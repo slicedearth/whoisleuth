@@ -29,6 +29,7 @@ export type VerificationOwnershipAssignment = Readonly<{
   changedPath: string;
   ownershipArea: string;
   impactAreas: readonly string[];
+  selectionNotes: readonly string[];
   focusedUnitChecks: readonly string[];
   focusedBrowserChecks: readonly string[];
   mandatorySpecialisedChecks: readonly SpecialisedCheck[];
@@ -199,8 +200,9 @@ export function buildVerificationOwnershipPlan(
     ]);
     // Existing route owners explain components and their controller/model
     // dependencies. A new helper does not need a separate workflow declaration.
+    const unclassifiedRoutes = routes.filter(route => matchingRules(route).length === 1);
     const unexplainedInterface = discoverRouteCoverage
-      && (!routes.length || routes.some(route => matchingRules(route).length === 1));
+      && (!routes.length || unclassifiedRoutes.length > 0);
     const focusedBrowserChecks = uniqueSorted([
       ...(componentChecks.length ? componentChecks : impacts.flatMap((rule) => rule.focusedBrowser)),
       ...[changedPath, ...routes].flatMap(file => {
@@ -220,6 +222,11 @@ export function buildVerificationOwnershipPlan(
       changedPath,
       ownershipArea: owner.area,
       impactAreas: uniqueSorted(impacts.map((rule) => rule.area)),
+      selectionNotes: Object.freeze(unexplainedInterface
+        ? [unclassifiedRoutes.length
+          ? `Full browser coverage: no classified route owner for ${unclassifiedRoutes.join(', ')}.`
+          : 'Full browser coverage: no consuming route could be established for this interface.']
+        : []),
       focusedUnitChecks,
       focusedBrowserChecks,
       mandatorySpecialisedChecks: /^test\/[^/]+\.test\.mts$/u.test(changedPath) ? specialised()

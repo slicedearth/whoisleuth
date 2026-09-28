@@ -28,6 +28,13 @@ type LookupCollectionContext = Readonly<{
 }>;
 
 type LookupReveal = Readonly<{ current(): boolean; dispose(): void }>;
+const PHASE_FAILURE = {
+  request: 'Lookup request could not be prepared.',
+  publication: 'Lookup completed, but its result could not be displayed.',
+  reconciliation: 'Lookup completed, but its saved Case or watchlist context could not be refreshed.',
+  retention: 'Lookup completed, but the Case update could not be confirmed. Check the saved Case before retrying the update.',
+  presentation: 'Lookup completed, but the result view could not be updated.',
+} as const;
 type LookupCollectionEffects = Readonly<{
   context(): LookupCollectionContext;
   active(): boolean;
@@ -122,6 +129,7 @@ export class LookupCollectionWorkflow {
         state.request.lookupMode === mode,
     );
     const url = buildLookupRequestUrl(target, { ...state.request, mode, ...context.capabilities });
+    let phase: keyof typeof PHASE_FAILURE = 'request';
 
     try {
       const completed = await this.requests.run(
@@ -150,20 +158,25 @@ export class LookupCollectionWorkflow {
       }
       const published = await publishLookupResult(operation, {
         publish: () => {
+          phase = 'publication';
           state.observation.response = outcome.value;
           state.observation.target = target;
           state.observation.incidentUrl = incident?.exactUrl ?? '';
           state.observation.depth = mode;
         },
-        reconcile: () =>
-          Promise.all([
+        reconcile: () => {
+          phase = 'reconciliation';
+          return Promise.all([
             this.effects.refreshCase(operation.revision, preferredCase),
             this.effects.refreshWatchlist(operation.revision),
-          ]),
+          ]);
+        },
         retain: async () => {
+          phase = 'retention';
           if (options.refreshCaseEvidence && reveal?.current()) await this.effects.retainCase();
         },
         ready: async () => {
+          phase = 'presentation';
           state.loading = false;
           await this.effects.rendered();
         },
@@ -173,7 +186,7 @@ export class LookupCollectionWorkflow {
       });
       if (published) return operation;
     } catch {
-      if (operation.current()) state.error = 'Lookup request could not be prepared.';
+      if (operation.current()) state.error = PHASE_FAILURE[phase];
     } finally {
       reveal?.dispose();
       if (operation.current()) {

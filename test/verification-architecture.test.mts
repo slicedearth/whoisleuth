@@ -636,6 +636,13 @@ describe('verification architecture contracts', () => {
     const unexplained = buildVerificationOwnershipPlan([ordinary], new Map(), new Map(),
       new Map([[ordinary, ['frontend/src/routes/(console)/unclassified/+page.svelte']]]));
     assert.deepEqual(unexplained.focusedBrowserChecks, readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
+    assert.deepEqual(unexplained.assignments[0]!.selectionNotes, [
+      'Full browser coverage: no classified route owner for frontend/src/routes/(console)/unclassified/+page.svelte.',
+    ]);
+    const explanation = renderExecutionPlan(unexplained, buildFocusedVerificationExecution(unexplained));
+    assert.ok(explanation.includes('frontend/src/routes/(console)/unclassified/+page.svelte'));
+    assert.ok(explanation.includes('Full browser coverage: no classified route owner'));
+    assert.deepEqual(discovered.assignments[0]!.selectionNotes, []);
     const stage = 'frontend/src/lib/components/CaseHistoryStage.svelte';
     const known = buildVerificationOwnershipPlan([stage], new Map(), new Map(),
       new Map([[stage, ['frontend/src/routes/(console)/cases/+page.svelte']]]));
@@ -655,6 +662,9 @@ describe('verification architecture contracts', () => {
     assert.equal(plan.focusedBrowserChecks.includes('e2e/dashboard.spec.ts'), false);
     assert.equal(plan.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
     const missing = buildVerificationOwnershipPlan([helper]);
+    assert.deepEqual(missing.assignments[0]!.selectionNotes, [
+      'Full browser coverage: no consuming route could be established for this interface.',
+    ]);
     assert.deepEqual(missing.focusedBrowserChecks, readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
     const unknown = buildVerificationOwnershipPlan([helper], new Map(), new Map(),
       new Map([[helper, ['frontend/src/routes/(console)/new-workflow/+page.svelte']]]));

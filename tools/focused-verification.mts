@@ -260,7 +260,10 @@ export function renderExecutionPlan(
   const lines = [
     `Focused ${execution.scope} verification: ${plan.changedPaths.length} changed path(s) across ${plan.ownershipAreas.length} owner and ${plan.impactAreas.length} impact area(s).`,
     `Focused unit files: ${plan.focusedUnitChecks.length}.`,
-    ...plan.assignments.map((assignment) => `Selected for ${assignment.changedPath}: ${assignment.impactAreas.join('; ')}.`),
+    ...plan.assignments.flatMap((assignment) => [
+      `Selected for ${assignment.changedPath}: ${assignment.impactAreas.join('; ')}.`,
+      ...assignment.selectionNotes.map(note => `  ${assignment.changedPath}: ${note}`),
+    ]),
     ...plan.interpretation.slice(-1),
     ...execution.commands.map((command) => `Run: ${command.id} — selected by ${command.selectedBy.join(', ')}.`),
     `Focused browser specs: ${execution.browserSpecs.length}${execution.browserSpecs.length ? ` (${execution.browserSpecs.join(', ')})` : ''}.`,

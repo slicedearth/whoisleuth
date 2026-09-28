@@ -6,6 +6,11 @@ regression test for a behavioural defect; inspect cosmetic changes in the
 rendered interface rather than freezing individual CSS values in tests.
 Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
+Common changes: [interface behaviour](#change-interface-behaviour),
+[portable Case fields](#change-a-portable-case-field),
+[CLI options and commands](#change-cli-options-and-commands),
+[verification](#select-local-verification) and [workflows](#change-workflows).
+
 Format edited source with `npm run format -- <path> ...`; quote paths containing
 parentheses. The shared configuration also works in editors. Keep formatting
 focused on the files being changed, and put larger readability-only changes in
@@ -95,6 +100,8 @@ automatic request for screenshot baselines or pixel assertions. Changes to
 disclosed scope, uncertainty, privacy or accessibility are behavioural, not
 equivalent wording.
 
+### Select local verification
+
 For behavioural changes:
 
 ```bash
@@ -153,6 +160,8 @@ contains the curated workflow obligations; `runtime-test-consumers.mts` indexes
 runtime dependents; `verification-ownership.mts` combines them into the explained
 plan. An ordinary module or test still requires no registration.
 
+### Change interface behaviour
+
 UI tests should assert the behaviour they protect. Locate navigation by its
 destination and accessible role; avoid layout classes or whole explanatory
 sentences when their wording is not the contract. Keep independent assertions
@@ -181,6 +190,8 @@ instead of being silently normalised. Keep the expected behaviour in the test
 independent. Historical-format and hostile-input tests must retain their own
 explicit inputs, not regenerate them through a current fixture builder.
 
+### Change a portable Case field
+
 For a portable Case field, start with `case-record-contracts.mts`, then declare
 its audience treatment in `case-record-projection.mts`. Current recovery is in
 `case-record-operations.mts`; declared historical input adaptation is in
@@ -189,6 +200,8 @@ its audience treatment in `case-record-projection.mts`. Current recovery is in
 `packages/contracts/case-portability.mts` only when the durable contract changes.
 Run the Case ownership and portability lifecycle tests; retain published
 fixtures unchanged and add an independent current fixture when required.
+
+### Change CLI options and commands
 
 CLI commands are grouped by responsibility: collection, network, evidence,
 review, assurance, workflow, history and support. Each family's
@@ -222,6 +235,8 @@ does not promise identical behaviour on every supported environment.
 For a Linux-specific change, `npm run verification:linux -- --focused <path> ...`
 runs the existing selection in a clean container; add `--list` to preview it.
 The complete local Linux run is opt-in with `--full`, not a routine push requirement.
+
+### Change workflows
 
 For workflow changes, run `npm run workflow:check`. Local and hosted quality
 checks use the same pinned actionlint release and platform archive digests.

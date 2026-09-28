@@ -288,6 +288,35 @@ test('preparation and collection failures leave a retryable idle state without l
   }
 });
 
+test('post-collection failures preserve the observation and distinguish refresh, uncertain writes and presentation', async (t) => {
+  const expected = {
+    refreshCase: 'Lookup completed, but its saved Case or watchlist context could not be refreshed.',
+    refreshWatchlist: 'Lookup completed, but its saved Case or watchlist context could not be refreshed.',
+    retainCase: 'Lookup completed, but the Case update could not be confirmed. Check the saved Case before retrying the update.',
+    rendered: 'Lookup completed, but the result view could not be updated.',
+    reveal: 'Lookup completed, but the result view could not be updated.',
+  } as const;
+  for (const method of Object.keys(expected) as Array<keyof typeof expected>) {
+    let writes = 0;
+    const failure = () => { throw new Error('private implementation detail'); };
+    const h = harness(undefined, {
+      retainCase: async () => { writes++; },
+      [method]: method === 'retainCase'
+        ? async () => { writes++; failure(); }
+        : failure,
+    });
+    t.after(() => h.requests.dispose());
+    assert.equal(await h.workflow.run({ refreshCaseEvidence: true }), undefined);
+    assert.equal(h.state.error, expected[method]);
+    assert.equal(h.state.observation.response, response);
+    assert.equal(h.state.observation.target, 'example.test');
+    assert.equal(h.state.loading, false);
+    assert.equal(h.state.sourceProgress, null);
+    assert.equal(writes, method.startsWith('refresh') ? 0 : 1, 'never retry a possibly committed write');
+    assert.equal(h.seen.at(-1), 'dispose');
+  }
+});
+
 test('cancelled reveal intent retains the observation without automatically saving or moving focus', async (t) => {
   const h = harness(undefined, { captureReveal: () => ({ current: () => false, dispose() {} }) });
   t.after(() => h.requests.dispose());
