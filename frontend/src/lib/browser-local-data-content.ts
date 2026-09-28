@@ -2,6 +2,7 @@ import { assertBoundedJsonStructure, boundedJsonLimitsForBytes, scanBoundedJson 
 import { plaintextLocalBinaryCodec, type BrowserLocalBinaryCodec, type BrowserLocalStoredBinary } from './browser-local-binaries.ts';
 import { captureRetainedFiles, readRetainedFileReference, type RetainedFileInput, type RetainedFileReference } from '../../../packages/evidence/retained-file.mts';
 import { MAX_SELECTED_FILES } from '../../../packages/contracts/selected-file-limits.mts';
+import { BROWSER_LOCAL_COLLECTION_MANIFEST } from '../../../packages/contracts/browser-local-collection-manifest.mts';
 import {
   localDataRecordContent as canonicalRecordContent,
   type LocalDataStoredRecord as BrowserLocalStoredRecord,
@@ -16,7 +17,9 @@ export type {
 
 export const LOCAL_DATA_OPERATION_TIMEOUT_MS = 10_000;
 export const MAX_LOCAL_DATA_OPERATION_TIMEOUT_MS = 60_000;
-export const MAX_LOCAL_DATA_COLLECTIONS = 16;
+// Each build admits its finite supported catalogue; per-collection byte and
+// record limits remain independent of how many collections are supported.
+export const MAX_LOCAL_DATA_COLLECTIONS = BROWSER_LOCAL_COLLECTION_MANIFEST.length;
 export const MAX_LOCAL_DATA_RECORDS_PER_COLLECTION = 2_000;
 export const MAX_LOCAL_DATA_RECORD_ID_LENGTH = 256;
 export const MAX_LOCAL_DATA_CODEC_ID_LENGTH = 64;

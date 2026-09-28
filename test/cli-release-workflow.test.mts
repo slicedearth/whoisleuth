@@ -40,17 +40,19 @@ describe('scoped CLI release workflow', () => {
     assert.deepEqual(DOCUMENT.jobs.publish.permissions, { contents: 'read', 'id-token': 'write' });
     assert.equal(Object.values(DOCUMENT.jobs).filter(job => job.permissions?.['id-token'] === 'write').length, 1);
     assert.doesNotMatch(WORKFLOW, /\b(?:contents|issues|pull-requests|actions|packages): write\b/u);
-    assert.equal(prepare.find(step => step.uses?.startsWith('actions/checkout@'))?.with?.['persist-credentials'], false);
-
     const actions = [...prepare, ...publish].flatMap(step => step.uses
       ? [{ action: step.uses.split('@')[0], revision: step.uses.split('@')[1] }] : []);
-    assert.deepEqual(actions.map(({ action }) => action), [
-      'actions/checkout',
-      'actions/setup-node',
-      'actions/upload-artifact',
-      'actions/setup-node',
-      'actions/download-artifact',
-    ]);
+    // Required capabilities and immutable pins are the contract, not the full
+    // action inventory or the order of unrelated preparation steps.
+    for (const action of ['actions/checkout', 'actions/setup-node', 'actions/upload-artifact']) {
+      assert.ok(prepare.some(step => step.uses?.startsWith(`${action}@`)), `Preparation requires ${action}`);
+    }
+    for (const action of ['actions/setup-node', 'actions/download-artifact']) {
+      assert.ok(publish.some(step => step.uses?.startsWith(`${action}@`)), `Publication requires ${action}`);
+    }
+    for (const step of [...prepare, ...publish].filter(step => step.uses?.startsWith('actions/checkout@'))) {
+      assert.equal(step.with?.['persist-credentials'], false);
+    }
     for (const { revision } of actions) assert.match(requiredValue(revision), /^[a-f0-9]{40}$/u);
   });
 

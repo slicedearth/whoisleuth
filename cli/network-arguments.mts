@@ -57,7 +57,7 @@ type TlsArguments = {
   output: 'terminal' | 'json';
 } & TerminalOptions;
 
-function parsePostureArguments(parsed: ParsedCommandArguments): PostureArguments {
+function parsePostureArguments(parsed: ParsedCommandArguments<PostureArguments['action']>): PostureArguments {
   const mailProfile =
     parsed.optionValue('--mail-profile') ?? commandDefaultText('posture', '--mail-profile');
   return {
@@ -76,7 +76,7 @@ function parsePostureArguments(parsed: ParsedCommandArguments): PostureArguments
   };
 }
 
-function parseDnssecValidateArguments(parsed: ParsedCommandArguments): DnssecValidateArguments {
+function parseDnssecValidateArguments(parsed: ParsedCommandArguments<DnssecValidateArguments['action']>): DnssecValidateArguments {
   return {
     action: 'dnssec-validate',
     target: parsed.positionalValue('domain')!,
@@ -88,7 +88,7 @@ function parseDnssecValidateArguments(parsed: ParsedCommandArguments): DnssecVal
   };
 }
 
-function parseMailTransportArguments(parsed: ParsedCommandArguments): MailTransportArguments {
+function parseMailTransportArguments(parsed: ParsedCommandArguments<MailTransportArguments['action']>): MailTransportArguments {
   return {
     action: 'mail-transport',
     source: parsed.positionalValue('source'),
@@ -102,12 +102,12 @@ function parseMailTransportArguments(parsed: ParsedCommandArguments): MailTransp
 }
 
 export const NETWORK_ARGUMENT_PARSERS = Object.freeze({
-  'ct-search': (parsed: ParsedCommandArguments): CtSearchArguments =>
+  'ct-search': (parsed: ParsedCommandArguments<CtSearchArguments['action']>): CtSearchArguments =>
     singleInputAction('ct-search', parsed, 'keyword'),
   posture: parsePostureArguments,
-  http: (parsed: ParsedCommandArguments): HttpArguments =>
+  http: (parsed: ParsedCommandArguments<HttpArguments['action']>): HttpArguments =>
     singleInputAction('http', parsed, 'domain'),
-  tls: (parsed: ParsedCommandArguments): TlsArguments =>
+  tls: (parsed: ParsedCommandArguments<TlsArguments['action']>): TlsArguments =>
     singleInputAction('tls', parsed, 'hostname'),
   'dnssec-validate': parseDnssecValidateArguments,
   'mail-transport': parseMailTransportArguments,

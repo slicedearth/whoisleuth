@@ -115,7 +115,7 @@ type CasePackArguments = {
   reviewed: true;
 } & TerminalOptions;
 
-function parseVerifyArtifactArguments(parsed: ParsedCommandArguments): VerifyArtifactArguments {
+function parseVerifyArtifactArguments(parsed: ParsedCommandArguments<VerifyArtifactArguments['action']>): VerifyArtifactArguments {
   if (parsed.hasOption('--folder') && parsed.positionalValue('source'))
     throw new CliUsageError('--folder selects its own input; do not also supply a file or stdin marker.');
   return {
@@ -133,7 +133,7 @@ function parseVerifyArtifactArguments(parsed: ParsedCommandArguments): VerifyArt
   };
 }
 
-function parseCaseArguments(parsed: ParsedCommandArguments): CaseArguments {
+function parseCaseArguments(parsed: ParsedCommandArguments<CaseArguments['action']>): CaseArguments {
   const operation = parsed.positionalValue('operation') as (typeof CLI_CASE_OPERATIONS)[number];
   const source = parsed.positionalValue('source');
   const domain = parsed.optionValue('--domain');
@@ -192,29 +192,29 @@ function parseCaseArguments(parsed: ParsedCommandArguments): CaseArguments {
 
 export const REVIEW_ARGUMENT_PARSERS = Object.freeze({
   'verify-artifact': parseVerifyArtifactArguments,
-  'interchange-report': (parsed: ParsedCommandArguments): InterchangeReportArguments => ({
+  'interchange-report': (parsed: ParsedCommandArguments<InterchangeReportArguments['action']>): InterchangeReportArguments => ({
     action: 'interchange-report',
     source: parsed.positionalValue('source'),
     passphraseSource: parsed.optionValue('--passphrase-file'),
     output: jsonOutput(parsed),
     ...terminalOptions(parsed),
   }),
-  'source-report': (parsed: ParsedCommandArguments): SourceReportArguments =>
+  'source-report': (parsed: ParsedCommandArguments<SourceReportArguments['action']>): SourceReportArguments =>
     singleInputAction('source-report', parsed),
-  compare: (parsed: ParsedCommandArguments): CompareArguments => singleInputAction('compare', parsed),
-  'page-compare': (parsed: ParsedCommandArguments): PageCompareArguments => ({
+  compare: (parsed: ParsedCommandArguments<CompareArguments['action']>): CompareArguments => singleInputAction('compare', parsed),
+  'page-compare': (parsed: ParsedCommandArguments<PageCompareArguments['action']>): PageCompareArguments => ({
     action: 'page-compare',
     ...parseTwoFileComparisonArguments(parsed, 'page-compare'),
   }),
-  'mail-review': (parsed: ParsedCommandArguments): MailReviewArguments =>
+  'mail-review': (parsed: ParsedCommandArguments<MailReviewArguments['action']>): MailReviewArguments =>
     singleInputAction('mail-review', parsed),
-  'mail-headers': (parsed: ParsedCommandArguments): MailHeadersArguments => ({
+  'mail-headers': (parsed: ParsedCommandArguments<MailHeadersArguments['action']>): MailHeadersArguments => ({
     ...singleInputAction('mail-headers', parsed),
     ...(parsed.hasOption('--trusted-auth-header')
       ? { trustedAuthHeaders: parsed.optionValues('--trusted-auth-header') }
       : {}),
   }),
-  intake: (parsed: ParsedCommandArguments): IntakeArguments => ({
+  intake: (parsed: ParsedCommandArguments<IntakeArguments['action']>): IntakeArguments => ({
     action: 'intake',
     kind: parsed.positionalValue(
       'kind',
@@ -230,7 +230,7 @@ export const REVIEW_ARGUMENT_PARSERS = Object.freeze({
     strictExit: parsed.hasOption('--strict-exit'),
     ...terminalOptions(parsed),
   }),
-  'review-evidence': (parsed: ParsedCommandArguments): ReviewEvidenceArguments => ({
+  'review-evidence': (parsed: ParsedCommandArguments<ReviewEvidenceArguments['action']>): ReviewEvidenceArguments => ({
     action: 'review-evidence',
     source: parsed.positionalValue('source'),
     mmdbSource: parsed.optionValue('--mmdb'),
@@ -238,16 +238,16 @@ export const REVIEW_ARGUMENT_PARSERS = Object.freeze({
     strictExit: parsed.hasOption('--strict-exit'),
     ...terminalOptions(parsed),
   }),
-  brief: (parsed: ParsedCommandArguments): BriefArguments => singleInputAction('brief', parsed),
+  brief: (parsed: ParsedCommandArguments<BriefArguments['action']>): BriefArguments => singleInputAction('brief', parsed),
   case: parseCaseArguments,
-  'indicator-set': (parsed: ParsedCommandArguments): IndicatorSetArguments => ({
+  'indicator-set': (parsed: ParsedCommandArguments<IndicatorSetArguments['action']>): IndicatorSetArguments => ({
     action: 'indicator-set',
     operation: parsed.positionalValue('operation') as (typeof CLI_INDICATOR_OPERATIONS)[number],
     source: parsed.positionalValue('source'),
     output: jsonOutput(parsed),
     ...terminalOptions(parsed),
   }),
-  'case-pack': (parsed: ParsedCommandArguments): CasePackArguments => ({
+  'case-pack': (parsed: ParsedCommandArguments<CasePackArguments['action']>): CasePackArguments => ({
     action: 'case-pack',
     source: parsed.positionalValue('source'),
     output: jsonOutput(parsed),

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { test } from 'node:test';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../packages/contracts/selected-file-limits.mts';
+import { BROWSER_LOCAL_COLLECTION_MANIFEST } from '../packages/contracts/browser-local-collection-manifest.mts';
 
 import {
   BrowserLocalDataError,
@@ -530,7 +531,7 @@ test('multi-collection reads use one captured transaction and reject invalid sel
   (documents.get(WRITE_DEFINITION.id) as string[]).push('caller-only');
   assert.deepEqual(await provider.read(WRITE_DEFINITION), []);
   const previousTransactions = transactions.length;
-  for (const selection of [[], [WRITE_DEFINITION, WRITE_DEFINITION], Array(17).fill(WRITE_DEFINITION), [{ ...WRITE_DEFINITION }], [null]]) {
+  for (const selection of [[], [WRITE_DEFINITION, WRITE_DEFINITION], Array(BROWSER_LOCAL_COLLECTION_MANIFEST.length + 1).fill(WRITE_DEFINITION), [{ ...WRITE_DEFINITION }], [null]]) {
     await assert.rejects(provider.readMany(selection as readonly AnyLocalDataCollectionDefinition[]),
       (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'INVALID_LOCAL_DATA_DEFINITION');
   }
@@ -751,6 +752,17 @@ test('plaintext encoding rejects oversized aggregate text before creating JSON o
   assert.equal(stringify.mock.callCount(), 0);
 });
 
+test('admits one collection per supported identity without a separate count baseline', async () => {
+  const definitions = BROWSER_LOCAL_COLLECTION_MANIFEST.map(({ id, label }) => ({ ...WRITE_DEFINITION, id, label, legacyKey: `fixture-${id}` }));
+  const provider = new BrowserLocalDataProvider({ indexedDB: readyEmptyCollectionsFactory(definitions), storage: NULL_STORAGE });
+  try {
+    assert.equal((await provider.initialize(definitions)).state, 'ready');
+    assert.deepEqual([...(await provider.readMany(definitions)).keys()], definitions.map(({ id }) => id));
+  } finally {
+    await provider.close();
+  }
+});
+
 test('rejects invalid collection sets and returns no-op update results without writing', async () => {
   const notifications: Array<readonly string[]> = [];
   const provider = new BrowserLocalDataProvider({
@@ -759,7 +771,11 @@ test('rejects invalid collection sets and returns no-op update results without w
     storage: NULL_STORAGE,
     oncommit: (ids) => { notifications.push(ids); },
   });
-  await assert.rejects(provider.initialize([]), /between 1 and 16/u);
+  const invalidSets = [[], [...BROWSER_LOCAL_COLLECTION_MANIFEST.map(({ id }) => ({ ...WRITE_DEFINITION, id })), WRITE_DEFINITION]];
+  for (const definitions of invalidSets) {
+    await assert.rejects(provider.initialize(definitions),
+      (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'INVALID_LOCAL_DATA_DEFINITION');
+  }
   await assert.rejects(provider.initialize([WRITE_DEFINITION, WRITE_DEFINITION]), /identifiers must be unique/u);
   const ready = await provider.initialize([WRITE_DEFINITION, SECOND_WRITE_DEFINITION]);
   assert.equal(ready.state, 'ready');

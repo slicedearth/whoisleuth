@@ -4,13 +4,13 @@ export class CliGrammarError extends Error {
   constructor(message: string) { super(message); this.name = 'CliGrammarError'; }
 }
 
-export type ParsedCommandArguments<Command extends string = string> = Readonly<{
+export type ParsedCommandArguments<Command extends string = string, Option extends string = string> = Readonly<{
   command: Command;
   allPositionals: readonly string[];
-  hasOption(option: string): boolean;
-  optionValue(option: string): string | null;
-  optionValues(option: string): readonly string[];
-  integerOption(option: string): number | null;
+  hasOption(option: Option): boolean;
+  optionValue(option: Option): string | null;
+  optionValues(option: Option): readonly string[];
+  integerOption(option: Option): number | null;
   positionalValue(name: string): string | null;
   positionalValues(name: string): readonly string[];
 }>;

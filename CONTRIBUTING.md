@@ -236,6 +236,8 @@ definitions live in `command-definition.mts`; help, completion and browser
 reference pages derive from them. Keep effects in the corresponding runner,
 not in the data-only definition. Independent network and privacy expectations
 remain in the contract tests.
+Each parser's argument type uses its result's `action` to check direct option
+reads against that command's declarations. Shared helpers accept the option union.
 The catalogue's coarse offline/network label derives from the declared execution
 effect; write the collection scope once and preserve independent no-request tests.
 Each runner declares its own dependency type beside its handlers; the dispatcher

@@ -5,7 +5,7 @@ import {
   type CliFailPolicy,
   type CliFailPolicyCommand,
 } from './fail-policy.mts';
-import { PRESENTATION_OPTIONS, type CliCommandSeed } from './command-definition.mts';
+import { PRESENTATION_OPTIONS, type CliCommandSeed, type CliOption } from './command-definition.mts';
 
 type TerminalOptions = { quiet: boolean; color: boolean };
 type LookupDetail = 'summary' | 'standard' | 'verbose';
@@ -22,7 +22,7 @@ function jsonOutput(parsed: ParsedCommandArguments): 'terminal' | 'json' {
 
 function normalizedLabel(
   parsed: ParsedCommandArguments,
-  option: string,
+  option: CliOption,
   maximum: number,
 ): string | null {
   const value = parsed.optionValue(option);

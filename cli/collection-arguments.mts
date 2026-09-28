@@ -79,7 +79,7 @@ type DiscoverScanArguments = {
   failOn?: readonly CliFailPolicy[];
 } & TerminalOptions;
 
-function parseLookupArguments(parsed: ParsedCommandArguments): LookupArguments {
+function parseLookupArguments(parsed: ParsedCommandArguments<LookupArguments['action']>): LookupArguments {
   const output = parseOutput(parsed, COLLECTION_COMMAND_DEFINITIONS.lookup);
   const selectedFailPolicies = failPolicies(parsed, 'lookup');
   return {
@@ -108,7 +108,7 @@ function parseLookupArguments(parsed: ParsedCommandArguments): LookupArguments {
   };
 }
 
-function parseBulkArguments(parsed: ParsedCommandArguments): BulkArguments {
+function parseBulkArguments(parsed: ParsedCommandArguments<BulkArguments['action']>): BulkArguments {
   const deep = parsed.hasOption('--deep');
   const selectedFailPolicies = failPolicies(parsed, 'bulk');
   const output = parseOutput(parsed, COLLECTION_COMMAND_DEFINITIONS.bulk);
@@ -136,7 +136,7 @@ function parseBulkArguments(parsed: ParsedCommandArguments): BulkArguments {
   };
 }
 
-function parseDiscoverArguments(parsed: ParsedCommandArguments): DiscoverArguments {
+function parseDiscoverArguments(parsed: ParsedCommandArguments<DiscoverArguments['action']>): DiscoverArguments {
   return {
     action: 'discover',
     seed: parsed.positionalValue('subject'),
@@ -162,7 +162,7 @@ function discoveryValues(parsed: ParsedCommandArguments) {
   };
 }
 
-function parseDiscoverScanArguments(parsed: ParsedCommandArguments): DiscoverScanArguments {
+function parseDiscoverScanArguments(parsed: ParsedCommandArguments<DiscoverScanArguments['action']>): DiscoverScanArguments {
   const deep = parsed.hasOption('--deep');
   const selectedFailPolicies = failPolicies(parsed, 'discover-scan');
   const filter = parsed.hasOption('--registered-only')

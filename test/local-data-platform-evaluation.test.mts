@@ -7,7 +7,6 @@ import {
   LOCAL_STORAGE_REFERENCE_BYTES,
   MAX_LOCAL_DATA_EVALUATION_CANDIDATES,
   MAX_LOCAL_DATA_EVALUATION_DETAIL_LENGTH,
-  MAX_LOCAL_DATA_EVALUATION_STORES,
   buildLocalDataPlatformEvaluation,
   formatLocalDataPlatformEvaluation,
   main,
@@ -45,7 +44,6 @@ describe('local data platform evaluation', () => {
     assert.equal(report.generatedAt, NOW.toISOString());
     assert.equal(report.mode, 'offline_contract_evaluation');
     assert.equal(report.current.storeCount, BROWSER_LOCAL_COLLECTIONS.length);
-    assert.ok(report.current.storeCount <= MAX_LOCAL_DATA_EVALUATION_STORES);
     assert.equal(report.current.declaredMaximumBytes, DECLARED_BROWSER_STORE_BYTES);
     assert.equal(report.current.declaredMaximumMiB, DECLARED_BROWSER_STORE_BYTES / 1024 / 1024);
     assert.equal(report.current.localStorageReferenceBytes, LOCAL_STORAGE_REFERENCE_BYTES);

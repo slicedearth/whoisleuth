@@ -28,7 +28,7 @@ type VerifySignatureArguments = {
   output: 'terminal' | 'json';
 } & TerminalOptions;
 
-function parseInspectArchiveArguments(parsed: ParsedCommandArguments): InspectArchiveArguments {
+function parseInspectArchiveArguments(parsed: ParsedCommandArguments<InspectArchiveArguments['action']>): InspectArchiveArguments {
   const expectedContentDigest = parsed.optionValue('--expect-content-digest');
   try {
     parseArchiveContentDigest(expectedContentDigest);
@@ -50,7 +50,7 @@ function parseInspectArchiveArguments(parsed: ParsedCommandArguments): InspectAr
   };
 }
 
-function parseSignArtifactArguments(parsed: ParsedCommandArguments): SignArtifactArguments {
+function parseSignArtifactArguments(parsed: ParsedCommandArguments<SignArtifactArguments['action']>): SignArtifactArguments {
   return {
     action: 'sign-artifact',
     source: parsed.positionalValue('source'),
@@ -58,7 +58,7 @@ function parseSignArtifactArguments(parsed: ParsedCommandArguments): SignArtifac
   };
 }
 
-function parseVerifySignatureArguments(parsed: ParsedCommandArguments): VerifySignatureArguments {
+function parseVerifySignatureArguments(parsed: ParsedCommandArguments<VerifySignatureArguments['action']>): VerifySignatureArguments {
   return {
     action: 'verify-signature',
     source: parsed.positionalValue('source'),

@@ -37,7 +37,7 @@ type ExportArguments = {
   includeAttribution: boolean;
 };
 
-function parseDiffArguments(parsed: ParsedCommandArguments): DiffArguments {
+function parseDiffArguments(parsed: ParsedCommandArguments<DiffArguments['action']>): DiffArguments {
   const compared = parseTwoFileComparisonArguments(parsed, 'diff');
   const leftSessionId = parsed.optionValue('--left-session');
   const rightSessionId = parsed.optionValue('--right-session');
@@ -54,19 +54,19 @@ function parseDiffArguments(parsed: ParsedCommandArguments): DiffArguments {
 
 export const HISTORY_ARGUMENT_PARSERS = Object.freeze({
   diff: parseDiffArguments,
-  reconcile: (parsed: ParsedCommandArguments): ReconcileArguments => ({
+  reconcile: (parsed: ParsedCommandArguments<ReconcileArguments['action']>): ReconcileArguments => ({
     action: 'reconcile',
     sources: uniqueSources(parsed, 'reconcile'),
     output: jsonOutput(parsed),
     ...terminalOptions(parsed),
   }),
-  timeline: (parsed: ParsedCommandArguments): TimelineArguments => ({
+  timeline: (parsed: ParsedCommandArguments<TimelineArguments['action']>): TimelineArguments => ({
     action: 'timeline',
     sources: uniqueSources(parsed, 'timeline'),
     output: jsonOutput(parsed),
     ...terminalOptions(parsed),
   }),
-  export: (parsed: ParsedCommandArguments): ExportArguments => ({
+  export: (parsed: ParsedCommandArguments<ExportArguments['action']>): ExportArguments => ({
     action: 'export',
     source: parsed.positionalValue('source'),
     format: parsed.hasOption('--markdown') ? 'markdown' : parsed.hasOption('--html') ? 'html' : 'json',

@@ -55,7 +55,7 @@ type WorkflowRunArguments = {
   output: 'terminal' | 'json';
 } & TerminalOptions;
 
-function parseMonitorOnceArguments(parsed: ParsedCommandArguments): MonitorOnceArguments {
+function parseMonitorOnceArguments(parsed: ParsedCommandArguments<MonitorOnceArguments['action']>): MonitorOnceArguments {
   const selectedFailPolicies = failPolicies(parsed, 'monitor-once');
   return {
     action: 'monitor-once',
@@ -71,7 +71,7 @@ function parseMonitorOnceArguments(parsed: ParsedCommandArguments): MonitorOnceA
   };
 }
 
-function parseWorkflowPlanArguments(parsed: ParsedCommandArguments): WorkflowPlanArguments {
+function parseWorkflowPlanArguments(parsed: ParsedCommandArguments<WorkflowPlanArguments['action']>): WorkflowPlanArguments {
   const options = { output: jsonOutput(parsed), ...terminalOptions(parsed) };
   if (parsed.hasOption('--list')) {
     if (parsed.allPositionals.length > 0)
@@ -101,7 +101,7 @@ function parseWorkflowPlanArguments(parsed: ParsedCommandArguments): WorkflowPla
   };
 }
 
-function parseWorkflowRunArguments(parsed: ParsedCommandArguments): WorkflowRunArguments {
+function parseWorkflowRunArguments(parsed: ParsedCommandArguments<WorkflowRunArguments['action']>): WorkflowRunArguments {
   const artifactBindings = parsed.optionValues('--use-artifact').map((value) => {
     const match = /^([a-z0-9]+(?:-[a-z0-9]+)*):([1-9][0-9]?)=([a-z0-9]+(?:-[a-z0-9]+)*)$/u.exec(
       value,

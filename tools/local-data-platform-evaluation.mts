@@ -32,7 +32,6 @@ type CandidateAssessment = Readonly<{
 export const LOCAL_DATA_PLATFORM_EVALUATION_SCHEMA = 'whoisleuth.local-data-platform-evaluation';
 export const LOCAL_DATA_PLATFORM_EVALUATION_VERSION = 2;
 export const LOCAL_STORAGE_REFERENCE_BYTES = 5 * 1024 * 1024;
-export const MAX_LOCAL_DATA_EVALUATION_STORES = 16;
 export const MAX_LOCAL_DATA_EVALUATION_CANDIDATES = 8;
 export const MAX_LOCAL_DATA_EVALUATION_DETAIL_LENGTH = 320;
 
@@ -98,7 +97,7 @@ function boundedDetail(value: string): string {
 }
 
 export function buildLocalDataPlatformEvaluation(options: Readonly<{ now?: () => Date }> = {}) {
-  const stores = CURRENT_STORES.slice(0, MAX_LOCAL_DATA_EVALUATION_STORES);
+  const stores = CURRENT_STORES;
   const declaredMaximumBytes = stores.reduce((total, store) => total + store.maximumBytes, 0);
   const exceedsReferenceByBytes = Math.max(0, declaredMaximumBytes - LOCAL_STORAGE_REFERENCE_BYTES);
   const candidates = CANDIDATES.slice(0, MAX_LOCAL_DATA_EVALUATION_CANDIDATES);

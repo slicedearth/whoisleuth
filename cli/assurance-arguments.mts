@@ -63,7 +63,7 @@ type ChangePacketArguments = {
   output: 'terminal' | 'json';
 } & TerminalOptions;
 
-function parseManifestArguments(parsed: ParsedCommandArguments): ManifestArguments {
+function parseManifestArguments(parsed: ParsedCommandArguments<ManifestArguments['action']>): ManifestArguments {
   const sources = parsed.positionalValues('artefacts');
   if (sources.some((source) => !source))
     throw new CliUsageError(
@@ -91,7 +91,7 @@ function parseManifestArguments(parsed: ParsedCommandArguments): ManifestArgumen
   };
 }
 
-function parseSharingReviewArguments(parsed: ParsedCommandArguments): SharingReviewArguments {
+function parseSharingReviewArguments(parsed: ParsedCommandArguments<SharingReviewArguments['action']>): SharingReviewArguments {
   const purpose = parsed.optionValue('--purpose')!.replace(/\s+/gu, ' ').trim();
   if (!purpose || purpose.length > 200) throw new CliUsageError('--purpose is limited to 200 characters.');
   return {
@@ -111,15 +111,15 @@ function parseSharingReviewArguments(parsed: ParsedCommandArguments): SharingRev
 
 export const ASSURANCE_ARGUMENT_PARSERS = Object.freeze({
   manifest: parseManifestArguments,
-  'map-observations': (parsed: ParsedCommandArguments): MapObservationsArguments =>
+  'map-observations': (parsed: ParsedCommandArguments<MapObservationsArguments['action']>): MapObservationsArguments =>
     singleInputAction('map-observations', parsed),
-  'oam-export': (parsed: ParsedCommandArguments): OamExportArguments =>
+  'oam-export': (parsed: ParsedCommandArguments<OamExportArguments['action']>): OamExportArguments =>
     singleInputAction('oam-export', parsed),
-  'ct-intake': (parsed: ParsedCommandArguments): CtIntakeArguments => singleInputAction('ct-intake', parsed),
-  'domain-control': (parsed: ParsedCommandArguments): DomainControlArguments =>
+  'ct-intake': (parsed: ParsedCommandArguments<CtIntakeArguments['action']>): CtIntakeArguments => singleInputAction('ct-intake', parsed),
+  'domain-control': (parsed: ParsedCommandArguments<DomainControlArguments['action']>): DomainControlArguments =>
     singleInputAction('domain-control', parsed),
-  assurance: (parsed: ParsedCommandArguments): AssuranceArguments => singleInputAction('assurance', parsed),
-  'change-packet': (parsed: ParsedCommandArguments): ChangePacketArguments =>
+  assurance: (parsed: ParsedCommandArguments<AssuranceArguments['action']>): AssuranceArguments => singleInputAction('assurance', parsed),
+  'change-packet': (parsed: ParsedCommandArguments<ChangePacketArguments['action']>): ChangePacketArguments =>
     singleInputAction('change-packet', parsed),
   'sharing-review': parseSharingReviewArguments,
 });
