@@ -49,9 +49,11 @@ adapters.
 Console routes connect components to responsibility-specific controllers in
 `frontend/src/lib/controllers/`. Lookup has separate request, Case, watchlist
 and section-navigation owners. Bulk separates scan execution, shortlist membership
-and saved-session drafts, retention approval and mutation outcomes. Controllers publish state
-snapshots; existing storage adapters retain transactional writes and conflict
-checks. A committed write and a failed subsequent refresh remain distinct.
+and saved-session drafts, retention approval and mutation outcomes. Lookup's
+session updates page-owned reactive state; Case and watchlist workspaces publish
+replacement state snapshots. Existing storage adapters retain transactional
+writes and conflict checks. A committed write and a failed subsequent refresh
+remain distinct.
 Brand Profile editing separates its form draft, capture cancellation and save
 completion from the route's collection and mutation coordinators. CLI workflow
 recipe definitions supply both the command grammar choices and plan catalogue;

@@ -56,6 +56,17 @@ type LookupRequestSelection = Readonly<{
   securityTxtEligible: boolean;
 }>;
 
+/** UI eligibility uses collection admission; address safety remains server-owned. */
+export function lookupSecurityTxtEligible(entries: readonly string[]): boolean {
+  if (entries.length !== 1 || !entries[0]) return false;
+  try {
+    const host = prepareLookupCollectionTarget(entries[0]);
+    return host.includes('.') && !host.includes(':') && !/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(host);
+  } catch {
+    return false;
+  }
+}
+
 export function buildLookupRequestUrl(
   target: string,
   selection: LookupRequestSelection,

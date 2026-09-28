@@ -32,6 +32,12 @@ owner, then runs `release:check`. Review the complete diff before committing.
 Existing release tags are refused; no tag or publication is created. See
 [local verification](getting-started.md#verification) for the shared check path.
 
+If a step fails, earlier edits remain in the working tree. Inspect the diff and
+the failed command's output, correct the cause, then rerun the same
+`release:prepare -- <version>` command. When the manifest already has that version,
+the command skips the version change and reruns generation and validation.
+It never rolls back or discards other local work.
+
 `release:check` alone is offline and read-only. It verifies that:
 
 - `package.json`, `package-lock.json`, and the lockfile root package agree;

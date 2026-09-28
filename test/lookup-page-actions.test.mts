@@ -7,9 +7,27 @@ import {
   buildLookupSectionLinks,
   lookupEvidenceFamilyForHref,
   lookupEvidenceTargetForHref,
+  lookupSecurityTxtEligible,
 } from '../frontend/src/lib/analysis/lookup-page-actions.ts';
 
 describe('lookup page actions', () => {
+  test('offers security.txt only for a single admitted hostname', () => {
+    for (const target of [
+      'portal.example.test',
+      'https://portal.example.test/private-path?query=value#fragment',
+      'http://portal.example.test:8080/path',
+      'https://bücher.example.test/path',
+    ]) assert.equal(lookupSecurityTxtEligible([target]), true, target);
+    for (const entries of [
+      [], [''], ['one.example.test', 'two.example.test'],
+      ['192.0.2.1'], ['2001:db8::1'], ['https://[2001:db8::1]/'], ['AS64496'],
+      ['localhost'], ['ftp://portal.example.test/path'],
+      ['https://synthetic:private@portal.example.test/path'],
+      ['portal.example.test\n'], ['https://portal.example.test\\path'],
+      ['https://0xc0000201/'],
+    ]) assert.equal(lookupSecurityTxtEligible(entries), false, JSON.stringify(entries));
+  });
+
   test('keeps fast lookup requests free of deep enrichment flags', () => {
     const url = buildLookupRequestUrl('target.example', {
       mode: 'fast',

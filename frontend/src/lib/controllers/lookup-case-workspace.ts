@@ -151,12 +151,19 @@ export class LookupCaseWorkspace {
     try {
       const next = await action();
       const current = this.#options.context();
-      if (this.#disposed || generation !== this.#actionGeneration
+      if (
+        this.#disposed || generation !== this.#actionGeneration
         || context.revision !== current.revision || context.domain !== current.domain
-        || (this.#state.record?.id ?? '') !== recordId) return 'stale';
+        || (this.#state.record?.id ?? '') !== recordId
+      ) return 'stale';
       this.#update({
-        ...(next.record ? { record: next.record,
-          candidates: [...this.#state.candidates.filter(record => record.id !== next.record!.id), next.record] } : {}),
+        ...(next.record ? {
+          record: next.record,
+          candidates: [
+            ...this.#state.candidates.filter(record => record.id !== next.record!.id),
+            next.record,
+          ],
+        } : {}),
         status: next.status,
         sourceState: next.sourceState ?? (next.record ? 'ready' : this.#state.sourceState),
       });

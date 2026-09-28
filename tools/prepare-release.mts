@@ -34,8 +34,12 @@ export function main(args = process.argv.slice(2)): number {
     const current = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version as string;
     for (const [command, ...commandArgs] of releasePreparationCommands(version, current)) {
       const result = spawnSync(command!, commandArgs, { cwd: ROOT, stdio: 'inherit', timeout: 120_000 });
-      if (result.error) throw result.error;
-      if (result.status !== 0) throw new Error('Release preparation stopped; inspect the retained local diff before retrying.');
+      if (result.error || result.status !== 0) {
+        process.stderr.write(`Release preparation stopped at ${commandArgs.join(' ')}. Earlier edits remain in the working tree.\n`);
+        process.stderr.write(`Inspect the diff, correct the reported cause, then rerun npm run release:prepare -- ${version}.\n`);
+        if (result.error) throw result.error;
+        return 2;
+      }
     }
     process.stdout.write(`Prepared ${version} locally. Review, verification and commit remain separate; no tag or publication was created.\n`);
     return 0;

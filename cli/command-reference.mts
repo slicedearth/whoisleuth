@@ -1,7 +1,45 @@
 import { INVESTIGATION_PLAN_RECIPES, RUNNABLE_INVESTIGATION_PLAN_RECIPES } from './investigation-recipes.mts';
-import type { CliOptionValueKind, CliOptionOccurrence, CliOptionScope, CliPositionalValueKind, CliPositionalInputSource, CliMetaActionId, CliMetaAction, CliOptionIntegerRange, CliOptionSpec, CliPositionalSpec, CliGrammarConstraint } from '../packages/contracts/cli-grammar.mts';
+import type {
+  CliOptionValueKind,
+  CliOptionOccurrence,
+  CliOptionScope,
+  CliPositionalValueKind,
+  CliPositionalInputSource,
+  CliMetaActionId,
+  CliMetaAction,
+  CliOptionIntegerRange,
+  CliOptionSpec,
+  CliPositionalSpec,
+  CliGrammarConstraint,
+} from '../packages/contracts/cli-grammar.mts';
 import { CLI_COMMAND_SEMANTICS, CLI_HELP_GROUP_ORDER, type CliCommand, type CliHelpGroup } from '../packages/contracts/cli-command-semantics.mts';
-import { type CompletionShell, type CommandDetail, type CommandCollection, type CliNetworkEffect, type CliInvocationNetworkEffect, type CliDisclosureClass, type CliHandlerOwner, INLINE_COMMAND_FAMILIES, type InlineCommandFamily, type CliCommandDefinition, CLI_CASE_OPERATIONS, CLI_INDICATOR_OPERATIONS, CLI_META_ACTIONS, CLI_META_ACTION_BY_ID, HELP_INTRO, HELP_FOOTER, commonOptionsForSeed, CLI_OPTION_DEFINITIONS, type CliOption, type CliOptionDefinition, PRESENTATION_OPTIONS, optionSpec, grammarConstraints, type CliCommandSeed } from './command-definition.mts';
+import {
+  type CompletionShell,
+  type CommandDetail,
+  type CommandCollection,
+  type CliNetworkEffect,
+  type CliInvocationNetworkEffect,
+  type CliDisclosureClass,
+  type CliHandlerOwner,
+  INLINE_COMMAND_FAMILIES,
+  type InlineCommandFamily,
+  type CliCommandDefinition,
+  type CliExecutionOwner,
+  CLI_CASE_OPERATIONS,
+  CLI_INDICATOR_OPERATIONS,
+  CLI_META_ACTIONS,
+  CLI_META_ACTION_BY_ID,
+  HELP_INTRO,
+  HELP_FOOTER,
+  commonOptionsForSeed,
+  CLI_OPTION_DEFINITIONS,
+  type CliOption,
+  type CliOptionDefinition,
+  PRESENTATION_OPTIONS,
+  optionSpec,
+  grammarConstraints,
+  type CliCommandSeed,
+} from './command-definition.mts';
 import { COMMAND_SEEDS } from './command-seeds.mts';
 
 const COMMAND_ORDER = Object.freeze(Object.keys(CLI_COMMAND_SEMANTICS)) as readonly CliCommand[];
@@ -10,13 +48,16 @@ function commandOptionDefinition(command: CliCommand, option: CliOption): CliOpt
   return COMMAND_SEEDS[command].optionOverrides?.[option] ?? CLI_OPTION_DEFINITIONS[option];
 }
 
-export type CliCommandFor<Owner extends import('./command-definition.mts').CliExecutionOwner> = {
+export type CliCommandFor<Owner extends CliExecutionOwner> = {
   [Command in CliCommand]: typeof COMMAND_SEEDS[Command]['handlerOwner'] extends Owner ? Command : never
 }[CliCommand];
 
 type InlineCommandFor<Family extends InlineCommandFamily> = CliCommandFor<Family>;
 
-export function commandHasOwner<Owner extends import('./command-definition.mts').CliExecutionOwner>(command: unknown, owner: Owner): command is CliCommandFor<Owner> {
+export function commandHasOwner<Owner extends CliExecutionOwner>(
+  command: unknown,
+  owner: Owner,
+): command is CliCommandFor<Owner> {
   return isCliCommand(command) && COMMAND_SEEDS[command].handlerOwner === owner;
 }
 

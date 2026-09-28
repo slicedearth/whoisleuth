@@ -242,6 +242,12 @@ The complete local Linux run is opt-in with `--full`, not a routine push require
 
 ### Change workflows
 
+`tools/ci-verification.mts` owns the shared verification groups. Add or change a
+required check there; `.github/workflows/ci.yml` invokes those groups rather than
+copying their command lists. `test/ci-workflow.test.mts` checks group coverage,
+failure propagation and build handoff. Job setup and artefact transfer remain
+explicit workflow responsibilities.
+
 For workflow changes, run `npm run workflow:check`. Local and hosted quality
 checks use the same pinned actionlint release and platform archive digests.
 The command downloads the official executable into a temporary directory,

@@ -56,6 +56,7 @@
     prepareLookupCollectionTarget,
     buildLookupResultSectionLinks,
     lookupEvidenceFamilyForHref,
+    lookupSecurityTxtEligible,
   } from '$lib/analysis/lookup-page-actions.ts';
   import {
     readLookupPresentation,
@@ -204,18 +205,7 @@
       ? [trimmed]
       : entries;
   });
-  const securityTxtEligible = $derived.by(() => {
-    if (lookupEntries.length !== 1) return false;
-    try {
-      const value = lookupEntries[0];
-      if (!value) return false;
-      const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `https://${value}`);
-      const host = url.hostname;
-      return host.includes('.') && !host.includes(':') && !/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(host);
-    } catch {
-      return false;
-    }
-  });
+  const securityTxtEligible = $derived(lookupSecurityTxtEligible(lookupEntries));
   const lookupView = $derived(createLookupViewModel(session.observation.response));
   const validatedResponseJson = $derived.by(() =>
     session.observation.response ? JSON.stringify(session.observation.response, null, 2) : '',

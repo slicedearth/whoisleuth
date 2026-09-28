@@ -1009,6 +1009,10 @@ test(`security.txt ${publication.state} collection retains its route deadline an
   await expect(option).toBeDisabled();
   await page.locator('#query').fill('one.example.test, two.example.test');
   await expect(option).toBeDisabled();
+  await page.locator('#query').fill('ftp://portal.example.test/path');
+  await expect(option).toBeDisabled();
+  await page.locator('#query').fill('https://synthetic:private@portal.example.test/path');
+  await expect(option).toBeDisabled();
   await page.locator('#query').fill('portal.example.test');
   await expect(option).toBeEnabled();
   await option.check();
