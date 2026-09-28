@@ -463,20 +463,23 @@ test('the mobile review inbox reveals and focuses a saved Bulk session', async (
 test('status and disposition edits persist across a reload', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'triage.invalid');
-  await openCaseMetadata(page);
+  const metadata = await openCaseMetadata(page);
 
-  await page.locator('.metadata-fields .field-grid select').first().selectOption('escalated');
-  await page.locator('.metadata-fields .field-grid select').nth(1).selectOption('confirmed_abuse');
+  await metadata.getByRole('combobox', { name: /^Status/u }).selectOption('escalated');
+  await metadata.getByRole('combobox', { name: 'Disposition', exact: true }).selectOption('confirmed_abuse');
 
   const head = page.locator('.case-heading', { hasText: 'triage.invalid' });
-  await expect(head.locator('.badge').first()).toHaveText('Escalated');
-  await expect(head.locator('.badge').nth(1)).toHaveText('Confirmed abuse');
+  await expect(head.getByText('Escalated', { exact: true })).toBeVisible();
+  await expect(head.getByText('Confirmed abuse', { exact: true })).toBeVisible();
 
   await page.reload();
   await openConsoleView(page, 'cases');
   const reloaded = page.locator('.case-heading', { hasText: 'triage.invalid' });
-  await expect(reloaded.locator('.badge').first()).toHaveText('Escalated');
-  await expect(reloaded.locator('.badge').nth(1)).toHaveText('Confirmed abuse');
+  await expect(reloaded.getByText('Escalated', { exact: true })).toBeVisible();
+  await expect(reloaded.getByText('Confirmed abuse', { exact: true })).toBeVisible();
+  const restoredMetadata = await openCaseMetadata(page);
+  await expect(restoredMetadata.getByRole('combobox', { name: /^Status/u })).toHaveValue('escalated');
+  await expect(restoredMetadata.getByRole('combobox', { name: 'Disposition', exact: true })).toHaveValue('confirmed_abuse');
 });
 
 test('reviewed cases export an explicitly selected privacy-bounded Risk calibration dataset', async ({ page }) => {

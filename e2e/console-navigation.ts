@@ -62,6 +62,7 @@ export async function openCaseMetadata(page: Page) {
   const summary = page.getByText('Edit status, tags and Brand associations', { exact: true });
   await expect(summary).toBeVisible();
   if (await details.getAttribute('open') === null) await summary.click();
+  return details;
 }
 
 export async function openCaseClassification(page: Page) {

@@ -1470,7 +1470,7 @@ test('IDN review shows Unicode and ASCII together with cautious profile similari
   await expect(card.getByText('Cyrillic, Latin', { exact: true })).toBeVisible();
   await expect(card.getByText('Mixed writing scripts', { exact: true })).toBeVisible();
   await expect(card.getByText('Confusable with an official domain', { exact: true })).toBeVisible();
-  await expect(card.getByText(/similarity indicators and do not establish maliciousness/i)).toBeVisible();
+  await expect(card.getByText('similarity indicators and do not establish maliciousness')).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
