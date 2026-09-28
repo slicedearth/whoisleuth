@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseCliArguments } from '../cli/arguments.mts';
+import { CLI_OPTION_DEFINITIONS, commandSeed, file } from '../cli/command-definition.mts';
+import { COLLECTION_COMMAND_DEFINITIONS } from '../cli/collection-command-definitions.mts';
 
 test('presentation flags retain their command-specific executable meaning', () => {
   const examples: Array<{ command: string; formats: Record<string, string> }> = [
@@ -55,4 +57,27 @@ test('presentation flags retain their command-specific executable meaning', () =
     );
   }
   assert.throws(() => parseCliArguments(['lookup', 'example.test', '--sarif']), /Unknown option/u);
+});
+
+test('option variants remain local and reject undeclared flags before registry construction', () => {
+  const variant = commandSeed({
+    ...COLLECTION_COMMAND_DEFINITIONS.lookup,
+    options: ['--json'],
+    optionOverrides: { '--json': file('Read the fixture input.') },
+  });
+  assert.equal(variant.optionOverrides?.['--json']?.valueKind('lookup'), 'file');
+  assert.equal(CLI_OPTION_DEFINITIONS['--json'].valueKind('lookup'), 'flag');
+  assert.ok(Object.isFrozen(variant.optionOverrides));
+  assert.throws(
+    () =>
+      commandSeed({
+        ...COLLECTION_COMMAND_DEFINITIONS.lookup,
+        options: ['--json'],
+        optionOverrides: {
+          // @ts-expect-error A variant cannot silently add a flag to the command.
+          '--resume': file('Read the fixture checkpoint.'),
+        },
+      }),
+    /Cannot override an undeclared command option: --resume\./u,
+  );
 });

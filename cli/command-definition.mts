@@ -149,8 +149,8 @@ const REGISTRY_SCAFFOLD_COMMON_OPTIONS = Object.freeze(
   COMMON_OPTIONS.filter((option) => option !== '--config' && option !== '--profile'),
 );
 
-function commonOptionsSeedForCommand(command: CliCommand): readonly CliOption[] {
-  return command === 'registry-scaffold' ? REGISTRY_SCAFFOLD_COMMON_OPTIONS : COMMON_OPTIONS;
+function commonOptionsForSeed(seed: Pick<CliCommandSeed, 'bootstrapProfile'>): readonly CliOption[] {
+  return seed.bootstrapProfile === 'command_owned' ? REGISTRY_SCAFFOLD_COMMON_OPTIONS : COMMON_OPTIONS;
 }
 
 function positional(
@@ -237,14 +237,14 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--output': file('Write output atomically to this local file.'),
   '--force': flag('Allow replacement of the selected output file.'),
   '--config': file('Load explicit versioned CLI configuration from this file.'),
-  '--profile': optionDefinition('text', command => command === 'registry-scaffold' ? 'Select the registry fixture capability profile.' : 'Select a named profile from the supplied configuration.', { acceptsOptionLikeValue: true }),
+  '--profile': text('Select a named profile from the supplied configuration.', true),
   '--palette': enumeration('Choose the terminal colour palette; redirected output and no-colour settings still take precedence.', ['auto', 'light', 'dark']),
   '--network': flag('Include the optional public DNS and port 43 runtime checks.'),
   '--json': flag('Write structured JSON to stdout or the selected output file.'),
   '--reported-action': optionDefinition('enum', 'Record an analyst-reported identity action; repeat for separate actions.', { values: IDENTITY_ACTIONS.map(action => action.id), occurrence: 'repeatable' }),
   '--trusted-auth-header': optionDefinition('text', 'Select a recognised receiver header by part:header-index. This records analyst trust, not independent authentication; repeat for separate headers.', { occurrence: 'repeatable' }),
-  '--package': optionDefinition('flag', command => command === 'manifest' ? 'Create a portable evidence ZIP containing the selected files.' : 'Verify a portable evidence ZIP or encrypted package rather than a single report.'),
-  '--folder': optionDefinition('file', command => command === 'manifest' ? 'Create a new evidence folder containing the selected files.' : 'Verify the evidence package within this selected folder.'),
+  '--package': flag('Verify a portable evidence ZIP or encrypted package rather than a single report.'),
+  '--folder': file('Verify the evidence package within this selected folder.'),
   '--quiet': flag('Suppress ordinary terminal presentation.', 'idempotent'),
   '--no-color': flag('Suppress ANSI colour in terminal output.', 'idempotent'),
   '--common': flag('Show only commands marked as common.'),
@@ -280,11 +280,10 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--registered-only': flag('Keep registered results in the presented output.'),
   '--inconclusive-only': flag('Keep inconclusive results in the presented output.'),
   '--errors-only': flag('Keep error results in the presented output.'),
-  '--concurrency': integer('Set the maximum number of concurrent collection tasks.', (command) => command === 'monitor-once'
-    ? Object.freeze([BASE_INTEGER_RANGE(1, 3)])
-    : Object.freeze([BASE_INTEGER_RANGE(1, 8), DEEP_INTEGER_RANGE(1, 3)]), (command, deep) => command === 'monitor-once' || deep ? 2 : 4),
+  '--concurrency': integer('Set the maximum number of concurrent collection tasks.',
+    () => Object.freeze([BASE_INTEGER_RANGE(1, 8), DEEP_INTEGER_RANGE(1, 3)]), (_command, deep) => deep ? 2 : 4),
   '--checkpoint': file('Save resumable collection state to this local file.'),
-  '--resume': optionDefinition((command) => command === 'workflow-run' ? 'file' : 'flag', command => command === 'workflow-run' ? 'Resume the selected workflow checkpoint; approvals must be supplied again.' : 'Resume collection from the selected checkpoint.'),
+  '--resume': flag('Resume collection from the selected checkpoint.'),
   '--tlds': text('Use this comma-separated set of domain endings.', true),
   '--preset': enumeration('Choose candidate-generation families; explicit families select a custom set instead.', ['common', 'impersonation', 'all'], 'all'),
   '--families': text('Select the candidate-generation families explicitly.'),
@@ -315,7 +314,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--summary-json': flag('Write the concise structured summary.'),
   '--passphrase-file': file('Read the archive passphrase from a local file, not a command-line value.'),
   '--manifest': file('Use the selected investigation manifest.'),
-  '--bagit': optionDefinition('flag', command => command === 'manifest' ? 'Create a BagIt 1.0 package with SHA-512 checksums.' : 'Verify the selected package as BagIt 1.0.'),
+  '--bagit': flag('Verify the selected package as BagIt 1.0.'),
   '--manifest-entry': enumeration('Select an artefact entry from the supplied manifest.', Array.from({ length: MAX_INVESTIGATION_MANIFEST_ARTIFACTS }, (_, index) => `artifact-${index + 1}`)),
   '--search': text('Search the selected local archive.'),
   '--require-match': flag('Require the local archive search to find a match.'),
@@ -390,8 +389,7 @@ const PRESENTATION_OPTIONS = Object.freeze([
 ] as const);
 const MACHINE_OUTPUT_OPTIONS: readonly string[] = Object.freeze(PRESENTATION_OPTIONS.map(([option]) => option));
 
-function optionSpec(command: CliCommand, option: CliOption, scope: CliOptionScope): CliOptionSpec {
-  const definition = CLI_OPTION_DEFINITIONS[option];
+function optionSpec(command: CliCommand, option: CliOption, scope: CliOptionScope, definition: CliOptionDefinition = CLI_OPTION_DEFINITIONS[option]): CliOptionSpec {
   const valueKind = definition.valueKind(command);
   const values = definition.values(command);
   return Object.freeze({
@@ -433,6 +431,7 @@ type CliCommandSeed = Readonly<{
   collection: CommandCollection;
   summary: string;
   options: readonly CliOption[];
+  optionOverrides?: Readonly<Partial<Record<CliOption, CliOptionDefinition>>>;
   positionals: readonly CliPositionalSpec[];
   constraints: readonly CliGrammarConstraint[];
   handlerOwner: CliExecutionOwner;
@@ -446,13 +445,22 @@ type CliCommandSeed = Readonly<{
 }>;
 
 function commandSeed<const Owner extends CliExecutionOwner, const Options extends readonly CliOption[]>(
-  seed: Omit<CliCommandSeed, 'handlerOwner' | 'options'> & { handlerOwner: Owner; options: Options },
+  seed: Omit<CliCommandSeed, 'handlerOwner' | 'options' | 'optionOverrides'> & {
+    handlerOwner: Owner;
+    options: Options;
+    optionOverrides?: Readonly<Partial<Record<NoInfer<Options[number]> | typeof COMMON_OPTIONS[number], CliOptionDefinition>>>;
+  },
 ): CliCommandSeed & { readonly handlerOwner: Owner; readonly options: readonly Options[number][] } {
+  const admitted = new Set<string>([...seed.options, ...commonOptionsForSeed(seed)]);
+  for (const option of Object.keys(seed.optionOverrides ?? {})) {
+    if (!admitted.has(option)) throw new TypeError(`Cannot override an undeclared command option: ${option}.`);
+  }
   return Object.freeze({
     ...seed,
     reference: Object.freeze({ ...seed.reference }),
     collection: Object.freeze({ ...seed.collection }),
     options: Object.freeze([...seed.options]),
+    ...(seed.optionOverrides ? { optionOverrides: Object.freeze({ ...seed.optionOverrides }) } : {}),
     positionals: Object.freeze([...seed.positionals]),
     constraints: Object.freeze([...seed.constraints]),
     schemaIdentifiers: Object.freeze([...seed.schemaIdentifiers]),
@@ -461,5 +469,5 @@ function commandSeed<const Owner extends CliExecutionOwner, const Options extend
   });
 }
 
-export { LEGACY_WORKSPACE_ARCHIVE_VERSIONS, LEGACY_WORKSPACE_ARCHIVE_DESCRIPTION, PUBLISHED_V2_LOOKUP_EVIDENCE_VERSIONS, LEGACY_WORKSPACE_ARCHIVE_SCOPE, INLINE_COMMAND_FAMILIES, CLI_CASE_OPERATIONS, CLI_INDICATOR_OPERATIONS, CLI_META_ACTIONS, CLI_META_ACTION_BY_ID, HELP_INTRO, HELP_FOOTER, COMMON_OPTIONS, REGISTRY_SCAFFOLD_COMMON_OPTIONS, commonOptionsSeedForCommand, positional, NO_POSITIONALS, OPTIONAL_FILE_POSITIONAL, OPTIONAL_TEXT_POSITIONAL, NO_INTEGER_RANGES, BASE_INTEGER_RANGE, DEEP_INTEGER_RANGE, optionDefinition, flag, file, text, enumeration, integer, CLI_OPTION_DEFINITIONS, constraint, EMPTY_CONSTRAINTS, FILE_OUTPUT_CONSTRAINTS, QUIET_OUTPUT_CONSTRAINT, PRESENTATION_OPTIONS, MACHINE_OUTPUT_OPTIONS, optionSpec, grammarConstraints, commandSeed };
+export { LEGACY_WORKSPACE_ARCHIVE_VERSIONS, LEGACY_WORKSPACE_ARCHIVE_DESCRIPTION, PUBLISHED_V2_LOOKUP_EVIDENCE_VERSIONS, LEGACY_WORKSPACE_ARCHIVE_SCOPE, INLINE_COMMAND_FAMILIES, CLI_CASE_OPERATIONS, CLI_INDICATOR_OPERATIONS, CLI_META_ACTIONS, CLI_META_ACTION_BY_ID, HELP_INTRO, HELP_FOOTER, COMMON_OPTIONS, REGISTRY_SCAFFOLD_COMMON_OPTIONS, commonOptionsForSeed, positional, NO_POSITIONALS, OPTIONAL_FILE_POSITIONAL, OPTIONAL_TEXT_POSITIONAL, NO_INTEGER_RANGES, BASE_INTEGER_RANGE, DEEP_INTEGER_RANGE, optionDefinition, flag, file, text, enumeration, integer, CLI_OPTION_DEFINITIONS, constraint, EMPTY_CONSTRAINTS, FILE_OUTPUT_CONSTRAINTS, QUIET_OUTPUT_CONSTRAINT, PRESENTATION_OPTIONS, MACHINE_OUTPUT_OPTIONS, optionSpec, grammarConstraints, commandSeed };
 export type { CompletionShell, CommandDetail, CommandCollection, CliNetworkEffect, CliInvocationNetworkEffect, CliDisclosureClass, CliHandlerOwner, InlineCommandFamily, CliExecutionOwner, CliCommandDefinition, CliOptionDefinition, CliOption, CliCommandSeed };

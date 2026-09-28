@@ -1,5 +1,5 @@
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../packages/investigation/investigation-manifest.mts';
-import { positional, OPTIONAL_FILE_POSITIONAL, constraint, EMPTY_CONSTRAINTS, commandSeed } from './command-definition.mts';
+import { positional, OPTIONAL_FILE_POSITIONAL, constraint, EMPTY_CONSTRAINTS, commandSeed, flag, file } from './command-definition.mts';
 
 export const ASSURANCE_COMMAND_DEFINITIONS = Object.freeze({
   manifest: commandSeed({
@@ -11,6 +11,11 @@ export const ASSURANCE_COMMAND_DEFINITIONS = Object.freeze({
     collection: { mode: 'offline', scope: `Reads 1 to ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS} local files, at most ${MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES / 1024 / 1024} MiB each and ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES.toLocaleString('en-AU')} bytes combined; retains no source paths.` },
     summary: 'Build an evidence manifest offline',
     options: ['--workflow', '--configuration-digest', '--package', '--bagit', '--passphrase-file', '--folder', '--json', '--quiet', '--no-color'],
+    optionOverrides: {
+      '--package': flag('Create a portable evidence ZIP containing the selected files.'),
+      '--folder': file('Create a new evidence folder containing the selected files.'),
+      '--bagit': flag('Create a BagIt 1.0 package with SHA-512 checksums.'),
+    },
     positionals: Object.freeze([positional('artefacts', 'file', 1, MAX_INVESTIGATION_MANIFEST_ARTIFACTS)]),
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--workflow'] }),

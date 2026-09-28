@@ -1,10 +1,14 @@
 import { INVESTIGATION_PLAN_RECIPES, RUNNABLE_INVESTIGATION_PLAN_RECIPES } from './investigation-recipes.mts';
 import type { CliOptionValueKind, CliOptionOccurrence, CliOptionScope, CliPositionalValueKind, CliPositionalInputSource, CliMetaActionId, CliMetaAction, CliOptionIntegerRange, CliOptionSpec, CliPositionalSpec, CliGrammarConstraint } from '../packages/contracts/cli-grammar.mts';
 import { CLI_COMMAND_SEMANTICS, CLI_HELP_GROUP_ORDER, type CliCommand, type CliHelpGroup } from '../packages/contracts/cli-command-semantics.mts';
-import { type CompletionShell, type CommandDetail, type CommandCollection, type CliNetworkEffect, type CliInvocationNetworkEffect, type CliDisclosureClass, type CliHandlerOwner, INLINE_COMMAND_FAMILIES, type InlineCommandFamily, type CliCommandDefinition, CLI_CASE_OPERATIONS, CLI_INDICATOR_OPERATIONS, CLI_META_ACTIONS, CLI_META_ACTION_BY_ID, HELP_INTRO, HELP_FOOTER, commonOptionsSeedForCommand, CLI_OPTION_DEFINITIONS, type CliOption, PRESENTATION_OPTIONS, optionSpec, grammarConstraints, type CliCommandSeed } from './command-definition.mts';
+import { type CompletionShell, type CommandDetail, type CommandCollection, type CliNetworkEffect, type CliInvocationNetworkEffect, type CliDisclosureClass, type CliHandlerOwner, INLINE_COMMAND_FAMILIES, type InlineCommandFamily, type CliCommandDefinition, CLI_CASE_OPERATIONS, CLI_INDICATOR_OPERATIONS, CLI_META_ACTIONS, CLI_META_ACTION_BY_ID, HELP_INTRO, HELP_FOOTER, commonOptionsForSeed, CLI_OPTION_DEFINITIONS, type CliOption, type CliOptionDefinition, PRESENTATION_OPTIONS, optionSpec, grammarConstraints, type CliCommandSeed } from './command-definition.mts';
 import { COMMAND_SEEDS } from './command-seeds.mts';
 
 const COMMAND_ORDER = Object.freeze(Object.keys(CLI_COMMAND_SEMANTICS)) as readonly CliCommand[];
+
+function commandOptionDefinition(command: CliCommand, option: CliOption): CliOptionDefinition {
+  return COMMAND_SEEDS[command].optionOverrides?.[option] ?? CLI_OPTION_DEFINITIONS[option];
+}
 
 export type CliCommandFor<Owner extends import('./command-definition.mts').CliExecutionOwner> = {
   [Command in CliCommand]: typeof COMMAND_SEEDS[Command]['handlerOwner'] extends Owner ? Command : never
@@ -130,11 +134,11 @@ function generatedCommandUsage(
 const CLI_COMMAND_REGISTRY: readonly CliCommandDefinition[] = Object.freeze(
   COMMAND_ORDER.map((command, order) => {
     const seed = COMMAND_SEEDS[command];
-    const commonOptions = Object.freeze([...commonOptionsSeedForCommand(command)]);
+    const commonOptions = Object.freeze([...commonOptionsForSeed(seed)]);
     const commandOptions = seed.options;
     const grammarOptions = Object.freeze([
-      ...commonOptions.map((option) => optionSpec(command, option, 'common')),
-      ...commandOptions.map((option) => optionSpec(command, option, 'command')),
+      ...commonOptions.map((option) => optionSpec(command, option, 'common', commandOptionDefinition(command, option))),
+      ...commandOptions.map((option) => optionSpec(command, option, 'command', commandOptionDefinition(command, option))),
     ]);
     const constraints = grammarConstraints(commandOptions, seed.constraints);
     return Object.freeze({
@@ -322,13 +326,13 @@ function commandHelp(command: CliCommand): string {
 }
 
 export function commandDefaultNumber(command: CliCommand, option: CliOption, deep = false): number {
-  const value = CLI_OPTION_DEFINITIONS[option].defaultValue(command, deep);
+  const value = commandOptionDefinition(command, option).defaultValue(command, deep);
   if (!commandOwnsOption(command, option) || typeof value !== 'number') throw new TypeError(`No numeric default for ${command} ${option}.`);
   return value;
 }
 
 export function commandDefaultText(command: CliCommand, option: CliOption): string {
-  const value = CLI_OPTION_DEFINITIONS[option].defaultValue(command, false);
+  const value = commandOptionDefinition(command, option).defaultValue(command, false);
   if (!commandOwnsOption(command, option) || typeof value !== 'string') throw new TypeError(`No text default for ${command} ${option}.`);
   return value;
 }
@@ -336,7 +340,7 @@ export function commandDefaultText(command: CliCommand, option: CliOption): stri
 // Help is a mechanical projection, not another parser or public grammar format.
 export function commandOptionHelp(command: CliCommand) {
   return commandDefinition(command).grammar.options.map(specification => {
-    const owner = CLI_OPTION_DEFINITIONS[specification.option as CliOption];
+    const owner = commandOptionDefinition(command, specification.option as CliOption);
     const ordinary = owner.defaultValue(command, false);
     const deep = owner.defaultValue(command, true);
     return Object.freeze({

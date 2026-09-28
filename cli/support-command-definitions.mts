@@ -1,5 +1,5 @@
 import { RISK_CALIBRATION_DATASET_SCHEMA, RISK_CALIBRATION_REPORT_SCHEMA } from '../packages/contracts/risk-calibration.mts';
-import { positional, NO_POSITIONALS, OPTIONAL_FILE_POSITIONAL, constraint, EMPTY_CONSTRAINTS, commandSeed } from './command-definition.mts';
+import { positional, NO_POSITIONALS, OPTIONAL_FILE_POSITIONAL, constraint, EMPTY_CONSTRAINTS, commandSeed, text } from './command-definition.mts';
 
 export const SUPPORT_COMMAND_DEFINITIONS = Object.freeze({
   completion: commandSeed({
@@ -151,6 +151,7 @@ export const SUPPORT_COMMAND_DEFINITIONS = Object.freeze({
     collection: { mode: 'offline', scope: 'Reads the embedded registry capability catalogue and prints one synthetic fixture template.' },
     summary: 'Create a sanitised registry fixture scaffold',
     options: ['--profile', '--suffix', '--scenario'],
+    optionOverrides: { '--profile': text('Select the registry fixture capability profile.', true) },
     positionals: NO_POSITIONALS,
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--profile', '--suffix', '--scenario'] }),

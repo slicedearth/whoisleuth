@@ -1,5 +1,5 @@
 import { INVESTIGATION_PLAN_RECIPES, RUNNABLE_INVESTIGATION_PLAN_RECIPES } from './investigation-recipes.mts';
-import { positional, OPTIONAL_FILE_POSITIONAL, constraint, commandSeed } from './command-definition.mts';
+import { positional, OPTIONAL_FILE_POSITIONAL, constraint, commandSeed, integer, BASE_INTEGER_RANGE, file } from './command-definition.mts';
 
 export const WORKFLOW_COMMAND_DEFINITIONS = Object.freeze({
   "monitor-once": commandSeed({
@@ -11,6 +11,10 @@ export const WORKFLOW_COMMAND_DEFINITIONS = Object.freeze({
     collection: { mode: 'network', scope: 'Runs deep collection for at most 20 manifest domains with concurrency capped at 3.' },
     summary: 'Run one bounded domain control review',
     options: ['--previous', '--limit', '--concurrency', '--fail-on', '--json', '--junit', '--quiet', '--no-color'],
+    optionOverrides: {
+      '--concurrency': integer('Set the maximum number of concurrent collection tasks.',
+        () => Object.freeze([BASE_INTEGER_RANGE(1, 3)]), () => 2),
+    },
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: Object.freeze([
     constraint({ kind: 'mutually_exclusive', options: ['--json', '--junit'] }),
@@ -58,6 +62,7 @@ export const WORKFLOW_COMMAND_DEFINITIONS = Object.freeze({
     collection: { mode: 'network', scope: 'Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause.' },
     summary: 'Execute approved fixed-recipe steps',
     options: ['--select', '--use-artifact', '--confirm-review', '--approve-network', '--resume', '--interactive', '--preview', '--json', '--quiet', '--no-color'],
+    optionOverrides: { '--resume': file('Resume the selected workflow checkpoint; approvals must be supplied again.') },
     positionals: Object.freeze([
     positional('recipe', 'enum', 1, 1, RUNNABLE_INVESTIGATION_PLAN_RECIPES),
     positional('subject', 'text', 1, 1),
