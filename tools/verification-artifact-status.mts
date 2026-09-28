@@ -24,9 +24,9 @@ const GROUPS = Object.freeze({
   ]),
 });
 
-function resolveArtifact(relative: string): string {
-  const absolute = path.resolve(REPOSITORY_ROOT, relative);
-  if (!absolute.startsWith(`${REPOSITORY_ROOT}${path.sep}`) || path.relative(REPOSITORY_ROOT, absolute) !== relative) {
+function resolveArtifact(relative: string, repositoryRoot: string): string {
+  const absolute = path.resolve(repositoryRoot, relative);
+  if (!absolute.startsWith(`${repositoryRoot}${path.sep}`) || path.relative(repositoryRoot, absolute) !== relative) {
     throw new TypeError('Verification artifact target escaped the repository root.');
   }
   return absolute;
@@ -35,17 +35,21 @@ function resolveArtifact(relative: string): string {
 export async function inspectVerificationArtifacts(
   cleanup: 'none' | 'unit' | 'browser' | 'all' = 'none',
   checkPort = true,
+  options: Readonly<{ preserve?: readonly string[]; repositoryRoot?: string }> = {},
 ) {
+  const repositoryRoot = path.resolve(options.repositoryRoot ?? REPOSITORY_ROOT);
+  const preserve = new Set(options.preserve ?? []);
   const selected = cleanup === 'all'
     ? [...GROUPS.unit, ...GROUPS.browser]
     : cleanup === 'none' ? [...GROUPS.unit, ...GROUPS.browser] : [...GROUPS[cleanup]];
-  const before = selected.filter((item) => existsSync(resolveArtifact(item)));
-  if (cleanup !== 'none') for (const item of before) rmSync(resolveArtifact(item), { recursive: true, force: true });
-  const remaining = [...GROUPS.unit, ...GROUPS.browser].filter((item) => existsSync(resolveArtifact(item)));
+  const before = selected.filter((item) => existsSync(resolveArtifact(item, repositoryRoot)));
+  const removed = cleanup === 'none' ? [] : before.filter(item => !preserve.has(item));
+  for (const item of removed) rmSync(resolveArtifact(item, repositoryRoot), { recursive: true, force: true });
+  const remaining = [...GROUPS.unit, ...GROUPS.browser].filter((item) => existsSync(resolveArtifact(item, repositoryRoot)));
   return Object.freeze({
     cleanup,
     selected: selected.length,
-    removed: cleanup === 'none' ? Object.freeze([]) : Object.freeze(before),
+    removed: Object.freeze(removed),
     remaining: Object.freeze(remaining),
     playwrightPort: PLAYWRIGHT_PORT,
     portFree: checkPort ? await localPortIsFree(PLAYWRIGHT_PORT, 2_000) : null,

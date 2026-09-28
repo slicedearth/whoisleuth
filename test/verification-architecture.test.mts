@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
@@ -16,12 +16,14 @@ import {
   PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS,
 } from '../tools/playwright-execution-contract.mts';
 import { createTestDurationReport } from '../tools/test-duration-reporter.mts';
+import { inspectVerificationArtifacts } from '../tools/verification-artifact-status.mts';
 import {
   buildFocusedVerificationExecution,
   assertFocusedBrowserCoverage,
   focusedBrowserLanes,
   discoverFocusedVerificationPaths,
   parseFocusedVerificationOptions,
+  renderExecutionPlan,
 } from '../tools/focused-verification.mts';
 import {
   buildBalancedBrowserShardPlan,
@@ -53,6 +55,28 @@ function rawProfile(): Record<string, unknown> {
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 describe('verification architecture contracts', () => {
+  test('focused cleanup preserves pre-existing artefacts while explicit cleanup still removes its selected group', async () => {
+    const repositoryRoot = mkdtempSync(path.join(tmpdir(), 'verification-cleanup-'));
+    const options = { repositoryRoot };
+    try {
+      mkdirSync(path.join(repositoryRoot, 'frontend/.svelte-kit'), { recursive: true });
+      mkdirSync(path.join(repositoryRoot, 'coverage'));
+      const existing = await inspectVerificationArtifacts('none', false, options);
+      assert.deepEqual([...existing.remaining].sort(), ['coverage', 'frontend/.svelte-kit']);
+      mkdirSync(path.join(repositoryRoot, 'frontend/build'));
+      const focused = await inspectVerificationArtifacts('browser', false, { ...options, preserve: existing.remaining });
+      assert.deepEqual(focused.removed, ['frontend/build']);
+      assert.deepEqual(focused.remaining, existing.remaining);
+      assert.equal(existsSync(path.join(repositoryRoot, 'frontend/.svelte-kit')), true);
+      const explicit = await inspectVerificationArtifacts('browser', false, options);
+      assert.deepEqual(explicit.removed, ['frontend/.svelte-kit']);
+      assert.deepEqual(explicit.remaining, ['coverage']);
+      assert.equal(existsSync(path.join(repositoryRoot, 'coverage')), true);
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+
   test('explains dependency fallback without exposing arbitrary failure details', () => {
     const failure = Object.assign(new Error('private transport detail'), { code: 'ENOENT' });
     assert.equal(dependencyAnalysisFailure('reading dependency configuration', failure),
@@ -752,6 +776,32 @@ describe('verification architecture contracts', () => {
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
+  test('iteration defers integration execution explicitly without changing its selection or defaults', () => {
+    const paths = ['packages/cases/case-record-projection.mts', 'frontend/src/lib/components/LookupAtAGlance.svelte'];
+    const plan = buildVerificationOwnershipPlan(paths);
+    const integration = buildFocusedVerificationExecution(plan);
+    const iteration = buildFocusedVerificationExecution(plan, { iteration: true });
+    assert.equal(integration.scope, 'integration');
+    assert.equal(iteration.scope, 'iteration');
+    assert.deepEqual(iteration.browserSpecs, []);
+    assert.deepEqual(iteration.deferredBrowserSpecs, plan.focusedBrowserChecks);
+    assert.deepEqual(iteration.deferredSpecialisedChecks, [...plan.mandatorySpecialisedChecks].sort());
+    assert.deepEqual(iteration.commands.map(command => command.id), ['browser-discovery', 'focused-unit', 'check', 'typecheck', 'diff-whitespace']);
+    assert.deepEqual(iteration.commands.find(command => command.id === 'focused-unit')?.args,
+      integration.commands.find(command => command.id === 'focused-unit')?.args);
+    assert.deepEqual(iteration.commands.find(command => command.id === 'check')?.selectedBy, [paths[1]]);
+    assert.deepEqual(iteration.commands.find(command => command.id === 'typecheck')?.selectedBy, [paths[0]]);
+    assert.ok(integration.commands.some(command => command.id === 'schema:inventory'));
+    for (const command of integration.commands) {
+      assert.ok(command.selectedBy.length, command.id);
+      assert.ok(command.selectedBy.every(file => paths.includes(file)), command.id);
+    }
+    const rendered = renderExecutionPlan(plan, iteration);
+    assert.match(rendered, /Iteration is not integration acceptance/u);
+    assert.match(rendered, /Browser execution deferred:/u);
+    assert.match(rendered, /Run: check — selected by frontend\/src\/lib\/components\/LookupAtAGlance.svelte/u);
+  });
+
   test('optional editor configuration does not select application or release checks', async () => {
     for (const file of ['.prettierrc.json', '.prettierignore', '.editorconfig', 'prettier.config.mjs']) {
       const plan = await createVerificationOwnershipPlan([file]);
@@ -925,6 +975,10 @@ describe('verification architecture contracts', () => {
       /Usage/u,
     );
     assert.throws(() => parseFocusedVerificationOptions(['--unknown']), /Usage/u);
+    assert.deepEqual(parseFocusedVerificationOptions(['--iteration', '--list', '--since=HEAD~2']), {
+      list: true, changed: true, iteration: true, paths: [], since: 'HEAD~2',
+    });
+    assert.throws(() => parseFocusedVerificationOptions(['--iteration', '--iteration']), /Usage/u);
     assert.deepEqual(parseFocusedVerificationOptions(['--since=HEAD~2', '--list']), {
       list: true, changed: true, paths: [], since: 'HEAD~2',
     });

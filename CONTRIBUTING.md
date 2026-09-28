@@ -25,7 +25,8 @@ references, retained data and compatibility fixtures use their existing owners.
   validation is in `case-response-review-inputs.mts`, separate from construction.
 - **Lookup downloads:** `frontend/src/lib/analysis/lookup-exports.ts` prepares
   projections and files; the route owns visible status, not export formatting.
-- **Lookup state:** `lookup-view-state.ts` creates and restores an observation;
+- **Lookup state:** `controllers/lookup-session.ts` owns request state, URL
+  reconciliation and session snapshots; `lookup-view-state.ts` restores observations.
   `lookup-case-workspace.ts` and `lookup-watchlist-workspace.ts` own their drafts,
   saves and stale-result guards. `lookup-section-navigation.ts` handles section
   buttons, evidence links and hash restoration through the shared anchor controller.
@@ -40,8 +41,9 @@ references, retained data and compatibility fixtures use their existing owners.
 - **Brand Profile editing:** `controllers/brand-profile-editor.ts` owns form values,
   reset/load, submission and capture cancellation. The route's existing mutation
   coordinator still owns writes, conflicts and recovery reads.
-- **CLI options:** `cli/command-reference.mts` owns grammar and command bindings.
-  Help and completion derive from it; command handlers own execution.
+- **CLI options:** family `cli/*-command-definitions.mts` files own command
+  bindings; `command-definition.mts` owns shared options. Help and completion
+  derive from them; command handlers own execution.
 - **CLI recipes:** `cli/investigation-recipes.mts` owns recipe definitions. Names,
   argument choices and catalogue entries derive; plan construction validates
   each step against the command's independent network contract.
@@ -89,6 +91,13 @@ For behavioural changes:
 npm run verification:focused -- --list
 npm run verification:focused
 ```
+
+While editing, add `--iteration` to run the selected unit/type checks and
+browser-import discovery without building or executing browsers, packages or
+repository-wide integration gates. The plan explains which changed paths
+selected each check and lists every deferred gate. Run the same selection
+without `--iteration` at the coherent batch boundary. Neither mode replaces
+the complete required pre-merge checks.
 
 For a fast all-domain feedback pass, use `npm run test:unit`. Repository-wide
 integration checks use the `.integration.test.mts` suffix and run through

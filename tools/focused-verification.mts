@@ -33,6 +33,7 @@ const MAX_GIT_OUTPUT_BYTES = 2 * 1024 * 1024;
 
 type FocusedCommand = Readonly<{
   id: string;
+  selectedBy: readonly string[];
   executable: string;
   args: readonly string[];
   environment?: Readonly<Record<string, string>>;
@@ -41,15 +42,18 @@ type FocusedCommand = Readonly<{
 export type FocusedVerificationOptions = Readonly<{
   list: boolean;
   changed: boolean;
+  iteration?: true;
   paths: readonly string[];
   since?: string;
 }>;
 
 export type FocusedVerificationExecution = Readonly<{
+  scope: 'iteration' | 'integration';
   commands: readonly FocusedCommand[];
   browserSpecs: readonly string[];
   cleanupBrowserArtifacts: boolean;
   deferredSpecialisedChecks: readonly SpecialisedCheck[];
+  deferredBrowserSpecs: readonly string[];
 }>;
 
 const SPECIALISED_SCRIPTS: Readonly<Partial<Record<SpecialisedCheck, string>>> = Object.freeze({
@@ -82,8 +86,8 @@ const SPECIALISED_DELIVERY_ONLY = new Set<SpecialisedCheck>([
   'staged-security',
 ]);
 
-function npmCommand(script: string): FocusedCommand {
-  return Object.freeze({ id: script, executable: npmExecutableName(), args: Object.freeze(['run', script]) });
+function npmCommand(script: string, selectedBy: readonly string[]): FocusedCommand {
+  return Object.freeze({ id: script, selectedBy: Object.freeze([...selectedBy]), executable: npmExecutableName(), args: Object.freeze(['run', script]) });
 }
 
 export function focusedBrowserLanes(specs: readonly string[]) {
@@ -108,18 +112,20 @@ export function assertFocusedBrowserCoverage(specs: readonly string[], report: u
 export function parseFocusedVerificationOptions(args: readonly string[]): FocusedVerificationOptions {
   const listCount = args.filter((value) => value === '--list').length;
   const changedCount = args.filter((value) => value === '--changed').length;
+  const iterationCount = args.filter(value => value === '--iteration').length;
   const sinceOptions = args.filter(value => value.startsWith('--since='));
   const since = sinceOptions[0]?.slice('--since='.length);
-  const paths = args.filter((value) => value !== '--list' && value !== '--changed' && !value.startsWith('--since='));
-  if (listCount > 1 || changedCount > 1 || paths.some((value) => value.startsWith('-'))
+  const paths = args.filter((value) => value !== '--list' && value !== '--changed' && value !== '--iteration' && !value.startsWith('--since='));
+  if (listCount > 1 || changedCount > 1 || iterationCount > 1 || paths.some((value) => value.startsWith('-'))
     || (changedCount > 0 && paths.length > 0) || sinceOptions.length > 1
     || (since !== undefined && (!since || since.length > 320 || /^[\s-]|[\s\0]/u.test(since) || changedCount || paths.length))) {
-    throw new TypeError('Usage: node tools/focused-verification.mts [--list] [--changed | --since=<commit> | <changed-path> ...]');
+    throw new TypeError('Usage: node tools/focused-verification.mts [--list] [--iteration] [--changed | --since=<commit> | <changed-path> ...]');
   }
   return Object.freeze({
     list: listCount === 1,
     changed: changedCount === 1 || paths.length === 0,
     paths: Object.freeze(paths),
+    ...(iterationCount ? { iteration: true as const } : {}),
     ...(since === undefined ? {} : { since }),
   });
 }
@@ -155,14 +161,17 @@ export function discoverFocusedVerificationPaths(since = 'HEAD', repositoryRoot 
 
 export function buildFocusedVerificationExecution(
   plan: VerificationOwnershipPlan,
+  options: Pick<FocusedVerificationOptions, 'iteration'> = {},
 ): FocusedVerificationExecution {
   const commands: FocusedCommand[] = [];
+  const browserPaths = plan.assignments.filter(assignment => assignment.focusedBrowserChecks.length).map(assignment => assignment.changedPath);
   if (plan.focusedBrowserChecks.length) {
     // Discovery loads the real configuration and selected specifications but
     // does not start the server, setup, or a browser. A broken import should
     // fail before unit coverage, package assembly, or a production build.
     commands.push(Object.freeze({
       id: 'browser-discovery', executable: process.execPath,
+      selectedBy: browserPaths,
       args: Object.freeze([PLAYWRIGHT_CLI, 'test', ...plan.focusedBrowserChecks,
         ...focusedBrowserLanes(plan.focusedBrowserChecks).map(lane => `--project=${lane.project}`), '--list', '--reporter=json']),
       environment: Object.freeze({ CI: '', WHOISLEUTH_E2E_USE_BUILD: '0', WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1', PLAYWRIGHT_JSON_OUTPUT_FILE: '' }),
@@ -171,6 +180,7 @@ export function buildFocusedVerificationExecution(
   if (plan.focusedUnitChecks.length) {
     commands.push(Object.freeze({
       id: 'focused-unit',
+      selectedBy: plan.assignments.filter(assignment => assignment.focusedUnitChecks.length).map(assignment => assignment.changedPath),
       executable: process.execPath,
       args: Object.freeze([
         '--test',
@@ -184,24 +194,27 @@ export function buildFocusedVerificationExecution(
   // Runtime import selection deliberately excludes erased type edges. Shared
   // source changes therefore retain compiler coverage of every consuming
   // project, even when those consumers need no behavioural test rerun.
-  const sharedSourceChanged = typedPaths.some(value => !value.startsWith('frontend/src/')
+  const sharedPaths = typedPaths.filter(value => !value.startsWith('frontend/src/')
     && !value.startsWith('test/') && !value.startsWith('e2e/') && value !== 'playwright.config.ts');
-  const frontendChanged = typedPaths.some((value) => value.startsWith('frontend/src/'));
+  const sharedSourceChanged = sharedPaths.length > 0;
+  const frontendPaths = typedPaths.filter((value) => value.startsWith('frontend/src/'));
+  const frontendChanged = frontendPaths.length > 0;
   // Svelte check already checks the frontend TypeScript project. Do not also
   // typecheck the server, CLI, test and browser-test projects for a UI edit.
-  if (frontendChanged) commands.push(npmCommand('check'));
-  const compilerProjects = new Set<string>();
-  if (sharedSourceChanged) commands.push(npmCommand('typecheck'));
+  if (frontendChanged) commands.push(npmCommand('check', frontendPaths));
+  const compilerProjects = new Map<string, string[]>();
+  if (sharedSourceChanged) commands.push(npmCommand('typecheck', sharedPaths));
   for (const file of typedPaths) {
     if (sharedSourceChanged) break;
     if (file.startsWith('frontend/src/')) continue;
-    if (file.startsWith('e2e/') || file === 'playwright.config.ts') compilerProjects.add('e2e/tsconfig.json');
-    else if (file.startsWith('test/')) compilerProjects.add('test/tsconfig.json');
-    else compilerProjects.add('tsconfig.json');
+    const project = file.startsWith('e2e/') || file === 'playwright.config.ts' ? 'e2e/tsconfig.json'
+      : file.startsWith('test/') ? 'test/tsconfig.json' : 'tsconfig.json';
+    compilerProjects.set(project, [...(compilerProjects.get(project) ?? []), file]);
   }
-  for (const project of compilerProjects) {
+  for (const [project, selectedBy] of compilerProjects) {
     commands.push(Object.freeze({
       id: `typecheck (${project})`, executable: process.execPath,
+      selectedBy,
       args: Object.freeze([path.join(REPOSITORY_ROOT, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', project]),
     }));
   }
@@ -209,48 +222,54 @@ export function buildFocusedVerificationExecution(
   const deferred = new Set<SpecialisedCheck>();
   for (const check of plan.mandatorySpecialisedChecks) {
     if (SPECIALISED_COVERED_BY_FOCUSED_TESTS.has(check)) continue;
-    if (SPECIALISED_DELIVERY_ONLY.has(check)) {
+    if (SPECIALISED_DELIVERY_ONLY.has(check) || options.iteration) {
       deferred.add(check);
       continue;
     }
     const script = SPECIALISED_SCRIPTS[check];
     if (!script) throw new TypeError(`Focused verification has no execution owner for ${check}.`);
-    if (check === 'local-package' && !commands.some(command => command.id === 'build')) commands.push(npmCommand('build'));
-    if (!commands.some((command) => command.id === script)) commands.push(npmCommand(script));
+    const selectedBy = plan.assignments.filter(assignment => assignment.mandatorySpecialisedChecks.includes(check)).map(assignment => assignment.changedPath);
+    if (check === 'local-package' && !commands.some(command => command.id === 'build')) commands.push(npmCommand('build', selectedBy));
+    if (!commands.some((command) => command.id === script)) commands.push(npmCommand(script, selectedBy));
   }
 
-  const browserSpecs = Object.freeze([...plan.focusedBrowserChecks]);
+  const browserSpecs = Object.freeze(options.iteration ? [] : [...plan.focusedBrowserChecks]);
   if (browserSpecs.length && !commands.some((command) => command.id === 'build')) {
-    commands.push(npmCommand('build'));
+    commands.push(npmCommand('build', browserPaths));
   }
-  commands.push(Object.freeze({ id: 'diff-whitespace', executable: 'git', args: Object.freeze(['diff', '--check']) }));
+  commands.push(Object.freeze({ id: 'diff-whitespace', selectedBy: plan.changedPaths, executable: 'git', args: Object.freeze(['diff', '--check']) }));
 
   const producesBrowserArtifacts = frontendChanged
     || browserSpecs.length > 0
     || commands.some((command) => command.id === 'build' || command.id === 'frontend:loading-report');
 
   return Object.freeze({
+    scope: options.iteration ? 'iteration' : 'integration',
     commands: Object.freeze(commands),
     browserSpecs,
     cleanupBrowserArtifacts: producesBrowserArtifacts,
     deferredSpecialisedChecks: Object.freeze([...deferred].sort()),
+    deferredBrowserSpecs: Object.freeze(options.iteration ? [...plan.focusedBrowserChecks] : []),
   });
 }
 
-function renderExecutionPlan(
+export function renderExecutionPlan(
   plan: VerificationOwnershipPlan,
   execution: FocusedVerificationExecution,
 ): string {
   const lines = [
-    `Focused verification map v${plan.mapVersion}: ${plan.changedPaths.length} changed path(s) across ${plan.ownershipAreas.length} owner and ${plan.impactAreas.length} impact area(s).`,
+    `Focused ${execution.scope} verification: ${plan.changedPaths.length} changed path(s) across ${plan.ownershipAreas.length} owner and ${plan.impactAreas.length} impact area(s).`,
     `Focused unit files: ${plan.focusedUnitChecks.length}.`,
     ...plan.assignments.map((assignment) => `Selected for ${assignment.changedPath}: ${assignment.impactAreas.join('; ')}.`),
     ...plan.interpretation.slice(-1),
-    ...execution.commands.map((command) => `Run: ${command.id}`),
+    ...execution.commands.map((command) => `Run: ${command.id} — selected by ${command.selectedBy.join(', ')}.`),
     `Focused browser specs: ${execution.browserSpecs.length}${execution.browserSpecs.length ? ` (${execution.browserSpecs.join(', ')})` : ''}.`,
     ...(execution.deferredSpecialisedChecks.length
-      ? [`Delivery-only checks deferred: ${execution.deferredSpecialisedChecks.join(', ')}.`]
+      ? [`Checks deferred: ${execution.deferredSpecialisedChecks.join(', ')}.`]
       : []),
+    ...(execution.deferredBrowserSpecs.length ? [`Browser execution deferred: ${execution.deferredBrowserSpecs.join(', ')}.`] : []),
+    ...(execution.scope === 'iteration'
+      ? ['Iteration is not integration acceptance. Run the same selection without --iteration before completing the batch.'] : []),
     'This focused result covers the listed paths and checks only. Complete hosted checks are required before merge; release checks remain separate.',
   ];
   return `${lines.join('\n')}\n`;
@@ -357,14 +376,16 @@ export async function runFocusedBrowserSpecs(specs: readonly string[]): Promise<
 
 export async function main(args = process.argv.slice(2)): Promise<number> {
   let cleanupBrowserArtifacts = false;
+  let existingArtifacts: readonly string[] = [];
   let failure: unknown;
   try {
     const options = parseFocusedVerificationOptions(args);
     const paths = options.changed ? discoverFocusedVerificationPaths(options.since) : options.paths;
     const plan = await createVerificationOwnershipPlan(paths);
-    const execution = buildFocusedVerificationExecution(plan);
+    const execution = buildFocusedVerificationExecution(plan, options);
     process.stdout.write(renderExecutionPlan(plan, execution));
     if (options.list) return 0;
+    existingArtifacts = (await inspectVerificationArtifacts('none', false)).remaining;
     for (const command of execution.commands) {
       if (execution.cleanupBrowserArtifacts
         && (command.id === 'typecheck' || command.id === 'check' || command.id === 'build')) {
@@ -379,8 +400,8 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
 
   if (cleanupBrowserArtifacts) {
     try {
-      const cleanup = await inspectVerificationArtifacts('browser', false);
-      process.stdout.write(`Focused verification cleanup removed ${cleanup.removed.length} generated path(s).\n`);
+      const cleanup = await inspectVerificationArtifacts('browser', false, { preserve: existingArtifacts });
+      process.stdout.write(`Focused verification cleanup removed ${cleanup.removed.length} new generated path(s); pre-existing paths were preserved.\n`);
     } catch (error) {
       failure ??= error;
     }
