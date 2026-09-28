@@ -20,15 +20,19 @@ unsupported future versions, and document migration or comparison behaviour.
 
 ## Prepare a release
 
-Work on a focused branch and update the root manifest and lockfile together:
+Work on a focused branch and prepare the approved explicit version:
 
 ```bash
-npm version minor --no-git-tag-version
-npm run release:check
+npm run release:prepare -- <version>
 ```
 
-Use `patch`, `minor`, `major`, or an explicit valid semantic version as
-appropriate. `release:check` is offline and read-only. It verifies that:
+Replace `<version>` with the chosen semantic version. This updates the root
+manifest and lockfile, regenerates version-derived public examples through their
+owner, then runs `release:check`. Review the complete diff before committing.
+Existing release tags are refused; no tag or publication is created. See
+[local verification](getting-started.md#verification) for the shared check path.
+
+`release:check` alone is offline and read-only. It verifies that:
 
 - `package.json`, `package-lock.json`, and the lockfile root package agree;
 - the version is a valid semantic version without an in-manifest `v` prefix;
