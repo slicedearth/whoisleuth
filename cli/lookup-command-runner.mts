@@ -1,6 +1,6 @@
 import { abortable } from '../lib/abort.mts';
 import { classifyQuery } from '../lib/classify.mts';
-import { runUnifiedLookup } from '../lib/lookup.mts';
+import { runUnifiedLookup, type LookupOptions } from '../lib/lookup.mts';
 import { plannedLookupProgressSources } from '../lib/lookup-source-progress.mts';
 import type { CliArguments } from './arguments.mts';
 import { CliUsageError } from './errors.mts';
@@ -103,6 +103,21 @@ async function runLookupCommand(
       },
     );
   };
+  const collect = (
+    signal: AbortSignal | undefined,
+    onSourceSettled: NonNullable<LookupOptions['onSourceSettled']>,
+  ) => abortable(() => executeLookup(classified, {
+    fast: !args.deep,
+    compact: false,
+    ...(signal ? { signal } : {}),
+    ...(args.deep ? {
+      ...(selectedUrl ? { selectedUrl } : {}),
+      onSourceSettled: settlement => {
+        onSourceSettled(settlement);
+        eventProgress.emit({ event: 'source_settled', source: settlement.source, state: settlement.state });
+      },
+    } : {}),
+  }), signal);
   let document: UnknownRecord;
   if (args.browse === true) {
     const browse = dependencies.browseLookupOperation || browseLookupOperation;
@@ -117,23 +132,7 @@ async function runLookupCommand(
       plannedSources: args.deep ? plannedLookupProgressSources(classified) : [],
       ...(dependencies.signal ? { signal: dependencies.signal } : {}),
       collect: async ({ signal, onSourceSettled }) => {
-        const result = await abortable(() => executeLookup(classified, args.deep
-          ? {
-              fast: false,
-              compact: false,
-              ...(selectedUrl ? { selectedUrl } : {}),
-              signal,
-              onSourceSettled: (settlement) => {
-                onSourceSettled(settlement);
-                eventProgress.emit({ event: 'source_settled', source: settlement.source, state: settlement.state });
-              },
-            }
-          : {
-              fast: true,
-              compact: false,
-              signal,
-            }), signal);
-        return buildDocument(result);
+        return buildDocument(await collect(signal, onSourceSettled));
       },
     });
     if (args.saveLookup) {
@@ -153,25 +152,12 @@ async function runLookupCommand(
     let settledSources = 0;
     let result: unknown;
     try {
-      result = await abortable(() => executeLookup(classified, args.deep
-        ? {
-            fast: false,
-            compact: false,
-            ...(selectedUrl ? { selectedUrl } : {}),
-            ...(dependencies.signal ? { signal: dependencies.signal } : {}),
-            onSourceSettled: (settlement) => {
-              settledSources += 1;
-              indicator.update(
-                `Collected ${settledSources} source${settledSources === 1 ? '' : 's'} · ${settlement.source.replaceAll('_', ' ')} ${settlement.state}`,
-              );
-              eventProgress.emit({ event: 'source_settled', source: settlement.source, state: settlement.state });
-            },
-          }
-        : {
-            fast: true,
-            compact: false,
-            ...(dependencies.signal ? { signal: dependencies.signal } : {}),
-          }), dependencies.signal);
+      result = await collect(dependencies.signal, settlement => {
+        settledSources += 1;
+        indicator.update(
+          `Collected ${settledSources} source${settledSources === 1 ? '' : 's'} · ${settlement.source.replaceAll('_', ' ')} ${settlement.state}`,
+        );
+      });
     } finally {
       context.endProgress();
     }

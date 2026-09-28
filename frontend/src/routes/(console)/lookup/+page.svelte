@@ -194,7 +194,7 @@
   const websiteProbeCapability = $derived(
     featureCapability(capabilityReport?.() || null, 'website_probe'),
   );
-  const securityTxtSupported = $derived(websiteProbeCapability?.status === 'supported');
+  const websiteObservationSupported = $derived(websiteProbeCapability?.status === 'supported');
 
   const parsedInput = $derived(parseDomainInput(session.request.query));
   const entries = $derived(parsedInput.entries);
@@ -530,7 +530,7 @@
         externalIntelligenceSupported,
         malwareHostIntelligenceSupported,
         malwareIocIntelligenceSupported,
-        securityTxtSupported,
+        websiteObservationSupported,
         securityTxtEligible,
       },
     }),
@@ -586,7 +586,7 @@
   {externalIntelligenceSupported}
   {malwareHostIntelligenceSupported}
   {malwareIocIntelligenceSupported}
-  {securityTxtSupported}
+  {websiteObservationSupported}
   {securityTxtEligible}
   bind:includeExternalIntelligence={session.request.includeExternalIntelligence}
   bind:includeMalwareHostIntelligence={session.request.includeMalwareHostIntelligence}

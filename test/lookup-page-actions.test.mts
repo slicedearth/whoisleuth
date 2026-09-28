@@ -20,7 +20,7 @@ describe('lookup page actions', () => {
       includeMalwareIocIntelligence: true,
       malwareIocIntelligenceSupported: true,
       includeSecurityTxt: true,
-      securityTxtSupported: true,
+      websiteObservationSupported: true,
       securityTxtEligible: true,
     });
 
@@ -30,7 +30,7 @@ describe('lookup page actions', () => {
       includeExternalIntelligence: false, externalIntelligenceSupported: false,
       includeMalwareHostIntelligence: false, malwareHostIntelligenceSupported: false,
       includeMalwareIocIntelligence: false, malwareIocIntelligenceSupported: false,
-      includeSecurityTxt: false, securityTxtSupported: false, securityTxtEligible: false,
+      includeSecurityTxt: false, websiteObservationSupported: false, securityTxtEligible: false,
     };
     assert.equal(buildLookupRequestUrl('https://portal.example.test/private-path?private-query=value#fragment', selection),
       '/api/lookup?q=portal.example.test&fast=1');
@@ -47,7 +47,7 @@ describe('lookup page actions', () => {
       includeMalwareIocIntelligence: false,
       malwareIocIntelligenceSupported: true,
       includeSecurityTxt: true,
-      securityTxtSupported: true,
+      websiteObservationSupported: true,
       securityTxtEligible: true,
     });
 

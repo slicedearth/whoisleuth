@@ -757,6 +757,47 @@ describe('lookup terminal evidence browser', () => {
 });
 
 describe('lookup browse CLI contract', () => {
+  for (const browse of [false, true]) for (const mode of ['fast', 'deep', 'selected-url'] as const) {
+    test(`${browse ? 'browse' : 'ordinary'} ${mode} collection retains its exact scope and cancellation owner`, async () => {
+      const outer = new AbortController(), interactive = new AbortController();
+      const settlement: LookupSourceSettlement = {
+        source: 'rdap', state: 'success', complete: true, truncated: false,
+        fragment: { status: 'success' },
+      };
+      let calls = 0, displayed = 0;
+      const code = await runCli([
+        'lookup', mode === 'selected-url' ? 'https://example.test/review' : 'example.test',
+        ...(mode === 'fast' ? [] : ['--deep']),
+        ...(mode === 'selected-url' ? ['--exact-url'] : []),
+        ...(browse ? ['--browse'] : ['--json']),
+      ], {
+        stdout: capture().stream, stderr: capture().stream,
+        signal: outer.signal,
+        canBrowseLookup: () => true,
+        browseLookupOperation: async options => options.collect!({
+          signal: interactive.signal,
+          onSourceSettled: value => { assert.equal(value, settlement); displayed++; },
+        }),
+        runUnifiedLookup: async (_classified, options) => {
+          calls++;
+          assert.ok(options);
+          const { onSourceSettled, ...scope } = options;
+          assert.deepEqual(scope, {
+            fast: mode === 'fast', compact: false,
+            signal: browse ? interactive.signal : outer.signal,
+            ...(mode === 'selected-url' ? { selectedUrl: 'https://example.test/review' } : {}),
+          });
+          assert.equal(typeof onSourceSettled, mode === 'fast' ? 'undefined' : 'function');
+          onSourceSettled?.(settlement);
+          return lookupDocument();
+        },
+      });
+      assert.equal(code, EXIT_CODES.SUCCESS);
+      assert.equal(calls, 1);
+      assert.equal(displayed, browse && mode !== 'fast' ? 1 : 0);
+    });
+  }
+
   test('parses the explicit presentation flag and rejects incompatible output paths and modes', () => {
     assert.deepEqual(parseCliArguments(['lookup', 'example.test', '--deep', '--browse']), {
       action: 'lookup', query: 'example.test', output: 'terminal', deep: true, detail: 'standard', strictExit: false,

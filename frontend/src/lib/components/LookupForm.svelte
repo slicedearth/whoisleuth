@@ -26,7 +26,7 @@
     externalIntelligenceSupported,
     malwareHostIntelligenceSupported,
     malwareIocIntelligenceSupported,
-    securityTxtSupported,
+    websiteObservationSupported,
     securityTxtEligible,
     includeExternalIntelligence = $bindable(),
     includeMalwareHostIntelligence = $bindable(),
@@ -54,7 +54,7 @@
     externalIntelligenceSupported: boolean;
     malwareHostIntelligenceSupported: boolean;
     malwareIocIntelligenceSupported: boolean;
-    securityTxtSupported: boolean;
+    websiteObservationSupported: boolean;
     securityTxtEligible: boolean;
     includeExternalIntelligence: boolean;
     includeMalwareHostIntelligence: boolean;
@@ -187,10 +187,10 @@
     {#if deepMode}<LookupSourceProgress progress={sourceProgress} />{/if}
   {/if}
 
-  {#if securityTxtSupported || intelligenceOptionCount}
+  {#if websiteObservationSupported || intelligenceOptionCount}
   <details class="optional-sources">
     <summary>Optional sources <span>{selectedSourceCount ? `${selectedSourceCount} selected for Deep` : 'None selected'}</span></summary>
-  {#if securityTxtSupported}
+  {#if websiteObservationSupported}
     <fieldset class="intelligence-options">
       <legend>Optional disclosure contact</legend>
       <p class="intelligence-hint">This starts one bounded HTTPS collection at the standardised security.txt location on the exact hostname entered.</p>

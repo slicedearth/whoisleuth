@@ -52,7 +52,7 @@ type LookupRequestSelection = Readonly<{
   includeMalwareIocIntelligence: boolean;
   malwareIocIntelligenceSupported: boolean;
   includeSecurityTxt: boolean;
-  securityTxtSupported: boolean;
+  websiteObservationSupported: boolean;
   securityTxtEligible: boolean;
 }>;
 
@@ -86,7 +86,7 @@ export function buildLookupRequestUrl(
   if (
     selection.mode === 'deep' &&
     selection.includeSecurityTxt &&
-    selection.securityTxtSupported &&
+    selection.websiteObservationSupported &&
     selection.securityTxtEligible
   ) {
     params.set('security_txt', '1');

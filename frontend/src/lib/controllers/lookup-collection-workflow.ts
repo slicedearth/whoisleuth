@@ -22,7 +22,7 @@ type LookupCollectionContext = Readonly<{
     | 'externalIntelligenceSupported'
     | 'malwareHostIntelligenceSupported'
     | 'malwareIocIntelligenceSupported'
-    | 'securityTxtSupported'
+    | 'websiteObservationSupported'
     | 'securityTxtEligible'
   >;
 }>;
@@ -93,7 +93,7 @@ export class LookupCollectionWorkflow {
     try {
       target = prepareLookupCollectionTarget(entry);
       if (state.collectSelectedUrl) {
-        if (state.request.lookupMode !== 'deep' || !context.capabilities.securityTxtSupported)
+        if (state.request.lookupMode !== 'deep' || !context.capabilities.websiteObservationSupported)
           throw new TypeError(
             'Selected URL collection requires an enabled Deep website observation.',
           );

@@ -59,7 +59,7 @@ function harness(request?: LookupRequest, overrides: Partial<LookupCollectionEff
       externalIntelligenceSupported: false,
       malwareHostIntelligenceSupported: false,
       malwareIocIntelligenceSupported: false,
-      securityTxtSupported: true,
+      websiteObservationSupported: true,
       securityTxtEligible: true,
     },
   };
@@ -146,7 +146,7 @@ test('collection admission preserves existing evidence and starts no effects for
         h.context({
           capabilities: {
             ...h.effects.context().capabilities,
-            securityTxtSupported: false,
+            websiteObservationSupported: false,
           },
         });
     }

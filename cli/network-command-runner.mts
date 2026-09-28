@@ -1,6 +1,14 @@
+import {
+  runDiscriminatedCommandHandler,
+  type DiscriminatedCommandHandlerMap,
+} from './discriminated-command-handlers.mts';
 import { fetchHomepage } from '../lib/availability.mts';
 import { searchCertificateTransparency } from '../lib/ct-search.mts';
-import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors } from '../lib/domain-posture.mts';
+import {
+  checkDomainPosture,
+  normalizeAuditDomain,
+  normalizeDkimSelectors,
+} from '../lib/domain-posture.mts';
 import { collectTlsIntelligence, normalizeTlsHostname } from '../lib/tls-intelligence.mts';
 import {
   MAX_DNSSEC_TRUST_ANCHOR_BYTES,
@@ -56,61 +64,75 @@ export type NetworkCommandDependencies = {
 
 type NetworkCommandArguments = Extract<CliArguments, { action: CliCommandFor<'network'> }>;
 
-async function runNetworkCommand(
-  args: NetworkCommandArguments,
-  dependencies: NetworkCommandDependencies,
-  context: CliCommandContext,
-): Promise<number> {
-  if (args.action === 'ct-search') {
+const networkCommandHandlers = {
+  'ct-search': async (args, dependencies, context) => {
     context.setFailureLabel('Certificate Transparency search');
-    const keyword = args.keyword || await context.readSingleInput();
-    if (!keyword) throw new CliUsageError('ct-search requires one keyword as an argument or on stdin.');
+    const keyword = args.keyword || (await context.readSingleInput());
+    if (!keyword)
+      throw new CliUsageError('ct-search requires one keyword as an argument or on stdin.');
     const search = dependencies.searchCertificateTransparency || searchCertificateTransparency;
-    const result = await context.withProgress('Searching certificate observations', () => search(keyword));
+    const result = await context.withProgress('Searching certificate observations', () =>
+      search(keyword),
+    );
     const document = buildCliCtSearchDocument(keyword, result as UnknownRecord, context.now());
     if (!args.quiet) {
-      context.writeStdout(args.output === 'json'
-        ? formatJsonDocument(document)
-        : context.terminal(formatTerminalCtSearch(document), args.color));
+      context.writeStdout(
+        args.output === 'json'
+          ? formatJsonDocument(document)
+          : context.terminal(formatTerminalCtSearch(document), args.color),
+      );
     }
     return EXIT_CODES.SUCCESS;
-  }
+  },
 
-  if (args.action === 'posture') {
+  posture: async (args, dependencies, context) => {
     context.setFailureLabel('Domain posture audit');
-    const requestedDomain = args.domain || await context.readSingleInput();
-    if (!requestedDomain) throw new CliUsageError('posture requires one domain as an argument or on stdin.');
+    const requestedDomain = args.domain || (await context.readSingleInput());
+    if (!requestedDomain)
+      throw new CliUsageError('posture requires one domain as an argument or on stdin.');
     const normalizeDomain = dependencies.normalizeAuditDomain || normalizeAuditDomain;
     const domain = normalizeDomain(requestedDomain);
     if (!domain) throw new CliUsageError('posture requires a valid domain name.');
     const normalizeSelectors = dependencies.normalizeDkimSelectors || normalizeDkimSelectors;
     const dkimSelectors = normalizePostureSelectors(args.selectorText, normalizeSelectors);
-    const retiredDkimSelectors = normalizePostureSelectors(args.retiredSelectorText, normalizeSelectors)
+    const retiredDkimSelectors = normalizePostureSelectors(
+      args.retiredSelectorText,
+      normalizeSelectors,
+    )
       .filter((selector) => !dkimSelectors.includes(selector))
       .slice(0, Math.max(0, 10 - dkimSelectors.length));
     const audit = dependencies.checkDomainPosture || checkDomainPosture;
-    const report = await context.withProgress('Collecting domain posture evidence', () => audit(domain, {
-      dkimSelectors,
-      retiredDkimSelectors,
-      mailProtectionProfile: args.mailProfile,
-      ...(args.includeInheritedDns ? { includeInheritedDns: true } : {}),
-      ...(dependencies.signal ? { signal: dependencies.signal } : {}),
-    }));
-    const document = buildCliPostureDocument(requestedDomain, report as UnknownRecord, context.now());
+    const report = await context.withProgress('Collecting domain posture evidence', () =>
+      audit(domain, {
+        dkimSelectors,
+        retiredDkimSelectors,
+        mailProtectionProfile: args.mailProfile,
+        ...(args.includeInheritedDns ? { includeInheritedDns: true } : {}),
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      }),
+    );
+    const document = buildCliPostureDocument(
+      requestedDomain,
+      report as UnknownRecord,
+      context.now(),
+    );
     if (!args.quiet) {
-      context.writeStdout(args.output === 'json'
-        ? formatJsonDocument(document)
-        : args.output === 'sarif'
-          ? formatJsonDocument(buildPostureSarif(document))
-          : context.terminal(formatTerminalPosture(document), args.color));
+      context.writeStdout(
+        args.output === 'json'
+          ? formatJsonDocument(document)
+          : args.output === 'sarif'
+            ? formatJsonDocument(buildPostureSarif(document))
+            : context.terminal(formatTerminalPosture(document), args.color),
+      );
     }
     return EXIT_CODES.SUCCESS;
-  }
+  },
 
-  if (args.action === 'http') {
+  http: async (args, dependencies, context) => {
     context.setFailureLabel('HTTP probe');
-    const requestedDomain = args.domain || await context.readSingleInput();
-    if (!requestedDomain) throw new CliUsageError('http requires one domain as an argument or on stdin.');
+    const requestedDomain = args.domain || (await context.readSingleInput());
+    if (!requestedDomain)
+      throw new CliUsageError('http requires one domain as an argument or on stdin.');
     const normalizeDomain = dependencies.normalizeAuditDomain || normalizeAuditDomain;
     const domain = normalizeDomain(requestedDomain);
     if (!domain) throw new CliUsageError('http requires a valid domain name.');
@@ -121,43 +143,55 @@ async function runNetworkCommand(
     );
     const document = buildCliHttpDocument(requestedDomain, result, context.now());
     if (!args.quiet) {
-      context.writeStdout(args.output === 'json'
-        ? formatJsonDocument(document)
-        : context.terminal(formatTerminalHttp(document), args.color));
+      context.writeStdout(
+        args.output === 'json'
+          ? formatJsonDocument(document)
+          : context.terminal(formatTerminalHttp(document), args.color),
+      );
     }
     return EXIT_CODES.SUCCESS;
-  }
+  },
 
-  if (args.action === 'dnssec-validate') {
+  'dnssec-validate': async (args, dependencies, context) => {
     context.setFailureLabel('DNSSEC chain validation');
     let anchorInput: string;
     try {
       anchorInput = dependencies.readTrustAnchorInput
         ? await dependencies.readTrustAnchorInput(args.trustAnchorSource)
-        : await context.readInput(args.trustAnchorSource, MAX_DNSSEC_TRUST_ANCHOR_BYTES, 'DNSSEC trust anchor');
+        : await context.readInput(
+            args.trustAnchorSource,
+            MAX_DNSSEC_TRUST_ANCHOR_BYTES,
+            'DNSSEC trust anchor',
+          );
     } catch (error) {
       if (error instanceof CliUsageError) throw error;
-      throw new CliUsageError(`Could not read DNSSEC trust anchor: ${String(error instanceof Error ? error.message : error).slice(0, 240)}`);
+      throw new CliUsageError(
+        `Could not read DNSSEC trust anchor: ${String(error instanceof Error ? error.message : error).slice(0, 240)}`,
+      );
     }
     const validate = dependencies.validateDnssecChain ?? validateDnssecChain;
-    const report = await context.withProgress('Validating the isolated DNSSEC chain', () => validate({
-      target: args.target,
-      resolver: args.resolver,
-      trustAnchor: anchorInput,
-      observedAt: context.now(),
-      ownedOrAuthorized: args.ownedOrAuthorized,
-    }));
+    const report = await context.withProgress('Validating the isolated DNSSEC chain', () =>
+      validate({
+        target: args.target,
+        resolver: args.resolver,
+        trustAnchor: anchorInput,
+        observedAt: context.now(),
+        ownedOrAuthorized: args.ownedOrAuthorized,
+      }),
+    );
     if (!args.quiet) {
-      context.writeStdout(args.output === 'json'
-        ? formatJsonDocument(report)
-        : context.terminal(formatDnssecChainReport(report), args.color));
+      context.writeStdout(
+        args.output === 'json'
+          ? formatJsonDocument(report)
+          : context.terminal(formatDnssecChainReport(report), args.color),
+      );
     }
     return report.state === 'secure' || report.state === 'insecure'
       ? EXIT_CODES.SUCCESS
       : EXIT_CODES.PARTIAL_FAILURE;
-  }
+  },
 
-  if (args.action === 'mail-transport') {
+  'mail-transport': async (args, dependencies, context) => {
     context.setFailureLabel('Mail transport review');
     let input: string;
     let anchorInput: string;
@@ -167,53 +201,87 @@ async function runNetworkCommand(
         : context.readInput(args.source, MAX_MAIL_TRANSPORT_INPUT_BYTES, 'Mail transport input'));
     } catch (error) {
       if (error instanceof CliUsageError) throw error;
-      throw new CliUsageError(`Could not read mail transport input: ${String(error instanceof Error ? error.message : error).slice(0, 240)}`);
+      throw new CliUsageError(
+        `Could not read mail transport input: ${String(error instanceof Error ? error.message : error).slice(0, 240)}`,
+      );
     }
     try {
       anchorInput = await (dependencies.readTrustAnchorInput
         ? dependencies.readTrustAnchorInput(args.trustAnchorSource)
-        : context.readInput(args.trustAnchorSource, MAX_DNSSEC_TRUST_ANCHOR_BYTES, 'DNSSEC trust anchor'));
+        : context.readInput(
+            args.trustAnchorSource,
+            MAX_DNSSEC_TRUST_ANCHOR_BYTES,
+            'DNSSEC trust anchor',
+          ));
     } catch (error) {
       if (error instanceof CliUsageError) throw error;
-      throw new CliUsageError(`Could not read DNSSEC trust anchor: ${String(error instanceof Error ? error.message : error).slice(0, 240)}`);
+      throw new CliUsageError(
+        `Could not read DNSSEC trust anchor: ${String(error instanceof Error ? error.message : error).slice(0, 240)}`,
+      );
     }
-    if (!input.trim()) throw new CliUsageError('mail-transport requires one versioned JSON file or a document on stdin.');
+    if (!input.trim())
+      throw new CliUsageError(
+        'mail-transport requires one versioned JSON file or a document on stdin.',
+      );
     const collect = dependencies.collectMailTransportReview ?? collectMailTransportReview;
     let review;
     try {
-      review = await context.withProgress('Reviewing selected authorised mail transports', () => collect(input, {
-        resolver: args.resolver,
-        trustAnchor: anchorInput,
-        ownedOrAuthorized: args.ownedOrAuthorized,
-        activeProbeAcknowledged: args.activeProbeAcknowledged,
-      }));
+      review = await context.withProgress('Reviewing selected authorised mail transports', () =>
+        collect(input, {
+          resolver: args.resolver,
+          trustAnchor: anchorInput,
+          ownedOrAuthorized: args.ownedOrAuthorized,
+          activeProbeAcknowledged: args.activeProbeAcknowledged,
+        }),
+      );
     } catch (error) {
       if (error instanceof TypeError) throw new CliUsageError(error.message);
       throw error;
     }
     if (!args.quiet) {
-      context.writeStdout(args.output === 'json'
-        ? formatJsonDocument(review)
-        : context.terminal(formatMailTransportReview(review), args.color));
+      context.writeStdout(
+        args.output === 'json'
+          ? formatJsonDocument(review)
+          : context.terminal(formatMailTransportReview(review), args.color),
+      );
     }
     return review.runState === 'complete' ? EXIT_CODES.SUCCESS : EXIT_CODES.PARTIAL_FAILURE;
-  }
+  },
 
-  context.setFailureLabel('TLS evidence collection');
-  const requestedHostname = args.hostname || await context.readSingleInput();
-  if (!requestedHostname) throw new CliUsageError('tls requires one hostname as an argument or on stdin.');
-  const normalizeHostname = dependencies.normalizeTlsHostname || normalizeTlsHostname;
-  const hostname = normalizeHostname(requestedHostname);
-  if (!hostname) throw new CliUsageError('tls requires a valid DNS hostname, not an IP address.');
-  const collect = dependencies.collectTlsIntelligence || collectTlsIntelligence;
-  const result = await context.withProgress('Inspecting the current TLS connection', () => collect(hostname));
-  const document = buildCliTlsDocument(requestedHostname, result as UnknownRecord, context.now());
-  if (!args.quiet) {
-    context.writeStdout(args.output === 'json'
-      ? formatJsonDocument(document)
-      : context.terminal(formatTerminalTls(document), args.color));
-  }
-  return EXIT_CODES.SUCCESS;
+  tls: async (args, dependencies, context) => {
+    context.setFailureLabel('TLS evidence collection');
+    const requestedHostname = args.hostname || (await context.readSingleInput());
+    if (!requestedHostname)
+      throw new CliUsageError('tls requires one hostname as an argument or on stdin.');
+    const normalizeHostname = dependencies.normalizeTlsHostname || normalizeTlsHostname;
+    const hostname = normalizeHostname(requestedHostname);
+    if (!hostname) throw new CliUsageError('tls requires a valid DNS hostname, not an IP address.');
+    const collect = dependencies.collectTlsIntelligence || collectTlsIntelligence;
+    const result = await context.withProgress('Inspecting the current TLS connection', () =>
+      collect(hostname),
+    );
+    const document = buildCliTlsDocument(requestedHostname, result as UnknownRecord, context.now());
+    if (!args.quiet) {
+      context.writeStdout(
+        args.output === 'json'
+          ? formatJsonDocument(document)
+          : context.terminal(formatTerminalTls(document), args.color),
+      );
+    }
+    return EXIT_CODES.SUCCESS;
+  },
+} satisfies DiscriminatedCommandHandlerMap<
+  NetworkCommandArguments,
+  [NetworkCommandDependencies, CliCommandContext],
+  number
+>;
+
+async function runNetworkCommand(
+  args: NetworkCommandArguments,
+  dependencies: NetworkCommandDependencies,
+  context: CliCommandContext,
+): Promise<number> {
+  return runDiscriminatedCommandHandler(networkCommandHandlers, args, dependencies, context);
 }
 
 export { runNetworkCommand };
