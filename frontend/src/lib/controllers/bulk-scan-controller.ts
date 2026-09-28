@@ -205,6 +205,7 @@ async function executeBulkScan(
 type BulkScanState = Readonly<{
   running: boolean;
   paused: boolean;
+  cancelled: boolean;
   completed: number;
   total: number;
   elapsedMs: number;
@@ -216,7 +217,7 @@ type BulkScanRunOptions = Omit<BulkScanExecutionOptions,
   'controller' | 'currentResults' | 'ownsScan' | 'waitWhilePaused' | 'onSnapshot' | 'onPublish' | 'onProgress'>;
 
 function emptyScanState(revision = 0): BulkScanState {
-  return { running: false, paused: false, completed: 0, total: 0, elapsedMs: 0, revision, results: [] };
+  return { running: false, paused: false, cancelled: false, completed: 0, total: 0, elapsedMs: 0, revision, results: [] };
 }
 
 /** Owns a page's run lifetime; collection and evidence policies remain injected. */
@@ -248,11 +249,11 @@ class BulkScanController {
     this.#snapshot = null;
   }
 
-  restore(results: readonly ScanResult[], total: number, completed = results.length): void {
+  restore(results: readonly ScanResult[], total: number, options: Readonly<{ completed?: number; cancelled?: boolean }> = {}): void {
     if (this.#disposed) return;
     this.#invalidate();
     this.#update({ ...emptyScanState(this.#state.revision + 1), results: [...results], total,
-      completed: Math.min(completed, results.length) });
+      completed: Math.min(options.completed ?? results.length, results.length), cancelled: options.cancelled === true });
   }
 
   togglePause(): void {
@@ -262,8 +263,8 @@ class BulkScanController {
   }
 
   cancel(): void {
-    if (this.#disposed) return;
-    this.#update({ paused: false });
+    if (this.#disposed || !this.#state.running) return;
+    this.#update({ paused: false, cancelled: true });
     this.#controller?.abort();
     this.#resume();
   }

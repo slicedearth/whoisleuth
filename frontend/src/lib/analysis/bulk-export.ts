@@ -1,10 +1,27 @@
 import type { ScanResult } from './bulk-result-model.ts';
+import type { buildCoverageReport } from './coverage.ts';
 import { rowsToCsv } from './utils.ts';
 
 // Observed CT hostnames are a list inside a single CSV cell; this pipe keeps
 // them one field (a comma would be re-quoted by toCsvValue but read as a list
 // by spreadsheets). Documented so importers can split on it deterministically.
 export const CT_HOSTNAME_CSV_DELIMITER = '|';
+
+/** Group counts may overlap; candidate rows retain their individual outcomes. */
+export function buildBulkCoverageCsv(report: ReturnType<typeof buildCoverageReport>): string {
+  const groups = (dimension: string, values: typeof report.mutationGroups) => values.map(group => [
+    dimension, group.label, group.total, group.registered, group.available, group.unknown,
+    group.profileListed, group.profileListedShare, '', '', '', '', '', '',
+  ]);
+  return rowsToCsv([
+    ['dimension', 'group', 'total', 'registered', 'available', 'unknown', 'profile_listed_overlapping',
+      'profile_listed_share', 'domain', 'outcome', 'profile_listed', 'priority', 'action', 'rationale'],
+    ...groups('mutation', report.mutationGroups),
+    ...groups('tld', report.tldGroups),
+    ...report.plan.map(row => ['candidate', '', '', '', '', '', '', '', row.domain, row.status,
+      row.profileListed ? 'true' : 'false', row.priority, row.actionLabel, row.rationale]),
+  ]);
+}
 
 /** Complete result export. Cells share the formula-safe CSV writer. */
 export function buildBulkResultsCsv(selected: readonly ScanResult[]): string {

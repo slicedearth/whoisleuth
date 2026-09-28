@@ -17,15 +17,14 @@
   import { failedLocalMutationOutcome, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { MUTATION_LABELS } from '$lib/analysis/typosquat-generator.ts';
   import { buildCoverageReport } from '$lib/analysis/coverage.ts';
-  import { canonicalBulkTargets, normalizeBulkScanResult } from '$lib/analysis/bulk-scan-normalizer.ts';
-  import { parseDomainInput, rowsToCsv } from '$lib/analysis/utils.ts';
-  import { buildScanRelationships, relationshipObservation, RELATIONSHIP_EVIDENCE_VERSION } from '$lib/analysis/relationship-evidence.ts';
+  import { canonicalBulkTargets, failedBulkScanResult, normalizeBulkScanResult } from '$lib/analysis/bulk-scan-normalizer.ts';
+  import { parseDomainInput } from '$lib/analysis/utils.ts';
+  import { buildScanRelationships, RELATIONSHIP_EVIDENCE_VERSION } from '$lib/analysis/relationship-evidence.ts';
   import type { RelationshipObservation } from '$lib/analysis/relationship-evidence.ts';
   import { relationshipAdmissionMatchesCurrent, type RelationshipRetentionAdmission } from '$lib/analysis/relationship-admission-preview.ts';
   import { relationshipObservationId } from '$lib/analysis/relationship-observation-model.ts';
-  import { buildBulkResultsCsv } from '$lib/analysis/bulk-export.ts';
+  import { buildBulkCoverageCsv, buildBulkResultsCsv } from '$lib/analysis/bulk-export.ts';
   import { buildDefensiveIndicatorExport, prepareDefensiveIndicatorExport } from '$lib/analysis/defensive-indicator-export.ts';
-  import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
   import { BulkCaseActions } from '$lib/controllers/bulk-case-actions.ts';
   import { BulkSessionWorkspace, type BulkSessionWorkspaceState } from '$lib/controllers/bulk-session-workspace.ts';
   import { BulkMonitorActions, type BulkMonitorScope } from '$lib/controllers/bulk-monitor-actions.ts';
@@ -141,7 +140,7 @@
   let relationshipsSourceState=$state<BrowserLocalCollectionLoadState>('idle');
   const sessionWorkspace = new BulkSessionWorkspace({
     loadStorage: () => loadDeferredModule(() => import('$lib/bulk-sessions'), { signal: moduleController.signal }),
-    scan: () => ({ running: scan.running, mode, domains: parseDomains(), results, cancelled: status.startsWith('Cancelled') }),
+    scan: () => ({ running: scan.running, mode, domains: parseDomains(), results, cancelled: scan.cancelled }),
     publish: next => { sessionState = next; },
     confirm: message => confirm(message),
   });
@@ -285,7 +284,7 @@
       }
       return reconcileBulkResultProfileContext(row,current);
     });
-    scanController.restore(restoredResults, restored.total, restored.completed);
+    scanController.restore(restoredResults, restored.total, { completed: restored.completed, cancelled: restored.cancelled === true });
     if(quarantined){
       status=`${restored.status} Withheld profile-derived trust, matches, and Risk for ${quarantined} restored row${quarantined===1?'':'s'} until rescanned under the current settled Brand Profile context.`.trim();
     }
@@ -438,6 +437,7 @@
         guideContext, input, mode, pacing, completed: scan.completed, total: scan.total,
         results: retainedResults, profileContext: retainedProfileContext, view: bulkNavigationView(view), page: view.page,
         status: wasRunning ? `Stopped after ${scan.completed} of ${scan.total} lookups when you left Bulk. Completed results were retained.` : status,
+        cancelled: scan.cancelled,
         indicatorFormat, indicatorWildcards, watchlistName,
       });
     };
@@ -571,7 +571,10 @@
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
   async function importShortlistFile(event:Event){const input=event.currentTarget as HTMLInputElement,file=input.files?.[0];if(!file)return;await ensurePrimaryResultContext();if(shortlistSourceState!=='ready'||!shortlistApi){shortlistStatus='The shortlist is unavailable. Reload before importing.';input.value='';return;}try{const maximumBytes=shortlistApi.MAX_SHORTLIST_IMPORT_BYTES;if(file.size>maximumBytes)throw new Error('Shortlist imports are limited to 2 MB.');const result=await shortlistApi.importShortlist(parseBoundedJson(await file.text(),{label:'Shortlist import',maximumBytes}));shortlist=await shortlistApi.loadShortlist();const skipped=result.skipped?`; skipped ${result.skipped} invalid, duplicate, or over-limit entr${result.skipped===1?'y':'ies'}`:'';shortlistStatus=`Imported ${result.added} new and ${result.updated} updated shortlist entries${skipped}.`;}catch(cause){shortlistStatus=cause instanceof Error?cause.message:'Shortlist import failed';}finally{input.value='';}}
   async function importDomainFile(event:Event){const control=event.currentTarget as HTMLInputElement,file=control.files?.[0];if(!file)return;try{if(file.size>MAX_DOMAIN_IMPORT_BYTES)throw new Error('Domain-list imports are limited to 2 MB.');const parsed=parseDomainInput(await file.text());if(parsed.tooLarge)throw new Error('The domain-list file exceeds the bounded row or cell limit.');if(!parsed.entries.length)throw new Error('No domain entries were found in that file.');input=parsed.entries.join('\n');status=`Loaded ${parsed.entries.length} unique entries from ${file.name}${parsed.usedHeader?' using its domain column':''}${parsed.duplicates?`; removed ${parsed.duplicates} duplicate${parsed.duplicates===1?'':'s'}`:''}.`;}catch(cause){status=cause instanceof Error?cause.message:'Could not import the domain list.';}finally{control.value='';}}
-  function exportCoverage(){if(!coverage)return;const rows=[['dimension','group','total','registered','available','unknown','profile_listed_overlapping','profile_listed_share','domain','outcome','profile_listed','priority','action','rationale'],...coverage.mutationGroups.map((group)=>['mutation',group.label,group.total,group.registered,group.available,group.unknown,group.profileListed,group.profileListedShare,'','','','','','']),...coverage.tldGroups.map((group)=>['tld',group.label,group.total,group.registered,group.available,group.unknown,group.profileListed,group.profileListedShare,'','','','','','']),...coverage.plan.map((row)=>['candidate','','','','','','','',row.domain,row.status,row.profileListed?'true':'false',row.priority,row.actionLabel,row.rationale])];downloadLocalFile(new Blob([rowsToCsv(rows)],{type:'text/csv'}), `defensive-registration-profile-listing-${new Date().toISOString().slice(0,10)}.csv`);}
+  function exportCoverage() {
+    if (!coverage) return;
+    downloadText(buildBulkCoverageCsv(coverage), `defensive-registration-profile-listing-${new Date().toISOString().slice(0,10)}.csv`, 'text/csv');
+  }
   function exportPeerOutliers(){const exported=buildBulkPeerOutlierExport(peerOutlierMatrix,new Date().toISOString());downloadText(exported.content,exported.filename,'text/csv');}
   function togglePause() { scanController.togglePause(); }
   function cancel() {
@@ -582,7 +585,12 @@
     const candidate=provenance(domain)||provenance(body.availability.domain)||null;
     return normalizeBulkScanResult(body,{targetDomain:domain,mode:snapshot.mode,profile:snapshot.profile,profileSourceState:snapshot.sourceState,candidate});
   }
-  function failedResult(domain:string,message:string,snapshot:BulkScanProfileSnapshot):ScanResult{const candidate=provenance(domain);const mutationTypes=candidate?.mutationTypes||[];const officialDomains=snapshot.sourceState==='ready'?(snapshot.profile?.officialDomains||[]):[];const idn=analyzeDomainIdn(domain,officialDomains);const profileValue=snapshot.sourceState==='ready'?false:null;return{domain:idn?.asciiDomain||domain,status:'error',availability:'error',confidence:'unknown',registrar:'—',activity:'—',risk:null,opportunity:null,mutationTypes,trusted:null,error:message,saved:{domain:idn?.asciiDomain||domain,scanDepth:snapshot.mode,availability:'error',registrarName:'—',nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:profileValue,faviconNearMatch:profileValue,reusesOfficialAssets:profileValue,idnReferenceMatch:snapshot.sourceState==='ready'?Boolean(idn?.referenceMatches.length):null,pageBaselineMatch:null,hasActiveBrandProfile:snapshot.sourceState==='ready'?Boolean(snapshot.profile):null,riskFactors:[],mutationTypes,profileContext:snapshot.provenance,error:message},nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:profileValue,faviconNearMatch:profileValue,reusesOfficialAssets:profileValue,hasPasswordField:false,hasExternalFormAction:null,phishingLanguageMatch:null,registrant:null,abuseEvidence:null,ct:candidate?.certificateTransparency||null,idn,dns:null,dnssec:null,comparisonEvidence:null,relationship:relationshipObservation({},officialDomains),sourceCoverage:[{source:'lookup',state:'error'}]};}
+  function failedResult(domain: string, message: string, snapshot: BulkScanProfileSnapshot): ScanResult {
+    return failedBulkScanResult(message, {
+      targetDomain: domain, mode: snapshot.mode, profile: snapshot.profile,
+      profileSourceState: snapshot.sourceState, candidate: provenance(domain) ?? null,
+    });
+  }
   function loadSavedBulkSession(session: BulkSession) {
     if (profileSourceState === 'loading') {
       sessionWorkspace.setStatus('Wait for saved Brand Profile context to finish loading before restoring a saved session.');
@@ -599,7 +607,7 @@
       if (reconciled.saved.profileContext.sourceState !== 'ready') quarantined += 1;
       return reconciled;
     });
-    scanController.restore(restoredResults, session.domains.length);
+    scanController.restore(restoredResults, session.domains.length, { cancelled: session.state === 'cancelled' });
     view.page = 1;
     status = `Loaded ${session.name}: ${results.length} of ${session.domains.length} rows settled. Contact records were not retained.${quarantined ? ` Withheld profile-derived trust, matches, and Risk for ${quarantined} row${quarantined === 1 ? '' : 's'} whose saved provenance does not match the current settled profile context.` : ''}`;
     void ensurePrimaryResultContext();

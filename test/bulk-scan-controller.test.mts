@@ -174,10 +174,21 @@ function runOptions(overrides: Partial<BulkScanRunOptions> = {}): BulkScanRunOpt
 }
 
 describe('Bulk scan lifetime', () => {
+  it('retains explicit cancellation through restoration and clears it only for a new scan', async () => {
+    const controller = new BulkScanController(() => {});
+    controller.cancel();
+    assert.equal(controller.state.cancelled, false);
+    controller.restore([scanResult('saved.example')], 2, { cancelled: true });
+    assert.equal(controller.state.cancelled, true);
+    await controller.run(runOptions());
+    assert.equal(controller.state.cancelled, false);
+    controller.restore([], 0);
+    assert.equal(controller.state.cancelled, false);
+  });
   it('owns initialisation, restoration and successful completion together', async () => {
     const controller = new BulkScanController(() => {});
     const empty = structuredClone(controller.state);
-    controller.restore([scanResult('retained.example')], 3, 2);
+    controller.restore([scanResult('retained.example')], 3, { completed: 2 });
     assert.equal(controller.state.completed, 1);
     assert.equal(controller.state.total, 3);
     assert.equal(controller.state.revision, 1);
@@ -217,6 +228,7 @@ describe('Bulk scan lifetime', () => {
     assert.equal(controller.state.running, false);
     assert.equal(controller.state.paused, false);
     assert.deepEqual(calls, ['one.example']);
+    assert.equal(controller.state.cancelled, true);
     assert.deepEqual(controller.results.map(row => row.domain), ['one.example']);
   });
 

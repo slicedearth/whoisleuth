@@ -3,10 +3,27 @@ import assert from 'node:assert/strict';
 import {
   BULK_SCORE_CSV_HEADERS,
   CT_HOSTNAME_CSV_DELIMITER,
+  buildBulkCoverageCsv,
   bulkScoreCsvFields,
   ctCsvFields,
 } from '../frontend/src/lib/analysis/bulk-export.ts';
 import { rowsToCsv, toCsvValue } from '../frontend/src/lib/analysis/utils.ts';
+import { buildCoverageReport } from '../frontend/src/lib/analysis/coverage.ts';
+
+test('coverage export preserves column positions, overlapping groups and formula-safe labels', () => {
+  const report = buildCoverageReport([
+    { domain: 'available.example', availability: 'available', mutationTypes: ['addition', 'dictionary'] },
+    { domain: 'unknown.example', availability: 'error', mutationTypes: ['addition'] },
+  ], [], new Set(['available.example']), { addition: '=hostile', dictionary: 'Dictionary' });
+  const lines = buildBulkCoverageCsv(report).split('\n').map(line => line.trimEnd());
+  assert.equal(lines[0], 'dimension,group,total,registered,available,unknown,profile_listed_overlapping,profile_listed_share,domain,outcome,profile_listed,priority,action,rationale');
+  assert.ok(lines.includes("mutation,'=hostile,2,0,1,1,1,50,,,,,,"));
+  assert.ok(lines.includes('mutation,Dictionary,1,0,1,0,1,100,,,,,,'));
+  const candidates = lines.filter(line => line.startsWith('candidate,'));
+  assert.equal(candidates.length, 2);
+  assert.match(candidates[0]!, /^candidate,,,,,,,,available\.example,available,true,P1,Review defensive acquisition,/u);
+  assert.match(candidates[1]!, /^candidate,,,,,,,,unknown\.example,unknown,false,P1,Resolve source coverage,/u);
+});
 
 describe('ctCsvFields', () => {
   test('populated CT provenance maps to the four columns', () => {

@@ -60,7 +60,7 @@ test('expand/collapse all preserve an active evidence target and use only the cu
 test('unrelated links do nothing and detached routes do not perform late DOM alignment', async () => {
   const h = harness();
   await h.navigation.navigate('/cases'); await h.navigation.navigate('#unknown');
-  assert.deepEqual(h.events, []);
+  assert.equal(h.events.length, 0);
   const navigating = h.navigation.navigate('#web-evidence'); h.detach(); await navigating;
   assert.equal(h.events.includes('align'), false);
   h.events.length = 0;

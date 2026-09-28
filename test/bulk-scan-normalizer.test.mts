@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 
 import {
   canonicalBulkTargets,
+  failedBulkScanResult,
   normalizeBulkScanResult,
 } from '../frontend/src/lib/analysis/bulk-scan-normalizer.ts';
 import { toBulkSessionResult } from '../frontend/src/lib/analysis/bulk-result-model.ts';
@@ -10,6 +11,28 @@ import { normalizeBulkSessionResult } from '../frontend/src/lib/analysis/bulk-se
 import type { CompactLookupHttpResponse } from '../frontend/src/lib/analysis/lookup-response.ts';
 
 describe('Bulk scan normalizer', () => {
+  test('failed rows retain error provenance and unknown profile conclusions through the same projection owner', () => {
+    for (const state of ['ready', 'unavailable'] as const) {
+      const result = failedBulkScanResult('Collection unavailable.', {
+        targetDomain: 'BÜCHER.example', mode: 'deep', profile: null, profileSourceState: state,
+        candidate: { domain: 'xn--bcher-kva.example', source: 'manual', mutationTypes: ['dictionary'], certificateTransparency: null },
+      });
+      assert.equal(result.domain, 'xn--bcher-kva.example');
+      assert.equal(result.risk, null);
+      assert.equal(result.opportunity, null);
+      assert.equal(result.saved.scanDepth, 'deep');
+      assert.equal(result.saved.profileContext.sourceState, state);
+      assert.equal(result.saved.faviconMatch, state === 'ready' ? false : null);
+      assert.deepEqual(result.sourceCoverage, [{ source: 'lookup', state: 'error' }]);
+      assert.deepEqual(result.mutationTypes, ['dictionary']);
+      assert.equal(result.registrant, null);
+      assert.equal(result.abuseEvidence, null);
+      const saved = toBulkSessionResult(result);
+      assert.equal(saved.status, 'error');
+      assert.equal(saved.error, 'Collection unavailable.');
+      assert.equal(saved.risk, null);
+    }
+  });
   test('carries the source observation time into live export provenance without substituting a local clock', () => {
     const context = { targetDomain: 'candidate.example', mode: 'deep', profile: null, candidate: null } as const;
     for (const observedAt of ['2026-08-01T01:00:00+01:00', undefined, null, 'invalid', '2026-08-01T01:00:00']) {

@@ -61,6 +61,34 @@ export function canonicalBulkTargets(values: readonly string[]): string[] {
   return targets;
 }
 
+/** The failed row has the same evidence boundary as a successful projection;
+ * unavailable profile context cannot become a negative match or favourable score. */
+export function failedBulkScanResult(message: string, context: BulkScanNormalizationContext): ScanResult {
+  const ready = (context.profileSourceState ?? 'ready') === 'ready';
+  const officialDomains = ready ? context.profile?.officialDomains ?? [] : [];
+  const idn = analyzeDomainIdn(context.targetDomain, officialDomains);
+  const domain = idn?.asciiDomain || context.targetDomain;
+  const mutationTypes = context.candidate?.mutationTypes ?? [];
+  const profileValue = ready ? false : null;
+  return {
+    domain, status: 'error', availability: 'error', confidence: 'unknown', registrar: '—', activity: '—',
+    risk: null, opportunity: null, mutationTypes, trusted: null, error: message,
+    saved: {
+      domain, scanDepth: context.mode, availability: 'error', registrarName: '—', nameservers: [],
+      faviconHash: null, faviconPHash: null, faviconMatch: profileValue, faviconNearMatch: profileValue,
+      reusesOfficialAssets: profileValue, idnReferenceMatch: ready ? Boolean(idn?.referenceMatches.length) : null,
+      pageBaselineMatch: null, hasActiveBrandProfile: ready ? Boolean(context.profile) : null,
+      riskFactors: [], mutationTypes,
+      profileContext: bulkProfileContextProvenance(context.profileSourceState ?? 'ready', context.profile), error: message,
+    },
+    nameservers: [], faviconHash: null, faviconPHash: null, faviconMatch: profileValue, faviconNearMatch: profileValue,
+    reusesOfficialAssets: profileValue, hasPasswordField: false, hasExternalFormAction: null, phishingLanguageMatch: null,
+    registrant: null, abuseEvidence: null, ct: context.candidate?.certificateTransparency ?? null, idn,
+    dns: null, dnssec: null, comparisonEvidence: null,
+    relationship: relationshipObservation({}, officialDomains), sourceCoverage: [{ source: 'lookup', state: 'error' }],
+  };
+}
+
 /**
  * Converts the compact HTTP lookup contract into the bounded result retained by
  * Bulk. Raw registration payloads and expanded contacts never cross this

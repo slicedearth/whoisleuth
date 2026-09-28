@@ -36,6 +36,8 @@ export type BulkWorkflowState<Result> = {
   view: BulkReviewPresetView;
   page: number;
   status: string;
+  /** Transient scan state is independent of its display wording. */
+  cancelled?: boolean;
   indicatorFormat: 'domains' | 'hosts' | 'dnsmasq' | 'rpz' | 'stix' | 'misp';
   indicatorWildcards: boolean;
   watchlistName: string;
