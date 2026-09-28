@@ -121,6 +121,10 @@ integration checks use the `.integration.test.mts` suffix and run through
 `npm run test:integration`. `npm test` still discovers both; required CI runs
 product coverage and integration checks separately, without instrumenting the
 repository analyser itself. New test files need no inventory registration.
+The unit and coverage lanes need no optional shells. Native completion and
+workflow-shell checks run in integration and require Bash, zsh, Fish and
+PowerShell; the complete local CI entry point checks those prerequisites before
+expensive work.
 
 Small leaf components can have a `<kebab-name>.component.spec.ts` browser
 contract exercised through a real page. Focused selection uses it only when the

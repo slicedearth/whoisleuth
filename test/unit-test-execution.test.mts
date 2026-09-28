@@ -55,7 +55,7 @@ function executeFixture(fixture: ReturnType<typeof executionFixture>, nodeArgume
 }
 
 for (const mode of ['ordinary', 'profile', 'coverage'] as const) {
-  test(`${mode} unit execution probes each shell once before workers and retains its report`, (context) => {
+  test(`${mode} explicit full-prerequisite execution probes each shell once before workers and retains its report`, (context) => {
     const fixture = executionFixture(context);
     let args = ['--test', '--test-concurrency=4', 'test/probe.test.mts'];
     if (mode === 'profile') {
@@ -88,6 +88,29 @@ for (const mode of ['ordinary', 'profile', 'coverage'] as const) {
     }
   });
 }
+
+test('the unit lane runs without optional shell tooling while integration still rejects a missing prerequisite', (context) => {
+  const fixture = executionFixture(context);
+  const executed = path.join(fixture.root, 'unit-executed');
+  writeFileSync(path.join(fixture.root, 'test/probe.test.mts'), [
+    "import { test } from 'node:test';",
+    "import { writeFileSync } from 'node:fs';",
+    `test('ordinary domain rule', () => writeFileSync(${JSON.stringify(executed)}, 'passed'));`,
+  ].join('\n'));
+  writeFileSync(path.join(fixture.root, 'test/shell.integration.test.mts'),
+    "throw new Error('Integration must not start with missing prerequisites.');");
+  fixture.environment.WHOISLEUTH_VERIFICATION_PWSH = path.join(fixture.root, 'missing');
+  const unit = executeFixture(fixture, ['--lane=unit', '--test']);
+  assert.equal(unit.error, undefined);
+  assert.equal(unit.status, 0, unit.stderr || unit.stdout);
+  assert.equal(readFileSync(executed, 'utf8'), 'passed');
+  assert.equal(existsSync(fixture.log), false, 'The pure lane must not probe a shell.');
+  const integration = executeFixture(fixture, ['--lane=integration', '--test']);
+  assert.equal(integration.error, undefined);
+  assert.equal(integration.status, 2);
+  assert.match(integration.stderr, /pwsh: not found/u);
+  assert.doesNotMatch(integration.stdout, /Integration must not start/u);
+});
 
 test('shell preflight rejects unusable overrides before a test can execute', (context) => {
   const fixture = executionFixture(context);

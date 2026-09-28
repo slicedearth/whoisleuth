@@ -462,7 +462,7 @@ export function productionCoverageArguments(testPattern?: string): string[] {
 export async function main(args = process.argv.slice(2)): Promise<number> {
   try {
     if (args.length === 1 && args[0] === '--run') {
-      const status = runUnitTests(productionCoverageArguments(), { cwd: REPOSITORY_ROOT });
+      const status = runUnitTests(productionCoverageArguments(), { cwd: REPOSITORY_ROOT, probeShells: false });
       if (status !== 0) return status;
       args = [];
     }

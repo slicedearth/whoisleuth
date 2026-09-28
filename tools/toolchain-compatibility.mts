@@ -179,12 +179,12 @@ export function unitTestExecutablePath(
 
 export function runUnitTests(
   nodeArguments: readonly string[],
-  options: Readonly<{ cwd?: string; environment?: NodeJS.ProcessEnv }> = {},
+  options: Readonly<{ cwd?: string; environment?: NodeJS.ProcessEnv; probeShells?: boolean }> = {},
 ): number {
   if (nodeArguments[0] !== '--test') throw new TypeError('Unit execution requires Node test-runner arguments beginning with --test.');
   const cwd = path.resolve(options.cwd ?? process.cwd());
   const environment = options.environment ?? process.env;
-  const resolved = resolveUnitTestExecutables(undefined, { cwd, environment });
+  const resolved = resolveUnitTestExecutables(options.probeShells === false ? [] : undefined, { cwd, environment });
   const result = spawnSync(process.execPath, [...nodeArguments], {
     cwd,
     env: unitTestExecutableEnvironment(resolved, environment),
@@ -346,7 +346,10 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
       if (args[1]?.startsWith('--lane=')) {
         const lane = args[1].slice('--lane='.length);
         if (lane !== 'unit' && lane !== 'integration' && lane !== 'all') throw new TypeError('Test lane must be unit, integration or all.');
-        return runUnitTests([...args.slice(2), ...nodeTestFiles(lane, options.repositoryRoot)], { cwd: options.repositoryRoot ?? process.cwd() });
+        return runUnitTests([...args.slice(2), ...nodeTestFiles(lane, options.repositoryRoot)], {
+          cwd: options.repositoryRoot ?? process.cwd(),
+          probeShells: lane !== 'unit',
+        });
       }
       return runUnitTests(args.slice(1), { cwd: options.repositoryRoot ?? process.cwd() });
     }

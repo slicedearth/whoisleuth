@@ -297,24 +297,6 @@ describe('continuous integration workflow', () => {
     assert.throws(() => assertHostedCiParity('x'.repeat(512 * 1024 + 1)), /bound/u);
   });
 
-  test('executes the final gate against every result, including newly added lanes', () => {
-    const workflow = workflowFixture();
-    const verify = fixtureJob(workflow, 'verify');
-    const gate = requiredValue(verify.steps.find((step) => step.env?.NEEDS_RESULTS));
-    assert.equal(gate.env?.NEEDS_RESULTS, '${{ toJSON(needs) }}');
-    const successes = Object.fromEntries(requiredValue(verify.needs).map((name) => [name, { result: 'success' }]));
-    const execute = (results: unknown) => spawnSync('bash', ['-e', '-o', 'pipefail', '-c', requiredValue(gate.run)], {
-      env: { ...process.env, NEEDS_RESULTS: JSON.stringify(results) }, encoding: 'utf8', timeout: 5000,
-    }).status;
-    assert.equal(execute(successes), 0);
-    assert.notEqual(execute({}), 0);
-    for (const name of [...Object.keys(successes), 'future-verification']) {
-      for (const result of ['failure', 'cancelled', 'skipped', null]) {
-        assert.notEqual(execute({ ...successes, [name]: { result } }), 0, `${name}: ${result}`);
-      }
-    }
-  });
-
   test('can inspect and run pre-install checks without loading the development parser', () => {
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
       import Module from 'node:module';

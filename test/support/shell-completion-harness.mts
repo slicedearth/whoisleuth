@@ -98,11 +98,17 @@ export function prepareBashCompletionBatch(
 COMP_WORDS=(${words.map(shellLiteral).join(' ')})
 COMP_CWORD=${words.length - 1}
 printf '${START_MARKER}${index}__\\n'
-_whoisleuth_completion
+"\${completion_function}"
 printf '%s\\n' "\${COMPREPLY[@]}"
 printf '${END_MARKER}${index}__\\n'
 `).join('\n');
-  const harness = `whoisleuth() { "$WHOISLEUTH_TEST_NODE" bin/whoisleuth.mts "$@"; }\n${script}\n${invocations}`;
+  const harness = `whoisleuth() { "$WHOISLEUTH_TEST_NODE" bin/whoisleuth.mts "$@"; }
+${script}
+completion_registration=$(complete -p whoisleuth)
+completion_function="\${completion_registration#* -F }"
+completion_function="\${completion_function%% *}"
+declare -F "$completion_function" >/dev/null || exit 7
+${invocations}`;
   const child = spawnSync(unitTestExecutablePath('bash'), ['--noprofile', '--norc', '-c', harness], {
     ...shellCompletionBatchProcessOptions(cases.length),
     cwd: repositoryRoot,
@@ -122,12 +128,12 @@ export function prepareZshCompletionBatch(
 words=(${words.map(shellLiteral).join(' ')})
 CURRENT=${words.length}
 printf '${START_MARKER}${index}__\\n'
-_whoisleuth
+"\${completion_function}"
 printf '${END_MARKER}${index}__\\n'
 `).join('\n');
   const harness = `
 whoisleuth() { "$WHOISLEUTH_TEST_NODE" bin/whoisleuth.mts "$@"; }
-compdef() { :; }
+compdef() { completion_function="$1"; }
 _describe() { :; }
 _files() { print -r -- __FILES__; }
 _message() { print -r -- __MESSAGE__; }
@@ -139,6 +145,7 @@ compadd() {
   done
 }
 ${script}
+typeset -f "$completion_function" >/dev/null || exit 7
 ${invocations}`;
   const child = spawnSync(unitTestExecutablePath('zsh'), ['-f', '-c', harness], {
     ...shellCompletionBatchProcessOptions(cases.length),
