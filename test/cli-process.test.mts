@@ -95,7 +95,8 @@ function runBinary(args: string[], input = '', cwd = ROOT) {
   });
 }
 
-describe('installed CLI process boundary', () => {
+// Installed-tarball verification is owned by tools/cli-package.mts.
+describe('source CLI process boundary', () => {
   test('ordinary explicit help renders from static metadata without execution, input or configuration modules', () => {
     const guard = `import { registerHooks } from 'node:module';
 registerHooks({ resolve(specifier, context, next) {
@@ -115,7 +116,7 @@ registerHooks({ resolve(specifier, context, next) {
       assert.equal(result.stdout, command ? commandHelp(command) : HELP);
     }
   });
-  test('version preserves the installed executable stream and exit contract', () => {
+  test('version preserves the source executable stream and exit contract', () => {
     const packageDocument = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as unknown;
     assert.ok(packageDocument && typeof packageDocument === 'object' && !Array.isArray(packageDocument));
     const version = (packageDocument as Record<string, unknown>).version;
@@ -127,7 +128,7 @@ registerHooks({ resolve(specifier, context, next) {
     assert.equal(result.stderr, '');
   });
 
-  test('usage failures preserve the installed executable stream and exit contract', () => {
+  test('usage failures preserve the source executable stream and exit contract', () => {
     const invalid = runBinary(['not-a-command']);
     assert.equal(invalid.status, 2);
     assert.equal(invalid.stdout, '');

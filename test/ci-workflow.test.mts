@@ -40,6 +40,7 @@ import {
   ciCommandGroupScripts,
   expectedHostedCiScriptPlan,
   formatLocalCiPlan,
+  localCiRevisionRange,
   parseCiVerificationArguments,
   playwrightBrowserCacheDirectory,
   readHostedCiScriptPlan,
@@ -358,6 +359,40 @@ describe('continuous integration workflow', () => {
     assert.equal(child.status, 0, child.stderr);
   });
 
+  test('resolves an explicit ancestor without a remote and never falls back from an invalid base', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-base-'));
+    const git = (...args: string[]) => {
+      const result = spawnSync('git', ['-c', 'commit.gpgsign=false', ...args], {
+        cwd: directory, encoding: 'utf8', input: '', timeout: 5_000,
+        env: { ...process.env, GIT_AUTHOR_NAME: 'Fixture', GIT_AUTHOR_EMAIL: 'fixture@example.test',
+          GIT_COMMITTER_NAME: 'Fixture', GIT_COMMITTER_EMAIL: 'fixture@example.test' },
+      });
+      assert.ifError(result.error);
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout.trim();
+    };
+    try {
+      git('init', '--quiet');
+      const tree = git('hash-object', '-w', '-t', 'tree', '--stdin');
+      const base = git('commit-tree', tree, '-m', 'Base fixture');
+      const head = git('commit-tree', tree, '-p', base, '-m', 'Head fixture');
+      const sibling = git('commit-tree', tree, '-p', base, '-m', 'Sibling fixture');
+      git('update-ref', 'HEAD', head);
+      // An unchanged tree can still have a legitimate commit-range comparison.
+      assert.equal(localCiRevisionRange(base, directory), `${base}..${head}`);
+      assert.throws(() => localCiRevisionRange(undefined, directory), /Git preflight/u);
+      git('update-ref', 'refs/remotes/origin/main', base);
+      assert.equal(localCiRevisionRange(undefined, directory), `${base}..${head}`);
+      for (const invalid of ['HEAD', base.slice(0, 8), '0'.repeat(40), tree, head, sibling]) {
+        assert.throws(() => localCiRevisionRange(invalid, directory), invalid);
+      }
+      git('tag', '-a', 'fixture-base', '-m', 'Annotated fixture', base);
+      assert.throws(() => localCiRevisionRange(git('rev-parse', 'fixture-base'), directory), /strictly before HEAD/u);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test('executes canonical local groups and stops at the first failed command', () => {
     const shardPlan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
     const assigned = shardPlan.shards.flatMap((shard) => shard.files);
@@ -367,6 +402,11 @@ describe('continuous integration workflow', () => {
     assert.equal(PACKAGE_MANIFEST.scripts?.['verification:ci'], 'node tools/ci-verification.mts');
     assert.deepEqual(CI_COMMAND_GROUPS, ['preflight', 'quality', 'unit', 'browser-build', 'cli-runtime']);
     assert.deepEqual(parseCiVerificationArguments([]), { mode: 'full' });
+    assert.deepEqual(parseCiVerificationArguments([`--base=${'a'.repeat(40)}`]), { mode: 'full', base: 'a'.repeat(40) });
+    for (const args of [['--base=HEAD'], ['--base=abc'], [`--base=${'A'.repeat(40)}`],
+      [`--base=${'a'.repeat(40)}`, '--list'], [`--base=${'a'.repeat(40)}`, '--group=unit']]) {
+      assert.throws(() => parseCiVerificationArguments(args), /Usage/u);
+    }
     assert.deepEqual(parseCiVerificationArguments(['--list']), { mode: 'list' });
     assert.deepEqual(parseCiVerificationArguments(['--group=quality']), { mode: 'group', group: 'quality' });
     assert.deepEqual(parseCiVerificationArguments(['--group', 'browser-build']), { mode: 'group', group: 'browser-build' });

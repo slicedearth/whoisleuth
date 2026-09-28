@@ -130,9 +130,13 @@ npm run verification:ci
 ```
 
 It requires the exact `.nvmrc` runtime, tested shells and a Node 26 executable
-on `PATH` (or `WHOISLEUTH_CLI_RUNTIME_NODE`). The Git checkout must have an
-`origin/main` remote-tracking ref; its merge base with `HEAD` bounds the changed-line
-secret scan. Refresh that ref before delivery. Fixture tests do not collect live
+on `PATH` (or `WHOISLEUTH_CLI_RUNTIME_NODE`). By default, the merge base of
+`origin/main` and `HEAD` bounds the changed-line secret scan; refresh that ref
+before delivery. A checkout without that ref can use
+`npm run verification:ci -- --base=<full-commit-sha>` with an explicitly reviewed
+ancestor of `HEAD`. The range is printed and invalid bases fail without fallback;
+choosing a base does not prove it matches the current upstream branch.
+Fixture tests do not collect live
 investigation data, but this full command is not offline: dependency/tool downloads
 and advisory checks require network access. It performs a locked install,
 quality checks, unit coverage, repository integration tests, production-browser

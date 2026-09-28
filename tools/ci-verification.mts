@@ -145,9 +145,9 @@ export function assertPlaywrightBrowserCacheWritable(cacheDirectory = playwright
   }
 }
 
-function gitOutput(args: readonly string[]): string {
+function gitOutput(args: readonly string[], repositoryRoot = REPOSITORY_ROOT): string {
   const child = spawnSync('git', args, {
-    cwd: REPOSITORY_ROOT,
+    cwd: repositoryRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -158,10 +158,19 @@ function gitOutput(args: readonly string[]): string {
   return child.stdout.trim();
 }
 
-export function localCiRevisionRange(): string {
-  const head = gitOutput(['rev-parse', '--verify', 'HEAD']);
-  const base = gitOutput(['merge-base', 'HEAD', 'refs/remotes/origin/main']);
+export function localCiRevisionRange(explicitBase?: string, repositoryRoot = REPOSITORY_ROOT): string {
+  if (explicitBase !== undefined && !FULL_SHA.test(explicitBase)) {
+    throw new TypeError('The explicit CI base must be a full lowercase commit SHA.');
+  }
+  const head = gitOutput(['rev-parse', '--verify', 'HEAD'], repositoryRoot);
+  const base = explicitBase === undefined
+    ? gitOutput(['merge-base', 'HEAD', 'refs/remotes/origin/main'], repositoryRoot)
+    : gitOutput(['rev-parse', '--verify', '--end-of-options', `${explicitBase}^{commit}`], repositoryRoot);
   if (!FULL_SHA.test(base) || !FULL_SHA.test(head)) throw new TypeError('Local CI requires full Git revision identities.');
+  if (explicitBase !== undefined && (base !== explicitBase || base === head
+    || gitOutput(['merge-base', head, base], repositoryRoot) !== base)) {
+    throw new TypeError('The explicit CI base must identify a commit strictly before HEAD in its ancestry.');
+  }
   return `${base}..${head}`;
 }
 
@@ -478,9 +487,13 @@ export function formatLocalCiPlan(): string {
 export function parseCiVerificationArguments(args: readonly string[]): Readonly<{
   mode: 'full' | 'list' | 'group';
   group?: CiCommandGroup;
+  base?: string;
 }> {
   if (args.length === 0) return Object.freeze({ mode: 'full' });
   if (args.length === 1 && args[0] === '--list') return Object.freeze({ mode: 'list' });
+  if (args.length === 1 && args[0]?.startsWith('--base=') && FULL_SHA.test(args[0].slice('--base='.length))) {
+    return Object.freeze({ mode: 'full', base: args[0].slice('--base='.length) });
+  }
   const group = args.length === 1 && args[0]?.startsWith('--group=')
     ? args[0].slice('--group='.length)
     : args.length === 2 && args[0] === '--group'
@@ -489,7 +502,7 @@ export function parseCiVerificationArguments(args: readonly string[]): Readonly<
   if (group && CI_COMMAND_GROUPS.includes(group as CiCommandGroup)) {
     return Object.freeze({ mode: 'group', group: group as CiCommandGroup });
   }
-  throw new TypeError(`Usage: node tools/ci-verification.mts [--list | --group=<${CI_COMMAND_GROUPS.join('|')}>]`);
+  throw new TypeError(`Usage: node tools/ci-verification.mts [--base=<full-commit-sha> | --list | --group=<${CI_COMMAND_GROUPS.join('|')}>]`);
 }
 
 export function main(args = process.argv.slice(2)): number {
@@ -518,7 +531,8 @@ export function main(args = process.argv.slice(2)): number {
     assertPlaywrightBrowserCacheWritable();
     process.stdout.write(`Security analyser memory budget: ${codeqlRamMegabytes()} MiB.\n`);
     const cliRuntime = cliRuntimeExecutable();
-    const range = localCiRevisionRange();
+    const range = localCiRevisionRange(parsed.base);
+    process.stdout.write(`Changed-line secret scan: ${range}\n`);
     npmRun('security:staged', ['--', '--range', range]);
     runCiCommandGroup('preflight');
     run(npmExecutableName(), ['ci', '--include=optional', '--ignore-scripts', '--audit=false']);

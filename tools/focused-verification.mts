@@ -58,35 +58,30 @@ export type FocusedVerificationExecution = Readonly<{
   deferredIntegrationChecks: readonly string[];
 }>;
 
-const SPECIALISED_SCRIPTS: Readonly<Partial<Record<SpecialisedCheck, string>>> = Object.freeze({
-  architecture: 'architecture:check',
-  'capability-catalogue': 'capabilities:check',
-  'privacy-catalogue': 'privacy:check',
-  'schema-inventory': 'schema:inventory',
-  'cli-package': 'cli:package:check',
-  'capture-package': 'capture:package:check',
-  'local-package': 'local:package:check',
-  'release-contract': 'release:check',
-  licences: 'licenses:check',
-  'production-dependency-audit': 'dependencies:audit',
-  'browser-build': 'build',
-  'browser-loading-report': 'frontend:loading-report',
-  'browser-timing-plan': 'verification:timing:check',
-  'analyst-journey-assurance': 'verification:journeys:check',
-  'critical-mutation': 'test:mutation',
-  'critical-io-coverage': 'test:coverage',
-  'workflow-closure': 'workflow:check',
-});
-
-const SPECIALISED_COVERED_BY_FOCUSED_TESTS = new Set<SpecialisedCheck>([
-  'documentation',
-]);
-
-const SPECIALISED_DELIVERY_ONLY = new Set<SpecialisedCheck>([
+type SpecialisedExecution = Readonly<{ script: string }> | 'focused-tests' | 'delivery-only';
+const SPECIALISED_EXECUTION: Readonly<Record<SpecialisedCheck, SpecialisedExecution>> = Object.freeze({
+  architecture: { script: 'architecture:check' },
+  'capability-catalogue': { script: 'capabilities:check' },
+  'privacy-catalogue': { script: 'privacy:check' },
+  'schema-inventory': { script: 'schema:inventory' },
+  'cli-package': { script: 'cli:package:check' },
+  'capture-package': { script: 'capture:package:check' },
+  'local-package': { script: 'local:package:check' },
+  'release-contract': { script: 'release:check' },
+  licences: { script: 'licenses:check' },
+  'production-dependency-audit': { script: 'dependencies:audit' },
+  'browser-build': { script: 'build' },
+  'browser-loading-report': { script: 'frontend:loading-report' },
+  'browser-timing-plan': { script: 'verification:timing:check' },
+  'analyst-journey-assurance': { script: 'verification:journeys:check' },
+  'critical-mutation': { script: 'test:mutation' },
+  'critical-io-coverage': { script: 'test:coverage' },
+  'workflow-closure': { script: 'workflow:check' },
+  documentation: 'focused-tests',
   // The staged scanner deliberately reads only staged or committed additions.
   // A dirty-tree iteration cannot honestly claim this delivery gate.
-  'staged-security',
-]);
+  'staged-security': 'delivery-only',
+});
 
 function npmCommand(script: string, selectedBy: readonly string[]): FocusedCommand {
   return Object.freeze({ id: script, selectedBy: Object.freeze([...selectedBy]), executable: npmExecutableName(), args: Object.freeze(['run', script]) });
@@ -238,13 +233,14 @@ export function buildFocusedVerificationExecution(
 
   const deferred = new Set<SpecialisedCheck>();
   for (const check of plan.mandatorySpecialisedChecks) {
-    if (SPECIALISED_COVERED_BY_FOCUSED_TESTS.has(check)) continue;
-    if (SPECIALISED_DELIVERY_ONLY.has(check) || options.iteration) {
+    const execution = SPECIALISED_EXECUTION[check];
+    if (!execution) throw new TypeError(`Focused verification has no execution owner for ${check}.`);
+    if (execution === 'focused-tests') continue;
+    if (execution === 'delivery-only' || options.iteration) {
       deferred.add(check);
       continue;
     }
-    const script = SPECIALISED_SCRIPTS[check];
-    if (!script) throw new TypeError(`Focused verification has no execution owner for ${check}.`);
+    const { script } = execution;
     const selectedBy = plan.assignments.filter(assignment => assignment.mandatorySpecialisedChecks.includes(check)).map(assignment => assignment.changedPath);
     if (check === 'local-package' && !commands.some(command => command.id === 'build')) commands.push(npmCommand('build', selectedBy));
     if (!commands.some((command) => command.id === script)) commands.push(npmCommand(script, selectedBy));
