@@ -2,31 +2,48 @@ import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
+import { parse } from 'yaml';
 
 const WORKFLOW = readFileSync(new URL('../.github/workflows/cli-release.yml', import.meta.url), 'utf8');
+type Step = { run?: string; uses?: string; env?: Record<string, string>; if?: string; 'continue-on-error'?: boolean; with?: Record<string, unknown> };
+const DOCUMENT = parse(WORKFLOW) as {
+  on: Record<string, unknown>;
+  permissions: Record<string, string>;
+  jobs: Record<'prepare' | 'publish', { permissions?: Record<string, string>; environment?: string; needs?: string; if?: string; steps: Step[] }>;
+};
+const prepare = DOCUMENT.jobs.prepare.steps;
+const publish = DOCUMENT.jobs.publish.steps;
+function commandIndex(steps: Step[], command: string): number {
+  const matches = steps.flatMap((step, index) => step.run?.includes(command) ? [index] : []);
+  assert.equal(matches.length, 1, `Expected one ${command} execution`);
+  return requiredValue(matches[0]);
+}
 
 describe('scoped CLI release workflow', () => {
   test('can run only through an explicit tagged release dispatch', () => {
-    assert.match(WORKFLOW, /^on:\s*\n\s{2}workflow_dispatch:/mu);
-    assert.doesNotMatch(WORKFLOW, /^\s{2}(?:push|pull_request|release|repository_dispatch):/mu);
-    assert.match(WORKFLOW, /process\.env\.GITHUB_REF !== `refs\/tags\/v\$\{expected\}`/u);
-    assert.match(WORKFLOW, /git merge-base --is-ancestor "\$GITHUB_SHA" origin\/main/u);
-    assert.match(WORKFLOW, /actions\/workflows\/ci\.yml\/runs/u);
-    assert.match(WORKFLOW, /endpoint\.searchParams\.set\("head_sha", sha\)/u);
-    assert.match(WORKFLOW, /run\?\.head_sha === sha && run\?\.event === "push" && run\?\.conclusion === "success"/u);
+    assert.deepEqual(Object.keys(DOCUMENT.on), ['workflow_dispatch']);
+    const provenance = requiredValue(prepare[commandIndex(prepare, 'node tools/release-provenance.mts')]);
+    assert.equal(provenance.env?.EXPECTED_VERSION, '${{ inputs.version }}');
+    assert.equal(provenance.env?.GITHUB_TOKEN, '${{ github.token }}');
+    assert.equal(provenance.if, undefined);
+    assert.equal(provenance['continue-on-error'], undefined);
+    assert.equal(DOCUMENT.jobs.prepare.if, undefined);
+    assert.ok(prepare.indexOf(provenance) < prepare.findIndex(step => step.run === 'npm run dependencies:audit'));
     assert.doesNotMatch(WORKFLOW, /publication_mode|initial-publish/u);
   });
 
   test('keeps preparation read-only and grants OIDC only to protected publication', () => {
-    assert.match(WORKFLOW, /^permissions:\s*\n\s{2}contents: read\s*\n\s{2}actions: read$/mu);
-    assert.match(WORKFLOW, /^\s{4}environment: npm-release$/mu);
-    assert.match(WORKFLOW, /^\s{6}id-token: write$/mu);
-    assert.equal((WORKFLOW.match(/id-token: write/gu) ?? []).length, 1);
+    assert.deepEqual(DOCUMENT.permissions, { contents: 'read', actions: 'read' });
+    assert.equal(DOCUMENT.jobs.prepare.permissions, undefined);
+    assert.equal(DOCUMENT.jobs.publish.environment, 'npm-release');
+    assert.equal(DOCUMENT.jobs.publish.needs, 'prepare');
+    assert.deepEqual(DOCUMENT.jobs.publish.permissions, { contents: 'read', 'id-token': 'write' });
+    assert.equal(Object.values(DOCUMENT.jobs).filter(job => job.permissions?.['id-token'] === 'write').length, 1);
     assert.doesNotMatch(WORKFLOW, /\b(?:contents|issues|pull-requests|actions|packages): write\b/u);
-    assert.match(WORKFLOW, /^\s{10}persist-credentials: false$/mu);
+    assert.equal(prepare.find(step => step.uses?.startsWith('actions/checkout@'))?.with?.['persist-credentials'], false);
 
-    const actions = [...WORKFLOW.matchAll(/^\s+uses: ([^@\s]+)@([^\s#]+)/gmu)]
-      .map((match) => ({ action: match[1], revision: match[2] }));
+    const actions = [...prepare, ...publish].flatMap(step => step.uses
+      ? [{ action: step.uses.split('@')[0], revision: step.uses.split('@')[1] }] : []);
     assert.deepEqual(actions.map(({ action }) => action), [
       'actions/checkout',
       'actions/setup-node',
@@ -38,27 +55,24 @@ describe('scoped CLI release workflow', () => {
   });
 
   test('reviews one digest-bound archive before the stage-only registry action', () => {
-    const uploadIndex = WORKFLOW.indexOf('name: Upload reviewed candidate');
-    const environmentIndex = WORKFLOW.indexOf('environment: npm-release');
-    const stageIndex = WORKFLOW.indexOf('npm stage publish');
-    assert.ok(uploadIndex > 0 && environmentIndex > uploadIndex && stageIndex > environmentIndex);
+    const uploadIndex = prepare.findIndex(step => step.uses?.startsWith('actions/upload-artifact@'));
+    const stageIndex = commandIndex(publish, 'npm stage publish');
+    assert.ok(uploadIndex > 0 && stageIndex > commandIndex(publish, 'sha256sum --check'));
     assert.match(WORKFLOW, /test "\$\{#archives\[@\]\}" -eq 1/gu);
     assert.equal((WORKFLOW.match(/sha256sum --check/gu) ?? []).length, 2);
     assert.doesNotMatch(WORKFLOW, /NODE_AUTH_TOKEN|NPM_FIRST_PUBLISH_TOKEN|\$\{\{ secrets\./u);
     assert.doesNotMatch(WORKFLOW, /(^|[^\w])npm publish(?:\s|$)/mu);
     assert.equal((WORKFLOW.match(/npm stage publish/gu) ?? []).length, 1);
     assert.match(WORKFLOW, /npm stage publish[^\n]+--access public --provenance/u);
-    assert.doesNotMatch(WORKFLOW.slice(0, environmentIndex), /\bnpm (?:publish|stage publish)\b/u);
-    const auditIndex = WORKFLOW.indexOf('npm run dependencies:audit');
-    const installIndex = WORKFLOW.indexOf('npm ci --include=optional --ignore-scripts --audit=false');
+    assert.ok(prepare.every(step => !/\bnpm (?:publish|stage publish)\b/u.test(step.run ?? '')));
+    const auditIndex = prepare.findIndex(step => step.run === 'npm run dependencies:audit');
+    const installIndex = commandIndex(prepare, 'npm ci --include=optional --ignore-scripts --audit=false');
     assert.ok(auditIndex > 0 && installIndex > auditIndex && installIndex < uploadIndex);
-    const installedAuditIndex = WORKFLOW.indexOf('npm run dependencies:audit -- --installed-candidate');
-    const assemblyIndex = WORKFLOW.indexOf('npm run cli:package:release');
+    const installedAuditIndex = commandIndex(prepare, 'npm run dependencies:audit -- --installed-candidate');
+    const assemblyIndex = commandIndex(prepare, 'npm run cli:package:release');
     assert.ok(assemblyIndex > installIndex && installedAuditIndex > assemblyIndex && installedAuditIndex < uploadIndex);
-    assert.match(WORKFLOW.slice(installedAuditIndex, uploadIndex), /"\$RELEASE_DIRECTORY\/installed-dependencies\.json"/u);
+    assert.match(requiredValue(prepare[installedAuditIndex]?.run), /"\$RELEASE_DIRECTORY\/installed-dependencies\.json"/u);
     assert.equal((WORKFLOW.match(/npm run dependencies:audit/gu) ?? []).length, 2);
-    const candidateUpload = WORKFLOW.slice(uploadIndex, environmentIndex);
-    assert.match(candidateUpload, /retention-days: 7/u);
-    assert.equal((candidateUpload.match(/retention-days:/gu) ?? []).length, 1);
+    assert.equal(prepare[uploadIndex]?.with?.['retention-days'], 7);
   });
 });

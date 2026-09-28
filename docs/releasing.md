@@ -89,7 +89,9 @@ software](https://docs.npmjs.com/policies/dual-use/). The tagged release workflo
 may submit only the exact reviewed archive through trusted publishing to npm
 staging. Before assembly it requires a successful completed push run of the
 full `ci.yml` workflow for the exact tagged commit; an ancestor commit's result
-does not satisfy that release-provenance gate. The workflow must not use either token-based direct publication or a
+does not satisfy that release-provenance gate. `tools/release-provenance.mts`
+owns the tag, manifest, ancestry and CI-run checks; its tests use injected responses
+without credentials or live requests. The workflow must not use either token-based direct publication or a
 direct OIDC publish path. A maintainer must inspect and approve the staged
 version with interactive two-factor authentication before it becomes
 available. Local assembly commands do not publish, configure credentials, or
