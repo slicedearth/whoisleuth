@@ -3,7 +3,6 @@
   import { goto } from '$app/navigation';
   import { page as routePage } from '$app/state';
   import { getContext, onMount, tick } from 'svelte';
-  import { parseBoundedJson } from '$lib/bounded-json';
   import BulkScanQueue from '$lib/components/BulkScanQueue.svelte';
   import BulkMobileDisclosure from '$lib/components/BulkMobileDisclosure.svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
@@ -22,7 +21,7 @@
     type CandidateHandoff,
     type CertificateTransparencyProvenance,
   } from '$lib/candidate-handoff';
-  import type { ShortlistRecord } from '$lib/shortlist';
+  import { BulkShortlistWorkspace, type BulkShortlistState } from '$lib/controllers/bulk-shortlist-workspace.ts';
   import type { CaseRecord } from '$lib/cases';
   import { saveWatchlist } from '$lib/watchlists';
   import {
@@ -184,9 +183,7 @@
 
   const MAX_DOMAIN_IMPORT_BYTES = 2 * 1024 * 1024;
   const PAGE_SIZE = 100;
-  type ShortlistApi = typeof import('$lib/shortlist');
   type CasesApi = typeof import('$lib/cases');
-  type ShortlistSelectionResult = Awaited<ReturnType<ShortlistApi['setShortlistSelection']>>;
   type MobileResultView = 'review' | 'list' | 'analysis';
   type WorkspaceTool = 'sessions' | 'review' | 'indicators';
   type BulkReviewApi = typeof import('$lib/bulk-review');
@@ -212,10 +209,17 @@
   let saveStatus = $state('');
   let profile = $state<BrandProfile | null>(null);
   let profileSourceState = $state<ActiveBrandProfileSourceState>('loading');
-  let shortlist = $state<ShortlistRecord[]>([]);
-  let shortlistStatus = $state('');
+  const shortlistWorkspace = new BulkShortlistWorkspace({
+    loadStorage: () => loadDeferredModule(() => import('$lib/shortlist'), { signal: moduleController.signal }),
+    publish: next => { shortlistState = next; },
+    confirm: message => confirm(message),
+    registerUndo: registerAnalystUndo,
+  });
+  let shortlistState: BulkShortlistState = $state.raw(shortlistWorkspace.state);
+  const shortlist = $derived(shortlistState.records);
+  const shortlistStatus = $derived(shortlistState.status);
   let draftStatus = $state('');
-  let shortlistSourceState = $state<BrowserLocalCollectionLoadState>('idle');
+  const shortlistSourceState = $derived(shortlistState.sourceState);
   let cases = $state<CaseRecord[]>([]);
   let caseStatus = $state('');
   let caseMutationBusy = $state(false);
@@ -257,7 +261,6 @@
   let relationshipApi: RelationshipApi | null = null;
   let bulkReviewLoad: Promise<void> | null = null;
   let relationshipLoad: Promise<void> | null = null;
-  let shortlistApi: ShortlistApi | null = null;
   let casesApi: CasesApi | null = null;
   let primaryResultContextLoad: Promise<void> | null = null;
   let caseOptions = $state<ReadonlyArray<CasesApi['CASE_DISPOSITIONS'][number]>>([]);
@@ -637,16 +640,11 @@
     )
       return;
     if (primaryResultContextLoad) return primaryResultContextLoad;
-    shortlistSourceState = 'loading';
     casesSourceState = 'loading';
     primaryResultContextLoad = loadDeferredModule(
       () =>
         Promise.allSettled([
-          import('$lib/shortlist').then(async (module) => {
-            shortlistApi = module;
-            shortlist = await module.loadShortlist();
-            shortlistSourceState = 'ready';
-          }),
+          shortlistWorkspace.ensureLoaded(),
           import('$lib/cases').then(async (module) => {
             casesApi = module;
             cases = await module.loadCases();
@@ -657,7 +655,6 @@
       { signal: moduleController.signal },
     )
       .then((settled) => {
-        if (settled[0]?.status === 'rejected') shortlistSourceState = 'unavailable';
         if (settled[1]?.status === 'rejected') {
           casesSourceState = 'unavailable';
           view.caseDispositionFilter = '';
@@ -670,7 +667,6 @@
           localContextStatus = `Some saved result context could not be loaded (${unavailable.join(', ')}). Collected results remain available; reload to retry the missing context.`;
       })
       .catch(() => {
-        shortlistSourceState = 'unavailable';
         casesSourceState = 'unavailable';
         view.caseDispositionFilter = '';
         caseOptions = [];
@@ -828,6 +824,7 @@
     return () => {
       moduleController.abort();
       sessionWorkspace.dispose();
+      shortlistWorkspace.dispose();
       const wasRunning = scan.running;
       scanController.dispose();
       const retainedResults = scanController.results;
@@ -1047,69 +1044,8 @@
       return failedLocalMutationOutcome(cause);
     }
   }
-  function isShortlisted(domain: string) {
-    return shortlistedDomains.has(domain);
-  }
-  async function toggleSaved(row: ScanResult) {
-    const selected = !isShortlisted(row.domain);
-    if (await selectRows([row], selected))
-      shortlistStatus = selected
-        ? `Added ${row.domain} to the shortlist.`
-        : `Removed ${row.domain} from the shortlist.`;
-  }
-  function shortlistPayload(row: ScanResult) {
-    return {
-      ...row.saved,
-      riskScore: row.risk,
-      opportunityScore: row.opportunity,
-      savedAt: new Date().toISOString(),
-    };
-  }
-  function shortlistSelectionStatus(result: ShortlistSelectionResult, selected: boolean): string {
-    if (!selected)
-      return `Removed ${result.removed} domain${result.removed === 1 ? '' : 's'} from the shortlist.`;
-    const changed = result.added + result.updated;
-    const skipped = result.skipped
-      ? `; skipped ${result.skipped} invalid or over-limit row${result.skipped === 1 ? '' : 's'}`
-      : '';
-    return `Selected ${result.added} new and refreshed ${result.updated} existing domain${changed === 1 ? '' : 's'}${skipped}.`;
-  }
-  async function restoreShortlistSelection(
-    undo: ShortlistSelectionResult['undo'],
-  ): Promise<string> {
-    await ensurePrimaryResultContext();
-    if (!shortlistApi) throw new Error('The shortlist is unavailable. Reload before changing it.');
-    shortlist = await shortlistApi.restoreShortlistSelection(undo);
-    return `Restored the prior shortlist membership for ${undo.length} domain${undo.length === 1 ? '' : 's'}.`;
-  }
-  async function selectRows(rows: ScanResult[], selected = true) {
-    await ensurePrimaryResultContext();
-    if (shortlistSourceState !== 'ready' || !shortlistApi) {
-      shortlistStatus = 'The shortlist is unavailable. Reload before changing the selection.';
-      return false;
-    }
-    const affected = selected ? rows : rows.filter((row) => isShortlisted(row.domain));
-    try {
-      const result = await shortlistApi.setShortlistSelection(
-        affected.map(shortlistPayload),
-        selected,
-      );
-      shortlist = result.records;
-      shortlistStatus = shortlistSelectionStatus(result, selected);
-      if (result.undo.length) {
-        registerAnalystUndo({
-          kind: 'shortlist_membership',
-          action: selected ? 'Updated shortlist selection' : 'Removed shortlist selection',
-          affectedRecord: `${result.undo.length} domain${result.undo.length === 1 ? '' : 's'}`,
-          undo: () => restoreShortlistSelection(result.undo),
-        });
-      }
-      return result.skipped === 0;
-    } catch (cause) {
-      shortlistStatus = cause instanceof Error ? cause.message : 'Could not update the selection.';
-      return false;
-    }
-  }
+  const toggleSaved = (row: ScanResult) => shortlistWorkspace.toggle(row);
+  const selectRows = (rows: ScanResult[], selected = true) => shortlistWorkspace.select(rows, selected);
   async function selectDomains(domains: string[]) {
     const wanted = new Set(domains);
     await selectRows(
@@ -1123,33 +1059,8 @@
   async function clearFilteredSelection() {
     await selectRows(filtered, false);
   }
-  async function removeAllShortlisted() {
-    await ensurePrimaryResultContext();
-    if (shortlistSourceState !== 'ready' || !shortlistApi) {
-      shortlistStatus = 'The shortlist is unavailable. Reload before changing it.';
-      return;
-    }
-    if (!shortlist.length || !confirm('Remove every domain from the shortlist?')) return;
-    try {
-      await shortlistApi.clearShortlist();
-      shortlist = [];
-      shortlistStatus = 'Shortlist cleared.';
-    } catch (cause) {
-      shortlistStatus = cause instanceof Error ? cause.message : 'Could not clear the shortlist.';
-    }
-  }
-  async function downloadShortlist() {
-    await ensurePrimaryResultContext();
-    if (!shortlistApi) {
-      shortlistStatus = 'The shortlist is unavailable. Reload before exporting it.';
-      return;
-    }
-    try {
-      await shortlistApi.exportShortlist();
-    } catch (cause) {
-      shortlistStatus = cause instanceof Error ? cause.message : 'Could not export the shortlist.';
-    }
-  }
+  const removeAllShortlisted = () => shortlistWorkspace.clear();
+  const downloadShortlist = () => shortlistWorkspace.download();
   function loadShortlisted() {
     loadDomains(shortlist.map((item) => item.domain));
   }
@@ -1162,31 +1073,11 @@
     }
   }
   async function importShortlistFile(event: Event) {
-    const input = event.currentTarget as HTMLInputElement,
-      file = input.files?.[0];
+    const control = event.currentTarget as HTMLInputElement;
+    const file = control.files?.[0];
     if (!file) return;
-    await ensurePrimaryResultContext();
-    if (shortlistSourceState !== 'ready' || !shortlistApi) {
-      shortlistStatus = 'The shortlist is unavailable. Reload before importing.';
-      input.value = '';
-      return;
-    }
-    try {
-      const maximumBytes = shortlistApi.MAX_SHORTLIST_IMPORT_BYTES;
-      if (file.size > maximumBytes) throw new Error('Shortlist imports are limited to 2 MB.');
-      const result = await shortlistApi.importShortlist(
-        parseBoundedJson(await file.text(), { label: 'Shortlist import', maximumBytes }),
-      );
-      shortlist = await shortlistApi.loadShortlist();
-      const skipped = result.skipped
-        ? `; skipped ${result.skipped} invalid, duplicate, or over-limit entr${result.skipped === 1 ? 'y' : 'ies'}`
-        : '';
-      shortlistStatus = `Imported ${result.added} new and ${result.updated} updated shortlist entries${skipped}.`;
-    } catch (cause) {
-      shortlistStatus = cause instanceof Error ? cause.message : 'Shortlist import failed';
-    } finally {
-      input.value = '';
-    }
+    try { await shortlistWorkspace.import(file); }
+    finally { control.value = ''; }
   }
   async function importDomainFile(event: Event) {
     const control = event.currentTarget as HTMLInputElement,
