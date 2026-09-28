@@ -59,6 +59,22 @@ test('presentation flags retain their command-specific executable meaning', () =
   assert.throws(() => parseCliArguments(['lookup', 'example.test', '--sarif']), /Unknown option/u);
 });
 
+test('catalogue collection labels derive from execution effects without changing scope text', () => {
+  for (const [networkEffect, expected] of [
+    ['offline', 'offline'], ['always_network', 'network'], ['conditional_network', 'network'],
+  ] as const) {
+    const seed = commandSeed({
+      ...COLLECTION_COMMAND_DEFINITIONS.lookup,
+      collection: { scope: 'The fixture scope remains independently authored.' },
+      networkEffect,
+    });
+    assert.deepEqual(seed.collection, {
+      mode: expected, scope: 'The fixture scope remains independently authored.',
+    });
+    assert.ok(Object.isFrozen(seed.collection));
+  }
+});
+
 test('option variants remain local and reject undeclared flags before registry construction', () => {
   const variant = commandSeed({
     ...COLLECTION_COMMAND_DEFINITIONS.lookup,

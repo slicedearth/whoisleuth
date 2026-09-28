@@ -45,6 +45,7 @@ import { validateCandidateReport } from './published-cli-check.mts';
 import {
   CLI_PACKAGE_REPORT_SCHEMA,
   CLI_PACKAGE_REPORT_VERSION,
+  CLI_PACKAGE_SUPPORT_FILES,
   MAX_CLI_PACKAGE_PROCESSING_ITEMS,
   MAX_CLI_PACKAGE_PACKED_BYTES,
   MAX_CLI_PACKAGE_UNPACKED_BYTES,
@@ -53,6 +54,7 @@ import {
 export {
   CLI_PACKAGE_REPORT_SCHEMA,
   CLI_PACKAGE_REPORT_VERSION,
+  CLI_PACKAGE_SUPPORT_FILES,
   MAX_CLI_PACKAGE_PROCESSING_ITEMS,
   MAX_CLI_PACKAGE_PACKED_BYTES,
   MAX_CLI_PACKAGE_UNPACKED_BYTES,
@@ -203,18 +205,6 @@ export const CLI_RUNTIME_DEPENDENCIES = Object.freeze([
   'tldts',
   'undici',
 ]);
-export const CLI_PACKAGE_SUPPORT_FILES = Object.freeze([
-  ['packages/cli/README.md', 'README.md'],
-  ['docs/cli.md', 'docs/cli.md'],
-  ['docs/cli-reference.md', 'docs/cli-reference.md'],
-  ['docs/contextual-reviews.md', 'docs/contextual-reviews.md'],
-  ['DISCLOSURE', 'DISCLOSURE'],
-  ['LICENSE', 'LICENSE'],
-  ['NOTICE', 'NOTICE'],
-  ['SECURITY.md', 'SECURITY.md'],
-  ['TRADEMARKS.md', 'TRADEMARKS.md'],
-  ['LICENSES/Retire.js-Apache-2.0.txt', 'LICENSES/Retire.js-Apache-2.0.txt'],
-] as const);
 const CLI_PACKAGE_COMPILER_CONTEXT_FILES = Object.freeze([
   'frontend/package.json',
 ]);

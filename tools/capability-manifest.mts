@@ -13,9 +13,10 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { renderCapabilityManifestMarkdown } from './capability-manifest-renderer.mts';
+import { CAPABILITY_DOCUMENT_PATH } from './capability-document-contract.mts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const OUTPUT_PATH = resolve(ROOT, 'docs', 'capability-manifest.md');
+const OUTPUT_PATH = resolve(ROOT, CAPABILITY_DOCUMENT_PATH);
 const MAX_RETAINED_DOCUMENT_BYTES = 1024 * 1024;
 
 function retainedDocument(): string | null {

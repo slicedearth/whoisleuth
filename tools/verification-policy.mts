@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { isPlaywrightFunctionalSpec } from './playwright-execution-contract.mts';
-import { OUTPUT_PATH as CAPABILITY_DOCUMENT_PATH } from './capability-manifest.mts';
-import { CLI_PACKAGE_SUPPORT_FILES } from './cli-package.mts';
+import { CAPABILITY_DOCUMENT_PATH } from './capability-document-contract.mts';
+import { CLI_PACKAGE_SUPPORT_FILES } from './cli-package-contract.mts';
 import { isOptionalEditorConfiguration } from './maintainer-tool-helpers.mts';
 
 export const FULL_BATCH_RELEASE_GATES = Object.freeze([
@@ -771,7 +771,8 @@ export function createVerificationRules(
       id: 'generated-capability-document',
       area: 'generated capability reference',
       priority: 45,
-      matches: (value: string) => path.resolve(REPOSITORY_ROOT, value) === CAPABILITY_DOCUMENT_PATH,
+      matches: (value: string) =>
+        path.resolve(REPOSITORY_ROOT, value) === path.resolve(REPOSITORY_ROOT, CAPABILITY_DOCUMENT_PATH),
       focusedUnit: unit('test/capability-manifest.test.mts', 'test/documentation-links.test.mts'),
       focusedBrowser: browser(),
       specialised: specialised('capability-catalogue', 'documentation'),

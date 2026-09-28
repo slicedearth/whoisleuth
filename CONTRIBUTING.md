@@ -67,6 +67,9 @@ Follow imports and nearby tests rather than adding another registration table.
 Cross-runtime analysis belongs in `packages/analysis/`; domain directories
 inherit dependency boundaries without a filename allowlist. Existing public
 facades stay compatible, but new internal imports use the implementation owner.
+Put new server-only implementations in `lib/server/`; browser imports are rejected
+for the whole directory, including modules without Node imports. Existing runtime
+entry points remain protected and need not move merely to adopt this convention.
 An ordinary helper in an existing area needs no package-inventory baseline or
 ownership exception. New unit tests follow `test/<name>.test.mts` and are
 discovered automatically. Source counts are reported; resource bounds still
@@ -196,6 +199,8 @@ definitions live in `command-definition.mts`; help, completion and browser
 reference pages derive from them. Keep effects in the corresponding runner,
 not in the data-only definition. Independent network and privacy expectations
 remain in the contract tests.
+The catalogue's coarse offline/network label derives from the declared execution
+effect; write the collection scope once and preserve independent no-request tests.
 Each runner declares its own dependency type beside its handlers; the dispatcher
 composes those types. Add a new injectable effect at its consumer, not to a
 parallel central list. Only workflow handlers receive recursive command execution.

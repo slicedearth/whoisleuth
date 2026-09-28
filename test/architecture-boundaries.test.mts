@@ -76,6 +76,8 @@ describe('architecture boundaries', () => {
       'domain-packages-no-node-core',
       'non-frontend-production-stays-out-of-frontend',
       'observation-consumers-use-domain-owner',
+      'frontend-no-server-only',
+      'verification-policy-does-not-load-builders',
     ]) assert.ok(violatedRules.has(name), `${name} must report an actual forbidden dependency`);
     const newDomainViolations = report.summary.violations.filter(violation =>
       violation.from.endsWith('packages/new-domain/forbidden-dependencies.mts'));
@@ -83,6 +85,14 @@ describe('architecture boundaries', () => {
       && violation.rule.name === 'domain-packages-no-node-core'));
     assert.ok(newDomainViolations.some(violation => violation.to.endsWith('lib/runtime.mts')
       && violation.rule.name === 'domain-packages-stay-independent-of-runtime-adapters'));
+    assert.ok(report.summary.violations.some(violation =>
+      violation.from.endsWith('frontend/src/lib/forbidden-server-runtime.mts')
+      && violation.to.endsWith('lib/server/new-service.mts')
+      && violation.rule.name === 'frontend-no-server-only'));
+    assert.ok(report.summary.violations.some(violation =>
+      violation.from.endsWith('tools/verification-policy.mts')
+      && violation.to.endsWith('tools/cli-package.mts')
+      && violation.rule.name === 'verification-policy-does-not-load-builders'));
     const blockedTargets = new Set(report.summary.violations
       .filter((violation) => violation.rule.name === 'non-frontend-production-stays-out-of-frontend')
       .map((violation) => violation.to.replace('test/fixtures/architecture/frontend/src/lib/', '')));

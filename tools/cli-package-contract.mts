@@ -4,6 +4,19 @@ import { MAX_PACKAGE_SOURCE_BYTES } from './package-resource-bounds.mts';
 export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
 export const CLI_PACKAGE_REPORT_VERSION = 3;
 
+export const CLI_PACKAGE_SUPPORT_FILES = Object.freeze([
+  ['packages/cli/README.md', 'README.md'],
+  ['docs/cli.md', 'docs/cli.md'],
+  ['docs/cli-reference.md', 'docs/cli-reference.md'],
+  ['docs/contextual-reviews.md', 'docs/contextual-reviews.md'],
+  ['DISCLOSURE', 'DISCLOSURE'],
+  ['LICENSE', 'LICENSE'],
+  ['NOTICE', 'NOTICE'],
+  ['SECURITY.md', 'SECURITY.md'],
+  ['TRADEMARKS.md', 'TRADEMARKS.md'],
+  ['LICENSES/Retire.js-Apache-2.0.txt', 'LICENSES/Retire.js-Apache-2.0.txt'],
+] as const);
+
 // Emergency work bound, not a release inventory or a refactoring budget.
 // Each phase may visit at most 4,096 items; independent byte limits and process
 // deadlines also apply. For tar validation this bounds header/padding overhead

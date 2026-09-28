@@ -97,16 +97,29 @@
     {
       "name": "frontend-no-server-only",
       "severity": "error",
-      "comment": "Browser code must not reach server networking, secrets, authentication, filesystem, CLI, or function modules.",
+      "comment": "Browser code must not reach server networking, secrets, authentication, filesystem, CLI, or function modules. New server-only implementations inherit the lib/server boundary; established entry points remain protected.",
       "from": {
-        "path": "^frontend/src/"
+        "path": "^(?:test/fixtures/architecture/)?frontend/src/"
       },
       "to": {
         "path": [
-          "^(?:bin|cli|netlify/functions|tools)(?:/|$)",
-          "^server\\.mts$",
+          "^(?:test/fixtures/architecture/)?(?:bin|cli|netlify/functions|tools)(?:/|$)",
+          "^(?:test/fixtures/architecture/)?server\\.mts$",
+          "^(?:test/fixtures/architecture/)?lib/server/",
           "^lib/(?:abusech-auth|auth|availability|capabilities|ct-search|distributed-operation-budget|dns-intelligence|dns-mx|domain-posture|favicon|feature-policy|http|http-intelligence|lookup|lookup-cache|netlify-function-types|netlify-network-guard|observed-network-context|operation-budget|rate-limit|rdap|safe-fetch|scheduled-monitor-configuration|scheduled-monitor-crypto|scheduled-monitor-cycle|scheduled-monitor-management|scheduled-monitor-netlify-store|scheduled-monitor-repository|scheduled-monitor-runtime|security-txt|service-binding-dns|threatfox-intelligence|tls-intelligence|urlhaus-intelligence|urlscan-intelligence|whois)\\.mts$"
         ],
+        "reachable": true
+      }
+    },
+    {
+      "name": "verification-policy-does-not-load-builders",
+      "severity": "error",
+      "comment": "Selecting checks may read shared metadata but must not load package assembly or document-writing entry points.",
+      "from": {
+        "path": "^(?:test/fixtures/architecture/)?tools/verification-policy\\.mts$"
+      },
+      "to": {
+        "path": "^(?:test/fixtures/architecture/)?tools/(?:cli-package|capability-manifest)\\.mts$",
         "reachable": true
       }
     },

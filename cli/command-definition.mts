@@ -445,7 +445,8 @@ type CliCommandSeed = Readonly<{
 }>;
 
 function commandSeed<const Owner extends CliExecutionOwner, const Options extends readonly CliOption[]>(
-  seed: Omit<CliCommandSeed, 'handlerOwner' | 'options' | 'optionOverrides'> & {
+  seed: Omit<CliCommandSeed, 'collection' | 'handlerOwner' | 'options' | 'optionOverrides'> & {
+    collection: Pick<CommandCollection, 'scope'>;
     handlerOwner: Owner;
     options: Options;
     optionOverrides?: Readonly<Partial<Record<NoInfer<Options[number]> | typeof COMMON_OPTIONS[number], CliOptionDefinition>>>;
@@ -458,7 +459,10 @@ function commandSeed<const Owner extends CliExecutionOwner, const Options extend
   return Object.freeze({
     ...seed,
     reference: Object.freeze({ ...seed.reference }),
-    collection: Object.freeze({ ...seed.collection }),
+    collection: Object.freeze({
+      mode: seed.networkEffect === 'offline' ? 'offline' : 'network',
+      scope: seed.collection.scope,
+    }),
     options: Object.freeze([...seed.options]),
     ...(seed.optionOverrides ? { optionOverrides: Object.freeze({ ...seed.optionOverrides }) } : {}),
     positionals: Object.freeze([...seed.positionals]),
