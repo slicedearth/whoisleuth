@@ -1,3 +1,4 @@
+import { INVESTIGATION_PLAN_RECIPES, RUNNABLE_INVESTIGATION_PLAN_RECIPES } from './investigation-recipes.mts';
 import type {
   CliOptionValueKind, CliOptionOccurrence, CliOptionScope, CliPositionalValueKind,
   CliPositionalInputSource, CliMetaActionId, CliMetaAction, CliOptionIntegerRange,
@@ -102,20 +103,6 @@ type CliCommandDefinition = Readonly<{
   }>;
 }>;
 
-const INVESTIGATION_PLAN_RECIPES = Object.freeze([
-  'domain-triage',
-  'lookalike-review',
-  'owned-domain-review',
-  'historical-comparison',
-  'campaign-review',
-  'certificate-anomaly',
-  'registry-disagreement',
-  'evidence-handoff',
-  'planned-domain-change',
-  'post-change-verification',
-] as const);
-
-const RUNNABLE_INVESTIGATION_PLAN_RECIPES = INVESTIGATION_PLAN_RECIPES;
 const CLI_CASE_OPERATIONS = ['show', 'open', 'note', 'pin', 'link', 'withdraw-link', 'assess', 'recheck'] as const;
 const CLI_INDICATOR_OPERATIONS = ['revise', 'inspect', 'stix', 'misp'] as const;
 

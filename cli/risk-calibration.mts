@@ -49,7 +49,7 @@ import {
   type RiskCalibrationThreatIntelligence,
 } from '../packages/contracts/risk-calibration.mts';
 
-import { CliUsageError } from './arguments.mts';
+import { CliUsageError } from './errors.mts';
 import type { BoundedTextStream } from './bulk.mts';
 import { RISK_MUTATION_TYPES } from '../packages/analysis/risk-scoring.mts';
 import type { RiskExplanation, RiskInput } from '../packages/analysis/risk-scoring.mts';

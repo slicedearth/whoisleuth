@@ -37,8 +37,14 @@ references, retained data and compatibility fixtures use their existing owners.
 - **Bulk actions:** `bulk-case-actions.ts` coordinates Case writes and refreshes;
   `bulk-monitor-actions.ts` admits every Monitor save through the same checks.
   `analysis/bulk-export.ts` owns CSV columns; the route only downloads the result.
+- **Brand Profile editing:** `controllers/brand-profile-editor.ts` owns form values,
+  reset/load, submission and capture cancellation. The route's existing mutation
+  coordinator still owns writes, conflicts and recovery reads.
 - **CLI options:** `cli/command-reference.mts` owns grammar and command bindings.
   Help and completion derive from it; command handlers own execution.
+- **CLI recipes:** `cli/investigation-recipes.mts` owns recipe definitions. Names,
+  argument choices and catalogue entries derive; plan construction validates
+  each step against the command's independent network contract.
 - **Portable fields:** `packages/cases/case-record-projection.mts` requires
   explicit audience treatment. Preserve independent privacy assertions and
   immutable published-version fixtures; do not derive their expected answers

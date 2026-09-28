@@ -52,6 +52,10 @@ and section-navigation owners. Bulk separates scan execution from saved-session
 drafts, retention approval and mutation outcomes. Controllers publish state
 snapshots; existing storage adapters retain transactional writes and conflict
 checks. A committed write and a failed subsequent refresh remain distinct.
+Brand Profile editing separates its form draft, capture cancellation and save
+completion from the route's collection and mutation coordinators. CLI workflow
+recipe definitions supply both the command grammar choices and plan catalogue;
+the command registry independently validates each step's network effect.
 
 Package builders share bounded source discovery, snapshots, compilation and
 emitted-file validation in `tools/package-source.mts`. Each builder owns its

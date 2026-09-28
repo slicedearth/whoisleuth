@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
-import { CliUsageError } from './arguments.mts';
+import { CliUsageError } from './errors.mts';
 import { normalizeDiscoverySuffix } from '../packages/analysis/registrable-domain.mts';
 
 const DEFAULT_DISCOVERY_TLDS = Object.freeze(['com', 'net', 'org']);

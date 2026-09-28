@@ -1,8 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { abortable } from '../lib/abort.mts';
 import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
-import { CliUsageError } from './arguments.mts';
-import { hasUnsafeCliText } from './errors.mts';
+import { CliUsageError, hasUnsafeCliText } from './errors.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import {
   MAX_DEEP_BULK_QUERIES,

@@ -1,4 +1,4 @@
-import { CliUsageError } from './arguments.mts';
+import { CliUsageError } from './errors.mts';
 
 type SelectorNormalizer = (values: string[]) => string[];
 

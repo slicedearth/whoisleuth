@@ -6,7 +6,7 @@ import {
   scanBoundedJson,
 } from '../packages/analysis/bounded-json.mts';
 import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
-import { CliUsageError } from './arguments.mts';
+import { CliUsageError } from './errors.mts';
 import type { BoundedTextStream } from './bulk.mts';
 import {
   validHttpDeliveryMetadata,
