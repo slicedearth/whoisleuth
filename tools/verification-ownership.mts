@@ -821,6 +821,15 @@ export function leafComponentContracts(
   }));
 }
 
+/** Report the failed operation and an allowlisted category, never source paths
+ * or arbitrary parser/transport text from a thrown error. */
+export function dependencyAnalysisFailure(stage: string, error: unknown): string {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+  const category = typeof code === 'string' && ['ENOENT', 'EACCES', 'ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND'].includes(code)
+    ? code : error instanceof SyntaxError ? 'invalid syntax' : error instanceof TypeError ? 'invalid analysis data' : 'analysis error';
+  return `Dependency analysis failed while ${stage} (${category}): the focused plan falls back to the complete unit and functional browser inventories.`;
+}
+
 export async function createVerificationOwnershipPlan(rawPaths: readonly string[]): Promise<VerificationOwnershipPlan> {
   const initial = buildVerificationOwnershipPlan(rawPaths);
   const importedPaths = initial.changedPaths.filter((file) => /\.(?:[cm]?[jt]s|json|svelte)$/u.test(file)
@@ -834,8 +843,10 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
   let routeConsumers: ReadonlyMap<string, readonly string[]> = new Map();
   let componentContracts: ReadonlyMap<string, readonly string[]> = new Map();
   let explanation: string;
+  let stage = 'loading the dependency analyser';
   try {
     const { cruise } = await import('dependency-cruiser');
+    stage = 'reading dependency configuration';
     const config = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, '.dependency-cruiser.json'), 'utf8')) as { options: IOptions };
     const components = importedPaths.filter(file => file.endsWith('.svelte'));
     const frontendPaths = importedPaths.filter(file => file.startsWith('frontend/src/'));
@@ -846,6 +857,7 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
     const unitEntries = importedPaths.some(file => !file.endsWith('.svelte')) ? inventory : [];
     const entries = routeEntriesOnly ? [...browserInventory]
       : [...unitEntries, ...browserInventory, ...(frontendPaths.length ? ['frontend/src/routes'] : [])];
+    stage = 'resolving the source import graph';
     const { output } = await cruise(entries, {
       ...config.options, baseDir: REPOSITORY_ROOT, outputType: 'json', tsPreCompilationDeps: 'specify', validate: false,
       tsConfig: { fileName: path.join(REPOSITORY_ROOT, 'tsconfig.dependency-cruiser.json') },
@@ -853,6 +865,7 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
       // browser consumers are destinations, including imported test helpers.
       ...(routeEntriesOnly ? { doNotFollow: { path: '^(?!e2e/)' } } : {}),
     });
+    stage = 'mapping source dependents';
     const graph = typeof output === 'string' ? JSON.parse(output) as ICruiseResult : output;
     selection = new Map([
       ...importedTestConsumers(importedPaths.filter(file => !file.endsWith('.svelte')), graph, inventory),
@@ -868,6 +881,7 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
     // into application changes. Unresolved local imports still fail broadly.
     browserSelection = importedTestConsumers(importedPaths, graph, browserInventory, false);
     if (frontendPaths.length) {
+      stage = 'reading browser route references';
       // A browser journey can visit a page without importing it or sharing its
       // filename. Include those consumers before iteration reaches a full run.
       // Test helpers inherit their route references through the same graph.
@@ -894,10 +908,10 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
     explanation = fallback.length
       ? `Complete unit fallback where import evidence is missing or uncertain: ${fallback.join(', ')}.`
       : 'Runtime dependents and browser route references are discovered from current sources, including transitive helpers and newly added tests; compiler checks protect type-only contracts.';
-  } catch {
+  } catch (error) {
     selection = new Map(importedPaths.map((file) => [file, inventory]));
     browserSelection = new Map(importedPaths.map((file) => [file, browserInventory]));
-    explanation = 'Dependency analysis was unavailable: the focused plan falls back to the complete unit and functional browser inventories.';
+    explanation = dependencyAnalysisFailure(stage, error);
   }
   const plan = buildVerificationOwnershipPlan(rawPaths, selection, browserSelection, routeConsumers, componentContracts);
   return Object.freeze({ ...plan, interpretation: Object.freeze([...plan.interpretation, explanation]) });

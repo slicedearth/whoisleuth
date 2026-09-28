@@ -40,6 +40,7 @@ import {
   browserSpecsForPrefixes,
   checkVerificationOwnershipMap,
   createVerificationOwnershipPlan,
+  dependencyAnalysisFailure,
   importedTestConsumers,
   leafComponentContracts,
   FULL_BATCH_RELEASE_GATES,
@@ -52,6 +53,14 @@ function rawProfile(): Record<string, unknown> {
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 describe('verification architecture contracts', () => {
+  test('explains dependency fallback without exposing arbitrary failure details', () => {
+    const failure = Object.assign(new Error('private transport detail'), { code: 'ENOENT' });
+    assert.equal(dependencyAnalysisFailure('reading dependency configuration', failure),
+      'Dependency analysis failed while reading dependency configuration (ENOENT): the focused plan falls back to the complete unit and functional browser inventories.');
+    for (const error of [new SyntaxError('private transport detail'), new TypeError('private transport detail'), { code: 'private transport detail' }, null]) {
+      assert.doesNotMatch(dependencyAnalysisFailure('mapping source dependents', error), /private transport detail/u);
+    }
+  });
   test('uses discovered tests for a deterministic exact browser plan and retains honest timing history', () => {
     const inventory = readVerificationTestInventory();
     const profile = readVerificationTimingProfile();

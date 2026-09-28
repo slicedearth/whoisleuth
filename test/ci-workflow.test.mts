@@ -93,9 +93,13 @@ const FRONTEND_PACKAGE_MANIFEST = JSON.parse(fs.readFileSync(
 type WorkflowFixture = {
   on: Record<string, unknown>;
   permissions: Record<string, string>;
+  concurrency?: { 'cancel-in-progress'?: boolean };
   jobs: Record<string, {
     if?: string;
     needs?: string[];
+    permissions?: Record<string, string>;
+    'timeout-minutes'?: number;
+    'continue-on-error'?: boolean;
     steps: Array<{
       name?: string;
       uses?: string;
@@ -132,11 +136,38 @@ function toolchainManifests() {
 }
 
 function pinnedActions(workflow: string): ReadonlyArray<Readonly<{ action: string; revision: string }>> {
-  return [...workflow.matchAll(/^\s+uses: ([^@\s]+)@([^\s#]+)/gmu)]
-    .map((match) => ({
-      action: requiredValue(match[1]),
-      revision: requiredValue(match[2]),
-    }));
+  return workflowSteps(parse(workflow) as WorkflowFixture).flatMap(step => {
+    if (!step.uses) return [];
+    const [action, revision] = step.uses.split('@');
+    return [{ action: requiredValue(action), revision: requiredValue(revision) }];
+  });
+}
+
+function workflowSteps(workflow: WorkflowFixture) {
+  return Object.values(workflow.jobs).flatMap(job => job.steps);
+}
+
+function workflowCommands(workflow: WorkflowFixture): string {
+  return workflowSteps(workflow).flatMap(step => step.run ? [step.run] : []).join('\n');
+}
+
+function scheduledWorkflow(source: string, cron: string): WorkflowFixture {
+  const workflow = parse(source) as WorkflowFixture;
+  assert.deepEqual(Object.keys(workflow.on).sort(), ['schedule', 'workflow_dispatch']);
+  assert.deepEqual(workflow.on.schedule, [{ cron }]);
+  assert.deepEqual(workflow.permissions, { contents: 'read' });
+  assert.equal(workflow.concurrency?.['cancel-in-progress'], false);
+  for (const job of Object.values(workflow.jobs)) {
+    assert.ok(Number.isInteger(job['timeout-minutes']) && job['timeout-minutes']! > 0 && job['timeout-minutes']! <= 60);
+    assert.notEqual(job['continue-on-error'], true);
+    if (job.permissions) assert.ok(Object.values(job.permissions).every(value => value === 'read' || value === 'none'));
+    for (const step of job.steps) assert.notEqual(step['continue-on-error'], true);
+  }
+  for (const { revision } of pinnedActions(source)) assert.match(revision, /^[a-f0-9]{40}$/u);
+  const checkouts = workflowSteps(workflow).filter(step => step.uses?.startsWith('actions/checkout@'));
+  assert.ok(checkouts.length > 0);
+  for (const checkout of checkouts) assert.equal(checkout.with?.['persist-credentials'], false);
+  return workflow;
 }
 
 function occurrences(value: string, pattern: RegExp): number {
@@ -472,17 +503,24 @@ describe('continuous integration workflow', () => {
   });
 
   test('keeps the live production audit outside required per-push verification', () => {
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^on:\s*\n\s{2}schedule:\s*\n\s{4}- cron: '29 3 \* \* 2'\s*\n\s{2}workflow_dispatch:$/mu);
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s{2}cancel-in-progress: false$/mu);
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s{4}timeout-minutes: 10$/mu);
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s+run: npm run dependencies:audit$/mu);
-    assert.doesNotMatch(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /npm (?:ci|install)|continue-on-error|write\b/iu);
+    const workflow = scheduledWorkflow(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, '29 3 * * 2');
+    assert.match(workflowCommands(workflow), /^npm run dependencies:audit$/mu);
+    assert.doesNotMatch(workflowCommands(workflow), /npm (?:ci|install)/u);
     const actions = pinnedActions(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW);
     assert.deepEqual(actions.map(({ action }) => action), ['actions/checkout', 'actions/setup-node']);
     for (const { revision } of actions) assert.match(requiredValue(revision), /^[a-f0-9]{40}$/u);
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s{10}persist-credentials: false$/mu);
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s{10}package-manager-cache: false$/mu);
+    assert.equal(requiredValue(workflowSteps(workflow).find(step => step.uses?.startsWith('actions/setup-node@'))).with?.['package-manager-cache'], false);
+  });
+
+  test('scheduled policy ignores presentation but rejects ignored failures and elevated permissions', () => {
+    const workflow = parse(TEST_HEALTH_WORKFLOW) as WorkflowFixture;
+    for (const step of workflowSteps(workflow)) step.name = 'Descriptive step label';
+    scheduledWorkflow(stringify(workflow, { indent: 4, defaultStringType: 'QUOTE_DOUBLE' }), '43 3 * * 3');
+    requiredValue(workflowSteps(workflow)[0])['continue-on-error'] = true;
+    assert.throws(() => scheduledWorkflow(stringify(workflow), '43 3 * * 3'));
+    delete requiredValue(workflowSteps(workflow)[0])['continue-on-error'];
+    workflow.permissions.contents = 'write';
+    assert.throws(() => scheduledWorkflow(stringify(workflow), '43 3 * * 3'));
   });
 
   test('resolves the same safe Playwright contract across local, hosted and performance lanes', () => {
@@ -871,17 +909,15 @@ describe('continuous integration workflow', () => {
   });
 
   test('repeats timing-sensitive browser workflows without retries on a bounded schedule', () => {
-    assert.match(STRESS_WORKFLOW, /^\s{2}schedule:\s*\n\s{4}- cron: '17 3 \* \* 1'\s*\n\s{2}workflow_dispatch:$/mu);
-    assert.match(STRESS_WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
-    assert.doesNotMatch(STRESS_WORKFLOW, /\b(?:contents|issues|pull-requests|actions): write\b/u);
-    assert.match(STRESS_WORKFLOW, /^\s+run: npm run test:e2e:stress$/mu);
-    assert.match(STRESS_WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts --audit=false$/mu);
-    assert.match(STRESS_WORKFLOW, /^\s+run: npm run test:e2e:summary$/mu);
+    const workflow = scheduledWorkflow(STRESS_WORKFLOW, '17 3 * * 1');
+    const commands = workflowCommands(workflow);
+    assert.match(commands, /^npm run test:e2e:stress$/mu);
+    assert.match(commands, /^npm ci --include=optional --ignore-scripts --audit=false$/mu);
+    assert.match(commands, /^npm run test:e2e:summary$/mu);
     assert.equal(
       PACKAGE_MANIFEST.scripts?.['test:e2e:stress'],
       'playwright test --grep @timing-sensitive --workers=1 --retries=0 --repeat-each=10',
     );
-    assert.equal(occurrences(STRESS_WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 1);
     const actions = pinnedActions(STRESS_WORKFLOW);
     assert.deepEqual(actions.map(({ action }) => action), [
       'actions/checkout',
@@ -893,34 +929,34 @@ describe('continuous integration workflow', () => {
   });
 
   test('runs expanded property checks and duration profiling on a bounded schedule', () => {
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{2}schedule:\s*\n\s{4}- cron: '43 3 \* \* 3'\s*\n\s{2}workflow_dispatch:$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
-    assert.doesNotMatch(TEST_HEALTH_WORKFLOW, /\b(?:contents|issues|pull-requests|actions): write\b/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts --audit=false$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER: '10'$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}WHOISLEUTH_FAST_CHECK_SEED: \$\{\{ github\.run_number \}\}$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm run test:properties$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm run verification:timing:check$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /npm run sources:health \| tee "\$RUNNER_TEMP\/source-health-report\.txt"/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s+npm run sources:health -- --github-annotations$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /## Offline retained source health/u);
-    assert.match(TEST_HEALTH_WORKFLOW, />> "\$GITHUB_STEP_SUMMARY"/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /apt-get install[^\n]*\bzsh\b/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /for run in 1 2 3; do\s+npm run test:profile > "\$RUNNER_TEMP\/test-duration-report-\$run\.txt"\s+done/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /npm run test:duration-health --/u);
+    const workflow = scheduledWorkflow(TEST_HEALTH_WORKFLOW, '43 3 * * 3');
+    const commands = workflowCommands(workflow);
+    const properties = requiredValue(workflowSteps(workflow).find(step => step.run === 'npm run test:properties'));
+    assert.equal(properties.env?.WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER, '10');
+    assert.equal(properties.env?.WHOISLEUTH_FAST_CHECK_SEED, '${{ github.run_number }}');
+    assert.match(commands, /^npm ci --include=optional --ignore-scripts --audit=false$/mu);
+    assert.match(commands, /^npm run verification:timing:check$/mu);
+    assert.match(commands, /npm run sources:health \| tee "\$RUNNER_TEMP\/source-health-report\.txt"/u);
+    assert.match(commands, /^npm run sources:health -- --github-annotations$/mu);
+    assert.match(commands, /## Offline retained source health/u);
+    assert.match(commands, />> "\$GITHUB_STEP_SUMMARY"/u);
+    assert.match(commands, /apt-get install[^\n]*\bzsh\b/u);
+    assert.match(commands, /for run in 1 2 3; do\s+npm run test:profile > "\$RUNNER_TEMP\/test-duration-report-\$run\.txt"\s+done/u);
+    assert.match(commands, /npm run test:duration-health --/u);
     for (const run of [1, 2, 3]) {
-      assert.match(TEST_HEALTH_WORKFLOW, new RegExp(`--report="\\$RUNNER_TEMP/test-duration-report-${run}\\.txt"`, 'u'));
+      assert.match(commands, new RegExp(`--report="\\$RUNNER_TEMP/test-duration-report-${run}\\.txt"`, 'u'));
     }
-    assert.match(TEST_HEALTH_WORKFLOW, /cat "\$RUNNER_TEMP\/test-duration-health\.md" >> "\$GITHUB_STEP_SUMMARY"/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /--provenance-id="unit-ci-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}"/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /npm run --silent verification:timing:update-candidate --/u);
-    assert.equal(occurrences(TEST_HEALTH_WORKFLOW, /--report="\$RUNNER_TEMP\/test-duration-report-[123]\.txt"/gu), 6);
-    assert.doesNotMatch(TEST_HEALTH_WORKFLOW, /--sample-count=/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{12}\$\{\{ runner\.temp \}\}\/test-duration-report-\*\.txt$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{12}\$\{\{ runner\.temp \}\}\/test-duration-health\.md$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{12}\$\{\{ runner\.temp \}\}\/verification-timing-unit-candidate\.json$/mu);
-    assert.doesNotMatch(TEST_HEALTH_WORKFLOW, /^\s{10}path: test-duration-report/mu);
-    assert.equal(occurrences(TEST_HEALTH_WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 1);
+    assert.match(commands, /cat "\$RUNNER_TEMP\/test-duration-health\.md" >> "\$GITHUB_STEP_SUMMARY"/u);
+    assert.match(commands, /--provenance-id="unit-ci-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}"/u);
+    assert.match(commands, /npm run --silent verification:timing:update-candidate --/u);
+    assert.equal(occurrences(commands, /--report="\$RUNNER_TEMP\/test-duration-report-[123]\.txt"/gu), 6);
+    assert.doesNotMatch(commands, /--sample-count=/u);
+    const uploads = workflowSteps(workflow).filter(step => step.uses?.startsWith('actions/upload-artifact@'));
+    assert.deepEqual(uploads.flatMap(step => String(step.with?.path).trim().split(/\s*\n\s*/u)), [
+      '${{ runner.temp }}/test-duration-report-*.txt',
+      '${{ runner.temp }}/test-duration-health.md',
+      '${{ runner.temp }}/verification-timing-unit-candidate.json',
+    ]);
     const actions = pinnedActions(TEST_HEALTH_WORKFLOW);
     assert.deepEqual(actions.map(({ action }) => action), [
       'actions/checkout',

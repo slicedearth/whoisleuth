@@ -19,7 +19,6 @@ dependency tree.
 
 ```bash
 npm ci --include=optional --ignore-scripts --audit=false
-npm run dev
 ```
 
 The install command matches required CI and keeps registry advisory availability
@@ -30,10 +29,39 @@ documented in [Dependency maintenance](dependency-maintenance.md).
 For bundled registry, threat-intelligence and Unicode data, use the separate
 [retained source checks and refresh procedure](source-maintenance.md).
 
-The development server prints its local URL. The protected Console requires the
-same authentication configuration described in the operations guide; public
-routes and the fixed synthetic demo do not perform live investigation
-collection.
+### Public pages and demo
+
+Run `npm run dev` and open the URL it prints. This starts the frontend only.
+Public pages and the fixed synthetic demo need no API server and make no live
+investigation requests.
+
+### Authenticated Console
+
+Create an ignored `.env.local` in the repository root containing `SITE_PASSWORD`
+and a separate `SESSION_SECRET`, following [authentication configuration](operations.md#authentication-boundary).
+Use development-only values, not production credentials. Generate a signing
+secret with `node -p "require('node:crypto').randomBytes(32).toString('hex')"`.
+
+Keep these two commands running in separate terminals, both at the repository
+root:
+
+```bash
+# Terminal 1: API on port 3000
+node --env-file=.env.local server.mts
+```
+
+```bash
+# Terminal 2: frontend with live reload
+npm run dev
+```
+
+Open the frontend URL and sign in with the development password. Vite forwards
+`/api` requests to `http://localhost:3000`; starting Vite alone cannot provide
+sign-in or collection. If port 3000 is occupied, stop the conflicting service
+or use the filesystem-local application below. Starting either server does not
+start an investigation; collection begins when you request it in the Console.
+
+### Production build on the Express host
 
 Build and run the portable Express host with:
 
@@ -46,7 +74,7 @@ npm start
 The application reads deployment settings from the environment. Never commit
 passwords, session secrets, provider credentials or production configuration.
 
-## Frontend development
+### Filesystem-local application
 
 For the Console with a filesystem workspace, see the separate
 [local application](../packages/local-application/README.md). Build the frontend,
@@ -55,6 +83,8 @@ Choose a folder outside the checkout for real work. This mode uses a private
 launch link rather than the hosting password and does not use IndexedDB for
 saved collections. `npm run local:package:check` verifies an installed package
 against the current production build.
+
+## Frontend development
 
 The SvelteKit frontend is under `frontend/`. Root scripts invoke the workspace
 commands. Run `npm run check` for Svelte validation or `npm run build` for a
