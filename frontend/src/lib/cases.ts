@@ -1,9 +1,10 @@
 import { downloadLocalFile } from './download-local-file.ts';
-// Browser-local analyst case store. Pure validation, merge, byte budgets and
+// Local-workspace analyst case store. Pure validation, merge, byte budgets and
 // export shaping live in packages/cases; this adapter owns provider access and
 // downloads. Internal consumers import pure operations from their domain owner.
-// Cases never leave the browser and hold no raw registry responses - only a
-// bounded, chronological history of evidence snapshots.
+// The selected provider uses browser storage or an explicitly selected local
+// filesystem workspace. Records hold no raw registry responses, only a bounded,
+// chronological history of evidence snapshots.
 import {
   buildCaseExport,
   enforceStoreBudget,

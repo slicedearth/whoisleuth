@@ -297,6 +297,13 @@ describe('continuous integration workflow', () => {
     assert.throws(() => assertHostedCiParity('x'.repeat(512 * 1024 + 1)), /bound/u);
   });
 
+  test('produces separate machine and human browser-health reports', () => {
+    const commands = fixtureJob(workflowFixture(), 'browser-health').steps
+      .flatMap(step => step.run?.includes('test:e2e:aggregate') ? [step.run] : []);
+    assert.equal(commands.length, 2);
+    assert.deepEqual(commands.map(command => /(?:^|\s)--summary(?:\s|$)/u.test(command)).sort(), [false, true]);
+  });
+
   test('can inspect and run pre-install checks without loading the development parser', () => {
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
       import Module from 'node:module';

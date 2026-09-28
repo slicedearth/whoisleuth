@@ -11,6 +11,7 @@ import {
 import { TLS_PROFILE_VERSION } from '../lib/lookup-network-evidence-bounds.mts';
 import { analyzeWebsiteTechnology } from '../lib/website-technology.mts';
 import { analyzeWebsiteSecurityPosture } from '../lib/website-security-posture.mts';
+import { expectLookupTargetAligned } from './lookup-design-fixtures';
 
 // Lookup fixtures use reserved targets or locally rejected inputs. The shared
 // browser and server guards prevent live collection.
@@ -601,6 +602,21 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expect(sslblReviewLead).toBeVisible();
   await expect(sslblReviewLead).toContainText('does not change Risk scoring');
   await expect(sslblReviewLead.getByRole('link', { name: 'Review certificate evidence' })).toHaveAttribute('href', '#evidence-sslbl');
+  // Derive direct-hash coverage from the actual cards, not a second anchor inventory.
+  const evidenceTargets = await page.locator('#web-evidence .evidence-component[id], #web-evidence .evidence-card[id]')
+    .evaluateAll(elements => [...new Set(elements.map(element => `#${element.id}`))]);
+  expect(evidenceTargets).toContain('#evidence-sslbl');
+  for (const target of evidenceTargets) {
+    await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+    await expect(page.locator(target)).toHaveCount(0);
+    await page.evaluate(hash => {
+      window.history.replaceState(window.history.state, '', window.location.pathname);
+      window.location.hash = hash;
+    }, target);
+    await expect(page.getByRole('button', { name: 'Collapse Web and DNS evidence' })).toBeVisible();
+    await expect(page.locator(target)).toBeVisible();
+    await expectLookupTargetAligned(page, target);
+  }
   const card = page.locator('.http-card');
   await expect(card).not.toHaveAttribute('open', '');
   await expect(card.getByRole('heading', { name: 'HTTP evidence' })).toBeVisible();
