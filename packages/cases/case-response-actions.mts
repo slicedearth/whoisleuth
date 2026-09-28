@@ -80,6 +80,22 @@ const ACTION_TRANSITIONS: Readonly<Record<CaseActionState, ReadonlySet<CaseActio
   terminal: new Set<CaseActionState>(),
 });
 
+// Terminal also includes deliberate withdrawal before review. This is stage
+// completion, not proof of authorisation or submission.
+const RESPONSE_DECISION_COMPLETE: Readonly<Record<CaseActionState, boolean>> = Object.freeze({
+  drafting: false,
+  ready_for_review: false,
+  reviewed: true,
+  authorised: true,
+  submitted: true,
+  acknowledged: true,
+  terminal: true,
+});
+
+export function caseActionCompletesResponseDecision(state: CaseActionState): boolean {
+  return RESPONSE_DECISION_COMPLETE[state];
+}
+
 function bytes(value: unknown): number {
   try {
     return new TextEncoder().encode(JSON.stringify(value)).byteLength;

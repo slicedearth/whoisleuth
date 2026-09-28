@@ -56,6 +56,7 @@ import { caseDispositionSupportsDefensiveResponse } from './case-record-decision
 import {
   buildCaseActionOutcomeSummary,
   buildCaseResponseLifecycleSummary,
+  caseActionCompletesResponseDecision,
   countEvidenceLinkedCaseDecisions,
 } from './case-response-model.mts';
 import {
@@ -687,7 +688,7 @@ export function buildCaseResponsePreflight(
   const evidenceLinkedDecisionCount = countEvidenceLinkedCaseDecisions(caseRecord.decisions, caseRecord.evidencePins);
   const responseDisposition = caseDispositionSupportsDefensiveResponse(caseRecord.disposition);
   const reviewedActionCount = caseRecord.actions.filter((action) =>
-    ['reviewed', 'authorised', 'submitted', 'acknowledged', 'terminal'].includes(action.state)).length;
+    caseActionCompletesResponseDecision(action.state)).length;
   const profile = responsePacketProfile(input.profile);
   const checks: CaseResponsePreflightCheck[] = [
     {

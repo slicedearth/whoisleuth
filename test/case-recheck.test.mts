@@ -16,6 +16,7 @@ import {
   assertCurrentRecheckQuestion,
   assertRecheckNonReproduction,
   caseRecheckAnswerContext,
+  caseRecheckComparisonBlockers,
   caseRecheckComparisonWarnings,
   caseRecheckQuestions,
   readCaseRecheckAnswerContext,
@@ -247,6 +248,33 @@ test('failed, partial, wrong-target and non-later evidence cannot establish non-
   assert.doesNotThrow(() =>
     assertRecheckNonReproduction('not_reproduced', context, 'complete', pins, undefined, after),
   );
+});
+
+test('comparison blockers have stable identities independent of their presentation', () => {
+  const pins = baselineAndCurrent(), baseline = pins[0]!, current = pins[1]!;
+  const context = { ...caseRecheckAnswerContext(planned().assertions[0]!, 'comparable'), baselinePinId: baseline.id };
+  const cases = [
+    { context: { ...context, conditionsMatch: 'different' as const }, pins, current, reason: 'different_conditions' },
+    { context: { ...context, conditionsMatch: 'unknown' as const }, pins, current, reason: 'unconfirmed_conditions' },
+    { context, pins: [], current, reason: 'missing_baseline' },
+    { context, pins, current: { ...current, observationHostname: 'other.example' }, reason: 'current_target_mismatch' },
+    { context, pins, current: { ...current, completeness: 'partial' as const }, reason: 'incomplete_current' },
+    { context, pins, current: { ...current, observedAt: before }, reason: 'later_observation_needed' },
+    { context, pins: [{ ...baseline, observationHostname: 'other.example' }, current], current, reason: 'baseline_target_mismatch' },
+    { context, pins, current: { ...current, field: 'other.field' }, reason: 'different_field_or_source' },
+  ];
+  for (const sample of cases) {
+    assert.deepEqual(caseRecheckComparisonBlockers(sample.context, sample.pins, sample.current), [sample.reason]);
+    const messages = caseRecheckComparisonWarnings(sample.context, sample.pins, sample.current);
+    assert.equal(messages.length, 1);
+    assert.notEqual(messages[0], sample.reason);
+    assert.throws(() => assertRecheckNonReproduction('not_reproduced', sample.context, 'complete', sample.pins, sample.current), /complete observation/);
+  }
+  // Presenters may append explanatory notes without making them admissibility rules.
+  const messages = caseRecheckComparisonWarnings(context, pins, current);
+  messages.push('Review the saved question alongside this observation.');
+  assert.deepEqual(caseRecheckComparisonBlockers(context, pins, current), []);
+  assert.doesNotThrow(() => assertRecheckNonReproduction('not_reproduced', context, 'complete', pins, current));
 });
 
 test('the mutation owner rejects incomplete answers and stale question context without changing retained data', () => {

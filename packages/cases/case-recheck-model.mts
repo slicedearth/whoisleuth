@@ -154,27 +154,40 @@ export function assertCurrentRecheckQuestion(
   }
 }
 
-export function caseRecheckComparisonWarnings(
+const RECHECK_COMPARISON_MESSAGES = {
+  different_conditions: 'The comparison conditions differ.',
+  unconfirmed_conditions: 'Comparable conditions have not been confirmed.',
+  missing_baseline: 'The baseline evidence is no longer available.',
+  current_target_mismatch: 'The current evidence concerns a different or unknown hostname.',
+  incomplete_current: 'The current source does not establish a complete observation.',
+  later_observation_needed: 'A later source observation is needed; reviewing the baseline again is not a recheck.',
+  baseline_target_mismatch: 'The baseline concerns a different hostname.',
+  different_field_or_source: 'The observations use different fields or sources.',
+} as const;
+export type CaseRecheckComparisonBlocker = keyof typeof RECHECK_COMPARISON_MESSAGES;
+
+/** Admissibility depends on these reasons, not on presentation warnings. */
+export function caseRecheckComparisonBlockers(
   context: CaseRecheckAnswerContext,
   pins: readonly CaseEvidencePin[],
   current?: CaseEvidencePin,
-): string[] {
-  const warnings: string[] = [];
+): CaseRecheckComparisonBlocker[] {
+  const blockers: CaseRecheckComparisonBlocker[] = [];
   if (context.conditionsMatch !== 'comparable') {
-    warnings.push(
+    blockers.push(
       context.conditionsMatch === 'different'
-        ? 'The comparison conditions differ.'
-        : 'Comparable conditions have not been confirmed.',
+        ? 'different_conditions'
+        : 'unconfirmed_conditions',
     );
   }
   const baseline = pins.find((pin) => pin.id === context.baselinePinId);
   if (context.baselinePinId && !baseline)
-    warnings.push('The baseline evidence is no longer available.');
+    blockers.push('missing_baseline');
   if (current) {
     if (current.observationHostname !== context.targetHostname)
-      warnings.push('The current evidence concerns a different or unknown hostname.');
+      blockers.push('current_target_mismatch');
     if (!casePinHasCompleteObservation(current))
-      warnings.push('The current source does not establish a complete observation.');
+      blockers.push('incomplete_current');
     if (baseline) {
       const sameObservation = baseline.id === current.id;
       const unknownObservationTime = !baseline.observedAt || !current.observedAt;
@@ -182,19 +195,26 @@ export function caseRecheckComparisonWarnings(
         !unknownObservationTime &&
         Date.parse(current.observedAt!) <= Date.parse(baseline.observedAt!);
       if (sameObservation || unknownObservationTime || nonLaterObservation) {
-        warnings.push(
-          'A later source observation is needed; reviewing the baseline again is not a recheck.',
-        );
+        blockers.push('later_observation_needed');
       }
       if (baseline.observationHostname && baseline.observationHostname !== context.targetHostname)
-        warnings.push('The baseline concerns a different hostname.');
+        blockers.push('baseline_target_mismatch');
       const differentField = Boolean(baseline.field) && current.field !== baseline.field;
       const differentSource = baseline.source !== current.source;
       if (differentField || differentSource)
-        warnings.push('The observations use different fields or sources.');
+        blockers.push('different_field_or_source');
     }
   }
-  return warnings;
+  return blockers;
+}
+
+export function caseRecheckComparisonWarnings(
+  context: CaseRecheckAnswerContext,
+  pins: readonly CaseEvidencePin[],
+  current?: CaseEvidencePin,
+): string[] {
+  return caseRecheckComparisonBlockers(context, pins, current)
+    .map((reason) => RECHECK_COMPARISON_MESSAGES[reason]);
 }
 
 export function assertRecheckNonReproduction(
@@ -206,18 +226,17 @@ export function assertRecheckNonReproduction(
   observedAt?: string | null,
 ): void {
   if (state !== 'not_reproduced') return;
-  const warnings = caseRecheckComparisonWarnings(context, pins, current);
+  const blockers = caseRecheckComparisonBlockers(context, pins, current);
   const baseline = pins.find((pin) => pin.id === context.baselinePinId);
+  let laterIndependentObservationNeeded = false;
   if (!current && baseline) {
     const missingObservationTime = !baseline.observedAt || !observedAt;
     const invalidObservationTime = observedAt ? !Number.isFinite(Date.parse(observedAt)) : false;
     const nonLaterObservation =
       !missingObservationTime && Date.parse(observedAt!) <= Date.parse(baseline.observedAt!);
-    if (missingObservationTime || invalidObservationTime || nonLaterObservation) {
-      warnings.push('A later independent observation is needed.');
-    }
+    laterIndependentObservationNeeded = missingObservationTime || invalidObservationTime || nonLaterObservation;
   }
-  if (completeness !== 'complete' || warnings.length) {
+  if (completeness !== 'complete' || blockers.length || laterIndependentObservationNeeded) {
     throw new Error(
       'Not reproduced requires a complete observation under comparable conditions. Record unavailable or describe the limited observation instead.',
     );

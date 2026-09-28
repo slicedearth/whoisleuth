@@ -29,6 +29,8 @@ references, retained data and compatibility fixtures use their existing owners.
 - **Response history:** [case-response-actions.mts](packages/cases/case-response-actions.mts) owns action transitions;
   [case-response-outcomes.mts](packages/cases/case-response-outcomes.mts) owns observed effects and closure. Packet input
   validation is in [case-response-review-inputs.mts](packages/cases/case-response-review-inputs.mts), separate from construction.
+  [case-response-progress.ts](frontend/src/lib/analysis/case-response-progress.ts) projects workspace stages; recheck
+  admissibility uses structured reasons in [case-recheck-model.mts](packages/cases/case-recheck-model.mts), independently of display wording.
 - **Lookup downloads:** [lookup-exports.ts](frontend/src/lib/analysis/lookup-exports.ts) prepares
   projections and files; the route owns visible status, not export formatting.
 - **Lookup state:** [lookup-session.ts](frontend/src/lib/controllers/lookup-session.ts) owns request state, URL
