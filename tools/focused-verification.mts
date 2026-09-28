@@ -283,6 +283,10 @@ export function renderExecutionPlan(
       `Selected for ${assignment.changedPath}: ${assignment.impactAreas.join('; ')}.`,
       ...assignment.selectionNotes.map(note => `  ${assignment.changedPath}: ${note}`),
     ]),
+    ...plan.focusedUnitChecks.map(check => {
+      const selectedBy = plan.assignments.filter(assignment => assignment.focusedUnitChecks.includes(check));
+      return `Selected ${isNodeIntegrationTest(check) ? 'integration' : 'unit'} test: ${check} — selected by ${selectedBy.map(assignment => assignment.changedPath).join(', ')}.`;
+    }),
     ...plan.interpretation.slice(-1),
     ...execution.commands.map((command) => `Run: ${command.id} — selected by ${command.selectedBy.join(', ')}.`),
     `Focused browser specs: ${execution.browserSpecs.length}${execution.browserSpecs.length ? ` (${execution.browserSpecs.join(', ')})` : ''}.`,

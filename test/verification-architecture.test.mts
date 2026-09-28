@@ -840,6 +840,11 @@ describe('verification architecture contracts', () => {
     assert.deepEqual(integration.deferredIntegrationChecks, []);
     assert.match(renderExecutionPlan(plan, iteration), /Integration execution deferred: test\/cli-shell-completion.integration.test.mts/u);
     assert.match(renderExecutionPlan(plan, integration), /Focused integration files: 1/u);
+    for (const execution of [integration, iteration]) {
+      const rendered = renderExecutionPlan(plan, execution);
+      assert.ok(rendered.includes(`Selected unit test: ${unit} — selected by ${unit}.`));
+      assert.ok(rendered.includes(`Selected integration test: ${shell} — selected by ${shell}.`));
+    }
   });
 
   test('optional editor configuration does not select application or release checks', async () => {

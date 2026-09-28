@@ -17,6 +17,7 @@ import {
   buildCaseClosureLinkContext,
   buildCaseInvestigationTrail,
   buildCaseResponseLifecycleSummary,
+  countEvidenceLinkedCaseDecisions,
   isLegalCaseActionTransition,
   MAX_CASE_ACTION_BYTES,
   MAX_CASE_ACTION_EVENTS_PER_ACTION,
@@ -122,6 +123,22 @@ describe('case response record normalization', () => {
       evidencePinIds: [pin.id, 'missing-pin'],
     }, NOW, new Set([pin.id]));
     assert.deepEqual(requiredValue(decisions[0]).evidencePinIds, [pin.id]);
+  });
+
+  test('decision support counts each linked decision once and excludes missing pins', () => {
+    const decisions = [
+      { evidencePinIds: [] },
+      { evidencePinIds: ['pin-retired'] },
+      { evidencePinIds: ['pin-kept', 'pin-kept'] },
+      { evidencePinIds: ['pin-retired', 'pin-kept'] },
+    ];
+    const original = structuredClone(decisions);
+    assert.equal(countEvidenceLinkedCaseDecisions([], [{ id: 'pin-kept' }]), 0);
+    assert.equal(countEvidenceLinkedCaseDecisions(decisions, []), 0);
+    assert.equal(countEvidenceLinkedCaseDecisions(decisions, [{ id: 'pin-other' }]), 0);
+    assert.equal(countEvidenceLinkedCaseDecisions(decisions, [{ id: 'pin-kept' }]), 2);
+    assert.equal(countEvidenceLinkedCaseDecisions(decisions, [{ id: 'pin-kept' }, { id: 'pin-retired' }]), 3);
+    assert.deepEqual(decisions, original);
   });
 
   test('current decisions retain bounded confidence while older schemas migrate without inventing it', () => {

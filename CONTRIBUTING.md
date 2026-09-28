@@ -209,8 +209,9 @@ fixtures unchanged and add an independent current fixture when required.
 ### Add a saved collection
 
 Declare its format and limits in the [collection manifest](packages/contracts/browser-local-collection-manifest.mts),
-then implement its typed record/document maps and adapter in
+then implement its adapter and decoded-record type association in
 [browser-local-data-definitions.ts](frontend/src/lib/browser-local-data-definitions.ts).
+The document type and runtime ordering derive from the adapter and manifest.
 Archive membership is a separate privacy decision: unfinished drafts and other
 local recovery state must not become portable merely because they are saved.
 

@@ -4,6 +4,7 @@ import { emptyCaseDraftStore, normalizeCaseDraftStore, removeCaseDraft } from '.
 import type { CaseDraftReceipt } from '../../../../packages/contracts/case-drafts.mts';
 import type { DraftStorage } from '../controllers/case-draft-recovery.ts';
 import { appendCaseAction, appendCaseActionTransition } from '../../../../packages/cases/case-response-actions.mts';
+import { countEvidenceLinkedCaseDecisions } from '../../../../packages/cases/case-response-model.mts';
 
 export const CASE_PRACTICE_OBSERVED_AT = '2026-09-01T12:00:00.000Z';
 export const CASE_PRACTICE_LATER_AT = '2026-09-02T12:00:00.000Z';
@@ -31,7 +32,7 @@ export function casePracticeFeedback(record: CaseRecord, initialPinIds: readonly
     { label: scenario === 'contradictory-sources' ? 'The decision links both supplied source accounts' : 'The decision links retained evidence',
       complete: !!decision && (scenario === 'contradictory-sources'
         ? [initialPinIds[0], initialPinIds[2]].every(id => id && decision.evidencePinIds.includes(id))
-        : decision.evidencePinIds.some(id => record.evidencePins.some(pin => pin.id === id))) },
+        : countEvidenceLinkedCaseDecisions([decision], record.evidencePins) > 0) },
     { label: 'The incomplete later capture is recorded as unavailable', complete: record.observedEffects.reviews.some(review => review.evidencePinId === initialPinIds[1] && review.state === 'unavailable' && review.recheck != null) },
   ];
 }

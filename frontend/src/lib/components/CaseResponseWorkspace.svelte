@@ -7,7 +7,7 @@
   import { handlesLocalLink } from '$lib/link-activation';
   import { failedLocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { reviewClock } from '$lib/review-clock.ts';
-  import { buildCaseActionOutcomeSummary } from '$lib/analysis/case-response-model.ts';
+  import { buildCaseActionOutcomeSummary, countEvidenceLinkedCaseDecisions } from '$lib/analysis/case-response-model.ts';
   import CaseObservationStage from '$lib/components/CaseObservationStage.svelte';
   import CaseAssessmentStage from '$lib/components/CaseAssessmentStage.svelte';
   import CaseHistoryStage from '$lib/components/CaseHistoryStage.svelte';
@@ -72,8 +72,7 @@
   let actionStage = $state<ReturnType<typeof CaseActionStage>>();
   let outcomeStage = $state<ReturnType<typeof CaseOutcomeStage>>();
   const investigationContext = $derived(caseInvestigationContext(record));
-  const evidenceLinkedDecisionCount = $derived(record.decisions.filter((decision) =>
-    decision.evidencePinIds.some((evidencePinId) => record.evidencePins.some((pin) => pin.id === evidencePinId))).length);
+  const evidenceLinkedDecisionCount = $derived(countEvidenceLinkedCaseDecisions(record.decisions, record.evidencePins));
   const reviewNow = $derived(new Date($reviewClock).toISOString());
   let evidenceHandoffStage = $state<CaseResponseStage>({
     id: 'evidence_handoff',

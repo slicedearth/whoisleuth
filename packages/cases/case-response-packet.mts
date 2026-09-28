@@ -56,6 +56,7 @@ import { caseDispositionSupportsDefensiveResponse } from './case-record-decision
 import {
   buildCaseActionOutcomeSummary,
   buildCaseResponseLifecycleSummary,
+  countEvidenceLinkedCaseDecisions,
 } from './case-response-model.mts';
 import {
   RESPONSE_AUTHORISATION_CONFIRMATION_IDS,
@@ -683,9 +684,7 @@ export function buildCaseResponsePreflight(
     .filter((item) => item.kind === 'contradiction' && item.state === 'open')
     .length;
   const actionSummary = buildCaseActionOutcomeSummary(caseRecord.actions, normalizedGeneratedAt);
-  const retainedPinIds = new Set(caseRecord.evidencePins.map((pin) => pin.id));
-  const evidenceLinkedDecisionCount = caseRecord.decisions.filter((decision) =>
-    decision.evidencePinIds.some((evidencePinId) => retainedPinIds.has(evidencePinId))).length;
+  const evidenceLinkedDecisionCount = countEvidenceLinkedCaseDecisions(caseRecord.decisions, caseRecord.evidencePins);
   const responseDisposition = caseDispositionSupportsDefensiveResponse(caseRecord.disposition);
   const reviewedActionCount = caseRecord.actions.filter((action) =>
     ['reviewed', 'authorised', 'submitted', 'acknowledged', 'terminal'].includes(action.state)).length;

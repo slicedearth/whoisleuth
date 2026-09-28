@@ -374,6 +374,16 @@ export function normalizeCaseDecisions(
     .slice(-MAX_CASE_DECISIONS);
 }
 
+/** Counts decisions, not links; references to pins no longer retained do not
+ * support a decision. Inputs have already passed their owning normalisers. */
+export function countEvidenceLinkedCaseDecisions(
+  decisions: readonly Pick<CaseDecisionRecord, 'evidencePinIds'>[],
+  pins: readonly Pick<CaseEvidencePin, 'id'>[],
+): number {
+  const retainedPinIds = new Set(pins.map(pin => pin.id));
+  return decisions.filter(decision => decision.evidencePinIds.some(id => retainedPinIds.has(id))).length;
+}
+
 export function appendCaseDecision(
   current: readonly CaseDecisionRecord[],
   raw: unknown,
