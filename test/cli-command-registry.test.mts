@@ -555,7 +555,7 @@ describe('canonical CLI command registry', () => {
       history: HISTORY_COMMAND_HANDLERS,
     } as const;
     for (const { family, commands } of FAMILY_COMMANDS) {
-      assert.deepEqual(Object.keys(inlineHandlerMaps[family]), commands, `${family} handler ownership`);
+      assert.deepEqual(Object.keys(inlineHandlerMaps[family]).sort(), [...commands].sort(), `${family} handler ownership`);
       assert.equal(Object.isFrozen(inlineHandlerMaps[family]), true, `${family} handler map`);
     }
     assert.deepEqual(

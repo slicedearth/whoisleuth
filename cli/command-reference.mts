@@ -68,6 +68,10 @@ type CliHandlerOwner =
   | 'inline'
   | 'lookup'
   | 'network';
+const INLINE_COMMAND_FAMILIES = ['support', 'review', 'assurance', 'workflow', 'history'] as const;
+type InlineCommandFamily = typeof INLINE_COMMAND_FAMILIES[number];
+type CliExecutionOwner = Exclude<CliHandlerOwner, 'inline'> | InlineCommandFamily;
+
 type CliCommandDefinition = Readonly<{
   command: CliCommand;
   order: number;
@@ -458,7 +462,7 @@ type CliCommandSeed = Readonly<{
   options: readonly CliOption[];
   positionals: readonly CliPositionalSpec[];
   constraints: readonly CliGrammarConstraint[];
-  handlerOwner: CliHandlerOwner;
+  handlerOwner: CliExecutionOwner;
   networkEffect: CliNetworkEffect;
   common: boolean;
   schemaIdentifiers: readonly string[];
@@ -468,7 +472,9 @@ type CliCommandSeed = Readonly<{
   bootstrapProfile: 'allowed' | 'command_owned';
 }>;
 
-function commandSeed(seed: CliCommandSeed): CliCommandSeed {
+function commandSeed<const Owner extends CliExecutionOwner>(
+  seed: Omit<CliCommandSeed, 'handlerOwner'> & { handlerOwner: Owner },
+): CliCommandSeed & { readonly handlerOwner: Owner } {
   return Object.freeze({
     ...seed,
     reference: Object.freeze({ ...seed.reference }),
@@ -494,7 +500,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: [],
     positionals: Object.freeze([positional('shell', 'enum', 1, 1, ['bash', 'zsh', 'fish', 'powershell'])]),
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'support',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze([]),
@@ -514,7 +520,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--network', '--json', '--quiet', '--no-color'],
     positionals: NO_POSITIONALS,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'support',
     networkEffect: 'conditional_network',
     common: true,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.doctor']),
@@ -534,7 +540,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--common', '--group', '--mode', '--json', '--quiet', '--no-color'],
     positionals: NO_POSITIONALS,
     constraints: Object.freeze([]),
-    handlerOwner: 'inline',
+    handlerOwner: 'support',
     networkEffect: 'offline',
     common: true,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.command-catalogue']),
@@ -554,7 +560,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: [],
     positionals: NO_POSITIONALS,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'support',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze([]),
@@ -582,7 +588,7 @@ const COMMAND_SEEDS = Object.freeze({
     constraint({ kind: 'mutually_exclusive', options: ['--package', '--json'] }),
     constraint({ kind: 'excludes_all', option: '--folder', excludedOptions: ['--package', '--output', '--force'] }),
   ]),
-    handlerOwner: 'inline',
+    handlerOwner: 'assurance',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.investigation-manifest']),
@@ -602,7 +608,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'assurance',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.external-observation-mapping']),
@@ -622,7 +628,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'assurance',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.open-asset-model-bridge']),
@@ -719,7 +725,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'assurance',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.ct-event-batch', 'whoisleuth.external-findings']),
@@ -898,7 +904,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('domain-or-suffix', 'text', 0, 1, [], 'argv_or_stdin')]),
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'support',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.registry-support', 'whoisleuth.registry-standards-coverage']),
@@ -918,7 +924,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'support',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.registry-doctor']),
@@ -938,7 +944,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'support',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.registry-cohort']),
@@ -960,7 +966,7 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--profile', '--suffix', '--scenario'] }),
   ]),
-    handlerOwner: 'inline',
+    handlerOwner: 'support',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze([]),
@@ -982,7 +988,7 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'mutually_exclusive', options: ['--json', '--summary-json'] }),
   ]),
-    handlerOwner: 'inline',
+    handlerOwner: 'support',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze([RISK_CALIBRATION_DATASET_SCHEMA, RISK_CALIBRATION_REPORT_SCHEMA]),
@@ -1002,7 +1008,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'support',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.lookalike-calibration-input', 'whoisleuth.lookalike-calibration']),
@@ -1029,7 +1035,7 @@ const COMMAND_SEEDS = Object.freeze({
     constraint({ kind: 'excludes_all', option: '--package', excludedOptions: ['--manifest', '--manifest-entry'] }),
     constraint({ kind: 'excludes_all', option: '--folder', excludedOptions: ['--package', '--manifest', '--manifest-entry', '--passphrase-file'] }),
   ]),
-    handlerOwner: 'inline',
+    handlerOwner: 'review',
     networkEffect: 'offline',
     common: true,
     schemaIdentifiers: Object.freeze(['whoisleuth.offline-artifact-verification']),
@@ -1049,7 +1055,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--passphrase-file', '--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'review',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.interchange-fidelity-report']),
@@ -1134,7 +1140,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'review',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.source-reliability-report']),
@@ -1154,7 +1160,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'review',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.compare']),
@@ -1174,7 +1180,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('sources', 'file', 2, 2)]),
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'review',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.page-compare']),
@@ -1194,7 +1200,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'review',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.mail-review']),
@@ -1214,7 +1220,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--trusted-auth-header', '--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'review',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.mail-header-review']),
@@ -1233,7 +1239,7 @@ const COMMAND_SEEDS = Object.freeze({
     summary: 'Review selected files and identity events offline',
     options: ['--json', '--reported-action', '--trusted-auth-header', '--strict-exit', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('kind', 'enum', 1, 1, MESSAGE_INTAKE_KINDS), positional('source', 'file', 0, 1, [], 'argv_or_stdin')]),
-    constraints: EMPTY_CONSTRAINTS, handlerOwner: 'inline', networkEffect: 'offline', common: true,
+    constraints: EMPTY_CONSTRAINTS, handlerOwner: 'review', networkEffect: 'offline', common: true,
     schemaIdentifiers: Object.freeze([MESSAGE_INTAKE_SCHEMA, IDENTITY_EVENTS_INPUT_SCHEMA]), primaryArtefacts: Object.freeze([]),
     planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
   }),
@@ -1248,7 +1254,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--mmdb', '--json', '--strict-exit', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'review',
     networkEffect: 'offline',
     common: true,
     schemaIdentifiers: Object.freeze([
@@ -1278,7 +1284,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'review',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.lookup-brief']),
@@ -1298,7 +1304,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--case-id', '--domain', '--title', '--new-incident', '--text', '--note-file', '--input', '--expect-file-digest', '--json', '--no-color'],
     positionals: Object.freeze([positional('operation', 'enum', 1, 1, CLI_CASE_OPERATIONS), positional('source', 'file', 0, 1)]),
     constraints: Object.freeze([constraint({ kind: 'mutually_exclusive', options: ['--text', '--note-file'] })]),
-    handlerOwner: 'inline', networkEffect: 'offline', common: true,
+    handlerOwner: 'review', networkEffect: 'offline', common: true,
     schemaIdentifiers: Object.freeze(['whoisleuth.case-export']),
     primaryArtefacts: Object.freeze(['Case export']), planSupport: false,
     additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
@@ -1313,7 +1319,7 @@ const COMMAND_SEEDS = Object.freeze({
     summary: 'Manage reviewed indicator revisions offline',
     options: ['--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('operation', 'enum', 1, 1, CLI_INDICATOR_OPERATIONS), positional('source', 'file', 0, 1)]),
-    constraints: EMPTY_CONSTRAINTS, handlerOwner: 'inline', networkEffect: 'offline', common: false,
+    constraints: EMPTY_CONSTRAINTS, handlerOwner: 'review', networkEffect: 'offline', common: false,
     schemaIdentifiers: Object.freeze([MANAGED_INDICATOR_SET_SCHEMA]), primaryArtefacts: Object.freeze(['Managed indicator revision']),
     planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
   }),
@@ -1330,7 +1336,7 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--audience', '--reviewed'] }),
   ]),
-    handlerOwner: 'inline',
+    handlerOwner: 'review',
     networkEffect: 'offline',
     common: true,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.case-pack', 'whoisleuth.case-report']),
@@ -1350,7 +1356,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'assurance',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.domain-control-review-input', 'whoisleuth.cli.domain-control-review']),
@@ -1372,7 +1378,7 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'mutually_exclusive', options: ['--json', '--junit'] }),
   ]),
-    handlerOwner: 'inline',
+    handlerOwner: 'workflow',
     networkEffect: 'always_network',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.domain-control-monitor', 'whoisleuth.domain-control-flight-recorder.input']),
@@ -1392,7 +1398,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'assurance',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.domain-assurance.input', 'whoisleuth.domain-assurance']),
@@ -1412,7 +1418,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'assurance',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.domain-change-packet.input', 'whoisleuth.domain-change-packet']),
@@ -1434,7 +1440,7 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--marking', '--recipient-scope', '--purpose'] }),
   ]),
-    handlerOwner: 'inline',
+    handlerOwner: 'assurance',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.sharing-review']),
@@ -1459,7 +1465,7 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'mutually_exclusive', options: ['--list', '--explain'] }),
   ]),
-    handlerOwner: 'inline',
+    handlerOwner: 'workflow',
     networkEffect: 'offline',
     common: true,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.investigation-plan', 'whoisleuth.cli.workflow-recipe-catalogue']),
@@ -1482,7 +1488,7 @@ const COMMAND_SEEDS = Object.freeze({
     positional('subject', 'text', 1, 1),
   ]),
     constraints: Object.freeze([constraint({ kind: 'excludes_all', option: '--preview', excludedOptions: ['--approve-network', '--confirm-review', '--interactive', '--output', '--force', '--quiet'] })]),
-    handlerOwner: 'inline',
+    handlerOwner: 'workflow',
     networkEffect: 'conditional_network',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.investigation-run', 'whoisleuth.cli.investigation-preview']),
@@ -1502,7 +1508,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--left-session', '--right-session', '--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('sources', 'file', 2, 2)]),
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'history',
     networkEffect: 'offline',
     common: true,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.lookup-diff']),
@@ -1522,7 +1528,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('sources', 'file', 2, 5)]),
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'history',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.lookup-reconciliation']),
@@ -1542,7 +1548,7 @@ const COMMAND_SEEDS = Object.freeze({
     options: ['--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('sources', 'file', 2, 20)]),
     constraints: EMPTY_CONSTRAINTS,
-    handlerOwner: 'inline',
+    handlerOwner: 'history',
     networkEffect: 'offline',
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.lookup-timeline']),
@@ -1566,7 +1572,7 @@ const COMMAND_SEEDS = Object.freeze({
     constraint({ kind: 'excludes_all', option: '--compact', excludedOptions: ['--markdown', '--html'] }),
     constraint({ kind: 'requires_any', option: '--no-attribution', requiredOptions: ['--markdown', '--html'] }),
   ]),
-    handlerOwner: 'inline',
+    handlerOwner: 'history',
     networkEffect: 'offline',
     common: true,
     schemaIdentifiers: Object.freeze(['whoisleuth.lookup-evidence']),
@@ -1578,6 +1584,20 @@ const COMMAND_SEEDS = Object.freeze({
 } satisfies Readonly<Record<CliCommand, CliCommandSeed>>);
 
 const COMMAND_ORDER = Object.freeze(Object.keys(COMMAND_SEEDS)) as readonly CliCommand[];
+
+type InlineCommandFor<Family extends InlineCommandFamily> = {
+  [Command in CliCommand]: typeof COMMAND_SEEDS[Command]['handlerOwner'] extends Family ? Command : never
+}[CliCommand];
+
+function inlineCommandFamily(command: CliCommand): InlineCommandFamily | null {
+  const owner = COMMAND_SEEDS[command].handlerOwner;
+  return INLINE_COMMAND_FAMILIES.find(family => family === owner) ?? null;
+}
+
+function inlineCommandsFor<Family extends InlineCommandFamily>(family: Family): readonly InlineCommandFor<Family>[] {
+  return Object.freeze(COMMAND_ORDER.filter((command): command is InlineCommandFor<Family> =>
+    COMMAND_SEEDS[command].handlerOwner === family));
+}
 const HELP_COMMANDS_BY_GROUP = Object.freeze(Object.fromEntries(
   CLI_HELP_GROUP_ORDER.map((group) => [
     group,
@@ -1712,7 +1732,7 @@ const CLI_COMMAND_REGISTRY: readonly CliCommandDefinition[] = Object.freeze(
         metaActions: Object.freeze(['help'] as const),
       }),
       execution: Object.freeze({
-        handlerOwner: seed.handlerOwner,
+        handlerOwner: inlineCommandFamily(command) ? 'inline' : seed.handlerOwner as CliHandlerOwner,
         networkEffect: seed.networkEffect,
       }),
       help: Object.freeze({
@@ -1906,6 +1926,9 @@ export function commandOptionHelp(command: CliCommand) {
 }
 
 export {
+  INLINE_COMMAND_FAMILIES,
+  inlineCommandFamily,
+  inlineCommandsFor,
   CLI_COMMAND_REGISTRY,
   CLI_CASE_OPERATIONS,
   CLI_INDICATOR_OPERATIONS,
@@ -1934,6 +1957,8 @@ export {
   metaActionDefinition,
 };
 export type {
+  InlineCommandFamily,
+  InlineCommandFor,
   CliCommand,
   CliCommandDefinition,
   CliDisclosureClass,
