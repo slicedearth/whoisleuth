@@ -63,12 +63,13 @@ export type BrowserLocalCollectionStaticDefinition = Readonly<{
   maximumRecords: number;
 }>;
 
-function definition(value: Omit<BrowserLocalCollectionStaticDefinition, 'schemaVersion' | 'minimumReadableVersion' | 'acceptsUnversionedLegacy'> & {
+function definition<const Id extends string>(value: Omit<BrowserLocalCollectionStaticDefinition, 'id' | 'schemaVersion' | 'minimumReadableVersion' | 'acceptsUnversionedLegacy'> & {
+  id: Id;
   compatibility: SchemaCompatibilityDescriptor;
   schemaVersion?: number;
   minimumReadableVersion?: number;
   acceptsUnversionedLegacy?: boolean;
-}): BrowserLocalCollectionStaticDefinition {
+}): BrowserLocalCollectionStaticDefinition & Readonly<{ id: Id }> {
   const {
     compatibility,
     schemaVersion = compatibility.currentVersion,
@@ -113,24 +114,9 @@ export const BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID = Object.freeze({
   }),
 } as const);
 
-export const BROWSER_LOCAL_COLLECTION_MANIFEST = Object.freeze([
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.review_session,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.case_drafts,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.case_views,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.cases,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.campaigns,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.brand_profiles,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.watchlists,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.shortlist,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.ct_history,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.detection_rules,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.relationship_observations,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.bulk_sessions,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.website_snapshots,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.investigation_templates,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.bulk_review,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.analyst_review_state,
-]);
+export const BROWSER_LOCAL_COLLECTION_MANIFEST = Object.freeze(
+  Object.values(BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID),
+);
 
 // Archive membership is distinct from browser persistence. Recovery drafts and
 // saved review positions and transient certificate searches remain local and are not portable sections.

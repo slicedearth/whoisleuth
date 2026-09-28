@@ -115,7 +115,7 @@ import {
   LEGACY_WATCHLIST_KEY,
   LEGACY_WEBSITE_SNAPSHOTS_KEY,
 } from './browser-local-data-contract.ts';
-import { BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID } from '../../../packages/contracts/browser-local-collection-manifest.mts';
+import { BROWSER_LOCAL_COLLECTION_MANIFEST, BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID } from '../../../packages/contracts/browser-local-collection-manifest.mts';
 import { CASE_DRAFT_SCHEMA, type CaseDraftRecord, type CaseDraftStore } from '../../../packages/contracts/case-drafts.mts';
 import { emptyCaseDraftStore, normalizeCaseDraftStore, serializeCaseDraftStore, caseDraftStoreVersion } from '../../../packages/cases/case-drafts.mts';
 import { caseAttachmentReferences } from '../../../packages/cases/case-attachment-model.mts';
@@ -162,7 +162,7 @@ export type BrowserLocalCollectionDocumentMap = Readonly<{
   analyst_review_state: AnalystReviewStateStore;
 }>;
 
-export type BrowserLocalCollectionId = keyof BrowserLocalCollectionValueMap;
+export type BrowserLocalCollectionId = keyof typeof BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID;
 export type BrowserLocalDecodedCollectionRecord<Collection extends BrowserLocalCollectionId> = Readonly<{
   id: string;
   value: BrowserLocalCollectionValueMap[Collection];
@@ -439,24 +439,30 @@ export const REVIEW_SESSION_COLLECTION: LocalDataCollectionDefinition<ReviewSess
   join: (records, version) => ({ schema: REVIEW_SESSION_SCHEMA, version, records: records.map(item => item.value) }),
 });
 
-export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
-  REVIEW_SESSION_COLLECTION,
-  CASE_DRAFTS_COLLECTION,
-  CASE_VIEWS_COLLECTION,
-  CASES_COLLECTION,
-  CAMPAIGNS_COLLECTION,
-  PROFILES_COLLECTION,
-  WATCHLISTS_COLLECTION,
-  SHORTLIST_COLLECTION,
-  CT_HISTORY_COLLECTION,
-  DETECTION_RULES_COLLECTION,
-  RELATIONSHIP_OBSERVATIONS_COLLECTION,
-  BULK_SESSIONS_COLLECTION,
-  WEBSITE_SNAPSHOTS_COLLECTION,
-  INVESTIGATION_TEMPLATES_COLLECTION,
-  BULK_REVIEW_COLLECTION,
-  ANALYST_REVIEW_STATE_COLLECTION,
-]);
+const browserLocalCollectionsById = {
+  review_session: REVIEW_SESSION_COLLECTION,
+  case_drafts: CASE_DRAFTS_COLLECTION,
+  case_views: CASE_VIEWS_COLLECTION,
+  cases: CASES_COLLECTION,
+  campaigns: CAMPAIGNS_COLLECTION,
+  brand_profiles: PROFILES_COLLECTION,
+  watchlists: WATCHLISTS_COLLECTION,
+  shortlist: SHORTLIST_COLLECTION,
+  ct_history: CT_HISTORY_COLLECTION,
+  detection_rules: DETECTION_RULES_COLLECTION,
+  relationship_observations: RELATIONSHIP_OBSERVATIONS_COLLECTION,
+  bulk_sessions: BULK_SESSIONS_COLLECTION,
+  website_snapshots: WEBSITE_SNAPSHOTS_COLLECTION,
+  investigation_templates: INVESTIGATION_TEMPLATES_COLLECTION,
+  bulk_review: BULK_REVIEW_COLLECTION,
+  analyst_review_state: ANALYST_REVIEW_STATE_COLLECTION,
+} satisfies {
+  readonly [Collection in BrowserLocalCollectionId]: LocalDataCollectionDefinition<BrowserLocalCollectionDocumentMap[Collection]>;
+};
+
+export const BROWSER_LOCAL_COLLECTIONS = Object.freeze(
+  BROWSER_LOCAL_COLLECTION_MANIFEST.map(({ id }) => browserLocalCollectionsById[id]),
+);
 
 function browserLocalCollectionDefinition(
   collection: BrowserLocalCollectionId,
