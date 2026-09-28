@@ -148,6 +148,15 @@ instead of being silently normalised. Keep the expected behaviour in the test
 independent. Historical-format and hostile-input tests must retain their own
 explicit inputs, not regenerate them through a current fixture builder.
 
+For a portable Case field, start with `case-record-contracts.mts`, then declare
+its audience treatment in `case-record-projection.mts`. Current recovery is in
+`case-record-operations.mts`; declared historical input adaptation is in
+`case-record-version-input.mts`, with store/import admission in
+`case-migration-model.mts`. Change the format owner in
+`packages/contracts/case-portability.mts` only when the durable contract changes.
+Run the Case ownership and portability lifecycle tests; retain published
+fixtures unchanged and add an independent current fixture when required.
+
 Before submitting a feature branch, run proportionate local checks and state
 any omissions. Merge requires complete fresh hosted checks against the current
 merge candidate. Release verification is a separate boundary. Local success

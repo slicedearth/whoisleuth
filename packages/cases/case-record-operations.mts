@@ -39,10 +39,10 @@ import {
   type CasePatch,
   type CaseRecord,
 } from './case-record-contracts.mts';
-import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION, INCIDENT_CASE_SCHEMA_VERSION, MAX_CASE_OBJECTIVE_LENGTH } from '../contracts/case-portability.mts';
+import { MAX_CASE_OBJECTIVE_LENGTH } from '../contracts/case-portability.mts';
+import { caseRecordVersionInput } from './case-record-version-input.mts';
 import { readCaseAttachments } from './case-attachment-model.mts';
 import { readCaseEvidenceLinks, appendCaseEvidenceLink, withdrawCaseEvidenceLink } from './case-evidence-links.mts';
-import { EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import { assertCurrentRecheckQuestion, assertRecheckNonReproduction, readCaseRecheckAnswerContext } from './case-recheck-model.mts';
 import {
   caseDispositionSupportsDefensiveResponse,
@@ -147,15 +147,12 @@ export function normalizeCase(
   sourceVersion?: number | null,
 ): CaseRecord | null {
   const now = caseTimestampOrNull(nowIso) || new Date().toISOString();
-  const record = objectRecord(raw);
-  const domain = normalizeDomain(existing ? existing.domain : record.domain);
+  const input = objectRecord(raw);
+  const domain = normalizeDomain(existing ? existing.domain : input.domain);
   if (!domain) return null;
+  const { record, timestampOptions } = caseRecordVersionInput(input, sourceVersion);
   const createdAt = existing ? existing.createdAt : caseTimestampOrNull(record.createdAt, sourceVersion) || now;
   const updatedAt = caseTimestampOrNull(record.updatedAt, sourceVersion) || createdAt;
-  const timestampOptions = {
-    legacyTimestamps: sourceVersion != null && sourceVersion < PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
-    ...(sourceVersion === undefined ? {} : { sourceVersion }),
-  };
   const evidencePins = normalizeCaseEvidencePins(record.evidencePins, updatedAt, timestampOptions);
   const pinIds = new Set(evidencePins.map((item) => item.id));
   const actions = normalizeCaseActions(record.actions, updatedAt, { ...timestampOptions, validEvidencePinIds: pinIds });
@@ -163,14 +160,14 @@ export function normalizeCase(
   const sightings = normalizeCaseSightings(record.sightings, updatedAt, pinIds, timestampOptions);
   const sightingIds = new Set(sightings.map((item) => item.id));
   const observedEffects = normalizeCaseObservedEffectHistory(
-    sourceVersion != null && sourceVersion < 13 ? undefined : record.observedEffects,
+    record.observedEffects,
     updatedAt,
     pinIds,
     sightingIds,
     timestampOptions,
   );
   const closures = normalizeCaseClosureHistory(
-    sourceVersion != null && sourceVersion < 13 ? undefined : record.closures,
+    record.closures,
     updatedAt,
     new Set(observedEffects.reviews.map((item) => item.id)),
     new Set(actions.map((item) => item.id)),
@@ -180,12 +177,11 @@ export function normalizeCase(
   const normalizedStatus = normalizeStatus(record.status);
   const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
   const attachments = readCaseAttachments(record.attachments);
-  if (record.evidenceLinks !== undefined && sourceVersion != null && sourceVersion < EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION) throw new TypeError('Evidence relationships require the current Case schema.');
   const evidenceLinks = readCaseEvidenceLinks(record.evidenceLinks);
   return {
     id: existing ? existing.id : safeId(record.id) || deterministicId(domain),
     domain,
-    title: sourceVersion != null && sourceVersion < INCIDENT_CASE_SCHEMA_VERSION ? '' : normalizeCaseObjective(record.title),
+    title: normalizeCaseObjective(record.title),
     status: caseStatusRequiresClosure(normalizedStatus)
       && closures.records.length === 0 && !closures.preV13HistoryUnavailable
       ? 'reviewing'

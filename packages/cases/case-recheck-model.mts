@@ -71,17 +71,30 @@ export function assertCurrentRecheckQuestion(answer: CaseRecheckAnswerContext, a
 
 export function caseRecheckComparisonWarnings(context: CaseRecheckAnswerContext, pins: readonly CaseEvidencePin[], current?: CaseEvidencePin): string[] {
   const warnings: string[] = [];
-  if (context.conditionsMatch !== 'comparable') warnings.push(context.conditionsMatch === 'different'
-    ? 'The comparison conditions differ.' : 'Comparable conditions have not been confirmed.');
+  if (context.conditionsMatch !== 'comparable') {
+    warnings.push(context.conditionsMatch === 'different'
+      ? 'The comparison conditions differ.' : 'Comparable conditions have not been confirmed.');
+  }
   const baseline = pins.find(pin => pin.id === context.baselinePinId);
   if (context.baselinePinId && !baseline) warnings.push('The baseline evidence is no longer available.');
   if (current) {
     if (current.observationHostname !== context.targetHostname) warnings.push('The current evidence concerns a different or unknown hostname.');
-    if (current.completeness !== 'complete' || current.truncated || current.sourceState !== 'complete' && current.sourceState !== 'success' && current.sourceState !== 'reviewed' && current.sourceState !== 'not_found') warnings.push('The current source does not establish a complete observation.');
+    const completeSource = current.sourceState !== null
+      && ['complete', 'success', 'reviewed', 'not_found'].includes(current.sourceState);
+    const completeObservation = current.completeness === 'complete' && !current.truncated && completeSource;
+    if (!completeObservation) warnings.push('The current source does not establish a complete observation.');
     if (baseline) {
-      if (baseline.id === current.id || !baseline.observedAt || !current.observedAt || Date.parse(current.observedAt) <= Date.parse(baseline.observedAt)) warnings.push('A later source observation is needed; reviewing the baseline again is not a recheck.');
+      const sameObservation = baseline.id === current.id;
+      const unknownObservationTime = !baseline.observedAt || !current.observedAt;
+      const nonLaterObservation = !unknownObservationTime
+        && Date.parse(current.observedAt!) <= Date.parse(baseline.observedAt!);
+      if (sameObservation || unknownObservationTime || nonLaterObservation) {
+        warnings.push('A later source observation is needed; reviewing the baseline again is not a recheck.');
+      }
       if (baseline.observationHostname && baseline.observationHostname !== context.targetHostname) warnings.push('The baseline concerns a different hostname.');
-      if (baseline.field && current.field !== baseline.field || baseline.source !== current.source) warnings.push('The observations use different fields or sources.');
+      const differentField = Boolean(baseline.field) && current.field !== baseline.field;
+      const differentSource = baseline.source !== current.source;
+      if (differentField || differentSource) warnings.push('The observations use different fields or sources.');
     }
   }
   return warnings;
@@ -91,6 +104,16 @@ export function assertRecheckNonReproduction(state: CaseObservedEffectState, con
   if (state !== 'not_reproduced') return;
   const warnings = caseRecheckComparisonWarnings(context, pins, current);
   const baseline = pins.find(pin => pin.id === context.baselinePinId);
-  if (!current && baseline && (!baseline.observedAt || !observedAt || !Number.isFinite(Date.parse(observedAt)) || Date.parse(observedAt) <= Date.parse(baseline.observedAt))) warnings.push('A later independent observation is needed.');
-  if (completeness !== 'complete' || warnings.length) throw new Error('Not reproduced requires a complete observation under comparable conditions. Record unavailable or describe the limited observation instead.');
+  if (!current && baseline) {
+    const missingObservationTime = !baseline.observedAt || !observedAt;
+    const invalidObservationTime = observedAt ? !Number.isFinite(Date.parse(observedAt)) : false;
+    const nonLaterObservation = !missingObservationTime
+      && Date.parse(observedAt!) <= Date.parse(baseline.observedAt!);
+    if (missingObservationTime || invalidObservationTime || nonLaterObservation) {
+      warnings.push('A later independent observation is needed.');
+    }
+  }
+  if (completeness !== 'complete' || warnings.length) {
+    throw new Error('Not reproduced requires a complete observation under comparable conditions. Record unavailable or describe the limited observation instead.');
+  }
 }
