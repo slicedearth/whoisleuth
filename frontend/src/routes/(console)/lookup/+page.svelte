@@ -16,6 +16,7 @@
   import LookupTaskGuidance from '$lib/components/LookupTaskGuidance.svelte';
   import LookupWebEvidenceSection from '$lib/components/LookupWebEvidenceSection.svelte';
   import { lookupWebSurfaces } from '$lib/components/lookup-web-surfaces.ts';
+  import { lookupSectionSurfaces } from '$lib/components/lookup-section-surfaces.ts';
   import LookupSavedContextPreview from '$lib/components/LookupSavedContextPreview.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
   import { lookupObservationHostname } from '../../../../../packages/evidence/lookup-target.mts';
@@ -27,12 +28,11 @@
     type ActiveBrandProfileSourceState,
     type BrandProfile,
   } from '$lib/brand-profiles';
-  import { publishLookupResult } from '$lib/controllers/lookup-publication.ts';
+  import { LookupCollectionWorkflow } from '$lib/controllers/lookup-collection-workflow.ts';
   import {
     dispositionLabel as caseDispositionLabel,
     statusLabel as caseStatusLabel,
   } from '../../../../../packages/cases/case-record-decisions.mts';
-  import { parseIncidentUrlContext } from '../../../../../packages/cases/case-incident-context.mts';
   import type { CaseRecord } from '../../../lib/cases.ts';
   import { loadWatchlists, saveSingleDomainWatchlist } from '$lib/watchlists';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
@@ -59,9 +59,7 @@
     LookupSourceRefreshLedger,
   } from '$lib/analysis/lookup-source-refresh.ts';
   import { LOOKUP_CLIENT_TIMEOUT_MS } from '$lib/analysis/lookup-request.ts';
-  import { prepareSelectedLookupUrl } from '../../../../../packages/evidence/lookup-target.mts';
   import {
-    buildLookupRequestUrl,
     prepareLookupCollectionTarget,
     buildLookupResultSectionLinks,
     lookupEvidenceFamilyForHref,
@@ -92,7 +90,6 @@
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import { preloadBestEffort } from '$lib/idle-preload';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
-  import type { LookupProgressUpdate } from '../../../../../lib/lookup-progress-http.mts';
   import {
     LookupCaseController,
   } from '$lib/controllers/lookup-case-controller';
@@ -394,9 +391,6 @@
   function invalidateLookupForInputChange() {
     lookupSession.invalidateInput();
   }
-  function clearCompletedLookupContext(preserveWatchlistDraft = false) {
-    lookupSession.clearCompleted(preserveWatchlistDraft);
-  }
   function handleLookupQueryChange(value: string) {
     lookupSession.changeQuery(value);
   }
@@ -410,34 +404,16 @@
     pageComparison: Boolean(pageComparison || (profile?.pageBaseline && session.observation.response?.type === 'domain')),
     brandMimicry: Boolean(brandMimicryReview),
   }));
+  const sectionSurfaces = $derived(lookupSectionSurfaces(lookupView, {
+    domainResult: session.observation.response?.type === 'domain',
+    caseSection: hasCaseSection,
+    web: webSurfaces,
+  }));
   function preloadLookupSection(sectionId: string) {
-    const loads: Array<Promise<unknown>> = [];
-    if (sectionId === 'web-evidence') {
-      for (const surface of Object.values(webSurfaces)) {
-        if (surface.visible) loads.push(surface.load());
-      }
-    } else if (sectionId === 'registry') {
-      if (registryAccess.suffix) loads.push(import('$lib/components/RegistryAccessNotice.svelte'));
-      loads.push(import('$lib/components/LookupRegistrySources.svelte'));
-      if (
-        session.observation.response?.type === 'domain' &&
-        Array.isArray(rdapParsed.redactions) &&
-        rdapParsed.redactions.length
-      )
-        loads.push(import('$lib/components/RegistrationDisclosurePlanner.svelte'));
-    } else if (sectionId === 'relationships-history') {
-      loads.push(import('$lib/components/LookupVisualWorkspace.svelte'));
-    } else if (sectionId === 'source-quality') {
-      loads.push(
-        import('$lib/components/LookupEvidenceQuality.svelte'),
-        import('$lib/components/LookupOverviewFacts.svelte'),
-      );
-    } else if (sectionId === 'case-response') {
-      loads.push(import('$lib/components/LookupCaseResponse.svelte'));
-    } else if (sectionId === 'advanced-evidence' && threatIntelligenceProviders.length) {
-      loads.push(import('$lib/components/LookupExternalIntelligence.svelte'));
-    }
-    if (loads.length) preloadBestEffort(() => Promise.all(loads), moduleController.signal);
+    if (!Object.hasOwn(sectionSurfaces, sectionId)) return;
+    const surfaces = sectionSurfaces[sectionId as keyof typeof sectionSurfaces];
+    preloadBestEffort(() => Promise.all(Object.values(surfaces)
+      .filter(surface => surface.visible).map(surface => surface.load())), moduleController.signal);
   }
   const sectionNavigation = new LookupSectionNavigation({
     expanded: () => session.observation.expandedSections,
@@ -562,161 +538,34 @@
       task: session.task,
     });
   }
-  async function runLookup(options: Readonly<{ refreshCaseEvidence?: boolean }> = {}) {
-    if (lookupDisabled) {
-      session.error = lookupDisabled.reason || 'Lookup is disabled by deployment policy.';
-      return;
-    }
-    if (parsedInput.tooLarge) {
-      session.error = 'This domain list is too large. Shorten it and try again.';
-      return;
-    }
-    if (!lookupEntries.length || session.loading) return;
-    if (lookupEntries.length > 1) {
-      let targets: string[];
-      try {
-        targets = lookupEntries.slice(0, 2000).map(prepareLookupCollectionTarget);
-      } catch (cause) {
-        session.error = cause instanceof Error ? cause.message : 'Lookup targets could not be prepared.';
-        return;
-      }
-      clearCompletedLookupContext();
-      session.error = '';
-      const handoffResult = saveCandidateHandoff(
-        'manual',
-        targets.map((domain) => ({
-          domain: domain.toLowerCase(),
-          source: 'manual input',
-          mutationTypes: [],
-        })),
-      );
-      if (!handoffResult.saved) {
-        session.error =
-          'This browser could not retain the selected domains for Bulk. Check site-storage access and try again.';
-        return;
-      }
-      await goto(`/bulk?source=manual&handoff=${handoffResult.token}`);
-      return;
-    }
-
-    const submittedEntry = lookupEntries[0];
-    if (!submittedEntry) return;
-    const submittedIncident =
-      session.task === 'incident' && /^[a-z][a-z\d+.-]*:\/\//iu.test(submittedEntry)
-        ? parseIncidentUrlContext(submittedEntry)
-        : null;
-    if (
-      session.task === 'incident' &&
-      /^[a-z][a-z\d+.-]*:\/\//iu.test(submittedEntry) &&
-      !submittedIncident
-    ) {
-      session.error =
-        'Incident URLs must be absolute HTTP(S) URLs without credentials and within the Case URL bound.';
-      return;
-    }
-    let target: string;
-    let selectedUrl: string | undefined;
-    try {
-      target = prepareLookupCollectionTarget(submittedEntry);
-      if (session.collectSelectedUrl) {
-        if (session.request.lookupMode !== 'deep' || !securityTxtSupported)
-          throw new TypeError(
-            'Selected URL collection requires an enabled Deep website observation.',
-          );
-        selectedUrl = prepareSelectedLookupUrl(submittedEntry, target);
-      }
-    } catch (cause) {
-      session.error = cause instanceof Error ? cause.message : 'Lookup target could not be prepared.';
-      return;
-    }
-    const preferredCase = caseRecord ? { id: caseRecord.id, domain: caseRecord.domain } : null;
-    lookupAnchorController?.stop();
-    clearCompletedLookupContext(true);
-    session.loading = true;
-    session.loadingElapsedMs = 0;
-    session.error = '';
-    session.sourceProgress = null;
-    const requestedLookupMode = session.request.lookupMode;
-    const revealIntent = lookupAnchorController?.captureRevealIntent();
-    const operation = lookupRequestController.begin(() => pageActive &&
-      lookupEntries[0] === submittedEntry && session.request.lookupMode === requestedLookupMode);
-    const requestRevision = operation.revision;
-    const requestCurrent = operation.current;
-    const lookupUrl = buildLookupRequestUrl(target, {
-      mode: session.request.lookupMode,
-      includeExternalIntelligence: session.request.includeExternalIntelligence,
-      externalIntelligenceSupported,
-      includeMalwareHostIntelligence: session.request.includeMalwareHostIntelligence,
-      malwareHostIntelligenceSupported,
-      includeMalwareIocIntelligence: session.request.includeMalwareIocIntelligence,
-      malwareIocIntelligenceSupported,
-      includeSecurityTxt: session.request.includeSecurityTxt,
-      securityTxtSupported,
-      securityTxtEligible,
-    });
-
-    try {
-      const completed = await lookupRequestController.run(
-        lookupUrl,
-        (elapsedMs) => {
-          session.loadingElapsedMs = elapsedMs;
-        },
-        refreshProfileContext,
-        {
-          ...(selectedUrl ? { selectedUrl } : {}),
-          ...(requestedLookupMode === 'deep'
-            ? {
-                onProgress: (update: LookupProgressUpdate) => {
-                  if (requestCurrent()) session.sourceProgress = update;
-                },
-              }
-            : {}),
-        },
-        operation,
-      );
-      if (completed.state === 'stale' || !requestCurrent()) return;
-      const outcome = completed.outcome;
-      if (!outcome.ok) {
-        session.error = outcome.message;
-        return;
-      }
-      const published = await publishLookupResult(operation, {
-        publish: () => {
-          session.observation.response = outcome.value;
-          session.observation.target = target;
-          session.observation.incidentUrl = submittedIncident?.exactUrl ?? '';
-          session.observation.depth = requestedLookupMode;
-        },
-        reconcile: () => Promise.all([
-          refreshCase(requestRevision, preferredCase),
-          watchlistWorkspace.refresh(requestRevision),
-        ]),
-        retain: async () => {
-          if (options.refreshCaseEvidence && revealIntent?.current()) await caseActions.open();
-        },
-        ready: async () => {
-          session.loading = false;
-          await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-        },
-        reveal: () => {
-          if (!revealIntent?.current()) return;
-          if (options.refreshCaseEvidence) void sectionNavigation.navigate('#case-response');
-          else if (window.location.hash && lookupEvidenceFamilyForHref(window.location.hash)) navigateToCurrentLookupHash();
-          else document.querySelector('#result')?.scrollIntoView({ behavior: 'instant', block: 'start' });
-        },
-      });
-      if (published) return operation;
-    } catch {
-      if (operation.current())
-        session.error = 'Lookup request could not be prepared.';
-    } finally {
-      revealIntent?.dispose();
-      if (operation.current()) {
-        session.loading = false;
-        session.sourceProgress = null;
-      }
-    }
-  }
+  const lookupCollection = new LookupCollectionWorkflow(lookupSession, lookupRequestController, {
+    context: () => ({
+      disabled: lookupDisabled,
+      tooLarge: parsedInput.tooLarge,
+      entries: lookupEntries,
+      preferredCase: caseRecord,
+      capabilities: {
+        externalIntelligenceSupported, malwareHostIntelligenceSupported,
+        malwareIocIntelligenceSupported, securityTxtSupported, securityTxtEligible,
+      },
+    }),
+    active: () => pageActive,
+    saveHandoff: saveCandidateHandoff,
+    navigate: goto,
+    stopReveal: () => lookupAnchorController?.stop(),
+    captureReveal: () => lookupAnchorController?.captureRevealIntent(),
+    refreshProfile: refreshProfileContext,
+    refreshCase,
+    refreshWatchlist: revision => watchlistWorkspace.refresh(revision),
+    retainCase: () => caseActions.open(),
+    rendered: () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())),
+    reveal: refreshCaseEvidence => {
+      if (refreshCaseEvidence) void sectionNavigation.navigate('#case-response');
+      else if (window.location.hash && lookupEvidenceFamilyForHref(window.location.hash)) navigateToCurrentLookupHash();
+      else document.querySelector('#result')?.scrollIntoView({ behavior: 'instant', block: 'start' });
+    },
+  });
+  const runLookup = (options: Readonly<{ refreshCaseEvidence?: boolean }> = {}) => lookupCollection.run(options);
   async function submit(event: SubmitEvent) {
     event.preventDefault();
     await runLookup();
@@ -755,7 +604,7 @@
   onquerychange={handleLookupQueryChange}
 >
   {#snippet guidance()}
-    <LookupTaskGuidance task={session.task} lookupMode={session.request.lookupMode} ontask={setTaskView} onmode={(mode) => { session.request.lookupMode = mode; invalidateLookupForInputChange(); clearCompletedLookupContext(); }} />
+    <LookupTaskGuidance task={session.task} lookupMode={session.request.lookupMode} ontask={setTaskView} onmode={(mode) => { session.request.lookupMode = mode; invalidateLookupForInputChange(); lookupSession.clearCompleted(); }} />
   {/snippet}
 </LookupForm>
 
@@ -892,9 +741,9 @@
         onhide={()=>void sectionNavigation.navigate('#registry', false)}
       />
       {#if sectionNavigation.visible('registry')}
-      {#if registryAccess.suffix}
+      {#if sectionSurfaces.registry.access.visible}
         <DeferredSurface
-          load={()=>import('$lib/components/RegistryAccessNotice.svelte')}
+          load={sectionSurfaces.registry.access.load}
           loadingLabel="Loading registry-access context…"
           unavailableLabel="Registry-access context could not be loaded."
           props={{access:registryAccess,lookupTarget:session.observation.target}}
@@ -911,16 +760,16 @@
       {/if}
 
       <div class="evidence-component" id="evidence-registry"><DeferredSurface
-        load={()=>import('$lib/components/LookupRegistrySources.svelte')}
+        load={sectionSurfaces.registry.sources.load}
         loadingLabel="Loading registration evidence…"
         unavailableLabel="Registration evidence could not be loaded."
         onready={restoreDeferredLookupTarget}
         props={{comparisonSummary:`RDAP / WHOIS comparison · ${comparison.counts.conflict} conflicts · ${sourceOnlyCount} source-only · ${redactedComparisonCount} redacted · ${limitedComparisonCount} unavailable/incomplete · ${comparison.counts.equivalent} equivalent`,comparisonRows:registryDisplay.comparisonRows,comparisonHasConflicts:comparison.counts.conflict>0,rdapError:boundedTechnologyText(rdap.error,240),resultType:String(session.observation.response?.type||''),rdapParsed,rdapPartialDetail:registryDisplay.rdapPartialDetail,rdapRows:registryDisplay.rdapRows,whoisError:boundedTechnologyText(whois.error,240),whoisRows:registryDisplay.whoisRows,whoisContactRoles:registryDisplay.whoisContactRoles,whoisTruncatedFields:stringList(whoisParsed.fieldsTruncated,64,80),registrationTrace:registryDisplay.registrationTrace,insights:registryInsights,standing:registrarStanding,registrar:registryDisplay.registrarRdap}}
       /></div>
 
-      {#if session.observation.response?.type==='domain' && Array.isArray(rdapParsed.redactions) && rdapParsed.redactions.length}
+      {#if sectionSurfaces.registry.disclosure.visible}
         <div class="evidence-component"><DeferredSurface
-          load={()=>import('$lib/components/RegistrationDisclosurePlanner.svelte')}
+          load={sectionSurfaces.registry.disclosure.load}
           loadingLabel="Loading registration-disclosure planner…"
           unavailableLabel="The disclosure planner could not be loaded."
           props={{domain:caseDomain,observedAt:lookupObservedAt,registryRdapEndpoint:boundedTechnologyText(rdap.endpoint,2048),rdapParsed,registrar:registryDisplay.registrarRdap,caseReference:caseRecord?.id??''}}
@@ -947,7 +796,7 @@
       />
       {#if sectionNavigation.visible('relationships-history')}
         <DeferredSurface
-          load={()=>import('$lib/components/LookupVisualWorkspace.svelte')}
+          load={sectionSurfaces['relationships-history'].workspace.load}
           loadingLabel="Loading relationships and history workspace…"
           unavailableLabel="Relationships and history could not be loaded."
           onready={restoreDeferredLookupTarget}
@@ -971,14 +820,14 @@
       />
       {#if sectionNavigation.visible('source-quality') && session.observation.response}
         <DeferredSurface
-          load={()=>import('$lib/components/LookupEvidenceQuality.svelte')}
+          load={sectionSurfaces['source-quality'].quality.load}
           loadingLabel="Loading source-quality review…"
           unavailableLabel="Source-quality review could not be loaded."
           onready={restoreDeferredLookupTarget}
           props={{matrix:evidenceQualityMatrix,lookupDecisionFacts,refreshPlan:lookupSourceRefreshPlan,original:session.observation.response,refreshLedger:session.observation.refreshLedger,onrefreshchange:(value:LookupSourceRefreshLedger)=>session.observation.refreshLedger=value,caseTarget:{record:caseRecord,ready:caseState.sourceState==='ready',busy:caseState.busy,status:caseState.status,oncreate:caseActions.open,onsave:caseActions.saveRefreshedCheckpoint},depth:lookupEvidenceDepth,timing:lookupTiming,onpolicychange:setFreshnessPolicy}}
         />
         <DeferredSurface
-          load={()=>import('$lib/components/LookupOverviewFacts.svelte')}
+          load={sectionSurfaces['source-quality'].facts.load}
           loadingLabel="Loading evidence facts and diagnostics…"
           unavailableLabel="Evidence facts and diagnostics could not be loaded."
           props={{facts:[...lookupSummary.facts],diagnostics:[...lookupSummary.diagnostics],hasAssessment:availability.applicable!==false}}
@@ -988,7 +837,7 @@
     {/snippet}
 
     {#snippet caseSection()}
-    {#if hasCaseSection}
+    {#if sectionSurfaces['case-response'].workspace.visible}
       <section class="result-section family-analyst" id="case-response" aria-labelledby="case-response-title">
         <h3 id="case-response-title">Case and response</h3>
         <LookupFamilySummary
@@ -1002,7 +851,7 @@
         />
         {#if sectionNavigation.visible('case-response')}
         <DeferredSurface
-          load={()=>import('$lib/components/LookupCaseResponse.svelte')}
+          load={sectionSurfaces['case-response'].workspace.load}
           loadingLabel="Loading Case and response workspace…"
           unavailableLabel="The Case and response workspace could not be loaded."
           onready={restoreDeferredLookupTarget}
@@ -1034,11 +883,11 @@
         onhide={()=>void sectionNavigation.navigate('#advanced-evidence', false)}
       />
       {#if sectionNavigation.visible('advanced-evidence')}
-        {#if threatIntelligenceProviders.length}
+        {#if sectionSurfaces['advanced-evidence'].intelligence.visible}
           <section class="advanced-block" id="external-intelligence" aria-labelledby="external-intelligence-title">
             <h4 id="external-intelligence-title">External intelligence</h4>
             <DeferredSurface
-              load={()=>import('$lib/components/LookupExternalIntelligence.svelte')}
+              load={sectionSurfaces['advanced-evidence'].intelligence.load}
               loadingLabel="Loading external-intelligence evidence…"
               unavailableLabel="External-intelligence evidence could not be loaded."
               onready={restoreDeferredLookupTarget}

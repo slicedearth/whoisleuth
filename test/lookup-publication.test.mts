@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { LookupRequestController } from '../frontend/src/lib/controllers/lookup-request-controller.ts';
 import { publishLookupResult } from '../frontend/src/lib/controllers/lookup-publication.ts';
 import { lookupWebSurfaces } from '../frontend/src/lib/components/lookup-web-surfaces.ts';
+import { lookupSectionSurfaces } from '../frontend/src/lib/components/lookup-section-surfaces.ts';
 import { createLookupViewModel } from '../lib/lookup-response-contract.mts';
 import { normalizeSnapshot } from '../packages/cases/case-evidence-model.mts';
 import { compareLookupRecheck } from '../frontend/src/lib/analysis/lookup-recheck-comparison.ts';
@@ -34,7 +35,8 @@ test('rechecks distinguish missing, non-later, wrong-host and comparable observa
   assert.equal(compareLookupRecheck(before, null).available, false);
   assert.match(compareLookupRecheck(before, before).detail, /No later/);
   assert.equal(
-    compareLookupRecheck(before, changedSnapshot({ inputHostname: 'other.example.test' })).available,
+    compareLookupRecheck(before, changedSnapshot({ inputHostname: 'other.example.test' }))
+      .available,
     false,
   );
   const same = compareLookupRecheck(before, after);
@@ -150,4 +152,35 @@ test('web surface eligibility is source-specific and rendering shares its loader
   const unavailable = lookupWebSurfaces({ ...view, dnsEvidence: { source: 'future' } }, context);
   assert.equal(unavailable.dns.visible, false);
   assert.equal(unavailable.serviceDependency.visible, false);
+});
+
+test('registration disclosure and optional sections require their own evidence context', () => {
+  const view = createLookupViewModel(null);
+  const web = lookupWebSurfaces(view, {
+    serviceDependency: false,
+    pageComparison: false,
+    brandMimicry: false,
+  });
+  const empty = lookupSectionSurfaces(view, { domainResult: false, caseSection: false, web });
+  assert.equal(empty.registry.access.visible, false);
+  assert.equal(empty.registry.disclosure.visible, false);
+  assert.equal(empty['case-response'].workspace.visible, false);
+  assert.equal(empty['advanced-evidence'].intelligence.visible, false);
+  assert.equal(empty['web-evidence'], web);
+  const evidence = {
+    ...view,
+    registryAccess: { suffix: 'test' },
+    rdapParsed: { redactions: [{}] },
+    threatIntelligenceProviders: [{}],
+  };
+  const domain = lookupSectionSurfaces(evidence, { domainResult: true, caseSection: true, web });
+  assert.equal(domain.registry.access.visible, true);
+  assert.equal(domain.registry.disclosure.visible, true);
+  assert.equal(domain['case-response'].workspace.visible, true);
+  assert.equal(domain['advanced-evidence'].intelligence.visible, true);
+  assert.equal(
+    lookupSectionSurfaces(evidence, { domainResult: false, caseSection: false, web }).registry
+      .disclosure.visible,
+    false,
+  );
 });

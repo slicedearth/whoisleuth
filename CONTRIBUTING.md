@@ -142,6 +142,13 @@ sentences when their wording is not the contract. Keep independent assertions
 for meaningful names, privacy disclosures and evidence limitations. Run the
 affected tests before broad verification.
 
+Lookup and Bulk collection start in `controllers/*-collection-workflow.ts`:
+admission, submitted context and completion live there. Routes supply view effects;
+request controllers own cancellation and workspace controllers own saved mutations.
+Lookup section eligibility and deferred imports live together in
+`components/lookup-section-surfaces.ts` and `lookup-web-surfaces.ts`, shared by
+rendering and intent loading.
+
 Selected browser specifications are loaded before expensive checks. This catches
 test-discovery and import errors without starting a server or browser; it is not
 a substitute for the subsequent verified-build execution.

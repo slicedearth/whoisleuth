@@ -10,7 +10,6 @@
   import {
     activeProfile,
     isDomainAllowlisted,
-    normalizeProfile,
     type ActiveBrandProfileSourceState,
     type BrandProfile,
   } from '$lib/brand-profiles';
@@ -32,8 +31,6 @@
   import { buildCoverageReport } from '$lib/analysis/coverage.ts';
   import {
     canonicalBulkTargets,
-    failedBulkScanResult,
-    normalizeBulkScanResult,
   } from '$lib/analysis/bulk-scan-normalizer.ts';
   import { parseDomainInput } from '$lib/analysis/utils.ts';
   import {
@@ -60,12 +57,10 @@
     BulkMonitorActions,
     type BulkMonitorScope,
   } from '$lib/controllers/bulk-monitor-actions.ts';
-  import type { CompactLookupHttpResponse } from '$lib/analysis/lookup-response.ts';
-  import { fetchCompactBulkLookup } from '$lib/analysis/bulk-lookup-controller.ts';
+  import { BulkCollectionWorkflow } from '$lib/controllers/bulk-collection-workflow.ts';
   import {
     BulkScanController,
     type BulkScanState,
-    type BulkScanProfileSnapshot,
   } from '$lib/controllers/bulk-scan-controller.ts';
   import {
     bulkNavigationView,
@@ -525,17 +520,6 @@
 
   function currentProfileContext(): BulkProfileContextProvenance {
     return bulkProfileContextProvenance(profileSourceState, profile);
-  }
-
-  function settledProfileSnapshot(): BulkScanProfileSnapshot {
-    const sourceState = profileSourceState === 'ready' ? 'ready' : 'unavailable';
-    const profileSnapshot = sourceState === 'ready' && profile ? normalizeProfile(profile) : null;
-    return Object.freeze({
-      mode,
-      sourceState,
-      profile: profileSnapshot,
-      provenance: bulkProfileContextProvenance(sourceState, profileSnapshot),
-    });
   }
 
   function restoreWorkflowResults(
@@ -1117,33 +1101,6 @@
     scanController.cancel();
     status = `Cancelled after ${scan.completed} of ${scan.total} lookups.`;
   }
-  function normalize(
-    domain: string,
-    body: CompactLookupHttpResponse,
-    snapshot: BulkScanProfileSnapshot,
-  ): ScanResult {
-    const candidate = provenance(domain) || provenance(body.availability.domain) || null;
-    return normalizeBulkScanResult(body, {
-      targetDomain: domain,
-      mode: snapshot.mode,
-      profile: snapshot.profile,
-      profileSourceState: snapshot.sourceState,
-      candidate,
-    });
-  }
-  function failedResult(
-    domain: string,
-    message: string,
-    snapshot: BulkScanProfileSnapshot,
-  ): ScanResult {
-    return failedBulkScanResult(message, {
-      targetDomain: domain,
-      mode: snapshot.mode,
-      profile: snapshot.profile,
-      profileSourceState: snapshot.sourceState,
-      candidate: provenance(domain) ?? null,
-    });
-  }
   function loadSavedBulkSession(session: BulkSession) {
     if (profileSourceState === 'loading') {
       sessionWorkspace.setStatus(
@@ -1244,57 +1201,15 @@
     }
     await goto(`/lookup?q=${encodeURIComponent(row.domain)}&depth=deep#query`);
   }
-  async function run(
-    domains: string[],
-    replace = true,
-    preservePrior = false,
-  ): Promise<string[] | null> {
-    if (scan.running) return null;
-    if (sessionState.busy) {
-      status = 'Wait for the saved-session operation to finish before scanning.';
-      return null;
-    }
-    if (profileSourceState === 'loading') {
-      status = 'Wait for saved Brand Profile context to finish loading before scanning.';
-      return null;
-    }
-    const scanProfile = settledProfileSnapshot();
-    const limit = bulkQueryLimit(mode);
-    if (!domains.length) {
-      status = 'Enter at least one domain.';
-      return null;
-    }
-    if (domains.length > limit) {
-      status = `${mode === 'fast' ? 'Fast' : 'Deep'} scans are limited to ${limit} domains.`;
-      return null;
-    }
-    if (!sessionWorkspace.beginScan(replace)) return null;
-    void ensurePrimaryResultContext();
-    view.page = 1;
-    status = `Scanning ${domains.length} domain${domains.length === 1 ? '' : 's'}…${scanProfile.sourceState === 'unavailable' ? ' Brand Profile-derived trust, allowlist, match, and contextual Risk evidence will remain inconclusive.' : ''}`;
-    const executionPromise = scanController.run({
-      domains,
-      replace,
-      preservePrior,
-      profile: scanProfile,
-      concurrency: bulkConcurrency(scanProfile.mode, pacing),
-      fetchLookup: (domain, signal) => fetchCompactBulkLookup(domain, scanProfile.mode, signal),
-      normalizeResult: normalize,
-      failedResult,
-    });
-    const revision = scan.revision;
-    try {
-      const execution = await executionPromise;
-      if (!execution.owned || execution.aborted) return null;
-      status = `Completed ${scan.completed} of ${scan.total} lookups.${scanProfile.sourceState === 'unavailable' ? ' Brand Profile context was unavailable; profile-derived fields are retained as inconclusive and every row records that limitation.' : ''}${execution.preservedReasons.length ? ` Retained ${execution.preservedReasons.length} stronger prior result${execution.preservedReasons.length === 1 ? '' : 's'}.` : ''}`;
-      return [...execution.preservedReasons];
-    } catch {
-      if (!moduleController.signal.aborted && revision === scan.revision) {
-        status = `The scan stopped unexpectedly after ${scan.completed} of ${scan.total} lookups. Completed results remain available; review them before starting another scan.`;
-      }
-      return null;
-    }
-  }
+  const collection = new BulkCollectionWorkflow(scanController, sessionWorkspace, {
+    context: () => ({ mode, pacing, profile, profileSourceState }),
+    active: () => !moduleController.signal.aborted,
+    prepareView: () => { void ensurePrimaryResultContext(); view.page = 1; },
+    status: message => { status = message; },
+    provenance,
+  });
+  const run = (domains: string[], replace = true, preservePrior = false) =>
+    collection.run(domains, replace, preservePrior);
   async function start() {
     if (lookupDisabled) {
       status = lookupDisabled.reason || 'Lookup is disabled by deployment policy.';
