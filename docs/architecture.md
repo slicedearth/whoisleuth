@@ -48,8 +48,8 @@ adapters.
 
 Console routes connect components to responsibility-specific controllers in
 `frontend/src/lib/controllers/`. Lookup has separate request, Case, watchlist
-and section-navigation owners. Bulk separates scan execution from saved-session
-drafts, retention approval and mutation outcomes. Controllers publish state
+and section-navigation owners. Bulk separates scan execution, shortlist membership
+and saved-session drafts, retention approval and mutation outcomes. Controllers publish state
 snapshots; existing storage adapters retain transactional writes and conflict
 checks. A committed write and a failed subsequent refresh remain distinct.
 Brand Profile editing separates its form draft, capture cancellation and save
@@ -123,11 +123,19 @@ freshness-bound review digest govern reuse. No preview is stored in the Case.
 
 Lookup's route composes collection and local context. The result-state factory
 owns observation reset and restoration. Its Case workspace owns draft selection,
-read/write generations and publication; request and persistence controllers remain
-separate. Bulk's scan controller owns cancellation, pause, progress, settled rows
+read/write generations and rechecks. The request owner's operation token remains
+current through result publication, storage reconciliation and reveal. Request and
+persistence controllers remain separate. Section-owned eligibility and loaders
+serve both rendering and intent preloading; TLS components consume a typed display
+projection rather than source records. Bulk's scan controller owns cancellation, pause, progress, settled rows
 and disposal; its view-state owner projects filters to navigation and saved presets.
 Routes subscribe to those states and derive analysis from record/result identity,
 not from unrelated progress or draft updates.
+
+`lib/availability.mts` composes registration assessment from
+`domain-registration.mts` with eligible DNS, TLS and website observations from
+`website-enrichment.mts`. Target admission precedes both; registration authority
+and website activity remain separate results.
 
 Lookup's export module owns portable-output preparation and file delivery;
 evidence-quality and decision-review views share the contributor presentation
