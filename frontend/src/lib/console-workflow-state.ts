@@ -46,7 +46,12 @@ export type BulkWorkflowState<Result> = {
 let lookupWorkflowState: LookupWorkflowState | null = null;
 let bulkWorkflowState: BulkWorkflowState<unknown> | null = null;
 let selectedCaseId: string | null = null;
-type CaseNavigationContext = Readonly<{ caseId: string; href: string; label: string; message: string }>;
+type CaseNavigationContext = Readonly<{
+  caseId: string;
+  href: string;
+  label: string;
+  message: string;
+}>;
 let caseNavigationContext: CaseNavigationContext | null = null;
 const caseSelectionListeners = new Set<(id: string | null) => void>();
 
@@ -63,7 +68,7 @@ export function writeLookupWorkflowState(state: LookupWorkflowState): void {
 }
 
 export function readBulkWorkflowState<Result>(): BulkWorkflowState<Result> | null {
-  return inBrowser() ? bulkWorkflowState as BulkWorkflowState<Result> | null : null;
+  return inBrowser() ? (bulkWorkflowState as BulkWorkflowState<Result> | null) : null;
 }
 
 export function writeBulkWorkflowState<Result>(state: BulkWorkflowState<Result>): void {
@@ -74,13 +79,25 @@ export function readSelectedConsoleCase(): string | null {
   return inBrowser() ? selectedCaseId : null;
 }
 
-export function setCaseNavigationContext(caseId: string, href: string, label: string, message = ''): void {
+export function setCaseNavigationContext(
+  caseId: string,
+  href: string,
+  label: string,
+  message = '',
+): void {
   if (!inBrowser()) return;
-  if (normalizeOpaqueReferenceId(caseId) !== caseId || label.length > 80 || message.length > 2_000) {
+  if (
+    normalizeOpaqueReferenceId(caseId) !== caseId ||
+    label.length > 80 ||
+    message.length > 2_000
+  ) {
     throw new RangeError('The Case navigation context is invalid.');
   }
   caseNavigationContext = Object.freeze({
-    caseId, href: protectedReturnTarget(href, 'https://console.invalid'), label, message,
+    caseId,
+    href: protectedReturnTarget(href, 'https://console.invalid'),
+    label,
+    message,
   });
 }
 
@@ -97,7 +114,11 @@ export function selectConsoleCase(id: string | null): void {
   if (selectedCaseId === id) return;
   selectedCaseId = id;
   for (const listener of [...caseSelectionListeners]) {
-    try { void Promise.resolve(listener(id)).catch(() => {}); } catch { /* A view observer cannot change the selection. */ }
+    try {
+      void Promise.resolve(listener(id)).catch(() => {});
+    } catch {
+      /* A view observer cannot change the selection. */
+    }
   }
 }
 
@@ -105,7 +126,9 @@ export function subscribeSelectedConsoleCase(listener: (id: string | null) => vo
   listener(readSelectedConsoleCase());
   if (!inBrowser()) return () => {};
   caseSelectionListeners.add(listener);
-  return () => { caseSelectionListeners.delete(listener); };
+  return () => {
+    caseSelectionListeners.delete(listener);
+  };
 }
 
 export function clearConsoleWorkflowState(): void {
@@ -114,6 +137,10 @@ export function clearConsoleWorkflowState(): void {
   selectedCaseId = null;
   caseNavigationContext = null;
   for (const listener of [...caseSelectionListeners]) {
-    try { void Promise.resolve(listener(null)).catch(() => {}); } catch { /* Clearing private state does not depend on a view. */ }
+    try {
+      void Promise.resolve(listener(null)).catch(() => {});
+    } catch {
+      /* Clearing private state does not depend on a view. */
+    }
   }
 }
