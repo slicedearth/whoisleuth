@@ -375,8 +375,8 @@ export const CASE_DRAFTS_COLLECTION = Object.freeze({
   normalize: normalizeCaseDraftStore,
   version: caseDraftStoreVersion,
   serialize: serializeCaseDraftStore,
-  split: (store) => store.records.map(value => ({ id: value.id, value })),
-  join: (records, version) => ({ schema: CASE_DRAFT_SCHEMA, version, records: records.map(item => item.value) }),
+  split: (store) => recordsFromArray(store.records, value => value.id),
+  join: (records, version) => ({ schema: CASE_DRAFT_SCHEMA, version, records: arrayFromRecords(records) }),
 } satisfies LocalDataCollectionDefinition<CaseDraftStore>);
 
 export const CASE_VIEWS_COLLECTION = Object.freeze({
@@ -388,8 +388,8 @@ export const CASE_VIEWS_COLLECTION = Object.freeze({
   normalize: normalizeCaseViewsStore,
   version: caseViewsStoreVersion,
   serialize: serializeCaseViewsStore,
-  split: (store) => store.views.map(value => ({ id: value.id, value })),
-  join: (records, version) => ({ schema: CASE_VIEWS_SCHEMA, version, views: records.map(item => item.value) }),
+  split: (store) => recordsFromArray(store.views, value => value.id),
+  join: (records, version) => ({ schema: CASE_VIEWS_SCHEMA, version, views: arrayFromRecords(records) }),
 } satisfies LocalDataCollectionDefinition<CaseViewsStore>);
 
 export const REVIEW_SESSION_COLLECTION = Object.freeze({
@@ -398,8 +398,8 @@ export const REVIEW_SESSION_COLLECTION = Object.freeze({
   empty: emptyReviewSessionStore,
   acceptLegacyRoot: raw => record(raw)?.schema === REVIEW_SESSION_SCHEMA && positiveVersion(record(raw)?.version) && Array.isArray(record(raw)?.records),
   normalize: normalizeReviewSessionStore, version: reviewSessionStoreVersion, serialize: serializeReviewSessionStore,
-  split: store => store.records.map(value => ({ id: value.id, value })),
-  join: (records, version) => ({ schema: REVIEW_SESSION_SCHEMA, version, records: records.map(item => item.value) }),
+  split: store => recordsFromArray(store.records, value => value.id),
+  join: (records, version) => ({ schema: REVIEW_SESSION_SCHEMA, version, records: arrayFromRecords(records) }),
 } satisfies LocalDataCollectionDefinition<ReviewSessionStore>);
 
 const browserLocalCollectionsById = {

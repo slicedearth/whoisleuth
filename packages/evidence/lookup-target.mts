@@ -7,6 +7,11 @@ const URL_SCHEME = /^[a-z][a-z\d+.-]*:\/\//iu;
 const CONTROL = /[\u0000-\u001f\u007f]/u;
 export type WebObservationMode = 'selected_url';
 
+/** Lexical recognition only; protocol, credentials and target admission remain separate. */
+export function hasLookupUrlScheme(value: string): boolean {
+  return URL_SCHEME.test(value);
+}
+
 export function validWebObservationMode(value: unknown): value is WebObservationMode | undefined {
   return value === undefined || value === 'selected_url';
 }
@@ -81,7 +86,7 @@ export function prepareLookupCollectionTarget(value: string): string {
   }
   const raw = value.trim();
   if (!raw) throw new TypeError('Enter a domain, IP address or ASN.');
-  const absolute = URL_SCHEME.test(raw);
+  const absolute = hasLookupUrlScheme(raw);
   // An unbracketed IPv6 literal is not a URL with a port. Use the same URL
   // parser to admit its syntax, then leave address safety and ASN bounds to
   // the classifier; malformed colon-separated text must not become a request.

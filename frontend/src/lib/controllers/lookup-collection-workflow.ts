@@ -1,5 +1,5 @@
 import { parseIncidentUrlContext } from '../../../../packages/cases/case-incident-context.mts';
-import { prepareSelectedLookupUrl } from '../../../../packages/evidence/lookup-target.mts';
+import { hasLookupUrlScheme, prepareSelectedLookupUrl } from '../../../../packages/evidence/lookup-target.mts';
 import { MAX_HANDOFF_CANDIDATES } from '../../../../packages/investigation/candidate-handoff.mts';
 import type { CaseRecord } from '../cases.ts';
 import type { saveCandidateHandoff } from '../candidate-handoff.ts';
@@ -88,7 +88,7 @@ export class LookupCollectionWorkflow {
 
     const entry = context.entries[0];
     if (!entry) return;
-    const isIncidentUrl = state.task === 'incident' && /^[a-z][a-z\d+.-]*:\/\//iu.test(entry);
+    const isIncidentUrl = state.task === 'incident' && hasLookupUrlScheme(entry);
     const incident = isIncidentUrl ? parseIncidentUrlContext(entry) : null;
     if (isIncidentUrl && !incident) {
       state.error =

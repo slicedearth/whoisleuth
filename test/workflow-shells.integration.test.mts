@@ -5,6 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { parseArgs } from 'node:util';
 import { test } from 'node:test';
 import { parse } from 'yaml';
 import { unitTestExecutablePath } from '../tools/toolchain-compatibility.mts';
@@ -27,17 +28,26 @@ const HEALTH_NPM_DOUBLE = String.raw`
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const args = process.argv.slice(2);
-assert.equal(args.shift(), 'run');
-if (args[0] === '--silent') args.shift();
-const command = args.shift();
-assert.ok(['sources:health', 'test:profile', 'test:duration-health', 'verification:timing:update-candidate'].includes(command));
+const operation = args.shift();
+assert.ok(operation === 'ci' || operation === 'run');
+if (operation === 'run' && args[0] === '--silent') args.shift();
+const command = operation === 'ci' ? 'ci' : args.shift();
+assert.ok(['ci', 'toolchain:check', 'test:properties', 'verification:timing:check', 'sources:health', 'test:profile', 'test:duration-health', 'verification:timing:update-candidate'].includes(command));
 const log = process.env.TEST_CALL_LOG;
 const calls = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse) : [];
 const call = { command, args };
 fs.appendFileSync(log, JSON.stringify(call) + '\n');
 const index = calls.length;
 if (String(index) === process.env.TEST_FAIL_CALL) process.exit(23);
-if (command === 'sources:health') {
+if (command === 'ci') {
+  assert.deepEqual([...args].sort(), ['--audit=false', '--ignore-scripts', '--include=optional']);
+} else if (['toolchain:check', 'test:properties', 'verification:timing:check'].includes(command)) {
+  assert.deepEqual(args, []);
+  if (command === 'test:properties') {
+    assert.equal(process.env.WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER, '10');
+    assert.equal(process.env.WHOISLEUTH_FAST_CHECK_SEED, '42');
+  }
+} else if (command === 'sources:health') {
   assert.ok(args.length === 0 || JSON.stringify(args) === JSON.stringify(['--', '--github-annotations']));
   console.log(args.length ? 'fixture-annotations' : 'fixture-source-health');
 } else if (command === 'test:profile') {
@@ -62,17 +72,21 @@ if (command === 'sources:health') {
 }
 `;
 
-type HealthStep = { run?: string; uses?: string; if?: string; with?: Record<string, unknown> };
+type HealthStep = { run?: string; uses?: string; if?: string; with?: Record<string, unknown>; env?: Record<string, string> };
 const healthWorkflow = parse(readFileSync(new URL('../.github/workflows/test-health.yml', import.meta.url), 'utf8'));
 const healthSteps = Object.values(healthWorkflow.jobs as Record<string, { steps: HealthStep[] }>).flatMap(job => job.steps);
 
-for (const failure of [null, 0, 1, 2, 3, 4, 5, 6]) {
+const expectedHealthCommands = ['ci', 'toolchain:check', 'test:properties', 'verification:timing:check',
+  'sources:health', 'sources:health', 'test:profile', 'test:profile', 'test:profile',
+  'test:duration-health', 'verification:timing:update-candidate'];
+
+for (const failure of [null, ...expectedHealthCommands.map((_, index) => index)]) {
   test(`scheduled health executes distinct samples and propagates ${failure === null ? 'success' : `command failure ${failure + 1}`}`, async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'test-health-shell-'));
     const summary = path.join(directory, 'summary.md');
     const log = path.join(directory, 'calls.jsonl');
     const double = path.join(directory, 'npm-double.cjs');
-    const selected = healthSteps.filter(step => /npm run (?:--silent )?(?:sources:health|test:profile|test:duration-health|verification:timing:update-candidate)(?:\s|$)/u.test(step.run ?? ''));
+    const selected = healthSteps.filter(step => step.run !== undefined);
     assert.ok(selected.length > 0);
     try {
       await writeFile(double, HEALTH_NPM_DOUBLE);
@@ -80,9 +94,10 @@ for (const failure of [null, 0, 1, 2, 3, 4, 5, 6]) {
       for (const step of selected) {
         assert.equal(step.if, undefined, 'Required health collection must not be conditionally skipped.');
         const result = spawnSync(unitTestExecutablePath('bash'), ['-e', '-c',
-          'npm() { "$TEST_NODE" "$TEST_NPM_DOUBLE" "$@"; }\n' + requiredValue(step.run)], {
+          'npm() { "$TEST_NODE" "$TEST_NPM_DOUBLE" "$@"; }\nsudo() { :; }\n' + requiredValue(step.run)], {
           cwd: directory, encoding: 'utf8', timeout: 10_000,
-          env: { ...process.env, RUNNER_TEMP: directory, GITHUB_STEP_SUMMARY: summary,
+          env: { ...process.env, ...step.env, RUNNER_TEMP: directory, GITHUB_STEP_SUMMARY: summary,
+            WHOISLEUTH_FAST_CHECK_SEED: step.env?.WHOISLEUTH_FAST_CHECK_SEED === '${{ github.run_number }}' ? '42' : '',
             PROFILE_PROVENANCE: 'unit-ci-fixture-1', TEST_NODE: process.execPath, TEST_NPM_DOUBLE: double,
             TEST_CALL_LOG: log, TEST_FAIL_CALL: failure === null ? '' : String(failure) },
         });
@@ -92,15 +107,13 @@ for (const failure of [null, 0, 1, 2, 3, 4, 5, 6]) {
         if (status !== 0) break;
       }
       const calls = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; args: string[] });
-      const expected = ['sources:health', 'sources:health', 'test:profile', 'test:profile', 'test:profile',
-        'test:duration-health', 'verification:timing:update-candidate'];
-      assert.deepEqual(calls.map(call => call.command), failure === null ? expected : expected.slice(0, failure + 1));
+      assert.deepEqual(calls.map(call => call.command), failure === null ? expectedHealthCommands : expectedHealthCommands.slice(0, failure + 1));
       if (failure !== null) {
         assert.notEqual(status, 0, 'No failing producer may be hidden by a pipeline or a later command.');
         return;
       }
       assert.equal(status, 0);
-      assert.deepEqual(calls[1]?.args, ['--', '--github-annotations']);
+      assert.deepEqual(calls.filter(call => call.command === 'sources:health')[1]?.args, ['--', '--github-annotations']);
       const displayed = await readFile(summary, 'utf8');
       assert.match(displayed, /fixture-source-health/u);
       assert.match(displayed, /fixture-duration-health/u);
@@ -123,6 +136,83 @@ for (const failure of [null, 0, 1, 2, 3, 4, 5, 6]) {
     }
   });
 }
+
+// Resolve shell quoting and flag ordering without invoking a package manager,
+// browser or installer. Only argument vectors and the two public test knobs leave the shell.
+function capturedCommands(source: string, failure = false) {
+  const capture = 'process.stdout.write(JSON.stringify({argv:process.argv.slice(1),multiplier:process.env.WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER,seed:process.env.WHOISLEUTH_FAST_CHECK_SEED})+"\\n");if(process.env.TEST_COMMAND_FAIL==="1")process.exit(23)';
+  const declarations = ['npm', 'node', 'playwright'].map(command =>
+    `${command}() { "$TEST_NODE" -e '${capture}' ${command} "$@"; }`).join('\n');
+  const result = spawnSync(unitTestExecutablePath('bash'), ['-e', '-c', `${declarations}\n${source}`], {
+    encoding: 'utf8', timeout: 10_000,
+    env: { ...process.env, TEST_NODE: process.execPath, TEST_COMMAND_FAIL: failure ? '1' : '0',
+      WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER: '', WHOISLEUTH_FAST_CHECK_SEED: '' },
+  });
+  assert.ifError(result.error);
+  assert.equal(result.signal, null);
+  return { status: result.status, calls: result.stdout.trim().split('\n').filter(Boolean)
+    .map(line => JSON.parse(line) as { argv: string[]; multiplier: string; seed: string }) };
+}
+
+test('scheduled browser execution preserves its invocation and failure contract, not shell spelling', () => {
+  const workflow = parse(readFileSync(new URL('../.github/workflows/e2e-stress.yml', import.meta.url), 'utf8'));
+  const allSteps = (Object.values(workflow.jobs) as { steps: HealthStep[] }[]).flatMap(job => job.steps);
+  const steps = allSteps.filter(step => step.run);
+  const calls = steps.flatMap(step => {
+    const result = capturedCommands(requiredValue(step.run));
+    assert.equal(result.status, 0);
+    assert.ok(result.calls.length > 0);
+    return result.calls.map(call => ({ ...call, step }));
+  });
+  const install = requiredValue(calls.find(call => call.argv[0] === 'npm' && call.argv[1] === 'ci'));
+  assert.deepEqual(install.argv.slice(2).sort(), ['--audit=false', '--ignore-scripts', '--include=optional']);
+  const scripts = calls.filter(call => call.argv[0] === 'npm' && call.argv[1] === 'run');
+  assert.deepEqual(scripts.map(call => call.argv[2]).sort(), ['build', 'test:e2e:install', 'test:e2e:stress', 'test:e2e:summary']);
+  const stressIndex = scripts.findIndex(call => call.argv[2] === 'test:e2e:stress');
+  for (const preparation of ['build', 'test:e2e:install']) {
+    assert.ok(scripts.findIndex(call => call.argv[2] === preparation) < stressIndex);
+  }
+  for (const call of scripts.filter(call => call.argv[2] !== 'test:e2e:summary')) {
+    assert.equal(call.step.if, undefined);
+    assert.equal(capturedCommands(requiredValue(call.step.run), true).status, 23);
+  }
+  assert.equal(scripts.find(call => call.argv[2] === 'test:e2e:summary')?.step.if, 'always()');
+  const uploads = allSteps.filter(step => step.uses?.startsWith('actions/upload-artifact@'));
+  const results = requiredValue(uploads.find(step => step.with?.path === 'playwright-results.json'));
+  assert.equal(results.if, 'always()');
+  const diagnostics = requiredValue(uploads.find(step => String(step.with?.path).includes('test-results/')));
+  assert.equal(diagnostics.if, 'failure()');
+  assert.ok(String(diagnostics.with?.path).split(/\s+/u).includes('playwright-report/'));
+});
+
+test('stress and property scripts keep independent repetition, retry and seed expectations', () => {
+  const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { scripts: Record<string, string> };
+  const run = (name: string) => {
+    const result = capturedCommands(requiredValue(scripts[name]));
+    assert.equal(result.status, 0);
+    assert.equal(result.calls.length, 1);
+    return result.calls[0]!;
+  };
+  const browser = run('test:e2e:stress');
+  assert.equal(browser.argv[0], 'playwright');
+  const parsed = parseArgs({ args: browser.argv.slice(1), allowPositionals: true, strict: false,
+    options: { grep: { type: 'string' }, workers: { type: 'string' }, retries: { type: 'string' }, 'repeat-each': { type: 'string' } } });
+  assert.deepEqual(parsed.positionals, ['test']);
+  assert.equal(parsed.values.grep, '@timing-sensitive');
+  assert.equal(parsed.values.workers, '1');
+  assert.equal(parsed.values.retries, '0');
+  assert.equal(parsed.values['repeat-each'], '10');
+  const properties = run('test:properties');
+  assert.deepEqual(properties.argv.slice(0, 2), ['node', '--test']);
+  assert.ok(properties.argv.includes('test/verification-state-machines.test.mts'));
+  const expanded = run('test:properties:stress');
+  assert.deepEqual(expanded.argv, ['npm', 'run', 'test:properties']);
+  assert.equal(expanded.multiplier, '10');
+  assert.equal(expanded.seed, '334462');
+  assert.deepEqual(run('test:duration-health').argv, ['node', 'tools/test-duration-health.mts']);
+  assert.deepEqual(capturedCommands("playwright 'test' --repeat-each 10 --retries=0 --workers '1' --grep '@timing-sensitive'").calls[0]?.argv,
+    ['playwright', 'test', '--repeat-each', '10', '--retries=0', '--workers', '1', '--grep', '@timing-sensitive']);
+});
 
 test('executes the final gate against every result, including newly added lanes', () => {
   const workflow = parse(

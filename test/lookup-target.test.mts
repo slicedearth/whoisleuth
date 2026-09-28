@@ -1,8 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MAX_LOOKUP_INPUT_CHARACTERS, parseCredentialFreeHttpUrl, prepareLookupCollectionTarget } from '../packages/evidence/lookup-target.mts';
+import { hasLookupUrlScheme, MAX_LOOKUP_INPUT_CHARACTERS, parseCredentialFreeHttpUrl, prepareLookupCollectionTarget } from '../packages/evidence/lookup-target.mts';
 import { classifyQuery } from '../lib/classify.mts';
 import { parseIncidentUrlContext } from '../packages/cases/case-record-operations.mts';
+
+test('scheme recognition does not claim URL validity or collection admission', () => {
+  for (const value of ['https://example.test/', 'HTTP://example.test/', 'ftp://example.test/', 'custom+scheme://']) {
+    assert.equal(hasLookupUrlScheme(value), true, value);
+  }
+  for (const value of ['example.test', '2001:db8::1', '//example.test/', 'https:example.test', '1https://example.test/']) {
+    assert.equal(hasLookupUrlScheme(value), false, value);
+  }
+  assert.throws(() => prepareLookupCollectionTarget('ftp://example.test/'));
+  assert.throws(() => prepareLookupCollectionTarget('custom+scheme://'));
+});
 
 test('collection retains the full hostname but never URL path, query, fragment, port or credentials', () => {
   const input = 'https://portal.example.test:8443/private-path?private-query=present#private-fragment';

@@ -22,7 +22,7 @@
   import { lookupSectionSurfaces } from '$lib/components/lookup-section-surfaces.ts';
   import LookupSavedContextPreview from '$lib/components/LookupSavedContextPreview.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
-  import { lookupObservationHostname } from '../../../../../packages/evidence/lookup-target.mts';
+  import { hasLookupUrlScheme, lookupObservationHostname } from '../../../../../packages/evidence/lookup-target.mts';
   import LookupPresentationControls from '$lib/components/LookupPresentationControls.svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
@@ -201,7 +201,7 @@
   const entries = $derived(parsedInput.entries);
   const lookupEntries = $derived.by(() => {
     const trimmed = session.request.query.trim();
-    return /^[a-z][a-z\d+.-]*:\/\//iu.test(trimmed) && !/[\r\n]/u.test(trimmed)
+    return hasLookupUrlScheme(trimmed) && !/[\r\n]/u.test(trimmed)
       ? [trimmed]
       : entries;
   });
