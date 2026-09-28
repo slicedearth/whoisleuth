@@ -1,5 +1,9 @@
 
 import { positional, OPTIONAL_FILE_POSITIONAL, OPTIONAL_TEXT_POSITIONAL, constraint, commandSeed } from './command-definition.mts';
+import { bulkQueryLimit, bulkConcurrencyLimit } from '../lib/bulk-limits.mts';
+
+const COLLECTION_CEILINGS = `${bulkQueryLimit('fast')} fast or ${bulkQueryLimit('deep')} deep`;
+const CONCURRENCY_CEILINGS = `${bulkConcurrencyLimit('fast')} fast or ${bulkConcurrencyLimit('deep')} deep`;
 
 export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
   lookup: commandSeed({
@@ -39,7 +43,7 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
       example: 'cat domains.txt | whoisleuth bulk --jsonl',
       boundary: 'Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.',
     },
-    collection: { scope: 'Accepts at most 500 fast or 50 deep targets, with concurrency capped at 8 fast or 3 deep.' },
+    collection: { scope: `Accepts at most ${COLLECTION_CEILINGS} targets, with concurrency capped at ${CONCURRENCY_CEILINGS}.` },
     summary: 'Run bounded multi-target collection',
     options: ['--json', '--jsonl', '--junit', '--csv', '--csv-with-metadata', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--plan', '--fail-on', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
@@ -87,9 +91,9 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
     reference: {
       description: 'Generate a bounded candidate set, collect a selected subset, and produce a supervised review queue.',
       example: 'whoisleuth discover-scan example.test --scan-limit 50 --checkpoint scan.json --json',
-      boundary: 'This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.',
+      boundary: `This command performs network collection. Fast compact lookup is the default; deep mode is capped at ${bulkQueryLimit('deep')} candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.`,
     },
-    collection: { scope: 'Scans at most 500 fast or 50 deep candidates, with concurrency capped at 8 fast or 3 deep.' },
+    collection: { scope: `Scans at most ${COLLECTION_CEILINGS} candidates, with concurrency capped at ${CONCURRENCY_CEILINGS}.` },
     summary: 'Collect a supervised candidate review queue',
     options: ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--fast', '--deep', '--scan-limit', '--chunk-size', '--concurrency', '--resolver', '--allowlist', '--checkpoint', '--resume', '--observation-snapshot', '--registered-only', '--inconclusive-only', '--acquisition-only', '--suppressed-only', '--events', '--plan', '--fail-on', '--json', '--jsonl', '--csv', '--csv-with-metadata', '--domains', '--quiet', '--no-color'],
     positionals: OPTIONAL_TEXT_POSITIONAL,

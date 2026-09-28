@@ -367,8 +367,8 @@ describe('privacy data-flow catalogue', () => {
       assert.ok(PRIVACY_DATA_FLOW_CATALOGUE.capabilityFlows.some((flow) => flow.id === source.source), source.source);
     }
     for (const preflight of [
-      buildCollectionPreflight({ command: 'bulk', targetCount: 2, targetLimit: 50, deep: true, concurrency: 2, output: 'json', checkpoint: false }),
-      buildCollectionPreflight({ command: 'discover-scan', targetCount: 3, targetLimit: 50, deep: false, concurrency: 2, output: 'json', checkpoint: false }),
+      buildCollectionPreflight({ command: 'bulk', targetCount: 2, deep: true, concurrency: 2, output: 'json', checkpoint: false }),
+      buildCollectionPreflight({ command: 'discover-scan', targetCount: 3, deep: false, concurrency: 2, output: 'json', checkpoint: false }),
     ]) {
       assert.equal(preflight.networkRequestsMade, false);
       const flow = PRIVACY_DATA_FLOW_CATALOGUE.cliOperationFlows.find((item) => item.command === preflight.command)!;

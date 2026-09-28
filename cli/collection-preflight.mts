@@ -1,10 +1,11 @@
+import { bulkQueryLimit } from '../lib/bulk-limits.mts';
+
 export const CLI_COLLECTION_PREFLIGHT_SCHEMA = 'whoisleuth.cli.collection-preflight';
 export const CLI_COLLECTION_PREFLIGHT_VERSION = 1;
 
 type CollectionPreflightOptions = Readonly<{
   command: 'bulk' | 'discover-scan';
   targetCount: number;
-  targetLimit: number;
   deep: boolean;
   concurrency: number;
   output: string;
@@ -25,7 +26,7 @@ export function buildCollectionPreflight(options: CollectionPreflightOptions) {
     networkRequestsMade: false,
     scope: Object.freeze({
       selectedTargets: options.targetCount,
-      commandTargetLimit: options.targetLimit,
+      commandTargetLimit: bulkQueryLimit(options.deep ? 'deep' : 'fast'),
       concurrency: options.concurrency,
       sourceFamilies: Object.freeze(sourceFamilies),
       exactRequestCountKnown: false,

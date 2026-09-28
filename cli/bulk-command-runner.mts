@@ -56,7 +56,7 @@ async function runBulkCommand(
   const parsed = parseBulkQueries(input, { deep: args.deep });
   if (args.plan) {
     const document = buildCollectionPreflight({
-      command: 'bulk', targetCount: parsed.queries.length, targetLimit: args.deep ? 50 : 500,
+      command: 'bulk', targetCount: parsed.queries.length,
       deep: args.deep, concurrency: args.concurrency, output: args.output, checkpoint: false,
     });
     context.writeStdout(args.output === 'json' ? formatJsonDocument(document) : context.terminal(formatCollectionPreflight(document), args.color));

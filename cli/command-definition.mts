@@ -7,6 +7,7 @@ import { type CliCommand, type CliHelpGroup } from '../packages/contracts/cli-co
 import { CLI_FAIL_POLICIES_BY_COMMAND, type CliFailPolicyCommand } from './fail-policy.mts';
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../packages/investigation/investigation-manifest.mts';
 import { IDENTITY_ACTIONS } from '../packages/contracts/message-intake.mts';
+import { bulkQueryLimit, bulkConcurrencyLimit } from '../lib/bulk-limits.mts';
 
 const LEGACY_WORKSPACE_ARCHIVE_VERSIONS = SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS
   .filter((version) => version !== WORKSPACE_ARCHIVE_VERSION);
@@ -280,8 +281,12 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--registered-only': flag('Keep registered results in the presented output.'),
   '--inconclusive-only': flag('Keep inconclusive results in the presented output.'),
   '--errors-only': flag('Keep error results in the presented output.'),
+  // Higher ceilings do not automatically increase the default collection load.
   '--concurrency': integer('Set the maximum number of concurrent collection tasks.',
-    () => Object.freeze([BASE_INTEGER_RANGE(1, 8), DEEP_INTEGER_RANGE(1, 3)]), (_command, deep) => deep ? 2 : 4),
+    () => Object.freeze([
+      BASE_INTEGER_RANGE(1, bulkConcurrencyLimit('fast')),
+      DEEP_INTEGER_RANGE(1, bulkConcurrencyLimit('deep')),
+    ]), (_command, deep) => Math.min(deep ? 2 : 4, bulkConcurrencyLimit(deep ? 'deep' : 'fast'))),
   '--checkpoint': file('Save resumable collection state to this local file.'),
   '--resume': flag('Resume collection from the selected checkpoint.'),
   '--tlds': text('Use this comma-separated set of domain endings.', true),
@@ -291,9 +296,9 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--dictionary': file('Read candidate words from this local dictionary.'),
   '--snapshot': file('Use this retained observation snapshot.'),
   '--scan-limit': integer('Limit the number of generated candidates to collect.', () => Object.freeze([
-    BASE_INTEGER_RANGE(1, 500),
-    DEEP_INTEGER_RANGE(1, 50),
-  ]), (_command, deep) => deep ? 50 : 100),
+    BASE_INTEGER_RANGE(1, bulkQueryLimit('fast')),
+    DEEP_INTEGER_RANGE(1, bulkQueryLimit('deep')),
+  ]), (_command, deep) => Math.min(deep ? 50 : 100, bulkQueryLimit(deep ? 'deep' : 'fast'))),
   '--chunk-size': integer('Set the number of candidates processed per checkpoint chunk.', () => Object.freeze([BASE_INTEGER_RANGE(1, 100)]), () => 25),
   '--resolver': text('Choose the supported DNS resolver for collection.'),
   '--allowlist': file('Read reviewed domains whose priority should be suppressed, without changing their evidence.'),

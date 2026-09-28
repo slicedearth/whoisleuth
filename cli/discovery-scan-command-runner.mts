@@ -83,7 +83,7 @@ async function runDiscoveryScanCommand(
   const queries = candidates.map((candidate) => String(candidate.domain));
   if (args.plan) {
     const document = buildCollectionPreflight({
-      command: 'discover-scan', targetCount: queries.length, targetLimit: args.deep ? 50 : 500,
+      command: 'discover-scan', targetCount: queries.length,
       deep: args.deep, concurrency: args.concurrency, output: args.output, checkpoint: false,
       customResolvers: Boolean(args.resolverText), allowlist: Boolean(args.allowlistSource),
     });
