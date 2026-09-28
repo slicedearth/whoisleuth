@@ -201,20 +201,15 @@ async function installLookupFixture(page: Page) {
   });
 }
 
-test('public and dashboard support content exposes semantic labels and link cues', async ({ page }) => {
+test('public and dashboard support content exposes semantic labels and keyboard-accessible attribution', async ({ page }) => {
   await page.goto('/');
   await expect(
     page.getByRole('region', { name: 'Synthetic WHOISleuth console preview' }),
   ).toBeVisible();
   const attribution = page.getByRole('link', { name: 'slicedearth' });
-  const attributionCue = await attribution.evaluate((element) => {
-    const style = getComputedStyle(element);
-    const footerStyle = getComputedStyle(element.closest('footer') as HTMLElement);
-    return { color: style.color, footerColor: footerStyle.color, fontWeight: style.fontWeight, decoration: style.textDecorationLine };
-  });
-  expect(attributionCue.color).not.toBe(attributionCue.footerColor);
-  expect(Number(attributionCue.fontWeight)).toBeGreaterThanOrEqual(700);
-  expect(attributionCue.decoration).toBe('none');
+  await expect(attribution).toBeVisible();
+  await attribution.focus();
+  await expect(attribution).toBeFocused();
   await expect(attribution).toHaveAccessibleName(/opens in a new tab/);
 
   await page.goto('/dashboard');

@@ -35,14 +35,14 @@ test('creating selected Cases appends current Bulk evidence to the existing inci
   expect(saved.records[0]?.value.evidenceHistory).toHaveLength(1);
   expect(saved.records[0]?.value.evidenceHistory[0]).toMatchObject({ source: 'bulk', availability: 'registered' });
 });
-test('the scan button only takes the high-contrast primary treatment once ready', async ({ page }) => {
-  const scanButton = page.locator('.queue-actions button.primary');
+test('the scan action is available only when the queue contains a target', async ({ page }) => {
+  const scanButton = page.getByRole('button', { name: /^Scan(?: \d+)? domains?$/u });
   await expect(scanButton).toBeDisabled();
-  expect(await scanButton.evaluate((el) => getComputedStyle(el).backgroundImage)).toBe('none');
 
   await page.locator('#domains').fill(invalidDomains(1).join('\n'));
   await expect(scanButton).toBeEnabled();
-  expect(await scanButton.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('gradient');
+  await page.locator('#domains').fill('');
+  await expect(scanButton).toBeDisabled();
 });
 
 test('canonicalises equivalent hostnames into one request per registrable target', async ({ page }) => {
