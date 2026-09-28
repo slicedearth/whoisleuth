@@ -22,18 +22,25 @@ import {
   buildCliRetainedArtifactDiff,
   formatCliRetainedArtifactDiff,
 } from './retained-artifact-diff.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext } from './runner-types.mts';
 import { MAX_SAVED_LOOKUP_INPUT_BYTES } from './saved-lookup.mts';
 import { HISTORY_INLINE_COMMANDS } from './inline-command-families.mts';
 
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
+
+export type HistoryCommandDependencies = {
+  readDiffInput?: (source: string) => string | Promise<string>;
+  readExportInput?: (source?: string | null) => string | Promise<string>;
+  loadEvidenceExport?: () => Promise<typeof import('../lib/evidence-export.mts')>;
+};
+
 type HistoryInlineCommand = typeof HISTORY_INLINE_COMMANDS[number];
 type HistoryCommandArguments = Extract<CliArguments, { action: HistoryInlineCommand }>;
 
 
 async function runRetainedDiffCommand(
   args: Extract<HistoryCommandArguments, { action: 'diff' }>,
-  dependencies: CliDependencies,
+  dependencies: HistoryCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Retained artifact diff');
@@ -66,7 +73,7 @@ async function runRetainedDiffCommand(
 
 async function runReconciliationCommand(
   args: Extract<HistoryCommandArguments, { action: 'reconcile' }>,
-  dependencies: CliDependencies,
+  dependencies: HistoryCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Lookup observation reconciliation');
@@ -98,7 +105,7 @@ async function runReconciliationCommand(
 
 async function runTimelineCommand(
   args: Extract<HistoryCommandArguments, { action: 'timeline' }>,
-  dependencies: CliDependencies,
+  dependencies: HistoryCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Lookup observation timeline');
@@ -130,7 +137,7 @@ async function runTimelineCommand(
 
 async function runExportCommand(
   args: Extract<HistoryCommandArguments, { action: 'export' }>,
-  dependencies: CliDependencies,
+  dependencies: HistoryCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Evidence export');
@@ -163,13 +170,13 @@ const HISTORY_COMMAND_HANDLERS = Object.freeze({
   'export': runExportCommand,
 } satisfies DiscriminatedCommandHandlerMap<
   HistoryCommandArguments,
-  [CliDependencies, CliCommandContext],
+  [HistoryCommandDependencies, CliCommandContext],
   number
 >);
 
 function runHistoryCommand(
   args: HistoryCommandArguments,
-  dependencies: CliDependencies,
+  dependencies: HistoryCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   return runDiscriminatedCommandHandler(HISTORY_COMMAND_HANDLERS, args, dependencies, context);

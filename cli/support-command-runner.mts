@@ -39,18 +39,35 @@ import {
   parseRiskCalibrationDataset,
   serializeRiskCalibrationReport,
 } from './risk-calibration.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext } from './runner-types.mts';
+import type { RegistryCompatibilityRow } from '../lib/registry-capabilities.mts';
+import type { resolvePublicAddresses, safeFetch } from '../lib/safe-fetch.mts';
+import type { whoisQuery } from '../lib/whois-transport.mts';
 import { MAX_SAVED_LOOKUP_INPUT_BYTES } from './saved-lookup.mts';
 import { SUPPORT_INLINE_COMMANDS } from './inline-command-families.mts';
 
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
+
+export type SupportCommandDependencies = {
+  resolvePublicAddresses?: typeof resolvePublicAddresses;
+  safeFetch?: typeof safeFetch;
+  whoisQuery?: typeof whoisQuery;
+  registryCapabilityFor?: (value: unknown) => RegistryCompatibilityRow | null;
+  registryCapabilitiesVersion?: number;
+  readCompareInput?: (source?: string | null) => string | Promise<string>;
+  readRiskCalibrationInput?: (source?: string | null) => string | Promise<string>;
+  explainRiskScore?: typeof explainRiskScore;
+  riskModelVersion?: number;
+  riskReviewThreshold?: number;
+};
+
 type SupportInlineCommand = typeof SUPPORT_INLINE_COMMANDS[number];
 type SupportCommandArguments = Extract<CliArguments, { action: SupportInlineCommand }>;
 
 
 async function runCompletionCommand(
   args: Extract<SupportCommandArguments, { action: 'completion' }>,
-  dependencies: CliDependencies,
+  dependencies: SupportCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.writeStdout(buildShellCompletion(args.shell));
@@ -59,7 +76,7 @@ async function runCompletionCommand(
 
 async function runCommandCatalogueCommand(
   args: Extract<SupportCommandArguments, { action: 'commands' }>,
-  dependencies: CliDependencies,
+  dependencies: SupportCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   const selectedCommands = selectCliCommands(CLI_COMMAND_REGISTRY, {
@@ -84,7 +101,7 @@ async function runCommandCatalogueCommand(
 
 async function runManualCommand(
   args: Extract<SupportCommandArguments, { action: 'manual' }>,
-  dependencies: CliDependencies,
+  dependencies: SupportCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.writeStdout(buildCliManual({
@@ -99,7 +116,7 @@ async function runManualCommand(
 
 async function runDoctorCommand(
   args: Extract<SupportCommandArguments, { action: 'doctor' }>,
-  dependencies: CliDependencies,
+  dependencies: SupportCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('CLI diagnostics');
@@ -125,7 +142,7 @@ async function runDoctorCommand(
 
 async function runRegistrySupportCommand(
   args: Extract<SupportCommandArguments, { action: 'registry-support' }>,
-  dependencies: CliDependencies,
+  dependencies: SupportCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Registry support');
@@ -146,7 +163,7 @@ async function runRegistrySupportCommand(
 
 async function runRegistryDoctorCommand(
   args: Extract<SupportCommandArguments, { action: 'registry-doctor' }>,
-  dependencies: CliDependencies,
+  dependencies: SupportCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Registry compatibility diagnostic');
@@ -171,7 +188,7 @@ async function runRegistryDoctorCommand(
 
 async function runRegistryCohortCommand(
   args: Extract<SupportCommandArguments, { action: 'registry-cohort' }>,
-  dependencies: CliDependencies,
+  dependencies: SupportCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Registry quality cohort');
@@ -197,7 +214,7 @@ async function runRegistryCohortCommand(
 
 async function runRegistryScaffoldCommand(
   args: Extract<SupportCommandArguments, { action: 'registry-scaffold' }>,
-  dependencies: CliDependencies,
+  dependencies: SupportCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Registry fixture scaffold');
@@ -211,7 +228,7 @@ async function runRegistryScaffoldCommand(
 
 async function runRiskCalibrationCommand(
   args: Extract<SupportCommandArguments, { action: 'risk-calibrate' }>,
-  dependencies: CliDependencies,
+  dependencies: SupportCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Risk calibration');
@@ -247,7 +264,7 @@ async function runRiskCalibrationCommand(
 
 async function runLookalikeCalibrationCommand(
   args: Extract<SupportCommandArguments, { action: 'lookalike-calibrate' }>,
-  dependencies: CliDependencies,
+  dependencies: SupportCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Lookalike review-yield calibration');
@@ -288,13 +305,13 @@ const SUPPORT_COMMAND_HANDLERS = Object.freeze({
   'lookalike-calibrate': runLookalikeCalibrationCommand,
 } satisfies DiscriminatedCommandHandlerMap<
   SupportCommandArguments,
-  [CliDependencies, CliCommandContext],
+  [SupportCommandDependencies, CliCommandContext],
   number
 >);
 
 function runSupportCommand(
   args: SupportCommandArguments,
-  dependencies: CliDependencies,
+  dependencies: SupportCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   return runDiscriminatedCommandHandler(SUPPORT_COMMAND_HANDLERS, args, dependencies, context);

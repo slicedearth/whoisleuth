@@ -13,10 +13,15 @@ import { dispositionLabel, statusLabel } from '../packages/cases/case-record-dec
 import { normalizeDomain } from '../packages/cases/case-record-core.mts';
 import type { CaseRecord } from '../packages/cases/case-record-contracts.mts';
 import type { CliArguments } from './arguments.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext } from './runner-types.mts';
 import { safeTerminalValue } from './formatters/terminal.mts';
 import { CliUsageError } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
+
+export type CaseCommandDependencies = {
+  signal?: AbortSignal;
+  caseFileInput?: string;
+};
 
 type CaseArguments = Extract<CliArguments, { action: 'case' }>;
 type JsonObject = Record<string, unknown>;
@@ -166,7 +171,7 @@ function formatCases(cases: readonly CaseRecord[], digest: string): string {
   return lines.join('\n');
 }
 
-export async function runCaseCommand(args: CaseArguments, dependencies: CliDependencies, context: CliCommandContext): Promise<number> {
+export async function runCaseCommand(args: CaseArguments, dependencies: CaseCommandDependencies, context: CliCommandContext): Promise<number> {
   context.setFailureLabel('Local Case operation');
   try {
     const raw = args.source ? dependencies.caseFileInput ?? await context.readInput(args.source, MAX_EDITABLE_CASE_INPUT_BYTES, 'Case file') : null;

@@ -30,16 +30,35 @@ import {
 } from './formatters/terminal.mts';
 import { buildHttpProbeResult } from './http.mts';
 import { normalizePostureSelectors } from './posture.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext } from './runner-types.mts';
+import type { DomainPostureOptions } from '../lib/domain-posture.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { buildPostureSarif } from './ci-report.mts';
+
+export type NetworkCommandDependencies = {
+  signal?: AbortSignal;
+  searchCertificateTransparency?: (keyword: unknown) => unknown | Promise<unknown>;
+  normalizeAuditDomain?: (raw: unknown) => string | null;
+  normalizeDkimSelectors?: (raw: unknown) => string[];
+  checkDomainPosture?: (
+    domain: string,
+    options?: DomainPostureOptions,
+  ) => unknown | Promise<unknown>;
+  fetchHomepage?: (domain: string) => unknown | Promise<unknown>;
+  readTrustAnchorInput?: (source: string) => string | Promise<string>;
+  validateDnssecChain?: typeof validateDnssecChain;
+  readMailTransportInput?: (source?: string | null) => string | Promise<string>;
+  collectMailTransportReview?: typeof collectMailTransportReview;
+  normalizeTlsHostname?: (value: unknown) => string | null;
+  collectTlsIntelligence?: (hostname: string) => unknown | Promise<unknown>;
+};
 
 type NetworkCommandArguments = Extract<CliArguments, { action: CliCommandFor<'network'> }>;
 
 async function runNetworkCommand(
   args: NetworkCommandArguments,
-  dependencies: CliDependencies,
+  dependencies: NetworkCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   if (args.action === 'ct-search') {

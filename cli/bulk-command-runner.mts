@@ -17,13 +17,22 @@ import { buildCollectionPreflight, formatCollectionPreflight } from './collectio
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
 import { formatCliJunit } from './ci-report.mts';
 import { createCliProgressEvents } from './progress-events.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext, LookupDependency } from './runner-types.mts';
+
+export type BulkCommandDependencies = {
+  now?: () => string;
+  signal?: AbortSignal;
+  readBulkInput?: (source?: string | null) => string | Promise<string>;
+  classifyQuery?: typeof classifyQuery;
+  runUnifiedLookup?: LookupDependency;
+  createBulkCheckpointWriter?: typeof createBulkCheckpointWriter;
+};
 
 type BulkCommandArguments = Extract<CliArguments, { action: 'bulk' }>;
 
 async function runBulkCommand(
   args: BulkCommandArguments,
-  dependencies: CliDependencies,
+  dependencies: BulkCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   const eventProgress = createCliProgressEvents(context.stderr, {

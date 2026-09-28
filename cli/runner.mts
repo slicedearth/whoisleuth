@@ -30,7 +30,7 @@ import {
 import { cleanupPendingOutputFiles, createBufferedOutput, writePrivateFile, MAX_CLI_OUTPUT_BYTES } from './output-file.mts';
 import { createTerminalProgress, type TerminalProgress } from './progress.mts';
 import type { CliProgressEvents } from './progress-events.mts';
-import type { CliCommandContext, CliDependencies, WritableLike } from './runner-types.mts';
+import type { CliWorkflowContext, CliDependencies, WritableLike } from './runner-types.mts';
 import {
   presentTerminalOutput,
   terminalPresentation,
@@ -161,7 +161,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       }
       return passphrase;
     };
-    const commandContext: CliCommandContext = Object.freeze({
+    const commandContext: CliWorkflowContext = Object.freeze({
       packageVersion: VERSION,
       stdout,
       stderr,

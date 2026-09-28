@@ -6,7 +6,12 @@ import {
   normalizeDiscoveryTlds,
 } from './discover.mts';
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext, DiscoveryGeneratorDependency } from './runner-types.mts';
+
+export type DiscoveryDependencies = {
+  readDiscoveryDictionary?: (source: string) => string | Promise<string>;
+  loadTyposquatGenerator?: () => Promise<DiscoveryGeneratorDependency>;
+};
 
 type DiscoveryOptions = Pick<
   Extract<CliArguments, { action: 'discover' }>,
@@ -15,7 +20,7 @@ type DiscoveryOptions = Pick<
 
 async function generateDiscoveryCandidates(
   args: DiscoveryOptions,
-  dependencies: CliDependencies,
+  dependencies: DiscoveryDependencies,
   context: CliCommandContext,
 ) {
   const seed = args.seed || await context.readSingleInput();

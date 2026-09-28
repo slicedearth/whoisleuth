@@ -56,17 +56,32 @@ import {
   formatJsonDocument,
 } from './formatters/json.mts';
 import { formatTerminalCompare } from './formatters/terminal.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext } from './runner-types.mts';
+import type { CaseCommandDependencies } from './case-command.mts';
+import type { IntakeCommandDependencies } from './intake-command.mts';
+import type { IndicatorSetCommandDependencies } from './indicator-set-command.mts';
 import { MAX_SAVED_LOOKUP_INPUT_BYTES } from './saved-lookup.mts';
 import { REVIEW_INLINE_COMMANDS } from './inline-command-families.mts';
 
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
+
+export type ReviewCommandDependencies = CaseCommandDependencies & IntakeCommandDependencies & IndicatorSetCommandDependencies & {
+  readArtifactInput?: (source?: string | null) => string | Promise<string>;
+  readBinaryArtifactInput?: (source: string) => Uint8Array | Promise<Uint8Array>;
+  readSourceReliabilityInput?: (source?: string | null) => string | Promise<string>;
+  readCompareInput?: (source?: string | null) => string | Promise<string>;
+  loadRegistryComparison?: () => Promise<typeof import('../lib/registry-comparison.mts')>;
+  readDiffInput?: (source: string) => string | Promise<string>;
+  readMailReviewInput?: (source?: string | null) => string | Promise<string>;
+  readMailHeaderInput?: (source?: string | null) => string | Promise<string>;
+};
+
 type ReviewInlineCommand = typeof REVIEW_INLINE_COMMANDS[number];
 type ReviewCommandArguments = Extract<CliArguments, { action: ReviewInlineCommand }>;
 
 async function runVerifyArtifactCommand(
   args: Extract<ReviewCommandArguments, { action: 'verify-artifact' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Artefact verification');
@@ -139,7 +154,7 @@ async function runVerifyArtifactCommand(
 
 async function runInterchangeReportCommand(
   args: Extract<ReviewCommandArguments, { action: 'interchange-report' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Interchange fidelity report');
@@ -168,7 +183,7 @@ async function runInterchangeReportCommand(
 
 async function runSourceReportCommand(
   args: Extract<ReviewCommandArguments, { action: 'source-report' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Source reliability report');
@@ -193,7 +208,7 @@ async function runSourceReportCommand(
 
 async function runCompareCommand(
   args: Extract<ReviewCommandArguments, { action: 'compare' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Registry comparison');
@@ -226,7 +241,7 @@ async function runCompareCommand(
 
 async function runPageCompareCommand(
   args: Extract<ReviewCommandArguments, { action: 'page-compare' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Static page comparison');
@@ -254,7 +269,7 @@ async function runPageCompareCommand(
 
 async function runMailReviewCommand(
   args: Extract<ReviewCommandArguments, { action: 'mail-review' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Passive mail review');
@@ -278,7 +293,7 @@ async function runMailReviewCommand(
 
 async function runMailHeadersCommand(
   args: Extract<ReviewCommandArguments, { action: 'mail-headers' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Mail-header review');
@@ -303,7 +318,7 @@ async function runMailHeadersCommand(
 
 async function runOfflineEvidenceReviewCommand(
   args: Extract<ReviewCommandArguments, { action: 'review-evidence' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Offline evidence review');
@@ -345,7 +360,7 @@ async function runOfflineEvidenceReviewCommand(
 
 async function runBriefOrCasePackCommand(
   args: Extract<ReviewCommandArguments, { action: 'brief' | 'case-pack' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   const isBrief = args.action === 'brief';
@@ -398,13 +413,13 @@ const REVIEW_COMMAND_HANDLERS = Object.freeze({
   'indicator-set': runIndicatorSetCommand,
 } satisfies DiscriminatedCommandHandlerMap<
   ReviewCommandArguments,
-  [CliDependencies, CliCommandContext],
+  [ReviewCommandDependencies, CliCommandContext],
   number
 >);
 
 function runReviewCommand(
   args: ReviewCommandArguments,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   return runDiscriminatedCommandHandler(REVIEW_COMMAND_HANDLERS, args, dependencies, context);

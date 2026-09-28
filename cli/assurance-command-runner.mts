@@ -65,7 +65,7 @@ import {
   buildOpenAssetModelBridge,
   formatOpenAssetModelBridge,
 } from './open-asset-model-bridge.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext } from './runner-types.mts';
 import { ASSURANCE_INLINE_COMMANDS } from './inline-command-families.mts';
 import {
   MAX_SHARING_REVIEW_BYTES,
@@ -74,12 +74,20 @@ import {
 } from './sharing-review.mts';
 
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
+
+export type AssuranceCommandDependencies = {
+  signal?: AbortSignal;
+  readBinaryArtifactInput?: (source: string) => Uint8Array | Promise<Uint8Array>;
+  readDiffInput?: (source: string) => string | Promise<string>;
+  readArtifactInput?: (source?: string | null) => string | Promise<string>;
+};
+
 type AssuranceInlineCommand = typeof ASSURANCE_INLINE_COMMANDS[number];
 type AssuranceCommandArguments = Extract<CliArguments, { action: AssuranceInlineCommand }>;
 
 async function runManifestCommand(
   args: Extract<AssuranceCommandArguments, { action: 'manifest' }>,
-  dependencies: CliDependencies,
+  dependencies: AssuranceCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Investigation manifest');
@@ -146,7 +154,7 @@ async function runManifestCommand(
 
 async function runObservationBridgeCommand(
   args: Extract<AssuranceCommandArguments, { action: 'map-observations' | 'oam-export' }>,
-  dependencies: CliDependencies,
+  dependencies: AssuranceCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   const mapping = args.action === 'map-observations';
@@ -192,7 +200,7 @@ async function runObservationBridgeCommand(
 
 async function runDomainControlCommand(
   args: Extract<AssuranceCommandArguments, { action: 'domain-control' }>,
-  dependencies: CliDependencies,
+  dependencies: AssuranceCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Domain control review');
@@ -256,7 +264,7 @@ async function runDomainControlCommand(
 
 async function runAssuranceReviewCommand(
   args: Extract<AssuranceCommandArguments, { action: 'assurance' }>,
-  dependencies: CliDependencies,
+  dependencies: AssuranceCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Domain assurance review');
@@ -293,7 +301,7 @@ async function runAssuranceReviewCommand(
 
 async function runChangePacketCommand(
   args: Extract<AssuranceCommandArguments, { action: 'change-packet' }>,
-  dependencies: CliDependencies,
+  dependencies: AssuranceCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Domain change packet');
@@ -330,7 +338,7 @@ async function runChangePacketCommand(
 
 async function runSharingReviewCommand(
   args: Extract<AssuranceCommandArguments, { action: 'sharing-review' }>,
-  dependencies: CliDependencies,
+  dependencies: AssuranceCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Evidence sharing review');
@@ -367,7 +375,7 @@ async function runSharingReviewCommand(
 
 async function runCertificateIntakeCommand(
   args: Extract<AssuranceCommandArguments, { action: 'ct-intake' }>,
-  dependencies: CliDependencies,
+  dependencies: AssuranceCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Certificate event intake');
@@ -413,13 +421,13 @@ const ASSURANCE_COMMAND_HANDLERS = Object.freeze({
   'ct-intake': runCertificateIntakeCommand,
 } satisfies DiscriminatedCommandHandlerMap<
   AssuranceCommandArguments,
-  [CliDependencies, CliCommandContext],
+  [AssuranceCommandDependencies, CliCommandContext],
   number
 >);
 
 function runAssuranceCommand(
   args: AssuranceCommandArguments,
-  dependencies: CliDependencies,
+  dependencies: AssuranceCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   return runDiscriminatedCommandHandler(ASSURANCE_COMMAND_HANDLERS, args, dependencies, context);

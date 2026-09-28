@@ -12,7 +12,9 @@ import { formatLookupEvidenceMarkdown } from './formatters/markdown.mts';
 import { formatTerminalLookup } from './formatters/terminal.mts';
 import { buildCliLookupPlan, formatCliLookupPlan } from './lookup-plan.mts';
 import { createCliProgressEvents } from './progress-events.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext, LookupDependency } from './runner-types.mts';
+import type { BoundedTextStream } from './bulk.mts';
+import type { TerminalEnvironment } from './terminal-presentation.mts';
 import { serializeCliLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 import { lookupStrictExitFindings } from './strict-exit.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
@@ -21,11 +23,24 @@ import { browseLookupOperation, canBrowseLookup } from './lookup-browser.mts';
 import { writePrivateFile } from './output-file.mts';
 import { prepareLookupCollectionTarget, prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
 
+export type LookupCommandDependencies = {
+  stdin?: BoundedTextStream;
+  environment?: TerminalEnvironment;
+  now?: () => string;
+  signal?: AbortSignal;
+  classifyQuery?: typeof classifyQuery;
+  runUnifiedLookup?: LookupDependency;
+  canBrowseLookup?: typeof canBrowseLookup;
+  browseLookupOperation?: typeof browseLookupOperation;
+  writePrivateFile?: typeof writePrivateFile;
+  loadEvidenceExport?: () => Promise<typeof import('../lib/evidence-export.mts')>;
+};
+
 type LookupCommandArguments = Extract<CliArguments, { action: 'lookup' }>;
 
 async function runLookupCommand(
   args: LookupCommandArguments,
-  dependencies: CliDependencies,
+  dependencies: LookupCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   const browserInput = dependencies.stdin || process.stdin;

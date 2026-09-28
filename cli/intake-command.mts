@@ -4,10 +4,15 @@ import { reviewSelectedInputInWorker } from './selected-input-worker.mts';
 import { reviewIdentityIncident } from '../packages/investigation/identity-incident-review.mts';
 import { selectReceiverTrust, authenticationHeaderLabel } from '../packages/investigation/mail-authentication-review.mts';
 import type { CliArguments } from './arguments.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext } from './runner-types.mts';
 import { CliUsageError } from './errors.mts';
 import { formatJsonDocument } from './formatters/json.mts';
 import EXIT_CODES from './exit-codes.mts';
+
+export type IntakeCommandDependencies = {
+  signal?: AbortSignal;
+  readBinaryArtifactInput?: (source: string) => Uint8Array | Promise<Uint8Array>;
+};
 
 export function formatMessageIntake(report: MessageIntakeReport): string {
   const lines = [`Offline ${report.source.kind} intake`, `Review: ${report.coverage.state} · Extracted links: ${report.links.length} · Reviewed parts: ${report.coverage.reviewedParts}`,
@@ -61,7 +66,7 @@ export function formatMessageIntake(report: MessageIntakeReport): string {
   return `${lines.join('\n')}\n`;
 }
 
-export async function runIntakeCommand(args: Extract<CliArguments, { action: 'intake' }>, dependencies: CliDependencies, context: CliCommandContext): Promise<number> {
+export async function runIntakeCommand(args: Extract<CliArguments, { action: 'intake' }>, dependencies: IntakeCommandDependencies, context: CliCommandContext): Promise<number> {
   context.setFailureLabel('Message intake');
   if (MESSAGE_INTAKE_INPUTS[args.kind].binary && (!args.source || args.source === '-')) throw new CliUsageError('Binary intake requires a selected file; binary stdin is not accepted.');
   let bytes: Uint8Array;

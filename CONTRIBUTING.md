@@ -182,6 +182,9 @@ definitions live in `command-definition.mts`; help, completion and browser
 reference pages derive from them. Keep effects in the corresponding runner,
 not in the data-only definition. Independent network and privacy expectations
 remain in the contract tests.
+Each runner declares its own dependency type beside its handlers; the dispatcher
+composes those types. Add a new injectable effect at its consumer, not to a
+parallel central list. Only workflow handlers receive recursive command execution.
 
 Before submitting a feature branch, run proportionate local checks and state
 any omissions. Merge requires complete fresh hosted checks against the current

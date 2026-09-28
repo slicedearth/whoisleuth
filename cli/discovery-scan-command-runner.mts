@@ -21,13 +21,23 @@ import { formatJsonDocument } from './formatters/json.mts';
 import { createCliProgressEvents } from './progress-events.mts';
 import { buildCollectionPreflight, formatCollectionPreflight } from './collection-preflight.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext, LookupDependency } from './runner-types.mts';
+import type { DiscoveryDependencies } from './discovery-workflow.mts';
+
+export type DiscoveryScanCommandDependencies = DiscoveryDependencies & {
+  now?: () => string;
+  signal?: AbortSignal;
+  readDiscoveryAllowlist?: (source: string) => string | Promise<string>;
+  classifyQuery?: typeof classifyQuery;
+  runUnifiedLookup?: LookupDependency;
+  createBulkCheckpointWriter?: typeof createBulkCheckpointWriter;
+};
 
 type DiscoveryScanArguments = Extract<CliArguments, { action: 'discover-scan' }>;
 
 async function readAllowlist(
   source: string | null,
-  dependencies: CliDependencies,
+  dependencies: DiscoveryScanCommandDependencies,
   context: CliCommandContext,
   classify: typeof classifyQuery,
 ): Promise<Set<string>> {
@@ -45,7 +55,7 @@ async function readAllowlist(
 
 async function runDiscoveryScanCommand(
   args: DiscoveryScanArguments,
-  dependencies: CliDependencies,
+  dependencies: DiscoveryScanCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   const eventProgress = createCliProgressEvents(context.stderr, {

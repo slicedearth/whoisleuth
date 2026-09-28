@@ -2,12 +2,18 @@ import { buildManagedIndicatorRevision, managedIndicatorState, parseManagedIndic
 import { exportManagedIndicators } from '../packages/interchange/managed-indicator-export.mts';
 import { MAX_MANAGED_INDICATOR_PLAN_BYTES, MAX_MANAGED_INDICATOR_SET_BYTES } from '../packages/contracts/analyst-interchange.mts';
 import type { CliArguments } from './arguments.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext } from './runner-types.mts';
+
 import { formatJsonDocument } from './formatters/json.mts';
 import { safeTerminalValue } from './formatters/terminal.mts';
 import EXIT_CODES from './exit-codes.mts';
 
-export async function runIndicatorSetCommand(args: Extract<CliArguments, { action: 'indicator-set' }>, dependencies: CliDependencies, context: CliCommandContext): Promise<number> {
+export type IndicatorSetCommandDependencies = {
+  signal?: AbortSignal;
+  readArtifactInput?: (source?: string | null) => string | Promise<string>;
+};
+
+export async function runIndicatorSetCommand(args: Extract<CliArguments, { action: 'indicator-set' }>, dependencies: IndicatorSetCommandDependencies, context: CliCommandContext): Promise<number> {
   context.setFailureLabel('Indicator revision');
   const raw = dependencies.readArtifactInput ? await dependencies.readArtifactInput(args.source)
     : await context.readInput(args.source, args.operation === 'revise' ? MAX_MANAGED_INDICATOR_PLAN_BYTES : MAX_MANAGED_INDICATOR_SET_BYTES, 'Indicator input');

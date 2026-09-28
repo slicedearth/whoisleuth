@@ -3,7 +3,7 @@ import {
   CLI_COMMANDS, INLINE_COMMAND_FAMILIES, inlineCommandFamily, inlineCommandsFor,
   type CliCommand, type InlineCommandFamily,
 } from './command-reference.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliWorkflowContext, CliDependencies } from './runner-types.mts';
 
 const FAMILY_COMMANDS = Object.freeze(INLINE_COMMAND_FAMILIES.map(family =>
   Object.freeze({ family, commands: inlineCommandsFor(family) })));
@@ -14,7 +14,7 @@ const INLINE_CLI_COMMANDS: readonly CliCommand[] = Object.freeze(
 async function runInlineCommand(
   args: CliArguments,
   dependencies: CliDependencies,
-  context: CliCommandContext,
+  context: CliWorkflowContext,
 ): Promise<number> {
   const family = inlineCommandFamily(args.action as CliCommand);
   if (family === 'support') {
