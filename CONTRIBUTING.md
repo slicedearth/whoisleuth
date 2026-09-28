@@ -33,6 +33,10 @@ references, retained data and compatibility fixtures use their existing owners.
   Request and storage adapters retain their collection and transaction boundaries.
   `lookup-page-lifecycle.ts` owns restoration, context refresh and disposal;
   `lookup-case-form.ts` owns temporary response-form defaults and reset policy.
+  Section presenters (`LookupRegistrySection`, `LookupRelationshipsSection`,
+  `LookupSourceQualitySection` and `LookupWebEvidenceSection`) own their display
+  projections and child wiring. `LookupEvidenceSection` owns the shared heading
+  and spacing; section controls delegate to the existing navigation owner.
 - **Bulk state:** `bulk-scan-controller.ts` owns a scan from start through pause,
   cancellation and disposal. `bulk-view-state.ts` creates, resets and projects
   filters. `bulk-session-workspace.ts` owns saved-session drafts, retention
@@ -196,7 +200,11 @@ Each runner declares its own dependency type beside its handlers; the dispatcher
 composes those types. Add a new injectable effect at its consumer, not to a
 parallel central list. Only workflow handlers receive recursive command execution.
 Output flags use the shared presentation definition and the family's declared
-options; no separate flag-to-format map belongs in a parser. A command added to
+options; no separate flag-to-format map belongs in a parser. If the same flag has
+a genuinely different meaning for one command, declare its `optionOverrides`
+beside that command, using the shared option constructors; grammar, defaults and
+help consume the same choice. Do not add command-name branches to shared options.
+A command added to
 an existing family needs its semantics, definition, parser and handler, plus
 independent behaviour/network tests—not a new dispatcher branch, argument-union
 entry, help list or ownership registration. Add a new family only for a genuinely

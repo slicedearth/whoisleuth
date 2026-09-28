@@ -73,6 +73,32 @@ test('section and deep evidence links establish scroll ownership before opening 
   assert.equal(h.navigation.allVisible(), true);
 });
 
+test('section controls read current expansion and delegate every navigation phase to one owner', async () => {
+  const h = harness();
+  const controls = h.navigation.controls('registry');
+  assert.equal(controls.expanded, false);
+  controls.onpreload();
+  assert.deepEqual(h.events, [['preload', 'registry']]);
+  h.events.length = 0;
+  await controls.onshow();
+  assert.equal(controls.expanded, true);
+  assert.deepEqual(h.events, [
+    ['hash', '#registry'],
+    ['begin', '#registry', '#registry'],
+    ['preload', 'registry'],
+    ['expanded', 'registry'],
+    'rendered',
+    'align',
+  ]);
+  await controls.onhide();
+  assert.equal(controls.expanded, false);
+  await controls.onnavigate('#evidence-dns');
+  assert.deepEqual(h.expanded, ['web-evidence']);
+  h.events.length = 0;
+  await controls.onready();
+  assert.deepEqual(h.events, ['rendered', 'ready']);
+});
+
 test('closing a section aligns its heading without preloading it or collapsing its siblings', async () => {
   const h = harness();
   await h.navigation.setAll(true);

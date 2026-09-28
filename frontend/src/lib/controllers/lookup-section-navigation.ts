@@ -32,6 +32,21 @@ export class LookupSectionNavigation {
   visible(section: string): boolean {
     return this.#options.expanded().includes(section);
   }
+
+  /** Section presenters receive navigation affordances, not request or save owners. */
+  controls(section: string) {
+    const owner = this;
+    return Object.freeze({
+      get expanded() {
+        return owner.visible(section);
+      },
+      onpreload: () => this.#options.preload(section),
+      onshow: () => this.navigate(`#${section}`),
+      onhide: () => this.navigate(`#${section}`, false),
+      onready: () => this.contentReady(),
+      onnavigate: (href: string) => this.navigate(href),
+    });
+  }
   allVisible(): boolean {
     const sections = this.#sections();
     return sections.length > 0 && sections.every((section) => this.visible(section));
@@ -100,3 +115,5 @@ export class LookupSectionNavigation {
     return { destroy: () => node.removeEventListener('click', click) };
   }
 }
+
+export type LookupSectionControls = ReturnType<LookupSectionNavigation['controls']>;
