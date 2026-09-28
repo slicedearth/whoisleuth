@@ -2,7 +2,7 @@
   import type { CaseRecord } from '$lib/cases';
   import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
-  import { caseEvidenceLinkIssues, caseEvidenceSharedContext } from '../../../../packages/cases/case-evidence-links.mts';
+  import { caseEvidenceLinkIssues, caseEvidenceSharedContext, type CaseEvidenceLink } from '../../../../packages/cases/case-evidence-links.mts';
   import { MAX_RESPONSE_RATIONALE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
@@ -10,7 +10,7 @@
 
   let { record, persist, mutationBusy }: { record: CaseRecord; persist: PersistCaseResponse; mutationBusy: boolean } = $props();
   const id = $props.id();
-  const draft = createCaseDraft(() => record.id, 'evidence-relationship', { fromPinId: '', toPinId: '', kind: 'derived_from', basis: '' });
+  const draft = createCaseDraft(() => record.id, 'evidence-relationship', { fromPinId: '', toPinId: '', kind: 'derived_from' as CaseEvidenceLink['kind'], basis: '' });
   const withdrawal = createCaseDraft(() => record.id, 'evidence-relationship-withdrawal', { id: '', reason: '' });
   const rows = $derived(caseEvidenceLinkIssues(record.evidenceLinks ?? [], record.evidencePins));
   const shared = $derived(caseEvidenceSharedContext(record.evidencePins));

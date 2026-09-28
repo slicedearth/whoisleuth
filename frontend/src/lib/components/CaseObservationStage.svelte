@@ -33,15 +33,15 @@
     pinValue: '',
     pinSource: 'lookup evidence',
     pinObservedAt: '',
-    pinCompleteness: 'complete',
+    pinCompleteness: 'complete' as typeof CASE_PIN_COMPLETENESS[number],
     pinLimitations: ''
   });
   const sightingDraft = createCaseDraft(() => record.id, 'sighting', {
-    sightingState: 'observed_by_deployment',
-    sightingCategory: 'website',
+    sightingState: 'observed_by_deployment' as typeof CASE_SIGHTING_STATES[number],
+    sightingCategory: 'website' as typeof CASE_SIGHTING_CATEGORIES[number],
     sightingSource: 'WHOISleuth deep lookup',
     sightingObservedAt: '',
-    sightingCompleteness: 'complete',
+    sightingCompleteness: 'complete' as typeof CASE_PIN_COMPLETENESS[number],
     sightingEvidencePinId: '',
     sightingLimitations: ''
   });

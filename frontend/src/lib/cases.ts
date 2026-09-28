@@ -35,9 +35,9 @@ import type {
   ReviewedCaseDisposition,
 } from './analysis/case-model.ts';
 
-import { readBrowserLocalData, updateBrowserLocalData, browserLocalDataProvider, browserLocalDataCollection } from './browser-local-data-service.ts';
+import { readBrowserLocalData, updateBrowserLocalData, updateBrowserLocalDataCollections } from './browser-local-data-service.ts';
 import { removeCaseDraft } from '../../../packages/cases/case-drafts.mts';
-import type { CaseDraftReceipt, CaseDraftStore } from '../../../packages/contracts/case-drafts.mts';
+import type { CaseDraftReceipt } from '../../../packages/contracts/case-drafts.mts';
 import { applyCaseReviewReturn, type CaseReviewReturn } from '../../../packages/cases/case-review-return.mts';
 import { LEGACY_CASES_KEY } from './browser-local-data-contract.ts';
 import { assertAnalystUndoCurrent } from './analysis/analyst-undo.ts';
@@ -265,11 +265,10 @@ function applyCasePatch(current: CaseRecord[], id: string, patch: CasePatch) {
 
 export async function editCase(id: string, patch: CasePatch, draft?: CaseDraftReceipt): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
   if (draft) {
-    const [provider, cases, drafts] = await Promise.all([browserLocalDataProvider(), browserLocalDataCollection('cases'), browserLocalDataCollection('case_drafts')]);
-    return provider.updateMany([cases, drafts], documents => {
-      const remaining = removeCaseDraft(documents.get('case_drafts') as CaseDraftStore, draft, id);
-      const change = applyCasePatch(documents.get('cases') as CaseRecord[], id, patch);
-      return { documents: new Map<string, unknown>([['cases', change.document], ['case_drafts', remaining]]), result: change.result };
+    return updateBrowserLocalDataCollections(['cases', 'case_drafts'], documents => {
+      const remaining = removeCaseDraft(documents.case_drafts, draft, id);
+      const change = applyCasePatch(documents.cases, id, patch);
+      return { documents: { cases: change.document, case_drafts: remaining }, result: change.result };
     });
   }
   return updateBrowserLocalData('cases', (current) => applyCasePatch(current, id, patch));
@@ -403,13 +402,12 @@ export async function addCaseNote(id: string, body: string): Promise<{ record: C
 }
 
 export async function deleteCase(id: string): Promise<{ cases: CaseRecord[]; deleted: boolean }> {
-  const [provider, casesDefinition, draftsDefinition] = await Promise.all([browserLocalDataProvider(), browserLocalDataCollection('cases'), browserLocalDataCollection('case_drafts')]);
-  return provider.updateMany([casesDefinition, draftsDefinition], documents => {
-    const current = documents.get('cases') as CaseRecord[];
+  return updateBrowserLocalDataCollections(['cases', 'case_drafts'], documents => {
+    const current = documents.cases;
     const cases = current.filter((item) => item.id !== id);
-    const drafts = documents.get('case_drafts') as CaseDraftStore;
+    const drafts = documents.case_drafts;
     return {
-      documents: new Map<string, unknown>([['cases', cases], ['case_drafts', { ...drafts, records: drafts.records.filter(item => item.caseId !== id) }]]),
+      documents: { cases, case_drafts: { ...drafts, records: drafts.records.filter(item => item.caseId !== id) } },
       result: { cases, deleted: cases.length !== current.length },
     };
   });

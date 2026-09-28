@@ -21,18 +21,18 @@
   } = $props();
 
   const draft = createCaseDraft(() => record.id, 'observed-effect', {
-    effectState: 'not_checked', effectObservedAt: '', effectSourceClass: 'analyst',
-    effectSource: 'Analyst review', effectCompleteness: 'unknown', effectEvidencePinId: '',
+    effectState: 'not_checked' as typeof CASE_OBSERVED_EFFECT_STATES[number], effectObservedAt: '', effectSourceClass: 'analyst' as typeof CASE_OBSERVED_EFFECT_SOURCE_CLASSES[number],
+    effectSource: 'Analyst review', effectCompleteness: 'unknown' as typeof CASE_PIN_COMPLETENESS[number], effectEvidencePinId: '',
     effectSightingId: '', effectFollowUpAt: '', effectLimitations: '',
     effectUsePinMetadata: false,
-    questionId: '', questionUpdatedAt: '', conditionsMatch: 'unknown',
+    questionId: '', questionUpdatedAt: '', conditionsMatch: 'unknown' as CaseRecheckAnswerContext['conditionsMatch'],
   });
   const sourceClasses = CASE_OBSERVED_EFFECT_SOURCE_CLASSES.filter(value => value !== 'import');
   const selected = $derived(record.evidencePins.find(pin => pin.id === draft.value.effectEvidencePinId));
   const retained = $derived(selected && draft.value.effectUsePinMetadata ? caseRecheckEvidence(selected) : null);
   const questions = $derived(caseRecheckQuestions(record.assertions));
   const question = $derived(questions.find(item => item.id === draft.value.questionId));
-  const recheck = $derived(question ? caseRecheckAnswerContext(question, draft.value.conditionsMatch as CaseRecheckAnswerContext['conditionsMatch']) : undefined);
+  const recheck = $derived(question ? caseRecheckAnswerContext(question, draft.value.conditionsMatch) : undefined);
   const comparisonWarnings = $derived(recheck ? caseRecheckComparisonWarnings(recheck, record.evidencePins, retained ? selected : undefined) : []);
   const evidenceProblem = $derived(!draft.value.effectEvidencePinId ? null
     : !selected ? 'The selected evidence is no longer available. Choose another pin or record a manual observation.'
@@ -55,7 +55,7 @@
     if (draft.value.questionId && (!question || question.updatedAt !== draft.value.questionUpdatedAt)) { error = 'The selected question changed or was resolved. Choose a current question.'; return; }
     if (evidenceProblem) { error = evidenceProblem; return; }
     if (recheck) {
-      try { assertRecheckNonReproduction(draft.value.effectState as import('$lib/analysis/case-response-model.ts').CaseObservedEffectState, recheck,
+      try { assertRecheckNonReproduction(draft.value.effectState, recheck,
         retained?.completeness ?? draft.value.effectCompleteness, record.evidencePins, retained ? selected : undefined, retained?.observedAt ?? isoFromUtcInput(draft.value.effectObservedAt) ?? new Date().toISOString()); }
       catch (cause) { error = cause instanceof Error ? cause.message : 'Review the comparison conditions.'; return; }
     }

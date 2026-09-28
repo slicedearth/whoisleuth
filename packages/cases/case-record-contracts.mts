@@ -8,6 +8,7 @@ import type {
   CaseObservedEffectHistory,
   CaseSightingRecord,
 } from './case-response-model.mts';
+import type { CaseActionTransitionEvent, CaseObservedEffectReview, CaseClosureRecord } from './case-response-records.mts';
 import { ANALYST_REVIEW_REASONS } from '../analysis/analyst-taxonomy.mts';
 import type { WebCollectionQuality } from '../evidence/collection-quality.mts';
 import {
@@ -217,6 +218,37 @@ export type CaseInput = {
   note?: unknown;
 };
 export type CasePatch = Omit<Partial<CaseInput>, 'domain'> & { expectedTitle?: string };
+
+/** Application-authored response values, distinct from hostile import admission.
+ * Runtime operations still validate relationships, limits and lifecycle policy. */
+type AuthoredFields<T> = Partial<Omit<T, 'id' | 'createdAt' | 'updatedAt'>>;
+type ActionMetadata = Pick<CaseActionRecord,
+  'type' | 'recipient' | 'contactSource' | 'routeObservedAt' | 'routeReviewAfter'
+  | 'contactLimitations' | 'dueAt' | 'followUpAt' | 'originActionId' | 'amendment'>;
+export type CaseResponseMutation = {
+  title?: string;
+  expectedTitle?: string;
+  status?: CaseStatus;
+  disposition?: CaseDisposition;
+  reviewReasonCode?: string | null;
+  tags?: string[];
+  note?: string;
+  evidencePin?: AuthoredFields<CaseEvidencePin>;
+  evidencePins?: AuthoredFields<CaseEvidencePin>[];
+  evidenceLink?: Omit<CaseEvidenceLink, 'id' | 'createdAt' | 'withdrawal'>;
+  evidenceLinkWithdrawal?: { id: string; reason: string };
+  decision?: AuthoredFields<CaseDecisionRecord>;
+  action?: Partial<ActionMetadata>;
+  actionUpdate?: Partial<ActionMetadata> & { id: string; transition?: AuthoredFields<CaseActionTransitionEvent> };
+  assertion?: AuthoredFields<CaseAssertionRecord>;
+  assertionUpdate?: AuthoredFields<CaseAssertionRecord> & { id: string; expectedUpdatedAt?: string };
+  trailEvent?: AuthoredFields<CaseManualTrailEvent>;
+  sighting?: AuthoredFields<CaseSightingRecord>;
+  observedEffectReview?: Omit<CaseObservedEffectReview, 'id' | 'createdAt'>;
+  closure?: Omit<CaseClosureRecord, 'id' | 'createdAt'>;
+  branch?: AuthoredFields<CaseInvestigationBranch>;
+  branchUpdate?: AuthoredFields<CaseInvestigationBranch> & { id: string };
+};
 export type SnapshotOptions = {
   source?: string;
   fallback?: string | null;

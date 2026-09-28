@@ -27,7 +27,7 @@
   }
 
   const closureDraft = createCaseDraft(() => record.id, 'closure', {
-    closureReason: 'unable_to_proceed',
+    closureReason: 'unable_to_proceed' as typeof CASE_CLOSURE_REASONS[number],
     closureSummary: '',
     closureReviewId: '',
     closureActionId: '',

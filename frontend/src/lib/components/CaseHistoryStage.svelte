@@ -13,7 +13,7 @@
     persist: PersistCaseResponse;
   } = $props();
   const trailDraft = createCaseDraft(() => record.id, 'manual-step', {
-    trailKind: 'pivot',
+    trailKind: 'pivot' as typeof CASE_MANUAL_TRAIL_KINDS[number],
     trailSummary: '',
     trailTarget: ''
   });

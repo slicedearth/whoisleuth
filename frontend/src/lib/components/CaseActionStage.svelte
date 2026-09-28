@@ -46,7 +46,7 @@
     return await receipt?.selectReceipt(actionId) ?? false;
   }
   const actionDraft = createCaseDraft(() => record.id, 'action-details', {
-    actionType: 'internal_review',
+    actionType: 'internal_review' as typeof CASE_ACTION_TYPES[number],
     actionRecipient: '',
     actionContactSource: 'analyst supplied',
     actionRouteObservedAt: '',
@@ -66,7 +66,7 @@
     transitionReference: '',
     transitionEvidencePinId: '',
     transitionLimitations: '',
-    transitionProviderOutcome: '',
+    transitionProviderOutcome: '' as '' | typeof CASE_PROVIDER_OUTCOMES[number],
     transitionOutcomeDetail: ''
   });
   const selectedAction = $derived(record.actions.find((action) => action.id === actionDraft.value.selectedActionId) ?? null);

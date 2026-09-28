@@ -1,8 +1,7 @@
 import { getContext, onMount, setContext, tick } from 'svelte';
 import { restoreSubmittedFocus } from './submitted-draft.ts';
-import { readBrowserLocalData, subscribeBrowserLocalData, browserLocalDataProvider, browserLocalDataCollection } from '../browser-local-data-service.ts';
-import type { CaseDraftFields, CaseDraftStore } from '../../../../packages/contracts/case-drafts.mts';
-import type { CaseRecord } from '../analysis/case-model.ts';
+import { readBrowserLocalData, subscribeBrowserLocalData, updateBrowserLocalDataCollections } from '../browser-local-data-service.ts';
+import type { CaseDraftFields } from '../../../../packages/contracts/case-drafts.mts';
 import type { PersistCaseResponse } from '../analysis/case-response-stage.ts';
 import { createCaseDraftRecovery, restoreCaseDraftFields, INITIAL_CASE_DRAFT_RECOVERY_STATE, type CaseDraftRecoveryState, type DraftStorage } from './case-draft-recovery.ts';
 import { setCaseDraftUnprotected } from './case-draft-state.ts';
@@ -47,10 +46,9 @@ export function createCaseDraft<T extends CaseDraftFields>(
     storage: transient ?? {
       read: () => readBrowserLocalData('case_drafts'),
       update: async change => {
-        const [provider, cases, drafts] = await Promise.all([browserLocalDataProvider(), browserLocalDataCollection('cases'), browserLocalDataCollection('case_drafts')]);
-        await provider.updateMany([cases, drafts], documents => {
-          if (!(documents.get('cases') as CaseRecord[]).some(record => record.id === caseId())) throw new Error('This Case was deleted. Its recovery drafts cannot be saved.');
-          return { documents: new Map(documents).set('case_drafts', change(documents.get('case_drafts') as CaseDraftStore)), result: undefined };
+        await updateBrowserLocalDataCollections(['cases', 'case_drafts'], documents => {
+          if (!documents.cases.some(record => record.id === caseId())) throw new Error('This Case was deleted. Its recovery drafts cannot be saved.');
+          return { documents: { ...documents, case_drafts: change(documents.case_drafts) }, result: undefined };
         });
       },
     },

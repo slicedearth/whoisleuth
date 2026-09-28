@@ -23,7 +23,7 @@
   const quickActionDraft = createCaseDraft(() => record.id, 'action-receipt', {
     quickActionId: '',
     quickActionReference: '',
-    quickProviderOutcome: '',
+    quickProviderOutcome: '' as '' | typeof CASE_PROVIDER_OUTCOMES[number],
     quickOutcomeDetail: '',
     quickOccurredAt: '',
     quickEvidencePinId: '',

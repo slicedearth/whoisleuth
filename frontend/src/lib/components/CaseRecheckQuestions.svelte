@@ -19,7 +19,7 @@
         baselinePinId: draft.value.baselinePinId || null, conditions: draft.value.conditions.trim() });
       const unchanged = draft.capture();
       if (!await draft.persist(persist, { assertion: { kind: 'next_step', statement: draft.value.question.trim(), state: 'open',
-        evidencePinIds: recheck?.baselinePinId ? [recheck.baselinePinId] : [], recheck } }, 'Saved the recheck question. No collection was started.') || !unchanged()) return;
+        evidencePinIds: recheck?.baselinePinId ? [recheck.baselinePinId] : [], ...(recheck ? { recheck } : {}) } }, 'Saved the recheck question. No collection was started.') || !unchanged()) return;
       draft.value.question = ''; draft.value.conditions = ''; draft.value.baselinePinId = '';
     } catch (cause) { error = cause instanceof Error ? cause.message : 'The recheck question could not be saved.'; }
   }

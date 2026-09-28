@@ -1,4 +1,5 @@
-import type { CasePatch, CaseRecord } from './case-model.ts';
+import type { CaseRecord } from './case-model.ts';
+import type { CaseResponseMutation } from '../../../../packages/cases/case-record-contracts.mts';
 import type { CaseDraftReceipt } from '../../../../packages/contracts/case-drafts.mts';
 
 export const CASE_RESPONSE_STAGE_DEFINITIONS = Object.freeze({
@@ -54,7 +55,7 @@ export function caseWorkspaceHref(id: string, section: CaseWorkspaceSection = 's
 }
 
 export type PersistCaseResponse = (
-  patch: CasePatch,
+  patch: CaseResponseMutation,
   success: string,
   focusFallback?: (() => HTMLElement | null) | null,
   draft?: CaseDraftReceipt,
