@@ -31,10 +31,13 @@ references, retained data and compatibility fixtures use their existing owners.
   saves and stale-result guards. `lookup-section-navigation.ts` handles section
   buttons, evidence links and hash restoration through the shared anchor controller.
   Request and storage adapters retain their collection and transaction boundaries.
+  `lookup-page-lifecycle.ts` owns restoration, context refresh and disposal;
+  `lookup-case-form.ts` owns temporary response-form defaults and reset policy.
 - **Bulk state:** `bulk-scan-controller.ts` owns a scan from start through pause,
   cancellation and disposal. `bulk-view-state.ts` creates, resets and projects
   filters. `bulk-session-workspace.ts` owns saved-session drafts, retention
-  approval and write/reload outcomes; the route connects it to the scan controller.
+  approval and write/reload outcomes; `bulk-collection-workflow.ts` connects it
+  to collection, while the route supplies visible effects.
 - **Bulk actions:** `bulk-case-actions.ts` coordinates Case writes and refreshes;
   `bulk-monitor-actions.ts` admits every Monitor save through the same checks.
   `analysis/bulk-export.ts` owns CSV columns; the route only downloads the result.
@@ -192,6 +195,12 @@ remain in the contract tests.
 Each runner declares its own dependency type beside its handlers; the dispatcher
 composes those types. Add a new injectable effect at its consumer, not to a
 parallel central list. Only workflow handlers receive recursive command execution.
+Output flags use the shared presentation definition and the family's declared
+options; no separate flag-to-format map belongs in a parser. A command added to
+an existing family needs its semantics, definition, parser and handler, plus
+independent behaviour/network tests—not a new dispatcher branch, argument-union
+entry, help list or ownership registration. Add a new family only for a genuinely
+different execution responsibility.
 
 Before submitting a feature branch, run proportionate local checks and state
 any omissions. Merge requires complete fresh hosted checks against the current

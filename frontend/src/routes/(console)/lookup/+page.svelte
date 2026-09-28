@@ -29,10 +29,7 @@
     type BrandProfile,
   } from '$lib/brand-profiles';
   import { LookupCollectionWorkflow } from '$lib/controllers/lookup-collection-workflow.ts';
-  import {
-    dispositionLabel as caseDispositionLabel,
-    statusLabel as caseStatusLabel,
-  } from '../../../../../packages/cases/case-record-decisions.mts';
+  import { LookupPageLifecycle } from '$lib/controllers/lookup-page-lifecycle.ts';
   import type { CaseRecord } from '../../../lib/cases.ts';
   import { loadWatchlists, saveSingleDomainWatchlist } from '$lib/watchlists';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
@@ -149,8 +146,6 @@
       ? { id: 'analyst-custom', thresholdsDays: customFreshnessThresholds }
       : undefined,
   );
-  let pageActive = false;
-  let lookupAnchorController: LookupAnchorController | null = null;
   const lookupRequestController = new LookupRequestController();
   const lookupCaseController = new LookupCaseController();
   const lookupCaseWorkspace: LookupCaseWorkspace = new LookupCaseWorkspace({
@@ -422,7 +417,7 @@
     },
     sections: resultSectionLinks,
     preload: preloadLookupSection,
-    anchor: () => lookupAnchorController,
+    anchor: () => pageLifecycle.anchor,
     hash: () => window.location.hash,
     replaceHash: (href) => window.history.replaceState(window.history.state, '', href),
     rendered: tick,
@@ -439,32 +434,20 @@
     freshnessPolicyMode = value.mode;
     customFreshnessThresholds = value.thresholdsDays;
   }
-  onMount(() => {
-    pageActive = true;
-    lookupAnchorController = new LookupAnchorController();
-    const presentation = readLookupPresentation(localStorage);
-    lookupSession.restore(readLookupWorkflowState(), presentation.task, page.url);
-    window.addEventListener('hashchange', navigateToCurrentLookupHash);
-    if (session.observation.response) requestAnimationFrame(navigateToCurrentLookupHash);
-    void (async () => {
-      await refreshProfileContext();
-      if (session.observation.response)
-        await Promise.all([
-          refreshCase(lookupRequestController.revision),
-          watchlistWorkspace.refresh(lookupRequestController.revision),
-        ]);
-    })();
-    return () => {
-      pageActive = false;
-      lookupCaseWorkspace.dispose();
-      watchlistWorkspace.dispose();
-      lookupAnchorController?.destroy();
-      lookupAnchorController = null;
-      window.removeEventListener('hashchange', navigateToCurrentLookupHash);
-      lookupRequestController.dispose();
-      writeLookupWorkflowState(lookupSession.snapshot());
-    };
+  const pageLifecycle = new LookupPageLifecycle({
+    session: lookupSession,
+    restore: () => ({ saved: readLookupWorkflowState(), task: readLookupPresentation(localStorage).task }),
+    retain: writeLookupWorkflowState,
+    request: lookupRequestController,
+    savedWorkspaces: [lookupCaseWorkspace, watchlistWorkspace],
+    createAnchor: () => new LookupAnchorController(),
+    refreshProfile: refreshProfileContext,
+    refreshSaved: async revision => {
+      await Promise.all([refreshCase(revision), watchlistWorkspace.refresh(revision)]);
+    },
+    navigateHash: navigateToCurrentLookupHash,
   });
+  onMount(() => pageLifecycle.mount(page.url, window));
 
   function websiteSnapshotInput() {
     const now = new Date().toISOString();
@@ -549,11 +532,11 @@
         malwareIocIntelligenceSupported, securityTxtSupported, securityTxtEligible,
       },
     }),
-    active: () => pageActive,
+    active: () => pageLifecycle.active,
     saveHandoff: saveCandidateHandoff,
     navigate: goto,
-    stopReveal: () => lookupAnchorController?.stop(),
-    captureReveal: () => lookupAnchorController?.captureRevealIntent(),
+    stopReveal: () => pageLifecycle.anchor?.stop(),
+    captureReveal: () => pageLifecycle.anchor?.captureRevealIntent(),
     refreshProfile: refreshProfileContext,
     refreshCase,
     refreshWatchlist: revision => watchlistWorkspace.refresh(revision),
@@ -855,7 +838,23 @@
           loadingLabel="Loading Case and response workspace…"
           unavailableLabel="The Case and response workspace could not be loaded."
           onready={restoreDeferredLookupTarget}
-          props={{oncaseopen:preserveLookupReturn,domain:caseDomain,lookupTarget:caseObservationTarget,lookupDepth:lookupEvidenceDepth,task:session.task,incidentUrl:session.observation.incidentUrl,recheckComparison:caseState.comparison,record:caseRecord,cases:caseState.candidates,selectCase:(id:string)=>lookupCaseWorkspace.select(id),createIncident:caseActions.createIncident,note:caseState.note,caseStatus: caseState.status,caseSourceState: caseState.sourceState,retryCaseRead:()=>refreshCase(),caseDisposition: caseState.disposition,caseReviewReason: caseState.reviewReason,checkpointFacts,draftStatus: session.observation.draftStatus,outreach,recipientResolution:abuseRecipientResolution,linkedWatchlistNames: watchlistState.names,watchlistSourceState: watchlistState.sourceState,watchlistName: watchlistState.name,watchlistStatus: watchlistState.status,setNote:(value:string)=>lookupCaseWorkspace.setNote(value),setCaseDisposition:(value:string)=>lookupCaseWorkspace.setDisposition(value),setCaseReviewReason:(value:string)=>lookupCaseWorkspace.setReviewReason(value),setWatchlistName:(value:string)=>watchlistWorkspace.setName(value),createCase:caseActions.open,addNote:caseActions.addNote,recordConclusion:caseActions.recordConclusion,recordInvestigationContext:caseActions.recordInvestigationContext,recordRecheckOutcome:caseActions.recordRecheckOutcome,saveToWatchlist:()=>watchlistWorkspace.save(),recheckCase:recheckLookupCase,recordRecipient:caseActions.recordRecipient,copyDraft,statusLabel:caseStatusLabel,dispositionLabel:caseDispositionLabel,actionBusy:caseState.busy,watchlistBusy:watchlistState.busy}}
+          props={{
+            observation: {
+              domain: caseDomain, lookupTarget: caseObservationTarget, lookupDepth: lookupEvidenceDepth,
+              task: session.task, incidentUrl: session.observation.incidentUrl, checkpointFacts,
+            },
+            caseState,
+            actions: caseActions,
+            watchlist: {
+              state: watchlistState,
+              setName: (value: string) => watchlistWorkspace.setName(value),
+              save: () => watchlistWorkspace.save(),
+            },
+            reporting: { outreach, recipientResolution: abuseRecipientResolution, draftStatus: session.observation.draftStatus, copyDraft },
+            oncaseopen: preserveLookupReturn,
+            retryCaseRead: () => refreshCase(),
+            recheckCase: recheckLookupCase,
+          }}
         />
         {#if caseRecord && checkpointFacts.length && session.task === 'acquisition'}
           <LookupEvidenceCheckpoint

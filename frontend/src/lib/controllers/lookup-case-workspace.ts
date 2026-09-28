@@ -188,6 +188,10 @@ export function lookupCaseActions(
   observation: () => LookupCaseObservation,
 ) {
   return {
+    select: (id: string) => workspace.select(id),
+    setNote: (value: string) => workspace.setNote(value),
+    setDisposition: (value: string) => workspace.setDisposition(value),
+    setReviewReason: (value: string) => workspace.setReviewReason(value),
     async open() {
       const { domain, evidence, depth } = observation();
       const selection = workspace.state.record ? { caseId: workspace.state.record.id } : {};

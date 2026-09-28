@@ -46,6 +46,11 @@ test('Lookup action bindings retain their observation and use the workspace publ
     domain: 'example.test', evidence: {}, depth: 'deep', incidentUrl: 'https://example.test/review',
     target: 'portal.example.test', facts: [],
   }));
+  actions.select(second.id);
+  assert.equal(h.workspace.state.record?.id, second.id);
+  actions.select(first.id);
+  actions.setDisposition(first.disposition);
+  actions.setReviewReason('');
   await actions.open();
   assert.deepEqual(calls.pop(), ['open', 'example.test', {}, 'deep', { caseId: first.id }]);
   await actions.createIncident('New incident');
@@ -58,7 +63,7 @@ test('Lookup action bindings retain their observation and use the workspace publ
   assert.deepEqual(calls.pop(), ['checkpoint', first, [], ['registration.registrar'], {}]);
   await actions.saveRefreshedCheckpoint([], ['dns.mx']);
   assert.deepEqual(calls.pop(), ['checkpoint', first, [], ['dns.mx']]);
-  h.workspace.setNote('Original note');
+  actions.setNote('Original note');
   const pending = actions.addNote();
   h.changeContext('other.test');
   h.workspace.reset();
