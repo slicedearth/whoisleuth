@@ -746,7 +746,7 @@ export function createVerificationRules(
       area: 'hosted verification workflows',
       priority: 40,
       matches: (value: string) => value.startsWith('.github/workflows/'),
-      focusedUnit: unit('test/ci-workflow.test.mts'),
+      focusedUnit: unit('test/ci-workflow.test.mts', 'test/workflow-shells.integration.test.mts'),
       focusedBrowser: browser(),
       specialised: specialised('workflow-closure', 'staged-security'),
       browserRequired: false,

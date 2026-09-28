@@ -847,6 +847,14 @@ describe('verification architecture contracts', () => {
     }
   });
 
+  test('workflow edits select executable shell contracts, with an explicit iteration deferral', async () => {
+    const plan = await createVerificationOwnershipPlan(['.github/workflows/test-health.yml']);
+    const shell = 'test/workflow-shells.integration.test.mts';
+    assert.ok(plan.focusedUnitChecks.includes(shell));
+    assert.ok(buildFocusedVerificationExecution(plan).commands.some(command => command.id === 'focused-integration' && command.args.includes(shell)));
+    assert.ok(buildFocusedVerificationExecution(plan, { iteration: true }).deferredIntegrationChecks.includes(shell));
+  });
+
   test('optional editor configuration does not select application or release checks', async () => {
     for (const file of ['.prettierrc.json', '.prettierignore', '.editorconfig', 'prettier.config.mjs']) {
       const plan = await createVerificationOwnershipPlan([file]);

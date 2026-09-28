@@ -962,27 +962,15 @@ describe('continuous integration workflow', () => {
     assert.equal(properties.env?.WHOISLEUTH_FAST_CHECK_SEED, '${{ github.run_number }}');
     assert.match(commands, /^npm ci --include=optional --ignore-scripts --audit=false$/mu);
     assert.match(commands, /^npm run verification:timing:check$/mu);
-    assert.match(commands, /npm run sources:health \| tee "\$RUNNER_TEMP\/source-health-report\.txt"/u);
-    assert.match(commands, /^npm run sources:health -- --github-annotations$/mu);
-    assert.match(commands, /## Offline retained source health/u);
-    assert.match(commands, />> "\$GITHUB_STEP_SUMMARY"/u);
     assert.match(commands, /apt-get install[^\n]*\bzsh\b/u);
-    assert.match(commands, /for run in 1 2 3; do\s+npm run test:profile > "\$RUNNER_TEMP\/test-duration-report-\$run\.txt"\s+done/u);
-    assert.match(commands, /npm run test:duration-health --/u);
-    for (const run of [1, 2, 3]) {
-      assert.match(commands, new RegExp(`--report="\\$RUNNER_TEMP/test-duration-report-${run}\\.txt"`, 'u'));
-    }
-    assert.match(commands, /cat "\$RUNNER_TEMP\/test-duration-health\.md" >> "\$GITHUB_STEP_SUMMARY"/u);
-    assert.match(commands, /--provenance-id="unit-ci-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}"/u);
-    assert.match(commands, /npm run --silent verification:timing:update-candidate --/u);
-    assert.equal(occurrences(commands, /--report="\$RUNNER_TEMP\/test-duration-report-[123]\.txt"/gu), 6);
-    assert.doesNotMatch(commands, /--sample-count=/u);
+    const candidate = requiredValue(workflowSteps(workflow).find(step => step.env?.PROFILE_PROVENANCE));
+    assert.equal(candidate.env?.PROFILE_PROVENANCE, 'unit-ci-${{ github.run_id }}-${{ github.run_attempt }}');
     const uploads = workflowSteps(workflow).filter(step => step.uses?.startsWith('actions/upload-artifact@'));
-    assert.deepEqual(uploads.flatMap(step => String(step.with?.path).trim().split(/\s*\n\s*/u)), [
-      '${{ runner.temp }}/test-duration-report-*.txt',
-      '${{ runner.temp }}/test-duration-health.md',
-      '${{ runner.temp }}/verification-timing-unit-candidate.json',
-    ]);
+    assert.ok(uploads.length > 0);
+    for (const upload of uploads) {
+      assert.equal(upload.if, 'always()');
+      assert.equal(upload.with?.['retention-days'], 14);
+    }
     const actions = pinnedActions(TEST_HEALTH_WORKFLOW);
     assert.deepEqual(actions.map(({ action }) => action), [
       'actions/checkout',
