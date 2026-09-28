@@ -1,12 +1,12 @@
 import { Buffer } from 'node:buffer';
-import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 import {
   CRITICAL_MUTATION_MANIFEST,
   assertUniqueCriticalMutationPattern,
+  isCriticalMutationSource,
   MAX_CRITICAL_MUTATION_TEXT_BYTES,
 } from './critical-mutation-manifest.mts';
 
@@ -23,24 +23,19 @@ if (Buffer.byteLength(mutant.search, 'utf8') < 1
   throw new TypeError('Critical mutation source pattern exceeds its bound.');
 }
 
-const target = path.resolve(repositoryRoot, mutant.file);
-const targetUrl = pathToFileURL(target);
-if (!target.startsWith(`${repositoryRoot}${path.sep}`) || fileURLToPath(targetUrl) !== target) {
-  throw new TypeError('Critical mutation target escaped the repository root.');
-}
-const retainedSource = readFileSync(target, 'utf8');
-assertUniqueCriticalMutationPattern(retainedSource, mutant.search, `Critical mutant ${mutant.id}`);
-
 let applications = 0;
 registerHooks({
   load(url, context, nextLoad) {
     const loaded = nextLoad(url, context);
-    if (url !== targetUrl.href) return loaded;
+    if (!url.startsWith('file:')) return loaded;
+    const relative = path.relative(repositoryRoot, fileURLToPath(url)).split(path.sep).join('/');
+    if (!isCriticalMutationSource(relative)) return loaded;
     const source = typeof loaded.source === 'string'
       ? loaded.source
       : Buffer.isBuffer(loaded.source) || loaded.source instanceof Uint8Array
         ? Buffer.from(loaded.source).toString('utf8')
         : '';
+    if (!source.includes(mutant.search)) return loaded;
     assertUniqueCriticalMutationPattern(source, mutant.search, `Critical mutant ${mutant.id} at load time`);
     applications += 1;
     return { ...loaded, source: source.replace(mutant.search, mutant.replacement) };

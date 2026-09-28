@@ -5,6 +5,7 @@ import {
   buildLookupNetworkDisplay,
   buildLookupPageDisplay,
 } from '../frontend/src/lib/analysis/lookup-display-model.ts';
+import { lookupTlsProps } from '../frontend/src/lib/analysis/lookup-tls-display.ts';
 
 test('DNS presentation retains null MX and withheld family evidence without claiming absence', () => {
   const display = buildLookupNetworkDisplay({
@@ -92,6 +93,25 @@ test('projects a typed TLS presentation without trusting malformed source values
   assert.equal(display.tlsPresentation.chainTruncated, true);
   assert.equal(display.tlsPresentation.alternativeNamesTruncated, true);
   assert.deepEqual(display.tlsPresentation.limitations, ['A source limitation']);
+  const props = lookupTlsProps(display);
+  assert.equal(props.status, 'partial');
+  assert.equal(props.complete, false);
+  assert.deepEqual(props.limitations, ['A source limitation']);
+  assert.equal(props.rows, display.tlsRows);
+  assert.equal(props.validationDetails, display.tlsValidation);
+  assert.equal(props.validFrom, null);
+});
+
+test('empty page evidence supplies no fingerprints, identities or inferred page role', () => {
+  const display = buildLookupPageDisplay(emptyPageInput());
+  assert.deepEqual(display.fingerprints, []);
+  assert.deepEqual(display.trackingIdentifiers, []);
+  assert.deepEqual(display.structuredIdentities, []);
+  assert.deepEqual(display.technologyFindings, []);
+  assert.deepEqual(display.pageRoles, []);
+  assert.equal(display.primaryPageRole, 'Unclassified');
+  assert.equal(display.pageIdentityFacts.find(row => row.label === 'Document language')?.value, '—');
+  assert.equal(display.pageComparison, null);
 });
 
 test('projects complete bounded DNS families and delegation evidence', () => {
