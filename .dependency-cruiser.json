@@ -77,8 +77,7 @@
       "severity": "error",
       "comment": "Production evidence consumers use the pure observation owner; the historical lib facade remains only for compatibility adapters and public imports.",
       "from": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)",
-        "pathNot": "^(?:frontend/src/lib/(?:candidate-handoff-core|scheduled-monitoring)\\.ts|frontend/src/routes/\\(console\\)/lookup/\\+page\\.svelte)$"
+        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)"
       },
       "to": {
         "path": "^(?:test/fixtures/architecture/)?lib/observation\\.mts$"
