@@ -1,4 +1,5 @@
 import type { LookupViewModel } from '../analysis/lookup-response.ts';
+import { lookupWebEvidenceSources } from '../analysis/lookup-route-projections.ts';
 
 /** Section-owned eligibility and imports, shared by rendering and intent loading. */
 export function lookupWebSurfaces(
@@ -10,59 +11,57 @@ export function lookupWebSurfaces(
   },
 ) {
   const dns = () => import('./LookupDnsEvidence.svelte');
-  const tls = view.tlsEvidence.source === 'tls';
+  const sources = lookupWebEvidenceSources(view);
   return {
     network: {
-      visible: view.observedNetworkContext.contextVersion === 1,
+      visible: sources.network,
       load: () => import('./LookupNetworkContext.svelte'),
     },
-    reverseDns: { visible: view.reverseDns.source === 'reverse_dns', load: dns },
-    dns: { visible: view.dnsEvidence.source === 'dns', load: dns },
+    reverseDns: { visible: sources.reverseDns, load: dns },
+    dns: { visible: sources.dns, load: dns },
     serviceDependency: {
-      visible: view.dnsEvidence.source === 'dns' && context.serviceDependency,
+      visible: sources.dns && context.serviceDependency,
       load: () => import('./LookupServiceDependencyReview.svelte'),
     },
     http: {
-      visible: view.httpEvidence.source === 'http',
+      visible: sources.http,
       load: () => import('./LookupHttpEvidence.svelte'),
     },
-    tls: { visible: tls, load: () => import('./LookupTlsEvidence.svelte') },
+    tls: { visible: sources.tls, load: () => import('./LookupTlsEvidence.svelte') },
     certificatePolicy: {
-      visible: tls,
+      visible: sources.tls,
       load: () => import('./LookupCertificatePolicyReview.svelte'),
     },
     sslbl: {
-      visible: view.sslbl.sslblVersion === 1,
+      visible: sources.sslbl,
       load: () => import('./LookupSslblEvidence.svelte'),
     },
     disclosure: {
-      visible: view.securityTxt.securityTxtVersion === 1,
+      visible: sources.disclosure,
       load: () => import('./LookupSecurityTxt.svelte'),
     },
     page: {
-      visible: view.pageIdentity.source === 'html',
+      visible: sources.page,
       load: () => import('./LookupPageIdentity.svelte'),
     },
     credentials: {
-      visible: view.credentialSurfaceProfile.source === 'html',
+      visible: sources.credentials,
       load: () => import('./LookupCredentialSurfaceProfile.svelte'),
     },
     posture: {
-      visible: view.securityPosture.source === 'derived',
+      visible: sources.posture,
       load: () => import('./LookupSecurityPosture.svelte'),
     },
     structuredIdentity: {
-      visible: view.structuredDataIdentity.source === 'html',
+      visible: sources.structuredIdentity,
       load: () => import('./LookupStructuredDataIdentity.svelte'),
     },
     technology: {
-      visible: view.technologyProfile.source === 'derived',
+      visible: sources.technology,
       load: () => import('./LookupTechnologyProfile.svelte'),
     },
     behaviour: {
-      visible:
-        view.pageRoleProfile.source === 'derived' &&
-        view.clientBehaviorProfile.source === 'derived',
+      visible: sources.pageRole && sources.clientBehaviour,
       load: () => import('./LookupPageRoleBehavior.svelte'),
     },
     comparison: {

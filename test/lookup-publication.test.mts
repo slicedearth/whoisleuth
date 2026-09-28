@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { LookupRequestController } from '../frontend/src/lib/controllers/lookup-request-controller.ts';
 import { publishLookupResult } from '../frontend/src/lib/controllers/lookup-publication.ts';
 import { lookupWebSurfaces } from '../frontend/src/lib/components/lookup-web-surfaces.ts';
+import { hasLookupWebEvidence, lookupWebEvidenceSources } from '../frontend/src/lib/analysis/lookup-route-projections.ts';
 import { lookupSectionSurfaces } from '../frontend/src/lib/components/lookup-section-surfaces.ts';
 import { createLookupViewModel } from '../lib/lookup-response-contract.mts';
 import { normalizeSnapshot } from '../packages/cases/case-evidence-model.mts';
@@ -152,6 +153,42 @@ test('web surface eligibility is source-specific and rendering shares its loader
   const unavailable = lookupWebSurfaces({ ...view, dnsEvidence: { source: 'future' } }, context);
   assert.equal(unavailable.dns.visible, false);
   assert.equal(unavailable.serviceDependency.visible, false);
+});
+
+test('each web source alone keeps its family available without inventing a complete combined surface', () => {
+  const view = createLookupViewModel(null);
+  const context = { serviceDependency: false, pageComparison: false, brandMimicry: false };
+  const examples = {
+    network: ['observedNetworkContext', { contextVersion: 1 }, 'network'],
+    reverseDns: ['reverseDns', { source: 'reverse_dns' }, 'reverseDns'],
+    dns: ['dnsEvidence', { source: 'dns' }, 'dns'],
+    http: ['httpEvidence', { source: 'http' }, 'http'],
+    tls: ['tlsEvidence', { source: 'tls' }, 'tls'],
+    sslbl: ['sslbl', { sslblVersion: 1 }, 'sslbl'],
+    page: ['pageIdentity', { source: 'html' }, 'page'],
+    credentials: ['credentialSurfaceProfile', { source: 'html' }, 'credentials'],
+    structuredIdentity: ['structuredDataIdentity', { source: 'html' }, 'structuredIdentity'],
+    technology: ['technologyProfile', { source: 'derived' }, 'technology'],
+    pageRole: ['pageRoleProfile', { source: 'derived' }, null],
+    clientBehaviour: ['clientBehaviorProfile', { source: 'derived' }, null],
+    posture: ['securityPosture', { source: 'derived' }, 'posture'],
+    disclosure: ['securityTxt', { securityTxtVersion: 1 }, 'disclosure'],
+  } as const satisfies Record<keyof ReturnType<typeof lookupWebEvidenceSources>, readonly [
+    keyof typeof view, Readonly<Record<string, unknown>>, keyof ReturnType<typeof lookupWebSurfaces> | null,
+  ]>;
+  assert.equal(hasLookupWebEvidence(null, view, null, null), false);
+  for (const [source, [field, input, surface]] of Object.entries(examples)) {
+    for (const status of ['success', 'partial', 'unsupported']) {
+      const only = { ...view, [field]: { ...input, status } };
+      assert.deepEqual(Object.entries(lookupWebEvidenceSources(only)).filter(([, present]) => present).map(([key]) => key), [source]);
+      assert.equal(hasLookupWebEvidence(null, only, null, null), true, `${source}: ${status}`);
+      const surfaces = lookupWebSurfaces(only, context);
+      if (surface) assert.equal(surfaces[surface].visible, true, source);
+      else assert.equal(surfaces.behaviour.visible, false, 'A combined behaviour view still requires both inputs.');
+    }
+    const unknown = { ...view, [field]: { source: 'future', contextVersion: 99, sslblVersion: 99, securityTxtVersion: 99 } };
+    assert.equal(hasLookupWebEvidence(null, unknown, null, null), false, source);
+  }
 });
 
 test('registration disclosure and optional sections require their own evidence context', () => {

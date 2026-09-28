@@ -168,42 +168,34 @@ export function buildLookupTaskEvidence(
   return evidence;
 }
 
+/** Source presence is shared by the family gate and its individual surfaces.
+ * It deliberately includes partial/unsupported records, not just successful ones. */
+export function lookupWebEvidenceSources(view: LookupViewModel) {
+  return {
+    network: view.observedNetworkContext.contextVersion === 1,
+    reverseDns: view.reverseDns.source === 'reverse_dns',
+    dns: view.dnsEvidence.source === 'dns',
+    http: view.httpEvidence.source === 'http',
+    tls: view.tlsEvidence.source === 'tls',
+    sslbl: view.sslbl.sslblVersion === 1,
+    page: view.pageIdentity.source === 'html',
+    credentials: view.credentialSurfaceProfile.source === 'html',
+    structuredIdentity: view.structuredDataIdentity.source === 'html',
+    technology: view.technologyProfile.source === 'derived',
+    pageRole: view.pageRoleProfile.source === 'derived',
+    clientBehaviour: view.clientBehaviorProfile.source === 'derived',
+    posture: view.securityPosture.source === 'derived',
+    disclosure: view.securityTxt.securityTxtVersion === 1,
+  };
+}
+
 export function hasLookupWebEvidence(
   result: LookupHttpResponse | null,
   lookupView: LookupViewModel,
   profile: BrandProfile | null,
   pageComparison: unknown,
 ): boolean {
-  const {
-    observedNetworkContext,
-    reverseDns,
-    dnsEvidence,
-    httpEvidence,
-    tlsEvidence,
-    sslbl,
-    pageIdentity,
-    credentialSurfaceProfile,
-    structuredDataIdentity,
-    technologyProfile,
-    pageRoleProfile,
-    clientBehaviorProfile,
-    securityPosture,
-    securityTxt,
-  } = lookupView;
-  return observedNetworkContext.contextVersion === 1
-    || reverseDns.source === 'reverse_dns'
-    || dnsEvidence.source === 'dns'
-    || httpEvidence.source === 'http'
-    || tlsEvidence.source === 'tls'
-    || sslbl.sslblVersion === 1
-    || pageIdentity.source === 'html'
-    || credentialSurfaceProfile.source === 'html'
-    || structuredDataIdentity.source === 'html'
-    || technologyProfile.source === 'derived'
-    || pageRoleProfile.source === 'derived'
-    || clientBehaviorProfile.source === 'derived'
-    || securityPosture.source === 'derived'
-    || securityTxt.securityTxtVersion === 1
+  return Object.values(lookupWebEvidenceSources(lookupView)).some(Boolean)
     || Boolean(pageComparison)
     || Boolean(profile?.pageBaseline && result?.type === 'domain');
 }
