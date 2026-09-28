@@ -381,12 +381,12 @@ const QUIET_OUTPUT_CONSTRAINT = constraint({
   options: ['--quiet', '--output'],
 });
 const PRESENTATION_OPTIONS = Object.freeze([
-  ['--json', 'JSON'], ['--jsonl', 'JSON Lines'], ['--junit', 'JUnit XML'],
-  ['--csv', 'CSV'],
-  ['--csv-with-metadata', 'CSV with evidence metadata'],
-  ['--domains', 'domain list'], ['--queries', 'query list'],
-  ['--markdown', 'Markdown'], ['--html', 'HTML'], ['--sarif', 'SARIF'],
-  ['--summary-json', 'summary JSON'],
+  ['--json', 'JSON', 'json'], ['--jsonl', 'JSON Lines', 'jsonl'], ['--junit', 'JUnit XML', 'junit'],
+  ['--csv', 'CSV', 'csv'],
+  ['--csv-with-metadata', 'CSV with evidence metadata', 'csv_metadata'],
+  ['--domains', 'domain list', 'domains'], ['--queries', 'query list', 'queries'],
+  ['--markdown', 'Markdown', 'markdown'], ['--html', 'HTML', 'html'], ['--sarif', 'SARIF', 'sarif'],
+  ['--summary-json', 'summary JSON', 'summary_json'],
 ] as const);
 const MACHINE_OUTPUT_OPTIONS: readonly string[] = Object.freeze(PRESENTATION_OPTIONS.map(([option]) => option));
 
@@ -445,9 +445,9 @@ type CliCommandSeed = Readonly<{
   bootstrapProfile: 'allowed' | 'command_owned';
 }>;
 
-function commandSeed<const Owner extends CliExecutionOwner>(
-  seed: Omit<CliCommandSeed, 'handlerOwner'> & { handlerOwner: Owner },
-): CliCommandSeed & { readonly handlerOwner: Owner } {
+function commandSeed<const Owner extends CliExecutionOwner, const Options extends readonly CliOption[]>(
+  seed: Omit<CliCommandSeed, 'handlerOwner' | 'options'> & { handlerOwner: Owner; options: Options },
+): CliCommandSeed & { readonly handlerOwner: Owner; readonly options: readonly Options[number][] } {
   return Object.freeze({
     ...seed,
     reference: Object.freeze({ ...seed.reference }),

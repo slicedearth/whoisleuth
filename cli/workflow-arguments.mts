@@ -1,9 +1,13 @@
 import { type ParsedCommandArguments } from './command-argument-grammar.mts';
 import { CliUsageError } from './errors.mts';
-import type { InvestigationPlanRecipe, RunnableInvestigationPlanRecipe } from './investigation-plan.mts';
+import type {
+  InvestigationPlanRecipe,
+  RunnableInvestigationPlanRecipe,
+} from './investigation-plan.mts';
 import type { WorkflowArtifactBinding } from '../packages/contracts/investigation-run.mts';
 import { type CliFailPolicy } from './fail-policy.mts';
 import { commandDefaultNumber } from './command-reference.mts';
+import { WORKFLOW_COMMAND_DEFINITIONS } from './workflow-command-definitions.mts';
 import {
   terminalOptions,
   jsonOutput,
@@ -57,13 +61,11 @@ function parseMonitorOnceArguments(parsed: ParsedCommandArguments): MonitorOnceA
     action: 'monitor-once',
     source: parsed.positionalValue('source'),
     previousSource: parsed.optionValue('--previous'),
-    output: parseOutput(parsed, [
-      ['--json', 'json'],
-      ['--junit', 'junit'],
-    ]) as 'terminal' | 'json' | 'junit',
+    output: parseOutput(parsed, WORKFLOW_COMMAND_DEFINITIONS['monitor-once']),
     limit: parsed.integerOption('--limit') ?? commandDefaultNumber('monitor-once', '--limit'),
     concurrency:
-      parsed.integerOption('--concurrency') ?? commandDefaultNumber('monitor-once', '--concurrency'),
+      parsed.integerOption('--concurrency') ??
+      commandDefaultNumber('monitor-once', '--concurrency'),
     ...terminalOptions(parsed),
     ...(selectedFailPolicies ? { failOn: selectedFailPolicies } : {}),
   };
@@ -101,9 +103,13 @@ function parseWorkflowPlanArguments(parsed: ParsedCommandArguments): WorkflowPla
 
 function parseWorkflowRunArguments(parsed: ParsedCommandArguments): WorkflowRunArguments {
   const artifactBindings = parsed.optionValues('--use-artifact').map((value) => {
-    const match = /^([a-z0-9]+(?:-[a-z0-9]+)*):([1-9][0-9]?)=([a-z0-9]+(?:-[a-z0-9]+)*)$/u.exec(value);
+    const match = /^([a-z0-9]+(?:-[a-z0-9]+)*):([1-9][0-9]?)=([a-z0-9]+(?:-[a-z0-9]+)*)$/u.exec(
+      value,
+    );
     if (!match)
-      throw new CliUsageError('--use-artifact requires <step-id>:<input-number>=<earlier-step-id>.');
+      throw new CliUsageError(
+        '--use-artifact requires <step-id>:<input-number>=<earlier-step-id>.',
+      );
     return Object.freeze({ stepId: match[1]!, input: Number(match[2]), sourceStepId: match[3]! });
   });
   const selections = parsed.optionValues('--select').map((value) => {

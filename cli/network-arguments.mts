@@ -1,5 +1,6 @@
 import { type ParsedCommandArguments } from './command-argument-grammar.mts';
 import { commandDefaultText } from './command-reference.mts';
+import { NETWORK_COMMAND_DEFINITIONS } from './network-command-definitions.mts';
 import {
   terminalOptions,
   jsonOutput,
@@ -44,23 +45,31 @@ type CtSearchArguments = {
   output: 'terminal' | 'json';
 } & TerminalOptions;
 
-type HttpArguments = { action: 'http'; domain: string | null; output: 'terminal' | 'json' } & TerminalOptions;
+type HttpArguments = {
+  action: 'http';
+  domain: string | null;
+  output: 'terminal' | 'json';
+} & TerminalOptions;
 
-type TlsArguments = { action: 'tls'; hostname: string | null; output: 'terminal' | 'json' } & TerminalOptions;
+type TlsArguments = {
+  action: 'tls';
+  hostname: string | null;
+  output: 'terminal' | 'json';
+} & TerminalOptions;
 
 function parsePostureArguments(parsed: ParsedCommandArguments): PostureArguments {
-  const mailProfile = parsed.optionValue('--mail-profile') ?? commandDefaultText('posture', '--mail-profile');
+  const mailProfile =
+    parsed.optionValue('--mail-profile') ?? commandDefaultText('posture', '--mail-profile');
   return {
     action: 'posture',
     domain: parsed.positionalValue('domain'),
-    output: parseOutput(parsed, [
-      ['--json', 'json'],
-      ['--sarif', 'sarif'],
-    ]) as 'terminal' | 'json' | 'sarif',
+    output: parseOutput(parsed, NETWORK_COMMAND_DEFINITIONS.posture),
     selectorText: parsed.optionValue('--selectors'),
     retiredSelectorText: parsed.optionValue('--retired-selectors'),
     mailProfile:
-      mailProfile === 'defensive-no-mail' ? 'defensive_no_mail' : (mailProfile as 'parked' | 'standard'),
+      mailProfile === 'defensive-no-mail'
+        ? 'defensive_no_mail'
+        : (mailProfile as 'parked' | 'standard'),
     ownedDomain: parsed.hasOption('--owned-domain'),
     ...(parsed.hasOption('--include-inherited-dns') ? { includeInheritedDns: true as const } : {}),
     ...terminalOptions(parsed),
@@ -96,8 +105,10 @@ export const NETWORK_ARGUMENT_PARSERS = Object.freeze({
   'ct-search': (parsed: ParsedCommandArguments): CtSearchArguments =>
     singleInputAction('ct-search', parsed, 'keyword'),
   posture: parsePostureArguments,
-  http: (parsed: ParsedCommandArguments): HttpArguments => singleInputAction('http', parsed, 'domain'),
-  tls: (parsed: ParsedCommandArguments): TlsArguments => singleInputAction('tls', parsed, 'hostname'),
+  http: (parsed: ParsedCommandArguments): HttpArguments =>
+    singleInputAction('http', parsed, 'domain'),
+  tls: (parsed: ParsedCommandArguments): TlsArguments =>
+    singleInputAction('tls', parsed, 'hostname'),
   'dnssec-validate': parseDnssecValidateArguments,
   'mail-transport': parseMailTransportArguments,
 });
