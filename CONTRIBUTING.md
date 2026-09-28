@@ -132,9 +132,16 @@ preserve workflow checks. Ordinary frontend
 components and models inherit the checks of their consuming routes; known families
 retain their workflow suites. Shared-code edits keep all compiler projects checked,
 so erased type imports need not select unrelated runtime tests.
-Missing runtime import evidence falls back to all unit tests, and unexplained
-interface changes select all functional browser tests. A full run remains available for infrastructure
+No known runtime consumer falls back to all unit tests. An unresolved local import
+keeps its reachable test consumers selected for every source change and is named
+in the plan; missing graph roots remain conservative. Unexplained interface
+changes select all functional browser tests. A full run remains available for infrastructure
 changes and reproducing CI; see [verification](docs/getting-started.md#verification).
+
+Verification responsibilities are separate: `tools/verification-policy.mts`
+contains the curated workflow obligations; `runtime-test-consumers.mts` indexes
+runtime dependents; `verification-ownership.mts` combines them into the explained
+plan. An ordinary module or test still requires no registration.
 
 UI tests should assert the behaviour they protect. Locate navigation by its
 destination and accessible role; avoid layout classes or whole explanatory

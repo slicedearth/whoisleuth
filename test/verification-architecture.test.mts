@@ -597,6 +597,7 @@ describe('verification architecture contracts', () => {
     const inventory = ['test/consumer.test.mts', 'test/unrelated.test.mts'];
     const graph = { modules: [
       { source: 'test/consumer.test.mts', dependencies: [{ resolved: 'packages/example/owner.mts', module: '../packages/example/owner.mts' }] },
+      { source: 'test/unrelated.test.mts', dependencies: [] },
       { source: 'packages/example/owner.mts', dependencies: [{ resolved: 'packages/example/helper.mts', module: './helper.mts' }] },
       { source: 'packages/example/helper.mts', dependencies: [{ resolved: 'packages/example/owner.mts', module: './owner.mts' }] },
     ] } as Parameters<typeof importedTestConsumers>[1];
