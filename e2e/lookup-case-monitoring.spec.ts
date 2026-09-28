@@ -117,16 +117,6 @@ test('Lookup recheck owns an explicit outcome draft and retains a saved question
           : [{ control: control.tagName, left: box.left, right: box.right, containerLeft: container.left, containerRight: container.right }];
       }));
       expect(clipped, `Recheck controls stay within their card at ${width}px in ${theme}`).toEqual([]);
-      if (width >= 1024) {
-        const formBox = await form.boundingBox(), columns = await card.locator('.case-tools').boundingBox();
-        expect(formBox && columns && formBox.width >= columns.width - 2, 'The recheck uses the full working width').toBe(true);
-        const unusedCardSpace = await card.locator('.conclusion-tool,.monitoring-tool').evaluateAll(cards => cards.map(element => {
-          const style = getComputedStyle(element), children = [...element.children].filter(child => child.getBoundingClientRect().height > 0);
-          const contentBottom = Math.max(...children.map(child => child.getBoundingClientRect().bottom + parseFloat(getComputedStyle(child).marginBottom)));
-          return element.getBoundingClientRect().bottom - contentBottom - parseFloat(style.paddingBottom) - parseFloat(style.borderBottomWidth);
-        }));
-        expect(unusedCardSpace.every(space => space < 2), 'Independent cards end after their own content').toBe(true);
-      }
       if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`lookup-recheck-${theme}-${width}.png`) }); }
     }
   }

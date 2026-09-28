@@ -130,7 +130,9 @@ npm run verification:ci
 ```
 
 It requires the exact `.nvmrc` runtime, tested shells and a Node 26 executable
-on `PATH` (or `WHOISLEUTH_CLI_RUNTIME_NODE`). Fixture tests do not collect live
+on `PATH` (or `WHOISLEUTH_CLI_RUNTIME_NODE`). The Git checkout must have an
+`origin/main` remote-tracking ref; its merge base with `HEAD` bounds the changed-line
+secret scan. Refresh that ref before delivery. Fixture tests do not collect live
 investigation data, but this full command is not offline: dependency/tool downloads
 and advisory checks require network access. It performs a locked install,
 quality checks, unit coverage, repository integration tests, production-browser
@@ -141,10 +143,11 @@ Shared executable groups keep the required local and hosted checks aligned.
 Already-prepared lanes can use `npm run verification:ci -- --group=<name>`;
 group mode does not install dependencies or orchestrate other lanes.
 
-`npm test`, coverage and scheduled unit profiling share shell preflight before
-test workers start. Tests reuse the resolved executable paths; startup checks
-use a hang guard, not a performance target. Missing or unusable shells stop the
-run before test execution.
+`npm test`, integration and scheduled profiling check shell prerequisites before
+test workers start; the unit-only and coverage lanes do not. Native shell tests
+reuse the resolved executable paths. Startup checks use a hang guard, not a
+performance target, and stop integration before execution if a shell is missing
+or unusable.
 
 Use Linux locally when a change depends on operating-system behaviour or when
 reproducing a hosted failure. It is not a prerequisite for every contribution.

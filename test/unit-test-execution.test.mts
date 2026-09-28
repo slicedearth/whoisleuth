@@ -92,10 +92,11 @@ for (const mode of ['ordinary', 'profile', 'coverage'] as const) {
 test('the unit lane runs without optional shell tooling while integration still rejects a missing prerequisite', (context) => {
   const fixture = executionFixture(context);
   const executed = path.join(fixture.root, 'unit-executed');
+  fixture.environment.WHOISLEUTH_TEST_EXECUTED_FILE = executed;
   writeFileSync(path.join(fixture.root, 'test/probe.test.mts'), [
     "import { test } from 'node:test';",
     "import { writeFileSync } from 'node:fs';",
-    `test('ordinary domain rule', () => writeFileSync(${JSON.stringify(executed)}, 'passed'));`,
+    "test('ordinary domain rule', () => writeFileSync(process.env.WHOISLEUTH_TEST_EXECUTED_FILE, 'passed'));",
   ].join('\n'));
   writeFileSync(path.join(fixture.root, 'test/shell.integration.test.mts'),
     "throw new Error('Integration must not start with missing prerequisites.');");
@@ -115,8 +116,9 @@ test('the unit lane runs without optional shell tooling while integration still 
 test('shell preflight rejects unusable overrides before a test can execute', (context) => {
   const fixture = executionFixture(context);
   const executed = path.join(fixture.root, 'test-executed');
+  fixture.environment.WHOISLEUTH_TEST_EXECUTED_FILE = executed;
   writeFileSync(path.join(fixture.root, 'test/probe.test.mts'),
-    `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(executed)}, 'unexpected');`);
+    "import { writeFileSync } from 'node:fs'; writeFileSync(process.env.WHOISLEUTH_TEST_EXECUTED_FILE, 'unexpected');");
   const failing = path.join(fixture.bin, 'pwsh');
   writeFileSync(failing, '#!/bin/sh\necho controlled startup failure >&2\nexit 7\n', { mode: 0o755 });
   const child = executeFixture(fixture, ['--test', 'test/probe.test.mts']);
