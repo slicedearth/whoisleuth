@@ -9,6 +9,10 @@ import { emptyCaseViewsStore } from '../packages/workspace/case-views.mts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../packages/contracts/selected-file-limits.mts';
 import type { CaseViewFilters } from '../packages/contracts/case-views-contract.mts';
 import { localCaseReviewPin, type LocalCaseReviewSummary } from '../packages/cases/case-review-summary.mts';
+import {
+  createCaseIncident, editCase, openCase, recordCaseConclusion,
+  recordCaseInvestigationContext, recordCaseRecheckOutcome,
+} from '../frontend/src/lib/cases.ts';
 
 const NOW = '2026-09-01T00:00:00.000Z';
 const FILTERS: CaseViewFilters = { status: '', disposition: '', search: '', sort: 'updated' };
@@ -39,6 +43,55 @@ function localStore(t: TestContext, initial: readonly [string, unknown][]) {
   });
   return state;
 }
+
+test('Case mutations return the admitted record from the same document sent to persistence', async t => {
+  const initial = createCase({ domain: 'example.test' }, NOW);
+  const state = localStore(t, [['cases', [initial]]]);
+  const operations = [
+    () => editCase(initial.id, { note: 'Retained analyst note' }),
+    () => recordCaseInvestigationContext(initial.id, {
+      objective: 'Review the selected page.', incidentUrl: 'https://login.example.test/review', retainExactUrl: false,
+    }),
+    () => recordCaseRecheckOutcome(initial.id, {
+      state: 'changed', observedAt: NOW, completeness: 'complete',
+      comparisonSummary: 'The selected observation changed.', source: 'Analyst-reviewed comparison',
+    }),
+    () => recordCaseConclusion(initial.id, {
+      disposition: 'suspicious', reviewReasonCode: 'other_reviewed', summary: 'Review required',
+      rationale: 'This observation requires corroboration.',
+      evidence: [{ stance: 'supports', pin: { label: 'Supplied observation', value: 'Observed change', source: 'Selected record', observedAt: NOW } }],
+    }),
+    () => openCase({ domain: 'new.example' }),
+    () => createCaseIncident({ domain: 'example.test', title: 'Separate incident' }),
+  ];
+  for (const operation of operations) {
+    const saved = await operation();
+    const persisted = state.documents.get('cases') as CaseRecord[];
+    assert.equal(saved.cases, persisted);
+    assert.equal(saved.record, persisted.find(record => record.id === saved.record.id));
+    assert.equal(saved.pruned, 0);
+  }
+  assert.equal(state.writes, operations.length);
+  assert.equal(initial.notes.length, 0, 'The caller snapshot remains unchanged.');
+  const before = structuredClone(state.documents.get('cases'));
+  await assert.rejects(editCase('missing', { note: 'Not saved' }), /no longer exists/u);
+  state.failure = new Error('Fixture write failure');
+  await assert.rejects(editCase(initial.id, { note: 'Not saved' }), /Fixture write failure/u);
+  assert.deepEqual(state.documents.get('cases'), before);
+  assert.equal(state.writes, operations.length);
+});
+
+test('an inadmissible changed Case cannot be reported saved or replace the store', async t => {
+  // Deliberately violate the provider contract to exercise the result boundary.
+  const invalid = { ...createCase({ domain: 'example.test' }, NOW), domain: 'not a domain' };
+  const original = [invalid];
+  const state = localStore(t, [['cases', original]]);
+  await assert.rejects(editCase(invalid.id, { note: 'Must not claim a save' }),
+    /changed Case could not be retained\. No data was changed/u);
+  assert.equal(state.documents.get('cases'), original);
+  assert.equal(state.writes, 0);
+  assert.equal(invalid.notes.length, 0);
+});
 
 test('selected files preserve exact bytes and independent provenance before one Case mutation', async t => {
   const record = createCase({ domain: 'files.example' }, NOW);

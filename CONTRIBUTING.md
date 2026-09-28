@@ -8,6 +8,7 @@ Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 Common changes: [interface behaviour](#change-interface-behaviour),
 [portable Case fields](#change-a-portable-case-field),
+[saved collections](#add-a-saved-collection),
 [CLI options and commands](#change-cli-options-and-commands),
 [verification](#select-local-verification) and [workflows](#change-workflows).
 
@@ -19,47 +20,47 @@ references, retained data and compatibility fixtures use their existing owners.
 
 ## Find the owner
 
-- **Interface behaviour:** start at `frontend/src/routes/`, follow component
+- **Interface behaviour:** start at [routes](frontend/src/routes/), follow component
   imports, and keep temporary form state with the form. Domain rules belong in
   `packages/`; browser storage and DOM operations belong in frontend adapters.
-- **Case decisions:** `packages/cases/case-record-decisions.mts` owns identities
+- **Case decisions:** [case-record-decisions.mts](packages/cases/case-record-decisions.mts) owns identities
   and labels. Transition policy is separate from presentation. Response forms
   use the existing workspace save coordinator, not independent writes.
-- **Response history:** `case-response-actions.mts` owns action transitions;
-  `case-response-outcomes.mts` owns observed effects and closure. Packet input
-  validation is in `case-response-review-inputs.mts`, separate from construction.
-- **Lookup downloads:** `frontend/src/lib/analysis/lookup-exports.ts` prepares
+- **Response history:** [case-response-actions.mts](packages/cases/case-response-actions.mts) owns action transitions;
+  [case-response-outcomes.mts](packages/cases/case-response-outcomes.mts) owns observed effects and closure. Packet input
+  validation is in [case-response-review-inputs.mts](packages/cases/case-response-review-inputs.mts), separate from construction.
+- **Lookup downloads:** [lookup-exports.ts](frontend/src/lib/analysis/lookup-exports.ts) prepares
   projections and files; the route owns visible status, not export formatting.
-- **Lookup state:** `controllers/lookup-session.ts` owns request state, URL
-  reconciliation and session snapshots; `lookup-view-state.ts` restores observations.
-  `lookup-case-workspace.ts` and `lookup-watchlist-workspace.ts` own their drafts,
-  saves and stale-result guards. `lookup-section-navigation.ts` handles section
+- **Lookup state:** [lookup-session.ts](frontend/src/lib/controllers/lookup-session.ts) owns request state, URL
+  reconciliation and session snapshots; [lookup-view-state.ts](frontend/src/lib/controllers/lookup-view-state.ts) restores observations.
+  [lookup-case-workspace.ts](frontend/src/lib/controllers/lookup-case-workspace.ts) and [lookup-watchlist-workspace.ts](frontend/src/lib/controllers/lookup-watchlist-workspace.ts) own their drafts,
+  saves and stale-result guards. [lookup-section-navigation.ts](frontend/src/lib/controllers/lookup-section-navigation.ts) handles section
   buttons, evidence links and hash restoration through the shared anchor controller.
   Request and storage adapters retain their collection and transaction boundaries.
-  `lookup-page-lifecycle.ts` owns restoration, context refresh and disposal;
-  `lookup-case-form.ts` owns temporary response-form defaults and reset policy.
-  Section presenters (`LookupRegistrySection`, `LookupRelationshipsSection`,
-  `LookupSourceQualitySection` and `LookupWebEvidenceSection`) own their display
-  projections and child wiring. `LookupEvidenceSection` owns the shared heading
+  [lookup-page-lifecycle.ts](frontend/src/lib/controllers/lookup-page-lifecycle.ts) owns restoration, context refresh and disposal;
+  [lookup-case-form.ts](frontend/src/lib/controllers/lookup-case-form.ts) owns temporary response-form defaults and reset policy.
+  Section presenters ([Registry](frontend/src/lib/components/LookupRegistrySection.svelte), [Relationships](frontend/src/lib/components/LookupRelationshipsSection.svelte),
+  [Source quality](frontend/src/lib/components/LookupSourceQualitySection.svelte) and [Web evidence](frontend/src/lib/components/LookupWebEvidenceSection.svelte)) own their display
+  projections and child wiring. [LookupEvidenceSection](frontend/src/lib/components/LookupEvidenceSection.svelte) owns the shared heading
   and spacing; section controls delegate to the existing navigation owner.
-- **Bulk state:** `bulk-scan-controller.ts` owns a scan from start through pause,
-  cancellation and disposal. `bulk-view-state.ts` creates, resets and projects
-  filters. `bulk-session-workspace.ts` owns saved-session drafts, retention
-  approval and write/reload outcomes; `bulk-collection-workflow.ts` connects it
+- **Bulk state:** [bulk-scan-controller.ts](frontend/src/lib/controllers/bulk-scan-controller.ts) owns a scan from start through pause,
+  cancellation and disposal. [bulk-view-state.ts](frontend/src/lib/controllers/bulk-view-state.ts) creates, resets and projects
+  filters. [bulk-session-workspace.ts](frontend/src/lib/controllers/bulk-session-workspace.ts) owns saved-session drafts, retention
+  approval and write/reload outcomes; [bulk-collection-workflow.ts](frontend/src/lib/controllers/bulk-collection-workflow.ts) connects it
   to collection, while the route supplies visible effects.
-- **Bulk actions:** `bulk-case-actions.ts` coordinates Case writes and refreshes;
-  `bulk-monitor-actions.ts` admits every Monitor save through the same checks.
-  `analysis/bulk-export.ts` owns CSV columns; the route only downloads the result.
-- **Brand Profile editing:** `controllers/brand-profile-editor.ts` owns form values,
+- **Bulk actions:** [bulk-case-actions.ts](frontend/src/lib/controllers/bulk-case-actions.ts) coordinates Case writes and refreshes;
+  [bulk-monitor-actions.ts](frontend/src/lib/controllers/bulk-monitor-actions.ts) admits every Monitor save through the same checks.
+  [bulk-export.ts](frontend/src/lib/analysis/bulk-export.ts) owns CSV columns; the route only downloads the result.
+- **Brand Profile editing:** [brand-profile-editor.ts](frontend/src/lib/controllers/brand-profile-editor.ts) owns form values,
   reset/load, submission and capture cancellation. The route's existing mutation
   coordinator still owns writes, conflicts and recovery reads.
 - **CLI options:** family `cli/*-command-definitions.mts` files own command
-  bindings; `command-definition.mts` owns shared options. Help and completion
+  bindings; [command-definition.mts](cli/command-definition.mts) owns shared options. Help and completion
   derive from them; command handlers own execution.
-- **CLI recipes:** `cli/investigation-recipes.mts` owns recipe definitions. Names,
+- **CLI recipes:** [investigation-recipes.mts](cli/investigation-recipes.mts) owns recipe definitions. Names,
   argument choices and catalogue entries derive; plan construction validates
   each step against the command's independent network contract.
-- **Portable fields:** `packages/cases/case-record-projection.mts` requires
+- **Portable fields:** [case-record-projection.mts](packages/cases/case-record-projection.mts) requires
   explicit audience treatment. Preserve independent privacy assertions and
   immutable published-version fixtures; do not derive their expected answers
   from the implementation being tested.
@@ -205,6 +206,24 @@ its audience treatment in `case-record-projection.mts`. Current recovery is in
 Run the Case ownership and portability lifecycle tests; retain published
 fixtures unchanged and add an independent current fixture when required.
 
+### Add a saved collection
+
+Declare its format and limits in the [collection manifest](packages/contracts/browser-local-collection-manifest.mts),
+then implement its typed record/document maps and adapter in
+[browser-local-data-definitions.ts](frontend/src/lib/browser-local-data-definitions.ts).
+Archive membership is a separate privacy decision: unfinished drafts and other
+local recovery state must not become portable merely because they are saved.
+
+Decide how existing plaintext, encrypted and filesystem workspaces admit the new
+collection. Encrypted workspaces fail closed when a manifest is missing; do not
+silently create an empty collection or assume the saved-views repair applies to
+other data. Implement an explicit migration or recovery path and test an existing
+workspace fixture, missing manifests with retained records/files, and concurrent
+creation. Follow the [storage recovery boundary](docs/browser-local-data.md#encrypted-working-workspaces)
+and [provider tests](test/browser-local-data-provider.test.mts). Keep historical
+fixtures independent. Version archive changes through their portable contract
+owner; browser persistence alone does not add export fields.
+
 ### Change CLI options and commands
 
 CLI commands are grouped by responsibility: collection, network, evidence,
@@ -227,10 +246,15 @@ a genuinely different meaning for one command, declare its `optionOverrides`
 beside that command, using the shared option constructors; grammar, defaults and
 help consume the same choice. Do not add command-name branches to shared options.
 A command added to
-an existing family needs its semantics, definition, parser and handler, plus
+an existing family needs [execution semantics](packages/contracts/cli-command-semantics.mts), definition, parser and handler, plus
 independent behaviour/network tests—not a new dispatcher branch, argument-union
 entry, help list or ownership registration. Add a new family only for a genuinely
 different execution responsibility.
+
+For example, follow [collection definitions](cli/collection-command-definitions.mts)
+→ [collection arguments](cli/collection-arguments.mts)
+→ [Lookup runner](cli/lookup-command-runner.mts), with independent
+[registry](test/cli-command-registry.test.mts) and [process](test/cli-process.test.mts) tests.
 
 Before submitting a feature branch, run proportionate local checks and state
 any omissions. Merge requires complete fresh hosted checks against the current

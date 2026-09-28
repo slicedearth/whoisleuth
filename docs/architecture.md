@@ -46,16 +46,11 @@ compatibility facades; internal consumers import the domain owner directly.
 Non-frontend production code cannot import Svelte routes, components or browser
 adapters.
 
-Console routes connect components to responsibility-specific controllers in
-`frontend/src/lib/controllers/`. Lookup has separate request, Case, watchlist
-and section-navigation owners. Bulk separates scan execution, shortlist membership
-and saved-session drafts, retention approval and mutation outcomes. Lookup's
-session updates page-owned reactive state; Case and watchlist workspaces publish
-replacement state snapshots. Existing storage adapters retain transactional
-writes and conflict checks. A committed write and a failed subsequent refresh
-remain distinct.
-Brand Profile editing separates its form draft, capture cancellation and save
-completion from the route's collection and mutation coordinators. CLI workflow
+Console routes compose view effects around responsibility-specific controllers.
+Domain models own validation; storage adapters own transactions and conflict
+checks. A committed write and a failed subsequent refresh remain distinct.
+The [contributor owner guide](../CONTRIBUTING.md#find-the-owner) locates the
+current components, controllers and adapters. CLI workflow
 recipe definitions supply both the command grammar choices and plan catalogue;
 the command registry independently validates each step's network effect.
 
@@ -123,14 +118,12 @@ The packet component owns one transient manual-handoff preview. Its generator
 supplies text and structured output; input identity and the existing
 freshness-bound review digest govern reuse. No preview is stored in the Case.
 
-Lookup's route composes collection and local context. The result-state factory
-owns observation reset and restoration. Its Case workspace owns draft selection,
-read/write generations and rechecks. The request owner's operation token remains
+Lookup's request operation token remains
 current through result publication, storage reconciliation and reveal. Request and
 persistence controllers remain separate. Section-owned eligibility and loaders
 serve both rendering and intent preloading; TLS components consume a typed display
-projection rather than source records. Bulk's scan controller owns cancellation, pause, progress, settled rows
-and disposal; its view-state owner projects filters to navigation and saved presets.
+projection rather than source records. Bulk separates scan lifetime and progress
+from saved work and filter state.
 Routes subscribe to those states and derive analysis from record/result identity,
 not from unrelated progress or draft updates.
 

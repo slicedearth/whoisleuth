@@ -209,13 +209,24 @@ export async function loadCases(): Promise<CaseRecord[]> {
   return readBrowserLocalData('cases');
 }
 
-// Persists a clean, bounded, budget-checked store. Enforces the serialized-size
-// budget before writing (pruning oldest evidence snapshots if needed), refuses
-// to downgrade data from a newer schema version, and surfaces a friendly error
-// when storage is full or unavailable. Returns the persisted cases plus how many
-// evidence snapshots were pruned to fit.
+// Prepare a clean, bounded store before the provider writes it. Only evidence
+// snapshots may be pruned to fit; the result reports that count to the caller.
+// The provider retains version admission, transactions and storage errors.
 function boundedCases(cases: CaseRecord[]): { cases: CaseRecord[]; pruned: number } {
   return enforceStoreBudget(cases);
+}
+
+// Only the budget-admitted record can be returned as the saved result. Keep
+// transaction choice and operation-specific metadata at the calling mutation.
+function caseWriteResult(
+  bounded: ReturnType<typeof boundedCases>,
+  id: string,
+  missing = 'The changed Case could not be retained. No data was changed.',
+) {
+  const { cases, pruned } = bounded;
+  const record = cases.find(item => item.id === id);
+  if (!record) throw new Error(missing);
+  return { document: cases, result: { record, cases, pruned } };
 }
 
 export async function getCase(id: string): Promise<CaseRecord | null> {
@@ -241,27 +252,23 @@ export async function openCase(input: CaseInput, selection: CaseOpenSelection = 
       document: current,
       result: { record: result.record, cases: current, created: false as boolean, pruned: 0 },
     };
-    const { cases, pruned } = boundedCases(result.cases);
-    const record = cases.find((item) => item.id === result.record.id) ?? result.record;
-    return { document: cases, result: { record, cases, created: true as boolean, pruned } };
+    const change = caseWriteResult(boundedCases(result.cases), result.record.id);
+    return { ...change, result: { ...change.result, created: true as boolean } };
   });
 }
 
 export async function createCaseIncident(input: CaseIncidentInput) {
   return updateBrowserLocalData('cases', current => {
     const result = createCaseIncidentModel(current, input);
-    const { cases, pruned } = boundedCases(result.cases);
-    const record = cases.find(item => item.id === result.record.id);
-    if (!record) throw new Error('The new incident could not be retained. No data was changed.');
-    return { document: cases, result: { record, cases, created: true, pruned } };
+    const change = caseWriteResult(boundedCases(result.cases), result.record.id,
+      'The new incident could not be retained. No data was changed.');
+    return { ...change, result: { ...change.result, created: true } };
   });
 }
 
 function applyCasePatch(current: CaseRecord[], id: string, patch: CasePatch) {
   const result = updateCase(current, id, patch);
-  const { cases, pruned } = boundedCases(result.cases);
-  const record = cases.find((item) => item.id === id) ?? result.record;
-  return { document: cases, result: { record, cases, pruned } };
+  return caseWriteResult(boundedCases(result.cases), id);
 }
 
 export async function editCase(id: string, patch: CasePatch, draft?: CaseDraftReceipt): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
@@ -296,9 +303,7 @@ export async function recordCaseConclusion(
 ): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const result = recordCaseConclusionModel(current, id, input);
-    const { cases, pruned } = boundedCases(result.cases);
-    const record = cases.find((item) => item.id === id) ?? result.record;
-    return { document: cases, result: { record, cases, pruned } };
+    return caseWriteResult(boundedCases(result.cases), id);
   });
 }
 
@@ -308,9 +313,7 @@ export async function recordCaseInvestigationContext(
 ): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const result = recordCaseInvestigationContextModel(current, id, input);
-    const { cases, pruned } = boundedCases(result.cases);
-    const record = cases.find((item) => item.id === id) ?? result.record;
-    return { document: cases, result: { record, cases, pruned } };
+    return caseWriteResult(boundedCases(result.cases), id);
   });
 }
 
@@ -320,9 +323,7 @@ export async function recordCaseRecheckOutcome(
 ): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const result = recordCaseRecheckOutcomeModel(current, id, input);
-    const { cases, pruned } = boundedCases(result.cases);
-    const record = cases.find((item) => item.id === id) ?? result.record;
-    return { document: cases, result: { record, cases, pruned } };
+    return caseWriteResult(boundedCases(result.cases), id);
   });
 }
 
@@ -374,9 +375,7 @@ async function updateCaseBrandProfileAssociation(
       || JSON.stringify(preview.removed) !== JSON.stringify(retention.preview.removed))) {
       throw new CaseAssociationCapacityError({ id, profileId, operation, preview });
     }
-    const { cases, pruned } = preview;
-    const persisted = cases.find((item) => item.id === id) ?? result.record;
-    return { document: cases, result: { record: persisted, cases, pruned } };
+    return caseWriteResult(preview, id);
   });
 }
 
@@ -480,16 +479,13 @@ export async function importExternalFindingsIntoCase(
 }> {
   return updateBrowserLocalData('cases', (current) => {
     const merged = mergeExternalFindingsIntoCase(current, caseId, document);
-    const { cases, pruned } = boundedCases(merged.cases);
-    const record = cases.find((item) => item.id === caseId) ?? merged.record;
+    const change = caseWriteResult(boundedCases(merged.cases), caseId);
     return {
-      document: cases,
+      ...change,
       result: {
-        record,
-        cases,
+        ...change.result,
         findingsAdded: merged.findingsAdded,
         duplicatesSkipped: merged.duplicatesSkipped,
-        pruned,
       },
     };
   });
@@ -508,17 +504,14 @@ export async function importExternalIntelligence(
 }> {
   return updateBrowserLocalData('cases', (current) => {
     const merged = mergeExternalIntelligenceIntoCase(current, caseId, preview);
-    const { cases, pruned } = boundedCases(merged.cases);
-    const record = cases.find((item) => item.id === merged.record.id) ?? merged.record;
+    const change = caseWriteResult(boundedCases(merged.cases), merged.record.id);
     return {
-      document: cases,
+      ...change,
       result: {
-        record,
-        cases,
+        ...change.result,
         assertionsAdded: merged.assertionsAdded,
         duplicatesSkipped: merged.duplicatesSkipped,
         capacitySkipped: merged.capacitySkipped,
-        pruned,
       },
     };
   });
