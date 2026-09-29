@@ -149,8 +149,17 @@ a size baseline whenever an implementation changes.
 
 The default scope is the working diff. For a batch spanning local commits, use
 `npm run verification:focused -- --since=<base-commit> --list`, then omit `--list`
-to run it. This includes committed, staged, unstaged and new files. Explicit
-paths after `--` select a smaller declared scope. Read the plan: runtime imports
+to run it. This includes committed, staged, unstaged and new files. To select
+explicit paths during editing:
+
+```bash
+npm run verification:focused -- --iteration --list cli/doctor.mts
+npm run verification:focused -- --iteration 'frontend/src/lib/components/CopyButton.svelte'
+```
+
+The first `--` passes arguments through npm. An optional second `--` separates
+verification options from paths. `--list` previews without executing checks;
+remove `--iteration` for integration acceptance. Read the plan: runtime imports
 and routes referenced by browser tests find consumers, while domain rules
 preserve workflow checks. Ordinary frontend
 components and models inherit the checks of their consuming routes; known families
@@ -200,10 +209,13 @@ explicit inputs, not regenerate them through a current fixture builder.
 ### Change a portable Case field
 
 For a portable Case field, start with `case-record-contracts.mts`, then declare
-its audience treatment in `case-record-projection.mts`. Current recovery is in
-`case-record-operations.mts`; declared historical input adaptation is in
-`case-record-version-input.mts`, with store/import admission in
-`case-migration-model.mts`. Change the format owner in
+its audience treatment in `case-record-projection.mts`. Creation, updates and
+current recovery are in `case-record-operations.mts`; historical input adaptation
+is in `case-record-version-input.mts`. In `case-migration-model.mts`,
+`extractImportPatch` validates imports, `caseFromPatch` creates imported records,
+and `applyImportPatch` merges them without treating absent fields as defaults or
+older records as newer. Check all three when adding a field; successful current
+normalisation alone does not establish an import round trip. Change the format owner in
 `packages/contracts/case-portability.mts` only when the durable contract changes.
 Run the Case ownership and portability lifecycle tests; retain published
 fixtures unchanged and add an independent current fixture when required.
@@ -220,7 +232,13 @@ local recovery state must not become portable merely because they are saved.
 Decide how existing plaintext, encrypted and filesystem workspaces admit the new
 collection. Encrypted workspaces fail closed when a manifest is missing; do not
 silently create an empty collection or assume the saved-views repair applies to
-other data. Implement an explicit migration or recovery path and test an existing
+other data. Follow approval in the [Console layout](frontend/src/routes/%28console%29/+layout.svelte),
+initialisation options in the [service](frontend/src/lib/browser-local-data-service.ts),
+and migration policy in the [provider](frontend/src/lib/browser-local-data.ts).
+The [named-workspace provider](frontend/src/lib/browser-workspace-provider.ts)
+requires existing encrypted manifests; the [IndexedDB](frontend/src/lib/browser-indexeddb-storage.ts)
+and [filesystem](lib/local-application-store.mts) backends own atomic revision,
+retained-record and retained-file checks. Implement an explicit migration or recovery path and test an existing
 workspace fixture, missing manifests with retained records/files, and concurrent
 creation. Follow the [storage recovery boundary](docs/browser-local-data.md#encrypted-working-workspaces)
 and the [provider](test/browser-local-data-provider.test.mts),

@@ -107,16 +107,22 @@ export function assertFocusedBrowserCoverage(specs: readonly string[], report: u
 }
 
 export function parseFocusedVerificationOptions(args: readonly string[]): FocusedVerificationOptions {
-  const listCount = args.filter((value) => value === '--list').length;
-  const changedCount = args.filter((value) => value === '--changed').length;
-  const iterationCount = args.filter(value => value === '--iteration').length;
-  const sinceOptions = args.filter(value => value.startsWith('--since='));
+  const separator = args.indexOf('--');
+  const options = separator < 0 ? args : args.slice(0, separator);
+  const explicitPaths = separator < 0 ? [] : args.slice(separator + 1);
+  const listCount = options.filter((value) => value === '--list').length;
+  const changedCount = options.filter((value) => value === '--changed').length;
+  const iterationCount = options.filter(value => value === '--iteration').length;
+  const sinceOptions = options.filter(value => value.startsWith('--since='));
   const since = sinceOptions[0]?.slice('--since='.length);
-  const paths = args.filter((value) => value !== '--list' && value !== '--changed' && value !== '--iteration' && !value.startsWith('--since='));
+  const paths = [
+    ...options.filter((value) => value !== '--list' && value !== '--changed' && value !== '--iteration' && !value.startsWith('--since=')),
+    ...explicitPaths,
+  ];
   if (listCount > 1 || changedCount > 1 || iterationCount > 1 || paths.some((value) => value.startsWith('-'))
     || (changedCount > 0 && paths.length > 0) || sinceOptions.length > 1
     || (since !== undefined && (!since || since.length > 320 || /^[\s-]|[\s\0]/u.test(since) || changedCount || paths.length))) {
-    throw new TypeError('Usage: node tools/focused-verification.mts [--list] [--iteration] [--changed | --since=<commit> | <changed-path> ...]');
+    throw new TypeError('Usage: node tools/focused-verification.mts [--list] [--iteration] [--changed | --since=<commit> | [--] <changed-path> ...]');
   }
   return Object.freeze({
     list: listCount === 1,

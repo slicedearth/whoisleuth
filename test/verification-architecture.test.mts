@@ -1042,6 +1042,29 @@ describe('verification architecture contracts', () => {
     }
   });
 
+  test('accepts an optional path separator without interpreting following paths as options', () => {
+    const paths = ['cli/doctor.mts', 'frontend/src/routes/(console)/lookup/+page.svelte'];
+    const options = ['--list', '--iteration'];
+    assert.deepEqual(parseFocusedVerificationOptions([...options, '--', ...paths]), {
+      list: true, changed: false, iteration: true, paths,
+    });
+    assert.deepEqual(
+      parseFocusedVerificationOptions([...options, ...paths]),
+      parseFocusedVerificationOptions([...options, '--', ...paths]),
+    );
+    assert.deepEqual(parseFocusedVerificationOptions(['--']), parseFocusedVerificationOptions([]));
+    for (const args of [
+      ['--changed', '--', ...paths],
+      ['--since=HEAD', '--', ...paths],
+      ['--', '--list'],
+      ['--', '--iteration'],
+      ['--', '--since=HEAD'],
+      ['--', '--', ...paths],
+    ]) {
+      assert.throws(() => parseFocusedVerificationOptions(args), /Usage/u);
+    }
+  });
+
   test('a focused batch includes committed, staged, working and new files from its explicit baseline', () => {
     const directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-focused-history-'));
     const git = (...args: string[]) => {
