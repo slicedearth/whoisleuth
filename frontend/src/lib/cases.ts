@@ -282,10 +282,10 @@ export async function editCase(id: string, patch: CasePatch, draft?: CaseDraftRe
   return updateBrowserLocalData('cases', (current) => applyCasePatch(current, id, patch));
 }
 
-export async function editCaseTags(id: string, tags: string[]) {
+export async function editCaseTags(id: string, tags: string[], expectedTags: readonly string[]) {
   return updateBrowserLocalData('cases', (current) => {
     const previous = [...(current.find((record) => record.id === id)?.tags ?? [])];
-    const change = applyCasePatch(current, id, { tags });
+    const change = applyCasePatch(current, id, { tags, expectedTags });
     return { ...change, result: { ...change.result, undo: { id, previous, expected: [...change.result.record.tags] } } };
   });
 }
@@ -413,19 +413,15 @@ export async function deleteCase(id: string): Promise<{ cases: CaseRecord[]; del
   });
 }
 
-export async function importCases(value: unknown): Promise<{ cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; authoredHistoryOmitted: number; pruned: number }> {
+export async function importCases(value: unknown): Promise<ReturnType<typeof mergeCases> & { pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const result = mergeCases(current, value);
     const { cases, pruned } = boundedCases(result.cases);
     return {
       document: cases,
       result: {
+        ...result,
         cases,
-        added: result.added,
-        updated: result.updated,
-        skipped: result.skipped,
-        brandProfileReferencesOmitted: result.brandProfileReferencesOmitted,
-        authoredHistoryOmitted: result.authoredHistoryOmitted,
         pruned,
       },
     };

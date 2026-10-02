@@ -23,6 +23,7 @@ import { serializeDomainControlManifest } from '../evidence/domain-control-runti
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   MAX_DESIRED_POSTURE_BASELINES,
+  MAX_PROFILE_VALUES,
   normalizeDesiredPostureBaselines,
   type BrandProfile,
   type DesiredPostureBaseline,
@@ -159,24 +160,50 @@ function configured(entry: DomainControlPassportEntry, field: DomainControlPassp
   return Array.isArray(value) ? value.length > 0 : value !== null;
 }
 
+export function passportImportCapacityIssue(
+  profile: Pick<BrandProfile, 'officialDomains' | 'desiredPostureBaselines'>,
+  domain: string,
+): string | null {
+  if (!profile.officialDomains.includes(domain) && profile.officialDomains.length >= MAX_PROFILE_VALUES) {
+    return `This profile already has ${MAX_PROFILE_VALUES} official domains. Remove one before adding another.`;
+  }
+  if (!profile.desiredPostureBaselines.some((baseline) => baseline.domain === domain)
+    && profile.desiredPostureBaselines.length >= MAX_DESIRED_POSTURE_BASELINES) {
+    return `This profile already has ${MAX_DESIRED_POSTURE_BASELINES} configured baselines. Existing baselines can still be updated; remove one before adding another.`;
+  }
+  return null;
+}
+
 export function applyDomainControlPassport(
   profile: BrandProfile,
   passport: DomainControlPassport,
   choices: readonly DomainControlPassportImportChoice[],
   importedAt = new Date().toISOString(),
 ): BrandProfile {
-  const choiceMap = new Map(choices.slice(0, MAX_DESIRED_POSTURE_BASELINES).map((item) => [item.domain, item]));
+  if (choices.length > MAX_DESIRED_POSTURE_BASELINES) {
+    throw new RangeError(`Select at most ${MAX_DESIRED_POSTURE_BASELINES} baseline entries per import. Nothing was imported.`);
+  }
+  const domains = new Set(passport.entries.map((entry) => entry.domain));
+  const choiceMap = new Map<string, DomainControlPassportImportChoice>();
+  for (const choice of choices) {
+    if (!domains.has(choice.domain) || choiceMap.has(choice.domain)) {
+      throw new TypeError('Each selected domain must occur exactly once in the passport import. Nothing was imported.');
+    }
+    choiceMap.set(choice.domain, choice);
+  }
   const officialDomains = [...profile.officialDomains];
   const baselines = new Map(profile.desiredPostureBaselines.map((item) => [item.domain, item]));
   for (const entry of passport.entries) {
     const choice = choiceMap.get(entry.domain);
     if (!choice) continue;
     const isOfficial = officialDomains.includes(entry.domain);
-    if (!isOfficial) {
-      if (!choice.addOfficialDomain || officialDomains.length >= MAX_DESIRED_POSTURE_BASELINES) continue;
-      officialDomains.push(entry.domain);
-    }
-    const selectedFields = new Set(choice.fields.filter((field) => DOMAIN_CONTROL_PASSPORT_FIELDS.includes(field)));
+    if (!isOfficial && !choice.addOfficialDomain) continue;
+    const selectedFields = new Set(choice.fields.filter((field) =>
+      DOMAIN_CONTROL_PASSPORT_FIELDS.includes(field) && configured(entry, field)));
+    if (!selectedFields.size) continue;
+    const capacityIssue = passportImportCapacityIssue({ officialDomains, desiredPostureBaselines: [...baselines.values()] }, entry.domain);
+    if (capacityIssue) throw new RangeError(`${capacityIssue} Nothing was imported.`);
+    if (!isOfficial) officialDomains.push(entry.domain);
     const existing = baselines.get(entry.domain) ?? emptyBaseline(entry.domain, importedAt);
     let changed = false;
     const next = { ...existing };

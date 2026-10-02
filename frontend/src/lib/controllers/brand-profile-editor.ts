@@ -1,4 +1,4 @@
-import type { BrandProfile } from '../../../../packages/workspace/brand-profile-model.mts';
+import { normalizeProfileDomains, type BrandProfile } from '../../../../packages/workspace/brand-profile-model.mts';
 import { parseProfileList } from '../analysis/brand-profile-signals.ts';
 import { normalizePageBaseline } from '../analysis/page-baseline.ts';
 import { createDraftRevision } from './submitted-draft.ts';
@@ -206,10 +206,17 @@ export class BrandProfileEditorController {
 
   async save(
     write: (submission: BrandEditorSubmission) => Promise<BrandEditorSaveResult>,
+    confirmBaselineRemoval: (domains: readonly string[]) => boolean = () => false,
   ): Promise<BrandEditorSaveResult | null> {
     if (this.#disposed || this.#state.saving) return null;
     this.cancelCapture();
     const submitted = this.#submission();
+    const official = new Set(normalizeProfileDomains(submitted.profile.officialDomains));
+    const removed = submitted.expected?.desiredPostureBaselines.filter(item => !official.has(item.domain)).map(item => item.domain) ?? [];
+    if (removed.length && !confirmBaselineRemoval(removed)) {
+      this.options.message('Profile not saved. Expected settings for removed official domains are unchanged.');
+      return null;
+    }
     const unchanged = this.unchanged();
     this.#update({ saving: true });
     try {

@@ -457,6 +457,12 @@ export function normalizeEvidenceHistory(
   rawList: unknown,
   options: SnapshotOptions = {},
 ): CaseEvidenceSnapshot[] {
+  const ordered = [...evidenceByMaterial(rawList, options).values()].sort(compareSnapshotChrono);
+  const kept = ordered.slice(Math.max(0, ordered.length - MAX_EVIDENCE_SNAPSHOTS_PER_CASE));
+  return assignUniqueSnapshotIds(kept);
+}
+
+function evidenceByMaterial(rawList: unknown, options: SnapshotOptions): Map<string, CaseEvidenceSnapshot> {
   const list = Array.isArray(rawList) ? rawList : [];
   const byMaterial = new Map<string, CaseEvidenceSnapshot>();
   for (const raw of list) {
@@ -467,9 +473,26 @@ export function normalizeEvidenceHistory(
     // collision can never merge two genuinely different snapshots.
     byMaterial.set(built.material, existing ? mergeDuplicateSnapshots(existing, built.snapshot) : built.snapshot);
   }
-  const ordered = [...byMaterial.values()].sort(compareSnapshotChrono);
-  const kept = ordered.slice(Math.max(0, ordered.length - MAX_EVIDENCE_SNAPSHOTS_PER_CASE));
-  return assignUniqueSnapshotIds(kept);
+  return byMaterial;
+}
+
+/** Imports add observations without evicting existing local material. Ordinary
+ * collection still uses the newest-history policy in normalizeEvidenceHistory. */
+export function mergeImportedEvidenceHistory(
+  local: readonly CaseEvidenceSnapshot[],
+  imported: readonly CaseEvidenceSnapshot[],
+  caseDomain: string,
+): { records: CaseEvidenceSnapshot[]; omitted: number } {
+  const options: SnapshotOptions = { source: 'import', fallback: null, caseDomain };
+  const retained = evidenceByMaterial(normalizeEvidenceHistory(local, options), options);
+  let omitted = 0;
+  for (const [material, incoming] of evidenceByMaterial(imported, options)) {
+    const existing = retained.get(material);
+    if (existing) retained.set(material, mergeDuplicateSnapshots(existing, incoming));
+    else if (retained.size < MAX_EVIDENCE_SNAPSHOTS_PER_CASE) retained.set(material, incoming);
+    else omitted += 1;
+  }
+  return { records: assignUniqueSnapshotIds([...retained.values()].sort(compareSnapshotChrono)), omitted };
 }
 
 function assignUniqueSnapshotIds(snapshots: CaseEvidenceSnapshot[]): CaseEvidenceSnapshot[] {
@@ -648,6 +671,7 @@ function valuesMateriallyEqual(
 }
 
 function collectionFieldComparable(field: string, snapshot: CaseEvidenceSnapshot): boolean {
+  if (field === 'registrar' || field === 'createdDate' || field === 'expiryDate') return isPresent(snapshot[field]);
   return field.startsWith('http')
     ? httpSummaryFieldIsObserved(field, snapshot)
     : webCollectionAllowsComparison(field, snapshot.webCollectionQuality, snapshot.scanDepth);
@@ -677,13 +701,16 @@ function incomparableReasonsForEvidence(
   if (!previous || !current || previous.fingerprint === current.fingerprint) return [];
   const reasons: Array<'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'collection-quality'> = [];
   if (!sameObservationContext(previous, current)) reasons.push('observation-context');
-  if (enforceCollectionQuality && previous.scanDepth === 'deep' && current.scanDepth === 'deep'
+  const missingRegistrationValue = (['registrar', 'createdDate', 'expiryDate'] as const).some(field =>
+    !valuesMateriallyEqual(field, previous, current) && (!isPresent(previous[field]) || !isPresent(current[field])));
+  const incompleteWebFields = previous.scanDepth === 'deep' && current.scanDepth === 'deep'
     && (JSON.stringify(previous.webCollectionQuality) !== JSON.stringify(current.webCollectionQuality)
     || COMPARE_FIELDS.some(spec => (spec.modelGate !== 'risk' || riskModelComparable(previous, current))
     && (spec.modelGate !== 'opportunity' || opportunityModelComparable(previous, current))
     && !valuesMateriallyEqual(spec.field, previous, current)
     && (!collectionFieldComparable(spec.field, previous)
-      || !collectionFieldComparable(spec.field, current))))) reasons.push('collection-quality');
+      || !collectionFieldComparable(spec.field, current))));
+  if (enforceCollectionQuality && (missingRegistrationValue || incompleteWebFields)) reasons.push('collection-quality');
   const hasRiskEvidence = previous.riskScore !== null || current.riskScore !== null
     || previous.riskFactors.length > 0 || current.riskFactors.length > 0;
   if (hasRiskEvidence && !riskModelComparable(previous, current)) reasons.push('risk-model');

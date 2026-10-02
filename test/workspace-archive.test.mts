@@ -15,7 +15,7 @@ import {
 import { MAX_BULK_REVIEW_PRESETS, MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN } from '../packages/contracts/workspace-portability.mts';
 import { createRelationshipObservation } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
-import { CASE_SCHEMA_VERSION, createCase, mergeCases, normalizeCaseStore, updateCase, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
+import { CASE_SCHEMA_VERSION, MAX_EVIDENCE_SNAPSHOTS_PER_CASE, MAX_NOTES_PER_CASE, createCase, mergeCases, normalizeCaseStore, updateCase, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
 import { mergeBrandProfiles } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import {
   BULK_PROFILE_CONTEXT_IMPORTED_LIMITATION,
@@ -351,6 +351,26 @@ function removeSections(archive: Awaited<ReturnType<typeof buildWorkspaceArchive
 }
 
 describe('portable workspace archive', () => {
+  test('Case preview and merge agree on omitted imports while retaining local notes and evidence', async () => {
+    const record = createCase({ domain: 'preserved.example' }, NOW);
+    const localCases = normalizeCaseStore([{ ...record,
+      notes: Array.from({ length: MAX_NOTES_PER_CASE }, (_, i) => ({ id: `local-${i}`, body: `Note ${i}`, createdAt: NOW })),
+      evidenceHistory: Array.from({ length: MAX_EVIDENCE_SNAPSHOTS_PER_CASE }, (_, i) => ({ registrar: `Registrar ${i}`, scanDepth: 'fast', capturedAt: NOW })),
+    }]).cases;
+    const local = { ...emptyInput(), cases: localCases };
+    const incoming = { ...emptyInput(), cases: [updateCase([record], record.id, { note: 'Imported note', evidence: { registrar: 'Imported registrar' } }, NOW).record] };
+    const archive = await buildWorkspaceArchive(incoming, { generatedAt: NOW });
+    const preview = await previewWorkspaceArchive(archive, local, { selectedSectionIds: ['cases'] });
+    const section = requiredValue(preview.sections.find(item => item.id === 'cases'));
+    assert.equal(section.status, 'ready');
+    assert.equal(section.authoredHistoryOmitted, 1);
+    assert.equal(section.evidenceHistoryOmitted, 1);
+    const result = requiredValue(mergeReadyWorkspaceArchiveData(local, [section], NOW)[0]);
+    assert.equal(result.authoredHistoryOmitted, section.authoredHistoryOmitted);
+    assert.equal(result.evidenceHistoryOmitted, section.evidenceHistoryOmitted);
+    assert.deepEqual(result.document, localCases);
+  });
+
   test('preview and application preserve full local saved-view and snapshot collections', async () => {
     const local = emptyInput();
     local.bulkReview = { ...bulkReview(), rows: [], presets: Array.from({ length: MAX_BULK_REVIEW_PRESETS }, (_, index) => ({
@@ -807,8 +827,11 @@ describe('portable workspace archive', () => {
     const casesSection = recordValue(archive.sections.cases);
     assert.ok(Array.isArray(casesSection.cases));
     const firstCase = recordValue(casesSection.cases[0]);
-    firstCase.domain = 'tampered.invalid';
-    await assert.rejects(readWorkspaceArchive(archive), /byte-count check|checksum check/);
+    await assert.doesNotReject(readWorkspaceArchive(archive));
+    const originalBytes = Buffer.byteLength(JSON.stringify(archive.sections.cases));
+    firstCase.domain = 'archive-two.invalid';
+    assert.equal(Buffer.byteLength(JSON.stringify(archive.sections.cases)), originalBytes);
+    await assert.rejects(readWorkspaceArchive(archive), /cases failed its archive checksum check/u);
   });
 
   test('rejects an incorrect declared byte count', async () => {

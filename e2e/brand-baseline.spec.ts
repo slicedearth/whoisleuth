@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openInboxReview } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalManifestWrite, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, openBrandProfileList, openBrandWorkbench, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
@@ -442,6 +443,53 @@ test('Brand editors reject same-clock peer changes without replacing unsaved dra
     expect(after.records).toEqual(before.records);
   } finally { await peer.close(); }
 });
+
+for (const peerChangesBaseline of [false, true]) {
+  test(`removing an official domain confirms expected-setting loss${peerChangesBaseline ? ' and rejects a stale confirmation' : ''}`, async ({ page, context }) => {
+    await page.goto('/brands');
+    await migrateLegacyBrowserData(page, {
+      [PROFILES_KEY]: currentBrandProfileBrowserStore([{ ...profileFixture(), officialDomains: ['stored.example', 'kept.example'],
+        desiredPostureBaselines: [{ domain: 'stored.example', nameservers: ['ns.original.example'], updatedAt: ISO }],
+      }]), [ACTIVE_KEY]: 'profile-1',
+    });
+    await page.getByRole('button', { name: 'Edit Stored Brand (profile-1)', exact: true }).click();
+    await page.getByLabel('Official domains').fill('kept.example');
+    page.once('dialog', async dialog => {
+      expect(dialog.message()).toContain('Remove expected settings for 1 official domain (stored.example)');
+      await dialog.dismiss();
+    });
+    await page.getByRole('button', { name: 'Save profile', exact: true }).click();
+    const status = page.getByRole('status', { name: 'Brand Profile action status' });
+    await expect(status).toContainText('Profile not saved');
+    await expect(page.getByLabel('Official domains')).toHaveValue('kept.example');
+    const before = await readBrowserLocalCollection(page, 'brand_profiles');
+    expect(before.records[0]?.value.desiredPostureBaselines).toHaveLength(1);
+    const peer = peerChangesBaseline ? await context.newPage() : null;
+    try {
+      if (peer) {
+        await peer.goto('/brands');
+        await openBrandWorkbench(peer, 'baselines');
+        const baseline = peer.locator('#desired-posture-baseline');
+        await baseline.getByLabel('Nameservers', { exact: true }).fill('ns.peer.example');
+        await baseline.getByRole('button', { name: 'Save expected settings', exact: true }).click();
+        await expect(peer.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved expected domain settings');
+      }
+      const expected = await readBrowserLocalCollection(page, 'brand_profiles');
+      page.once('dialog', dialog => dialog.accept());
+      await page.getByRole('button', { name: 'Save profile', exact: true }).click();
+      await expect(status).toContainText(peer ? 'Brand Profile changed or was deleted' : 'Saved "Stored Brand"');
+      const after = await readBrowserLocalCollection(page, 'brand_profiles');
+      if (peer) {
+        expect(after.records).toEqual(expected.records);
+        expect(after.manifest.revision).toBe(expected.manifest.revision);
+        await expect(page.getByLabel('Official domains')).toHaveValue('kept.example');
+      } else {
+        expect(after.records[0]?.value.officialDomains).toEqual(['kept.example']);
+        expect(after.records[0]?.value.desiredPostureBaselines).toEqual([]);
+      }
+    } finally { await peer?.close(); }
+  });
+}
 
 test('deleting a Brand Profile preserves later typing as a distinct new-identity draft', async ({ page, context }) => {
   await page.goto('/brands');
@@ -1809,6 +1857,46 @@ test('requires an explicit official-domain choice before enabling new-domain pas
   await expect(region.getByRole('status')).toContainText('Domain control passport has expired.');
   await expect(region.getByRole('heading', { name: 'Import preview' })).toHaveCount(0);
   expect(await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).toEqual(beforeExpiry);
+});
+
+test('passport capacity blocks new baselines while keeping existing baseline updates available', async ({ page }, testInfo) => {
+  await page.clock.setFixedTime(ISO);
+  await page.goto('/brands');
+  const domains = Array.from({ length: 20 }, (_, index) => `d${index}.example`);
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([{ ...profileFixture(), officialDomains: [...domains, 'new.example'],
+      desiredPostureBaselines: domains.map(domain => ({ domain, nameservers: ['ns.old.example'], updatedAt: ISO })),
+    }]), [ACTIVE_KEY]: 'profile-1',
+  });
+  await openBrandWorkbench(page, 'passport');
+  const passport = buildDomainControlManifest({ schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, version: 1,
+    expiresAt: '2026-09-13T04:05:06.000Z',
+    entries: ['d0.example', 'new.example'].map(domain => ({ domain, nameservers: ['ns.updated.example'] })),
+  }, ISO);
+  const region = page.getByRole('region', { name: 'Portable domain settings' });
+  await region.getByLabel('Review passport').setInputFiles({ name: 'capacity-passport.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(passport)) });
+  const blocked = region.locator('fieldset', { hasText: 'new.example' });
+  await expect(blocked.locator('legend').getByRole('checkbox')).toBeDisabled();
+  await expect(blocked).toContainText('already has 20 configured baselines');
+  await expect(region.locator('fieldset', { hasText: 'd0.example' }).locator('legend').getByRole('checkbox')).toBeEnabled();
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled() && width !== 390) {
+        await blocked.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath(`passport-capacity-${width}-${theme}.png`) });
+      }
+    }
+  }
+  await region.getByRole('button', { name: 'Import selected fields' }).click();
+  await expect(region.getByRole('status')).toContainText('Imported reviewed fields for 1 domain.');
+  const saved = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  const baselines = saved.records[0]!.value.desiredPostureBaselines as Array<{ domain: string; nameservers: string[] }>;
+  expect(baselines).toHaveLength(20);
+  expect(baselines.find(item => item.domain === 'd0.example')?.nameservers).toEqual(['ns.updated.example']);
+  expect(baselines.some(item => item.domain === 'new.example')).toBe(false);
 });
 
 test('a future Brand Profile schema is never overwritten by an older app', async ({ page }) => {

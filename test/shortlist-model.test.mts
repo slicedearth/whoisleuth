@@ -108,9 +108,9 @@ test('imports add, update, and disclose invalid and duplicate entries', () => {
     schema: SHORTLIST_SCHEMA,
     version: SHORTLIST_SCHEMA_VERSION,
     entries: [
-      record('local.invalid', { riskScore: 33 }),
+      record('local.invalid', { riskScore: 33, savedAt: '2026-07-15T08:00:00.000Z' }),
       record('added.invalid'),
-      record('ADDED.INVALID', { riskScore: 88 }),
+      record('ADDED.INVALID', { riskScore: 88, savedAt: '2026-07-15T08:00:00.000Z' }),
       { domain: '' },
     ],
   });
@@ -129,6 +129,17 @@ test('imports the current portable envelope without treating export metadata as 
   assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 1, updated: 0, skipped: 0 });
   assert.equal(requiredValue(result.entries[0]).domain, 'portable.invalid');
   assert.equal(requiredValue(result.entries[0]).exportedAt, undefined);
+});
+
+test('shortlist restore preserves newer local evidence and equal-time conflicts', () => {
+  const local = normalizeShortlistStore([record('retained.example')]).entries;
+  for (const savedAt of [NOW, '2026-07-01T00:00:00.000Z']) {
+    const imported = buildShortlistExport([record('retained.example', { savedAt, availability: 'available', riskScore: 0 })]);
+    const result = mergeShortlistStores(local, imported);
+    assert.deepEqual(result.entries, local);
+    assert.equal(result.updated, 0);
+    assert.equal(result.skipped, 1);
+  }
 });
 
 test('imports reject malformed and future structured exports', () => {

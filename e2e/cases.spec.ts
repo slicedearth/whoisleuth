@@ -596,6 +596,8 @@ test('Case tag undo preserves a newer change from another tab', async ({ page })
     await page.getByRole('button', { name: 'Save tags', exact: true }).click();
     const undo = page.getByRole('region', { name: 'Undo analyst change' });
     await expect(undo).toBeVisible();
+    await other.reload();
+    await openCaseMetadata(other);
     await other.getByRole('textbox', { name: /^Additional tags\b/u }).fill('later-review');
     await other.getByRole('button', { name: 'Save tags', exact: true }).click();
     await expect.poll(async () => (await readBrowserLocalCollection(other, 'cases')).records[0]?.value.tags).toEqual(['later-review']);
@@ -606,6 +608,35 @@ test('Case tag undo preserves a newer change from another tab', async ({ page })
   } finally {
     await other.close();
   }
+});
+
+test('stale Case status and tag edits preserve the peer record and the local draft', async ({ page, context }) => {
+  await openCasesView(page);
+  await createCase(page, 'stale-edit.invalid');
+  await openCaseMetadata(page);
+  const tags = page.getByRole('textbox', { name: /^Additional tags\b/u });
+  await tags.fill('local-draft');
+  const peer = await context.newPage();
+  try {
+    await peer.goto(page.url());
+    await openCaseMetadata(peer);
+    const peerStatus = peer.getByRole('combobox', { name: /^Status\b/u });
+    await expect(peerStatus).toBeVisible();
+    await peerStatus.selectOption('monitoring');
+    await expect(caseWorkspaceActionStatus(peer)).toContainText('Set stale-edit.invalid');
+    await peer.getByRole('textbox', { name: /^Additional tags\b/u }).fill('peer-tags');
+    await peer.getByRole('button', { name: 'Save tags', exact: true }).click();
+    await expect(caseWorkspaceActionStatus(peer)).toContainText('Updated tags');
+    const before = await readBrowserLocalCollection(peer, 'cases');
+    await page.getByRole('combobox', { name: /^Status\b/u }).selectOption('escalated');
+    await expect(caseWorkspaceActionStatus(page)).toContainText('Case status changed after this edit');
+    await page.getByRole('button', { name: 'Save tags', exact: true }).click();
+    await expect(caseWorkspaceActionStatus(page)).toContainText('Case tags changed after this edit');
+    await expect(tags).toHaveValue('local-draft');
+    const after = await readBrowserLocalCollection(page, 'cases');
+    expect(after.records).toEqual(before.records);
+    expect(after.manifest.revision).toBe(before.manifest.revision);
+  } finally { await peer.close(); }
 });
 
 test('projects retained evidence into a filterable source-attributed timeline', async ({ page }) => {

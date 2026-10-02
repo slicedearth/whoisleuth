@@ -72,6 +72,26 @@ test('current export and repeated import preserve both identities without mergin
   assert.equal(imported.cases.find(record => record.id === separate.id)?.notes.length, 0);
 });
 
+test('field-owned edits reject stale status, disposition, reason and tags without rejecting unrelated notes', () => {
+  const original = createCase({ domain: 'edits.example', status: 'new', tags: ['original'] }, BEFORE);
+  const newer = updateCase([original], original.id, { status: 'monitoring', disposition: 'false_positive', reviewReasonCode: 'authorized_or_owned', tags: ['peer'] }, AFTER);
+  const baseline = structuredClone(newer.cases);
+  for (const patch of [
+    { status: 'escalated', expectedStatus: original.status },
+    { disposition: 'confirmed_abuse', expectedDisposition: original.disposition },
+    { reviewReasonCode: 'other_reviewed', expectedReviewReasonCode: original.reviewReasonCode ?? null },
+    { tags: ['draft'], expectedTags: original.tags },
+  ]) {
+    assert.throws(() => updateCase(newer.cases, original.id, patch, AFTER), /changed after this edit was started/u);
+    assert.deepEqual(newer.cases, baseline);
+  }
+  const updated = updateCase(newer.cases, original.id, { tags: ['reviewed'], expectedTags: ['peer'], note: 'Independent note' }, AFTER);
+  assert.deepEqual(updated.record.tags, ['reviewed']);
+  assert.equal(updated.record.status, 'monitoring');
+  assert.equal(Object.hasOwn(updated.record, 'expectedTags'), false);
+  assert.equal(updated.record.notes.at(-1)?.body, 'Independent note');
+});
+
 test('legacy exports merge only into an unambiguous domain or matching stable identity', () => {
   const { first, second, records } = incidents();
   const legacy = { version: 15, cases: [{ ...first, id: 'legacy-other-id' }] };

@@ -8,6 +8,7 @@
     DOMAIN_CONTROL_PASSPORT_FIELDS,
     MAX_DOMAIN_CONTROL_PASSPORT_BYTES,
     passportConfiguredFields,
+    passportImportCapacityIssue,
     passportFieldSummary,
     serializeDomainControlManifest,
     verifyDomainControlPassport,
@@ -47,6 +48,7 @@
   const draft = createDraftRevision(() => active.id);
   const importReady = $derived(Boolean(imported?.entries.some((entry) =>
     selectedImports.includes(entry.domain)
+      && !passportImportCapacityIssue(active, entry.domain)
       && (active.officialDomains.includes(entry.domain) || addDomains.includes(entry.domain))
       && (importFields[entry.domain] ?? []).length > 0
   )));
@@ -113,7 +115,7 @@
       }));
       imported = verified;
       selectedImports = verified.entries
-        .filter((entry) => active.officialDomains.includes(entry.domain))
+        .filter((entry) => active.officialDomains.includes(entry.domain) && !passportImportCapacityIssue(active, entry.domain))
         .map((entry) => entry.domain);
       addDomains = [];
       importFields = Object.fromEntries(verified.entries.map((entry) => [entry.domain, passportConfiguredFields(entry)]));
@@ -142,9 +144,10 @@
         .map((entry) => ({
           domain: entry.domain,
           addOfficialDomain: addDomains.includes(entry.domain),
-          fields: importFields[entry.domain] ?? [],
-        }));
-      if (!choices.length || choices.every((choice) => !choice.fields.length)) {
+          fields: (importFields[entry.domain] ?? []).filter((field) => passportConfiguredFields(entry).includes(field)),
+        }))
+        .filter((choice) => choice.fields.length > 0);
+      if (!choices.length) {
         throw new Error('Select at least one configured field to import.');
       }
       const expected = $state.snapshot(active);
@@ -214,15 +217,17 @@
         {@const isOfficial = active.officialDomains.includes(entry.domain)}
         {@const importEligible = isOfficial || addDomains.includes(entry.domain)}
         {@const configuredFields = passportConfiguredFields(entry)}
+        {@const capacityIssue = passportImportCapacityIssue(active, entry.domain)}
         <fieldset>
-          <legend><label><input type="checkbox" checked={selectedImports.includes(entry.domain)} onchange={(event) => toggleImport(entry.domain, event.currentTarget.checked)}> <span>{entry.domain}</span></label></legend>
+          <legend><label><input type="checkbox" disabled={Boolean(capacityIssue)} checked={selectedImports.includes(entry.domain)} onchange={(event) => toggleImport(entry.domain, event.currentTarget.checked)}> <span>{entry.domain}</span></label></legend>
+          {#if capacityIssue}<p class="limitation">{capacityIssue}</p>{/if}
           {#if !isOfficial}
-            <label class="add-domain"><input type="checkbox" checked={addDomains.includes(entry.domain)} onchange={(event) => toggleAdd(entry.domain, event.currentTarget.checked)}> Add as an official domain</label>
+            <label class="add-domain"><input type="checkbox" disabled={Boolean(capacityIssue)} checked={addDomains.includes(entry.domain)} onchange={(event) => toggleAdd(entry.domain, event.currentTarget.checked)}> Add as an official domain</label>
           {/if}
           <div class="field-grid">
             {#each DOMAIN_CONTROL_PASSPORT_FIELDS as field}
               <label class:unavailable={!configuredFields.includes(field)}>
-                <input type="checkbox" disabled={!configuredFields.includes(field) || !selectedImports.includes(entry.domain) || !importEligible} checked={(importFields[entry.domain] ?? []).includes(field)} onchange={(event) => toggleField(entry.domain, field, event.currentTarget.checked)}>
+                <input type="checkbox" disabled={Boolean(capacityIssue) || !configuredFields.includes(field) || !selectedImports.includes(entry.domain) || !importEligible} checked={(importFields[entry.domain] ?? []).includes(field)} onchange={(event) => toggleField(entry.domain, field, event.currentTarget.checked)}>
                 <span>{fieldLabels[field]}</span>
                 <small>{passportFieldSummary(entry, field)}</small>
               </label>

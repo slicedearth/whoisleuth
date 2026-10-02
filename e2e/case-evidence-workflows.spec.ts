@@ -26,7 +26,7 @@ test.describe('evidence timeline', () => {
         webCollectionQuality: { version: 1, page: 'unavailable', favicon: 'unknown', combined: 'partial' } }),
     ] })], CASE_SCHEMA_VERSION);
     const latest = page.locator('.timeline-entry').first();
-    await expect(latest).toContainText('Web collection limits comparison');
+    await expect(latest).toContainText('Collection limits comparison');
     await expect(latest.locator('.timeline-change')).toHaveCount(0);
     await expect(latest.locator('.timeline-incomparable-note')).toContainText('not treated as additions or removals');
     const riskSummary = page.locator('dl.evidence dt').filter({ hasText: /^Risk$/ }).locator('..').locator('dd').nth(1);

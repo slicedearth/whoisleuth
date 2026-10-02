@@ -38,7 +38,7 @@ export async function openWorkspaceRecovery(input: ReviewedWorkspaceArchive, opt
     documents.set(owner[1], result.document);
   }
   const omissions = merged.reduce((total, result) => total + result.skipped + (result.pruned ?? 0)
-    + (result.brandProfileReferencesOmitted ?? 0) + (result.authoredHistoryOmitted ?? 0), 0);
+    + (result.brandProfileReferencesOmitted ?? 0) + (result.authoredHistoryOmitted ?? 0) + (result.evidenceHistoryOmitted ?? 0), 0);
   const destination = await openBrowserWorkspaceDestination(options);
   const { workspace, provider } = destination;
   options = { name: options.name, requireEncryption: options.requireEncryption };

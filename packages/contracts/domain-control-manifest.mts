@@ -475,7 +475,7 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         bounds: [
           { id: 'exported-entries', path: '$.selectedDomains', phase: 'action', unit: 'entries', minimum: 1, maximum: MAX_DOMAIN_CONTROL_BROWSER_PROFILE_ENTRIES, handling: 'cap_operation' },
           { id: 'previewed-entries', path: '$.verifiedManifest.entries', phase: 'action', unit: 'entries', minimum: 1, maximum: MAX_DOMAIN_CONTROL_MANIFEST_ENTRIES, handling: 'reject' },
-          { id: 'applied-baselines', path: '$.choices', phase: 'action', unit: 'entries', minimum: 0, maximum: MAX_DOMAIN_CONTROL_BROWSER_PROFILE_ENTRIES, handling: 'cap_operation' },
+          { id: 'applied-baselines', path: '$.choices', phase: 'action', unit: 'entries', minimum: 0, maximum: MAX_DOMAIN_CONTROL_BROWSER_PROFILE_ENTRIES, handling: 'reject' },
         ],
       },
       {

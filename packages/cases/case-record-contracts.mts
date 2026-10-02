@@ -217,7 +217,14 @@ export type CaseInput = {
   branchUpdate?: unknown;
   note?: unknown;
 };
-export type CasePatch = Omit<Partial<CaseInput>, 'domain'> & { expectedTitle?: string };
+type CaseEditExpectations = {
+  expectedTitle?: string;
+  expectedStatus?: CaseStatus;
+  expectedDisposition?: CaseDisposition;
+  expectedReviewReasonCode?: string | null;
+  expectedTags?: readonly string[];
+};
+export type CasePatch = Omit<Partial<CaseInput>, 'domain'> & CaseEditExpectations;
 
 /** Application-authored response values, distinct from hostile import admission.
  * Runtime operations still validate relationships, limits and lifecycle policy. */
@@ -225,9 +232,8 @@ type AuthoredFields<T> = Partial<Omit<T, 'id' | 'createdAt' | 'updatedAt'>>;
 type ActionMetadata = Pick<CaseActionRecord,
   'type' | 'recipient' | 'contactSource' | 'routeObservedAt' | 'routeReviewAfter'
   | 'contactLimitations' | 'dueAt' | 'followUpAt' | 'originActionId' | 'amendment'>;
-export type CaseResponseMutation = {
+export type CaseResponseMutation = CaseEditExpectations & {
   title?: string;
-  expectedTitle?: string;
   status?: CaseStatus;
   disposition?: CaseDisposition;
   reviewReasonCode?: string | null;

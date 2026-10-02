@@ -182,6 +182,7 @@ export interface WorkspaceArchivePreviewSection extends Omit<WorkspaceArchiveSec
   pruned?: number;
   brandProfileReferencesOmitted?: number;
   authoredHistoryOmitted?: number;
+  evidenceHistoryOmitted?: number;
   selected: boolean;
   normalizedSettings?: WorkspaceSettings | null;
 }
@@ -210,6 +211,7 @@ interface WorkspaceMergeResult {
   pruned?: number;
   brandProfileReferencesOmitted?: number;
   authoredHistoryOmitted?: number;
+  evidenceHistoryOmitted?: number;
   profiles?: BrandProfile[];
   settings?: WorkspaceSettings;
   reason?: string;
@@ -836,6 +838,7 @@ function previewVerifiedWorkspaceArchive(
         pruned: result.pruned ?? 0,
         brandProfileReferencesOmitted: result.brandProfileReferencesOmitted ?? 0,
         authoredHistoryOmitted: result.authoredHistoryOmitted ?? 0,
+        evidenceHistoryOmitted: result.evidenceHistoryOmitted ?? 0,
         selected,
         normalizedSettings: result.settings || null,
       });
@@ -877,6 +880,7 @@ function previewVerifiedWorkspaceArchive(
         pruned: 0,
         brandProfileReferencesOmitted: 0,
         authoredHistoryOmitted: 0,
+        evidenceHistoryOmitted: 0,
         selected: false,
         normalizedSettings: dependentId === 'settings' ? null : dependentSection.normalizedSettings ?? null,
       };

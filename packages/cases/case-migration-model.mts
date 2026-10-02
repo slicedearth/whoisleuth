@@ -19,7 +19,7 @@ import {
 import { normalizeCase } from './case-record-operations.mts';
 import { normalizeCaseObjective } from './case-incident-context.mts';
 import { normalizeDomain } from '../evidence/domain-name.mts';
-import { normalizeEvidenceHistory } from './case-evidence-model.mts';
+import { mergeImportedEvidenceHistory, normalizeEvidenceHistory } from './case-evidence-model.mts';
 import type {
   CaseDisposition,
   CaseEvidenceSnapshot,
@@ -377,16 +377,6 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
   };
 }
 
-/** @param {CaseNote[]} a @param {CaseNote[]} b @returns {CaseNote[]} */
-function unionNotes(a: CaseNote[], b: CaseNote[]): CaseNote[] {
-  const byId = new Map<string, CaseNote>();
-  for (const note of [...a, ...b]) {
-    if (!byId.has(note.id)) byId.set(note.id, note);
-  }
-  const notes = [...byId.values()].sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
-  return notes.slice(Math.max(0, notes.length - MAX_NOTES_PER_CASE));
-}
-
 function retainLocalAuthoredRecords<T extends { id: string }>(
   local: readonly T[],
   imported: readonly T[],
@@ -405,18 +395,6 @@ function retainLocalAuthoredRecords<T extends { id: string }>(
     retainedIds.add(item.id);
   }
   return { records, omitted };
-}
-
-// Additive, deduplicated union of two evidence histories. Identical material
-// collapses (earliest firstCapturedAt, latest capturedAt), distinct snapshots
-// are retained subject to the per-case bound, and an older import can never
-// move an existing observation backwards.
-function mergeEvidenceHistories(
-  local: CaseEvidenceSnapshot[],
-  imported: CaseEvidenceSnapshot[],
-  caseDomain: string,
-): CaseEvidenceSnapshot[] {
-  return normalizeEvidenceHistory([...local, ...imported], { source: 'import', fallback: null, caseDomain });
 }
 
 /** @param {ImportPatch} patch @param {string} now @returns {CaseRecord} */
@@ -461,9 +439,11 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
 function applyImportPatch(
   local: CaseRecord,
   patch: ImportPatch,
-): { record: CaseRecord; brandProfileReferencesOmitted: number; authoredHistoryOmitted: number } {
+): { record: CaseRecord; brandProfileReferencesOmitted: number; authoredHistoryOmitted: number; evidenceHistoryOmitted: number } {
   const importNewer = patch.updatedAt !== null && Date.parse(patch.updatedAt) > Date.parse(local.updatedAt);
   const fallback = patch.updatedAt || local.updatedAt;
+  const noteSelection = retainLocalAuthoredRecords(local.notes, patch.notes, MAX_NOTES_PER_CASE);
+  const historySelection = mergeImportedEvidenceHistory(local.evidenceHistory, patch.evidenceHistory, local.domain);
   const pinSelection = retainLocalAuthoredRecords(local.evidencePins, patch.evidencePins, MAX_CASE_EVIDENCE_PINS);
   const evidencePins = normalizeCaseEvidencePins(pinSelection.records, fallback);
   const pinIds = new Set(evidencePins.map((item) => item.id));
@@ -497,6 +477,7 @@ function applyImportPatch(
   const attachments = mergeCaseAttachments(local.attachments, patch.attachments);
   const evidenceLinks = mergeCaseEvidenceLinks(local.evidenceLinks, patch.evidenceLinks);
   const authoredHistoryOmitted = patch.authoredHistoryOmitted
+    + noteSelection.omitted
     + pinSelection.omitted
     + decisionSelection.omitted
     + assertionSelection.omitted
@@ -510,7 +491,7 @@ function applyImportPatch(
     reviewReasonCode: patch.reviewReasonCode !== undefined && importNewer ? patch.reviewReasonCode : local.reviewReasonCode ?? null,
     brandProfileIds: brandProfileReferences.ids,
     source: patch.source !== undefined && importNewer ? patch.source : local.source,
-    evidenceHistory: mergeEvidenceHistories(local.evidenceHistory, patch.evidenceHistory, local.domain),
+    evidenceHistory: historySelection.records,
     evidencePins,
     decisions,
     actions,
@@ -523,10 +504,10 @@ function applyImportPatch(
     ...(attachments === undefined ? {} : { attachments }),
     ...(evidenceLinks === undefined ? {} : { evidenceLinks }),
     tags: normalizeTags([...local.tags, ...patch.tags]),
-    notes: unionNotes(local.notes, patch.notes),
+    notes: normalizeNotes(noteSelection.records, fallback),
     createdAt: patch.createdAt && Date.parse(patch.createdAt) < Date.parse(local.createdAt) ? patch.createdAt : local.createdAt,
     updatedAt: importNewer ? (patch.updatedAt ?? local.updatedAt) : local.updatedAt,
-  }, brandProfileReferencesOmitted: brandProfileReferences.omitted, authoredHistoryOmitted };
+  }, brandProfileReferencesOmitted: brandProfileReferences.omitted, authoredHistoryOmitted, evidenceHistoryOmitted: historySelection.omitted };
 }
 
 function pickFreeId(preferred: unknown, domain: string, used: Set<string>): string {
@@ -653,12 +634,12 @@ function caseCollectionImportEnvelope(importedRaw: unknown): Record<string, unkn
  * reinterpreted.
  * @param {CaseRecord[]} localCases
  * @param {unknown} importedRaw
- * @returns {{ cases: CaseRecord[], added: number, updated: number, skipped: number, brandProfileReferencesOmitted: number, authoredHistoryOmitted: number }}
+ * @returns {{ cases: CaseRecord[], added: number, updated: number, skipped: number, brandProfileReferencesOmitted: number, authoredHistoryOmitted: number, evidenceHistoryOmitted: number }}
  */
 export function mergeCases(
   localCases: CaseRecord[],
   importedRaw: unknown,
-): { cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; authoredHistoryOmitted: number } {
+): { cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; authoredHistoryOmitted: number; evidenceHistoryOmitted: number } {
   assertBoundedJsonStructure(importedRaw, 'Case import', CASE_INPUT_JSON_LIMITS);
   const importedEnvelope = caseCollectionImportEnvelope(importedRaw);
   const importedVersion = parseStoreVersion(importedEnvelope);
@@ -684,6 +665,7 @@ export function mergeCases(
   let skipped = imported.omitted;
   let brandProfileReferencesOmitted = 0;
   let authoredHistoryOmitted = 0;
+  let evidenceHistoryOmitted = 0;
   const fallback = new Date(0).toISOString();
   const importedIds = new Set<string>();
   for (const item of imported.items) {
@@ -714,6 +696,7 @@ export function mergeCases(
       byId.set(existing.id, merged.record);
       brandProfileReferencesOmitted += patch.brandProfileReferencesOmitted + merged.brandProfileReferencesOmitted;
       authoredHistoryOmitted += merged.authoredHistoryOmitted;
+      evidenceHistoryOmitted += merged.evidenceHistoryOmitted;
       updated += 1;
     } else if (byId.size < MAX_CASES) {
       const record = caseFromPatch(patch, fallback);
@@ -734,5 +717,6 @@ export function mergeCases(
     skipped,
     brandProfileReferencesOmitted,
     authoredHistoryOmitted,
+    evidenceHistoryOmitted,
   };
 }

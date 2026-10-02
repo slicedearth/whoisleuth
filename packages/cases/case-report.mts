@@ -564,7 +564,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
         if (reasons.includes('risk-model')) lines.push('> Risk scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
         if (reasons.includes('opportunity-model')) lines.push('> Opportunity scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
         if (reasons.includes('scan-depth')) lines.push('> Capture depths differ, so unevaluated deep signals are not treated as additions or removals.');
-        if (reasons.includes('collection-quality')) lines.push('> Incomplete or unknown web collection prevents comparison of affected page, favicon and score fields.');
+        if (reasons.includes('collection-quality')) lines.push('> Missing or incomplete observations prevent comparison of affected registration, page, favicon or score fields.');
         if (reasons.length === 0 || reasons.includes('other')) lines.push('> The observations differ materially, but no reliable field-level comparison is available.');
         lines.push('');
       }

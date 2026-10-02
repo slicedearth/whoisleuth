@@ -89,6 +89,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   let calibrationMode = $state(false);
   let noteDraft = $state('');
   let tagDraft = $state('');
+  let tagExpected = $state<string[]>([]);
   let newDomain = $state('');
   let openingCase = $state(false);
   let incidentDraftDirty = $state(false);
@@ -138,6 +139,10 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   function caseTagDraft(record: CaseRecord) {
     return caseFreeformTags(record.tags).join(', ');
   }
+  function loadTagDraft(record: CaseRecord) {
+    tagDraft = caseTagDraft(record);
+    tagExpected = [...record.tags];
+  }
   async function selectCase(record: CaseRecord) {
     selectionRevision.changed();
     await navigateCase(record.id);
@@ -179,7 +184,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     casePage = 1;
     showCasePage(record);
     expandedId = record.id;
-    tagDraft = caseTagDraft(record);
+    loadTagDraft(record);
     noteDraft = '';
     await navigateCase(record.id, responseRequested);
   }
@@ -218,7 +223,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
       casePage = 1;
       showCasePage(record);
       expandedId = record.id;
-      tagDraft = caseTagDraft(record);
+      loadTagDraft(record);
       noteDraft = '';
       await navigateCase(record.id);
       if (unchanged())
@@ -252,7 +257,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   }
   async function setStatus(record: CaseRecord, value: string) {
     try {
-      const committed = await editCase(record.id, { status: value });
+      const committed = await editCase(record.id, { status: value, expectedStatus: record.status });
       await reconcileCommittedCaseMutation(committed, `Set ${record.domain} to ${statusLabel(value)}.`);
     }
     catch (cause) {
@@ -261,7 +266,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   }
   async function setDisposition(record: CaseRecord, value: string) {
     try {
-      const committed = await editCase(record.id, { disposition: value });
+      const committed = await editCase(record.id, { disposition: value, expectedDisposition: record.disposition });
       await reconcileCommittedCaseMutation(committed, `Marked ${record.domain} as ${dispositionLabel(value)}.`);
     }
     catch (cause) {
@@ -270,7 +275,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   }
   async function setReviewReason(record: CaseRecord, value: string) {
     try {
-      const committed = await editCase(record.id, { reviewReasonCode: value });
+      const committed = await editCase(record.id, { reviewReasonCode: value, expectedReviewReasonCode: record.reviewReasonCode ?? null });
       await reconcileCommittedCaseMutation(committed, `Updated the review reason for ${record.domain}.`);
     }
     catch (cause) {
@@ -344,14 +349,15 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     return changeBrandProfileAssociation(record, profileId, 'remove');
   }
   async function saveTags(record: CaseRecord) {
-    const previous = [...record.tags];
+    const previous = [...tagExpected];
     const submittedDraft = tagDraft;
     const unchanged = tagRevision.capture();
     try {
-      const next = caseTagsWithTypes(submittedDraft.split(/[,\n]+/).map(value => value.trim()).filter(Boolean), caseTypeIds(record.tags));
+      const next = caseTagsWithTypes(submittedDraft.split(/[,\n]+/).map(value => value.trim()).filter(Boolean), caseTypeIds(previous));
       if (previous.join('\\0') === next.join('\\0'))
         return;
-      const committed = await editCaseTags(record.id, next);
+      const committed = await editCaseTags(record.id, next, previous);
+      if (expandedId === record.id) tagExpected = [...committed.record.tags];
       if (unchanged())
         tagDraft = caseTagDraft(committed.record);
       await reconcileCommittedCaseSnapshot(committed, `Updated tags for ${record.domain}.`, expandedId === record.id ? committed.record : null);
@@ -360,6 +366,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
         undo: async () => {
           const unchangedUndo = tagRevision.capture();
           const restored = await restoreCaseTags(committed.undo);
+          if (expandedId === restored.record.id) tagExpected = [...restored.record.tags];
           if (expandedId === restored.record.id && unchangedUndo())
             tagDraft = caseTagDraft(restored.record);
           await reconcileCommittedCaseSnapshot(restored, `Restored the previous tags for ${record.domain}.`, expandedId === restored.record.id ? restored.record : null);
@@ -474,7 +481,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
       if (file.size > MAX_CASE_IMPORT_BYTES)
         throw new Error(`Case imports are limited to ${MAX_CASE_IMPORT_BYTES} bytes.`);
       const result = await importCases(parseBoundedJson(await file.text(), { label: 'Case import', maximumBytes: MAX_CASE_IMPORT_BYTES }));
-      const success = `Imported ${result.added} new and ${result.updated} merged cases${result.skipped ? `; skipped ${result.skipped} invalid or over-limit record${result.skipped === 1 ? '' : 's'}` : ''}${result.brandProfileReferencesOmitted ? `; omitted ${result.brandProfileReferencesOmitted} Brand Profile reference${result.brandProfileReferencesOmitted === 1 ? '' : 's'} beyond the retained bounds` : ''}${result.authoredHistoryOmitted ? `; omitted ${result.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${result.authoredHistoryOmitted === 1 ? '' : 's'}` : ''}.`;
+      const success = `Imported ${result.added} new and ${result.updated} merged cases${result.skipped ? `; skipped ${result.skipped} invalid or over-limit record${result.skipped === 1 ? '' : 's'}` : ''}${result.brandProfileReferencesOmitted ? `; omitted ${result.brandProfileReferencesOmitted} Brand Profile reference${result.brandProfileReferencesOmitted === 1 ? '' : 's'} beyond the retained bounds` : ''}${result.authoredHistoryOmitted ? `; omitted ${result.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${result.authoredHistoryOmitted === 1 ? '' : 's'}` : ''}${result.evidenceHistoryOmitted ? `; omitted ${result.evidenceHistoryOmitted} imported evidence snapshot${result.evidenceHistoryOmitted === 1 ? '' : 's'} to preserve local history` : ''}.`;
       await reconcileCommittedCaseSnapshot(result, success);
     }
     catch (cause) {
@@ -584,7 +591,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
       showCasePage(record);
       if (expandedId !== record.id) {
         expandedId = record.id;
-        tagDraft = caseTagDraft(record);
+        loadTagDraft(record);
         noteDraft = '';
       }
       await tick();

@@ -367,6 +367,16 @@ export function updateCase(
   if (patch.title !== undefined && patch.expectedTitle !== undefined && patch.expectedTitle !== (current.title ?? '')) {
     throw new Error('The incident title changed after this draft was started. Reload and review the current title before saving; your draft has not been applied.');
   }
+  for (const [value, expected, actual, label] of [
+    [patch.status, patch.expectedStatus, current.status, 'status'],
+    [patch.disposition, patch.expectedDisposition, current.disposition, 'disposition'],
+    [patch.reviewReasonCode, patch.expectedReviewReasonCode, current.reviewReasonCode ?? null, 'review reason'],
+    [patch.tags, patch.expectedTags, current.tags, 'tags'],
+  ] as const) {
+    if (value !== undefined && expected !== undefined && JSON.stringify(expected) !== JSON.stringify(actual)) {
+      throw new Error(`The Case ${label} changed after this edit was started. Reopen the Case to review the current value; your edit has not been applied.`);
+    }
+  }
   let notes = current.notes;
   if (patch.note !== undefined) {
     const body = normalizeNoteBody(patch.note);

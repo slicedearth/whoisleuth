@@ -164,6 +164,33 @@ test('failed writes preserve the draft and expected record for a deliberate retr
   assert.equal(editor.state.visible, false);
 });
 
+test('removing an official domain requires confirmation before discarding its expected settings', async () => {
+  const h = harness();
+  const original = requiredValue(normalizeBrandProfile({ ...profile(), officialDomains: ['example.test', 'kept.example'],
+    desiredPostureBaselines: [{ domain: 'example.test', nameservers: ['ns.example'], updatedAt: '2026-09-20T00:00:00.000Z' }],
+  }));
+  h.editor.edit(original);
+  h.editor.setValue('official', 'kept.example');
+  let writes = 0;
+  const write = async (submission: BrandEditorSubmission) => {
+    writes++;
+    assert.deepEqual(submission.expected?.desiredPostureBaselines, original.desiredPostureBaselines);
+    return { profile: requiredValue(normalizeBrandProfile({ ...original, ...submission.profile })), issue: null };
+  };
+  assert.equal(await h.editor.save(write), null);
+  assert.equal(writes, 0);
+  assert.equal(h.editor.state.values.official, 'kept.example');
+  assert.equal(h.editor.state.visible, true);
+  assert.match(h.message, /unchanged/u);
+  await h.editor.save(write, domains => { assert.deepEqual(domains, ['example.test']); return true; });
+  assert.equal(writes, 1);
+  assert.equal(h.editor.state.expected?.desiredPostureBaselines.length, 0);
+  h.editor.edit(original);
+  h.editor.setValue('name', 'Renamed');
+  await h.editor.save(write, () => { throw new Error('No domain removal to confirm'); });
+  assert.equal(writes, 2);
+});
+
 test('a committed save with failed reconciliation remains open and advances its expected snapshot', async () => {
   for (const issue of ['active-preference', 'reread'] as const) {
     const { editor } = harness();

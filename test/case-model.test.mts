@@ -393,6 +393,54 @@ describe('reviewed recheck outcome', () => {
   });
 });
 
+describe('additive import retention', () => {
+  test('full local notes and observations survive newer imports, including duplicate-material reconciliation', () => {
+    const local = requiredValue(model.normalizeCase({
+      domain: 'retention.example', id: 'retention-case', createdAt: ISO, updatedAt: ISO,
+      notes: Array.from({ length: model.MAX_NOTES_PER_CASE }, (_, i) => ({ id: `local-${i}`, body: `Local note ${i}`, createdAt: ISO })),
+      evidenceHistory: Array.from({ length: model.MAX_EVIDENCE_SNAPSHOTS_PER_CASE }, (_, i) => ({ ...deepEvidence({ registrar: `Local registrar ${i}` }), capturedAt: ISO })),
+    }, undefined, ISO));
+    const exported = model.buildCaseExport([{
+      ...local, updatedAt: LATER,
+      notes: [...local.notes.slice(0, 1), { id: 'imported-note', body: 'New import', createdAt: LATER }],
+      evidenceHistory: model.normalizeEvidenceHistory([
+        { ...local.evidenceHistory[0], capturedAt: LATER },
+        { ...deepEvidence({ registrar: 'Imported registrar' }), capturedAt: LATER },
+      ], { fallback: LATER, caseDomain: local.domain }),
+    }], LATER);
+    const result = model.mergeCases([local], exported);
+    const retained = requiredValue(result.cases[0]);
+    assert.deepEqual(retained.notes, local.notes);
+    assert.deepEqual(new Set(retained.evidenceHistory.map(item => item.registrar)), new Set(local.evidenceHistory.map(item => item.registrar)));
+    const duplicate = retained.evidenceHistory.find(item => item.registrar === local.evidenceHistory[0]?.registrar);
+    assert.equal(duplicate?.firstCapturedAt, ISO);
+    assert.equal(duplicate?.capturedAt, LATER);
+    assert.equal(result.authoredHistoryOmitted, 1);
+    assert.equal(result.evidenceHistoryOmitted, 1);
+    const again = model.mergeCases(result.cases, exported);
+    assert.deepEqual(again.cases, result.cases);
+    assert.equal(again.evidenceHistoryOmitted, 1);
+    const available = model.mergeCases([{ ...local, notes: local.notes.slice(0, -1), evidenceHistory: local.evidenceHistory.slice(0, -1) }], exported);
+    assert.equal(available.cases[0]?.notes.some(note => note.id === 'imported-note'), true);
+    assert.equal(available.authoredHistoryOmitted, 0);
+    assert.equal(available.cases[0]?.evidenceHistory.length, model.MAX_EVIDENCE_SNAPSHOTS_PER_CASE);
+    assert.equal(available.evidenceHistoryOmitted, 0, 'One available slot admits the distinct observation without evicting locals.');
+  });
+
+  test('unobserved registration scalars are incomparable rather than removed, including fast captures', () => {
+    const before = normalizedSnapshot({ scanDepth: 'fast', registrar: 'Observed registrar', createdDate: ISO, expiryDate: LATEST }, { fallback: ISO });
+    for (const field of ['registrar', 'createdDate', 'expiryDate'] as const) {
+      const missing = normalizedSnapshot({ ...before, [field]: null, capturedAt: LATER });
+      for (const [a, b] of [[before, missing], [missing, before]] as const) {
+        assert.equal(model.compareCaseEvidence(a, b).some(change => change.field === field), false);
+        assert.ok(model.caseEvidenceIncomparableReasons(a, b).includes('collection-quality'));
+      }
+    }
+    const after = normalizedSnapshot({ ...before, registrar: 'Different registrar', expiryDate: '2027-07-01T00:00:00.000Z', capturedAt: LATER });
+    assert.deepEqual(model.compareCaseEvidence(before, after).map(change => change.field), ['registrar', 'expiryDate']);
+  });
+});
+
 describe('current Case Brand Profile references', () => {
   test('round trips current opaque references without case-folding or resolution', () => {
     const opened = model.openOrCreateCase([], {

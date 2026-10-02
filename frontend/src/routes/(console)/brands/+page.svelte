@@ -669,6 +669,7 @@
     try {
       const result = await profileEditor.save((submitted) =>
         commitProfileWrite(submitted.profile, submitted.editingId, { expected: submitted.expected }),
+        domains => confirm(`Remove expected settings for ${domains.length} official domain${domains.length === 1 ? '' : 's'} (${domains.join(', ')})? These settings will be removed when you save this profile.`),
       );
       if (!result) return;
       savedProfileId = result.profile.id;
