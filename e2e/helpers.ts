@@ -229,6 +229,7 @@ export async function expectNoHorizontalOverflow(page: Page) {
         };
       })
       .filter((item) => item.right > doc.clientWidth + tolerance || item.left < -tolerance)
+      .sort((left, right) => right.right - left.right)
       .slice(0, 8);
     return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth, offenders };
   }, OVERFLOW_TOLERANCE_PX), { message: 'horizontal overflow: rendered content must fit the viewport' }).toBeNull();

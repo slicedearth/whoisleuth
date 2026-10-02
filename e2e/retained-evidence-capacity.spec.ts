@@ -31,7 +31,7 @@ for (const viewport of [
     await migrateLegacyBrowserData(page, {
       'whois-rdap-cases-v1': JSON.parse(serializeCaseStore(retainedCases())),
       'whoisleuth-relationship-observations-v1': currentBrowserLocalDocument('relationship_observations', {
-        observations: [createRelationshipObservation({ type: 'ip_address', value: '192.0.2.10', domains: members }, { retainedAt: NOW })],
+        observations: [createRelationshipObservation({ type: 'ip_address', value: '11.12.13.14', domains: members }, { retainedAt: NOW })],
       }),
     }, { clearStorage: true, destination: '/monitor?view=timeline' });
     await useTheme(page, theme);

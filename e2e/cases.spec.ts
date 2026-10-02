@@ -109,7 +109,7 @@ test('Cases and monitoring report unreadable collections without false empty sta
   await expect(page.getByRole('heading', { name: 'Cases unavailable' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No cases yet' })).toHaveCount(0);
   await openConsoleView(page, 'watchlists');
-  await expect(page.getByRole('tab', { name: /^Watchlists/ }).locator('span')).toHaveAttribute('aria-label', 'count unavailable');
+  await expect(page.getByRole('tab', { name: /^Watchlists/ })).toHaveAccessibleName('Watchlists count unavailable');
   await expect(page.getByRole('heading', { name: 'Watchlists unavailable' })).toBeVisible();
   await expect(page.getByText(/No watchlists/i)).toHaveCount(0);
 });

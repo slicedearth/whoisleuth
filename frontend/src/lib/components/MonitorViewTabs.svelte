@@ -52,6 +52,7 @@
 <style>
   .view-groups{margin-bottom:16px}
   .view-group{min-width:0}
-  button span{padding:1px 7px;border-radius:99px;background:var(--border);color:var(--text);font-size:var(--text-2xs)}
+  button{position:relative}
+  button span[aria-hidden="true"]{padding:1px 7px;border-radius:99px;background:var(--border);color:var(--text);font-size:var(--text-2xs)}
   @media(max-width:760px){.view-groups{grid-template-columns:minmax(0,1fr)}button{min-height:44px;padding-inline:10px}}
 </style>

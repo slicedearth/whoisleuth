@@ -1,6 +1,6 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCaseSection, openConsoleView, openInboxReview } from './console-navigation';
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
@@ -157,7 +157,7 @@ test('a pending review read stays loading after the other timeline collections a
   }, rationale);
   try {
     await openConsoleView(page, 'relationships');
-    await expect(page.getByRole('tab', { name: /^Relationships/u }).locator('span')).not.toHaveAttribute('aria-label', /count (loading|unavailable)/u);
+    await expect(page.getByRole('tab', { name: /^Relationships/u })).toHaveAccessibleName('Relationships 0 saved');
     await openConsoleView(page, 'inbox');
     await expect.poll(() => gate.evaluate((control) => control.held)).toBe(true);
     const gaps = page.getByRole('region', { name: 'Evidence gaps', exact: true });
@@ -178,7 +178,7 @@ test('an unreadable review collection cannot produce an apparently complete acti
   await seed(page);
   await failBrowserLocalCollectionReads(page, 'analyst_review_state');
   await openConsoleView(page, 'timeline');
-  await expect(page.getByRole('tab', { name: /^Timeline/u }).locator('span')).toHaveAttribute('aria-label', 'count unavailable');
+  await expect(page.getByRole('tab', { name: /^Timeline/u })).toHaveAccessibleName('Timeline count unavailable');
   await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toHaveCount(0);
 });
 
@@ -187,12 +187,23 @@ async function holdNextWorker(page: Page) {
   let release = () => {};
   const released = new Promise<void>((resolve) => { release = resolve; });
   let held = 0;
-  await page.route(pattern, async (route) => {
+  const pending = new Set<Promise<void>>();
+  const handler = async (route: Route) => {
     held += 1;
-    if (held === 1) await released;
-    await route.fallback();
-  });
-  return { release, count: () => held, dispose: async () => { release(); if (!page.isClosed()) await page.unroute(pattern); } };
+    const first = held === 1;
+    const operation = (async () => {
+      if (first) await released;
+      await route.fallback();
+    })();
+    pending.add(operation);
+    try { await operation; } finally { pending.delete(operation); }
+  };
+  await page.route(pattern, handler);
+  return { release, count: () => held, dispose: async () => {
+    release();
+    if (!page.isClosed()) await page.unroute(pattern, handler);
+    await Promise.all(pending);
+  } };
 }
 
 async function workerProbe(page: Page) {
@@ -261,7 +272,7 @@ test('held preparation is not an empty result and switching views cancels it wit
     await expect.poll(held.count).toBe(1);
     await expect(page.getByRole('status').filter({ hasText: 'Preparing the timeline locally' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('tab', { name: /^Timeline/u }).locator('span')).toHaveAttribute('aria-label', 'count loading');
+    await expect(page.getByRole('tab', { name: /^Timeline/u })).toHaveAccessibleName('Timeline count loading');
     await openConsoleView(page, 'inbox');
     await expect(page.getByRole('region', { name: 'Evidence gaps', exact: true })).toContainText('2 evidence gaps to review');
     await expect.poll(async () => (await probe.evaluate((value) => value.read())).operations[0]?.terminatedAt ?? 0).toBeGreaterThan(0);
@@ -284,7 +295,7 @@ test('failed preparation allows deliberate retry and refresh preserves filters, 
   await openConsoleView(page, 'timeline');
   await expect(page.getByRole('status').filter({ hasText: 'retained review worker is unavailable' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('tab', { name: /^Timeline/u }).locator('span')).toHaveAttribute('aria-label', 'count unavailable');
+  await expect(page.getByRole('tab', { name: /^Timeline/u })).toHaveAccessibleName('Timeline count unavailable');
   await page.unroute(pattern);
   await page.getByRole('button', { name: 'Retry timeline', exact: true }).press('Enter');
   const timeline = page.getByRole('region', { name: 'Investigation timeline', exact: true });
@@ -327,7 +338,7 @@ test('leaving Monitor cancels the active worker without a late route update', as
 
 test('unchanged views reuse preparation and deleting a retained record invalidates that cached evidence', async ({ page }) => {
   await seed(page, { 'whoisleuth-relationship-observations-v1': currentBrowserLocalDocument('relationship_observations', {
-    observations: [createRelationshipObservation({ type: 'ip_address', value: '192.0.2.10', domains: ['retained-00.example', 'retained-01.example'] }, { retainedAt: NOW })],
+    observations: [createRelationshipObservation({ type: 'ip_address', value: '11.12.13.14', domains: ['retained-00.example', 'retained-01.example'] }, { retainedAt: NOW })],
   }) });
   const probe = await workerProbe(page);
   try {
@@ -348,7 +359,7 @@ test('unchanged views reuse preparation and deleting a retained record invalidat
     const held = await holdNextWorker(page);
     try {
       await openConsoleView(page, 'timeline');
-      await expect(page.getByRole('tab', { name: /^Timeline/u }).locator('span')).toHaveAttribute('aria-label', 'count loading');
+      await expect(page.getByRole('tab', { name: /^Timeline/u })).toHaveAccessibleName('Timeline count loading');
       await expect.poll(held.count).toBe(1);
       await expect(timeline).toHaveCount(0);
       held.release();
