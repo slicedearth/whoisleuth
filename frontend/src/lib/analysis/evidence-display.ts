@@ -11,6 +11,7 @@ import {
 import type { CaseEvidenceSnapshot } from './case-model.ts';
 import { httpSecurityHeaderLabel } from './http-summary.ts';
 import { webCollectionScoreLimitation } from '../../../../packages/evidence/collection-quality.mts';
+import { MAX_RESPONSE_VALUE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -208,6 +209,31 @@ export function formatChangeEntry(change: EvidenceChange) {
   const afterText = formatChangeValue(change.field, change.after);
   const kind = classifyChangeKind(change.field, change.before, change.after);
   return { field: change.field, label: change.label, beforeText, afterText, tone: change.tone, kind };
+}
+
+/** Retain whole readable changes, with explicit accounting when a Case pin
+ * cannot hold them all. The on-screen comparison still shows every change. */
+export function recheckComparisonSummary(changes: readonly EvidenceChange[]): {
+  comparisonSummary: string; comparisonTruncated: boolean;
+} {
+  if (!changes.length) return {
+    comparisonSummary: 'No comparable material field change was found between the retained Case observations.',
+    comparisonTruncated: false,
+  };
+  const entries = changes.map(formatChangeEntry).map(change => `${change.label}: ${change.beforeText} to ${change.afterText}`);
+  const complete = entries.join('; ');
+  if (complete.length <= MAX_RESPONSE_VALUE_LENGTH) return { comparisonSummary: complete, comparisonTruncated: false };
+  const retained: string[] = [];
+  const omission = (count: number) => `[${count} change${count === 1 ? '' : 's'} omitted from this summary]`;
+  for (const entry of entries) {
+    const candidate = [...retained, entry, omission(entries.length - retained.length - 1)].join('; ');
+    if (candidate.length > MAX_RESPONSE_VALUE_LENGTH) break;
+    retained.push(entry);
+  }
+  return {
+    comparisonSummary: [...retained, omission(entries.length - retained.length)].join('; '),
+    comparisonTruncated: true,
+  };
 }
 
 function formatChangeValue(field: string, value: unknown): string {

@@ -39,7 +39,7 @@ import {
   type CasePatch,
   type CaseRecord,
 } from './case-record-contracts.mts';
-import { MAX_CASE_OBJECTIVE_LENGTH } from '../contracts/case-portability.mts';
+import { MAX_CASE_OBJECTIVE_LENGTH, MAX_RESPONSE_VALUE_LENGTH } from '../contracts/case-portability.mts';
 import { caseRecordVersionInput } from './case-record-version-input.mts';
 import { readCaseAttachments } from './case-attachment-model.mts';
 import { readCaseEvidenceLinks, appendCaseEvidenceLink, withdrawCaseEvidenceLink } from './case-evidence-links.mts';
@@ -666,6 +666,7 @@ export function recordCaseRecheckOutcome(
     observedAt: unknown;
     completeness: unknown;
     comparisonSummary: unknown;
+    comparisonTruncated?: unknown;
     source: unknown;
     followUpAt?: unknown;
     limitations?: unknown;
@@ -692,7 +693,8 @@ export function recordCaseRecheckOutcome(
       collectionDepth: input.collectionDepth,
       observationHostname: input.observationHostname,
       completeness: input.completeness,
-      truncated: false,
+      truncated: input.comparisonTruncated === true
+        || (typeof input.comparisonSummary === 'string' && input.comparisonSummary.length > MAX_RESPONSE_VALUE_LENGTH),
       limitations: input.limitations,
     },
   }, now);

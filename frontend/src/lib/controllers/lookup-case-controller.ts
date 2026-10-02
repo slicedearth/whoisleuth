@@ -74,7 +74,7 @@ export type LookupConclusionEvidenceSelection = Readonly<{
 export type LookupRecheckComparison = Readonly<{ available: boolean; changes: EvidenceChange[]; observedAt: string; detail: string }>;
 export type LookupRecheckOutcomeInput = Readonly<{
   state: string; completeness: string; source: string; followUpAt: string | null;
-  limitations: readonly string[]; comparisonSummary: string; recheck?: CaseRecheckAnswerContext;
+  limitations: readonly string[]; comparisonSummary: string; comparisonTruncated?: boolean; recheck?: CaseRecheckAnswerContext;
 }>;
 
 function pruneSuffix(pruned: number): string {

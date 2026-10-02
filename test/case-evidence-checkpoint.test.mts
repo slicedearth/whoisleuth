@@ -8,6 +8,7 @@ import {
   checkpointPinInputs,
   compareCheckpointPins,
   MAX_CHECKPOINT_FACTS,
+  type AcquisitionTransitionComparison,
 } from '../frontend/src/lib/analysis/case-evidence-checkpoint.ts';
 import { buildLookupAssetGraph } from '../packages/investigation/lookup-asset-graph.mts';
 import type { LookupEvidenceReplay } from '../frontend/src/lib/analysis/lookup-evidence-replay.ts';
@@ -359,9 +360,10 @@ describe('case evidence checkpoints', () => {
       createdAt: OBSERVED_AT,
     })), OBSERVED_AT);
     const current = sourceFacts.map((fact) => {
-      if (fact.field === 'dns.mx') return { ...fact, value: 'mx.changed.example' };
+      const later = { ...fact, observedAt: '2026-07-30T01:00:00.000Z' };
+      if (fact.field === 'dns.mx') return { ...later, value: 'mx.changed.example' };
       if (fact.field === 'http.final_origin') return { ...fact, sourceState: 'unavailable', value: null };
-      return fact;
+      return later;
     });
     const states = Object.fromEntries(compareAcquisitionTransitionPins(pins, current)
       .map((item) => [item.field, item.transitionState]));
@@ -371,6 +373,27 @@ describe('case evidence checkpoints', () => {
     assert.equal(states['tls.protocol'], 'manual_review');
     assert.equal(states['http.final_origin'], 'indeterminate');
     assert.ok(pins.every((pin) => pin.transitionExpectation !== null));
+  });
+
+  test('transition verification requires a valid strictly later source observation for equal and changed values', () => {
+    const fact = buildLookupCheckpointFacts(response(), { collectionDepth: 'deep' }).find(item => item.field === 'dns.nameservers');
+    assert.ok(fact);
+    for (const expectation of ['preserve', 'change'] as const) {
+      const pins = normalizeCaseEvidencePins(checkpointPinInputs([fact], [fact.field], {
+        transitionExpectations: { [fact.field]: expectation },
+      }), OBSERVED_AT);
+      for (const observedAt of [OBSERVED_AT, '2026-07-28T01:00:00.000Z', null, 'not-a-time']) {
+        for (const value of [fact.value, 'ns.changed.example']) {
+          const result: AcquisitionTransitionComparison | undefined = compareAcquisitionTransitionPins(pins, [{ ...fact, observedAt, value }])[0];
+          assert.equal(result?.transitionState, 'indeterminate');
+          assert.match(result?.limitations.join(' ') ?? '', /strictly later/u);
+        }
+      }
+      const undated = compareAcquisitionTransitionPins(pins.map(pin => ({ ...pin, observedAt: null })), [{ ...fact, observedAt: '2026-07-30T01:00:00.000Z' }]);
+      assert.equal(undated[0]?.transitionState, 'indeterminate');
+    }
+    const pins = normalizeCaseEvidencePins(checkpointPinInputs([fact], [fact.field]), OBSERVED_AT);
+    assert.equal(compareCheckpointPins(pins, [fact])[0]?.state, 'equal', 'same-observation value comparison remains available');
   });
 
   test('keeps matching partial or differently scoped transition evidence indeterminate', () => {
@@ -402,5 +425,20 @@ describe('case evidence checkpoints', () => {
     })), [{ ...nameservers, collectionDepth: 'fast' }]);
     assert.equal(otherDepth[0]?.state, 'incomparable');
     assert.equal(otherDepth[0]?.transitionState, 'indeterminate');
+  });
+
+  test('evaluates each transition against its own pin when checkpoints share a field', () => {
+    const fact = buildLookupCheckpointFacts(response(), { collectionDepth: 'deep' }).find(item => item.field === 'dns.nameservers');
+    assert.ok(fact);
+    const inputs = checkpointPinInputs([fact], [fact.field], { transitionExpectations: { [fact.field]: 'preserve' } });
+    const pins = normalizeCaseEvidencePins([
+      { ...inputs[0], id: 'earlier-pin', value: 'ns.earlier.example' },
+      { ...inputs[0], id: 'later-pin', value: fact.value },
+    ], OBSERVED_AT);
+    const comparisons = compareAcquisitionTransitionPins(pins, [{ ...fact, observedAt: '2026-07-30T01:00:00.000Z' }]);
+    assert.equal(comparisons.length, 2);
+    assert.deepEqual(comparisons.map(item => [item.before, item.transitionState]), [
+      ['ns.earlier.example', 'unexpected_change'], [fact.value, 'verified_preserved'],
+    ]);
   });
 });

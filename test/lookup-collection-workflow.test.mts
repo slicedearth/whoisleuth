@@ -87,6 +87,7 @@ function harness(request?: LookupRequest, overrides: Partial<LookupCollectionEff
     },
     refreshCase: async (_revision, preferred) => {
       seen.push(`case:${preferred?.id}`);
+      context = { ...context, preferredCase: preferred };
     },
     refreshWatchlist: async () => {
       seen.push('watchlist');
@@ -317,15 +318,36 @@ test('post-collection failures preserve the observation and distinguish refresh,
   }
 });
 
-test('cancelled reveal intent retains the observation without automatically saving or moving focus', async (t) => {
+test('cancelled reveal intent preserves an explicit Case refresh without moving focus', async (t) => {
   const h = harness(undefined, { captureReveal: () => ({ current: () => false, dispose() {} }) });
   t.after(() => h.requests.dispose());
   assert.ok(await h.workflow.run({ refreshCaseEvidence: true }));
   assert.equal(h.state.observation.response, response);
   assert.equal(h.seen.includes('render'), true);
-  assert.equal(h.seen.includes('retain'), false);
+  assert.equal(h.seen.includes('retain'), true);
   assert.equal(
     h.seen.some((step) => step.startsWith('reveal:')),
     false,
   );
+});
+
+test('a missing or changed Case after reconciliation cannot receive a recheck write', async (t) => {
+  for (const selected of [null, { id: 'other-case', domain: 'example.test' }, { id: 'case-original', domain: 'other.test' }]) {
+    const h = harness();
+    t.after(() => h.requests.dispose());
+    const workflow = new LookupCollectionWorkflow(h.session, h.requests, {
+      ...h.effects, refreshCase: async () => { h.context({ preferredCase: selected }); },
+    });
+    assert.ok(await workflow.run({ refreshCaseEvidence: true }));
+    assert.equal(h.seen.includes('retain'), false);
+    assert.equal(h.state.observation.response, response);
+    assert.match(h.state.error, /selected Case changed/u);
+  }
+});
+
+test('ordinary collection does not save a Case even when reveal remains active', async (t) => {
+  const h = harness();
+  t.after(() => h.requests.dispose());
+  assert.ok(await h.workflow.run());
+  assert.equal(h.seen.includes('retain'), false);
 });

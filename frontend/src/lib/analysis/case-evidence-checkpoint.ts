@@ -415,14 +415,16 @@ export function compareAcquisitionTransitionPins(
   pins: readonly CaseEvidencePin[],
   currentFacts: readonly CheckpointFact[],
 ): AcquisitionTransitionComparison[] {
-  const comparisons = new Map(compareCheckpointPins(pins, currentFacts).map((item) => [item.field, item]));
+  const currentByField = new Map(currentFacts.map(fact => [fact.field, fact]));
   return pins
     .filter((pin): pin is CaseEvidencePin & { transitionExpectation: CaseTransitionExpectation } =>
       Boolean(pin.field && pin.transitionExpectation))
     .slice(-MAX_CHECKPOINT_FACTS)
     .flatMap((pin) => {
-      const comparison = comparisons.get(pin.field ?? '');
-      if (!comparison) return [];
+      const comparison = compareCheckpointValue(pin, currentByField.get(pin.field ?? ''));
+      const beforeTime = normalizeExplicitIsoTimestamp(pin.observedAt);
+      const afterTime = normalizeExplicitIsoTimestamp(comparison.observedAt);
+      const laterObservation = beforeTime !== null && afterTime !== null && Date.parse(afterTime) > Date.parse(beforeTime);
       let transitionState: AcquisitionTransitionState = 'indeterminate';
       if (pin.transitionExpectation === 'review') {
         transitionState = 'manual_review';
@@ -430,7 +432,8 @@ export function compareAcquisitionTransitionPins(
         || comparison.state === 'conflicting'
         || comparison.state === 'incomparable'
         || comparison.state === 'missing'
-        || comparison.state === 'not_recorded') {
+        || comparison.state === 'not_recorded'
+        || !laterObservation) {
         transitionState = 'indeterminate';
       } else if (pin.transitionExpectation === 'preserve') {
         transitionState = comparison.state === 'equal' ? 'verified_preserved' : 'unexpected_change';
@@ -439,6 +442,9 @@ export function compareAcquisitionTransitionPins(
       }
       return [{
         ...comparison,
+        limitations: !laterObservation && pin.transitionExpectation !== 'review'
+          ? ['A transition requires a source observation strictly later than the pinned observation.', ...comparison.limitations].slice(0, MAX_CHECKPOINT_LIMITATIONS)
+          : comparison.limitations,
         expectation: pin.transitionExpectation,
         transitionState,
       }];

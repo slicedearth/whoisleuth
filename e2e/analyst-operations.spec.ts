@@ -564,6 +564,31 @@ test('focused inbox reviews keep separate drafts, exact times and keyboard-safe 
   expect(collectionRequests.count()).toBe(0);
 });
 
+test('multiple adjacent Case comparisons render independently across review queues', async ({ page }) => {
+  const domain = 'comparison-review.example';
+  const requests = countCollectionRequests(page);
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord({
+      domain, evidenceHistory: [19, 20, 21, 22].map(day => snapshot({
+        id: `comparison-${day}`, capturedAt: `2026-08-${day}T00:00:00.000Z`,
+        firstCapturedAt: `2026-08-${day}T00:00:00.000Z`, registrar: `Registrar ${day}`,
+      })),
+    })] },
+  }, { destination: '/monitor?view=inbox&queue=all' });
+  const items = page.locator('.review-inbox .items > li').filter({
+    has: page.getByRole('heading', { name: `${domain} · adjacent case snapshots`, exact: true }),
+  });
+  await expect(items).toHaveCount(3);
+  const queues = page.getByRole('group', { name: 'Review queue' });
+  await queues.getByRole('button', { name: /^Changed since review/u }).click();
+  await expect(queues.getByRole('button', { name: /^Changed since review/u })).toHaveAttribute('aria-pressed', 'true');
+  await expect(items).toHaveCount(3);
+  await queues.getByRole('button', { name: /^Everything/u }).click();
+  await expect(items).toHaveCount(3);
+  await expect(items.first()).toBeVisible();
+  expect(requests.count()).toBe(0);
+});
+
 test('one canonical Review Item lifecycle persists independently and recurs after material Case evidence changes', async ({ page }) => {
   const collectionRequests = countCollectionRequests(page);
   await migrateLegacyBrowserData(page, {

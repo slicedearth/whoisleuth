@@ -83,10 +83,28 @@ test('Lookup recheck owns an explicit outcome draft and retains a saved question
     evidenceHistory: [{ ...snapshot({ inputHostname: LOOKUP_TARGET, pageTitle: 'Earlier page' }), observationHostname: LOOKUP_TARGET }] };
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: 16, cases: [record] } }, { destination: '/lookup' });
   let requests = 0;
-  await page.route('**/api/lookup?*', route => { requests += 1; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(responseLoopFixture(requests)) }); });
+  let releaseRecheck!: () => void;
+  const recheckHeld = new Promise<void>(resolve => { releaseRecheck = resolve; });
+  let recheckStarted!: () => void;
+  const recheckEntered = new Promise<void>(resolve => { recheckStarted = resolve; });
+  await page.route('**/api/lookup?*', async route => {
+    requests += 1;
+    if (requests === 2) { recheckStarted(); await recheckHeld; }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(responseLoopFixture(requests)) });
+  });
   await runDeepLookup(page);
   const card = page.locator('.case-card'), recollect = card.getByRole('button', { name: 'Recheck and refresh Case' });
   await expect(recollect).toBeEnabled(); await recollect.click();
+  await recheckEntered;
+  // A real analyst gesture cancels automatic reveal, not the requested save.
+  await page.mouse.wheel(0, 200);
+  await page.keyboard.press('Tab');
+  releaseRecheck();
+  await expect(page.getByRole('button', { name: 'Run lookup', exact: true })).toBeEnabled();
+  await expect.poll(async () => (await readBrowserLocalCollection(page, 'cases')).records[0]!.value.evidenceHistory.length).toBe(2);
+  // Reveal was cancelled, so reopen the section deliberately after confirming
+  // persistence. A missing comparison cannot be hidden by automatic scrolling.
+  await page.getByRole('button', { name: 'Expand Case and response evidence', exact: true }).click();
   const comparison = card.locator('.recheck-comparison'), form = comparison.getByRole('form', { name: 'Record Lookup recheck' });
   await expect(form).toBeVisible();
   const save = form.getByRole('button', { name: 'Record reviewed recheck outcome' });

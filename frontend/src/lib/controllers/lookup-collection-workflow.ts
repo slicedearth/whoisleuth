@@ -173,7 +173,15 @@ export class LookupCollectionWorkflow {
         },
         retain: async () => {
           phase = 'retention';
-          if (options.refreshCaseEvidence && reveal?.current()) await this.effects.retainCase();
+          if (!options.refreshCaseEvidence) return;
+          const selectedCase = this.effects.context().preferredCase;
+          if (!preferredCase || selectedCase?.id !== preferredCase.id || selectedCase.domain !== preferredCase.domain) {
+            state.error = 'Lookup completed, but the selected Case changed. Review the result before saving it to a Case.';
+            return;
+          }
+          // Scrolling or keyboard activity can cancel automatic navigation,
+          // not the explicit request to refresh this same Case's evidence.
+          await this.effects.retainCase();
         },
         ready: async () => {
           phase = 'presentation';

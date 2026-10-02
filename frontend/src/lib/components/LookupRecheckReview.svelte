@@ -10,6 +10,7 @@
   import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
   import { isoFromUtcInput, utcDateTimeInputAttributes } from '$lib/analysis/case-response-form-values.ts';
   import { CASE_RECHECK_CONDITIONS, selectCaseRecheckQuestion, type CaseRecheckAnswerContext } from '../../../../packages/cases/case-recheck-model.mts';
+  import { formatChangeEntry, recheckComparisonSummary } from '$lib/analysis/evidence-display.ts';
 
   let { record, comparison, busy, save, changed }: {
     record: CaseRecord; comparison: LookupRecheckComparison; busy: boolean;
@@ -23,21 +24,15 @@
   const selection = $derived(selectCaseRecheckQuestion(record.assertions, { questionId, questionUpdatedAt, conditionsMatch }));
   const questions = $derived(selection.questions);
   const recheck = $derived(selection.context);
-
-  function display(value: unknown): string {
-    if (Array.isArray(value)) return value.map(String).join(', ') || 'none';
-    return value === null || value === undefined || value === '' ? 'unavailable' : String(value);
-  }
+  const changes = $derived(comparison.changes.map(formatChangeEntry));
   async function submit() {
     error = '';
     if (!comparison.available || outcomeState === 'not_checked' || busy) return;
     if (selection.stale) { error = 'The saved question changed or was resolved. Select it again after reviewing its conditions.'; return; }
     const followUp = isoFromUtcInput(followUpAt);
     if (followUpAt && !followUp) { error = 'Enter a valid UTC follow-up time.'; return; }
-    const comparisonSummary = comparison.changes.length ? comparison.changes.map(change => `${change.label}: ${display(change.before)} to ${display(change.after)}`).join('; ').slice(0, 1000)
-      : 'No comparable material field change was found between the retained Case observations.';
     const input: LookupRecheckOutcomeInput = { state: outcomeState, completeness, source: source.trim(), followUpAt: followUp,
-      limitations: limitations.split(/\r?\n/u).map(item => item.trim()).filter(Boolean), comparisonSummary, ...(recheck ? { recheck } : {}) };
+      limitations: limitations.split(/\r?\n/u).map(item => item.trim()).filter(Boolean), ...recheckComparisonSummary(comparison.changes), ...(recheck ? { recheck } : {}) };
     // Later form edits remain a draft even when this submitted input succeeds.
     const captured = JSON.stringify({ outcomeState, completeness, source, followUpAt, limitations, questionId, questionUpdatedAt, conditionsMatch });
     const origin = form?.contains(document.activeElement) && document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -52,7 +47,7 @@
 <section class="recheck-comparison" aria-labelledby="lookup-recheck-comparison-title">
   <header><strong id="lookup-recheck-comparison-title">Recheck comparison</strong><span>{comparison.observedAt || 'Time unavailable'}</span></header>
   <p>{comparison.detail}</p>
-  {#if comparison.changes.length}<ul>{#each comparison.changes as change}<li data-tone={change.tone}><strong>{change.label}</strong><span>{display(change.before)} → {display(change.after)}</span></li>{/each}</ul>{/if}
+  {#if changes.length}<ul>{#each changes as change}<li data-tone={change.tone}><strong>{change.label}</strong><span>{change.beforeText} → {change.afterText}</span></li>{/each}</ul>{/if}
   {#if comparison.available}
     <form bind:this={form} aria-label="Record Lookup recheck" oninput={() => { error = ''; changed(true); }} onsubmit={event => { event.preventDefault(); void submit(); }}>
       {#if questions.length || questionId}

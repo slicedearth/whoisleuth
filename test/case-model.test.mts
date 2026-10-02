@@ -345,6 +345,18 @@ describe('Incident URL context', () => {
 });
 
 describe('reviewed recheck outcome', () => {
+  test('preserves declared and independently detected summary truncation through export', () => {
+    const original = model.createCase({ domain: 'example.test' }, ISO);
+    for (const summary of [{ comparisonSummary: 'Whole entries; [more changes omitted]', comparisonTruncated: true }, { comparisonSummary: 'x'.repeat(1_001) }]) {
+      const result = model.recordCaseRecheckOutcome([original], original.id, {
+        state: 'changed', observedAt: LATER, completeness: 'complete', source: 'Analyst review', ...summary,
+      }, LATER);
+      assert.equal(result.record.evidencePins[0]?.truncated, true);
+      assert.ok((result.record.evidencePins[0]?.value.length ?? Infinity) <= 1_000);
+      assert.equal(model.buildCaseExport(result.cases, LATER).cases[0]?.evidencePins[0]?.truncated, true);
+    }
+  });
+
   test('retains a comparison pin and links the independent outcome atomically', () => {
     const original = model.createCase({ domain: 'example.test' }, ISO);
     const result = model.recordCaseRecheckOutcome([original], original.id, {

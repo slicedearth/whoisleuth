@@ -8,6 +8,34 @@ const ISO = '2026-05-01T00:00:00.000Z';
 const LATER = '2026-06-01T00:00:00.000Z';
 const LATEST = '2026-07-01T00:00:00.000Z';
 
+describe('recheck summary', () => {
+  test('formats structured factors, security headers and booleans without object coercion', () => {
+    const summary = display.recheckComparisonSummary([
+      { field: 'riskFactors', label: 'Risk factors', before: [], after: [{ label: 'Example factor', points: 5 }], tone: 'neutral' },
+      { field: 'hasMx', label: 'MX', before: false, after: true, tone: 'neutral' },
+      { field: 'httpSecurityHeaders', label: 'Headers', before: [], after: ['hsts'], tone: 'neutral' },
+    ]);
+    assert.equal(summary.comparisonTruncated, false);
+    assert.match(summary.comparisonSummary, /Example factor \(\+5\)/u);
+    assert.match(summary.comparisonSummary, /Not detected to Detected/u);
+    assert.match(summary.comparisonSummary, /HSTS/u);
+    assert.doesNotMatch(summary.comparisonSummary, /\[object Object\]/u);
+  });
+
+  test('retains only whole comparison entries and identifies omitted details', () => {
+    const changes = Array.from({ length: 20 }, (_, index) => ({ field: 'pageTitle', label: `Change ${index}`, before: 'previous', after: 'x'.repeat(100), tone: 'neutral' }));
+    const summary = display.recheckComparisonSummary(changes);
+    assert.equal(summary.comparisonTruncated, true);
+    assert.ok(summary.comparisonSummary.length <= 1_000);
+    const retained = (summary.comparisonSummary.match(/Change /gu) ?? []).length;
+    assert.ok(retained > 0 && retained < 20);
+    assert.ok(summary.comparisonSummary.endsWith(`[${20 - retained} changes omitted from this summary]`));
+    assert.deepEqual(display.recheckComparisonSummary([{ ...changes[0]!, after: 'x'.repeat(1_001) }]), {
+      comparisonSummary: '[1 change omitted from this summary]', comparisonTruncated: true,
+    });
+  });
+});
+
 function deepSnapshot(overrides: Partial<CaseEvidenceSnapshot> = {}): CaseEvidenceSnapshot {
   return {
     id: 'ev-abc',
