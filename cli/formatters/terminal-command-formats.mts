@@ -189,6 +189,11 @@ function formatTerminalPosture(document: TerminalRecord): string {
     `Dependencies   ${dependencies.length} observed · ${dmarcAuthorizations.length} DMARC reporting destination${dmarcAuthorizations.length === 1 ? '' : 's'} checked`,
     '',
   ];
+  for (const value of dmarcAuthorizations.slice(0, 10)) {
+    const item = terminalRecord(value);
+    lines.push(`Reporting      ${safeTerminalValue(item.destination)} · ${safeTerminalValue(item.reportType)} · ${item.state === 'self' ? 'same organisational scope' : safeTerminalValue(item.state).replaceAll('_', ' ')}`);
+    if (item.error) lines.push(`  Detail       ${safeTerminalValue(item.error)}`);
+  }
   for (const value of checks) {
     const item = terminalRecord(value);
     lines.push(`[${safeTerminalValue(item.status, 'info').toUpperCase()}] ${safeTerminalValue(item.label)}: ${safeTerminalValue(item.summary)}`);

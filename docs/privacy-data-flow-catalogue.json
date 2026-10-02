@@ -609,7 +609,7 @@
     {
       "id": "domain_posture",
       "title": "Owned-domain posture review",
-      "requestPurpose": "Review bounded DNS and mail publication posture without changing configuration; a separate opt-in adds inherited DMARC and sampled direct parent referrals.",
+      "requestPurpose": "Review bounded DNS and mail publication posture without changing configuration; a separate opt-in adds inherited DMARC, reporting-destination boundaries and sampled direct parent referrals.",
       "job": "assure",
       "executionPlanes": [
         "hosted_bounded_passive"
@@ -683,7 +683,7 @@
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration.",
-        "Inherited DMARC and direct parent delegation require a separate opt-in: at most seven ancestor TXT questions, one parent NS discovery and A/AAAA discovery for at most two parent servers, followed by one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate."
+        "Inherited DMARC and direct parent delegation require a separate opt-in: up to 32 additional TXT questions within ten seconds cover ancestor policies, reporting-destination boundaries and authorisation. One parent NS discovery and A/AAAA discovery for at most two parent servers precede one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate."
       ]
     },
     {
@@ -6042,7 +6042,7 @@
       "command": "posture",
       "capabilityFamilyId": "domain_posture",
       "title": "Review DNS and mail posture",
-      "requestPurpose": "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor DMARC questions and direct DNS/TCP to sampled parent servers.",
+      "requestPurpose": "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor and reporting-destination DMARC questions and direct DNS/TCP to sampled parent servers.",
       "collectionMode": "network",
       "executionPlanes": [
         "local_cli_network"
@@ -6110,7 +6110,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Missing or failed DNS observations remain inconclusive. --include-inherited-dns explicitly adds a bounded DMARC tree walk and direct parent-delegation sample; records retain their queried owner and source. No message is sent and receiver enforcement is not inferred.",
+        "Missing or failed DNS observations remain inconclusive. --include-inherited-dns adds inherited policy and reporting-boundary reviews within 32 additional TXT queries and ten seconds, plus a direct parent-delegation sample. No message is sent and receiver enforcement is not inferred.",
         "The posture review performs bounded RDAP, DNS and MTA-STS publication checks without changing configuration."
       ],
       "variants": []

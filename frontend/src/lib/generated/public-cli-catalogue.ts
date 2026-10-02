@@ -691,7 +691,7 @@ const SHARED_COMMAND_OPTIONS = [
     "option": "--include-inherited-dns",
     "scope": "command",
     "usage": "--include-inherited-dns",
-    "description": "Explicitly collect inherited DMARC and parent-delegation evidence.",
+    "description": "Explicitly review inherited DMARC, reporting boundaries and parent-delegation evidence.",
     "values": [],
     "repeatable": false,
     "ranges": [],
@@ -2588,10 +2588,10 @@ export const PUBLIC_CLI_CATALOGUE = {
       "common": false,
       "usage": "whoisleuth posture [\u003cdomain>] [--json|--sarif] [--selectors \u003cvalue>] [--retired-selectors \u003cvalue>] [--mail-profile \u003cstandard|defensive-no-mail|parked>] [--include-inherited-dns] [--owned-domain] [--quiet] [--no-color]",
       "example": "whoisleuth posture example.test --mail-profile standard --json",
-      "boundary": "Missing or failed DNS observations remain inconclusive. --include-inherited-dns explicitly adds a bounded DMARC tree walk and direct parent-delegation sample; records retain their queried owner and source. No message is sent and receiver enforcement is not inferred.",
+      "boundary": "Missing or failed DNS observations remain inconclusive. --include-inherited-dns adds inherited policy and reporting-boundary reviews within 32 additional TXT queries and ten seconds, plus a direct parent-delegation sample. No message is sent and receiver enforcement is not inferred.",
       "collection": {
         "mode": "network",
-        "scope": "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor DMARC questions and direct DNS/TCP to sampled parent servers."
+        "scope": "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor and reporting-destination DMARC questions and direct DNS/TCP to sampled parent servers."
       },
       "inputs": [
         {
@@ -2625,7 +2625,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecli.posture"
       ],
       "inputLimits": [
-        "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor DMARC questions and direct DNS/TCP to sampled parent servers.",
+        "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor and reporting-destination DMARC questions and direct DNS/TCP to sampled parent servers.",
         "domain: 0-1 text value"
       ],
       "outputLimits": [

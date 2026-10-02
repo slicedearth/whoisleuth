@@ -1,13 +1,13 @@
 import { promises as dns } from 'node:dns';
 import { parse as parseDomain } from 'tldts';
-import { parseDmarcRecords } from './domain-posture-parsers.mts';
+import { validateDmarcExternalReporting, type DmarcExternalAuthorization } from './domain-posture-analysis.mts';
+import { requireDmarcDomain, walkDmarcTree, type DmarcDnsObservation } from './dmarc-discovery.mts';
 import { buildDnssecQuery, DNS_TYPE_NS, normalizeResolverEndpoint, parseDnssecResponse } from './dnssec-chain-validation.mts';
 import { defaultTcpExchange, type DnsExchange } from './service-binding-dns.mts';
 import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
 import type { DomainPostureCheck } from '../packages/evidence/domain-posture-context.mts';
-import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
-type DnsObservation = { records: unknown[]; error: string | null; observedAt?: string | null };
+type DnsObservation = DmarcDnsObservation;
 export type InheritanceDnsDependencies = Readonly<{
   resolveTxt: (name: string) => Promise<unknown[]>;
   resolveNs: (name: string) => Promise<unknown[]>;
@@ -20,13 +20,8 @@ const MAX_PARENT_SERVERS = 2;
 const MAX_NS = 16;
 const QUERY_TIMEOUT_MS = 2200;
 const REVIEW_TIMEOUT_MS = 10_000;
+export const MAX_DMARC_REVIEW_QUERIES = 32;
 const MISSING = new Set(['ENODATA', 'ENOTFOUND', 'ENONAME']);
-
-function requireDomain(domain: string): void {
-  if (typeof domain !== 'string' || domain.length > 253 || !isValidAsciiHostname(domain) || domain !== domain.toLowerCase()) {
-    throw new TypeError('The additional DNS review requires a normalised domain.');
-  }
-}
 
 /** Explicit query parameter; malformed opt-ins never broaden collection. */
 export function parseInheritedDnsSelection(value: unknown): true | undefined {
@@ -39,56 +34,15 @@ function check(id: string, label: string, status: DomainPostureCheck['status'], 
   return { id, label, status, summary, detail, records, remediation: '' };
 }
 
-function policyObservation(owner: string, observation: DnsObservation) {
-  const records = observation.records;
-  let bytes = 0;
-  const admitted = Array.isArray(records) && records.length <= 64 && records.every(raw => {
-    const parts = typeof raw === 'string' ? [raw] : raw;
-    return Array.isArray(parts) && parts.length <= 256 && parts.every(part => {
-      if (typeof part !== 'string' || part.length > 4096) return false;
-      bytes += Buffer.byteLength(part, 'utf8');
-      return bytes <= 65_536;
-    });
-  });
-  const parsed = parseDmarcRecords(admitted ? records : []);
-  const unavailable = Boolean(observation.error) || !admitted;
-  const valid = !unavailable && parsed.valid && ['u', 'n', 'y'].includes(parsed.tags.psd?.toLowerCase() ?? 'u');
-  const state = unavailable ? 'unavailable' : valid ? 'observed' : parsed.records.length ? 'invalid' : 'not found';
-  const description = valid
-    ? `p=${parsed.policy}; sp=${parsed.subdomainPolicy}; np=${parsed.nonexistentSubdomainPolicy}; psd=${parsed.tags.psd?.toLowerCase() ?? 'u'}; test=${parsed.testMode ? 'yes' : 'no'}`
-    : state;
-  const time = typeof observation.observedAt === 'string' && observation.observedAt.length <= 64
-    ? normalizeExplicitIsoTimestamp(observation.observedAt) : null;
-  return { owner, parsed, valid, unavailable, record: `Recursive DNS TXT _dmarc.${owner} · ${time ?? 'time unavailable'} · ${description}` };
-}
-
 /** RFC 9989 sections 4.10–4.10.2; at most eight owners including the exact name. */
 export async function reviewInheritedDmarc(
   domain: string,
   exact: DnsObservation,
   resolve: (owner: string) => Promise<DnsObservation>,
 ): Promise<DomainPostureCheck> {
-  requireDomain(domain);
-  const rows = [policyObservation(domain, exact)];
-  const labels = domain.split('.');
-  let next = labels.length >= 8 ? labels.slice(-7) : labels.slice(1);
-  if (!rows[0]!.valid && !rows[0]!.unavailable) {
-    while (next.length) {
-      const owner = next.join('.');
-      const row = policyObservation(owner, await resolve(`_dmarc.${owner}`));
-      rows.push(row);
-      if (row.unavailable || (row.valid && ['n', 'y'].includes(row.parsed.tags.psd?.toLowerCase() ?? ''))) break;
-      next = next.slice(1);
-    }
-  }
-  const available = rows.filter(row => row.valid);
+  const { rows, available, boundary, incomplete, organisationalDomain } = await walkDmarcTree(domain, exact, resolve, 'policy');
   const explicit = rows[0]!.valid ? rows[0] : null;
-  const boundary = available.find(row => row.parsed.tags.psd?.toLowerCase() === 'n' || row.parsed.tags.psd?.toLowerCase() === 'y');
-  const organisational = boundary?.parsed.tags.psd?.toLowerCase() === 'y'
-    ? domain.split('.').slice(-(boundary.owner.split('.').length + 1)).join('.')
-    : boundary?.owner ?? available.at(-1)?.owner ?? null;
-  const selected = explicit ?? available.find(row => row.owner === organisational) ?? (boundary?.parsed.tags.psd?.toLowerCase() === 'y' ? boundary : null);
-  const incomplete = rows.some(row => row.unavailable || (!row.valid && row.parsed.records.length === 1));
+  const selected = explicit ?? available.find(row => row.owner === organisationalDomain) ?? (boundary?.psd === 'y' ? boundary : null);
   const summary = incomplete ? 'Inherited policy could not be determined from the collected records.'
     : selected ? `${selected.owner === domain ? 'Exact-name' : 'Inherited'} policy published at _dmarc.${selected.owner}.`
       : 'No applicable DMARC policy was found in the completed tree walk.';
@@ -113,7 +67,7 @@ export async function reviewParentDelegation(
   dependencies: InheritanceDnsDependencies,
   signal?: AbortSignal,
 ): Promise<DomainPostureCheck> {
-  requireDomain(domain);
+  requireDmarcDomain(domain);
   const parsed = parseDomain(domain, { allowPrivateDomains: false });
   const child = parsed.domain;
   const parent = parsed.publicSuffix;
@@ -178,14 +132,14 @@ export async function reviewParentDelegation(
   return finish();
 }
 
-export async function collectDnsInheritanceChecks(
+export async function collectDnsInheritanceReview(
   domain: string,
   exact: DnsObservation,
   recursive: DnsObservation,
   options: { signal?: AbortSignal } = {},
   injected?: InheritanceDnsDependencies,
-): Promise<DomainPostureCheck[]> {
-  requireDomain(domain);
+): Promise<{ checks: DomainPostureCheck[]; dmarcAuthorizations: DmarcExternalAuthorization[] }> {
+  requireDmarcDomain(domain);
   options.signal?.throwIfAborted();
   const timeout = AbortSignal.timeout(REVIEW_TIMEOUT_MS);
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
@@ -197,23 +151,60 @@ export async function collectDnsInheritanceChecks(
     resolve4: (name: string) => resolver!.resolve4(name), resolve6: (name: string) => resolver!.resolve6(name),
     exchange: defaultTcpExchange, now: () => new Date(),
   };
-  const resolve = async (owner: string): Promise<DnsObservation> => {
+  let questions = 0;
+  const cache = new Map<string, Promise<DnsObservation>>([[`_dmarc.${domain}`, Promise.resolve(exact)]]);
+  const query = async (owner: string): Promise<DnsObservation> => {
     signal.throwIfAborted();
     if (owner.length > 253) return { records: [], error: 'The DNS question exceeds the name limit.' };
+    questions += 1;
     try { return { records: await dependencies.resolveTxt(owner), error: null, observedAt: dependencies.now().toISOString() }; }
     catch (error) {
       options.signal?.throwIfAborted();
       return { records: [], error: MISSING.has(String((error as {code?: unknown})?.code)) ? null : 'DNS observation unavailable.', observedAt: dependencies.now().toISOString() };
     }
   };
-  const operations = [reviewInheritedDmarc(domain, exact, resolve), reviewParentDelegation(domain, recursive, dependencies, signal)];
-  try { return await Promise.all(operations); }
-  catch {
+  const resolve = (owner: string): Promise<DnsObservation> => {
     options.signal?.throwIfAborted();
-    const settled = await Promise.allSettled(operations);
-    return settled.map((result, index) => result.status === 'fulfilled' ? result.value : check(
+    const existing = cache.get(owner);
+    if (existing) return existing;
+    if (questions >= MAX_DMARC_REVIEW_QUERIES) return Promise.resolve({ records: [], error: 'The shared DMARC query budget was reached.' });
+    const pending = query(owner);
+    cache.set(owner, pending);
+    return pending;
+  };
+  const organisations = new Map<string, Promise<string | null>>();
+  const boundaryRecords = new Map<string, string>();
+  const boundaryResults = new Map<string, string>();
+  const resolveOrganisationalDomain = (owner: string): Promise<string | null> => {
+    const existing = organisations.get(owner);
+    if (existing) return existing;
+    const pending = (async () => {
+      const walk = await walkDmarcTree(owner, await resolve(`_dmarc.${owner}`), resolve, 'organisation');
+      for (const row of walk.rows) if (cache.has(`_dmarc.${row.owner}`)) boundaryRecords.set(row.owner, row.record);
+      boundaryResults.set(owner, `${owner}: organisational domain ${walk.organisationalDomain ?? 'unknown'}.`);
+      return walk.organisationalDomain;
+    })();
+    organisations.set(owner, pending);
+    return pending;
+  };
+  const operations = [
+    reviewInheritedDmarc(domain, exact, resolve),
+    reviewParentDelegation(domain, recursive, dependencies, signal),
+    validateDmarcExternalReporting(domain, exact, resolve, resolveOrganisationalDomain),
+  ] as const;
+  try {
+    const [policy, parent, reporting] = await Promise.allSettled(operations);
+    options.signal?.throwIfAborted();
+    const checks = [policy, parent].map((result, index) => result.status === 'fulfilled' ? result.value : check(
       index === 0 ? 'dmarc_inheritance' : 'parent_delegation', index === 0 ? 'Inherited DMARC policy' : 'Direct parent delegation',
       'warning', 'The additional review could not complete.', 'No absence or effective-policy conclusion is available from the incomplete review.', [],
     ));
-  } finally { await Promise.allSettled(operations); signal.removeEventListener('abort', cancel); cancel(); }
+    const dmarcAuthorizations = reporting.status === 'fulfilled' ? reporting.value : [];
+    if (organisations.size) checks.push(check('dmarc_reporting_boundaries', 'DMARC reporting boundaries',
+      reporting.status === 'rejected' || dmarcAuthorizations.some(item => !['self', 'authorized'].includes(item.state)) ? 'warning' : 'info',
+      'Reporting destinations were reviewed using DNS-derived organisational boundaries.',
+      `${questions} additional DMARC TXT questions used; the shared limit is ${MAX_DMARC_REVIEW_QUERIES} within ten seconds. Each tree walk examines at most eight owners. Unavailable boundaries remain unknown; a missing optional authorisation record does not establish a configuration error.`,
+      [...boundaryResults.values(), ...boundaryRecords.values()]));
+    return { checks, dmarcAuthorizations };
+  } finally { signal.removeEventListener('abort', cancel); cancel(); }
 }

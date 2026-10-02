@@ -310,7 +310,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--mail-profile': enumeration('Choose the expected mail posture for the review.', ['standard', 'defensive-no-mail', 'parked'], 'standard'),
   '--sarif': flag('Write the posture review as SARIF.'),
   '--owned-domain': flag('Declare that the reviewed domain is owned by the analyst.'),
-  '--include-inherited-dns': flag('Explicitly collect inherited DMARC and parent-delegation evidence.'),
+  '--include-inherited-dns': flag('Explicitly review inherited DMARC, reporting boundaries and parent-delegation evidence.'),
   '--trust-anchor': file('Read the analyst-selected DNSSEC trust anchor.'),
   '--owned-or-authorized': flag('Acknowledge ownership or permission for this active collection.'),
   '--active-probe': flag('Explicitly enable the bounded active protocol exchange.'),

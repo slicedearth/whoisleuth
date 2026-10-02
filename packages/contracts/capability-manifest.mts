@@ -919,7 +919,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     outcomes: COMPLETE_OR_LIMITED,
     privacyLimitations: [
       'Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration.',
-      'Inherited DMARC and direct parent delegation require a separate opt-in: at most seven ancestor TXT questions, one parent NS discovery and A/AAAA discovery for at most two parent servers, followed by one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate.',
+      'Inherited DMARC and direct parent delegation require a separate opt-in: up to 32 additional TXT questions within ten seconds cover ancestor policies, reporting-destination boundaries and authorisation. One parent NS discovery and A/AAAA discovery for at most two parent servers precede one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate.',
     ],
     featurePolicyId: 'domain_posture',
     featurePolicyDependencies: ['dns_intelligence'],

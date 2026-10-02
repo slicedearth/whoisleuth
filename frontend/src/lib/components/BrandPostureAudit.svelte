@@ -43,7 +43,7 @@
     <p>Each review requests only the selected batch. Choose another batch to review the remaining domains.</p>
   {/if}
   <label class="inheritance-option"><input type="checkbox" bind:checked={includeInheritedDns} disabled={auditing} /> Include inherited DMARC and direct parent delegation</label>
-  <p class="inheritance-detail">Adds up to seven ancestor DMARC queries and a direct sample of two parent DNS servers per domain, with bounded server discovery. Exact-name results remain separate.</p>
+  <p class="inheritance-detail">Also checks DMARC reporting destinations. Uses up to 32 additional TXT queries within ten seconds and a direct sample of two parent DNS servers per domain. Exact-name results remain separate.</p>
   {#if disabledReason}<p class="feature-disabled" role="note">{disabledReason}</p>{/if}
   {#if results.length}
     <div class="audit-results">
@@ -163,7 +163,9 @@
                 <summary><span>DMARC reporting authorisation</span><strong>{item.report.dmarcAuthorizations.length}</strong></summary>
                 <ul>
                   {#each item.report.dmarcAuthorizations as authorization}
-                    <li><span class="wrap">{authorization.destination}</span> · {authorization.reportType} · {authorization.state}</li>
+                    <li><span class="wrap">{authorization.destination}</span> · {authorization.reportType} · {authorization.state === 'self' ? 'same organisational scope' : authorization.state.replaceAll('_', ' ')}
+                      {#if authorization.error}<p class="limitation">{authorization.error}</p>{/if}
+                    </li>
                   {/each}
                 </ul>
               </details>

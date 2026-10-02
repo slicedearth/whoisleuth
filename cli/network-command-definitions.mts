@@ -26,9 +26,9 @@ export const NETWORK_COMMAND_DEFINITIONS = Object.freeze({
     reference: {
       description: 'Review bounded DNS mail, delegation, and domain-control posture.',
       example: 'whoisleuth posture example.test --mail-profile standard --json',
-      boundary: 'Missing or failed DNS observations remain inconclusive. --include-inherited-dns explicitly adds a bounded DMARC tree walk and direct parent-delegation sample; records retain their queried owner and source. No message is sent and receiver enforcement is not inferred.',
+      boundary: 'Missing or failed DNS observations remain inconclusive. --include-inherited-dns adds inherited policy and reporting-boundary reviews within 32 additional TXT queries and ten seconds, plus a direct parent-delegation sample. No message is sent and receiver enforcement is not inferred.',
     },
-    collection: { scope: 'Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor DMARC questions and direct DNS/TCP to sampled parent servers.' },
+    collection: { scope: 'Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor and reporting-destination DMARC questions and direct DNS/TCP to sampled parent servers.' },
     summary: 'Review DNS and mail posture',
     options: ['--selectors', '--retired-selectors', '--mail-profile', '--include-inherited-dns', '--json', '--sarif', '--owned-domain', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('domain', 'text', 0, 1, [], 'argv_or_stdin')]),

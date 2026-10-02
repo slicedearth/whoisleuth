@@ -266,8 +266,9 @@ hostname history.
 ## Hosted collection
 
 Inherited DMARC and direct parent delegation are off by default. A separate
-settings-review checkbox or CLI `--include-inherited-dns` sends up to seven
-ancestor TXT questions, one parent NS question and A/AAAA discovery for at most
+settings-review checkbox or CLI `--include-inherited-dns` sends up to 32 additional
+TXT questions within ten seconds for ancestor policies, reporting-destination
+boundaries and authorisation, plus one parent NS question and A/AAAA discovery for at most
 two parent servers to the resolver. Each selected parent receives one
 registration-domain NS question over pinned public-address DNS/TCP. No mail is
 sent. Results retain queried owners, source times and normalised policy or

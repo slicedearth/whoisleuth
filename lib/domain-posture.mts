@@ -9,7 +9,7 @@ import { nonEmptyErrorMessage } from './error-detail.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { whoisleuthRequestHeaders } from './outbound-identity.mts';
 import { classifyMxRecords } from './dns-mx.mts';
-import { collectDnsInheritanceChecks } from './dns-inheritance-review.mts';
+import { collectDnsInheritanceReview } from './dns-inheritance-review.mts';
 import type { MxRecord } from './dns-mx.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECK_RECORDS, POSTURE_CHECK_SOURCES, type DomainPostureCheck } from '../packages/evidence/domain-posture-context.mts';
@@ -69,7 +69,7 @@ type DomainPostureCollectorDependencies = Readonly<{
   now: () => Date;
   setTimer: (callback: () => void, milliseconds: number) => DomainPostureTimerHandle;
   clearTimer: (handle: DomainPostureTimerHandle) => void;
-  collectDnsInheritanceChecks?: typeof collectDnsInheritanceChecks;
+  collectDnsInheritanceReview?: typeof collectDnsInheritanceReview;
 }>;
 
 type DomainPostureOptions = {
@@ -306,18 +306,20 @@ function dmarcCheck(query: DnsQuery, authorizations: DmarcExternalAuthorization[
     parsed.failureReporting ? 'Failure reporting is configured.' : 'No failure reporting destination is configured.',
     ...parsed.issues,
   ];
-  const external = authorizations.filter((authorization) => authorization.state !== 'self');
-  const unresolvedExternal = external.filter((authorization) => authorization.state !== 'authorized');
+  const unresolvedExternal = authorizations.filter((authorization) => !['self', 'authorized'].includes(authorization.state));
   const intendedDestinations = parsed.aggregateDestinations.length + parsed.failureDestinations.length;
   const omittedDestinations = Math.max(0, intendedDestinations - authorizations.length);
   if (omittedDestinations) {
     details.push(`Reporting authorisation coverage: ${authorizations.length} of ${intendedDestinations} destinations reviewed; ${omittedDestinations} not checked within the bounded collection. Omitted destinations are not assumed authorised.`);
   }
-  if (external.length > 0) {
+  if (authorizations.length > 0) {
     details.push(
-      `${external.length} external reporting destination${external.length === 1 ? '' : 's'} checked; `
-      + `${unresolvedExternal.length} could not be authorized.`,
+      `${authorizations.length} reporting destination${authorizations.length === 1 ? '' : 's'} reviewed; `
+      + `${unresolvedExternal.length} need further evidence.`,
     );
+  }
+  if (unresolvedExternal.some(item => item.state === 'unavailable')) {
+    details.push('An unknown organisational boundary or unavailable query does not establish a missing authorisation requirement.');
   }
   if (parsed.testMode) {
     return check('dmarc', 'DMARC', 'warning', 'Policy is in test mode (t=y)', {
@@ -341,9 +343,7 @@ function dmarcCheck(query: DnsQuery, authorizations: DmarcExternalAuthorization[
     return check('dmarc', 'DMARC', 'warning', `Enforced at p=${parsed.policy}; reporting authorisation is incomplete`, {
       detail: `${details.join(' ')} ${unresolvedExternal.map((authorization) => `${authorization.destination}: ${authorization.state}.`).join(' ')}`,
       records: parsed.records,
-      remediation: omittedDestinations > 0
-        ? 'Review the unchecked destinations and confirm any required external reporting authorisation before relying on delivery.'
-        : 'Publish the required external reporting authorisation record or remove the unavailable destination.',
+      remediation: 'Review unresolved destinations and their organisational boundaries, then confirm any required external reporting authorisation before relying on delivery.',
     });
   }
   if (!parsed.aggregateReporting) {
@@ -910,17 +910,18 @@ async function collectDomainPosture(
   const enrichment = [
     parsedMtaDns?.valid ? dependencies.fetchMtaStsPolicy(domain, signal) : Promise.resolve(null),
     expandSpfPolicy(domain, spf, resolveEnrichmentTxt),
-    validateDmarcExternalReporting(domain, dmarc, resolveEnrichmentTxt),
     includeInheritedDns === true
-      ? (dependencies.collectDnsInheritanceChecks
-        ? dependencies.collectDnsInheritanceChecks(domain, dmarc, nameservers, signal ? { signal } : {})
+      ? (dependencies.collectDnsInheritanceReview
+        ? dependencies.collectDnsInheritanceReview(domain, dmarc, nameservers, signal ? { signal } : {})
         : Promise.reject(new TypeError('The explicit DNS review collector is unavailable.')))
-      : Promise.resolve([]),
+      : validateDmarcExternalReporting(domain, dmarc, resolveEnrichmentTxt)
+        .then(dmarcAuthorizations => ({ checks: [] as DomainPostureCheck[], dmarcAuthorizations })),
   ] as const;
   // A rejected policy request must not release the operation's capacity while
   // other started enrichment collectors are still settling.
-  const [mtaStsPolicy, spfExpansion, dmarcAuthorizations, inheritanceChecks] = await Promise.all(enrichment)
+  const [mtaStsPolicy, spfExpansion, dnsReview] = await Promise.all(enrichment)
     .finally(() => Promise.allSettled(enrichment));
+  const { dmarcAuthorizations, checks: inheritanceChecks } = dnsReview;
   signal?.throwIfAborted();
   const dnssec = !rdap
     ? { value: null, error: 'RDAP did not return a domain record.' }
@@ -1014,7 +1015,7 @@ async function checkDomainPosture(
       now: () => new Date(),
       setTimer: (callback, milliseconds) => setTimeout(callback, milliseconds),
       clearTimer: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
-      collectDnsInheritanceChecks,
+      collectDnsInheritanceReview,
     });
   } finally {
     options.signal?.removeEventListener('abort', cancel);

@@ -1140,7 +1140,7 @@ test('valid posture results disclose bounded SPF and external-dependency evidenc
   await expect(page.getByText('ns1.example.net', { exact: true })).toBeVisible();
 });
 
-test('additional DNS review is explicit, visible and not retained as a background preference', async ({ page }) => {
+test('additional DNS review is explicit, visible and not retained as a background preference', async ({ page }, testInfo) => {
   const selections: Array<string | null> = [];
   await page.route('**/api/domain-posture?*', async route => {
     const query = new URL(route.request().url()).searchParams;
@@ -1149,6 +1149,10 @@ test('additional DNS review is explicit, visible and not retained as a backgroun
     if (query.get('includeInheritedDns') === '1') {
       report.checks.push({ id: 'dmarc_inheritance', label: 'Inherited DMARC policy', status: 'info', summary: 'Inherited policy published at _dmarc.example.', detail: 'Existing and nonexistent names remain separate.', records: ['Recursive DNS TXT _dmarc.example · policy reject'], remediation: '' });
       report.summary.info += 1;
+      report.dmarcAuthorizations = [
+        { destination: 'reports.stored.example', reportType: 'aggregate', recordName: null, state: 'self', error: null },
+        { destination: 'reports.other.example', reportType: 'aggregate', recordName: null, state: 'unavailable', error: 'The organisational boundary is unknown; no authorisation requirement can be inferred from the missing record.' },
+      ];
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(report) });
   });
@@ -1157,6 +1161,7 @@ test('additional DNS review is explicit, visible and not retained as a backgroun
   await openBrandWorkbench(page, 'posture');
   const option = page.getByRole('checkbox', { name: 'Include inherited DMARC and direct parent delegation' });
   await expect(option).not.toBeChecked();
+  await expect(page.locator('.inheritance-detail')).toContainText('32 additional TXT queries within ten seconds');
   const button = page.getByRole('button', { name: 'Review official domains' });
   const status = page.getByRole('status', { name: 'Brand Profile action status' });
   await button.click(); await expect(status).toHaveText('Reviewed 1/1 official domain.');
@@ -1167,6 +1172,15 @@ test('additional DNS review is explicit, visible and not retained as a backgroun
   expect(selections).toEqual([null, '1']);
   const disclosure = page.locator('.checks details').filter({ has: page.getByText('Inherited DMARC policy', { exact: true }) });
   await disclosure.locator('summary').click(); await expect(disclosure).toContainText('Recursive DNS TXT _dmarc.example');
+  const reporting = page.locator('.audit details').filter({ has: page.getByText('DMARC reporting authorisation', { exact: true }) });
+  await reporting.locator('summary').click();
+  await expect(reporting).toContainText('same organisational scope');
+  await expect(reporting).toContainText('no authorisation requirement can be inferred');
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: 800 }); await useTheme(page, theme);
+    await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await reporting.screenshot({ path: testInfo.outputPath(`reporting-${width}-${theme}.png`) });
+  }
   await page.reload(); await openBrandWorkbench(page, 'posture'); await expect(option).not.toBeChecked();
   expect(selections).toEqual([null, '1']);
 });

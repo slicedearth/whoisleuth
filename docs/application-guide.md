@@ -355,12 +355,15 @@ only the selected fields. Missing, incomplete or stale observations cannot
 confirm an expected absence.
 
 In **Current settings**, **Include inherited DMARC and direct parent delegation**
-is off by default. Selecting it adds a bounded ancestor-policy review and a
-direct parent-server sample when you start **Review official domains**.
+is off by default. Selecting it adds ancestor-policy and reporting-destination
+boundary reviews, sharing at most 32 additional TXT queries within ten seconds,
+and a direct parent-server sample when you start **Review official domains**.
 Each result identifies its queried owner and source. Inherited policy distinguishes
 existing from nonexistent names without deciding which applies; a parent sample
 is not complete delegation or DNSSEC validation. Ordinary Lookup and monitoring
-do not enable this option.
+do not enable this option. Reporting destinations are in the same organisational
+scope only when their DNS-derived boundaries agree. Unknown boundaries do not
+make a missing optional authorisation record a configuration error.
 
 Other Brand views include:
 
