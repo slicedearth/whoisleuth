@@ -394,13 +394,18 @@ class SocketReplyReader {
   #endedError: Error | null = null;
   bytesRead = 0;
   lineCount = 0;
+  #onData = (chunk: Buffer) => this.#receive(chunk);
+  #onError = (error: Error) => this.#fail(error);
+  #onEnd = () => this.#fail(new Error('SMTP server closed the connection before completing a reply.'));
+  #onTimeout = () => this.#fail(new Error('SMTP transport timed out.'));
 
   constructor(socket: net.Socket) {
     this.#socket = socket;
-    socket.on('data', (chunk: Buffer) => this.#receive(Buffer.from(chunk)));
-    socket.once('error', (error) => this.#fail(error));
-    socket.once('end', () => this.#fail(new Error('SMTP server closed the connection before completing a reply.')));
-    socket.once('timeout', () => this.#fail(new Error('SMTP transport timed out.')));
+    socket.on('data', this.#onData);
+    socket.once('error', this.#onError);
+    socket.once('end', this.#onEnd);
+    socket.once('close', this.#onEnd);
+    socket.once('timeout', this.#onTimeout);
   }
 
   #receive(chunk: Buffer): void {
@@ -464,10 +469,15 @@ class SocketReplyReader {
 
   release(): void {
     this.assertIdle();
-    this.#socket.removeAllListeners('data');
-    this.#socket.removeAllListeners('error');
-    this.#socket.removeAllListeners('end');
-    this.#socket.removeAllListeners('timeout');
+    this.detach();
+  }
+
+  detach(): void {
+    this.#socket.removeListener('data', this.#onData);
+    this.#socket.removeListener('error', this.#onError);
+    this.#socket.removeListener('end', this.#onEnd);
+    this.#socket.removeListener('close', this.#onEnd);
+    this.#socket.removeListener('timeout', this.#onTimeout);
   }
 }
 
@@ -482,10 +492,23 @@ function smtpStartTlsOptions(socket: net.Socket, hostname: string): tls.Connecti
   };
 }
 
-async function defaultSmtpProbe(options: Parameters<SmtpProbe>[0]): Promise<SmtpConversationResult> {
-  const socket = net.createConnection({ host: options.address, port: SMTP_PORT, family: options.family });
+type SmtpProbeTransport = Readonly<{
+  connect(options: net.TcpNetConnectOpts): net.Socket;
+  startTls(options: tls.ConnectionOptions): tls.TLSSocket;
+}>;
+
+async function defaultSmtpProbe(options: Parameters<SmtpProbe>[0], transport: SmtpProbeTransport = {
+  connect: options => net.createConnection(options),
+  startTls: options => tls.connect(options),
+}): Promise<SmtpConversationResult> {
+  options.signal.throwIfAborted();
+  const socket = transport.connect({ host: options.address, port: SMTP_PORT, family: options.family });
+  let activeSocket: net.Socket = socket;
+  let reader: SocketReplyReader | null = null;
   socket.setTimeout(options.timeoutMs);
-  const aborted = () => socket.destroy(new Error('SMTP endpoint review timed out.'));
+  // Closing the active phase rejects its pending read/handshake. Do not emit
+  // an unhandled error on the raw socket after ownership has moved to TLS.
+  const aborted = () => { activeSocket.destroy(); };
   options.signal.addEventListener('abort', aborted, { once: true });
   try {
     await new Promise<void>((resolve, reject) => {
@@ -493,37 +516,46 @@ async function defaultSmtpProbe(options: Parameters<SmtpProbe>[0]): Promise<Smtp
         socket.removeListener('connect', connected);
         socket.removeListener('error', failed);
         socket.removeListener('timeout', timedOut);
+        socket.removeListener('close', closed);
       };
       const connected = () => { cleanup(); resolve(); };
       const failed = (error: Error) => { cleanup(); socket.destroy(); reject(error); };
       const timedOut = () => { cleanup(); socket.destroy(); reject(new Error('SMTP connection timed out.')); };
+      const closed = () => failed(new Error('SMTP connection closed before connecting.'));
       socket.once('connect', connected);
       socket.once('error', failed);
       socket.once('timeout', timedOut);
+      socket.once('close', closed);
       if (options.signal.aborted) aborted();
     });
-    const reader = new SocketReplyReader(socket);
+    const replyReader = new SocketReplyReader(socket);
+    reader = replyReader;
     const connection: SmtpConversationConnection = {
       remoteAddress: socket.remoteAddress || null,
-      readReply: () => reader.readReply(),
-      assertIdle: () => reader.assertIdle(),
+      readReply: () => replyReader.readReply(),
+      assertIdle: () => replyReader.assertIdle(),
       write: (command) => new Promise<void>((resolve, reject) => socket.write(command, (error) => error ? reject(error) : resolve())),
       startTls: async (hostname) => {
-        reader.release();
-        const tlsSocket = tls.connect(smtpStartTlsOptions(socket, hostname));
+        replyReader.release();
+        const tlsSocket = transport.startTls(smtpStartTlsOptions(socket, hostname));
+        activeSocket = tlsSocket;
         tlsSocket.setTimeout(options.timeoutMs);
         await new Promise<void>((resolve, reject) => {
           const cleanup = () => {
             tlsSocket.removeListener('secureConnect', secured);
             tlsSocket.removeListener('error', failed);
             tlsSocket.removeListener('timeout', timedOut);
+            tlsSocket.removeListener('close', closed);
           };
           const secured = () => { cleanup(); resolve(); };
           const failed = (error: Error) => { cleanup(); tlsSocket.destroy(); reject(error); };
           const timedOut = () => { cleanup(); tlsSocket.destroy(); reject(new Error('SMTP STARTTLS handshake timed out.')); };
+          const closed = () => failed(new Error('SMTP STARTTLS connection closed before completing the handshake.'));
           tlsSocket.once('secureConnect', secured);
           tlsSocket.once('error', failed);
           tlsSocket.once('timeout', timedOut);
+          tlsSocket.once('close', closed);
+          if (options.signal.aborted) aborted();
         });
         const cipher = tlsSocket.getCipher();
         return Object.freeze({
@@ -535,12 +567,14 @@ async function defaultSmtpProbe(options: Parameters<SmtpProbe>[0]): Promise<Smtp
           remoteAddress: tlsSocket.remoteAddress || null,
         });
       },
-      diagnostics: () => ({ bytesRead: reader.bytesRead, lineCount: reader.lineCount }),
-      destroy: () => socket.destroy(),
+      diagnostics: () => ({ bytesRead: replyReader.bytesRead, lineCount: replyReader.lineCount }),
+      destroy: () => { activeSocket.destroy(); socket.destroy(); },
     };
     return await runSmtpConversation(options.hostname, connection);
   } finally {
     options.signal.removeEventListener('abort', aborted);
+    reader?.detach();
+    activeSocket.destroy();
     socket.destroy();
   }
 }
@@ -1029,6 +1063,8 @@ export {
   runSmtpConversation,
   smtpStartTlsOptions,
   smtpCapabilities,
+  SocketReplyReader,
+  defaultSmtpProbe,
 };
 
 export type {
@@ -1042,6 +1078,7 @@ export type {
   SmtpConversationConnection,
   SmtpConversationResult,
   SmtpProbe,
+  SmtpProbeTransport,
   SmtpReply,
   TlsaObservation,
 };
