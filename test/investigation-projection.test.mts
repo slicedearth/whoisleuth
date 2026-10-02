@@ -385,8 +385,8 @@ describe('typed local investigation projection', () => {
       type: 'ip_address',
       label: 'Shared IP address',
       method: 'Exact normalized address',
-      normalizedValue: '192.0.2.20',
-      value: '192.0.2.20',
+      normalizedValue: '11.12.13.20',
+      value: '11.12.13.20',
       domains: ['first.invalid', 'second.invalid'],
       description: 'Bounded retained pivot.',
       sourceEvidence: ['first.invalid', 'second.invalid'].map((domain) => ({ domain, source: 'dns', status: 'success', observedAt: EARLY, complete: true, truncated: false })),
@@ -409,7 +409,7 @@ describe('typed local investigation projection', () => {
 
     assert.ok(retainedObservation);
     assert.equal(result.sources.relationshipObservations.state, 'supported');
-    assert.equal(entity(result, 'ip_address').properties.ipAddress, '192.0.2.20');
+    assert.equal(entity(result, 'ip_address').properties.ipAddress, '11.12.13.20');
     assert.equal(entity(result, 'ip_address').properties.observationId, retained.id);
     assert.equal(retainedObservation.store, 'relationshipObservations');
     assert.equal(retainedObservation.source, 'dns');

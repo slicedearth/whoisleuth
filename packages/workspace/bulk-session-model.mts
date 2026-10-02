@@ -6,7 +6,7 @@ import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeCaaCritical } from './dns-record-normalization.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { normalizeWebCollectionQuality, webCollectionAllowsComparison, type WebCollectionQuality } from '../evidence/collection-quality.mts';
-import { RELATIONSHIP_EVIDENCE_VERSION } from '../contracts/offline-comparison.mts';
+import { RELATIONSHIP_EVIDENCE_VERSION, RELATIONSHIP_SOURCE_PROVENANCE_VERSION, SUPPORTED_RELATIONSHIP_EVIDENCE_VERSIONS } from '../contracts/offline-comparison.mts';
 import { normalizeRelationshipSourceProjection } from '../comparison/relationship-provenance.mts';
 import type { RelationshipObservation } from '../comparison/relationship-evidence.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
@@ -383,7 +383,7 @@ function nullableHash(value: unknown, expression: RegExp): string | null {
 
 function normalizeRelationship(value: unknown): BulkSessionRelationship {
   const item = record(value);
-  if (item?.version !== undefined && item.version !== 2 && item.version !== RELATIONSHIP_EVIDENCE_VERSION) {
+  if (item?.version !== undefined && !SUPPORTED_RELATIONSHIP_EVIDENCE_VERSIONS.some(version => version === item.version)) {
     throw new TypeError('This Bulk relationship projection uses an unsupported version. No source evidence was interpreted.');
   }
   return {
@@ -395,7 +395,7 @@ function normalizeRelationship(value: unknown): BulkSessionRelationship {
     faviconHash: nullableHash(item?.faviconHash, HASH_64_RE),
     faviconPHash: nullableHash(item?.faviconPHash, PHASH_RE),
     certificateFingerprint: nullableHash(item?.certificateFingerprint, HASH_64_RE),
-    sourceEvidence: item?.version === RELATIONSHIP_EVIDENCE_VERSION ? normalizeRelationshipSourceProjection(item.sourceEvidence) : {},
+    sourceEvidence: Number(item?.version) >= RELATIONSHIP_SOURCE_PROVENANCE_VERSION ? normalizeRelationshipSourceProjection(item?.sourceEvidence) : {},
     truncated: item?.truncated === true,
   };
 }
@@ -579,7 +579,7 @@ export function normalizeBulkSession(value: unknown, sourceStoreVersion?: number
       throw new TypeError('Web collection quality requires Bulk schema 6 or later; historical evidence was not reinterpreted.');
     }
     const publicLegacyRow = sourceStoreVersion === 4;
-    if (publicLegacyRow && record(record(candidate)?.relationship)?.version === RELATIONSHIP_EVIDENCE_VERSION) {
+    if (publicLegacyRow && Number(record(record(candidate)?.relationship)?.version) >= RELATIONSHIP_SOURCE_PROVENANCE_VERSION) {
       throw new TypeError('Bulk schema 4 cannot contain newer relationship source evidence; no evidence was interpreted.');
     }
     const result = normalizeBulkSessionResult(candidate, inheritedProfileContext);

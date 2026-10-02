@@ -12,6 +12,7 @@ import {
   type CommonInfrastructureMatch,
 } from './common-infrastructure.mts';
 import { analyzeBoundedRelationshipGraph } from './bounded-relationship-graph.mts';
+import { isNonPublicAddressRelationship, NON_PUBLIC_RELATIONSHIP_LIMITATION } from '../comparison/relationship-provenance.mts';
 import {
   CASE_RELATIONSHIP_CLUSTER_VERSION,
   REVIEWED_RELATIONSHIP_CLUSTERS_SCHEMA,
@@ -118,7 +119,7 @@ function infrastructureMatchesFor(
 ): CommonInfrastructureMatch[] {
   const matches = new Map<string, CommonInfrastructureMatch>();
   for (const group of groups) {
-    if (group.type !== 'ip_address') continue;
+    if (group.type !== 'ip_address' || isNonPublicAddressRelationship(group.type, group.value)) continue;
     for (const match of classifyCommonInfrastructureAddress(group.value)) {
       matches.set(`${match.sourceId}:${match.cidr}`, match);
       if (matches.size >= 8) break;
@@ -136,6 +137,7 @@ function confidenceFor(
 ): RelationshipClusterConfidence {
   if (infrastructureMatches.length) return 'shared_infrastructure';
   if (groups.some((group) => COMMON_INFRASTRUCTURE_TYPES.has(group.type)
+    && !isNonPublicAddressRelationship(group.type, group.value)
     && group.cases.length >= COMMON_INFRASTRUCTURE_CASE_THRESHOLD)) {
     return 'shared_infrastructure';
   }
@@ -155,6 +157,7 @@ function limitationsFor(
   infrastructureMatches = infrastructureMatchesFor(groups),
 ): string[] {
   const values = new Set<string>();
+  if (groups.some(group => isNonPublicAddressRelationship(group.type, group.value))) values.add(NON_PUBLIC_RELATIONSHIP_LIMITATION);
   if (infrastructureMatches.length) {
     const labels = [...new Set(infrastructureMatches.map((match) => match.sourceLabel))].slice(0, 4);
     values.add(`Exact catalogue match: ${labels.join(', ')}. The matched range is published as shared infrastructure and does not identify an origin host, tenant, account, operator, ownership, intent, safety, or maliciousness.`);

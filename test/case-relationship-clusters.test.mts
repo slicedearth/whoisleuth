@@ -94,7 +94,7 @@ describe('case relationship clusters', () => {
       (_, index) => `common-${index}.invalid`,
     );
     const result = buildCaseRelationshipClusters(summary([
-      relationship('ip_address', '192.0.2.1', cases),
+      relationship('ip_address', '11.12.13.14', cases),
     ]));
 
     assert.equal(result.clusters[0]?.confidence, 'shared_infrastructure');

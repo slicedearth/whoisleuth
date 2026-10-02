@@ -5,15 +5,19 @@
 // boundary.
 
 import { normalizeDomain } from '../evidence/domain-name.mts';
+import { canonicalPublicIpAddress } from '../evidence/public-address-policy.mts';
 import { groupBySimilarFavicon } from './favicon-similarity.mts';
 import {
   qualifyRelationshipSources, relationshipSourceEvidence, normalizeRelationshipSourceProjection,
+  FAVICON_RELATIONSHIP_DESCRIPTION,
   unknownRelationshipSource, MAX_RELATIONSHIP_SOURCES_PER_DOMAIN,
   type RelationshipContribution, type RelationshipSourceProjection, type RelationshipType,
 } from './relationship-provenance.mts';
 import {
   RELATIONSHIP_EVIDENCE_SCHEMA,
   RELATIONSHIP_EVIDENCE_VERSION,
+  SUPPORTED_RELATIONSHIP_EVIDENCE_VERSIONS,
+  RELATIONSHIP_SOURCE_PROVENANCE_VERSION,
   SUPPORTED_TLS_RELATIONSHIP_PROFILE_VERSIONS,
   TLS_RELATIONSHIP_PROFILE_VERSION,
 } from '../contracts/offline-comparison.mts';
@@ -21,6 +25,7 @@ import {
 export {
   RELATIONSHIP_EVIDENCE_SCHEMA,
   RELATIONSHIP_EVIDENCE_VERSION,
+  SUPPORTED_RELATIONSHIP_EVIDENCE_VERSIONS,
   SUPPORTED_TLS_RELATIONSHIP_PROFILE_VERSIONS,
   TLS_RELATIONSHIP_PROFILE_VERSION,
 };
@@ -76,6 +81,7 @@ export interface ScanRelationshipGroup {
 export interface ScanRelationshipSummary {
   version: typeof RELATIONSHIP_EVIDENCE_VERSION;
   groups: ScanRelationshipGroup[];
+  excludedNonPublicAddresses: number;
   truncated: boolean;
   limitations: string[];
 }
@@ -296,7 +302,7 @@ export function buildScanRelationships(rawRows: RelationshipRow[]): ScanRelation
   for (const raw of input.slice(0, MAX_RELATIONSHIP_ROWS)) {
     const domain = normalizeDomain(raw?.domain);
     const observation = record(raw?.relationship);
-    if (!domain || raw?.trusted || !observation || ![2, RELATIONSHIP_EVIDENCE_VERSION].some((version) => version === observation.version)) continue;
+    if (!domain || raw?.trusted || !observation || !SUPPORTED_RELATIONSHIP_EVIDENCE_VERSIONS.some((version) => version === observation.version)) continue;
     rows.push({ domain, observation });
     if (observation.truncated === true) truncated = true;
   }
@@ -306,6 +312,7 @@ export function buildScanRelationships(rawRows: RelationshipRow[]): ScanRelation
   const identifiers = new Map<string, Set<string>>();
   const certificates = new Map<string, Set<string>>();
   const officialAssets = new Map<string, Set<string>>();
+  let excludedNonPublicAddresses = 0;
   for (const { domain, observation } of rows) {
     const nameserverSource = Array.isArray(observation.nameservers) ? observation.nameservers : [];
     const addressSource = Array.isArray(observation.ipAddresses) ? observation.ipAddresses : [];
@@ -315,7 +322,13 @@ export function buildScanRelationships(rawRows: RelationshipRow[]): ScanRelation
       || identifierSource.length > MAX_TRACKING_IDS_PER_ROW || assetSource.length > MAX_OFFICIAL_ASSET_HOSTS_PER_ROW) truncated = true;
     const nameservers = nameserverSource.slice(0, MAX_NAMESERVERS_PER_ROW).map(hostname).filter(Boolean);
     if (nameservers.length) addBucket(nameserverSets, [...new Set(nameservers)].sort().join(' · '), domain);
-    for (const value of addressSource.slice(0, MAX_IPS_PER_ROW)) addBucket(addresses, ipAddress(value), domain);
+    for (const value of addressSource.slice(0, MAX_IPS_PER_ROW)) {
+      const address = ipAddress(value);
+      if (!address) continue;
+      const publicAddress = canonicalPublicIpAddress(address);
+      if (publicAddress) addBucket(addresses, publicAddress, domain);
+      else excludedNonPublicAddresses += 1;
+    }
     for (const value of identifierSource.slice(0, MAX_TRACKING_IDS_PER_ROW)) {
       if (typeof value === 'string' && /^[a-z-]{1,40}:[A-Z0-9-]{1,64}$/.test(value)) {
         addBucket(identifiers, value, domain);
@@ -357,11 +370,11 @@ export function buildScanRelationships(rawRows: RelationshipRow[]): ScanRelation
       }).join('|');
       output.push(group(
         'favicon',
-        'Similar favicon',
+        'Connected favicon matches',
         'Exact SHA-256 or perceptual dHash distance ≤ 6',
         '',
         distinctDomains,
-        'These domains used an identical or perceptually similar favicon in this scan.',
+        FAVICON_RELATIONSHIP_DESCRIPTION,
         normalizedValue,
       ));
     }
@@ -389,7 +402,7 @@ export function buildScanRelationships(rawRows: RelationshipRow[]): ScanRelation
       if (!contributesToGroup(observation, item, domain)) continue;
       const field = ARRAY_RELATIONSHIP_FIELDS[item.type as RelationshipType];
       if (field && Array.isArray(observation[field.field]) && (observation[field.field] as unknown[]).length > field.maximum) groupTruncated = true;
-      const projection = observation.version === RELATIONSHIP_EVIDENCE_VERSION
+      const projection = Number(observation.version) >= RELATIONSHIP_SOURCE_PROVENANCE_VERSION
         ? normalizeRelationshipSourceProjection(observation.sourceEvidence) : {};
       for (const source of projection[item.type as RelationshipType] ?? [unknownRelationshipSource()]) {
         if (contributors.length >= MAX_RELATIONSHIP_DOMAINS * MAX_RELATIONSHIP_SOURCES_PER_DOMAIN) groupTruncated = true;
@@ -401,8 +414,10 @@ export function buildScanRelationships(rawRows: RelationshipRow[]): ScanRelation
   return {
     version: RELATIONSHIP_EVIDENCE_VERSION,
     groups,
+    excludedNonPublicAddresses,
     truncated,
     limitations: [
+      ...(excludedNonPublicAddresses ? [`${excludedNonPublicAddresses} non-public address observations were excluded from public-infrastructure grouping; their DNS answers remain in the scan evidence.`] : []),
       'Shared observations are investigation pivots, not proof of common ownership, coordination, intent, or maliciousness.',
       'Certificate relationships use exact native TLS leaf-certificate SHA-256 values only. Certificate Transparency counts and hostnames are never treated as certificate reuse.',
       'A shared certificate can reflect a multi-domain certificate, shared hosting, CDN, or managed platform and does not establish common control.',

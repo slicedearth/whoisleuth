@@ -133,7 +133,7 @@ describe('retained relationship observation model', () => {
       normalizedValue: `192.0.2.${index % 250}`,
       value: `192.0.2.${index % 250}`,
       domains: [`candidate-${index}.invalid`],
-    }, { retainedAt: new Date(Date.parse(LATE) + index * 1000).toISOString() }));
+    }, { sourceVersion: 3, retainedAt: new Date(Date.parse(LATE) + index * 1000).toISOString() }));
     const bounded = normalizeRelationshipObservationStore(many).observations;
     const newest = many.at(-1);
     assert.ok(newest);

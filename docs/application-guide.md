@@ -208,6 +208,10 @@ change the view, not the retained data. Projection input coverage distinguishes
 admitted values, duplicates, invalid input and capacity omissions. Source
 observation times remain separate from the time an export was created.
 
+Bulk public-infrastructure groups exclude non-public DNS answers. Those answers
+remain in the underlying evidence. Older retained IP groups remain readable but
+are labelled as equal non-public answers, not evidence of shared public hosting.
+
 A full Deep domain result can include:
 
 - registry RDAP and a separately attributed registrar RDAP follow-up;

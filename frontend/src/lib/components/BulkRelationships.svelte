@@ -24,6 +24,7 @@
 
   let {
     groups,
+    excludedNonPublicAddresses = 0,
     truncated,
     limitations,
     loadDomains,
@@ -35,6 +36,7 @@
     sourceContextId,
   }: {
     groups: RelationshipAdmissionGroup[];
+    excludedNonPublicAddresses?: number;
     truncated: boolean;
     limitations: string[];
     loadDomains: (domains: string[]) => void;
@@ -134,19 +136,22 @@
   });
 </script>
 
-{#if groups.length}
+{#if groups.length || excludedNonPublicAddresses}
   <section class="relationships card" aria-labelledby="relationship-title">
     <header class="section-head">
       <div><p class="eyebrow">Relationship evidence</p><h2 id="relationship-title">{groups.length} observed relationship{groups.length === 1 ? '' : 's'}</h2></div>
       {#if truncated}<span class="partial">Partial result</span>{/if}
     </header>
+    {#if excludedNonPublicAddresses}<p class="relationship-intro">{excludedNonPublicAddresses} non-public address observation{excludedNonPublicAddresses === 1 ? ' was' : 's were'} excluded from public-infrastructure grouping. Their DNS answers remain in the scan evidence.</p>{/if}
+    {#if groups.length}
     <p class="relationship-intro">Compare bounded observations already collected by this scan. These are investigation pivots, not ownership or maliciousness conclusions.</p>
     <BoundedRelationshipMap
       title="Shared evidence relationships"
-      description="Relationship nodes connect domains that share the exact bounded value described by the scan."
+      description="Relationship nodes connect domains through the exact observations or bounded match chains described by each group."
       nodes={relationshipMap.nodes}
       links={relationshipMap.links}
     />
+    {/if}
     <div class="relationship-list">
       {#each groups as relationship, index}
         <article>

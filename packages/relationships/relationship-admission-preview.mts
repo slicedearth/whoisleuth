@@ -1,5 +1,5 @@
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
-import { RELATIONSHIP_TYPES, qualifyRelationshipSources, type RelationshipContribution } from '../comparison/relationship-provenance.mts';
+import { RELATIONSHIP_TYPES, qualifyRelationshipSources, isNonPublicAddressRelationship, NON_PUBLIC_RELATIONSHIP_LIMITATION, type RelationshipContribution } from '../comparison/relationship-provenance.mts';
 
 export const RELATIONSHIP_ADMISSION_PREVIEW_VERSION = 2;
 export const MAX_RELATIONSHIP_ADMISSION_SOURCES = 20;
@@ -174,7 +174,7 @@ export function buildRelationshipAdmissionPreview(
     persistence: options.action === 'retain' ? 'browser_local_relationship_observation' : 'none',
     networkRequests: 0,
     externalRecipients: Object.freeze([]),
-    sharedInfrastructureWarning: infrastructureWarning(type),
+    sharedInfrastructureWarning: isNonPublicAddressRelationship(type, value) ? NON_PUBLIC_RELATIONSHIP_LIMITATION : infrastructureWarning(type),
     usefulness: text(raw.description, 'This pivot can help compare already retained evidence across the connected domains.'),
     limitations: Object.freeze([
       'The pivot does not establish shared ownership, control, actor identity, coordination, intent, safety, or maliciousness.',

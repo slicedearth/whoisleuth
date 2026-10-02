@@ -1,7 +1,7 @@
 import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
-import { RELATIONSHIP_EVIDENCE_VERSION } from '../contracts/offline-comparison.mts';
-import { RELATIONSHIP_TYPES, qualifyRelationshipSources, type RelationshipContribution } from '../comparison/relationship-provenance.mts';
+import { RELATIONSHIP_EVIDENCE_VERSION, RELATIONSHIP_SOURCE_PROVENANCE_VERSION, RELATIONSHIP_PUBLIC_ADDRESS_VERSION } from '../contracts/offline-comparison.mts';
+import { RELATIONSHIP_TYPES, qualifyRelationshipSources, isNonPublicAddressRelationship, NON_PUBLIC_RELATIONSHIP_LIMITATION, FAVICON_RELATIONSHIP_DESCRIPTION, type RelationshipContribution } from '../comparison/relationship-provenance.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
   MAX_RELATIONSHIP_OBSERVATIONS,
@@ -107,9 +107,9 @@ const TYPE_METADATA: Record<RelationshipObservationType, {
     description: 'These pages exposed the same recognised public tracking identifier in bounded static HTML.',
   }),
   favicon: Object.freeze({
-    label: 'Similar favicon',
+    label: 'Connected favicon matches',
     method: 'Exact SHA-256 or perceptual dHash distance ≤ 6',
-    description: 'These domains used an identical or perceptually similar favicon in the retained scan.',
+    description: FAVICON_RELATIONSHIP_DESCRIPTION,
   }),
   official_asset: Object.freeze({
     label: 'Official asset host match',
@@ -302,16 +302,17 @@ export function normalizeRelationshipObservation(raw: unknown, sourceStoreVersio
   if (value.sourceVersion !== undefined && !positiveInteger(value.sourceVersion)) throw new TypeError('This retained relationship uses an unsupported source-evidence version; no evidence was interpreted.');
   if (sourceVersion > RELATIONSHIP_EVIDENCE_VERSION) throw new TypeError('This retained relationship uses a newer source-evidence version; no evidence was interpreted.');
   if (sourceStoreVersion === 1 && sourceVersion > 2) throw new TypeError('Relationship schema 1 cannot contain newer source evidence; no evidence was interpreted.');
-  const qualified = qualifyRelationshipSources(sourceVersion === RELATIONSHIP_EVIDENCE_VERSION ? value.sourceEvidence : [], domains, { truncated: value.truncated === true, type });
+  const qualified = qualifyRelationshipSources(sourceVersion >= RELATIONSHIP_SOURCE_PROVENANCE_VERSION ? value.sourceEvidence : [], domains, { truncated: value.truncated === true, type });
+  const nonPublicAddress = isNonPublicAddressRelationship(type, normalizedValue);
   return {
     id,
     type,
-    label: metadata.label,
+    label: nonPublicAddress ? 'Shared non-public DNS answer' : metadata.label,
     method: metadata.method,
     normalizedValue,
     displayValue: type === 'favicon' ? '' : normalizedValue,
     domains,
-    description: metadata.description,
+    description: nonPublicAddress ? NON_PUBLIC_RELATIONSHIP_LIMITATION : metadata.description,
     classification: 'derived',
     source: 'bulk_relationship_analysis',
     sourceVersion,
@@ -323,7 +324,7 @@ export function normalizeRelationshipObservation(raw: unknown, sourceStoreVersio
     complete: value.complete === true && qualified.complete,
     truncated: qualified.truncated
       || (Array.isArray(value.domains) && value.domains.length > MAX_RELATIONSHIP_OBSERVATION_DOMAINS),
-    limitations: observationLimitations(value.limitations),
+    limitations: observationLimitations([...(nonPublicAddress ? [NON_PUBLIC_RELATIONSHIP_LIMITATION] : []), ...(Array.isArray(value.limitations) ? value.limitations : [])]),
   };
 }
 
@@ -373,7 +374,9 @@ export function createRelationshipObservation(
   const now = new Date().toISOString();
   const sourceVersion = Object.hasOwn(options, 'sourceVersion') ? positiveInteger(options.sourceVersion) : RELATIONSHIP_EVIDENCE_VERSION;
   if (!sourceVersion || sourceVersion > RELATIONSHIP_EVIDENCE_VERSION) throw new TypeError('This relationship needs a supported source-evidence version.');
-  const qualified = qualifyRelationshipSources(sourceVersion === RELATIONSHIP_EVIDENCE_VERSION ? raw.sourceEvidence : [], domains, { truncated: options.truncated === true, type });
+  const nonPublicAddress = isNonPublicAddressRelationship(type, normalizedValue);
+  if (nonPublicAddress && sourceVersion >= RELATIONSHIP_PUBLIC_ADDRESS_VERSION) throw new TypeError('Non-public DNS answers cannot be retained as new public-infrastructure relationships.');
+  const qualified = qualifyRelationshipSources(sourceVersion >= RELATIONSHIP_SOURCE_PROVENANCE_VERSION ? raw.sourceEvidence : [], domains, { truncated: options.truncated === true, type });
   // Older callers can supply their original scan timestamp. It does not
   // qualify the missing source metadata, and an explicit current projection
   // never substitutes that timestamp for unknown contributing-source times.
@@ -385,12 +388,12 @@ export function createRelationshipObservation(
   return {
     id: observationId(canonical),
     type,
-    label: metadata.label,
+    label: nonPublicAddress ? 'Shared non-public DNS answer' : metadata.label,
     method: metadata.method,
     normalizedValue,
     displayValue: type === 'favicon' ? '' : normalizedValue,
     domains,
-    description: metadata.description,
+    description: nonPublicAddress ? NON_PUBLIC_RELATIONSHIP_LIMITATION : metadata.description,
     classification: 'derived',
     source: 'bulk_relationship_analysis',
     sourceVersion,
@@ -400,7 +403,7 @@ export function createRelationshipObservation(
     complete: options.complete !== false && qualified.complete,
     truncated: qualified.truncated
       || (Array.isArray(raw.domains) && raw.domains.length > MAX_RELATIONSHIP_OBSERVATION_DOMAINS),
-    limitations: observationLimitations(options.limitations),
+    limitations: observationLimitations([...(nonPublicAddress ? [NON_PUBLIC_RELATIONSHIP_LIMITATION] : []), ...(Array.isArray(options.limitations) ? options.limitations : [])]),
   };
 }
 

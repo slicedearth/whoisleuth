@@ -4,6 +4,7 @@ import {
   MAX_NAMESERVERS_PER_ROW,
   RELATIONSHIP_EVIDENCE_SCHEMA,
   RELATIONSHIP_EVIDENCE_VERSION,
+  SUPPORTED_RELATIONSHIP_EVIDENCE_VERSIONS,
 } from '../comparison/relationship-evidence.mts';
 import type {
   ObservationEnvelopeDerivation,
@@ -474,7 +475,7 @@ for (const row of relationshipRows.records) {
   const domain = normalizeDomain(value?.domain);
   const observedAt = timestamp(value?.observedAt);
   const relation = record(value?.relationship);
-  if (!value || !domain || !observedAt || !relation || relation.version !== RELATIONSHIP_EVIDENCE_VERSION) {
+  if (!value || !domain || !observedAt || !relation || !SUPPORTED_RELATIONSHIP_EVIDENCE_VERSIONS.some(version => version === relation.version)) {
     const relationVersion = relation ? positiveInteger(relation.version) : null;
     if (relationVersion !== null && relationVersion > RELATIONSHIP_EVIDENCE_VERSION) {
       projectionLimitations.push(`A relationship observation used unsupported schema ${relationVersion} and was not interpreted.`);
@@ -503,7 +504,7 @@ for (const row of relationshipRows.records) {
     status: relationshipInputTruncated ? 'partial' : 'success',
     complete: null,
     truncated: relationshipInputTruncated,
-    schemaVersions: { relationshipEvidence: RELATIONSHIP_EVIDENCE_VERSION },
+    schemaVersions: { relationshipEvidence: Number(relation.version) },
     limitations: ['Scan-local relationship evidence does not retain a complete source-health envelope.'],
   });
   if (!observation) continue;

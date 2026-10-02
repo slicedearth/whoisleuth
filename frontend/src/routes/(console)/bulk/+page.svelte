@@ -1590,7 +1590,7 @@
       <BulkMobileDisclosure title="Relationships" description="Review shared infrastructure observed in this scan." onpreload={()=>preloadModule(()=>import('$lib/components/BulkRelationships.svelte'))} onopen={ensureRelationshipContext}>
         <DeferredSurface
           load={()=>import('$lib/components/BulkRelationships.svelte')}
-          props={{groups:relationshipSummary.groups,truncated:relationshipSummary.truncated,limitations:relationshipSummary.limitations,loadDomains,retainObservation,observationId:relationshipObservationId,retainedIds:retainedRelationshipIds,retainStatus:relationshipRetentionStatus,retentionAvailable:relationshipsSourceState==='ready',sourceContextId:relationshipSourceContextId}}
+          props={{groups:relationshipSummary.groups,excludedNonPublicAddresses:relationshipSummary.excludedNonPublicAddresses,truncated:relationshipSummary.truncated,limitations:relationshipSummary.limitations,loadDomains,retainObservation,observationId:relationshipObservationId,retainedIds:retainedRelationshipIds,retainStatus:relationshipRetentionStatus,retentionAvailable:relationshipsSourceState==='ready',sourceContextId:relationshipSourceContextId}}
           loadingLabel="Loading relationship analysis."
           unavailableLabel="Relationship analysis could not be loaded."
         />

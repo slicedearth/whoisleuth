@@ -647,7 +647,7 @@ test.describe('accessible cross-case relationship table', () => {
     const graph = graphRegion.locator('.graph-scroll > svg');
     const viewControls = graphRegion.getByRole('group', { name: 'Relationship graph view controls' });
     for (let index = 1; index <= 8; index += 1) {
-      await graph.getByRole('button', { name: `Shared IP address: 192.0.2.${index}`, exact: true }).click();
+      await graph.getByRole('button', { name: `Shared non-public DNS answer: 192.0.2.${index}`, exact: true }).click();
       await viewControls.getByRole('button', { name: 'Pin selected' }).click();
     }
     await expect(viewControls).toContainText('8 pinned');
@@ -657,7 +657,7 @@ test.describe('accessible cross-case relationship table', () => {
     await retained.getByRole('button', { name: 'Delete retained observation' }).click();
     await expect(viewControls).toContainText('7 pinned');
 
-    await graph.getByRole('button', { name: 'Shared IP address: 192.0.2.9', exact: true }).click();
+    await graph.getByRole('button', { name: 'Shared non-public DNS answer: 192.0.2.9', exact: true }).click();
     await expect(viewControls.getByRole('button', { name: 'Pin selected' })).toBeEnabled();
     await viewControls.getByRole('button', { name: 'Pin selected' }).click();
     await expect(viewControls).toContainText('8 pinned');
