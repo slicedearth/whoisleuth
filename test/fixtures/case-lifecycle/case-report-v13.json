@@ -27,6 +27,11 @@
   "currentAssessment": null,
   "evidenceTimeline": [],
   "analystResponse": {
+    "workflowMetadata": {
+      "types": [],
+      "incidentTargets": [],
+      "investigationContext": null
+    },
     "evidencePins": [],
     "decisions": [],
     "actions": [

@@ -46,11 +46,6 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     dispositionLabel,
     statusLabel,
   } from '../../../../packages/cases/case-record-decisions.mts';
-  import {
-    caseFreeformTags,
-    caseTagsWithTypes,
-    caseTypeIds,
-  } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { MAX_CASE_IMPORT_BYTES } from '../../../../packages/contracts/case-portability.mts';
   import LocalCollectionState from '$lib/components/LocalCollectionState.svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
@@ -137,7 +132,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
       casePage = Math.floor(index / CASE_PAGE_SIZE) + 1;
   }
   function caseTagDraft(record: CaseRecord) {
-    return caseFreeformTags(record.tags).join(', ');
+    return record.tags.join(', ');
   }
   function loadTagDraft(record: CaseRecord) {
     tagDraft = caseTagDraft(record);
@@ -353,7 +348,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     const submittedDraft = tagDraft;
     const unchanged = tagRevision.capture();
     try {
-      const next = caseTagsWithTypes(submittedDraft.split(/[,\n]+/).map(value => value.trim()).filter(Boolean), caseTypeIds(previous));
+      const next = submittedDraft.split(/[,\n]+/).map(value => value.trim()).filter(Boolean);
       if (previous.join('\\0') === next.join('\\0'))
         return;
       const committed = await editCaseTags(record.id, next, previous);

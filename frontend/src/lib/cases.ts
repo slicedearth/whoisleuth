@@ -103,12 +103,9 @@ export {
 } from './analysis/case-model.ts';
 export {
   CASE_TYPES,
-  caseFreeformTags,
-  caseIncidentTargetAssertion,
   caseIncidentTargets,
   caseNumber,
   caseResponseIncidentUrls,
-  caseTagsWithTypes,
   caseTypeIds,
   caseTypeRecords,
   caseTypeSummary,

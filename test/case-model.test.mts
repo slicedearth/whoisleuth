@@ -303,7 +303,7 @@ describe('Incident URL context', () => {
     assert.equal(model.parseIncidentUrlContext('file:///tmp/evidence'), null);
   });
 
-  test('retains exact or origin-only context through the existing Case assertion contract', () => {
+  test('retains exact or origin-only typed context without creating assertions', () => {
     const original = model.createCase({ domain: 'example.test' }, ISO);
     const exact = model.recordCaseInvestigationContext([original], original.id, {
       objective: 'Determine whether the page is impersonating the affected service.',
@@ -314,7 +314,7 @@ describe('Incident URL context', () => {
       objective: 'Determine whether the page is impersonating the affected service.',
       incidentUrl: 'https://login.example.test/sign-in?token=secret',
       urlRetention: 'exact',
-      assertionId: exact.record.assertions[0]?.id,
+      id: exact.record.workflowMetadata?.investigationContext?.id,
       updatedAt: LATER,
     });
 
@@ -323,12 +323,12 @@ describe('Incident URL context', () => {
       incidentUrl: 'https://login.example.test/different?identifier=private',
       retainExactUrl: false,
     }, LATEST);
-    assert.equal(originOnly.record.assertions.length, 1);
+    assert.equal(originOnly.record.assertions.length, 0);
     assert.deepEqual(model.caseInvestigationContext(originOnly.record), {
       objective: 'Prepare the reviewed evidence needed for a response decision.',
-      incidentUrl: 'https://login.example.test/',
+      incidentUrl: 'https://login.example.test',
       urlRetention: 'origin_only',
-      assertionId: originOnly.record.assertions[0]?.id,
+      id: exact.record.workflowMetadata?.investigationContext?.id,
       updatedAt: LATEST,
     });
     assert.doesNotMatch(JSON.stringify(originOnly.record), /identifier=private/u);

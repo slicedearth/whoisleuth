@@ -190,6 +190,8 @@ describe('CLI case pack', () => {
     const current = buildCliCasePack(JSON.stringify({ version: CASE_SCHEMA_VERSION, cases: [record] }), { audience: 'internal', reviewed: true }, NOW);
     const published = JSON.parse(JSON.stringify(current));
     published.version = 15;
+    delete published.cases[0].workflowMetadata;
+    delete published.packet.reports[0].analystResponse.workflowMetadata;
     delete published.cases[0].title;
     delete published.packet.reports[0].case.title;
     published.packet.reports[0].schemaVersion = 11;

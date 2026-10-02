@@ -125,6 +125,10 @@ function listItemPath(path: readonly (number | string)[], list: 'actions' | 'man
 function allowedSensitiveFieldPath(key: string, path: readonly (number | string)[]): boolean {
   if (key === 'brandProfileIds') return topCasePath(path) || reportCasePath(path);
   if (key === 'notes') return topCasePath(path) || reportCasePath(path);
+  if (key === 'workflowMetadata') return topCasePath(path) || analystResponsePath(path);
+  if (key === 'incidentTargets' || key === 'investigationContext') {
+    return path.at(-1) === 'workflowMetadata' && (topCasePath(path.slice(0, -1)) || analystResponsePath(path.slice(0, -1)));
+  }
   if (key === 'actions' || key === 'assertions' || key === 'manualTrail' || key === 'observedEffects' || key === 'closures' || key === 'branches') {
     return topCasePath(path) || analystResponsePath(path);
   }

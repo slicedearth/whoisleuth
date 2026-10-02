@@ -284,7 +284,7 @@
       {/each}
     </div>
     <details class="summary-editor">
-      <summary>Classification and incident links <span>{caseTypeSummary(record.tags)}</span></summary>
+      <summary>Classification and incident links <span>{caseTypeSummary(record)}</span></summary>
       <CaseWorkflowDetails {record} {onsaved} {oncommitted} {onmessage} />
     </details>
     <CaseTitleForm {record} {mutationBusy} {persist} />

@@ -37,6 +37,7 @@ import {
 import type { CaseInvestigationBranch } from './case-investigation-branch-model.mts';
 import type { CaseAttachment } from './case-attachment-model.mts';
 import type { CaseEvidenceLink } from './case-evidence-links.mts';
+import type { CaseWorkflowMetadata, CaseTypeId } from './case-workflow-metadata.mts';
 import {
   CASE_DISPOSITIONS,
   CASE_STATUSES,
@@ -171,6 +172,7 @@ export type CaseRecord = {
   reviewReasonCode?: string | null;
   brandProfileIds: string[];
   tags: string[];
+  workflowMetadata?: CaseWorkflowMetadata;
   notes: CaseNote[];
   source: CaseSource;
   evidenceHistory: CaseEvidenceSnapshot[];
@@ -199,6 +201,10 @@ export type CaseInput = {
   brandProfileIds?: unknown;
   source?: unknown;
   tags?: unknown;
+  caseTypes?: unknown;
+  incidentTarget?: unknown;
+  incidentTargetResolution?: unknown;
+  investigationContext?: unknown;
   evidence?: unknown;
   evidencePin?: unknown;
   evidencePins?: unknown;
@@ -223,6 +229,7 @@ type CaseEditExpectations = {
   expectedDisposition?: CaseDisposition;
   expectedReviewReasonCode?: string | null;
   expectedTags?: readonly string[];
+  expectedCaseTypes?: readonly CaseTypeId[];
 };
 export type CasePatch = Omit<Partial<CaseInput>, 'domain'> & CaseEditExpectations;
 
@@ -238,6 +245,10 @@ export type CaseResponseMutation = CaseEditExpectations & {
   disposition?: CaseDisposition;
   reviewReasonCode?: string | null;
   tags?: string[];
+  caseTypes?: CaseTypeId[];
+  incidentTarget?: string;
+  incidentTargetResolution?: string;
+  investigationContext?: { objective: string; incidentUrl: string; retainExactUrl: boolean };
   note?: string;
   evidencePin?: AuthoredFields<CaseEvidencePin>;
   evidencePins?: AuthoredFields<CaseEvidencePin>[];

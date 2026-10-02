@@ -170,7 +170,7 @@
     }
     const retainedIncidentUrls = caseResponseIncidentUrls(record);
     if (!packetUrlsEdited) packetUrls = retainedIncidentUrls.join('\n');
-    if (!packetCategoryEdited) packetCategory = caseTypeSummary(record.tags).slice(0, 80);
+    if (!packetCategoryEdited) packetCategory = caseTypeSummary(record).slice(0, 80);
     defaultsAppliedRecordId = record.id;
   });
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import Pagination from '$lib/components/Pagination.svelte';
-  import { caseFreeformTags, caseNumber, caseTypeRecords } from '../../../../packages/cases/case-workflow-metadata.mts';
+  import { caseNumber, caseTypeRecords } from '../../../../packages/cases/case-workflow-metadata.mts';
   import {
     dispositionLabel,
     isReviewedCaseDisposition,
@@ -39,7 +39,7 @@
         <span class="badges"><span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span><span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span></span>
         <time class="updated" datetime={record.updatedAt}>{formatDate(record.updatedAt)}</time>
       </a>
-      {#if caseTypeRecords(record.tags).length || caseFreeformTags(record.tags).length}<div class="tag-row">{#each caseTypeRecords(record.tags) as type}<span class="tag">{type.label}</span>{/each}{#each caseFreeformTags(record.tags) as tag}<span class="tag">{tag}</span>{/each}</div>{/if}
+      {#if caseTypeRecords(record).length || record.tags.length}<div class="tag-row">{#each caseTypeRecords(record) as type}<span class="tag">{type.label}</span>{/each}{#each record.tags as tag}<span class="tag">{tag}</span>{/each}</div>{/if}
     </article>
   {/each}
   {#if !records.length}<p class="count">No cases match the current filters.</p>{/if}

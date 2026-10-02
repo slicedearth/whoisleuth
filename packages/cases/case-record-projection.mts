@@ -130,6 +130,14 @@ const CASE_FIELD_RULES = Object.freeze({
     audienceExclusions: { public: { label: 'Brand Profile references', order: 2 } },
   }),
   tags: fieldRule('tags', PRESERVE, (record) => [...record.tags]),
+  workflowMetadata: fieldRule('workflowMetadata', PUBLIC_REDACT, (record, profile) => (
+    record.workflowMetadata === undefined ? undefined : profile === 'public'
+      ? { types: [...record.workflowMetadata.types], incidentTargets: [], investigationContext: null }
+      : structuredClone(record.workflowMetadata)
+  ), {
+    nestedSensitiveFields: ['incidentTargets', 'investigationContext'],
+    audienceExclusions: { public: { label: 'Private incident links and investigation context', order: 4, sinceVersion: EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION } },
+  }),
   notes: fieldRule('notes', SHARED_EXCLUDE, (record, profile) => (
     profile === 'trusted' || profile === 'public'
       ? []

@@ -94,16 +94,18 @@ test('field-owned edits reject stale status, disposition, reason and tags withou
 
 test('legacy exports merge only into an unambiguous domain or matching stable identity', () => {
   const { first, second, records } = incidents();
-  const legacy = { version: 15, cases: [{ ...first, id: 'legacy-other-id' }] };
+  const { workflowMetadata: _firstWorkflow, ...firstPublished } = first;
+  const { workflowMetadata: _secondWorkflow, ...secondPublished } = second;
+  const legacy = { version: 15, cases: [{ ...firstPublished, id: 'legacy-other-id' }] };
   assert.equal(normalizeCaseStore(legacy).cases[0]?.title, '', 'An undeclared legacy title is not current evidence.');
   assert.equal(mergeCases([first], legacy).updated, 1);
   const before = structuredClone(records);
   assert.throws(() => mergeCases(records, legacy), /several incidents exist/u);
   assert.deepEqual(records, before);
   assert.throws(() => mergeCases(records, { version: CASE_SCHEMA_VERSION, cases: [{ domain: first.domain }] }), /several incidents exist/u);
-  assert.equal(mergeCases(records, { version: 15, cases: [second] }).updated, 1);
+  assert.equal(mergeCases(records, { version: 15, cases: [secondPublished] }).updated, 1);
   assert.throws(() => mergeCases(records, { version: CASE_SCHEMA_VERSION, cases: [{ ...first, domain: 'other.example' }] }), /different domain/u);
-  const legacyCollision = mergeCases([first], { version: 15, cases: [{ ...first, domain: 'other.example', evidenceHistory: [] }] });
+  const legacyCollision = mergeCases([first], { version: 15, cases: [{ ...firstPublished, domain: 'other.example', evidenceHistory: [] }] });
   assert.equal(legacyCollision.added, 1);
   assert.equal(new Set(legacyCollision.cases.map(record => record.id)).size, 2);
 });

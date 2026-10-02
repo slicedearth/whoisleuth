@@ -88,6 +88,9 @@ import {
   type CaseSightingRecord,
 } from './case-response-model.mts';
 
+import { readCaseWorkflowFields } from './case-workflow-migration.mts';
+import { emptyCaseWorkflowMetadata, mergeCaseWorkflowMetadata, type CaseWorkflowMetadata } from './case-workflow-metadata.mts';
+
 export const MAX_CASE_INPUT_RECORDS = 2_000;
 
 function compareCodeUnits(left: string, right: string): number {
@@ -118,6 +121,7 @@ type ImportPatch = {
   attachments: CaseAttachment[] | undefined;
   evidenceLinks: CaseEvidenceLink[] | undefined;
   tags: string[];
+  workflowMetadata: CaseWorkflowMetadata | undefined;
   notes: CaseNote[];
   createdAt: string | null;
   updatedAt: string | null;
@@ -334,6 +338,9 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
     [record.sightings, sightings],
   ].reduce((total, [candidates, retained]) => total
     + Math.max(0, (Array.isArray(candidates) ? candidates.length : 0) - (retained as unknown[]).length), 0);
+  const workflow = readCaseWorkflowFields(record, domain, assertions, importedVersion);
+  const hasWorkflow = record.workflowMetadata !== undefined || workflow.workflowMetadata.types.length > 0
+    || workflow.workflowMetadata.incidentTargets.length > 0 || workflow.workflowMetadata.investigationContext !== null;
   return {
     domain,
     rawId: typeof record.id === 'string' ? record.id : null,
@@ -366,7 +373,8 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
       : [],
     attachments: importedVersion >= INCIDENT_CASE_SCHEMA_VERSION ? readCaseAttachments(record.attachments) : undefined,
     evidenceLinks: readCaseEvidenceLinks(record.evidenceLinks),
-    tags: normalizeTags(record.tags),
+    tags: workflow.tags,
+    workflowMetadata: hasWorkflow ? workflow.workflowMetadata : undefined,
     // Imported notes fall back only to the imported record's own timestamps
     // (never "now"), so a timestamp-less note gets a stable, deterministic time
     // and id, and re-importing the same file cannot manufacture a duplicate or a
@@ -408,6 +416,7 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     reviewReasonCode: patch.reviewReasonCode ?? null,
     brandProfileIds: patch.brandProfileIds,
     tags: patch.tags,
+    workflowMetadata: patch.workflowMetadata ?? emptyCaseWorkflowMetadata(),
     notes: patch.notes,
     source: patch.source ?? DEFAULT_SOURCE,
     evidenceHistory: patch.evidenceHistory,
@@ -504,6 +513,9 @@ function applyImportPatch(
     ...(attachments === undefined ? {} : { attachments }),
     ...(evidenceLinks === undefined ? {} : { evidenceLinks }),
     tags: normalizeTags([...local.tags, ...patch.tags]),
+    workflowMetadata: patch.workflowMetadata === undefined
+      ? local.workflowMetadata ?? emptyCaseWorkflowMetadata()
+      : mergeCaseWorkflowMetadata(local.workflowMetadata ?? emptyCaseWorkflowMetadata(), patch.workflowMetadata, importNewer, local.domain),
     notes: normalizeNotes(noteSelection.records, fallback),
     createdAt: patch.createdAt && Date.parse(patch.createdAt) < Date.parse(local.createdAt) ? patch.createdAt : local.createdAt,
     updatedAt: importNewer ? (patch.updatedAt ?? local.updatedAt) : local.updatedAt,

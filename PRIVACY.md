@@ -295,6 +295,11 @@ collection, without the port, path, query or fragment. Credential-bearing URLs
 are rejected. Deliberate retention of an exact Incident URL in a Case remains
 separate from that collection request.
 
+Case types, incident links and investigation context are structured local fields.
+Public CLI Case packs retain the types but exclude incident URLs and the private
+objective; trusted/internal packs and ordinary backups retain those details.
+Migrated historical tags and assertions remain preserved as original text.
+
 Explicit **selected URL** collection in Deep Lookup sends the path and query
 in a request body to the application server, then to the website and its
 followed redirects. Fragments are not sent. CLI `--deep --exact-url` makes the

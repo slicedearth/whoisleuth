@@ -180,9 +180,9 @@ test('an Incident URL sends only its hostname and retains exact Case context onl
 
   const originOnly = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   expect(JSON.stringify(originOnly.records[0]?.value)).not.toContain('reference=fixture');
-  expect(originOnly.records[0]?.value?.assertions).toEqual([
-    expect.objectContaining({ statement: 'Investigate incident URL: https://login.incident.invalid' }),
-  ]);
+  expect(originOnly.records[0]?.value?.workflowMetadata?.investigationContext).toEqual(
+    expect.objectContaining({ incidentUrl: 'https://login.incident.invalid', urlRetention: 'origin_only' }),
+  );
 
   await incidentContext.getByRole('checkbox', { name: /Retain the exact URL/ }).check();
   await incidentContext.getByRole('button', { name: 'Save Incident context' }).click();
@@ -190,9 +190,9 @@ test('an Incident URL sends only its hostname and retains exact Case context onl
     minimumRecords: 1,
     minimumRevision: originOnly.manifest.revision + 1,
   });
-  expect(exact.records[0]?.value?.assertions).toEqual([
-    expect.objectContaining({ statement: `Investigate incident URL: ${incidentUrl}` }),
-  ]);
+  expect(exact.records[0]?.value?.workflowMetadata?.investigationContext).toEqual(
+    expect.objectContaining({ incidentUrl, urlRetention: 'exact' }),
+  );
   await caseCard.getByRole('link', { name: 'Open Case', exact: true }).click();
   await openCaseSection(page, 'Evidence');
   const capture = page.locator('.capture-workspace');

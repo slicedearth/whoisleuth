@@ -173,7 +173,7 @@ const TYPE_CHECKS: Readonly<Record<CaseTypeId, Readonly<{ required: readonly Cas
 });
 
 export function buildCaseTypeEvidenceReadiness(record: CaseRecord): CaseTypeReadiness {
-  const selectedTypes = caseTypeIds(record.tags);
+  const selectedTypes = caseTypeIds(record);
   if (!selectedTypes.length) return Object.freeze({
     selectedTypes,
     rows: Object.freeze([]),

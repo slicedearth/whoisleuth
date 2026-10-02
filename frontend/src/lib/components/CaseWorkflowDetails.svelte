@@ -6,12 +6,13 @@
   import {
     CASE_TYPES,
     MAX_CASE_INCIDENT_TARGETS,
-    caseIncidentTargetAssertion,
+    MAX_CASE_INCIDENT_TARGET_URL_LENGTH,
+    normalizeCaseIncidentTargetUrl,
     caseIncidentTargets,
     caseNumber,
-    caseTagsWithTypes,
     caseTypeIds,
     formattedCaseNumber,
+    type CaseTypeId,
   } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { buildCaseTypeEvidenceReadiness } from '../../../../packages/cases/case-type-evidence-readiness.mts';
   import { editCase, type CaseRecord } from '../cases.ts';
@@ -41,7 +42,8 @@
     resolution: PlatformReportingResolution;
   };
 
-  let selectedTypes = $state<string[]>([]);
+  let selectedTypes = $state<CaseTypeId[]>([]);
+  let expectedTypes = $state<CaseTypeId[]>([]);
   let typesDirty = $state(false);
   let typesOpen = $state(false);
   let typesOpenRecordId = $state('');
@@ -86,13 +88,16 @@
   $effect(() => {
     record.updatedAt;
     if (typesOpenRecordId !== record.id) {
-      typesOpen = caseTypeIds(record.tags).length === 0;
+      typesOpen = caseTypeIds(record).length === 0;
       typesOpenRecordId = record.id;
     }
-    if (!typesDirty && !busy) selectedTypes = caseTypeIds(record.tags);
+    if (!typesDirty && !busy) {
+      selectedTypes = caseTypeIds(record);
+      expectedTypes = caseTypeIds(record);
+    }
   });
 
-  function setType(id: string, checked: boolean) {
+  function setType(id: CaseTypeId, checked: boolean) {
     typesDirty = true;
     selectedTypes = checked
       ? [...selectedTypes, id]
@@ -139,14 +144,7 @@
 
   async function saveTypes() {
     const unchanged = typeDraft.capture();
-    let tags: string[];
-    try {
-      tags = caseTagsWithTypes(record.tags, selectedTypes);
-    } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Could not prepare the selected Case types.');
-      return;
-    }
-    if (!await persist({ tags }, `Saved Case types for ${record.domain}.`) || !unchanged()) return;
+    if (!await persist({ caseTypes: selectedTypes, expectedCaseTypes: expectedTypes }, `Saved Case types for ${record.domain}.`) || !unchanged()) return;
     typesDirty = false;
     typesOpen = false;
   }
@@ -157,24 +155,22 @@
       onmessage(`A Case can retain at most ${MAX_CASE_INCIDENT_TARGETS} active incident links. Resolve one before adding another.`);
       return;
     }
-    let assertion: ReturnType<typeof caseIncidentTargetAssertion>;
-    try {
-      assertion = caseIncidentTargetAssertion(targetUrl);
-    } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Enter a valid exact incident URL.');
+    const url = normalizeCaseIncidentTargetUrl(targetUrl);
+    if (!url) {
+      onmessage('Enter an exact HTTP(S) incident URL without embedded credentials.');
       return;
     }
-    if (incidentTargets.some((target) => target.url === assertion.statement.slice('Incident target URL: '.length))) {
+    if (incidentTargets.some((target) => target.url === url)) {
       onmessage('That exact incident URL is already active in this Case.');
       return;
     }
-    if (!await persist({ assertion }, `Added an exact incident target to ${record.domain}.`) || !unchanged()) return;
+    if (!await persist({ incidentTarget: url }, `Added an exact incident target to ${record.domain}.`) || !unchanged()) return;
     targetUrl = '';
   }
 
-  async function resolveIncidentTarget(assertionId: string) {
+  async function resolveIncidentTarget(id: string) {
     await persist(
-      { assertionUpdate: { id: assertionId, state: 'resolved' } },
+      { incidentTargetResolution: id },
       `Removed the incident target from the active reporting scope for ${record.domain}; its Case history remains retained.`,
       `incident-targets-${record.id}`,
     );
@@ -265,13 +261,13 @@
   <section id={`incident-targets-${record.id}`} class="incident-targets" tabindex="-1" aria-labelledby={`incident-targets-title-${record.id}`}>
     <div class="section-heading"><div><h5 id={`incident-targets-title-${record.id}`}>Incident links</h5><p>Retain exact social, platform or web content links that belong in this Case.</p></div><span>{incidentTargets.length} active{resolvedTargetCount ? ` · ${resolvedTargetCount} resolved` : ''}</span></div>
     <form class="target-form" oninput={targetDraft.changed} onchange={targetDraft.changed} onsubmit={(event) => { event.preventDefault(); void addIncidentTarget(); }}>
-      <label class="field">Exact HTTP(S) URL <small>Do not include credentials or private access tokens</small><input type="url" bind:value={targetUrl} maxlength="1979" placeholder="https://social.example/post/123" required></label>
+      <label class="field">Exact HTTP(S) URL <small>Do not include credentials or private access tokens</small><input type="url" bind:value={targetUrl} maxlength={MAX_CASE_INCIDENT_TARGET_URL_LENGTH} placeholder="https://social.example/post/123" required></label>
       <button class="btn" type="submit" disabled={busy || !targetUrl.trim() || incidentTargets.length >= MAX_CASE_INCIDENT_TARGETS}>Add incident link</button>
     </form>
     {#if incidentTargets.length}
       <ol class="target-list">
         {#each incidentTargets as target}
-          <li><a href={target.url} target="_blank" rel="noopener noreferrer">{target.url}<span class="sr-only"> (opens in a new tab)</span></a><button class="btn small" type="button" disabled={busy} onclick={() => void resolveIncidentTarget(target.assertionId)}>Resolve</button></li>
+          <li><a href={target.url} target="_blank" rel="noopener noreferrer">{target.url}<span class="sr-only"> (opens in a new tab)</span></a><button class="btn small" type="button" disabled={busy} onclick={() => void resolveIncidentTarget(target.id)}>Resolve</button></li>
         {/each}
       </ol>
     {:else}

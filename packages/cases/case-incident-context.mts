@@ -6,9 +6,6 @@ import { parseCredentialFreeHttpUrl } from '../evidence/lookup-target.mts';
 import type { CaseRecord } from './case-record-contracts.mts';
 
 export const MAX_CASE_INCIDENT_URL_LENGTH = 1_850;
-export const INCIDENT_CONTEXT_STATEMENT_PREFIX = 'Investigate incident URL: ';
-const OBJECTIVE_PREFIX = 'Objective: ';
-const RETENTION_SEPARATOR = ' | URL retained: ';
 
 export type IncidentUrlContext = Readonly<{
   exactUrl: string;
@@ -24,7 +21,7 @@ export type CaseInvestigationContext = Readonly<{
   objective: string;
   incidentUrl: string;
   urlRetention: 'exact' | 'origin_only';
-  assertionId: string;
+  id: string;
   updatedAt: string;
 }>;
 
@@ -58,36 +55,14 @@ export function parseIncidentUrlContext(value: unknown): IncidentUrlContext | nu
 }
 
 export function caseInvestigationContext(record: CaseRecord | null | undefined): CaseInvestigationContext | null {
-  if (!record) return null;
-  for (const assertion of [...record.assertions].reverse()) {
-    if (assertion.kind !== 'next_step' || assertion.state !== 'open'
-      || !assertion.statement.startsWith(INCIDENT_CONTEXT_STATEMENT_PREFIX)) continue;
-    const incidentUrl = assertion.statement.slice(INCIDENT_CONTEXT_STATEMENT_PREFIX.length);
-    const parsed = parseIncidentUrlContext(incidentUrl);
-    if (!parsed || parsed.registrableDomain !== record.domain) continue;
-    const rationale = assertion.rationale ?? '';
-    const separatorIndex = rationale.lastIndexOf(RETENTION_SEPARATOR);
-    const objective = separatorIndex > OBJECTIVE_PREFIX.length && rationale.startsWith(OBJECTIVE_PREFIX)
-      ? normalizeCaseObjective(rationale.slice(OBJECTIVE_PREFIX.length, separatorIndex))
-      : '';
-    const retention = separatorIndex >= 0 ? rationale.slice(separatorIndex + RETENTION_SEPARATOR.length) : '';
-    if (!objective || (retention !== 'exact' && retention !== 'origin_only')) continue;
-    return Object.freeze({
-      objective,
-      incidentUrl: parsed.exactUrl,
-      urlRetention: retention,
-      assertionId: assertion.id,
-      updatedAt: assertion.updatedAt,
-    });
-  }
-  return null;
+  return record?.workflowMetadata?.investigationContext ?? null;
 }
 
-export function caseInvestigationContextAssertion(input: Readonly<{
+export function prepareCaseInvestigationContext(input: Readonly<{
   objective: unknown;
   incidentUrl: unknown;
   retainExactUrl: boolean;
-}>): Readonly<{ statement: string; rationale: string; retainedUrl: string; retention: 'exact' | 'origin_only' }> {
+}>): Omit<CaseInvestigationContext, 'id' | 'updatedAt'> {
   const objective = normalizeCaseObjective(input.objective);
   if (!objective) throw new Error('Enter the investigation objective before retaining Incident context.');
   const parsed = parseIncidentUrlContext(input.incidentUrl);
@@ -95,9 +70,8 @@ export function caseInvestigationContextAssertion(input: Readonly<{
   const retention = input.retainExactUrl ? 'exact' : 'origin_only';
   const retainedUrl = input.retainExactUrl ? parsed.exactUrl : parsed.originUrl;
   return Object.freeze({
-    statement: `${INCIDENT_CONTEXT_STATEMENT_PREFIX}${retainedUrl}`,
-    rationale: `${OBJECTIVE_PREFIX}${objective}${RETENTION_SEPARATOR}${retention}`,
-    retainedUrl,
-    retention,
+    objective,
+    incidentUrl: retainedUrl,
+    urlRetention: retention,
   });
 }

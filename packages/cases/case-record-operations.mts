@@ -2,12 +2,12 @@
 // record normalization, and analyst updates.
 
 import {
-  caseInvestigationContext,
-  caseInvestigationContextAssertion,
   normalizeCaseObjective,
   parseIncidentUrlContext,
 } from './case-incident-context.mts';
 import { selectExistingCase, type CaseOpenSelection } from './case-selection.mts';
+import { emptyCaseWorkflowMetadata, updateCaseWorkflowMetadata } from './case-workflow-metadata.mts';
+import { readCaseWorkflowFields } from './case-workflow-migration.mts';
 import {
   appendCaseAction,
   appendCaseAssertion,
@@ -189,7 +189,7 @@ export function normalizeCase(
     disposition: normalizeDisposition(record.disposition),
     reviewReasonCode: normalizeReviewReasonCode(record.reviewReasonCode),
     brandProfileIds: normalizeCaseBrandProfileIds(record.brandProfileIds),
-    tags: normalizeTags(record.tags),
+    ...readCaseWorkflowFields(record, domain, assertions, sourceVersion),
     notes: normalizeNotes(record.notes, now, sourceVersion),
     source: normalizeSource(record.source),
     evidenceHistory: normalizeCaseEvidence(record, domain, createdAt, updatedAt, now, sourceVersion),
@@ -266,6 +266,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
     reviewReasonCode: normalizeReviewReasonCode(input.reviewReasonCode),
     brandProfileIds: input.brandProfileIds === undefined ? [] : assertCaseBrandProfileIds(input.brandProfileIds),
     tags: normalizeTags(input.tags),
+    workflowMetadata: updateCaseWorkflowMetadata(emptyCaseWorkflowMetadata(), input, domain, now),
     notes: noteBody ? [{ id: makeId(), body: noteBody, createdAt: now }] : [],
     source,
     evidenceHistory: normalizeEvidenceHistory(input.evidence ? [input.evidence] : [], {
@@ -474,6 +475,8 @@ export function updateCase(
   }
   const record: CaseRecord = {
     ...current,
+    workflowMetadata: updateCaseWorkflowMetadata(current.workflowMetadata
+      ?? readCaseWorkflowFields(current, current.domain, current.assertions).workflowMetadata, patch, current.domain, now),
     title: patch.title === undefined ? current.title ?? '' : normalizeCaseObjective(patch.title),
     status: patch.closure !== undefined
       ? 'resolved'
@@ -646,26 +649,7 @@ export function recordCaseInvestigationContext(
   if (!parsed || parsed.registrableDomain !== current.domain) {
     throw new Error(`The Incident URL must belong to the Case domain ${current.domain}.`);
   }
-  const context = caseInvestigationContextAssertion(input);
-  const existing = caseInvestigationContext(current);
-  return updateCase(cases, id, existing
-    ? {
-        assertionUpdate: {
-          id: existing.assertionId,
-          statement: context.statement,
-          rationale: context.rationale,
-          state: 'open',
-        },
-      }
-    : {
-        assertion: {
-          kind: 'next_step',
-          statement: context.statement,
-          rationale: context.rationale,
-          evidenceRelations: [],
-          state: 'open',
-        },
-      }, nowIso);
+  return updateCase(cases, id, { investigationContext: input }, nowIso);
 }
 
 export function recordCaseRecheckOutcome(

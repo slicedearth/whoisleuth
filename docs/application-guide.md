@@ -619,8 +619,10 @@ change Cases. Intelligence claims require an existing target Case.
 Each Case has a stable `WS-` reference derived from its complete immutable local
 UUID, so it remains stable across browser exports without relying on a shared
 counter.
-Controlled Case types classify the reviewed issue separately from free-form
-tags. Exact public incident links can be retained for web or social-platform
+Controlled Case types, incident links and investigation context are typed Case
+fields, separate from free-form tags and assertions. Historical tags and
+assertions remain retained when their metadata is migrated. Exact public incident
+links can be retained for web or social-platform
 content, resolved without erasing history, and carried into a response packet.
 
 For supported platform hostnames, the Case workspace shows freshness-bounded

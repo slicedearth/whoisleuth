@@ -15,6 +15,7 @@ import { httpSecurityHeaderLabel } from './http-summary.mts';
 import { webCollectionScoreLimitation } from '../evidence/collection-quality.mts';
 import { analystInteroperabilityTags } from '../analysis/analyst-taxonomy.mts';
 import { caseEvidenceLinkIssues } from './case-evidence-links.mts';
+import { caseTypeSummary } from './case-workflow-metadata.mts';
 import {
   buildPortableGeneratorMetadata,
   portableGeneratorAttribution,
@@ -106,6 +107,7 @@ type CaseReportJson = {
   currentAssessment: ReportSnapshot | null;
   evidenceTimeline: ReportTimelineEntry[];
   analystResponse: {
+    workflowMetadata?: CaseRecord['workflowMetadata'];
     evidencePins: CaseRecord['evidencePins'];
     evidenceLinks?: CaseRecord['evidenceLinks'];
     decisions: CaseRecord['decisions'];
@@ -305,6 +307,7 @@ export function buildCaseReport(
     currentAssessment,
     evidenceTimeline: timelineEntries,
     analystResponse: {
+      ...(caseRecord.workflowMetadata === undefined ? {} : { workflowMetadata: structuredClone(caseRecord.workflowMetadata) }),
       evidencePins: caseRecord.evidencePins.map((item) => ({ ...item, limitations: [...item.limitations] })),
       ...(caseRecord.evidenceLinks === undefined ? {} : { evidenceLinks: structuredClone(caseRecord.evidenceLinks) }),
       decisions: caseRecord.decisions.map((item) => ({ ...item, evidencePinIds: [...item.evidencePinIds] })),
@@ -431,6 +434,16 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   lines.push(`| Updated | ${escapeMarkdownInline(report.case.updatedAt)} |`);
   if (report.case.tags.length > 0) {
     lines.push(`| Tags | ${escapeMarkdownInline(report.case.tags.join(', '))} |`);
+  }
+  const caseTypes = caseTypeSummary(report.analystResponse.workflowMetadata ? { workflowMetadata: report.analystResponse.workflowMetadata } : {});
+  if (caseTypes) lines.push(`| Case types | ${escapeMarkdownInline(caseTypes)} |`);
+  const context = report.analystResponse.workflowMetadata?.investigationContext;
+  if (context) {
+    lines.push(`| Investigation objective | ${escapeMarkdownInline(context.objective)} |`);
+    lines.push(`| Incident URL (${context.urlRetention === 'exact' ? 'exact' : 'origin only'}) | ${escapeMarkdownInline(context.incidentUrl)} |`);
+  }
+  for (const target of report.analystResponse.workflowMetadata?.incidentTargets ?? []) {
+    lines.push(`| Incident link (${target.state}) | ${escapeMarkdownInline(target.url)} |`);
   }
   lines.push(`| Notes included | ${report.case.notesIncluded ? 'Yes' : 'No'} |`);
   lines.push('');

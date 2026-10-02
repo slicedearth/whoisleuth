@@ -339,10 +339,12 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   await expect.poll(async () => {
     const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
     return saved.records.find((item) => item.value.id === stored.id)?.value.tags;
-  }).toEqual(['case-type:phishing', 'case-type:trademark_infringement', 'case-type:copyright_infringement', 'priority-review']);
+  }).toEqual(['priority-review']);
   const updated = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const updatedCase = requiredValue(updated.records[0], 'The updated Case is missing.').value;
-  expect(updatedCase.assertions).toEqual(expect.arrayContaining([expect.objectContaining({ statement: `Incident target URL: ${incidentUrl}`, state: 'open' })]));
+  expect(updatedCase.workflowMetadata?.types).toEqual(['phishing', 'trademark_infringement', 'copyright_infringement']);
+  expect(updatedCase.workflowMetadata?.incidentTargets).toEqual([expect.objectContaining({ url: incidentUrl, state: 'open' })]);
+  expect(updatedCase.assertions).toEqual([]);
   expect(updatedCase.actions).toEqual(expect.arrayContaining([expect.objectContaining({
     type: 'platform_report',
     recipient: 'https://www.tiktok.com/legal/report/feedback',
@@ -352,7 +354,7 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   await page.reload();
   await openConsoleView(page, 'cases');
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
-  await page.getByLabel('Search').fill('copyright infringement');
+  await page.getByRole('textbox', { name: 'Search', exact: true }).fill('copyright infringement');
   const restoredHead = page.locator('.case-head', { hasText: 'reported-content.invalid' });
   await expect(page.locator('.tag', { hasText: 'Phishing' })).toBeVisible();
   await restoredHead.click();

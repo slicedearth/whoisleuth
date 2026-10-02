@@ -140,7 +140,8 @@ describe('canonical Case portability lifecycle', () => {
       }, NOW);
       assert.equal(record.evidencePins.length, 1);
       assert.equal(record.sightings.length, 1);
-      const imported = caseModel.normalizeCaseStore({ version, cases: [record] });
+      const { workflowMetadata: _workflow, ...historical } = record;
+      const imported = caseModel.normalizeCaseStore({ version, cases: [version < contracts.CASE_SCHEMA_VERSION ? historical : record] });
       const restored = caseModel.normalizeCaseStore(JSON.parse(caseModel.serializeCaseStore(imported.cases)));
       const exported = caseModel.buildCaseExport(restored.cases, NOW);
       const merged = caseModel.mergeCases([], exported).cases[0]!;

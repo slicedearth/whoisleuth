@@ -44,8 +44,9 @@ test('file references survive internal portability but never enter trusted or pu
     for (const secret of ['private-original.png', 'Private selected capture', original.digestSha256, 'original-one']) assert.ok(!output.includes(secret));
   }
   assert.deepEqual(projectCaseForAudience(updated, 'internal').attachments, [original]);
-  assert.deepEqual(normalizeCaseStore({ version: 16, cases: [updated] }).cases[0]!.attachments, [original]);
-  assert.throws(() => normalizeCaseStore({ version: 15, cases: [updated] }), /current Case schema/);
+  const { workflowMetadata: _workflow, ...published } = updated;
+  assert.deepEqual(normalizeCaseStore({ version: 16, cases: [published] }).cases[0]!.attachments, [original]);
+  assert.throws(() => normalizeCaseStore({ version: 15, cases: [published] }), /current Case schema/);
 });
 
 test('removal is deliberate, conflict-aware and leaves unrelated references intact', () => {

@@ -1,15 +1,17 @@
 import { boundedJsonLimitsForBytes, parseBoundedJsonObject } from '../analysis/bounded-json.mts';
 import { canonicalArtifactJsonV2 } from '../evidence/artifact-integrity.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
-import { CASE_SCHEMA_VERSION, CLI_CASE_PACK_INPUT_CASE_VERSIONS, MAX_CASE_STORE_BYTES, MAX_EDITABLE_CASE_INPUT_BYTES, PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { CASE_SCHEMA_VERSION, CLI_CASE_PACK_INPUT_CASE_VERSIONS, MAX_CASE_STORE_BYTES, MAX_EDITABLE_CASE_INPUT_BYTES, PUBLISHED_V2_3_CASE_SCHEMA_VERSION, EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import { normalizeCaseStore } from './case-migration-model.mts';
 import { serializeCaseStore } from './case-storage-model.mts';
 import type { CaseRecord } from './case-record-contracts.mts';
 
 /** Historical wire shape remains independent of current in-memory defaults. */
 export function canonicalCaseExportProjection(cases: readonly CaseRecord[], caseVersion: number): CaseRecord[] {
-  if (caseVersion !== PUBLISHED_V2_3_CASE_SCHEMA_VERSION) return [...cases];
-  return cases.map((value) => {
+  return cases.map((record) => {
+    const { workflowMetadata: _workflow, ...historical } = record;
+    const value = caseVersion < EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION ? historical : record;
+    if (caseVersion !== PUBLISHED_V2_3_CASE_SCHEMA_VERSION) return value;
     if ([...value.evidencePins, ...value.sightings].some((item) => item.observedAt === null)) {
       throw new TypeError('The published Case 15 format requires a known observation time on each retained pin and sighting.');
     }

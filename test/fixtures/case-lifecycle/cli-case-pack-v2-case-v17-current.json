@@ -13,6 +13,11 @@
       "tags": [
         "response-review"
       ],
+      "workflowMetadata": {
+        "types": [],
+        "incidentTargets": [],
+        "investigationContext": null
+      },
       "notes": [],
       "source": "manual",
       "evidenceHistory": [],
@@ -124,6 +129,11 @@
         "currentAssessment": null,
         "evidenceTimeline": [],
         "analystResponse": {
+          "workflowMetadata": {
+            "types": [],
+            "incidentTargets": [],
+            "investigationContext": null
+          },
           "evidencePins": [],
           "decisions": [],
           "actions": [
@@ -221,6 +231,6 @@
   "integrity": {
     "algorithm": "SHA-256",
     "canonicalization": "sorted-json-v2",
-    "digestSha256": "sha256:6178e265f1bfbc9474179413ad126a9d1ff789363bb4c24c4ac0fe6f1dc07da5"
+    "digestSha256": "sha256:3cbf9f6dcacdc8efdaa55319e5ce7068a5cf2ea116c80e9ff8ccf6d2dc8741c6"
   }
 }

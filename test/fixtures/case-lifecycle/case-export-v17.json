@@ -13,6 +13,11 @@
       "tags": [
         "response-review"
       ],
+      "workflowMetadata": {
+        "types": [],
+        "incidentTargets": [],
+        "investigationContext": null
+      },
       "notes": [],
       "source": "manual",
       "evidenceHistory": [],
