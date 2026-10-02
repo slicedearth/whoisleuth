@@ -85,8 +85,8 @@ describe('domain change packet', () => {
     const value = packetInput();
     value.preChange.authoritySnapshots[0]!.observedAt = '2026-08-04T06:00:00.000Z';
     const packet = await buildDomainChangePacket(value, NOW);
-    assert.equal(packet.version, 3);
-    assert.equal(packet.evidence.preChange.version, 2);
+    assert.equal(packet.version, 4);
+    assert.equal(packet.evidence.preChange.version, 3);
     assert.equal(packet.evidence.preChange.authoritativeRecordMatrix[0]?.observations[0]?.observedAt, '2026-08-04T06:00:00.000Z');
     assert.equal(packet.evidence.postChange.authoritativeRecordMatrix[0]?.observations[0]?.observedAt, NOW);
     assert.equal((await verifyOfflineArtifact(JSON.stringify(packet))).state, 'verified');
@@ -134,7 +134,7 @@ describe('domain change packet', () => {
     assert.match(inconsistentPacket.gate.reasons.join(' '), /Post-change evidence.*differ/iu);
   });
 
-  test('distinguishes a complete empty post-change set from unavailable evidence', async () => {
+  test('never infers removal from an unrelated complete query', async () => {
     const completeEmpty = packetInput();
     completeEmpty.preChange.authoritySnapshots.forEach((snapshot) => {
       snapshot.records.push({ owner: 'example.test', type: 'NS', value: 'ns1.example.test', ttl: 300 });
@@ -143,9 +143,41 @@ describe('domain change packet', () => {
       snapshot.records = [{ owner: 'example.test', type: 'NS', value: 'ns1.example.test', ttl: 300 }];
     });
     const packet = await buildDomainChangePacket(completeEmpty, NOW);
-    const removed = packet.summary.changedAuthoritativeRecordSets.find((item) => item.type === 'A');
+    assert.equal(packet.summary.changedAuthoritativeRecordSets.some((item) => item.type === 'A'), false);
+    assert.equal(packet.gate.pass, false);
+    assert.match(packet.gate.reasons.join(' '), /Comparison evidence is incomplete for example.test A/u);
+    assert.equal((await verifyOfflineArtifact(JSON.stringify(packet))).state, 'verified');
+
+    const covered = {
+      ...completeEmpty,
+      postChange: {
+        ...completeEmpty.postChange, version: 2,
+        authoritySnapshots: completeEmpty.postChange.authoritySnapshots.map((snapshot) => ({
+          ...snapshot, queries: ['A', 'NS'].map((type) => ({ owner: 'example.test', type, state: 'observed' })),
+        })),
+      },
+    };
+    const explicitEmpty = await buildDomainChangePacket(covered, NOW);
+    const removed = explicitEmpty.summary.changedAuthoritativeRecordSets.find((item) => item.type === 'A');
     assert.deepEqual(removed?.beforeValues, ['192.0.2.10']);
     assert.deepEqual(removed?.afterValues, []);
+    assert.equal(explicitEmpty.gate.pass, true);
+    assert.equal((await verifyOfflineArtifact(JSON.stringify(explicitEmpty))).state, 'verified');
+
+    const forged = structuredClone(explicitEmpty);
+    Reflect.set(forged.evidence.postChange.sourceObservations.authorities[0]!, 'queries', []);
+    await assert.rejects(verifyOfflineArtifact(JSON.stringify(await redigest(forged))), /query provenance.*unsupported or malformed structure/iu);
+  });
+
+  test('preserves independently pinned version-3 packet verification', async () => {
+    const bytes = readFileSync(new URL('./fixtures/cli-domain-change-packet-v3.json', import.meta.url), 'utf8');
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), '5aabc8fcd0a198e1e2b23ce0e8eaca2b521974e203f9189e61c48cc5bfe22dae');
+    const packet = JSON.parse(bytes);
+    assert.equal(packet.version, 3);
+    assert.equal(packet.evidence.preChange.version, 2);
+    assert.equal(Object.hasOwn(packet.evidence.preChange.sourceObservations.authorities[0], 'queries'), false);
+    assert.equal((await verifyOfflineArtifact(bytes)).state, 'verified');
+    assert.equal(JSON.stringify(packet, null, 2) + '\n', bytes);
   });
 
   test('rejects mixed-domain evidence and reports incomplete inputs as review', async () => {

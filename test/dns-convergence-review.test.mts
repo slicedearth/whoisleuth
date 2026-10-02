@@ -71,13 +71,69 @@ describe('DNS convergence review', () => {
     assert.equal(unscoped.gate.pass, false);
     assert.match(unscoped.gate.reasons[0] ?? '', /no comparable/iu);
 
-    const explicitlyEmpty = reviewDnsConvergence({
+    const unqueried = reviewDnsConvergence({
       schema: DNS_CONVERGENCE_INPUT_SCHEMA, version: 1, domain: 'example.test',
       expected: [{ owner: '@', type: 'MX', values: [] }],
       snapshots: [emptySnapshot('Resolver A'), emptySnapshot('Resolver B')],
     }, NOW);
-    assert.equal(explicitlyEmpty.rows[0]?.state, 'converged');
-    assert.equal(explicitlyEmpty.gate.pass, true);
+    assert.equal(unqueried.rows[0]?.state, 'incomplete');
+    assert.equal(unqueried.rows[0]?.observations[0]?.state, 'not_queried');
+    assert.equal(unqueried.gate.pass, false);
+  });
+
+  test('requires explicit complete query coverage for an empty answer', () => {
+    const input = {
+      schema: DNS_CONVERGENCE_INPUT_SCHEMA, version: 2, domain: 'example.test',
+      expected: [{ owner: '@', type: 'MX', values: [] }],
+      snapshots: ['Resolver A', 'Resolver B'].map((observer) => ({
+        observer, source: 'fixture resolver', observedAt: NOW, state: 'observed', records: [],
+        queries: [{ owner: '@', type: 'MX', state: 'observed' }],
+      })),
+    };
+    const complete = reviewDnsConvergence(input, NOW);
+    assert.equal(complete.version, 2);
+    assert.equal(complete.gate.pass, true);
+    assert.equal(complete.rows[0]?.state, 'converged');
+    for (const state of ['partial', 'unavailable']) {
+      const incomplete = structuredClone(input);
+      incomplete.snapshots[1]!.state = state;
+      incomplete.snapshots[1]!.queries[0]!.state = state;
+      const review = reviewDnsConvergence(incomplete, NOW);
+      assert.equal(review.gate.pass, false);
+      assert.equal(review.rows[0]?.observations[1]?.state, state);
+    }
+    input.snapshots[1]!.queries = [];
+    assert.equal(reviewDnsConvergence(input, NOW).rows[0]?.observations[1]?.state, 'not_queried');
+    assert.equal(reviewDnsConvergence(input, NOW).gate.pass, false);
+  });
+
+  test('rejects undeclared, contradictory, duplicate and over-budget query coverage', () => {
+    const input = {
+      schema: DNS_CONVERGENCE_INPUT_SCHEMA, version: 2, domain: 'example.test', expected: null,
+      snapshots: [snapshot('Resolver A', '192.0.2.20'), snapshot('Resolver B', '192.0.2.20')]
+        .map((item) => ({ ...item, queries: [{ owner: '@', type: 'A', state: 'observed' }] })),
+    };
+    assert.equal(reviewDnsConvergence(input, NOW).gate.pass, true);
+    const absent = structuredClone(input);
+    absent.snapshots[0]!.queries = [];
+    assert.throws(() => reviewDnsConvergence(absent, NOW), /declare an observed or partial query/u);
+    const duplicate = structuredClone(input);
+    duplicate.snapshots[0]!.queries.push({ owner: 'example.test.', type: 'a', state: 'observed' });
+    assert.throws(() => reviewDnsConvergence(duplicate, NOW), /duplicates an owner and type/u);
+    const contradictory = structuredClone(input);
+    contradictory.snapshots[0]!.queries[0]!.state = 'unavailable';
+    assert.throws(() => reviewDnsConvergence(contradictory, NOW), /contradicts the snapshot state/u);
+    for (const value of [undefined, [{ owner: '@', type: 'ANY', state: 'observed' }], [{ owner: '@', type: 'A', state: 'unknown' }]]) {
+      const invalid = structuredClone(input);
+      Reflect.set(invalid.snapshots[0]!, 'queries', value);
+      assert.throws(() => reviewDnsConvergence(invalid, NOW), /query outcomes|unsupported/u);
+    }
+    const oversized = structuredClone(input);
+    oversized.snapshots[0]!.queries = Array.from({ length: 2_000 }, (_, index) => ({ owner: `s${index}.example.test`, type: 'A', state: 'observed' }));
+    oversized.snapshots[0]!.records = [];
+    assert.throws(() => reviewDnsConvergence(oversized, NOW), /no more than 0 query outcomes/u);
+    assert.throws(() => reviewDnsConvergence({ ...input, version: 3 }, NOW), /version 1 or 2/u);
+    assert.throws(() => reviewDnsConvergence({ ...input, version: 1 }, NOW), /unknown field: queries/u);
   });
 
   test('compares equivalent IPv6 spellings by address value', () => {

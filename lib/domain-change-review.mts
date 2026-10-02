@@ -6,11 +6,13 @@ import {
   requireRecord,
 } from './bounded-contract-normalizers.mts';
 import { normaliseRdata } from './zone-intent-review.mts';
+import { dnsQueryState, normaliseDnsQueryCoverage } from './dns-query-coverage.mts';
 
 export const DOMAIN_CHANGE_INPUT_SCHEMA = 'whoisleuth.domain-change.input';
-export const DOMAIN_CHANGE_INPUT_VERSION = 1;
+export const DOMAIN_CHANGE_INPUT_VERSION = 2;
+export const SUPPORTED_DOMAIN_CHANGE_INPUT_VERSIONS = Object.freeze([1, DOMAIN_CHANGE_INPUT_VERSION]);
 export const DOMAIN_CHANGE_REVIEW_SCHEMA = 'whoisleuth.domain-change.review';
-export const DOMAIN_CHANGE_REVIEW_VERSION = 2;
+export const DOMAIN_CHANGE_REVIEW_VERSION = 3;
 export const MAX_DOMAIN_CHANGE_VANTAGES = 16;
 export const MAX_DOMAIN_CHANGE_RECORDS = 500;
 
@@ -19,6 +21,7 @@ type RecordType = 'A' | 'AAAA' | 'CAA' | 'CDNSKEY' | 'CDS' | 'CNAME' | 'CSYNC' |
 
 const ROOT_KEYS = new Set(['schema', 'version', 'domain', 'authoritySnapshots', 'resolverSnapshots', 'acmeDependencies', 'certificate', 'hsts']);
 const SNAPSHOT_KEYS = new Set(['label', 'source', 'state', 'observedAt', 'records']);
+const COVERED_SNAPSHOT_KEYS = new Set([...SNAPSHOT_KEYS, 'queries']);
 const RECORD_KEYS = new Set(['owner', 'type', 'value', 'ttl']);
 const ACME_KEYS = new Set(['method', 'owner', 'target', 'provider', 'state']);
 const CERTIFICATE_KEYS = new Set(['state', 'observedAt', 'currentSpkiSha256', 'plannedSpkiSha256', 'mustStaple', 'ocspStapled', 'embeddedSctCount']);
@@ -79,24 +82,36 @@ function normaliseRecord(value: unknown, apex: string, label: string) {
   return Object.freeze({ owner: owner(input.owner, apex, `${label}.owner`), type, ttl, ...normaliseValue(type, input.value, `${label}.value`) });
 }
 
-function normaliseSnapshots(value: unknown, apex: string, label: string) {
+function normaliseSnapshots(value: unknown, apex: string, label: string, legacy: boolean) {
   if (!Array.isArray(value) || value.length > MAX_DOMAIN_CHANGE_VANTAGES) throw new TypeError(`${label} must contain no more than ${MAX_DOMAIN_CHANGE_VANTAGES} snapshots.`);
   let totalRecords = 0;
+  let totalQueries = 0;
   const snapshots = value.map((raw, index) => {
     const item = requireRecord(raw, `${label}[${index}]`);
-    exactKeys(item, SNAPSHOT_KEYS, `${label}[${index}]`);
+    exactKeys(item, legacy ? SNAPSHOT_KEYS : COVERED_SNAPSHOT_KEYS, `${label}[${index}]`);
     const state = evidenceState(item.state, `${label}[${index}].state`);
     if (!Array.isArray(item.records)) throw new TypeError(`${label}[${index}].records must be an array.`);
     totalRecords += item.records.length;
     if (totalRecords > MAX_DOMAIN_CHANGE_RECORDS) throw new TypeError(`Domain change review is limited to ${MAX_DOMAIN_CHANGE_RECORDS} records.`);
     const records = item.records.map((recordValue, recordIndex) => normaliseRecord(recordValue, apex, `${label}[${index}].records[${recordIndex}]`));
     if (state === 'unavailable' && records.length) throw new TypeError(`${label}[${index}] cannot contain records when unavailable.`);
+    const queries = normaliseDnsQueryCoverage(item.queries, {
+      legacy, label: `${label}[${index}].queries`, maximum: MAX_DOMAIN_CHANGE_RECORDS - totalQueries, state, records,
+      owner: (value, path) => owner(value, apex, path),
+      type: (value, path) => {
+        const type = text(value, path, 16).toUpperCase() as RecordType;
+        if (!TYPES.has(type)) throw new TypeError(`${path} is unsupported.`);
+        return type;
+      },
+    });
+    totalQueries += queries.length;
     return Object.freeze({
       label: text(item.label, `${label}[${index}].label`, 120),
       source: text(item.source, `${label}[${index}].source`, 240),
       state,
       observedAt: timestamp(item.observedAt, `${label}[${index}].observedAt`),
       records: Object.freeze(records),
+      queries,
     });
   });
   if (new Set(snapshots.map((item) => item.label.toLowerCase())).size !== snapshots.length) throw new TypeError(`${label} labels must be unique.`);
@@ -104,18 +119,19 @@ function normaliseSnapshots(value: unknown, apex: string, label: string) {
 }
 
 function snapshotProvenance(snapshot: ReturnType<typeof normaliseSnapshots>[number]) {
-  return Object.freeze({ label: snapshot.label, source: snapshot.source, state: snapshot.state, observedAt: snapshot.observedAt });
+  return Object.freeze({ label: snapshot.label, source: snapshot.source, state: snapshot.state, observedAt: snapshot.observedAt, queries: snapshot.queries });
 }
 
 function recordMatrix(snapshots: ReturnType<typeof normaliseSnapshots>) {
-  const keys = [...new Set(snapshots.flatMap((snapshot) => snapshot.records.map((item) => `${item.owner}\u0000${item.type}`)))].sort();
+  const keys = [...new Set(snapshots.flatMap((snapshot) => snapshot.queries.map((item) => `${item.owner}\u0000${item.type}`)))].sort();
   return Object.freeze(keys.map((key) => {
     const [recordOwner, type] = key.split('\u0000') as [string, RecordType];
     const observations = snapshots.map((snapshot) => {
       const matches = snapshot.records.filter((item) => item.owner === recordOwner && item.type === type);
       const ttls = matches.map((item) => item.ttl).filter((ttl): ttl is number => ttl !== null);
       return Object.freeze({
-        ...snapshotProvenance(snapshot),
+        label: snapshot.label, source: snapshot.source, observedAt: snapshot.observedAt,
+        state: dnsQueryState(snapshot.queries, recordOwner, type),
         values: Object.freeze([...new Set(matches.map((item) => item.value))].sort()),
         ttlRange: ttls.length ? Object.freeze({
           minimum: Math.min(...ttls),
@@ -128,14 +144,15 @@ function recordMatrix(snapshots: ReturnType<typeof normaliseSnapshots>) {
     return Object.freeze({
       owner: recordOwner,
       type,
-      state: complete.length < 2 ? 'insufficient' as const : signatures.size === 1 ? 'aligned' as const : 'different' as const,
+      state: complete.length < 2 || complete.length !== observations.length ? 'insufficient' as const : signatures.size === 1 ? 'aligned' as const : 'different' as const,
       observations: Object.freeze(observations),
     });
   }));
 }
 
 function reviewDnssecAutomation(matrix: ReturnType<typeof recordMatrix>) {
-  const automation = matrix.filter((row) => row.type === 'CDS' || row.type === 'CDNSKEY' || row.type === 'CSYNC');
+  const automation = matrix.filter((row) => ['CDS', 'CDNSKEY', 'CSYNC'].includes(row.type)
+    && row.observations.some((item) => item.values.length > 0));
   const byType = (type: RecordType) => automation.find((row) => row.type === type);
   const cds = byType('CDS');
   const cdnskey = byType('CDNSKEY');
@@ -249,11 +266,11 @@ function serviceInventory(snapshots: readonly ReturnType<typeof normaliseSnapsho
 
 export function reviewDomainChange(inputRaw: unknown, generatedAtValue = new Date().toISOString()) {
   const input = requireRecord(inputRaw, 'Domain change input');
-  if (input.schema !== DOMAIN_CHANGE_INPUT_SCHEMA || input.version !== DOMAIN_CHANGE_INPUT_VERSION) throw new TypeError(`Domain change input must use ${DOMAIN_CHANGE_INPUT_SCHEMA} version ${DOMAIN_CHANGE_INPUT_VERSION}.`);
+  if (input.schema !== DOMAIN_CHANGE_INPUT_SCHEMA || !SUPPORTED_DOMAIN_CHANGE_INPUT_VERSIONS.includes(input.version as number)) throw new TypeError(`Domain change input must use ${DOMAIN_CHANGE_INPUT_SCHEMA} version 1 or ${DOMAIN_CHANGE_INPUT_VERSION}.`);
   exactKeys(input, ROOT_KEYS, 'Domain change input');
   const apex = domain(input.domain, 'domain');
-  const authoritySnapshots = normaliseSnapshots(input.authoritySnapshots ?? [], apex, 'authoritySnapshots');
-  const resolverSnapshots = normaliseSnapshots(input.resolverSnapshots ?? [], apex, 'resolverSnapshots');
+  const authoritySnapshots = normaliseSnapshots(input.authoritySnapshots ?? [], apex, 'authoritySnapshots', input.version === 1);
+  const resolverSnapshots = normaliseSnapshots(input.resolverSnapshots ?? [], apex, 'resolverSnapshots', input.version === 1);
   const authorityMatrix = recordMatrix(authoritySnapshots);
   const resolverMatrix = recordMatrix(resolverSnapshots);
   const acmeDependencies = normaliseAcme(input.acmeDependencies ?? [], apex);
@@ -315,7 +332,7 @@ export function reviewDomainChange(inputRaw: unknown, generatedAtValue = new Dat
     limitations: Object.freeze([
       'This local review uses only analyst-supplied observations and makes no DNS, HTTP, certificate, certificate-authority, preload-list, or provider request.',
       'Different observations can reflect propagation, caching, split-horizon DNS, resolver policy, or collection timing; they do not establish misconfiguration by themselves.',
-      'Partial or unavailable evidence is never treated as record absence. TXT values are represented only by SHA-256 digests.',
+      'Only an explicitly observed query can establish an empty answer. Unqueried, partial and unavailable record types are not absence; legacy inputs establish scope only for supplied records. TXT values are represented only by SHA-256 digests.',
       'DNSSEC automation readiness describes CDS, CDNSKEY, and CSYNC publication consistency; it does not validate a cryptographic chain or authorise a registry-side change.',
       'HSTS preload state is an analyst-supplied, source-attributed observation and must be refreshed against the nominated source before a change.',
     ]),

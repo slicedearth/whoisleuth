@@ -53,6 +53,49 @@ function input() {
 }
 
 describe('domain change review', () => {
+  test('distinguishes a queried empty set from missing and partial query scope', () => {
+    const value = {
+      schema: DOMAIN_CHANGE_INPUT_SCHEMA, version: 2, domain: 'example.test',
+      authoritySnapshots: ['A', 'B', 'C'].map((label) => ({
+        label, source: 'fixture authority', state: 'observed', observedAt: NOW, records: [],
+        queries: [{ owner: '@', type: 'MX', state: 'observed' }],
+      })),
+    };
+    const complete = reviewDomainChange(value, NOW);
+    assert.equal(complete.gate.pass, true);
+    assert.equal(complete.authoritativeRecordMatrix[0]?.state, 'aligned');
+    assert.deepEqual(complete.authoritativeRecordMatrix[0]?.observations.map((item) => item.values), [[], [], []]);
+    for (const state of ['partial', 'unavailable']) {
+      const incomplete = structuredClone(value);
+      incomplete.authoritySnapshots[2]!.state = state;
+      incomplete.authoritySnapshots[2]!.queries[0]!.state = state;
+      const result = reviewDomainChange(incomplete, NOW);
+      assert.equal(result.authoritativeRecordMatrix[0]?.state, 'insufficient');
+      assert.equal(result.gate.pass, false);
+    }
+    value.authoritySnapshots[2]!.queries = [];
+    const unqueried = reviewDomainChange(value, NOW);
+    assert.equal(unqueried.gate.pass, false);
+    assert.equal(unqueried.authoritativeRecordMatrix[0]?.observations[2]?.state, 'not_queried');
+    assert.equal(unqueried.authoritativeRecordMatrix[0]?.state, 'insufficient');
+    assert.throws(() => reviewDomainChange({ ...value, version: 3 }, NOW), /version 1 or 2/u);
+  });
+
+  test('does not describe queried-empty DNSSEC automation types as published records', () => {
+    const value = {
+      schema: DOMAIN_CHANGE_INPUT_SCHEMA, version: 2, domain: 'example.test',
+      authoritySnapshots: ['A', 'B'].map((label) => ({
+        label, source: 'fixture authority', state: 'observed', observedAt: NOW, records: [],
+        queries: ['CDS', 'CDNSKEY', 'CSYNC'].map((type) => ({ owner: '@', type, state: 'observed' })),
+      })),
+    };
+    const review = reviewDomainChange(value, NOW);
+    assert.equal(review.dnssecAutomation.state, 'not_observed');
+    assert.equal(review.dnssecAutomation.cdsObserved, false);
+    assert.equal(review.dnssecAutomation.cdnskeyObserved, false);
+    assert.equal(review.dnssecAutomation.csyncObserved, false);
+  });
+
   test('preserves each contributing observation time separately from review generation', () => {
     const value = input();
     value.authoritySnapshots[0]!.observedAt = '2026-08-01T01:00:00.000Z';
@@ -61,7 +104,7 @@ describe('domain change review', () => {
     value.certificate.observedAt = '2026-08-04T04:00:00.000Z';
     const before = structuredClone(value);
     const review = reviewDomainChange(value, NOW);
-    assert.equal(review.version, 2);
+    assert.equal(review.version, 3);
     assert.equal(review.generatedAt, NOW);
     assert.deepEqual(review.authoritativeRecordMatrix[0]?.observations.map((item) => item.observedAt), [
       '2026-08-01T01:00:00.000Z', '2026-08-02T02:00:00.000Z',

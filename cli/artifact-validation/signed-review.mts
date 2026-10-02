@@ -351,25 +351,46 @@ function validateBulkReviewManifest(value: UnknownRecord): void {
   validateIntegrity(root.integrity, 'Bulk review manifest integrity', root.version, version);
 }
 
-function validateSourceObservations(value: unknown, label: string): UnknownRecord[] {
+function validateSourceObservations(value: unknown, label: string, queryCoverage: boolean): UnknownRecord[] {
   const names = new Set<string>();
+  let queryCount = 0;
   return array(value, label, 16).map((candidate) => {
-    const source = exact(candidate, ['label', 'source', 'state', 'observedAt'], label);
+    const source = exact(candidate, ['label', 'source', 'state', 'observedAt', ...(queryCoverage ? ['queries'] : [])], label);
     const name = text(source.label, `${label} label`, 120).toLowerCase();
     if (names.has(name)) fail(`${label} duplicate label`);
     names.add(name);
     text(source.source, `${label} source`, 240);
     enumeration(source.state, ['observed', 'partial', 'unavailable'], `${label} state`);
     iso(source.observedAt, `${label} observedAt`);
+    if (queryCoverage) {
+      const keys = new Set<string>();
+      const queries = array(source.queries, `${label} queries`, 500 - queryCount);
+      queryCount += queries.length;
+      for (const candidate of queries) {
+        const query = exact(candidate, ['owner', 'type', 'state'], `${label} query`);
+        text(query.owner, `${label} query owner`, 253);
+        enumeration(query.type, DNS_TYPES, `${label} query type`);
+        enumeration(query.state, ['observed', 'partial', 'unavailable'], `${label} query state`);
+        const key = `${query.owner}\u0000${query.type}`;
+        if (keys.has(key)) fail(`${label} duplicate query`);
+        keys.add(key);
+        if ((source.state === 'observed' && query.state !== 'observed')
+          || (source.state === 'unavailable' && query.state !== 'unavailable')) fail(`${label} query state`);
+      }
+    }
     return source;
   });
 }
 
-function validateReviewMatrix(value: unknown, label: string, sources?: readonly UnknownRecord[]): void {
+function validateReviewMatrix(value: unknown, label: string, sources?: readonly UnknownRecord[], queryCoverage = false): void {
+  const rowKeys = new Set<string>();
   for (const [rowIndex, candidate] of array(value, label, 500).entries()) {
     const row = exact(candidate, ['owner', 'type', 'state', 'observations'], `${label} row ${rowIndex + 1}`);
     text(row.owner, `${label} owner`, 253);
     enumeration(row.type, DNS_TYPES, `${label} type`);
+    const key = `${row.owner}\u0000${row.type}`;
+    if (queryCoverage && rowKeys.has(key)) fail(`${label} duplicate row`);
+    rowKeys.add(key);
     const observations = array(row.observations, `${label} observations`, 16);
     if (sources && observations.length !== sources.length) fail(`${label} source coverage`);
     let complete = 0;
@@ -379,14 +400,20 @@ function validateReviewMatrix(value: unknown, label: string, sources?: readonly 
       const observation = exact(observationCandidate, ['label', 'source', 'state', 'values', 'ttlRange', ...(sources ? ['observedAt'] : [])], `${label} observation`);
       text(observation.label, `${label} observation label`, 120);
       text(observation.source, `${label} observation source`, 240);
-      const state = enumeration(observation.state, ['observed', 'partial', 'unavailable'], `${label} observation state`);
+      const state = enumeration(observation.state, ['observed', 'partial', 'unavailable', ...(queryCoverage ? ['not_queried'] : [])], `${label} observation state`);
       const values = strings(observation.values, `${label} observation values`, 500, 16_384);
       if (sources) {
         const name = String(observation.label).toLowerCase();
         if (names.has(name)) fail(`${label} duplicate observation`);
         names.add(name);
         const source = sources.find((item) => item.label === observation.label);
-        if (!source || ['label', 'source', 'state', 'observedAt'].some((key) => observation[key] !== source[key])) fail(`${label} source provenance`);
+        const provenance = queryCoverage ? ['label', 'source', 'observedAt'] : ['label', 'source', 'state', 'observedAt'];
+        if (!source || provenance.some((key) => observation[key] !== source[key])) fail(`${label} source provenance`);
+        if (queryCoverage) {
+          const query = (source.queries as UnknownRecord[]).find((item) => item.owner === row.owner && item.type === row.type);
+          if (state !== (query?.state ?? 'not_queried')) fail(`${label} query provenance`);
+          if (['not_queried', 'unavailable'].includes(state) && (values.length || observation.ttlRange !== null)) fail(`${label} unavailable values`);
+        }
         iso(observation.observedAt, `${label} observation time`);
       }
       if (state === 'observed') { complete += 1; signatures.add(JSON.stringify(values)); }
@@ -397,21 +424,26 @@ function validateReviewMatrix(value: unknown, label: string, sources?: readonly 
         if (maximum < minimum) fail(`${label} TTL range`);
       }
     }
-    const expected = complete < 2 ? 'insufficient' : signatures.size === 1 ? 'aligned' : 'different';
+    const expected = complete < 2 || (queryCoverage && complete !== observations.length) ? 'insufficient' : signatures.size === 1 ? 'aligned' : 'different';
     if (row.state !== expected) fail(`${label} state`);
+  }
+  if (queryCoverage && sources) {
+    const expectedKeys = new Set(sources.flatMap((source) => (source.queries as UnknownRecord[]).map((item) => `${item.owner}\u0000${item.type}`)));
+    if (rowKeys.size !== expectedKeys.size || [...rowKeys].some((key) => !expectedKeys.has(key))) fail(`${label} query coverage`);
   }
 }
 
 function validateDomainChangeReview(value: unknown, label: string, version: number): UnknownRecord {
   const retainedTimes = version >= 2;
+  const queryCoverage = version >= 3;
   const review = exact(value, ['schema', 'version', 'generatedAt', 'domain', 'state', 'authoritativeRecordMatrix', 'resolverDivergenceMatrix', 'dnssecAutomation', 'acmeDependencies', 'certificate', 'services', 'hsts', 'gate', 'limitations', ...(retainedTimes ? ['sourceObservations'] : [])], label);
   if (review.schema !== DOMAIN_CHANGE_REVIEW_SCHEMA || review.version !== version) fail(label);
   iso(review.generatedAt, `${label} generatedAt`);
   domain(review.domain, `${label} domain`);
   enumeration(review.state, ['ready', 'review'], `${label} state`);
   const sources = retainedTimes ? exact(review.sourceObservations, ['authorities', 'resolvers'], `${label} source observations`) : null;
-  validateReviewMatrix(review.authoritativeRecordMatrix, `${label} authority matrix`, sources ? validateSourceObservations(sources.authorities, `${label} authority sources`) : undefined);
-  validateReviewMatrix(review.resolverDivergenceMatrix, `${label} resolver matrix`, sources ? validateSourceObservations(sources.resolvers, `${label} resolver sources`) : undefined);
+  validateReviewMatrix(review.authoritativeRecordMatrix, `${label} authority matrix`, sources ? validateSourceObservations(sources.authorities, `${label} authority sources`, queryCoverage) : undefined, queryCoverage);
+  validateReviewMatrix(review.resolverDivergenceMatrix, `${label} resolver matrix`, sources ? validateSourceObservations(sources.resolvers, `${label} resolver sources`, queryCoverage) : undefined, queryCoverage);
   const automation = exact(review.dnssecAutomation, ['state', 'cdsObserved', 'cdnskeyObserved', 'csyncObserved', 'conflictingTypes', 'detail'], `${label} DNSSEC automation`);
   enumeration(automation.state, ['not_observed', 'conflict', 'partial', 'review_ready'], `${label} DNSSEC automation`);
   boolean(automation.cdsObserved, `${label} CDS observed`);
@@ -514,7 +546,8 @@ function validatePlannedAssurance(value: unknown, label: string): UnknownRecord 
 function expectedDomainChangeSummary(
   before: UnknownRecord,
   after: UnknownRecord,
-): Array<Readonly<{ owner: string; type: string; beforeValues: string[]; afterValues: string[] }>> {
+  queryCoverage: boolean,
+) {
   const rows = (review: UnknownRecord) => new Map(
     (review.authoritativeRecordMatrix as UnknownRecord[]).map((row) => [`${row.owner}\u0000${row.type}`, row]),
   );
@@ -527,7 +560,7 @@ function expectedDomainChangeSummary(
     return observations.length >= 2 && observations.every((item) => item.state === 'observed');
   };
   const rowEvidence = (review: UnknownRecord, row: UnknownRecord | undefined): { state: string; values: string[] } => {
-    if (!row) return { state: collectionComplete(review) ? 'complete' : 'unavailable', values: [] };
+    if (!row) return { state: !queryCoverage && collectionComplete(review) ? 'complete' : 'unavailable', values: [] };
     const observations = row.observations as UnknownRecord[];
     if (observations.some((item) => item.state !== 'observed')) return { state: 'partial', values: [] };
     if (row.state === 'different') return { state: 'inconsistent', values: [] };
@@ -535,17 +568,19 @@ function expectedDomainChangeSummary(
     return { state: 'complete', values: [...new Set(observations.flatMap((item) => item.values as string[]))].sort() };
   };
   const changed: Array<Readonly<{ owner: string; type: string; beforeValues: string[]; afterValues: string[] }>> = [];
+  const reasons: string[] = queryCoverage && keys.length > 500 ? ['The comparison exceeds 500 owner and record-type pairs.'] : [];
   for (const key of keys.slice(0, 500)) {
     const left = rowEvidence(before, beforeRows.get(key));
     const right = rowEvidence(after, afterRows.get(key));
     const [owner, type] = key.split('\u0000');
     if (left.state !== 'complete' || right.state !== 'complete') {
+      if (queryCoverage) reasons.push(`Comparison evidence is incomplete for ${owner} ${type}.`);
       continue;
     } else if (!sameValues(left.values, right.values)) {
       changed.push({ owner: owner ?? '', type: type ?? '', beforeValues: left.values, afterValues: right.values });
     }
   }
-  return changed;
+  return { changed, reasons };
 }
 
 function validateDomainChangePacket(value: UnknownRecord): void {
@@ -585,15 +620,17 @@ function validateDomainChangePacket(value: UnknownRecord): void {
   const expectedReasons = [
     ...(pre.gate as UnknownRecord).reasons as string[],
   ].map((reason) => `Pre-change evidence: ${reason}`);
+  const comparison = expectedDomainChangeSummary(pre, post, reviewVersion >= 3);
   expectedReasons.push(
     ...((post.gate as UnknownRecord).reasons as string[]).map((reason) => `Post-change evidence: ${reason}`),
     ...(((assuranceResult.review as UnknownRecord).reasons as string[]).map((reason) => `Change plan: ${reason}`)),
+    ...comparison.reasons,
   );
   const boundedReasons = expectedReasons.slice(0, 100);
   if (!sameValues(gateReasons, boundedReasons)
     || gate.pass !== (boundedReasons.length === 0)
     || root.state !== (boundedReasons.length === 0 ? 'ready' : 'review')) fail('Domain change packet gate');
-  const expectedChanges = expectedDomainChangeSummary(pre, post);
+  const expectedChanges = comparison.changed;
   if (changed.length !== expectedChanges.length || changed.some((candidate, index) => {
     const item = candidate as UnknownRecord;
     const expected = expectedChanges[index]!;

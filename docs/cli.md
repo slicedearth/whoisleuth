@@ -542,7 +542,14 @@ diagnostics, and missing health metadata remains unmeasured.
 collection times visible. Source-output and review-generation times do not
 stand in for missing observation times. `domain-change` and
 `domain-change-packet` retain authority, resolver and certificate observation
-times; previously published version-2 packets remain verifiable.
+times; previously published version-2 and version-3 packets remain verifiable.
+Current DNS convergence and domain-change inputs use version 2. Each snapshot
+declares `queries`, for example
+`[{"owner":"example.test","type":"MX","state":"observed"}]`.
+An `observed` query with no matching records means an empty answer; `partial`
+and `unavailable` queries do not. Omitted queries are not queried. Version-1
+inputs remain readable but establish query scope only for supplied records.
+An expected empty set alone cannot establish an observed empty answer.
 
 ## Exit codes
 
