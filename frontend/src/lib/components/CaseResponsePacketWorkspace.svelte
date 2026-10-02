@@ -93,6 +93,8 @@
   let defaultsAppliedRecordId = $state('');
   let packetCategoryEdited = $state(false);
   let packetUrlsEdited = $state(false);
+  let packetActionEdited = $state(false);
+  let packetEvidenceEdited = $state(false);
   let lastPacketExport = $state<(Parameters<typeof onpacketexported>[0] & { materialSignature: string }) | null>(null);
   type PreparedPacket = Readonly<{
     built: Awaited<ReturnType<typeof buildCaseResponsePacket>>;
@@ -161,12 +163,12 @@
   $effect(() => {
     if (!visible || !packetOpen) return;
     if (defaultsAppliedRecordId !== record.id) {
-      packetCategoryEdited = false;
-      packetUrlsEdited = false;
+      // The parent keys this component by Case identity. Its fresh flags must
+      // not erase edits made before the native disclosure event is delivered.
       const latestDecision = [...record.decisions].reverse().find((decision) => decision.evidencePinIds.length);
       const retainedIds = new Set(record.evidencePins.map((pin) => pin.id));
-      packetSelectedEvidenceIds = latestDecision?.evidencePinIds.filter((id) => retainedIds.has(id)) ?? [];
-      packetActionId = record.actions.length === 1 ? record.actions[0]?.id ?? '' : '';
+      if (!packetEvidenceEdited) packetSelectedEvidenceIds = latestDecision?.evidencePinIds.filter((id) => retainedIds.has(id)) ?? [];
+      if (!packetActionEdited) packetActionId = record.actions.length === 1 ? record.actions[0]?.id ?? '' : '';
     }
     const retainedIncidentUrls = caseResponseIncidentUrls(record);
     if (!packetUrlsEdited) packetUrls = retainedIncidentUrls.join('\n');
@@ -455,14 +457,17 @@
       {#if packetWizardStep === 1}
         <section id={`packet-wizard-step-${record.id}-2`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-2`}>
           <header><div><p class="eyebrow">Prepare</p><h4 id={`packet-wizard-title-${record.id}-2`}>Evidence selection</h4></div><span>Selected material</span></header>
-          <fieldset class="pin-references"><legend>Evidence selected for this exact packet</legend>{#if record.evidencePins.length}{#each record.evidencePins as pin, index}<label class="choice"><input type="checkbox" aria-label={caseEvidenceChoiceName(pin, index)} checked={packetSelectedEvidenceIds.includes(pin.id)} onchange={(event) => packetSelectedEvidenceIds = event.currentTarget.checked ? [...packetSelectedEvidenceIds, pin.id] : packetSelectedEvidenceIds.filter((id) => id !== pin.id)}><CaseEvidenceFact {pin} /></label>{/each}{:else}<p class="notice">No evidence pins are retained in this Case. The draft will keep this unavailable.</p>{/if}</fieldset>
+          <fieldset class="pin-references"><legend>Evidence selected for this exact packet</legend>{#if record.evidencePins.length}{#each record.evidencePins as pin, index}<label class="choice"><input type="checkbox" aria-label={caseEvidenceChoiceName(pin, index)} checked={packetSelectedEvidenceIds.includes(pin.id)} onchange={(event) => {
+            packetEvidenceEdited = true;
+            packetSelectedEvidenceIds = event.currentTarget.checked ? [...packetSelectedEvidenceIds, pin.id] : packetSelectedEvidenceIds.filter((id) => id !== pin.id);
+          }}><CaseEvidenceFact {pin} /></label>{/each}{:else}<p class="notice">No evidence pins are retained in this Case. The draft will keep this unavailable.</p>{/if}</fieldset>
           <p class="notice">Selection includes only retained Case pins supported by response-packet v{CASE_RESPONSE_PACKET_VERSION}. It does not collect, upload, or infer new evidence.</p>
         </section>
       {/if}
       {#if packetWizardStep === 1}
         <section id={`packet-wizard-step-${record.id}-3`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-3`}>
           <header><div><p class="eyebrow">Prepare</p><h4 id={`packet-wizard-title-${record.id}-3`}>Action and recipient provenance</h4></div><span>Delivery context</span></header>
-          <label class="field">Case action for this packet<select bind:value={packetActionId}><option value="">Select a retained Case action</option>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient} · {action.state.replaceAll('_', ' ')}</option>{/each}</select></label>
+          <label class="field">Case action for this packet<select bind:value={packetActionId} onchange={() => packetActionEdited = true}><option value="">Select a retained Case action</option>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient} · {action.state.replaceAll('_', ' ')}</option>{/each}</select></label>
           {#if selectedPacketAction}<section class="profile-preview"><div><strong>{selectedPacketAction.recipient}</strong><span>{selectedPacketAction.type.replaceAll('_', ' ')}</span></div><p><strong>Source:</strong> {selectedPacketAction.contactSource}</p><p><strong>Route observed:</strong> {selectedPacketAction.routeObservedAt ?? 'Time unavailable'}</p>{#if selectedPacketAction.originActionId}<p><strong>Originating action:</strong> {selectedPacketAction.originActionId}</p>{/if}{#if selectedPacketAction.contactLimitations.length}<p><strong>Limitations:</strong> {selectedPacketAction.contactLimitations.join('; ')}</p>{/if}</section>{:else}<p class="notice">Create and review a Case action first. Browser and blocklist destinations use a manually entered internal-review action; other profiles require the matching typed route.</p>{/if}
           {#if selectedPacketAction}<p class="notice">Route freshness: {responseRouteFreshness(selectedPacketAction.routeObservedAt, selectedPacketAction.routeReviewAfter, packetReview.now)} · review deadline or published expiry: {selectedPacketAction.routeReviewAfter ?? 'not recorded'}. Refresh recipient evidence in the Response decision stage; changing it invalidates this packet review.</p>{/if}
           <p class="notice">Only the selected action, its bounded origin lineage and its route are included. A published or analyst-supplied route does not establish ownership, authority, successful delivery, or recipient action.</p>

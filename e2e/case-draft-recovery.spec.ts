@@ -2,7 +2,8 @@ import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-cont
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { createCase, openCasesView, openCaseResponseWorkspace } from './case-test-fixtures';
+import { caseRecord, createCase, openCasesView, openCaseResponseWorkspace, openSeededTimelineCase } from './case-test-fixtures';
+import { addFixtureCasePin, currentActionFixture } from './case-response-fixtures';
 import { openCaseSection } from './console-navigation';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { downloadWorkspaceArchive, workspaceArchiveRegion } from './workspace-backup';
@@ -16,6 +17,51 @@ async function pinForm(page: Page) {
   if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click();
   return details.locator('form').first();
 }
+
+test('packet inputs entered before the native disclosure event survive initial defaults', { tag: '@cross-browser-critical' }, async ({ page }) => {
+  const record = caseRecord({ id: 'case-queued-packet', domain: 'queued-packet.invalid', actions: [currentActionFixture({
+    id: 'action-only', type: 'internal_review', recipient: 'Fixture reviewer', contactSource: 'Analyst supplied internal owner',
+    routeObservedAt: null, contactLimitations: ['Internal review only'], dueAt: null, targetState: 'ready_for_review',
+    reference: null, followUpAt: null, outcome: null, createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-02T00:00:00.000Z',
+  })] });
+  await openSeededTimelineCase(page, record.domain, [record]);
+  await addFixtureCasePin(page, 'Queued packet observation');
+  const workspace = await openCaseResponseWorkspace(page);
+  await openCaseSection(page, 'Response');
+  const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
+  const category = packet.getByLabel('Abuse category', { exact: true });
+  const urls = packet.getByLabel('Exact abusive HTTP(S) URLs');
+  const action = packet.getByRole('combobox', { name: 'Case action for this packet', exact: true, includeHidden: true });
+  const evidence = packet.getByRole('checkbox', { name: /Queued packet observation/, includeHidden: true });
+  await expect(packet).not.toHaveAttribute('open', '');
+  await expect(action.locator('option[value="action-only"]')).toHaveCount(1);
+  await page.evaluate(async ({ details, category, urls, action, evidence }) => {
+    if (!(details instanceof HTMLDetailsElement) || !(category instanceof HTMLInputElement)
+      || !(urls instanceof HTMLTextAreaElement) || !(action instanceof HTMLSelectElement)
+      || !(evidence instanceof HTMLInputElement)) throw new Error('Packet controls are missing.');
+    const toggled = new Promise<void>(resolve => details.addEventListener('toggle', () => queueMicrotask(resolve), { once: true }));
+    // Native toggle notification is queued: editing in the opening task must
+    // still take precedence over defaults applied when that event arrives.
+    details.open = true;
+    category.value = 'Early analyst category';
+    category.dispatchEvent(new Event('input', { bubbles: true }));
+    urls.value = 'https://queued-packet.invalid/review';
+    urls.dispatchEvent(new Event('input', { bubbles: true }));
+    action.value = '';
+    action.dispatchEvent(new Event('change', { bubbles: true }));
+    evidence.checked = true;
+    evidence.dispatchEvent(new Event('change', { bubbles: true }));
+    await toggled;
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+  }, {
+    details: await packet.elementHandle(), category: await category.elementHandle(),
+    urls: await urls.elementHandle(), action: await action.elementHandle(), evidence: await evidence.elementHandle(),
+  });
+  await expect(category).toHaveValue('Early analyst category');
+  await expect(urls).toHaveValue('https://queued-packet.invalid/review');
+  await expect(action).toHaveValue('');
+  await expect(evidence).toBeChecked();
+});
 
 test('sign-out resolves unsaved Case edits before ending the session', { tag: '@cross-browser-critical' }, async ({ page }) => {
   await openCasesView(page); await createCase(page, 'signout-draft.example');
