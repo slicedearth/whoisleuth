@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { domainToASCII } from 'node:url';
 
 import {
+  compareCodeUnits,
   exactKeys,
   requireBoundedString,
   requireIsoTimestamp,
@@ -136,9 +137,9 @@ export function buildCtEventFindings(inputRaw: unknown) {
   });
   const seen = new Set<string>();
   const unique = candidates
-    .sort((left, right) => left.domain.localeCompare(right.domain)
-      || left.observedAt.localeCompare(right.observedAt)
-      || left.structuredObservation.value.localeCompare(right.structuredObservation.value))
+    .sort((left, right) => compareCodeUnits(left.domain, right.domain)
+      || compareCodeUnits(left.observedAt, right.observedAt)
+      || compareCodeUnits(left.structuredObservation.value, right.structuredObservation.value))
     .filter((item) => {
       const key = `${item.domain}\u0000${item.observedAt}\u0000${item.structuredObservation.value}\u0000${item.structuredObservation.eventId}`;
       if (seen.has(key)) return false;

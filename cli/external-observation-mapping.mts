@@ -1,6 +1,7 @@
 import { domainToASCII } from 'node:url';
 
 import {
+  compareCodeUnits,
   exactKeys,
   requireBoundedString,
   requireIsoTimestamp,
@@ -131,7 +132,7 @@ export function mapExternalObservations(inputRaw: unknown) {
         : null,
       structuredObservation: null,
     });
-  }).sort((left, right) => left.domain.localeCompare(right.domain) || left.observedAt.localeCompare(right.observedAt) || left.summary.localeCompare(right.summary));
+  }).sort((left, right) => compareCodeUnits(left.domain, right.domain) || compareCodeUnits(left.observedAt, right.observedAt) || compareCodeUnits(left.summary, right.summary));
   const selected: typeof candidates = [];
   const seen = new Set<string>();
   const domainCounts = new Map<string, number>();

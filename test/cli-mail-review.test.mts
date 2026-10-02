@@ -46,6 +46,18 @@ function capture() {
 }
 
 describe('passive mail exposure review', () => {
+  test('selects capped provider relationships independently of host collation', t => {
+    t.mock.method(String.prototype, 'localeCompare', () => assert.fail('Selection must not use host collation'));
+    const providers = ['z.example', 'aa.example', ...Array.from({ length: 100 }, (_, i) => `b${String(i).padStart(3, '0')}.example`)];
+    const rows = providers.flatMap((provider, i) => ['first', 'second'].map(side => bulkItem(`${side}-${i}.example`, {
+      hasMx: true, hasNullMx: false, hasSpf: true, hasDmarc: true, mxHosts: [`mx.${provider}`],
+    })));
+    const review = buildCliMailReview(bulkDocument(rows), ISO);
+    assert.deepEqual(review.providerRelationships.map(item => item.providerDomain), ['aa.example', ...providers.slice(2, 101)]);
+    assert.equal(review.providerCoverage.omittedRelationships, 2);
+    assert.deepEqual(buildCliMailReview(bulkDocument([...rows].reverse()), ISO).providerRelationships, review.providerRelationships);
+  });
+
   test('keeps null MX, authentication gaps, and incomplete evidence distinct', () => {
     const document = buildCliMailReview(bulkDocument([
       bulkItem('alpha.example', { hasMx: true, hasNullMx: false, hasSpf: true, hasDmarc: true, mxHosts: ['10 mx.shared.example.'] }),

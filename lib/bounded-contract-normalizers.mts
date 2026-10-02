@@ -79,6 +79,11 @@ export function requireRecord(value: unknown, label: string): Record<string, unk
   return value;
 }
 
+/** Stable ordering for bounded record selection, independent of host collation. */
+export function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 export function requireBoundedString(value: unknown, label: string, maxLength: number): string {
   const normalised = strictBoundedString(value, maxLength);
   if (!normalised) {

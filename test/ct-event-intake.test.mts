@@ -34,6 +34,15 @@ function batch(events: unknown[]) {
 }
 
 describe('certificate event intake', () => {
+  test('selects capped domains by code units rather than the host locale', t => {
+    t.mock.method(String.prototype, 'localeCompare', () => assert.fail('Selection must not use host collation'));
+    const names = ['z.example', 'aa.example', ...Array.from({ length: 24 }, (_, i) => `a${String(i).padStart(2, '0')}.example`)];
+    const result = buildCtEventFindings(batch([event(1, names)]));
+    assert.deepEqual(result.findings.map(item => item.domain), [...names.slice(2), 'aa.example']);
+    assert.ok(result.findings.every(item => item.limitations.some(text => text.includes('first 25'))));
+    assert.deepEqual(buildCtEventFindings(batch([event(1, [...names].reverse())])), result);
+  });
+
   test('normalises wildcard names into browser-compatible source-qualified findings', () => {
     const document = buildCtEventFindings(batch([
       event(1, ['*.Portal.Example.Test', 'portal.example.test', 'api.example.test']),

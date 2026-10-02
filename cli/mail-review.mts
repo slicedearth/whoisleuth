@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer';
 import { getDomain } from 'tldts';
 
 import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
+import { compareCodeUnits } from '../lib/bounded-contract-normalizers.mts';
 import { isValidAsciiDomainName } from '../packages/contracts/domain-name.mts';
 import { isRecord, recordOrEmpty } from '../lib/json-record.mts';
 import { classifyQuery } from '../lib/classify.mts';
@@ -343,7 +344,7 @@ function buildCliMailReview(textValue: unknown, generatedAt = new Date().toISOSt
         limitation: 'Shared mail providers are common and do not establish common ownership, control, intent, safety, or maliciousness.',
       };
     })
-    .sort((left, right) => left.providerDomain.localeCompare(right.providerDomain));
+    .sort((left, right) => compareCodeUnits(left.providerDomain, right.providerDomain));
   const providerRelationships = allProviderRelationships.slice(0, 100);
   const rowsWithIncompleteDns = rows.filter((row) => row.dnsStatus !== 'success' || row.hasMx === null || row.hasNullMx === null).length;
   const providerCoverage = {

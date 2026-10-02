@@ -10,9 +10,9 @@ import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import { createBulkCheckpointWriter, parseBulkCheckpoint } from '../cli/bulk-checkpoint.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliLookupDocument } from '../cli/formatters/json.mts';
-import { buildCliLookupDiff } from '../cli/lookup-diff.mts';
+import { buildCliLookupDiff, formatCliLookupDiff } from '../cli/lookup-diff.mts';
 import { buildCliLookupReconciliation, formatCliLookupReconciliation } from '../cli/lookup-reconcile.mts';
-import { buildCliLookupTimeline } from '../cli/lookup-timeline.mts';
+import { buildCliLookupTimeline, formatCliLookupTimeline } from '../cli/lookup-timeline.mts';
 import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../cli/investigation-manifest.mts';
 import { CLI_PROGRESS_EVENT_SCHEMA, CLI_PROGRESS_EVENT_VERSION, createCliProgressEvents } from '../cli/progress-events.mts';
 import { runCli } from '../cli/runner.mts';
@@ -21,6 +21,31 @@ import type { BulkLookupResult } from '../cli/bulk.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 
 const NOW = '2026-08-01T00:00:00.000Z';
+
+test('comparison terminal projections remove display controls without mutating JSON evidence', () => {
+  const hostile = 'Visible\u009b31m\u202eLabel\u202c\u200b';
+  const left = savedLookup('terminal.example', '2026-07-01T00:00:00.000Z');
+  const right = savedLookup('terminal.example', NOW);
+  const base = buildCliLookupDiff(left, right, NOW, { domainMode: 'same' });
+  const comparison = { ...base.comparison, rows: base.comparison.rows.map(row => ({
+    ...row, state: 'different' as const, label: hostile, left: hostile, right: hostile, source: hostile,
+  })) };
+  const diff = { ...base, comparison, limitations: [hostile] };
+  const timeline = { ...buildCliLookupTimeline([left, right], NOW),
+    transitions: [{ index: 0, fromObservation: 0, toObservation: 1, comparison }], limitations: [hostile] };
+  const original = buildCliLookupReconciliation([left, right], NOW);
+  const reconciliation = { ...original,
+    observations: original.observations.map(item => ({ ...item, observerLabel: hostile, vantageLabel: hostile })),
+    fields: original.fields.map(field => ({ ...field, state: 'disagreement' as const, label: hostile,
+      values: field.values.map(value => ({ ...value, value: hostile, sourceState: hostile })) })), limitations: [hostile] };
+  const before = JSON.stringify([diff, timeline, reconciliation]);
+  for (const output of [formatCliLookupDiff(diff), formatCliLookupTimeline(timeline), formatCliLookupReconciliation(reconciliation)]) {
+    assert.match(output, /Visible 31mLabel/u);
+    assert.doesNotMatch(output, /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\p{Default_Ignorable_Code_Point}]/u);
+  }
+  assert.equal(JSON.stringify([diff, timeline, reconciliation]), before);
+  assert.ok(before.includes(hostile));
+});
 
 test('same-domain timeline and reconciliation cannot compare selected-page values as the homepage', () => {
   const make = (at: string, selected: boolean, pageTitle: string) => JSON.stringify(buildCliLookupDocument('example.test', classifiedDomain('example.test'), {

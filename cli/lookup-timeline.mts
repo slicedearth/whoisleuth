@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer';
 import { CliUsageError } from './errors.mts';
 import { buildCliLookupDiff, type CliLookupDiffDocument } from './lookup-diff.mts';
 import { parseSavedLookupDocument } from './saved-lookup.mts';
+import { safeTerminalValue } from './formatters/terminal-shared.mts';
 
 export const CLI_LOOKUP_TIMELINE_SCHEMA = 'whoisleuth.cli.lookup-timeline';
 export const CLI_LOOKUP_TIMELINE_VERSION = 1;
@@ -146,10 +147,10 @@ function buildCliLookupTimeline(
 function formatCliLookupTimeline(document: LookupTimelineDocument): string {
   const output = [
     'Same-domain observation timeline',
-    `Domain             ${document.domain}`,
+    `Domain             ${safeTerminalValue(document.domain)}`,
     `Observations       ${document.summary.observationCount}`,
-    `First observed     ${document.observations[0]?.generatedAt || 'Unavailable'}`,
-    `Last observed      ${document.observations.at(-1)?.generatedAt || 'Unavailable'}`,
+    `First observed     ${safeTerminalValue(document.observations[0]?.generatedAt, 'Unavailable')}`,
+    `Last observed      ${safeTerminalValue(document.observations.at(-1)?.generatedAt, 'Unavailable')}`,
     `Changed transitions ${document.summary.transitionsWithObservedChanges}`,
   ];
   for (const transition of document.transitions) {
@@ -161,19 +162,19 @@ function formatCliLookupTimeline(document: LookupTimelineDocument): string {
     ));
     output.push(
       '',
-      `${from?.generatedAt || 'Unavailable'} to ${to?.generatedAt || 'Unavailable'}`,
+      `${safeTerminalValue(from?.generatedAt, 'Unavailable')} to ${safeTerminalValue(to?.generatedAt, 'Unavailable')}`,
       `  Observed changes ${counts.conflicting + counts.different}`,
       `  One-sided fields ${counts.missing}`,
       `  Unavailable      ${counts.unavailable + counts.not_recorded}`,
     );
     if (!changedRows.length) output.push('  No observed field changes in comparable evidence.');
     for (const row of changedRows.slice(0, 10)) {
-      output.push(`  ${row.label} [${row.state.replaceAll('_', ' ')}]: ${row.left} -> ${row.right}`);
+      output.push(`  ${safeTerminalValue(row.label)} [${safeTerminalValue(row.state).replaceAll('_', ' ')}]: ${safeTerminalValue(row.left)} -> ${safeTerminalValue(row.right)}`);
     }
     if (changedRows.length > 10) output.push(`  ${changedRows.length - 10} additional changed fields omitted; use --json for the complete bounded comparison.`);
   }
   output.push('', 'Limitations:');
-  for (const limitation of document.limitations) output.push(`  - ${limitation}`);
+  for (const limitation of document.limitations) output.push(`  - ${safeTerminalValue(limitation)}`);
   return `${output.join('\n')}\n`;
 }
 
