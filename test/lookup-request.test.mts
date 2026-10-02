@@ -263,7 +263,36 @@ describe('Lookup browser request boundary', () => {
     assert.equal(cancelledBodyCancelled, true);
   });
 
-  test('caps injected deadlines and sanitizes generic network failures', async () => {
+  test('caps an excessive deadline without timing out an admitted request early', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    let aborts = 0;
+    let requests = 0;
+    const pending = requestLookup('/api/lookup?q=example.test', {
+      timeoutMs: LOOKUP_CLIENT_TIMEOUT_MS * 4,
+      fetchImpl: async (_input, init) => {
+        requests += 1;
+        assert.ok(init?.signal);
+        return new Promise<Response>((_resolve, reject) => {
+          init.signal!.addEventListener('abort', () => {
+            aborts += 1;
+            reject(new DOMException('Aborted', 'AbortError'));
+          }, { once: true });
+        });
+      },
+    });
+    assert.equal(requests, 1);
+    context.mock.timers.tick(LOOKUP_CLIENT_TIMEOUT_MS - 1);
+    assert.equal(aborts, 0);
+    context.mock.timers.tick(1);
+    assert.equal(aborts, 1);
+    assert.deepEqual(await pending, {
+      ok: false,
+      kind: 'timeout',
+      message: `Lookup timed out after ${LOOKUP_CLIENT_TIMEOUT_MS / 1_000} seconds. No partial response was retained.`,
+    });
+  });
+
+  test('avoids requests after cancellation and sanitises generic network failures', async () => {
     let fetchCalled = false;
     const controller = new AbortController();
     controller.abort('already_cancelled');

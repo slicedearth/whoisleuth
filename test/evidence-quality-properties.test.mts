@@ -51,7 +51,7 @@ describe('evidence-quality contract properties', () => {
 
   test('reconstructs a complete progress contract across arbitrary UTF-8 chunk boundaries', () => {
     fc.assert(fc.property(
-      fc.string({ maxLength: 500 }),
+      fc.string({ unit: 'binary', maxLength: 500 }),
       fc.array(fc.integer({ min: 1, max: 41 }), { minLength: 1, maxLength: 60 }),
       (label, chunkSizes) => {
         const sources = ['rdap'] as const;
@@ -83,7 +83,7 @@ describe('evidence-quality contract properties', () => {
         decoder.finish();
         assert.deepEqual(reducer.finish(), final);
       },
-    ), fastCheckParameters(100));
+    ), { ...fastCheckParameters(100), examples: [['é中🙂\u0301', [1]]] });
   });
 
   test('rejects arbitrary undocumented first-use session fields', () => {

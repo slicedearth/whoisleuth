@@ -97,6 +97,17 @@ describe('offline Lookup evidence replay diff', () => {
     }
   });
 
+  test('does not treat a completeness flag as a positive source outcome', () => {
+    for (const state of ['skipped', 'disabled', 'rate-limited', 'inconclusive', 'blocked', 'not-reported', 'stale', 'error', 'partial', 'unavailable', 'unsupported', 'not-found', 'unknown']) {
+      const report = buildLookupEvidenceReplayDiff(replay(), replay({
+        sources: [{ id: 'dns', label: 'DNS', state, complete: true, observedAt: OBSERVED_AT, limitations: [] }],
+        facts: [],
+      }));
+      assert.equal(report.rows.find((item) => item.id === 'fact:registration.nameservers')?.kind, 'collection_quality_difference', state);
+      assert.equal(report.counts.observedChanges, 0, state);
+    }
+  });
+
   test('uses the fact source only instead of unrelated incomplete sources', () => {
     const report = buildLookupEvidenceReplayDiff(replay({
       sources: [

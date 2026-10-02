@@ -178,7 +178,7 @@ describe('official registry drift report', () => {
       httpsServiceGroups: 2, httpOnlyServiceGroups: 0, coveredTlds: 2,
     });
     assert.equal(report.baseline.catalogueVersion, REGISTRY_CAPABILITIES_VERSION);
-    assert.doesNotMatch(JSON.stringify(report), /must not be retained|AA\nBB/);
+    assert.doesNotMatch(JSON.stringify(report), /must not be retained|AA\\nBB/u);
   });
 
   test('keeps routine root-zone publication advances current when TLD membership is unchanged', async () => {

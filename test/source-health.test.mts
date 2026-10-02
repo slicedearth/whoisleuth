@@ -1,3 +1,4 @@
+import '../tools/browser-server-egress-guard.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { TECHNOLOGY_REVIEWED_FIXTURES } from '../fixtures/technology-reviewed-fixtures.mts';

@@ -34,7 +34,6 @@ import {
   CASE_ACTION_EVENT_SOURCE_CLASSES,
   isLegalCaseActionTransition,
   type CaseActionEventSourceClass,
-  type CaseActionState,
 } from '../packages/cases/case-response-model.mts';
 import { fastCheckParameters, fastCheckReplayDetails } from './helpers/fast-check-config.mts';
 
@@ -106,7 +105,7 @@ describe('bounded verification state machines', () => {
     ), PROPERTY_PARAMETERS);
   });
 
-  test('keeps Case status, decision, and response transitions legal and append-only', (context) => {
+  test('keeps Case status and decisions legal and append-only', (context) => {
     replay(context, 'Case lifecycle');
     const statuses = CASE_STATUSES.map((item) => item.value);
     const validRationale = fc.string({ maxLength: 39 }).map((suffix) => `R${suffix}`);
@@ -119,12 +118,7 @@ describe('bounded verification state machines', () => {
       fc.array(fc.constantFrom(...statuses), { minLength: 1, maxLength: 16 }),
       fc.array(validRationale, { maxLength: 12 }),
       fc.array(invalidRationale, { minLength: 1, maxLength: 12 }),
-      fc.array(fc.record({
-        previous: fc.option(fc.constantFrom(...CASE_ACTION_STATES), { nil: null }),
-        next: fc.constantFrom(...CASE_ACTION_STATES),
-        source: fc.constantFrom(...CASE_ACTION_EVENT_SOURCE_CLASSES),
-      }), { maxLength: 40 }),
-      (statusSequence, rationales, invalidRationales, transitions) => {
+      (statusSequence, rationales, invalidRationales) => {
         let record = createCase({ domain: 'case-state.example', source: 'manual' }, NOW);
         let cases = [record];
         for (const status of statusSequence) {
@@ -153,13 +147,35 @@ describe('bounded verification state machines', () => {
           }, new Date(Date.parse(NOW) + (rationales.length + index) * 1_000).toISOString()), /summary and rationale/u);
           assert.deepEqual(decisions, before);
         });
-        for (const transition of transitions) {
-          const expected = referenceCaseTransition(transition.previous, transition.next, transition.source);
-          assert.equal(isLegalCaseActionTransition(transition.previous, transition.next, transition.source), expected);
-          if (transition.previous === 'terminal') assert.equal(expected, false);
-        }
       },
     ), PROPERTY_PARAMETERS);
+  });
+
+  test('checks every response transition against independently enumerated source permissions', () => {
+    // These expected permissions deliberately do not import the transition map
+    // or copy its branching algorithm. Missing tuples are refusals.
+    const allowed: Readonly<Record<CaseActionEventSourceClass, readonly string[]>> = {
+      analyst: [
+        'new>drafting', 'drafting>ready_for_review', 'drafting>terminal',
+        'ready_for_review>drafting', 'ready_for_review>reviewed', 'ready_for_review>terminal',
+        'reviewed>drafting', 'reviewed>authorised', 'reviewed>terminal',
+        'authorised>drafting', 'authorised>submitted', 'authorised>terminal',
+        'submitted>submitted', 'submitted>acknowledged', 'submitted>terminal',
+        'acknowledged>acknowledged', 'acknowledged>terminal',
+      ],
+      provider: ['submitted>submitted', 'submitted>acknowledged', 'submitted>terminal', 'acknowledged>acknowledged', 'acknowledged>terminal'],
+      import: ['submitted>submitted', 'submitted>acknowledged', 'submitted>terminal', 'acknowledged>acknowledged', 'acknowledged>terminal'],
+      browser_local: ['new>drafting', 'ready_for_review>drafting', 'reviewed>drafting', 'authorised>drafting'],
+      migration: ['new>drafting', 'new>ready_for_review', 'new>reviewed', 'new>authorised', 'new>submitted', 'new>acknowledged', 'new>terminal'],
+    };
+    for (const source of CASE_ACTION_EVENT_SOURCE_CLASSES) {
+      for (const previous of [null, ...CASE_ACTION_STATES]) {
+        for (const next of CASE_ACTION_STATES) {
+          const tuple = `${previous ?? 'new'}>${next}`;
+          assert.equal(isLegalCaseActionTransition(previous, next, source), allowed[source].includes(tuple), `${source}: ${tuple}`);
+        }
+      }
+    }
   });
 
   test('distinguishes completed requests, analyst cancellation, and timeouts', async (context) => {
@@ -293,27 +309,3 @@ describe('bounded verification state machines', () => {
       [false, true].map(approval => [recipe, approval] as [typeof recipe, boolean])) });
   });
 });
-
-function referenceCaseTransition(
-  previous: CaseActionState | null,
-  next: CaseActionState,
-  source: CaseActionEventSourceClass,
-): boolean {
-  if (previous === null) return source === 'migration' || next === 'drafting' && (source === 'analyst' || source === 'browser_local');
-  const transitions: Readonly<Record<CaseActionState, readonly CaseActionState[]>> = {
-    drafting: ['ready_for_review', 'terminal'],
-    ready_for_review: ['drafting', 'reviewed', 'terminal'],
-    reviewed: ['drafting', 'authorised', 'terminal'],
-    authorised: ['drafting', 'submitted', 'terminal'],
-    submitted: ['submitted', 'acknowledged', 'terminal'],
-    acknowledged: ['acknowledged', 'terminal'],
-    terminal: [],
-  };
-  if (!transitions[previous].includes(next)) return false;
-  if (source === 'provider' || source === 'import') {
-    return (previous === 'submitted' || previous === 'acknowledged')
-      && (next === 'submitted' || next === 'acknowledged' || next === 'terminal');
-  }
-  if (source === 'browser_local') return next === 'drafting' && ['ready_for_review', 'reviewed', 'authorised'].includes(previous);
-  return source === 'analyst';
-}

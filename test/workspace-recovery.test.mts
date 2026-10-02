@@ -60,8 +60,14 @@ test('public archive migration remains readable and cannot claim identical curre
 
 test('unready, settings and duplicate sections cannot enter data persistence', async () => {
   const source = await fixture(), section = source.sections.find(item => item.id === 'cases')!;
-  for (const sections of [[{ ...section, status: 'blocked' as const }], [section, section], [source.sections.find(item => item.id === 'settings')!], [{ ...section, id: 'unknown' }]]) {
-    assert.throws(() => mergeReadyWorkspaceArchiveData({}, sections, NOW));
+  assert.doesNotThrow(() => mergeReadyWorkspaceArchiveData({}, [section], NOW));
+  for (const [sections, expected] of [
+    [[{ ...section, status: 'blocked' as const }], /Only verified, supported workspace data sections can be merged/u],
+    [[section, section], /duplicate identities/u],
+    [[source.sections.find(item => item.id === 'settings')!], /Only verified, supported workspace data sections can be merged/u],
+    [[{ ...section, id: 'unknown' }], /Only verified, supported workspace data sections can be merged/u],
+  ] as const) {
+    assert.throws(() => mergeReadyWorkspaceArchiveData({}, sections, NOW), expected);
   }
 });
 
@@ -83,6 +89,7 @@ test('conflicting content lengths and malformed file provenance fail before reco
   const rows = (source.sections.find(section => section.id === 'cases')!.data as { cases: { attachments: ReturnType<typeof attachment>[] }[] }).cases;
   rows[1]!.attachments[0]!.byteLength++;
   assert.throws(() => workspaceAttachmentGroups(source), /conflicting byte lengths/);
+  rows[1]!.attachments[0]!.byteLength--;
   rows[1]!.attachments[0]!.fileName = '../unsafe';
   assert.throws(() => workspaceAttachmentGroups(source), /path/);
 });
@@ -92,8 +99,13 @@ test('complete original bytes match the downloaded backup regardless of filename
   const matched = await matchRecoveryFiles(groups, [new File([BODY], 'renamed.bin'), new Blob([BODY])]);
   assert.equal(matched.length, 1); assert.deepEqual(matched[0]!.reference, { digestSha256: DIGEST, byteLength: BODY.byteLength });
   assert.deepEqual(new Uint8Array(await matched[0]!.file.arrayBuffer()), BODY);
-  for (const files of [[], [new Blob()], [new Blob([BODY]), new Blob(['different'])], Array.from({ length: MAX_SELECTED_FILES + 1 }, () => new Blob(['x']))]) {
-    await assert.rejects(matchRecoveryFiles(groups, files));
+  for (const [files, expected] of [
+    [[], /Select 1–\d+ files per operation/u],
+    [[new Blob()], /Selected recovery files are empty/u],
+    [[new Blob([BODY]), new Blob(['different'])], /does not match any file reference/u],
+    [Array.from({ length: MAX_SELECTED_FILES + 1 }, () => new Blob(['x'])), /Select 1–\d+ files per operation/u],
+  ] as const) {
+    await assert.rejects(matchRecoveryFiles(groups, files), expected);
   }
 });
 

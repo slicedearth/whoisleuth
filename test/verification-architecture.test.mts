@@ -119,13 +119,18 @@ describe('verification architecture contracts', () => {
     const retained = rawProfile();
     const inventory = (retained.files as Array<{ file: string }>).map((item) => item.file);
     assert.doesNotThrow(() => parseVerificationTimingProfile(JSON.stringify(retained), inventory));
-    const variants: Array<readonly [string, (value: Record<string, unknown>) => void]> = [
-      ['missing', (value) => { (value.files as unknown[]).pop(); }],
-      ['duplicate', (value) => { (value.files as unknown[]).push(structuredClone((value.files as unknown[])[0])); }],
-      ['unknown', (value) => { ((value.files as Array<Record<string, unknown>>)[0]!).file = 'test/unknown.test.mts'; }],
-      ['malformed', (value) => { ((value.files as Array<Record<string, unknown>>)[0]!).file = '../outside.test.mts'; }],
-      ['unmeasured', (value) => { ((value.files as Array<Record<string, unknown>>)[0]!).weightMs = 0; }],
-      ['excess provenance', (value) => {
+    const variants: Array<readonly [string, RegExp, (value: Record<string, unknown>) => void]> = [
+      ['missing', /inventory mismatch: 1 missing and 0 unknown/u, (value) => { (value.files as unknown[]).pop(); }],
+      ['duplicate', /test identities must not repeat/u, (value) => { (value.files as unknown[]).push(structuredClone((value.files as unknown[])[0])); }],
+      ['unknown', /inventory mismatch: 0 missing and 1 unknown/u, (value) => {
+        const files = value.files as Array<Record<string, unknown>>;
+        const unit = files.find((item) => item.lane === 'unit');
+        assert.ok(unit);
+        files.push({ ...unit, file: 'test/unknown.test.mts' });
+      }],
+      ['malformed', /repository-relative maintained test identity/u, (value) => { ((value.files as Array<Record<string, unknown>>)[0]!).file = '../outside.test.mts'; }],
+      ['unmeasured', /Timing weight .* must be an integer between 1 and/u, (value) => { ((value.files as Array<Record<string, unknown>>)[0]!).weightMs = 0; }],
+      ['excess provenance', /must retain 1 to \d+ provenance records/u, (value) => {
         const provenance = value.provenance as Array<Record<string, unknown>>;
         while (provenance.length <= MAX_TIMING_PROVENANCE) {
           provenance.push({
@@ -138,10 +143,10 @@ describe('verification architecture contracts', () => {
         }
       }],
     ];
-    for (const [label, mutate] of variants) {
+    for (const [label, expected, mutate] of variants) {
       const value = rawProfile();
       mutate(value);
-      assert.throws(() => parseVerificationTimingProfile(JSON.stringify(value), inventory), label);
+      assert.throws(() => parseVerificationTimingProfile(JSON.stringify(value), inventory), expected, label);
     }
   });
 

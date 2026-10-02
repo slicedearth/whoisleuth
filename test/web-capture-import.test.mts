@@ -40,8 +40,12 @@ describe('sanitised web-capture import', () => {
     assert.equal(parsed.captures[0]!.observerLabel, 'Analyst A');
     const retained = parsed.document.findings.map(finding => finding.summary).join(' ');
     assert.match(retained, /1024.*768.*en-AU/u); assert.match(retained, /Analyst A/u);
-    for (const invalid of [{ ...conditions, timezone: 'x'.repeat(81) }, { ...conditions, viewport: { width: 0, height: 768 } }, { ...conditions, cookies: [] }]) {
-      assert.throws(() => readWebCaptureManifest({ ...declared, captures: [{ ...declared.captures[0]!, conditions: invalid }] }));
+    for (const [invalid, expected] of [
+      [{ ...conditions, timezone: 'x'.repeat(81) }, /Capture timezone/u],
+      [{ ...conditions, viewport: { width: 0, height: 768 } }, /Image width has an unsupported or malformed structure/u],
+      [{ ...conditions, cookies: [] }, /Capture conditions has an unsupported or malformed structure/u],
+    ] as const) {
+      assert.throws(() => readWebCaptureManifest({ ...declared, captures: [{ ...declared.captures[0]!, conditions: invalid }] }), expected);
     }
   });
   test('requires explicit zones for the current manifest and rejects reader-only version 1', () => {
@@ -102,17 +106,19 @@ describe('sanitised web-capture import', () => {
   });
 
   test('rejects complete URLs and unsupported raw capture fields', () => {
-    assert.throws(() => parseWebCaptureSummary({
+    const document = {
       schema: WEB_CAPTURE_SUMMARY_SCHEMA,
       schemaVersion: 1,
       source: { name: 'Capture', reference: null, collectedAt: null },
       captures: [{
         domain: 'example.test',
         capturedAt: '2026-07-01T00:00:00Z',
-        finalOrigin: 'https://example.test/private?token=secret',
-        rawHtml: '<p>private</p>',
+        finalOrigin: 'https://example.test',
       }],
-    }), /unsupported fields|origin without credentials/i);
+    };
+    assert.doesNotThrow(() => parseWebCaptureSummary(document));
+    assert.throws(() => parseWebCaptureSummary({ ...document, captures: [{ ...document.captures[0], finalOrigin: 'https://example.test/private?token=secret' }] }), /origin without credentials/iu);
+    assert.throws(() => parseWebCaptureSummary({ ...document, captures: [{ ...document.captures[0], rawHtml: '<p>private</p>' }] }), /unsupported fields/iu);
   });
 
   test('does not accept embedded screenshot data in place of a digest', () => {

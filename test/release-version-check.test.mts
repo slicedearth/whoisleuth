@@ -46,10 +46,28 @@ function manifests(version = '1.5.0') {
 }
 
 function git(repositoryRoot: string, ...args: string[]): void {
-  execFileSync('git', args, { cwd: repositoryRoot, stdio: 'ignore' });
+  execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'tag.gpgSign=false', ...args], {
+    cwd: repositoryRoot, stdio: 'ignore', timeout: 10_000,
+  });
 }
 
 describe('release semantic-version validation', () => {
+  test('disposable release commits and tags do not invoke inherited signing configuration', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-release-signing-'));
+    try {
+      git(directory, 'init', '--quiet');
+      git(directory, 'config', 'user.name', 'Release fixture');
+      git(directory, 'config', 'user.email', 'release@example.test');
+      git(directory, 'config', 'commit.gpgsign', 'true');
+      git(directory, 'config', 'tag.gpgSign', 'true');
+      git(directory, 'config', 'gpg.program', path.join(directory, 'must-not-run'));
+      await writeFile(path.join(directory, 'fixture.txt'), 'Release fixture');
+      git(directory, 'add', 'fixture.txt');
+      git(directory, 'commit', '--quiet', '-m', 'Retain fixture');
+      git(directory, 'tag', 'v4.1.0');
+      assert.equal(execFileSync('git', ['cat-file', '-t', 'v4.1.0'], { cwd: directory, encoding: 'utf8' }).trim(), 'commit');
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
   test('prepares approved versions through existing writers without tags or dependency scripts', () => {
     const commands = releasePreparationCommands('4.1.1', '4.1.0');
     assert.deepEqual(commands[0], [npmExecutableName(), 'version', '4.1.1', '--no-git-tag-version', '--ignore-scripts']);

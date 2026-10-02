@@ -231,20 +231,21 @@ describe('schema lifecycle bounded extensions', () => {
   });
 
   test('rejects contradictory extension, discriminator, request, and serialisation declarations', () => {
-    const cases: Array<readonly [string, (value: any) => void]> = [
-      ['exact keys', (value) => { value.contracts[0]!.exactKeys = true; }],
-      ['extension policy', (value) => { value.contracts[0]!.extensionPolicy = 'reject'; }],
-      ['shape policy', (value) => { value.metadata.shapes[0]!.objects[0]!.unknownKeys = 'reject'; }],
-      ['normalisation', (value) => { value.metadata.shapes[0]!.normalisation = 'preserve_document'; }],
-      ['discriminator path', (value) => { value.metadata.consumerEdges[1]!.acceptedContracts[0]!.discriminator!.path = '$.missing'; }],
-      ['duplicate discriminator', (value) => { value.metadata.consumerEdges[1]!.acceptedContracts[0]!.discriminator!.values = ['domain', 'domain']; }],
-      ['request policy', (value) => { value.metadata.consumerEdges[0]!.requestMode = 'none'; }],
-      ['serialisation policy', (value) => { value.metadata.serialisationProfiles[0]!.propertyOrder = 'normalised_fixed'; }],
+    const cases: Array<readonly [string, RegExp, (value: any) => void]> = [
+      ['exact keys', /reconcile exact keys.*bounded extension policy/u, (value) => { value.contracts[0]!.exactKeys = true; }],
+      ['extension policy', /reconcile exact keys.*bounded extension policy/u, (value) => { value.contracts[0]!.extensionPolicy = 'reject'; }],
+      ['shape policy', /inconsistent bounded-extension metadata/u, (value) => { value.metadata.shapes[0]!.objects[0]!.unknownKeys = 'reject'; }],
+      ['normalisation', /inconsistent bounded-extension metadata/u, (value) => { value.metadata.shapes[0]!.normalisation = 'preserve_document'; }],
+      ['discriminator path', /unresolved contract discriminator/u, (value) => { value.metadata.consumerEdges[1]!.acceptedContracts[0]!.discriminator!.path = '$.missing'; }],
+      ['duplicate discriminator', /discriminator values must not contain duplicates/u, (value) => { value.metadata.consumerEdges[1]!.acceptedContracts[0]!.discriminator!.values = ['domain', 'domain']; }],
+      ['request policy', /inconsistent privacy, request, or retention metadata/u, (value) => { value.metadata.consumerEdges[0]!.requestMode = 'none'; }],
+      ['serialisation policy', /inconsistent document integrity metadata/u, (value) => { value.metadata.serialisationProfiles[0]!.propertyOrder = 'normalised_fixed'; }],
     ];
-    for (const [label, mutate] of cases) {
+    assert.doesNotThrow(() => defineSchemaLifecycleFamily(extensibleFamily()));
+    for (const [label, expected, mutate] of cases) {
       const value = extensibleFamily();
       mutate(value);
-      assert.throws(() => defineSchemaLifecycleFamily(value), label);
+      assert.throws(() => defineSchemaLifecycleFamily(value), expected, label);
     }
   });
 

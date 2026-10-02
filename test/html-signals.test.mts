@@ -80,16 +80,15 @@ describe('reviewed static page-pattern inputs', () => {
     assert.equal(result.phishingLanguageMatch, 'Reviewed English wallet or recovery-secret language');
   });
 
-  test('retains only whether a static form points off-origin', async () => {
+  test('retains the external form origin without its path or query', async () => {
     const result = await extractHtmlSignals(
       '<form method="post" action="https://collector.test/private?token=secret"><input type="password"></form>',
       'example.test',
       { baseUrl: 'https://example.test/' },
     );
     assert.equal(result.hasExternalFormAction, true);
-    assert.doesNotMatch(JSON.stringify({
-      hasExternalFormAction: result.hasExternalFormAction,
-    }), /collector|private|token|secret/u);
+    assert.deepEqual(result.pageIdentity?.forms.externalActionOrigins, ['https://collector.test']);
+    assert.doesNotMatch(JSON.stringify(result), /private\?token|token=secret/u);
   });
 });
 
