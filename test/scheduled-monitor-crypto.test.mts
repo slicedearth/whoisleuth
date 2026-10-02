@@ -10,6 +10,7 @@ import {
   MAX_ENVELOPE_BYTES,
   MAX_PLAINTEXT_BYTES,
   parseScheduledMonitorKey,
+  ScheduledMonitorStateUnreadableError,
 } from '../lib/scheduled-monitor-crypto.mts';
 
 const CONTEXT = 'deployment:scheduled-watchlists';
@@ -86,6 +87,7 @@ describe('scheduled monitoring authenticated encryption', () => {
     ));
     for (const attempt of variants) {
       assert.throws(attempt, { message: 'Encrypted scheduled monitoring state could not be authenticated.' });
+      assert.throws(attempt, ScheduledMonitorStateUnreadableError);
     }
   });
 

@@ -292,6 +292,14 @@ while the configured worker runtime receives the encryption key from its
 deployment environment; encryption therefore does not protect against an
 operator or hosting runtime with access to that environment.
 
+The data key and namespace are required to open existing monitoring state.
+Changing either does not re-encrypt that state. Preserve the original values
+securely before rotation; restore them to recover access if appropriate. If the
+key is lost or must remain revoked, disable monitoring and deliberately reset
+the Blob as described above, then recreate the watchlists. Wrong keys and
+damaged encrypted state produce the same management error; waiting alone will
+not repair them, and the application never resets the stored data automatically.
+
 ## Netlify deployment
 
 ### Protected public contact route

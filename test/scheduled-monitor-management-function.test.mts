@@ -457,6 +457,27 @@ test('maps expected conflicts and hides unexpected storage failures', async () =
   assert.equal(JSON.parse(failed.body || '').errorCode, SCHEDULED_MONITOR_UNAVAILABLE_CODE);
 });
 
+test('unreadable encrypted state requests operator recovery without changing the stored object', async () => {
+  const original = encryptScheduledMonitorState(emptyScheduledMonitorState(), key, namespace);
+  for (const kind of ['wrong-key', 'ciphertext', 'malformed']) {
+    const store = new FakeBlobStore();
+    const envelope = JSON.parse(original);
+    envelope.ciphertext = `${envelope.ciphertext[0] === 'A' ? 'B' : 'A'}${envelope.ciphertext.slice(1)}`;
+    store.entry = { data: kind === 'malformed' ? '{' : kind === 'ciphertext' ? JSON.stringify(envelope) : original, etag: '"unreadable"', metadata: {} };
+    const before = structuredClone(store.entry);
+    const env = { ...readyEnv(), ...(kind === 'wrong-key' ? { [KEY_ENV]: randomBytes(32).toString('base64') } : {}) };
+    const response = await runScheduledMonitorManagementFunction(event(), { env, blobStoreFactory: () => store });
+    assert.equal(response.statusCode, 503);
+    assert.deepEqual(JSON.parse(response.body!), {
+      error: 'Stored monitoring data cannot be opened with the current configuration. The deployment operator must check the data key and namespace or follow the recovery/reset procedure in the operations guide. No stored data was changed.',
+      errorCode: 'SCHEDULED_MONITOR_STATE_UNREADABLE',
+    });
+    assert.equal(store.writes, 0);
+    assert.deepEqual(store.entry, before);
+    assert.equal(new Headers(response.headers).get('cache-control'), 'no-store');
+  }
+});
+
 test('applies a dedicated authenticated-session rate ceiling before Blob work', async () => {
   const headers = authenticatedHeaders();
   let constructions = 0;

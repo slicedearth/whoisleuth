@@ -32,6 +32,13 @@ const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const BASE64_RE = /^[A-Za-z0-9+/_-]+={0,2}$/u;
 const BASE64URL_RE = /^[A-Za-z0-9_-]+$/u;
 
+export class ScheduledMonitorStateUnreadableError extends Error {
+  constructor(message = 'Encrypted scheduled monitoring state could not be authenticated.') {
+    super(message);
+    this.name = 'ScheduledMonitorStateUnreadableError';
+  }
+}
+
 function plainRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -127,20 +134,20 @@ function parseEnvelope(serialized: unknown): EncryptedScheduledMonitorEnvelope {
   if (typeof serialized !== 'string'
     || !serialized
     || Buffer.byteLength(serialized, 'utf8') > MAX_ENVELOPE_BYTES) {
-    throw new Error('Encrypted scheduled monitoring state is missing or oversized.');
+    throw new ScheduledMonitorStateUnreadableError('Encrypted scheduled monitoring state is missing or oversized.');
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(serialized);
   } catch {
-    throw new Error('Encrypted scheduled monitoring state is malformed.');
+    throw new ScheduledMonitorStateUnreadableError('Encrypted scheduled monitoring state is malformed.');
   }
   const envelope = plainRecord(parsed);
   if (!envelope
     || envelope.schema !== ENVELOPE_SCHEMA
     || envelope.version !== ENVELOPE_VERSION
     || envelope.algorithm !== ALGORITHM) {
-    throw new Error('Encrypted scheduled monitoring state uses an unsupported format.');
+    throw new ScheduledMonitorStateUnreadableError('Encrypted scheduled monitoring state uses an unsupported format.');
   }
   return envelope as EncryptedScheduledMonitorEnvelope;
 }
@@ -165,7 +172,7 @@ function decryptScheduledMonitorState(serialized: unknown, keyInput: unknown, co
   } catch {
     // Do not distinguish a wrong key from ciphertext, tag, or context
     // tampering. All are untrusted-store integrity failures to callers.
-    throw new Error('Encrypted scheduled monitoring state could not be authenticated.');
+    throw new ScheduledMonitorStateUnreadableError();
   }
 }
 

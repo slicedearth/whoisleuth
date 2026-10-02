@@ -148,7 +148,7 @@ function fakeBrowser(options: {
   flatScreenshot?: boolean;
   onInitScript?: () => void;
   subresourceUrls?: string[];
-  subresourceRequests?: { url: string; method?: string; resourceType?: string }[];
+  subresourceRequests?: { url: string; method?: string; resourceType?: string; navigation?: boolean }[];
   concurrentSubresources?: boolean;
   detachedSubresources?: boolean;
   closeSubresourceUrl?: string;
@@ -171,7 +171,7 @@ function fakeBrowser(options: {
         `https://${options.hostname ?? 'example.test'}/style.css`,
         'https://static.example.test/asset.js?secret=discarded',
       ]).map(url => ({ url }));
-      const handleSubresource = async (value: { url: string; method?: string; resourceType?: string }) => {
+      const handleSubresource = async (value: { url: string; method?: string; resourceType?: string; navigation?: boolean }) => {
         const request = fakeRoute(value.url, value);
         await handleRoute(request.route);
       };
@@ -667,6 +667,47 @@ describe('optional local rendered capture package', () => {
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
+  });
+
+  test('retains a partial error-frame capture only after an admitted navigation and a recorded refusal', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-refusal-'));
+    try {
+      for (const method of ['POST', 'GET']) {
+        const manifest = await captureFixturePage({ targetUrl: 'https://example.test/', outputDirectory: path.join(parent, method), timeoutMs: 5000 }, {
+          launchBrowser: async () => fakeBrowser({ finalUrl: 'chrome-error://chromewebdata/', subresourceRequests: [{ url: 'https://refused.example.test/private?secret=value', method, navigation: true }] }),
+          resolveAddresses: async hostname => { if (hostname === 'refused.example.test') throw new Error('refused fixture destination'); return [{ address: '192.0.2.1', family: 4 }]; },
+          fetchResource: async (url, options) => { assert.equal(options.method, 'GET'); assert.equal(new URL(url).hostname, 'example.test'); return fakeFetchResource(url); },
+        });
+        const captured = manifest.captures[0]!;
+        assert.equal(captured.completeness, 'partial');
+        assert.deepEqual(captured.page, { title: null, finalOrigin: null });
+        assert.deepEqual(captured.artifacts.map(item => item.kind), ['screenshot']);
+        assert.equal(captured.pageBehaviour.state, 'partial');
+        assert.deepEqual(captured.pageBehaviour.elements, []);
+        assert.equal(captured.pageBehaviour.requests[0]?.kind, 'navigation');
+        assert.equal(captured.pageBehaviour.coverage.attempts.filter(row => row.channel === 'navigation' && row.state !== 'observed').length, 1);
+        assert.match(captured.limitations.join(' '), /screenshot shows the resulting browser state/u);
+        assert.doesNotMatch(JSON.stringify(manifest), /secret=value|refused\.example/u);
+        assert.ok(parseWebCaptureManifest(manifest).findings.length > 0);
+        await assert.rejects(readFile(path.join(parent, method, 'dom-digest.json')), { code: 'ENOENT' });
+      }
+      await assert.rejects(compareRenderedCaptures(path.join(parent, 'POST', 'manifest.json'), path.join(parent, 'GET', 'manifest.json')),
+        /partial capture has no target-page DOM evidence/u);
+      for (const [name, finalUrl, requests] of [
+        ['unexplained-error', 'chrome-error://chromewebdata/', []],
+        ['unexpected-scheme', 'data:text/html,not-evidence', [{ url: 'https://example.test/', method: 'POST', navigation: true }]],
+      ] as const) {
+        await assert.rejects(captureFixturePage({ targetUrl: 'https://example.test/', outputDirectory: path.join(parent, name), timeoutMs: 5000 }, {
+          launchBrowser: async () => fakeBrowser({ finalUrl, subresourceRequests: [...requests] }),
+          resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }], fetchResource: fakeFetchResource,
+        }), /must use HTTP/u);
+      }
+      await assert.rejects(captureFixturePage({ targetUrl: 'https://example.test/', outputDirectory: path.join(parent, 'initial-failure'), timeoutMs: 5000 }, {
+        launchBrowser: async () => fakeBrowser(),
+        resolveAddresses: async () => { throw new Error('private resolver detail'); }, fetchResource: fakeFetchResource,
+      }), { message: 'Initial capture navigation was blocked or unavailable. No capture files were retained.' });
+      await assert.rejects(stat(path.join(parent, 'initial-failure')), { code: 'ENOENT' });
+    } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   test('round-trips the exact host, title, and artifact bounds into partitioned Case findings', async () => {

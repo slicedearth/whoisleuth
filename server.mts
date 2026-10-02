@@ -1,5 +1,5 @@
 import express from 'express';
-import type { IncomingHttpHeaders } from 'node:http';
+import { STATUS_CODES, type IncomingHttpHeaders } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { Request, Response } from 'express';
@@ -620,6 +620,22 @@ function apiErrorHandler(error: unknown, _req: RequestLike, res: ResponseLike, n
 
 app.use('/api', apiErrorHandler);
 
+// Static-file and non-API errors must not fall through to the environment-
+// dependent development renderer, which includes internal stack traces.
+function pageErrorHandler(error: unknown, _req: Request, res: Response, next: ErrorNext) {
+  if (res.headersSent) return next(error);
+  const candidate = recordValue(error, 'statusCode') ?? recordValue(error, 'status');
+  const status = typeof candidate === 'number' && Number.isInteger(candidate) && candidate >= 400 && candidate <= 599 ? candidate : 500;
+  if (status === 416) {
+    const range = recordValue(recordValue(error, 'headers'), 'Content-Range');
+    if (typeof range === 'string' && /^bytes \*\/[0-9]{1,20}$/u.test(range)) res.setHeader('Content-Range', range);
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(status).type('text/plain').send(`${STATUS_CODES[status] ?? 'Request failed'}\n`);
+}
+
+app.use(pageErrorHandler);
+
 function startServer() {
   reportSessionSecretConfigurationWarning();
   return app.listen(PORT, (error: Error | undefined) => {
@@ -632,5 +648,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   startServer();
 }
 
-export { app, isHttps, usesSecureCookies, requestOriginContext, requireAuth, requireNetworkRequestAdmission, rateLimit, requireFeature, apiErrorHandler, registerNetworkApiRoutes, sendPrerenderedHtmlFile, sendUnexpectedApiError, startServer };
+export { app, isHttps, usesSecureCookies, requestOriginContext, requireAuth, requireNetworkRequestAdmission, rateLimit, requireFeature, apiErrorHandler, pageErrorHandler, registerNetworkApiRoutes, sendPrerenderedHtmlFile, sendUnexpectedApiError, startServer };
 export type { NetworkRouteServices };

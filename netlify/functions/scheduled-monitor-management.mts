@@ -5,6 +5,7 @@
 
 import { getStore } from '@netlify/blobs';
 import { isTrustedOrigin, NETLIFY_REQUEST_ORIGIN_CONTEXT } from '../../lib/auth.mts';
+import { ScheduledMonitorStateUnreadableError } from '../../lib/scheduled-monitor-crypto.mts';
 import {
   json,
   netlifyJsonToResponse,
@@ -82,6 +83,12 @@ function noStoreResponse(response: ReturnType<typeof json>) {
 }
 
 function managementErrorResponse(error: unknown) {
+  if (error instanceof ScheduledMonitorStateUnreadableError) {
+    return json(503, {
+      error: 'Stored monitoring data cannot be opened with the current configuration. The deployment operator must check the data key and namespace or follow the recovery/reset procedure in the operations guide. No stored data was changed.',
+      errorCode: 'SCHEDULED_MONITOR_STATE_UNREADABLE',
+    }, NO_STORE_HEADERS);
+  }
   if (error instanceof ScheduledMonitorManagementError) {
     return json(MANAGEMENT_STATUS[error.code] || 400, {
       error: error.message,

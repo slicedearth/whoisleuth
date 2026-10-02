@@ -87,8 +87,32 @@ export async function checkCaptureBrowserIsolation(capture: Capture, launch: Lau
     assert.ok(observations.coverage.attempts.some(row => row.channel === 'beacon' && row.state === 'refused' && row.reason === 'method' && !row.collectionStarted));
     assert.equal(observations.coverage.interactions, 'not_exercised');
     assert.doesNotMatch(JSON.stringify(observations), /sentinel|private-form-value|private-clipboard-value|private-beacon-value|app\.js|forged/u);
+    const navigationRefusals: string[] = [];
+    for (const behaviour of ['form', 'redirect']) {
+      const collected: string[] = [];
+      const html = `<!doctype html><title>Navigation fixture</title><form method="post" action="https://refused.example.test/private"><input value="never-submit"></form><script>
+        setTimeout(() => { ${behaviour === 'form' ? 'document.forms[0].submit()' : 'location.href = "https://refused.example.test/private"'}; }, 50);
+      </script>`;
+      const manifest = await capture({ targetUrl: 'https://example.test/', outputDirectory: path.join(directory, behaviour), timeoutMs: 15_000 }, {
+        launchBrowser: launch,
+        resolveAddresses: async hostname => { if (hostname !== 'example.test') throw new Error('Fixture refuses this destination'); return [{ address: '192.0.2.10', family: 4 }]; },
+        fetchResource: async (url, options) => {
+          assert.equal(options.method, 'GET');
+          collected.push(url);
+          return new Response(new URL(url).pathname === '/' ? html : '', { headers: { 'content-type': 'text/html' } });
+        },
+      });
+      const result = manifest.captures[0]!;
+      assert.equal(result.completeness, 'partial');
+      assert.deepEqual(result.page, { title: null, finalOrigin: null });
+      assert.deepEqual(result.artifacts.map(item => item.kind), ['screenshot']);
+      assert.ok(result.pageBehaviour.coverage.attempts.some(row => row.channel === 'navigation' && row.state !== 'observed'));
+      assert.ok(collected.length > 0);
+      assert.ok(collected.every(url => new URL(url).hostname === 'example.test'));
+      navigationRefusals.push(behaviour);
+    }
     assert.equal(connections, 0);
-    return { directConnections: connections, rows };
+    return { directConnections: connections, rows, navigationRefusals };
   } finally {
     if (sink.listening) await new Promise<void>((resolve, reject) => sink.close(error => error ? reject(error) : resolve()));
     await rm(directory, { recursive: true, force: true });

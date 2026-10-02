@@ -246,6 +246,10 @@ function parseManifest(value: unknown): CaptureManifest {
   limitationList(capture.limitations, 'Rendered capture limitations');
   const page = record(capture.page);
   if (!page || !onlyKeys(page, PAGE_KEYS)) throw new Error('Rendered capture page metadata is invalid.');
+  if (completeness === 'partial' && page.finalOrigin === null && Array.isArray(capture.artifacts)
+    && capture.artifacts.length === 1 && record(capture.artifacts[0])?.kind === 'screenshot') {
+    throw new Error('The partial capture has no target-page DOM evidence. Review its request ledger and browser-state screenshot; rendered comparison requires a capture with a DOM digest.');
+  }
   if (!Array.isArray(capture.artifacts) || capture.artifacts.length !== 2) {
     throw new Error('Rendered capture must contain one screenshot and one DOM digest artefact.');
   }

@@ -60,6 +60,12 @@ text or HTML, and a version 3 `whoisleuth.web-capture-manifest` that can be
 reviewed before import into Cases. The manifest also retains one
 control-sanitised page title of up to 300 characters. File permissions are
 private where the platform supports POSIX modes.
+If a later refused navigation leaves a browser error page, the partial manifest
+retains request accounting and labels the screenshot as the resulting browser
+state. It claims no final origin, title, DOM digest or page-element observations.
+These partial manifests can be imported into Cases; rendered comparison requires
+DOM evidence and explains its absence instead of comparing the error page as
+target content. A failed initial navigation produces no capture.
 Capture conditions record the browser version, 1024 × 768 viewport, scale 1,
 `en-US` locale, UTC timezone and light colour scheme. Optional `--observer` and
 `--vantage` labels are declarations, not verified identities or locations.

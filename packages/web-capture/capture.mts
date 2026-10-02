@@ -448,6 +448,7 @@ async function installRequestBoundary(
   const pageRequests: PageRequestObservation[] = [];
   const attempts: CaptureRequestAttempt[] = [];
   let omittedAttempts = 0, websocketRefusals = 0;
+  let admittedMainFrame = false, refusedMainFrame = false;
   function requestChannel(route: Route): CaptureRequestChannel {
     const request = route.request();
     if (request.isNavigationRequest()) {
@@ -463,6 +464,10 @@ async function installRequestBoundary(
       origin: null, state: 'unavailable', reason: 'address_or_transport', collectionStarted: false };
   }
   function retainAttempt(value: CaptureRequestAttempt) {
+    if (value.channel === 'navigation') {
+      if (value.state === 'observed') admittedMainFrame = true;
+      else refusedMainFrame = true;
+    }
     if (value.position <= MAX_CAPTURE_CHANNEL_OBSERVATIONS) attempts.push(value);
     else omittedAttempts = Math.min(1_000_000, omittedAttempts + 1);
   }
@@ -607,6 +612,8 @@ async function installRequestBoundary(
   });
   page.on('download', (download) => { void download.cancel(); });
   return {
+    canRetainRefusedNavigation() { return admittedMainFrame && refusedMainFrame; },
+    hasRefusedNavigation() { return refusedMainFrame; },
     beginSeal() {
       acceptingRequests = false;
     },
@@ -905,12 +912,27 @@ export async function captureRenderedPage(
       argumentsValue.timeoutMs,
       deadline.signal,
     ));
-    await deadline.run(page.goto(target.toString(), { waitUntil: 'domcontentloaded', timeout: argumentsValue.timeoutMs }));
+    try {
+      await deadline.run(page.goto(target.toString(), { waitUntil: 'domcontentloaded', timeout: argumentsValue.timeoutMs }));
+    } catch (cause) {
+      if (!deadline.expired() && requestBoundary.hasRefusedNavigation()) {
+        throw new Error('Initial capture navigation was blocked or unavailable. No capture files were retained.');
+      }
+      throw cause;
+    }
     await deadline.run(page.waitForTimeout(Math.min(750, Math.max(100, Math.round(argumentsValue.timeoutMs / 20)))));
-    const finalUrl = captureUrl(page.url());
-    const title = sanitizeCaptureText(await deadline.run(page.title()), 300);
-    const dom = await deadline.run(projectDom(page));
-    const pageElements = await deadline.run(collectPageElements(page));
+    const browserUrl = page.url();
+    // Only a recorded main-frame failure after an admitted initial navigation
+    // can produce a partial capture. Do not relabel an arbitrary URL-policy or
+    // initial navigation failure as a successful observation.
+    const unavailableMainFrame = browserUrl === 'chrome-error://chromewebdata/'
+      && requestBoundary.canRetainRefusedNavigation();
+    const finalUrl = unavailableMainFrame ? null : captureUrl(browserUrl);
+    const title = unavailableMainFrame ? null : sanitizeCaptureText(await deadline.run(page.title()), 300);
+    const dom = unavailableMainFrame ? null : await deadline.run(projectDom(page));
+    const pageElements = unavailableMainFrame
+      ? { elements: [], partial: true, clipboardWriteAttempts: 0 }
+      : await deadline.run(collectPageElements(page));
     const screenshot = await deadline.run(page.screenshot({ type: 'png', fullPage: false, animations: 'disabled' }));
     const screenshotBuffer = Buffer.from(screenshot);
     if (!screenshotBuffer.length || screenshotBuffer.length > MAX_WEB_CAPTURE_SCREENSHOT_BYTES) {
@@ -941,10 +963,10 @@ export async function captureRenderedPage(
     await deadline.run(browser.close());
     const blockedDirectConnections = browser.blockedDirectConnections();
     browser = null;
-    const pageBehaviour = buildPageBehaviour(pageElements, sealedBoundary.pageRequests, dom.visibleText,
-      Boolean(requestStats.blockedRequestCount || blockedDirectConnections || dom.structureTruncated || dom.textTruncated),
+    const pageBehaviour = buildPageBehaviour(pageElements, sealedBoundary.pageRequests, dom?.visibleText ?? '',
+      Boolean(unavailableMainFrame || requestStats.blockedRequestCount || blockedDirectConnections || dom?.structureTruncated || dom?.textTruncated),
       { ...sealedBoundary.coverage, directConnectionRefusals: Math.min(1_000_000, blockedDirectConnections) });
-    const domDigest = {
+    const domDigest = dom ? {
       schema: WEB_CAPTURE_DOM_DIGEST_SCHEMA,
       version: WEB_CAPTURE_DOM_DIGEST_VERSION,
       capturedAt,
@@ -962,14 +984,15 @@ export async function captureRenderedPage(
         'No DOM markup, body text, form values, request paths, query strings, headers, bodies, cookies, or credentials are retained.',
       'Structure digest covers bounded preorder tag sequences, not nesting, attributes, or exact DOM equality. The legacy visibleText field hashes bounded body text nodes, including CSS-hidden or non-rendered text; it is not a visibility claim.',
       ],
-    };
-    const domBytes = Buffer.from(`${JSON.stringify(domDigest, null, 2)}\n`);
-    if (domBytes.length > MAX_WEB_CAPTURE_DOM_DIGEST_BYTES) throw new Error('DOM digest exceeds the 1 MiB artefact bound.');
+    } : null;
+    const domBytes = domDigest ? Buffer.from(`${JSON.stringify(domDigest, null, 2)}\n`) : null;
+    if (domBytes && domBytes.length > MAX_WEB_CAPTURE_DOM_DIGEST_BYTES) throw new Error('DOM digest exceeds the 1 MiB artefact bound.');
     const screenshotName = 'screenshot.png';
     const domName = 'dom-digest.json';
     await writeArtifact(screenshotName, screenshotBuffer);
-    await writeArtifact(domName, domBytes);
+    if (domBytes) await writeArtifact(domName, domBytes);
     const limitations = [
+      ...(unavailableMainFrame ? ['The final main frame became unavailable after a blocked or failed navigation. The screenshot shows the resulting browser state, not the admitted target page; no final origin, title, DOM digest or page-element observations are claimed.'] : []),
       'Each admitted exact resource URL, including path and query, is disclosed to its operator. No dedicated path or query field is retained; the page title and screenshot can reproduce page-controlled content including them.',
       'Downloads, service workers, dedicated/shared workers, WebSockets, WebRTC, WebTransport, non-read methods, non-HTTP(S), credentials, non-default ports, private addresses, and traffic over declared bounds were blocked.',
       'Each request was resolved and connection-pinned by the shared safe-fetch transport before its bounded response was supplied to the disposable browser; cookies, authorisation headers, and request bodies were not forwarded.',
@@ -991,7 +1014,7 @@ export async function captureRenderedPage(
         ...(observerLabel ? { observerLabel } : {}), ...(vantageLabel ? { vantageLabel } : {}),
         completeness: pageBehaviour.state === 'partial' ? 'partial' : 'complete',
         limitations,
-        page: { title: title || null, finalOrigin: finalUrl.origin.toLowerCase() },
+        page: { title: title || null, finalOrigin: finalUrl?.origin.toLowerCase() ?? null },
         pageBehaviour,
         requestDomains: sealedBoundary.requestHosts,
         technologies: [],
@@ -999,10 +1022,10 @@ export async function captureRenderedPage(
           kind: 'screenshot', fileName: screenshotName, mimeType: 'image/png',
           sha256: sha256(screenshotBuffer), perceptualHash: screenshotInspection.perceptualHash,
           bytes: screenshotBuffer.length, width: VIEWPORT.width, height: VIEWPORT.height,
-        }, {
+        }, ...(domBytes ? [{
           kind: 'dom_digest', fileName: domName, mimeType: 'application/json',
           sha256: sha256(domBytes), bytes: domBytes.length,
-        }],
+        }] : [])],
       }],
     };
     const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
