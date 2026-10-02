@@ -39,7 +39,6 @@ const FACADES = Object.freeze([
   ['../frontend/src/lib/analysis/web-capture-import.ts', '../packages/interchange/web-capture-import.mts'],
   ['../frontend/src/lib/analysis/domain-control-passport.ts', '../packages/workspace/domain-control-passport.mts'],
   ['../frontend/src/lib/candidate-handoff-core.ts', '../packages/investigation/candidate-handoff.mts'],
-  ['../lib/bounded-local-search.mts', '../packages/investigation/bounded-local-search.mts'],
   ['../lib/bounded-relationship-graph.mts', '../packages/relationships/bounded-relationship-graph.mts'],
   ['../lib/web-capture-contract.mts', '../packages/contracts/web-capture.mts'],
 ] as const);

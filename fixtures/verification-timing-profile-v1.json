@@ -1,6 +1,6 @@
 {
   "profileVersion": 1,
-  "inventoryFingerprint": "3e99850bde98e7c3f26bf1cd7b6f0d47046b227c225748e034144adcadc2bee9",
+  "inventoryFingerprint": "1e796c8c52d9995835f77be33a2ccf821ae52f308ae881560b58afe8f915f99b",
   "provenance": [
     {
       "id": "browser-local-start-60400ba9",
@@ -932,13 +932,6 @@
       "file": "test/bounded-json.test.mts",
       "lane": "unit",
       "weightMs": 272,
-      "sampleCount": 3,
-      "provenanceId": "unit-local-structural-ownership-20260906"
-    },
-    {
-      "file": "test/bounded-local-search.test.mts",
-      "lane": "unit",
-      "weightMs": 4,
       "sampleCount": 3,
       "provenanceId": "unit-local-structural-ownership-20260906"
     },
