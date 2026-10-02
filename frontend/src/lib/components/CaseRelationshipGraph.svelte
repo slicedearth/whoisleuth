@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import IntelligenceIcon, { type IntelligenceIconName } from '$lib/components/IntelligenceIcon.svelte';
   import type { CaseRecord } from '$lib/cases';
@@ -78,7 +79,9 @@
   function connectedCaseIds(node:CaseRelationshipGraphRelationshipNode):string[]{const visible=new Set<string>(graph.caseNodes.map((item)=>String(item.id)));const ids:string[]=node.cases.map((item)=>`case:${item.id}`);return [...new Set<string>(ids.filter((id)=>visible.has(id)))];}
   function canGroupConnectedCases(node:CaseRelationshipGraphRelationshipNode){const current=graph.view.groupCaseIds;const ungrouped=connectedCaseIds(node).filter((id)=>!current.includes(id));return ungrouped.length>0&&ungrouped.length<=MAX_RELATIONSHIP_GRAPH_GROUP_CASES-current.length;}
   function groupConnectedCases(node:CaseRelationshipGraphRelationshipNode){if(!canGroupConnectedCases(node))return;groupCaseIds=[...new Set([...graph.view.groupCaseIds,...connectedCaseIds(node)])];}
-  function date(value:string){const parsed=new Date(value);return Number.isNaN(parsed.getTime())?value:parsed.toLocaleString();}
+  function date(value: string | null): string {
+    return formatEvidenceDate(value, 'Unknown time');
+  }
   function sourceLabel(value:string){return value.split('_').filter(Boolean).map((part)=>part.charAt(0).toUpperCase()+part.slice(1)).join(' ')||'Unknown';}
   function completenessLabel(node:CaseRelationshipGraphRelationshipNode){if(node.truncated)return 'Partial or truncated';if(node.complete===true)return 'Complete';if(node.complete===false)return 'Partial';return 'Unknown';}
   function connectedRelationships(node:CaseRelationshipGraphCaseNode){

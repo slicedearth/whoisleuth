@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { parseBoundedJson } from '$lib/bounded-json';
   import {
@@ -212,7 +213,7 @@
 
   {#if imported}
     <div class="preview" aria-live="polite">
-      <header><div><p class="eyebrow">Verified locally</p><h3>Import preview</h3></div><p>Expires {new Date(imported.expiresAt).toLocaleDateString('en-AU')}</p></header>
+      <header><div><p class="eyebrow">Verified locally</p><h3>Import preview</h3></div><p>Expires {formatEvidenceDate(imported.expiresAt)}</p></header>
       {#each imported.entries as entry}
         {@const isOfficial = active.officialDomains.includes(entry.domain)}
         {@const importEligible = isOfficial || addDomains.includes(entry.domain)}

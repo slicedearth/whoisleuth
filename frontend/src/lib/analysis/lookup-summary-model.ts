@@ -1,3 +1,4 @@
+import { formatDate } from './lookup-display-shared.ts';
 import {
   fmtAge,
   fmtExpiresIn,
@@ -139,12 +140,6 @@ function textList(value: unknown, maximum = MAX_PROVENANCE_ITEMS): string[] {
     if (output.length >= maximum) break;
   }
   return output;
-}
-
-function formatDate(value: unknown): string {
-  if (!value) return '—';
-  const parsed = new Date(String(value));
-  return Number.isNaN(parsed.getTime()) ? boundedText(value) || '—' : parsed.toLocaleString();
 }
 
 function statusLabel(value: unknown): string {

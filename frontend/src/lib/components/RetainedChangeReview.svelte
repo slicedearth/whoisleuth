@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import ComparisonLedgerRows from '$lib/components/ComparisonLedgerRows.svelte';
   import {
     buildComparisonLedgerDetails,
@@ -81,9 +82,7 @@
   };
 
   function when(value: string | null): string {
-    if (!value) return 'Not retained';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString('en-AU');
+    return formatEvidenceDate(value, 'Not retained');
   }
 
   function sideSummary(side: ComparisonLedgerIndexSide): string {

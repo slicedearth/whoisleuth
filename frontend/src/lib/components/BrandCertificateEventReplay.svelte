@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import { buildBrandCertificateEventReplay, type CertificateEventReplayState } from '$lib/analysis/brand-certificate-event-replay.ts';
   import type { BrandProfile } from '$lib/brand-profiles';
@@ -21,7 +22,7 @@
   }
 
   function date(value: string | null): string {
-    return value ? new Date(value).toLocaleString() : 'Observation time unavailable';
+    return formatEvidenceDate(value, 'Observation time unavailable');
   }
 </script>
 

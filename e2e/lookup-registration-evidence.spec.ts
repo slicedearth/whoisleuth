@@ -533,7 +533,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   ] as const) {
     const row = evidenceQuality.locator(`[data-evidence-id="${id}"]`);
     await expect(row).toHaveCount(1);
-    const expectedTime = await page.evaluate((value) => new Date(value).toLocaleString(), timestamp);
+    const expectedTime = timestamp === '2026-07-14T01:02:04.000Z' ? /14 Jul(?:y)? 2026, 01:02:04 UTC/u : /14 Jul(?:y)? 2026, 01:02:03 UTC/u;
     await expect(row.locator('.observed')).toContainText(expectedTime);
   }
   for (const id of ['whois', 'http', 'tls']) {

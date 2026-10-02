@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { onMount } from 'svelte';
   import { parseBoundedJson } from '$lib/bounded-json';
   import {
@@ -165,9 +166,8 @@
       if (owns(generation, expectedDomain)) operation = 'ready';
     }
   }
-  function when(value: string) {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? 'Unknown time' : parsed.toLocaleString();
+  function when(value: string | null): string {
+    return formatEvidenceDate(value, 'Unknown time');
   }
   function sharedCertificateDomains(fingerprint: string): number {
     return new Set(

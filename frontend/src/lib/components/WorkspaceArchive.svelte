@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { onMount, tick } from 'svelte';
   import BrowserWorkspaceIndicator from '$lib/components/BrowserWorkspaceIndicator.svelte';
@@ -193,7 +194,7 @@
   </header>
   <BrowserWorkspaceIndicator destination />
   {#if !importOnly && !localApplication}<BrowserStorageHealth {preparedAt} />{/if}
-  {#if localApplication && preparedAt}<p>Backup prepared during this visit: {new Date(preparedAt).toLocaleString()}. Check the downloaded file; a prepared download is not a verified restore.</p>{/if}
+  {#if localApplication && preparedAt}<p>Backup prepared during this visit: {formatEvidenceDate(preparedAt)}. Check the downloaded file; a prepared download is not a verified restore.</p>{/if}
   {#if preparedBackup}{#key preparedBackup}<WorkspaceFileBackup archive={preparedBackup} />{/key}{/if}
 
   {#if showEncryptionForm}
@@ -251,7 +252,7 @@
     <div class="preview" role="group" aria-labelledby="workspace-archive-preview-title">
       <header>
         <div><p class="eyebrow">Backup review</p><h3 id="workspace-archive-preview-title">Choose saved data to add</h3></div>
-        <span>{preview.bytes.toLocaleString()} bytes · {preview.generatedAt?new Date(preview.generatedAt).toLocaleString():'Unknown creation time'}</span>
+        <span>{preview.bytes.toLocaleString()} bytes · {preview.generatedAt?formatEvidenceDate(preview.generatedAt):'Unknown creation time'}</span>
       </header>
       <p>Existing matches use each data type's established merge rules. Records absent from the backup are retained, and nothing is written until you choose Add selected data.</p>
       <ul>

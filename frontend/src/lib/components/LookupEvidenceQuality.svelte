@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { untrack } from 'svelte';
   import type { DecisionFact } from '../../../../packages/evidence/decision-fact.mts';
   import { buildLookupEvidenceQualityModel } from '$lib/analysis/lookup-evidence-quality-model.ts';
@@ -68,8 +69,7 @@
   }
 
   function observed(value: string | null): string {
-    if (!value) return 'Observation time unavailable';
-    return new Date(value).toLocaleString();
+    return formatEvidenceDate(value, 'Observation time unavailable');
   }
 </script>
 

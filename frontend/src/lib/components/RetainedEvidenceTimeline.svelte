@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import Pagination from '$lib/components/Pagination.svelte';
   import RetainedTimelineEntities from './RetainedTimelineEntities.svelte';
@@ -40,8 +41,8 @@
     time = 'all';
     page = 1;
   }
-  function formatDate(value: string): string {
-    return new Date(value).toLocaleString();
+  function formatDate(value: string | null): string {
+    return formatEvidenceDate(value, 'Unknown time');
   }
   function kindLabel(value: string): string {
     return value.replaceAll('_', ' ');

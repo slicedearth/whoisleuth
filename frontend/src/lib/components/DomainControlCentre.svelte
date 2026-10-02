@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import type { BrandProfile } from '$lib/brand-profiles';
   import { buildDomainControlCentre } from '$lib/analysis/domain-control-centre.ts';
 
@@ -6,9 +7,7 @@
   const centre = $derived(buildDomainControlCentre(active));
 
   function date(value: string | null): string {
-    if (!value) return 'Not retained';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? 'Invalid date' : parsed.toLocaleString();
+    return formatEvidenceDate(value, 'Not retained');
   }
 </script>
 

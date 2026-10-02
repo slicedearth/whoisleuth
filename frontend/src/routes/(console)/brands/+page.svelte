@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { getContext, onDestroy, onMount, tick } from 'svelte';
@@ -932,9 +933,8 @@
       return createPageBaseline(domain, parsed.value);
     });
   }
-  function baselineDate(value: string) {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? 'Unknown time' : date.toLocaleString('en-AU');
+  function baselineDate(value: string | null): string {
+    return formatEvidenceDate(value, 'Unknown time');
   }
   async function audit(includeInheritedDns = false, batchIndex = 0) {
     if (profileWriteDisabled) return;

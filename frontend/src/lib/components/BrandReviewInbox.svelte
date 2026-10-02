@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import Pagination from './Pagination.svelte';
   import type { BrandReviewInbox } from '../analysis/brand-review-inbox.ts';
 
@@ -32,9 +33,8 @@
   const firstVisible = $derived(inbox.items.length ? ((currentPage - 1) * PAGE_SIZE) + 1 : 0);
   const lastVisible = $derived(Math.min(currentPage * PAGE_SIZE, inbox.items.length));
 
-  function formatDate(value: string): string {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString('en-AU');
+  function formatDate(value: string | null): string {
+    return formatEvidenceDate(value, 'Unknown time');
   }
 
   $effect(() => {

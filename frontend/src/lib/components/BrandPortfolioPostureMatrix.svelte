@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import type { BrandProfile } from '$lib/brand-profiles';
   import {
     buildDomainPostureMatrix,
@@ -33,8 +34,8 @@
     return `${cell.label}: ${stateLabel(cell.state)}. ${cell.explanation}${context}`;
   }
 
-  function date(value: string): string {
-    return new Date(value).toLocaleString('en-AU');
+  function date(value: string | null): string {
+    return formatEvidenceDate(value, 'Unknown time');
   }
 </script>
 

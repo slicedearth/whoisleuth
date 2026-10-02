@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import type { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import { tick } from 'svelte';
   import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft.ts';
@@ -28,7 +29,7 @@
       <details><summary>{draft.state.candidates.length} saved draft{draft.state.candidates.length === 1 ? '' : 's'} for this form</summary>
         <p>{draft.retention === 'document' ? 'Practice copies stay on this page only.' : 'Recovery copies stay in this workspace and are not included in exports.'} Discard the current form before restoring another copy.</p>
         <ul>{#each draft.state.candidates as candidate (candidate.id)}
-          <li><span>{new Date(candidate.updatedAt).toLocaleString()}</span>
+          <li><span>{formatEvidenceDate(candidate.updatedAt)}</span>
             <button type="button" class="btn small" disabled={draft.state.busy || draft.state.edited || draft.state.status === 'unknown' || candidate.formVersion !== 1} onclick={(event) => void recover(event, () => draft.restore(candidate))}>Restore draft</button>
             <button type="button" class="btn small" disabled={draft.state.busy || draft.state.status === 'unknown'} onclick={() => void draft.discard(candidate)}>Discard saved draft</button>
             <button type="button" class="btn small" aria-expanded={previewId === candidate.id} onclick={() => previewId = previewId === candidate.id ? null : candidate.id}>View saved values</button>

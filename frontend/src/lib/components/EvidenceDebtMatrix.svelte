@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import Pagination from './Pagination.svelte';
   import { handlesLocalLink } from '../link-activation.ts';
   import {
@@ -80,9 +81,7 @@
   }
 
   function formatDate(value: string | null): string {
-    if (value === null) return 'time unavailable';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString('en-AU');
+    return formatEvidenceDate(value, 'time unavailable');
   }
 
   function openCase(event: MouseEvent, item: EvidenceDebtItem) {

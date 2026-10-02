@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import type { CaseRecord } from '$lib/cases';
   import { projectCaseRelationshipTable } from '$lib/analysis/case-relationship-table.ts';
   import type { CaseRelationshipTableRow } from '$lib/analysis/case-relationship-table.ts';
@@ -44,7 +45,9 @@
   });
 
   function openCase(id:string){const target=records.find((record)=>record.id===id);if(target)onselect?.(target);}
-  function date(value:string){const parsed=new Date(value);return Number.isNaN(parsed.getTime())?value:parsed.toLocaleString();}
+  function date(value: string | null): string {
+    return formatEvidenceDate(value, 'Unknown time');
+  }
   function sourceLabel(value:string){return value.split('_').filter(Boolean).map((part)=>part.charAt(0).toUpperCase()+part.slice(1)).join(' ')||'Unknown';}
   function completenessLabel(row:CaseRelationshipTableRow){if(row.truncated)return 'Partial or truncated';if(row.complete===true)return 'Complete';if(row.complete===false)return 'Partial';return 'Unknown';}
   function setQuery(value:string){searchQuery=value;page=1;}

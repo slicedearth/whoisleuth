@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import RdapDomainSource from '$lib/components/RdapDomainSource.svelte';
   import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
   import {
@@ -240,7 +241,7 @@
           <span>IANA ID {display(standing.ianaId)} · source {display(standingAccreditation.sourceHealth)}</span>
           {#if standingIanaUrl}<a href={standingIanaUrl} target="_blank" rel="noopener noreferrer">Open IANA registrar catalogue<span class="sr-only"> (opens in a new tab)</span></a>{/if}
           {#if standingAccreditation.observedAt}
-            <time datetime={String(standingAccreditation.observedAt)}>Reviewed {new Date(String(standingAccreditation.observedAt)).toLocaleDateString('en-AU')}</time>
+            <time datetime={String(standingAccreditation.observedAt)}>Reviewed {formatEvidenceDate(String(standingAccreditation.observedAt))}</time>
           {/if}
         </article>
         <article>
@@ -249,7 +250,7 @@
           <span>{standingComplianceSummary}</span>
           {#if standingIcannUrl}<a href={standingIcannUrl} target="_blank" rel="noopener noreferrer">Open ICANN notice index<span class="sr-only"> (opens in a new tab)</span></a>{/if}
           {#if standingCompliance.reviewedAt}
-            <time datetime={String(standingCompliance.reviewedAt)}>Reviewed {new Date(String(standingCompliance.reviewedAt)).toLocaleDateString('en-AU')}</time>
+            <time datetime={String(standingCompliance.reviewedAt)}>Reviewed {formatEvidenceDate(String(standingCompliance.reviewedAt))}</time>
           {/if}
         </article>
       </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import {
     buildCampaignTemporalExport,
@@ -23,8 +24,7 @@
   ];
 
   function formatDate(value: string | null): string {
-    if (!value) return 'Not retained';
-    return new Intl.DateTimeFormat('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
+    return formatEvidenceDate(value, 'Not retained');
   }
 
   function labelFor(layer: CampaignTemporalLayer): string {

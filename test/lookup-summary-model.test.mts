@@ -181,7 +181,7 @@ test('attributes each fallback registration fact to the publication that supplie
   for (const label of ['Registrar', 'Created', 'Expires', 'Updated']) {
     const fact = summary.facts.find((candidate) => candidate.label === label);
     assert.deepEqual(fact?.provenance.sources, ['WHOIS']);
-    assert.equal(fact?.provenance.observedAt, new Date(whoisTime).toLocaleString());
+    assert.equal(fact?.provenance.observedAt, '01 Mar 2026, 01:02:03 UTC');
     assert.equal(fact?.provenance.completeness, 'partial');
   }
   assert.deepEqual(summary.facts.find((fact) => fact.label === 'Registration')?.provenance.sources, ['Registry RDAP']);

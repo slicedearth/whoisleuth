@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { tick } from 'svelte';
   import Pagination from './Pagination.svelte';
   import type { ParsedMailReport } from '$lib/analysis/mail-report-workbench.ts';
@@ -24,7 +25,7 @@
   $effect(() => { identity; page = 1; query = ''; });
 
   const number = (value: number) => value.toLocaleString();
-  const timestamp = (value: string | null) => value ? new Date(value).toLocaleString() : 'unknown';
+  const timestamp = (value: string | null) => value ? formatEvidenceDate(value) : 'unknown';
 
   async function setPage(value: number) {
     const expectedIdentity = identity;

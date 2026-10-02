@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { goto } from '$app/navigation';
   import { getContext, onMount } from 'svelte';
   import DiscoverCandidateResults from '$lib/components/DiscoverCandidateResults.svelte';
@@ -256,10 +257,8 @@
     ctHistoryNotice = '';
   }
 
-  function historyDate(value:string|null) {
-    if (!value) return 'No complete baseline';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? 'Unknown date' : parsed.toLocaleString('en-AU');
+  function historyDate(value: string | null): string {
+    return formatEvidenceDate(value, 'No complete baseline');
   }
 
   function historyDisplayEntries() {

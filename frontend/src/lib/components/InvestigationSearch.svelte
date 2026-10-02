@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { onMount, tick } from 'svelte';
   import Pagination from './Pagination.svelte';
   import { reloadDeferredModulePage } from '$lib/deferred-module';
@@ -109,9 +110,8 @@
     return 'Completeness unknown';
   }
 
-  function formatDate(value: string): string {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? 'Unknown time' : parsed.toLocaleString();
+  function formatDate(value: string | null): string {
+    return formatEvidenceDate(value, 'Unknown time');
   }
   function setResultPage(value: number) {
     if (pending) return;

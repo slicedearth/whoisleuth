@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { untrack } from 'svelte';
   import {
@@ -65,12 +66,7 @@
   }
 
   function formatDate(value: string | null): string {
-    if (!value) return 'No global observation time retained';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat('en-AU', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(parsed);
+    return formatEvidenceDate(value, 'No global observation time retained');
   }
 
   function provenanceLabel(observation: ParentDomainHostnameObservation): string {

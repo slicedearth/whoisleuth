@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -98,9 +99,7 @@
   }
 
   function formatDate(value: string | null): string {
-    if (!value) return 'Unavailable';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? 'Unavailable' : parsed.toLocaleString('en-AU');
+    return formatEvidenceDate(value, 'Unavailable');
   }
 
   async function updateCategoricalFilter(parameter: 'assetClass' | 'assetSource' | 'assetEvidence', value: string) {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { onMount, tick } from 'svelte';
   import { isLocalApplication } from '$lib/local-application-context.ts';
   let localApplication = $state(false);
@@ -253,7 +254,7 @@
 <section class="recent-cases" aria-labelledby="recent-cases-title">
   <header><h2 id="recent-cases-title" tabindex="-1">Recent Cases</h2><a href="/cases">All Cases</a></header>
   {#if recentCases.length}
-    <ol>{#each recentCases as record}<li><a href={`/cases?case=${encodeURIComponent(record.id)}`}><strong>{record.domain}</strong><span>{statusLabel(record.status)} · <time datetime={record.updatedAt}>{new Date(record.updatedAt).toLocaleDateString()}</time></span></a></li>{/each}</ol>
+    <ol>{#each recentCases as record}<li><a href={`/cases?case=${encodeURIComponent(record.id)}`}><strong>{record.domain}</strong><span>{statusLabel(record.status)} · <time datetime={record.updatedAt}>{formatEvidenceDate(record.updatedAt)}</time></span></a></li>{/each}</ol>
   {:else if counts.cases === null}<p>Cases could not be read.</p>
   {:else}<p>No Cases saved yet. Keep evidence from Lookup when you need to continue an investigation.</p>{/if}
   <nav aria-label="Saved collections"><a href="/monitor?view=watchlists">Watchlists <span>{countText(counts.watchlists)}</span></a><a href="/brands">Brand profiles <span>{countText(counts.profiles)}</span></a></nav>

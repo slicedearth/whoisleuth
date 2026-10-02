@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { availabilityStatusDisplay } from '$lib/analysis/availability-status-display.ts';
   import { handlesLocalLink } from '$lib/link-activation';
 
@@ -50,7 +51,7 @@
   <div>
     <p class="eyebrow">Result</p>
     <h2>{title}</h2>
-    <p class="result-context"><span>{depth === 'deep' ? 'Deep' : 'Fast'} lookup</span>{#if observationTime}<time datetime={observationTime}>Observed {new Date(observationTime).toLocaleString()}</time>{:else}<span>Observation time unavailable</span>{/if}</p>
+    <p class="result-context"><span>{depth === 'deep' ? 'Deep' : 'Fast'} lookup</span>{#if observationTime}<time datetime={observationTime}>Observed {formatEvidenceDate(observationTime)}</time>{:else}<span>Observation time unavailable</span>{/if}</p>
     {#if isSubdomain}
       <p>Registration: {registrableDomain}.{' '}{#if depth === 'deep' && observationHostname}DNS, TLS and web observation target: {observationHostname}.{:else}Submitted hostname: {inputHostname}.{/if}</p>
     {/if}

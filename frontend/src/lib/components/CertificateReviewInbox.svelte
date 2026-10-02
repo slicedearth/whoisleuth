@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import Pagination from './Pagination.svelte';
   import ReviewLifecycleControls from './ReviewLifecycleControls.svelte';
@@ -52,9 +53,7 @@
   $effect(() => { oncount?.(inbox.findings.length); });
 
   function formatDate(value: string | null): string {
-    if (!value) return 'Unavailable';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString('en-AU');
+    return formatEvidenceDate(value, 'Unavailable');
   }
 </script>
 

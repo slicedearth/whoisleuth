@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { onMount, tick } from 'svelte';
   import { page } from '$app/state';
   import { getCase } from '../cases.ts';
@@ -26,7 +27,9 @@
     publish: (next) => { contextState = next; },
   });
 
-  function date(value: string | null) { return value ? new Date(value).toLocaleString() : 'Observation time unavailable'; }
+  function date(value: string | null): string {
+    return formatEvidenceDate(value, 'Observation time unavailable');
+  }
   function requestRefresh() {
     if (insideCaseEditor || document.visibilityState === 'hidden') return;
     void reader.refresh();

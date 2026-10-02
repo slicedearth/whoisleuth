@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { tick } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import RelationshipSourceEvidence from '$lib/components/RelationshipSourceEvidence.svelte';
@@ -27,10 +28,8 @@
     page = Math.min(pageCount, Math.max(1, Math.trunc(value)));
   }
 
-  function date(value: string | null) {
-    if (!value) return 'Source time not recorded';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? 'Unknown time' : parsed.toLocaleString();
+  function date(value: string | null): string {
+    return formatEvidenceDate(value, 'Source time not recorded');
   }
 
   function typeLabel(value: string) {

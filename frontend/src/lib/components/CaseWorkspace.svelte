@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { page } from '$app/state';
   import { beforeNavigate, goto } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
@@ -118,9 +119,8 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   const casePageCount = $derived(Math.max(1, Math.ceil(filteredCases.length / CASE_PAGE_SIZE)));
   const currentCasePage = $derived(Math.min(casePage, casePageCount));
   const pagedCases = $derived(filteredCases.slice((currentCasePage - 1) * CASE_PAGE_SIZE, currentCasePage * CASE_PAGE_SIZE));
-  function date(value: string) {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+  function date(value: string | null): string {
+    return formatEvidenceDate(value, 'Unknown time');
   }
   function setCasePage(value: number) {
     selectionRevision.changed();

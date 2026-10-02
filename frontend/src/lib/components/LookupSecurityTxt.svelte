@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { buildDisclosurePolicyHealth } from '$lib/analysis/disclosure-policy-health.ts';
   let {
     state = 'unavailable',
@@ -47,8 +48,8 @@
     <dl class="source-grid">
       <div><dt>Endpoint</dt><dd>{endpoint || '—'}</dd></div>
       <div><dt>HTTP status</dt><dd>{httpStatus || '—'}</dd></div>
-      <div><dt>Observed</dt><dd>{observedAt ? new Date(observedAt).toLocaleString() : '—'}</dd></div>
-      <div><dt>Expires</dt><dd>{expiresAt ? new Date(expiresAt).toLocaleString() : '—'}</dd></div>
+      <div><dt>Observed</dt><dd>{observedAt ? formatEvidenceDate(observedAt) : '—'}</dd></div>
+      <div><dt>Expires</dt><dd>{expiresAt ? formatEvidenceDate(expiresAt) : '—'}</dd></div>
     </dl>
     <section class="health" aria-label="Disclosure policy health">
       <div><strong>{health.state}</strong><span>{health.expiryDays === null ? 'Expiry unavailable' : health.expiryDays <= 0 ? 'Recorded expiry has passed' : `${health.expiryDays} day${health.expiryDays === 1 ? '' : 's'} to expiry`}</span></div>

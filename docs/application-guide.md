@@ -540,8 +540,9 @@ drafts and flags changed or unavailable evidence. Changed-evidence drafts requir
 explicit review before submission. A draft with an uncertain write outcome stays
 blocked until the current decision is inspected and the draft is discarded.
 Saved positions are not included in backups or exports. Case form recovery is
-separate. Review date inputs and displayed review times use UTC. **Copy** keeps the exact stored timestamp,
-including fractional seconds.
+separate. Review date inputs and displayed evidence times use UTC. A source
+containing only a calendar date keeps that date without acquiring a time or
+timezone. **Copy** keeps the exact stored timestamp, including fractional seconds.
 
 Bulk saved views apply their filters, List columns, grouping and sort order to the currently
 loaded results. They do not retain targets, select a Brand Profile or authorise

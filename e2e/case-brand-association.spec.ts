@@ -159,6 +159,40 @@ async function openCasesTab(page: Page): Promise<void> {
   await openConsoleView(page, 'cases');
 }
 
+for (const timezoneId of ['Pacific/Honolulu', 'Pacific/Kiritimati']) {
+  test.describe(`evidence dates in ${timezoneId}`, () => {
+    test.use({ timezoneId });
+    test('keeps Case, inbox and dashboard timestamps in UTC without collecting', async ({ page }, testInfo) => {
+      const apiRequests = trackApiRequests(page);
+      await page.goto('/brands');
+      await migrateLegacyBrowserData(page, storageEntries([
+        caseRecord({ id: 'dated-case', domain: 'dated.invalid', brandProfileIds: [PROFILE_ID], createdAt: NOW, updatedAt: NOW }),
+      ]), { destination: '/brands' });
+      const expected = '09 Aug 2026, 02:00:00 UTC';
+      const inbox = page.getByRole('region', { name: 'Brand review inbox' });
+      await expect(inbox).toContainText(`Saved Case · observed ${expected}`);
+      await page.goto('/dashboard');
+      await expect(page.locator('.recent-cases time')).toHaveText(expected);
+      await page.goto('/cases');
+      const time = page.locator('#case-head-dated-case time');
+      await expect(time).toHaveAttribute('datetime', NOW);
+      await expect(time).toHaveText(expected);
+      for (const width of [320, 1280]) {
+        await page.setViewportSize({ width, height: 800 });
+        for (const theme of ['light', 'dark'] as const) {
+          await useTheme(page, theme);
+          await expect(time).toBeVisible();
+          await time.scrollIntoViewIfNeeded();
+          await expect(time).toBeInViewport();
+          await expectNoHorizontalOverflow(page);
+          if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`case-date-${width}-${theme}.png`) });
+        }
+      }
+      expectNoFeatureApiRequests(apiRequests);
+    });
+  });
+}
+
 test('adds and removes exact associations by keyboard, restores focus, and preserves them through profile deletion', async ({ page }) => {
   const apiRequests = trackApiRequests(page);
   await page.goto('/monitor');

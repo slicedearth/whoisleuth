@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import {
     calibrationIntervalLabel,
     calibrationRateLabel,
@@ -71,7 +72,7 @@
   {:else if dashboard}
     {@const report = dashboard.report}
     <div class="report-meta" aria-live="polite">
-      <span class="report-file">{fileName} · generated {new Date(report.generatedAt).toLocaleString('en-AU')}</span>
+      <span class="report-file">{fileName} · generated {formatEvidenceDate(report.generatedAt)}</span>
       <button class="btn small" type="button" onclick={clearReport}>Clear summary</button>
     </div>
 
