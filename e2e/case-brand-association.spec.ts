@@ -17,7 +17,7 @@ import {
   useTheme,
 } from './helpers';
 import { caseRecord, snapshot } from './case-test-fixtures';
-import { CASE_SCHEMA_VERSION, MAX_CASE_STORE_BYTES } from '../packages/contracts/case-portability.mts';
+import { CASE_SCHEMA_VERSION, MAX_CASE_STORE_BYTES, MAX_NOTES_PER_CASE, MAX_NOTE_LENGTH } from '../packages/contracts/case-portability.mts';
 import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
 import { serializeCaseStore } from '../packages/cases/case-storage-model.mts';
 import type { CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
@@ -110,35 +110,38 @@ function storageEntries(
 }
 
 function nearBudgetCaseSnapshot(): CaseRecord[] {
-  const note = (caseIndex:number,noteIndex:number,length=1_987)=>({
-    createdAt:new Date(Date.parse('2026-06-01T00:00:00.000Z')+noteIndex*1_000).toISOString(),
-    body:`${caseIndex}-${noteIndex}-`.padEnd(length,'x'),
-  });
-  const fullNotes=(caseIndex:number)=>Array.from({length:50},(_,noteIndex)=>note(caseIndex,noteIndex));
-  const fixed=[
-    caseRecord({id:'post-write-case',domain:'post-write.invalid',brandProfileIds:[]}),
-    caseRecord({id:'pruned-other-case',domain:'pruned-other.invalid',evidenceHistory:[snapshot({id:'old-prunable',capturedAt:'2026-01-01T00:00:00.000Z',firstCapturedAt:'2026-01-01T00:00:00.000Z'})]}),
-    ...Array.from({length:40},(_,index)=>caseRecord({id:`budget-${index}`,domain:`budget-${index}.invalid`,notes:fullNotes(index)})),
-  ];
-  const build=(length:number)=>normalizeCaseStore({version:CASE_SCHEMA_VERSION,cases:[
-    ...fixed,
-    caseRecord({id:'budget-partial',domain:'budget-partial.invalid',notes:[
-      ...Array.from({length:23},(_,index)=>note(40,index)),
-      note(40,23,length),
-    ]}),
-  ]}).cases;
-  let lower=1,upper=2_000,best=build(1);
-  while(lower<=upper){
-    const middle=Math.floor((lower+upper)/2);
-    const candidate=build(middle);
-    const bytes=new TextEncoder().encode(serializeCaseStore(candidate)).byteLength;
-    if(bytes<MAX_CASE_STORE_BYTES){best=candidate;lower=middle+1;}
-    else upper=middle-1;
-  }
-  const remaining=MAX_CASE_STORE_BYTES-new TextEncoder().encode(serializeCaseStore(best)).byteLength;
+  const paddingCases = Math.ceil(MAX_CASE_STORE_BYTES / (MAX_NOTES_PER_CASE * MAX_NOTE_LENGTH));
+  const cases = normalizeCaseStore({ version: CASE_SCHEMA_VERSION, cases: [
+    caseRecord({ id: 'post-write-case', domain: 'post-write.invalid', brandProfileIds: [] }),
+    caseRecord({ id: 'pruned-other-case', domain: 'pruned-other.invalid', evidenceHistory: [
+      snapshot({ id: 'old-prunable', capturedAt: '2026-01-01T00:00:00.000Z', firstCapturedAt: '2026-01-01T00:00:00.000Z' }),
+    ] }),
+    ...Array.from({ length: paddingCases }, (_, index) => caseRecord({
+      id: `budget-${index}`, domain: `budget-${index}.invalid`,
+      notes: Array.from({ length: MAX_NOTES_PER_CASE }, (_, noteIndex) => ({
+        id: `budget-${index}-note-${noteIndex}`,
+        createdAt: new Date(Date.parse('2026-06-01T00:00:00.000Z') + noteIndex * 1_000).toISOString(),
+        body: `${index}-${noteIndex}-`,
+      })),
+    })),
+  ] }).cases;
+  const byteLength = (records: CaseRecord[]) => new TextEncoder().encode(serializeCaseStore(records)).byteLength;
+  let remaining = MAX_CASE_STORE_BYTES - 1 - byteLength(cases);
   expect(remaining).toBeGreaterThan(0);
-  expect(remaining).toBeLessThan(12);
-  return best;
+  // Measure the current envelope, then fill bounded ASCII notes exactly. New
+  // Case fields change the available room, not a hand-tuned fixture baseline.
+  for (const record of cases) {
+    if (!record.id.startsWith('budget-')) continue;
+    for (const note of record.notes) {
+      const extra = Math.min(MAX_NOTE_LENGTH - note.body.length, remaining);
+      note.body += 'x'.repeat(extra);
+      remaining -= extra;
+    }
+  }
+  expect(remaining).toBe(0);
+  const normalized = normalizeCaseStore({ version: CASE_SCHEMA_VERSION, cases }).cases;
+  expect(byteLength(normalized)).toBe(MAX_CASE_STORE_BYTES - 1);
+  return normalized;
 }
 
 function trackApiRequests(page: Page): string[] {
@@ -409,7 +412,7 @@ test('previews association storage pressure, exports or cancels, and reconciles 
   const committedSnapshot=await readBrowserLocalCollection(page,'cases',{minimumRecords:1,minimumRevision:2});
   expect(requiredValue(committedSnapshot.records.find((record)=>record.value.id==='pruned-other-case'),'The prunable other Case is missing.').value.evidenceHistory).toHaveLength(0);
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
-  await page.getByLabel('Search').fill('pruned-other.invalid');
+  await page.getByRole('textbox', { name: 'Search', exact: true }).fill('pruned-other.invalid');
   await page.locator('.case-head',{hasText:'pruned-other.invalid'}).click();
   await openCaseSection(page, 'Evidence');
   await expect(page.getByRole('heading',{name:'Evidence timeline 0 snapshots'})).toBeVisible();

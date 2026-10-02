@@ -305,8 +305,6 @@ test('dark chrome restores the deployed secondary accent while light chrome stay
       const interfaceAccent = colour('--interface-accent');
       const accent = colour('--accent');
       const accent2 = colour('--accent2');
-      const borderStrong = colour('--border-strong');
-      const controlBorder = colour('--control-border');
       probe.style.color = '';
       const selected = getComputedStyle(probe);
       const heading = document.querySelector<HTMLElement>('.heading')!;
@@ -318,8 +316,6 @@ test('dark chrome restores the deployed secondary accent while light chrome stay
         interfaceAccent,
         accent,
         accent2,
-        borderStrong,
-        controlBorder,
         selectedColour: selected.color,
         selectedBorder: selected.borderTopColor,
         eyebrow: getComputedStyle(eyebrow).color,
@@ -344,15 +340,13 @@ test('dark chrome restores the deployed secondary accent while light chrome stay
 
     if (theme === 'Dark') {
       expect(roles.interfaceAccent).toBe(roles.accent2);
-      expect(roles.controlBorder).toBe(roles.borderStrong);
     } else {
       expect(roles.interfaceAccent).toBe(roles.accent);
-      expect(roles.controlBorder).not.toBe(roles.borderStrong);
     }
   }
 });
 
-test('form hints remain readable in both colour themes', async ({ page }) => {
+test('form hints and control boundaries remain readable in both colour themes', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/lookup');
 
@@ -379,11 +373,13 @@ test('form hints remain readable in both colour themes', async ({ page }) => {
       };
       const value = {
         hintText: ratio(colour('--muted'), colour('--panel')),
+        controlBorder: ratio(getComputedStyle(document.querySelector('#query')!).borderTopColor, colour('--panel')),
       };
       sample.remove();
       return value;
     });
     expect(contrast.hintText).toBeGreaterThanOrEqual(4.5);
+    expect(contrast.controlBorder).toBeGreaterThanOrEqual(3);
   }
 });
 
@@ -415,17 +411,26 @@ test('forced colours preserve active navigation and disclosure affordances', asy
   const disclosure = page.locator('article[data-command-detail="commands"] .contract-details > summary');
   await disclosure.focus();
   const affordance = await disclosure.evaluate((element) => {
-    const marker = getComputedStyle(element, '::after');
     const focus = getComputedStyle(element);
     return {
-      marker: marker.content,
+      display: focus.display,
+      marker: focus.listStyleType,
       outlineStyle: focus.outlineStyle,
       outlineWidth: Number.parseFloat(focus.outlineWidth),
     };
   });
-  expect(affordance.marker).toBe('"+"');
+  expect(affordance.display).toBe('list-item');
+  expect(affordance.marker).not.toBe('none');
   expect(affordance.outlineStyle).not.toBe('none');
   expect(affordance.outlineWidth).toBeGreaterThanOrEqual(2);
+  const details = page.locator('article[data-command-detail="commands"] .contract-details');
+  await expect(details).not.toHaveAttribute('open');
+  await disclosure.press('Enter');
+  await expect(details).toHaveAttribute('open', '');
+  await expect(details.getByRole('region', { name: 'Operational boundary', exact: true })).toBeVisible();
+  await disclosure.press('Enter');
+  await expect(details).not.toHaveAttribute('open');
+  await expect(disclosure).toBeFocused();
 });
 
 test('system preference follows operating-system colour-scheme changes', async ({ page }) => {
