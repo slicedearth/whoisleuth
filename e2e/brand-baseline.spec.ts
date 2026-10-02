@@ -1445,12 +1445,17 @@ test('cross-domain posture matrix links exact retained baselines and observation
       desiredPostureBaselines: [{
         domain: 'stored.example',
         nameservers: ['ns1.stored.example'],
+        mx: ['10 mail.stored.example'],
         ds: ['12345 13 2 abcdef'],
         renewalReviewAt: '2026-07-12T00:00:00.000Z',
+        approvedChangeWindows: [{ startsAt: '2026-07-11T00:00:00.000Z', endsAt: '2026-07-13T00:00:00.000Z', summary: 'Reviewed nameserver migration' }],
         observationHistory: [{
           observedAt: '2026-07-12T00:00:00.000Z',
           context: brandPostureObservationContext(requiredValue(normalizeBrandProfile({ ...profileFixture(), officialDomains: ['stored.example', 'unavailable.example', 'unset.example'] }), 'The profile fixture is invalid.'), 'stored.example'),
-          checks: [{ id: 'nameservers', status: 'pass', records: ['ns1.stored.example'], sourceContext: { version: 1, source: 'dns_ns', observedAt: '2026-07-12T00:00:00.000Z', state: 'complete', omittedRecords: 0 } }],
+          checks: [
+            { id: 'nameservers', status: 'pass', records: ['ns1.stored.example'], sourceContext: { version: 1, source: 'dns_ns', observedAt: '2026-07-12T00:00:00.000Z', state: 'complete', omittedRecords: 0 } },
+            { id: 'mx', status: 'pass', records: ['20 changed-mail.stored.example'], sourceContext: { version: 1, source: 'dns_mx', observedAt: '2026-07-12T00:00:00.000Z', state: 'complete', omittedRecords: 0 } },
+          ],
         }],
         updatedAt: ISO,
       }, {
@@ -1469,6 +1474,9 @@ test('cross-domain posture matrix links exact retained baselines and observation
   await expect(storedRow).toContainText('Aligned');
   await expect(storedRow).toContainText('Unsupported');
   await expect(storedRow).toContainText('Review due');
+  await expect(storedRow.locator('.state-approved_window')).toContainText('Window · all settings');
+  await expect(storedRow.locator('.state-approved_window .window-context')).toBeVisible();
+  await expect(storedRow.locator('.state-approved_window')).toContainText('Reviewed nameserver migration');
   await expect(storedRow).not.toContainText('Drift');
   const unavailableRow = matrix.locator('tbody tr', { hasText: 'unavailable.example' });
   await expect(unavailableRow).toContainText('Unavailable');
@@ -1486,6 +1494,8 @@ test('cross-domain posture matrix links exact retained baselines and observation
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(matrix.locator('.mobile-rows')).toBeVisible();
   await expect(matrix.locator('.mobile-rows')).toContainText('Review due');
+  await expect(matrix.locator('.mobile-rows .state-approved_window')).toContainText('Window · all settings');
+  await expect(matrix.locator('.mobile-rows .state-approved_window .window-context')).toBeVisible();
   await expectNoHorizontalOverflow(page);
   if (captureVisualEvidenceEnabled()) {
     for (const width of [320, 390, 1280]) {
@@ -1641,6 +1651,9 @@ test('owned-domain baseline feedback reflects the committed browser-local write'
   await expect(consumers).toContainText('owned-domain posture matrix currently marks DS comparison unsupported');
   await expect(consumers).toContainText('certificate-policy review');
   await expect(consumers).toContainText('SAN patterns are not a posture-matrix column');
+  await expect(baseline.getByLabel('TLS SAN patterns', { exact: true })).toHaveAttribute('aria-describedby', 'tls-san-expectation-help');
+  await expect(baseline.locator('#tls-san-expectation-help')).toContainText('every pattern must match a name, and every name must match a pattern');
+  await expect(baseline.getByText('Each window covers all expected settings', { exact: false })).toBeVisible();
   await expect(consumers).toContainText('DNS change rehearsal');
   await baseline.getByRole('combobox', { name: 'Nameservers expectation', exact: true }).selectOption('expect_records');
   await baseline.getByRole('textbox', { name: 'Nameservers', exact: true }).fill('ns1.stored.example');

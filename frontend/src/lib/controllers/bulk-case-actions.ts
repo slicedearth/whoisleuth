@@ -1,6 +1,7 @@
 import type { CaseInput, CaseRecord } from '../cases.ts';
 import type { ScanResult } from '../analysis/bulk-result-model.ts';
 import { normalizeHttpSummary } from '../analysis/http-summary.ts';
+import { casePruningNotice } from '../analysis/case-mutation-feedback.ts';
 import { failedLocalMutationOutcome, summarizeLocalMutationOutcomes, type LocalMutationOutcome } from '../local-mutation-outcome.ts';
 
 type CasesApi = Pick<typeof import('../cases.ts'), 'openCase' | 'editCase' | 'loadCases' | 'setCaseDispositions' | 'dispositionLabel'>
@@ -17,7 +18,6 @@ type Dependencies = Readonly<{
 // Case creation is a sequence of individually committed writes, not one transaction.
 const MAX_CASE_CREATIONS = 50;
 const REFRESH_WARNING = ' The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.';
-const prunedNote = (count: number) => count ? ` (pruned ${count} old evidence snapshot${count === 1 ? '' : 's'} to stay within storage)` : '';
 
 /** The explicit Bulk-to-Case projection excludes contacts and unreviewed response fields. */
 export function bulkCaseInput(row: ScanResult) {
@@ -46,6 +46,7 @@ export function bulkCaseInput(row: ScanResult) {
 export class BulkCaseActions {
   state: BulkCaseActionState = { busy: false, status: '' };
   #refreshFailed = false;
+  #pruned = 0;
   private readonly dependencies: Dependencies;
   constructor(dependencies: Dependencies) { this.dependencies = dependencies; }
 
@@ -57,6 +58,7 @@ export class BulkCaseActions {
   async #run(operation: (context: BulkCaseContext) => Promise<void>) {
     if (this.state.busy) return;
     this.#refreshFailed = false;
+    this.#pruned = 0;
     this.#set('', true);
     try {
       const context = await this.dependencies.context();
@@ -65,7 +67,7 @@ export class BulkCaseActions {
     } catch (cause) {
       this.#set(cause instanceof Error ? cause.message : 'Could not update the selected Cases.');
     } finally {
-      this.#set(this.state.status + (this.#refreshFailed ? REFRESH_WARNING : ''), false);
+      this.#set(this.state.status + casePruningNotice(this.#pruned) + (this.#refreshFailed ? REFRESH_WARNING : ''), false);
     }
   }
 
@@ -82,8 +84,9 @@ export class BulkCaseActions {
       const input = bulkCaseInput(row);
       const opened = await context.api.openCase(input, selected ? { caseId: selected.id } : {});
       const committed = opened.created ? opened : await context.api.editCase(opened.record.id, { source: 'bulk', evidence: input.evidence });
+      this.#pruned += committed.pruned;
       await this.#reconcile(context.api, committed);
-      this.#set(`${opened.created ? `Opened a case for ${committed.record.domain}.` : `Refreshed the retained Case evidence for ${committed.record.domain}.`}${prunedNote(committed.pruned)}`);
+      this.#set(opened.created ? `Opened a case for ${committed.record.domain}.` : `Refreshed the retained Case evidence for ${committed.record.domain}.`);
       return 'committed';
     } catch (cause) {
       this.#set(cause instanceof Error ? cause.message : 'Could not open the case.');
@@ -98,8 +101,9 @@ export class BulkCaseActions {
       const record = context.selected.get(row.domain);
       if (!record) { this.#set('Select an incident Case for this target before changing its disposition.'); return; }
       const committed = await context.api.editCase(record.id, { disposition });
+      this.#pruned += committed.pruned;
       await this.#reconcile(context.api, committed);
-      this.#set(`Marked ${row.domain} as ${context.api.dispositionLabel(disposition)}.${prunedNote(committed.pruned)}`);
+      this.#set(`Marked ${row.domain} as ${context.api.dispositionLabel(disposition)}.`);
     });
   }
 
@@ -126,9 +130,10 @@ export class BulkCaseActions {
       const records = rows.map(row => context.selected.get(row.domain)).filter((record): record is CaseRecord => Boolean(record)).slice(0, limit);
       if (!records.length) { this.#set('Select an incident Case for each target before changing its disposition.'); return; }
       const committed = await context.api.setCaseDispositions(records.map(record => record.id), disposition);
+      this.#pruned += committed.pruned;
       await this.#reconcile(context.api, committed);
       const omitted = rows.length - records.length;
-      this.#set(`Marked ${committed.changed} selected case${committed.changed === 1 ? '' : 's'} as ${context.api.dispositionLabel(disposition)}.${omitted ? ` ${omitted} target${omitted === 1 ? ' was' : 's were'} not changed: no incident was selected, no Case exists, or the ${limit}-Case batch limit was reached.` : ''}${prunedNote(committed.pruned)}`);
+      this.#set(`Marked ${committed.changed} selected case${committed.changed === 1 ? '' : 's'} as ${context.api.dispositionLabel(disposition)}.${omitted ? ` ${omitted} target${omitted === 1 ? ' was' : 's were'} not changed: no incident was selected, no Case exists, or the ${limit}-Case batch limit was reached.` : ''}`);
     });
   }
 }

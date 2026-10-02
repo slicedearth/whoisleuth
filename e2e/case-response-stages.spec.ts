@@ -17,6 +17,49 @@ import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts'
 
 test.use({ timezoneId: 'UTC' });
 
+test('packet suggestions apply once and do not replace deliberately cleared selections', async ({ page }) => {
+  const at = '2026-09-10T10:00:00.000Z';
+  const pin = { id: 'packet-pin', checkpointId: null, field: 'http.status', category: 'http', label: 'Packet observation',
+    value: 'A page was observed', source: 'Fixture review', sourceState: 'complete', sourceSchema: null,
+    observedAt: at, collectionDepth: 'deep', completeness: 'complete', truncated: false,
+    transitionExpectation: null, limitations: [], createdAt: at };
+  const action = currentActionFixture({ id: 'packet-action', type: 'registrar_report', recipient: 'Fixture desk',
+    contactSource: 'Retained route', routeObservedAt: at, contactLimitations: [], dueAt: null,
+    targetState: 'ready_for_review', reference: null, followUpAt: null, outcome: null, createdAt: at, updatedAt: at });
+  const record = caseRecord({ domain: 'packet-selection.example', evidencePins: [pin], actions: [action],
+    decisions: [{ id: 'packet-decision', summary: 'Review this observation', rationale: 'Explicit retained evidence',
+      confidence: 'low', confidenceBasis: 'One source', evidencePinIds: [pin.id], createdAt: at }] });
+  const other = { ...record, id: 'case-2', domain: 'separate-packet.example' };
+  await openSeededTimelineCase(page, record.domain, [record, other], CASE_SCHEMA_VERSION);
+  await openCaseResponseWorkspace(page, '', 'quick', 'Response');
+  const packet = page.locator('details[id^="case-response-preflight-"]');
+  await packet.locator('summary').click();
+  const selectedPin = packet.getByRole('checkbox', { name: /^Pin 1: Packet observation/ });
+  const selectedAction = packet.getByRole('combobox', { name: 'Case action for this packet', exact: true });
+  await expect(selectedPin).toBeChecked();
+  await expect(selectedAction).toHaveValue(action.id);
+  await selectedPin.uncheck();
+  await selectedAction.selectOption('');
+  await packet.getByLabel('Observed harm', { exact: true }).fill('Draft retained while reviewing evidence.');
+  await openCaseSection(page, 'Assessment');
+  await openCaseSection(page, 'Response');
+  await packet.locator('summary').click();
+  await packet.locator('summary').click();
+  await expect(selectedPin).not.toBeChecked();
+  await expect(selectedAction).toHaveValue('');
+  await expect(packet.getByLabel('Observed harm', { exact: true })).toHaveValue('Draft retained while reviewing evidence.');
+  await expect(packet.getByRole('button', { name: 'Review and bind exact inputs', exact: true })).toHaveCount(0);
+  await openPacketWizardStep(packet, 'Review');
+  await expect(packet.getByRole('button', { name: 'Review and bind exact inputs', exact: true })).toBeDisabled();
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+  await page.locator('.case-head', { hasText: other.domain }).click();
+  await openCaseResponseWorkspace(page, '', 'quick', 'Response');
+  await packet.locator('summary').click();
+  await expect(selectedPin).toBeChecked();
+  await expect(selectedAction).toHaveValue(action.id);
+  await expect(packet.getByLabel('Observed harm', { exact: true })).toHaveValue('');
+});
+
 test('an open Case updates due reviews as time advances without changing retained evidence', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-09-10T10:00:00Z') });
   const action = currentActionFixture({

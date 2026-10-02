@@ -7,6 +7,7 @@ import { createCase, type CaseRecord } from '../packages/cases/case-model.mts';
 import { relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
 import type { ScanResult } from '../frontend/src/lib/analysis/bulk-result-model.ts';
 import { buildBulkResultsCsv } from '../frontend/src/lib/analysis/bulk-export.ts';
+import { casePruningNotice } from '../frontend/src/lib/analysis/case-mutation-feedback.ts';
 
 function row(domain = 'candidate.example'): ScanResult {
   return {
@@ -48,6 +49,25 @@ test('Bulk Case projection retains unknown evidence and excludes contacts', () =
   assert.equal(projected.evidence?.profileContextState, 'unavailable');
   assert.equal(projected.evidence?.profileContextLimitation, 'Unavailable context');
   assert.doesNotMatch(JSON.stringify(projected), /Private person|private@example|registrant|abuseEmail/u);
+});
+
+test('committed pruning receipts survive aggregate summaries, later rejection and refresh failure', async () => {
+  assert.equal(casePruningNotice(0), '');
+  assert.equal(casePruningNotice(1), ' Removed 1 older evidence snapshot to fit workspace storage.');
+  const h = harness({ loadCases: async () => { throw new Error('Unavailable'); } });
+  let writes = 0;
+  h.context.api.openCase = async () => {
+    writes++;
+    if (writes === 3) throw new Error('Rejected');
+    return { cases: [h.record], record: h.record, created: true, pruned: writes };
+  };
+  await h.actions.createSelected([row(), row('two.example'), row('three.example')]);
+  assert.match(h.actions.state.status, /2 committed, 1 rejected/u);
+  assert.match(h.actions.state.status, /Removed 3 older evidence snapshots/u);
+  assert.match(h.actions.state.status, /change was saved, but Cases could not be reread/u);
+  h.context.api.openCase = async () => ({ cases: [h.record], record: h.record, created: true, pruned: 0 });
+  await h.actions.open(row());
+  assert.doesNotMatch(h.actions.state.status, /Removed/u);
 });
 
 test('Case actions preserve the selected incident and publish the committed snapshot if rereading fails', async () => {

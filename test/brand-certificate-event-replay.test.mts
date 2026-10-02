@@ -99,6 +99,14 @@ describe('retained certificate expectation replay', () => {
     assert.match(event.limitations.join(' '), /did not retain every certificate name/iu);
   });
 
+  test('each configured pattern is required, including a wildcard separate from an apex', () => {
+    const apex = eventCase('official.example', { dnsNameCount: 1 });
+    const clause = (patterns: string[]) => buildBrandCertificateEventReplay(profile('Fixture issuer', patterns), [apex]).domains[0]?.events[0]?.clauses.find(item => item.id === 'san_patterns');
+    assert.equal(clause(['official.example'])?.state, 'aligned');
+    assert.equal(clause(['official.example', '*.official.example'])?.state, 'review');
+    assert.equal(clause(['*.official.example'])?.state, 'review');
+  });
+
   test('marks complete issuer or SAN differences for review without claiming improper issuance', () => {
     const replay = buildBrandCertificateEventReplay(profile('Different issuer', ['missing.example']), [
       eventCase('official.example'),

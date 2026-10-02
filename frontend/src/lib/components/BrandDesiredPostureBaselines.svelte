@@ -324,7 +324,7 @@
         </div>
       {/each}
       <label><span>TLS issuer</span><input maxlength="2000" bind:value={tlsIssuer} placeholder="Reviewed issuer name"></label>
-      <label><span>TLS SAN patterns</span><textarea rows="3" maxlength="6000" bind:value={tlsSanPatterns} placeholder="example.test&#10;*.example.test"></textarea></label>
+      <div class="record-expectation"><label><span>TLS SAN patterns</span><textarea rows="3" maxlength="6000" bind:value={tlsSanPatterns} placeholder="example.test" aria-describedby="tls-san-expectation-help"></textarea></label><small id="tls-san-expectation-help">Expected names on each certificate: every pattern must match a name, and every name must match a pattern. Add a wildcard only when a matching subdomain is also expected.</small></div>
       <label><span>TLS SPKI SHA-256</span><input maxlength="64" bind:value={tlsSpkiSha256} placeholder="64 hexadecimal characters"></label>
       <label>
         <span>Transfer-lock expectation</span>
@@ -359,7 +359,7 @@
     </div>
     <fieldset class="structured-rows wide">
       <legend>Approved change windows</legend>
-      <p>Times require Z or an explicit UTC offset. Expected changes remain in evidence and are labelled, not removed.</p>
+      <p>Each window covers all expected settings for this domain, not just the change named in its summary. Differences remain visible. Times require Z or an explicit UTC offset.</p>
       {#each approvedChangeWindows as window, index}
         <div class="structured-row change-window-row">
           <label><span>Start timestamp with timezone</span><input value={window.startsAt} maxlength="64" placeholder="2026-09-01T00:00:00+10:00" oninput={(event) => updateChangeWindow(index, 'startsAt', event.currentTarget.value)}></label>

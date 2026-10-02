@@ -131,19 +131,20 @@ async function executeBulkScan(
       let next: ScanResult;
       try {
         const response = await fetchLookup(domain, controller.signal);
+        if (controller.signal.aborted || !ownsScan()) break;
         next = normalizeResult(domain, response, profile);
         if (profile.mode === 'deep' && response.availability?.deepScanComplete === false) {
           next.saved.scanDepth = 'fast';
         }
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') break;
+        if (controller.signal.aborted || !ownsScan()) break;
         next = failedResult(
           domain,
           cause instanceof Error ? cause.message : 'Lookup failed',
           profile,
         );
       }
-      if (!ownsScan()) break;
+      if (controller.signal.aborted || !ownsScan()) break;
       const prior = priorByDomain.get(domain);
       if (preservePrior && prior) {
         const decision = chooseResult(prior, next);

@@ -133,6 +133,18 @@ test('session loading is shared, retryable after failure and cannot publish afte
   assert.equal(disposed.publications, publications);
 });
 
+test('saving a cancelled refresh preserves full retained coverage without inventing a completed attempt', async () => {
+  const h = harness();
+  h.scan.cancelled = true;
+  h.workspace.setName('Retained before cancellation');
+  await h.workspace.save();
+  const saved = normalizeBulkSession(h.writes[0]?.[0]);
+  assert.ok(saved);
+  assert.equal(saved.state, 'complete');
+  assert.deepEqual(saved.results, h.record.results);
+  assert.equal(h.scan.cancelled, true);
+});
+
 test('saving captures one coherent result and prevents competing session or scan operations', async () => {
   const h = harness();
   const held = deferred<Storage>();

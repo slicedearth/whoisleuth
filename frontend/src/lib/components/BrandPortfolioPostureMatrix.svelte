@@ -17,7 +17,7 @@
   const visibleRows = $derived(matrix.rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
 
   function stateLabel(state: DomainPostureMatrixState): string {
-    if (state === 'approved_window') return 'Approved window';
+    if (state === 'approved_window') return 'Window · all settings';
     if (state === 'not_configured') return 'Not configured';
     if (state === 'not_due') return 'Not due';
     if (state === 'due') return 'Review due';
@@ -66,6 +66,7 @@
               {#each row.cells as cell (cell.field)}
                 <td class={`state-${cell.state}`} title={cellTitle(cell)}>
                   <strong>{stateLabel(cell.state)}</strong>
+                  {#if cell.state === 'approved_window'}<small class="window-context">{cell.approvedWindowSummary}</small>{/if}
                   <span><a href={cell.baselineHref}>Expected</a>{#if cell.observationHref}<a href={cell.observationHref}>Observed</a>{:else}<em>No observation</em>{/if}</span>
                 </td>
               {/each}
@@ -79,7 +80,7 @@
       {#each visibleRows as row (row.domain)}
         <article>
           <header><div><h3>{row.domain}</h3><p>{row.lifecycle.replaceAll('_', ' ')} · {row.zoneIntent.replaceAll('_', ' ')}</p></div><span>{row.observationAt ? date(row.observationAt) : row.observationId ? 'No unique latest observation' : 'No retained observation'}</span></header>
-          <dl>{#each row.cells as cell (cell.field)}<div class={`state-${cell.state}`}><dt>{cell.label}</dt><dd><strong>{stateLabel(cell.state)}</strong><span><a href={cell.baselineHref}>Expected</a>{#if cell.observationHref}<a href={cell.observationHref}>Observed</a>{:else}<em>No observation</em>{/if}</span></dd></div>{/each}</dl>
+          <dl>{#each row.cells as cell (cell.field)}<div class={`state-${cell.state}`}><dt>{cell.label}</dt><dd><strong>{stateLabel(cell.state)}</strong>{#if cell.state === 'approved_window'}<small class="window-context">{cell.approvedWindowSummary}</small>{/if}<span><a href={cell.baselineHref}>Expected</a>{#if cell.observationHref}<a href={cell.observationHref}>Observed</a>{:else}<em>No observation</em>{/if}</span></dd></div>{/each}</dl>
         </article>
       {/each}
     </div>
@@ -122,6 +123,7 @@
   tbody th strong,tbody th small{display:block;overflow-wrap:anywhere}
   tbody th small{margin-top:4px;color:var(--muted);font-weight:400;text-transform:capitalize}
   td>strong{display:block}
+  .window-context{display:block;max-width:28ch;margin-top:4px;color:var(--muted);overflow-wrap:anywhere;font-size:var(--text-2xs)}
   td>span{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
   td a,.mobile-rows a{font-size:var(--text-2xs)}
   td em,.mobile-rows em{color:var(--muted);font-size:var(--text-2xs);font-style:normal}

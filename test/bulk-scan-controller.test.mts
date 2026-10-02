@@ -174,6 +174,30 @@ function runOptions(overrides: Partial<BulkScanRunOptions> = {}): BulkScanRunOpt
 }
 
 describe('Bulk scan lifetime', () => {
+  it('cancellation admits neither generic abort errors nor late successes and retains prior rows', async () => {
+    for (const preservePrior of [false, true]) for (const outcome of ['error', 'success'] as const) {
+      const held = deferred<void>(), started = deferred<void>();
+      const controller = new BulkScanController(() => {});
+      const prior = scanResult('one.example');
+      controller.restore([prior], 1);
+      const running = controller.run(runOptions({ domains: ['one.example'], replace: true, preservePrior,
+        fetchLookup: async () => {
+          started.resolve(); await held.promise;
+          if (outcome === 'error') throw new Error('The request was cancelled.');
+          return compactResponse('one.example');
+        },
+        normalizeResult: () => assert.fail('Cancelled work must not be projected'),
+        failedResult: () => assert.fail('Cancellation is not an evidence failure'),
+      }));
+      await started.promise;
+      controller.cancel(); held.resolve();
+      const result = await running;
+      assert.equal(result.aborted, true);
+      assert.equal(controller.state.completed, 0);
+      assert.equal(controller.state.cancelled, true);
+      assert.deepEqual(controller.results, preservePrior ? [prior] : []);
+    }
+  });
   it('retains explicit cancellation through restoration and clears it only for a new scan', async () => {
     const controller = new BulkScanController(() => {});
     controller.cancel();

@@ -292,15 +292,15 @@ function parseStix(
   if (objects.some((item) => item?.spec_version !== undefined && item.spec_version !== '2.1')) {
     throw new Error('Only STIX 2.1 objects are supported.');
   }
-  const identities = new Map<string, string>();
+  const identities = new Map<string, string | null>();
   const markingDefinitions = new Map<string, string>();
-  const observations = new Map<string, string>();
+  const observations = new Map<string, { observedAt: string; creator: string | null }>();
   for (const item of objects) {
     if (!item) continue;
     const id = text(item.id, 200);
     if (item.type === 'identity' && id) {
       const name = text(item.name, 160);
-      if (name) identities.set(id, name);
+      if (name) identities.set(id, identities.has(id) && identities.get(id) !== name ? null : name);
     }
     if (item.type === 'marking-definition' && id) {
       const definition = record(item.definition);
@@ -313,11 +313,17 @@ function parseStix(
       const observedAt = optionalIso(item.last_observed, 'STIX last_observed')
         ?? optionalIso(item.first_observed, 'STIX first_observed');
       if (observedAt) {
-        for (const reference of stringList(item.object_refs, 100)) observations.set(reference, observedAt);
+        const creator = text(item.created_by_ref, 200);
+        for (const reference of stringList(item.object_refs, 100)) {
+          const prior = observations.get(reference);
+          if (!prior || observedAt > prior.observedAt) observations.set(reference, { observedAt, creator });
+          else if (observedAt === prior.observedAt && creator !== prior.creator) {
+            observations.set(reference, { observedAt, creator: null });
+          }
+        }
       }
     }
   }
-  const defaultPublisher = identities.size === 1 ? [...identities.values()][0] ?? null : null;
   const candidates: Candidate[] = [];
   const exclusions: ExternalIntelligenceExclusion[] = [];
   for (const item of objects) {
@@ -345,14 +351,16 @@ function parseStix(
       exclusions.push(exclusion(externalId, type, 'The supported STIX entity value is malformed or unsafe.'));
       continue;
     }
-    const publisher = identities.get(text(item.created_by_ref, 200) ?? '') ?? defaultPublisher;
+    const observation = direct ? observations.get(externalId) : undefined;
+    const creator = observation ? observation.creator : text(item.created_by_ref, 200);
+    const publisher = identities.get(creator ?? '') ?? null;
     if (type === 'indicator') optionalIso(item.valid_from, 'STIX valid_from');
     candidates.push({
       externalId,
       entityType: entity.entityType,
       entityValue,
       claimType: direct ? 'observable' : 'indicator',
-      observedAt: observations.get(externalId) ?? null,
+      observedAt: observation?.observedAt ?? null,
       createdAt: optionalIso(item.created, 'STIX created'),
       modifiedAt: optionalIso(item.modified, 'STIX modified'),
       publisher,
@@ -364,12 +372,13 @@ function parseStix(
   return {
     format: 'stix',
     sourceName: text(root.id, 160) ?? 'STIX 2.1 bundle',
-    publisher: defaultPublisher,
+    publisher: null,
     candidates,
     exclusions: exclusions.slice(0, MAX_EXTERNAL_INTELLIGENCE_EXCLUSIONS),
     limitations: [
       'Only bounded domain, URL, IP, ASN, certificate, and simple exact-match Indicator objects are supported.',
       'STIX observed-data times are retained as observation times. Indicator valid_from is validity metadata and is not relabelled as an observation time.',
+      'Observable time and publisher come from the latest referenced observed-data record. Conflicting publishers at that time remain unknown; unreferenced identities are never treated as the publisher.',
       'WHOISleuth imports external claims as case assertions. It does not independently collect, verify, score, enrich, or act on them.',
     ],
   };

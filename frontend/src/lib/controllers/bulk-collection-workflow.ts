@@ -115,8 +115,12 @@ export class BulkCollectionWorkflow {
     const revision = this.scan.state.revision;
     try {
       const execution = await executionPromise;
-      if (!execution.owned || execution.aborted) return null;
+      if (!execution.owned) return null;
       const { completed, total } = this.scan.state;
+      if (execution.aborted) {
+        this.effects.status(`Cancelled after ${completed} of ${total} lookups in this attempt. ${this.scan.results.length} retained result${this.scan.results.length === 1 ? ' remains' : 's remain'} available${preservePrior ? ', including earlier evidence' : ''}. Saving records result coverage, not a completed refresh.`);
+        return null;
+      }
       this.effects.status(
         `Completed ${completed} of ${total} lookups.${sourceState === 'unavailable' ? ' Brand Profile context was unavailable; profile-derived fields are retained as inconclusive and every row records that limitation.' : ''}${execution.preservedReasons.length ? ` Retained ${execution.preservedReasons.length} stronger prior result${execution.preservedReasons.length === 1 ? '' : 's'}.` : ''}`,
       );

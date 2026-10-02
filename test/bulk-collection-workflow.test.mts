@@ -156,6 +156,26 @@ test('Bulk retry retains stronger prior observations and reports the preservatio
   h.scan.dispose();
 });
 
+test('a cancelled refresh describes retained coverage separately from completed requests', async () => {
+  let hold = false;
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const h = harness({ fetchLookup: async domain => {
+    if (hold) await held;
+    return response(domain);
+  } });
+  await h.workflow.run(['example.test']);
+  const previous = structuredClone(h.scan.results);
+  hold = true;
+  const refresh = h.workflow.run(['example.test'], false, true);
+  h.scan.cancel(); release();
+  await refresh;
+  assert.deepEqual(h.scan.results, previous);
+  assert.match(h.statuses.at(-1)!, /^Cancelled after 0 of 1 lookups in this attempt\. 1 retained result remains available, including earlier evidence/u);
+  assert.match(h.statuses.at(-1)!, /not a completed refresh/u);
+  h.scan.dispose();
+});
+
 test('Bulk projection failure reports stopped work without exposing internal errors', async () => {
   const h = harness({
     provenance: () => {

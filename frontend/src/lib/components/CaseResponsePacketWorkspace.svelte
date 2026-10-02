@@ -89,6 +89,7 @@
   ] as const);
   let packetWizardStep = $state(1);
   let packetBusy = $state(false);
+  let packetOpen = $state(false);
   let defaultsAppliedRecordId = $state('');
   let packetCategoryEdited = $state(false);
   let packetUrlsEdited = $state(false);
@@ -158,17 +159,15 @@
     }
   });
   $effect(() => {
-    if (!visible) return;
+    if (!visible || !packetOpen) return;
     if (defaultsAppliedRecordId !== record.id) {
       packetCategoryEdited = false;
       packetUrlsEdited = false;
-    }
-    const latestDecision = [...record.decisions].reverse().find((decision) => decision.evidencePinIds.length);
-    if (!packetSelectedEvidenceIds.length && latestDecision) {
+      const latestDecision = [...record.decisions].reverse().find((decision) => decision.evidencePinIds.length);
       const retainedIds = new Set(record.evidencePins.map((pin) => pin.id));
-      packetSelectedEvidenceIds = latestDecision.evidencePinIds.filter((id) => retainedIds.has(id));
+      packetSelectedEvidenceIds = latestDecision?.evidencePinIds.filter((id) => retainedIds.has(id)) ?? [];
+      packetActionId = record.actions.length === 1 ? record.actions[0]?.id ?? '' : '';
     }
-    if (!packetActionId && record.actions.length === 1) packetActionId = record.actions[0]?.id ?? '';
     const retainedIncidentUrls = caseResponseIncidentUrls(record);
     if (!packetUrlsEdited) packetUrls = retainedIncidentUrls.join('\n');
     if (!packetCategoryEdited) packetCategory = caseTypeSummary(record.tags).slice(0, 80);
@@ -422,7 +421,7 @@
 </script>
 
 {#if visible}
-  <details id={`case-response-preflight-${record.id}`}>
+  <details id={`case-response-preflight-${record.id}`} bind:open={packetOpen}>
     <summary>Prepare a reviewed abuse evidence packet</summary>
     <form class="response-form packet-form" onsubmit={(event) => event.preventDefault()}>
       <p class="notice">Date and time fields use UTC.</p>

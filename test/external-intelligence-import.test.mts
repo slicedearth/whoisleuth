@@ -123,6 +123,33 @@ function stixObjects() {
   ];
 }
 
+test('STIX publisher attribution requires an explicit producer and keeps observation time paired with it', () => {
+  const target = { type: 'domain-name', spec_version: '2.1', id: 'domain-name--00000000-0000-4000-8000-000000000004', value: 'candidate.invalid' };
+  const first = { type: 'identity', id: 'identity--00000000-0000-4000-8000-000000000002', name: 'First producer' };
+  const second = { type: 'identity', id: 'identity--00000000-0000-4000-8000-000000000003', name: 'Second producer' };
+  const observation = (time: string, creator: string | null) => ({ type: 'observed-data', id: 'observed-data--00000000-0000-4000-8000-000000000005', last_observed: time, created_by_ref: creator, object_refs: [target.id] });
+  const preview = (objects: unknown[]) => parseExternalIntelligenceDocument(stixBundle(objects), DIGEST);
+  const unbound = preview([first, target]);
+  assert.equal(unbound.publisher, null);
+  assert.equal(unbound.items[0]?.publisher, null);
+  const older = observation(OBSERVED, first.id), later = observation(NOW, second.id);
+  for (const ordered of [[older, later], [later, older]]) {
+    const item = preview([first, second, target, ...ordered]).items[0];
+    assert.equal(item?.observedAt, NOW);
+    assert.equal(item?.publisher, 'Second producer');
+  }
+  for (const ordered of [[first.id, second.id], [second.id, first.id]]) {
+    const item = preview([first, second, target, ...ordered.map(id => observation(NOW, id))]).items[0];
+    assert.equal(item?.observedAt, NOW);
+    assert.equal(item?.publisher, null);
+  }
+  assert.equal(preview([first, target, observation(NOW, second.id)]).items[0]?.publisher, null);
+  assert.equal(preview([first, { ...first, name: 'Conflicting identity' }, target, observation(NOW, first.id)]).items[0]?.publisher, null);
+  const indicator = { type: 'indicator', id: 'indicator--00000000-0000-4000-8000-000000000006', pattern_type: 'stix', pattern: "[domain-name:value = 'candidate.invalid']" };
+  assert.equal(preview([first, indicator]).items[0]?.publisher, null);
+  assert.equal(preview([first, { ...indicator, created_by_ref: first.id }]).items[0]?.publisher, 'First producer');
+});
+
 function mispEvent() {
   return {
     Event: {

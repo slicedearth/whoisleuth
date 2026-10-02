@@ -188,6 +188,7 @@ export class BulkSessionWorkspace {
       // Snapshot before any await: editing the queue cannot change a submitted save.
       const results = scan.results.map(toBulkSessionResult);
       const settled = new Set(results.map((row) => row.domain));
+      // Stored state describes retained row coverage, not the last refresh attempt.
       const complete = domains.every((domain) => settled.has(domain));
       const now = this.#now();
       const session = {
