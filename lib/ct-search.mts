@@ -77,6 +77,30 @@ const RETRY_DELAY_MS = 1500;
 // two attempts (~40s) instead of stacking on top of MAX_RETRIES.
 const MAX_TIMEOUT_RETRIES = 1;
 
+const COLLECTION_ERRORS = {
+  CT_TIMEOUT: [504, 'Certificate search timed out. Try a narrower keyword or try again later.'],
+  CT_OVERLOADED: [503, 'Certificate search is temporarily overloaded. Try again later.'],
+  CT_QUERY_TOO_BROAD: [422, 'Certificate search returned too many results. Try a narrower keyword.'],
+  CT_INVALID_RESPONSE: [502, 'Certificate search returned invalid UTF-8 or an unexpected response format (expected a JSON array). Try again later.'],
+  CT_UPSTREAM_ERROR: [502, 'Certificate search could not retrieve a response from its source. Try again later.'],
+} as const;
+
+export class CtCollectionError extends Error {
+  readonly code: keyof typeof COLLECTION_ERRORS;
+  constructor(code: keyof typeof COLLECTION_ERRORS) {
+    super(COLLECTION_ERRORS[code][1]);
+    this.code = code;
+    this.name = 'CtCollectionError';
+  }
+}
+
+/** Only this finite collection vocabulary may cross an HTTP error boundary. */
+export function ctCollectionErrorResponse(error: unknown) {
+  return error instanceof CtCollectionError
+    ? { statusCode: COLLECTION_ERRORS[error.code][0], body: { error: COLLECTION_ERRORS[error.code][1], errorCode: error.code } }
+    : null;
+}
+
 // Row-count defense: a hostile or malformed response could fit a very large
 // number of tiny rows into the 5 MB byte cap and impose excessive
 // iteration/set overhead after parsing. Legitimate responses under the byte
@@ -120,67 +144,60 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
   return sleep(ms, undefined, signal ? { signal } : {});
 }
 
-async function fetchCrtSh(keyword: string, attempt = 0, dependencies: CtDependencies = {}): Promise<CtRow[]> {
+async function fetchCrtSh(keyword: string, dependencies: CtDependencies = {}): Promise<CtRow[]> {
   dependencies.signal?.throwIfAborted();
   const fetcher = dependencies.fetcher || safeFetch;
   const wait = dependencies.delay || delay;
-  const controller = new AbortController();
-  const signal = dependencies.signal ? AbortSignal.any([dependencies.signal, controller.signal]) : controller.signal;
-  const timeout = setTimeout(() => controller.abort(), CRT_SH_TIMEOUT_MS);
-  try {
-    let res: Response;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    dependencies.signal?.throwIfAborted();
+    const controller = new AbortController();
+    const signal = dependencies.signal ? AbortSignal.any([dependencies.signal, controller.signal]) : controller.signal;
+    const timeout = setTimeout(() => controller.abort(), CRT_SH_TIMEOUT_MS);
+    let retryDelay = 0;
     try {
-      res = await fetcher(`https://crt.sh/?q=${encodeURIComponent(keyword)}&output=json`, {
+      const res = await fetcher(`https://crt.sh/?q=${encodeURIComponent(keyword)}&output=json`, {
         headers: whoisleuthRequestHeaders({ Accept: 'application/json' }),
         signal,
       }, 0);
-    } catch (err) {
-      dependencies.signal?.throwIfAborted();
-      if (!(err instanceof Error) || err.name !== 'AbortError') throw err;
-      if (attempt < MAX_TIMEOUT_RETRIES) return fetchCrtSh(keyword, attempt + 1, dependencies);
-      throw new Error(
-        `crt.sh took too long to respond (>${CRT_SH_TIMEOUT_MS / 1000}s per attempt, ${attempt + 1} attempts) - ` +
-          "it can be slow for broad search terms or under heavy load; try a narrower keyword or try again shortly."
-      );
-    }
-
-    if (!res.ok) {
-      // Not reading this body - release it explicitly instead of leaving an
-      // unconsumed stream (and the connection it's tied to) open until
-      // undici's own idle-timeout eventually notices.
-      await res.body?.cancel().catch(() => {});
-      if (RETRYABLE_STATUSES.has(res.status) && attempt < MAX_RETRIES) {
-        await wait(RETRY_DELAY_MS * (attempt + 1), dependencies.signal);
-        dependencies.signal?.throwIfAborted();
-        return fetchCrtSh(keyword, attempt + 1, dependencies);
+      if (!res.ok) {
+        await res.body?.cancel().catch(() => {});
+        if (RETRYABLE_STATUSES.has(res.status) && attempt < MAX_RETRIES) {
+          retryDelay = RETRY_DELAY_MS * (attempt + 1);
+        } else {
+          throw new CtCollectionError(RETRYABLE_STATUSES.has(res.status) || res.status === 429 ? 'CT_OVERLOADED' : 'CT_UPSTREAM_ERROR');
+        }
+      } else {
+        let text: string;
+        try {
+          const body = await readTextCapped(res, CRT_SH_MAX_BYTES, { fatalUtf8: true });
+          signal.throwIfAborted();
+          if (body.truncated) throw new CtCollectionError('CT_QUERY_TOO_BROAD');
+          text = body.text;
+        } catch (error) {
+          // Preserve transport/deadline failures for the attempt retry below.
+          if (error instanceof TypeError && !signal.aborted) {
+            throw new CtCollectionError('CT_INVALID_RESPONSE');
+          }
+          throw error;
+        }
+        let data: unknown;
+        try { data = JSON.parse(text); } catch { throw new CtCollectionError('CT_INVALID_RESPONSE'); }
+        if (!Array.isArray(data)) throw new CtCollectionError('CT_INVALID_RESPONSE');
+        if (data.length > MAX_CT_ROWS) throw new CtCollectionError('CT_QUERY_TOO_BROAD');
+        return data as CtRow[];
       }
-      throw new Error(
-        RETRYABLE_STATUSES.has(res.status)
-          ? `crt.sh is temporarily overloaded (${res.status} after ${attempt + 1} attempts) - it's a free public service that intermittently struggles under load; try again in a moment.`
-          : `crt.sh returned ${res.status}`
-      );
+    } catch (error) {
+      dependencies.signal?.throwIfAborted();
+      if (!controller.signal.aborted && (!(error instanceof Error) || error.name !== 'AbortError')) throw error;
+      if (attempt >= MAX_TIMEOUT_RETRIES) throw new CtCollectionError('CT_TIMEOUT');
+    } finally {
+      // End this attempt before delay/retry: body reads share the same deadline
+      // as headers, and earlier timers cannot fire during a later attempt.
+      clearTimeout(timeout);
     }
-
-    const { text, truncated } = await readTextCapped(res, CRT_SH_MAX_BYTES, { fatalUtf8: true });
-    signal.throwIfAborted();
-    if (truncated) {
-      throw new Error(
-        `crt.sh returned more than ${CRT_SH_MAX_BYTES / (1024 * 1024)}MB of results for "${keyword}" - try a narrower/more specific keyword.`
-      );
-    }
-    const data: unknown = JSON.parse(text);
-    if (!Array.isArray(data)) {
-      throw new Error('crt.sh returned an unexpected response format (expected a JSON array).');
-    }
-    if (data.length > MAX_CT_ROWS) {
-      throw new Error(
-        `crt.sh returned too many rows (${data.length}) for "${keyword}" - try a narrower keyword.`
-      );
-    }
-    return data as CtRow[];
-  } finally {
-    clearTimeout(timeout);
+    if (retryDelay) await wait(retryDelay, dependencies.signal);
   }
+  throw new CtCollectionError('CT_UPSTREAM_ERROR');
 }
 
 // ---------------------------------------------------------------------------
@@ -563,7 +580,7 @@ async function searchCertificateTransparency(keyword: unknown, dependencies: CtD
     };
   }
 
-  const data = await fetchCrtSh(trimmed, 0, dependencies);
+  const data = await fetchCrtSh(trimmed, dependencies);
   const summary = summarizeCtResults(data);
   return {
     certCount: data.length,

@@ -224,10 +224,12 @@ async function resolveDomainRegistration(domain: string, options: RegistrationOp
       if (Object.keys(record).length) {
         rdapServer = recordRdapServer;
         if (upstreamStatus === 404) {
+          const cleartext = record.transportSecurity === 'http'
+            || (recordRdapServer !== null && /^http:\/\//iu.test(recordRdapServer));
           return assessment({
             state: 'available',
-            confidence: 'high',
-            detail: 'The registry\'s RDAP service has no record for this domain.',
+            confidence: cleartext ? 'medium' : 'high',
+            detail: `The registry's RDAP service has no record for this domain.${cleartext ? ' This answer arrived over unencrypted HTTP, so its transport was not authenticated.' : ''}`,
             source: 'rdap',
             rdapServer: recordRdapServer,
           });

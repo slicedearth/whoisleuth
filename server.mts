@@ -24,7 +24,7 @@ import {
   PERMANENT_ROUTE_REDIRECTS,
   PRERENDERED_HTML_FILE_OVERRIDES,
 } from './lib/prerendered-routes.mts';
-import { searchCertificateTransparency } from './lib/ct-search.mts';
+import { ctCollectionErrorResponse, searchCertificateTransparency } from './lib/ct-search.mts';
 import { isCtQueryError, normalizeCtQuery } from './packages/analysis/ct-query.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors, normalizeMailProtectionProfile } from './lib/domain-posture.mts';
 import { parseInheritedDnsSelection } from './lib/dns-inheritance-review.mts';
@@ -563,6 +563,9 @@ function registerNetworkApiRoutes(
         if (signal.aborted) return;
         res.json({ keyword: q, ...result });
       } catch (err) {
+        if (signal.aborted) return;
+        const expected = ctCollectionErrorResponse(err);
+        if (expected) return res.status(expected.statusCode).json(expected.body);
         sendUnexpectedApiError(res);
       }
     });

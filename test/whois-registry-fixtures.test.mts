@@ -66,6 +66,14 @@ function escaped(value: string): string {
 }
 
 describe('WHOIS registry compatibility fixtures', () => {
+  test('preserves every parser family across protocol CRLF and LF without mutating the source', () => {
+    for (const fixture of fixtures) {
+      const chain = fixture.chain.map(hop => ({ ...hop, response: hop.response.replace(/\r?\n/g, '\r\n') }));
+      const before = structuredClone(chain);
+      assert.deepEqual(parseWhoisChain(chain), parseWhoisChain(fixture.chain), fixture.name);
+      assert.deepEqual(chain, before);
+    }
+  });
   for (const fixture of fixtures) {
     test(fixture.name, () => {
       const parsed = parseWhoisChain(fixture.chain);

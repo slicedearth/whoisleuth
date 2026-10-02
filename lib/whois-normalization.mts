@@ -24,7 +24,9 @@ export function normalizeWhoisChain(value: unknown): WhoisChain {
       ...(typeof hop.queriedAt === 'string' ? { queriedAt: hop.queriedAt.slice(0, 64) } : {}),
       ...(typeof hop.queryProfile === 'string' ? { queryProfile: hop.queryProfile.slice(0, 80) } : {}),
       ...(typeof hop.responseEncoding === 'string' ? { responseEncoding: hop.responseEncoding.slice(0, 40) } : {}),
-      ...(typeof hop.response === 'string' ? { response: hop.response.slice(0, MAX_WHOIS_BYTES) } : {}),
+      // Parser and authority analysis share protocol line endings, while the
+      // original hop retains its wire text. Lone and embedded controls remain.
+      ...(typeof hop.response === 'string' ? { response: hop.response.slice(0, MAX_WHOIS_BYTES).replace(/\r\n/g, '\n') } : {}),
       ...(typeof hop.error === 'string' ? { error: hop.error.slice(0, 1000) } : {}),
     });
   }

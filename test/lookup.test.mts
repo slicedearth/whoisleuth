@@ -81,6 +81,22 @@ const classifiedDomain: Extract<ClassifiedQuery, { type: 'domain' }> = {
 };
 
 describe('runUnifiedLookup', () => {
+  test('incremental RDAP settlement agrees with enabled unsupported and disabled final diagnostics', async () => {
+    for (const disabled of [false, true]) {
+      let calls = 0;
+      const settlements: Array<{source: string; state: string}> = [];
+      const result = await runFullLookup(classifiedDomain, {
+        featurePolicy: networkFeaturePolicy(disabled ? { WHOISLEUTH_DISABLE_RDAP: '1' } : {}),
+        fetchRdapRecord: async () => { calls++; return null; },
+        buildWhoisChain: async () => [],
+        checkDomainAvailability: async () => ({state: 'unknown', confidence: 'low'}),
+        onSourceSettled: (value: {source: string; state: string}) => settlements.push(value),
+      });
+      assert.equal(calls, disabled ? 0 : 1);
+      assert.equal(result.diagnostics.rdap.status, disabled ? 'disabled' : 'unsupported');
+      assert.equal(settlements.find(row => row.source === 'rdap')?.state, disabled ? 'skipped' : 'unsupported');
+    }
+  });
   test('bounds availability failure detail while preserving the unknown result and failure diagnostic', async () => {
     for (const failure of [new Error(`Collector\n\u0000failed ${'x'.repeat(500)}`), null, { message: '\n\t' }]) {
       const result = await runFullLookup(classifiedDomain, {

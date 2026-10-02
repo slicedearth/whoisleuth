@@ -241,7 +241,9 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     ) => {
       try {
         options.onSourceSettled?.(
-          normalizeLookupSourceSettlement(source, outcome, value, classified.type === 'domain' ? classified.registrableDomain ?? classified.value : undefined),
+          normalizeLookupSourceSettlement(source, outcome, value,
+            classified.type === 'domain' ? classified.registrableDomain ?? classified.value : undefined,
+            source !== 'rdap' || rdapEnabled),
         );
       } catch {
         // Presentation callbacks must never change evidence collection.

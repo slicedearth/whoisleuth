@@ -49,6 +49,15 @@ const FINDING = Object.freeze({
 });
 
 describe('Lookup source progress settlements', () => {
+  test('distinguishes unsupported RDAP from an explicitly disabled request', () => {
+    const unsupported = normalizeLookupSourceSettlement('rdap', 'fulfilled', null);
+    assert.equal(unsupported.state, 'unsupported');
+    assert.equal(unsupported.complete, false);
+    assert.match(unsupported.fragment.limitation ?? '', /could not provide authoritative evidence/u);
+    const disabled = normalizeLookupSourceSettlement('rdap', 'fulfilled', null, undefined, false);
+    assert.equal(disabled.state, 'skipped');
+    assert.equal(disabled.complete, false);
+  });
   test('labels preserve source authority and distinguish archived intelligence from current collection', () => {
     assert.match(LOOKUP_SOURCE_LABELS.rdap, /registry/iu);
     assert.match(LOOKUP_SOURCE_LABELS.registrar_rdap, /registrar/iu);

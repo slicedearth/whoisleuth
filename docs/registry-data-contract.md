@@ -202,7 +202,9 @@ reachability, selected-authority NS and A/AAAA/CAA/MX consistency, observed in-b
 and the internal consistency of registry DNSSEC fields. Refused or
 not-authoritative responses, unreachable authorities, missing observations,
 and source truncation remain distinct. A direct failure is inconclusive and
-does not establish record absence. The DNSSEC finding is not cryptographic
+does not establish record absence. Omitted optional RDAP address fields leave
+glue unknown; they do not prove that parent-zone glue is missing. The DNSSEC
+finding is not cryptographic
 chain validation. Delegation health does not decide registration availability,
 ownership, control, intent, safety, or maliciousness, and it is omitted from
 Fast and compact Bulk collection.
@@ -505,6 +507,12 @@ skipped values cannot erase or contradict an earlier complete deep snapshot.
 
 ## Normalised RDAP data
 
+An object-bound HTTP 404 is a negative answer even without a JSON explanation
+([RFC 7480 §5.3](https://www.rfc-editor.org/rfc/rfc7480#section-5.3)). Existing
+response-byte, encoding and final-object checks still apply. Cleartext HTTP
+answers remain usable but cannot receive high-confidence availability: the
+transport does not authenticate the response.
+
 All supported RDAP object types share these bounded fields:
 
 - `objectClassName`, `language`, `port43`, and `parentHandle`.
@@ -618,6 +626,8 @@ RDAP or WHOIS bodies or expanded contacts.
 ## Normalised WHOIS data
 
 WHOIS starts at the IANA root and follows a bounded registry referral chain.
+Parsing and authority checks accept both LF and protocol CRLF line endings;
+retained response text is unchanged, and embedded controls remain rejected.
 One chain shares a 25-second deadline; each hop has a 12-second DNS/connect/body
 ceiling, tries at most three validated public addresses, and caps its response
 at 200,000 bytes.

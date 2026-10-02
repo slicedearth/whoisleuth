@@ -7,6 +7,7 @@ import { stat } from 'node:fs/promises';
 import { recordValue, requiredValue, stringValue } from './value-assertions.mts';
 import { deferred } from './deferred.mts';
 import type { NetworkRouteServices } from '../server.mts';
+import { CtCollectionError } from '../lib/ct-search.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
@@ -57,6 +58,8 @@ const fixtureServices = {
   },
   searchCertificateTransparency: async (query: unknown) => {
     serviceFailure(query);
+    if (query === 'timeout.test') throw new CtCollectionError('CT_TIMEOUT');
+    if (query === 'broad.test') throw new CtCollectionError('CT_QUERY_TOO_BROAD');
     serviceCalls.push(['ct-search', query]);
     return { fixtureCt: true };
   },
@@ -132,6 +135,18 @@ test('non-API errors remain bounded without production mode and preserve range s
     assert.equal(cause, error); forwarded = true;
   });
   assert.equal(forwarded, true);
+});
+
+test('expected certificate-search failures retain actionable bounded HTTP responses', async () => {
+  const cookie = buildSessionCookie(createSessionToken(), { secure: false }).split(';')[0]!;
+  for (const [query, status, code] of [['timeout.test', 504, 'CT_TIMEOUT'], ['broad.test', 422, 'CT_QUERY_TOO_BROAD']] as const) {
+    const response = await fetch(`${fixtureOrigin}/api/ct-search?q=${query}`, { headers: { cookie, 'sec-fetch-site': 'same-origin' } });
+    assert.equal(response.status, status);
+    const result = await response.json();
+    assert.equal(result.errorCode, code);
+    assert.match(result.error, /narrower keyword/u);
+    assert.doesNotMatch(result.error, /\.test|private/u);
+  }
 });
 
 async function expectSanitizedJson(response: Response, statusCode: number, expectedBody: unknown) {

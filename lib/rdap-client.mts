@@ -98,24 +98,28 @@ export async function fetchRdapFromBasesWithParser<const T extends string>(
         continue;
       }
 
-      let data: unknown;
+      let data: unknown = null;
       try {
         data = JSON.parse(upstream.text);
       } catch {
-        attempts.push(
-          rdapAttempt(selectedEndpoint, 'invalid_json', {
-            status: upstream.status,
-            detail: 'The endpoint returned invalid JSON.',
-          }),
-        );
-        continue;
+        // RFC 7480 section 5.3 makes the explanatory body optional for a
+        // negative answer. URL binding and transport/body bounds still apply.
+        if (upstream.status !== 404) {
+          attempts.push(
+            rdapAttempt(selectedEndpoint, 'invalid_json', {
+              status: upstream.status,
+              detail: 'The endpoint returned invalid JSON.',
+            }),
+          );
+          continue;
+        }
       }
 
       if (upstream.status === 404) {
         attempts.push(
           rdapAttempt(selectedEndpoint, 'not_found', {
             status: upstream.status,
-            detail: 'The authoritative endpoint reported no matching object.',
+            detail: `The authoritative endpoint reported no matching object.${data === null ? ' No usable JSON explanation was supplied.' : ''}`,
             selected: true,
           }),
         );

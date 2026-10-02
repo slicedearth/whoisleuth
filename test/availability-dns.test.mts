@@ -4,6 +4,25 @@ import { checkDnsDelegation, checkDomainAvailability, isPrivacyProtected } from 
 import { recordValue, requiredValue, stringValue } from './value-assertions.mts';
 import { promises as dns } from 'node:dns';
 import { deferred } from './deferred.mts';
+import { fetchRdapFromBases } from '../lib/rdap.mts';
+
+test('RDAP absence confidence follows the deciding endpoint transport, including redirected failover', async () => {
+  for (const scheme of ['http', 'https']) {
+    let requests = 0;
+    const rdapRecord = await fetchRdapFromBases('domain', 'example.test', [
+      'https://first.example.test', 'https://second.example.test',
+    ], async () => ++requests === 1
+      ? { status: 503, ok: false, text: '' }
+      : { status: 404, ok: false, text: '', finalUrl: `${scheme}://final.example.test/domain/example.test` });
+    const result = await checkDomainAvailability('example.test', { fast: true, rdapRecord,
+      resolveNs: async () => { throw new Error('Unexpected DNS request'); } });
+    assert.equal(requests, 2);
+    assert.equal(result.state, 'available');
+    assert.equal(result.confidence, scheme === 'http' ? 'medium' : 'high');
+    if (scheme === 'http') assert.match(result.detail, /unencrypted HTTP.*not authenticated/u);
+    else assert.doesNotMatch(result.detail, /unencrypted/u);
+  }
+});
 
 test('cancellation interrupts a private DNS resolver without becoming an absence', async (context) => {
   const started = deferred<void>();

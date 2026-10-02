@@ -95,9 +95,10 @@ function normalizedState(
   outcome: 'fulfilled' | 'rejected',
   value: unknown,
   requestedDomain?: string,
+  requested = true,
 ): LookupProgressState {
   if (outcome === 'rejected') return 'error';
-  if (value === null || value === undefined) return 'skipped';
+  if (value === null || value === undefined) return source === 'rdap' && requested ? 'unsupported' : 'skipped';
 
   if (source === 'rdap') {
     const rdap = record(value);
@@ -136,8 +137,9 @@ function normalizeLookupSourceSettlement(
   outcome: 'fulfilled' | 'rejected',
   value: unknown,
   requestedDomain?: string,
+  requested = true,
 ): LookupSourceSettlement {
-  const state = normalizedState(source, outcome, value, requestedDomain);
+  const state = normalizedState(source, outcome, value, requestedDomain, requested);
   const sourceRecord = record(value);
   const threatObservation = THREAT_INTELLIGENCE_SOURCES.has(source)
     ? record(sourceRecord.observation)

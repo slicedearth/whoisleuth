@@ -1,4 +1,4 @@
-import { searchCertificateTransparency } from '../../lib/ct-search.mts';
+import { ctCollectionErrorResponse, searchCertificateTransparency } from '../../lib/ct-search.mts';
 import { isCtQueryError, normalizeCtQuery } from '../../packages/analysis/ct-query.mts';
 import { operationBudgetTargetFor } from '../../lib/operation-budget.mts';
 import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
@@ -26,8 +26,14 @@ async function handleCtSearch(
   if (!q) return json(400, { error: 'Missing query parameter "q"', errorCode: 'MISSING_QUERY' });
 
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('certificate_transparency'), async () => {
-    const result = await dependencies.searchCertificateTransparency(q);
-    return json(200, { keyword: q, ...result });
+    try {
+      const result = await dependencies.searchCertificateTransparency(q);
+      return json(200, { keyword: q, ...result });
+    } catch (error) {
+      const expected = ctCollectionErrorResponse(error);
+      if (expected) return json(expected.statusCode, expected.body);
+      throw error;
+    }
   });
 }
 
