@@ -3,6 +3,7 @@ import { isPlaywrightFunctionalSpec } from './playwright-execution-contract.mts'
 import { CAPABILITY_DOCUMENT_PATH } from './capability-document-contract.mts';
 import { CLI_PACKAGE_SUPPORT_FILES } from './cli-package-contract.mts';
 import { isOptionalEditorConfiguration } from './maintainer-tool-helpers.mts';
+import { THIRD_PARTY_NOTICE_PATH } from './third-party-notices.mts';
 
 export type SpecialisedCheck =
   | 'architecture'
@@ -733,7 +734,7 @@ export function createVerificationRules(
       area: 'maintained public documentation',
       priority: 42,
       matches: (value: string) =>
-        (/^[^/]+\.md$/u.test(value) && value !== 'THIRD_PARTY_NOTICES.md') ||
+        /^[^/]+\.md$/u.test(value) ||
         value.startsWith('docs/') ||
         ((value.startsWith('packages/') || value.startsWith('.github/')) && value.endsWith('.md')),
       focusedUnit: unit(
@@ -785,11 +786,13 @@ export function createVerificationRules(
         [
           'package.json',
           'package-lock.json',
-          'THIRD_PARTY_NOTICES.md',
+          'NOTICE',
+          'LICENSE',
+          THIRD_PARTY_NOTICE_PATH,
           '.nvmrc',
           'playwright.config.ts',
           'tsconfig.json',
-        ].includes(value),
+        ].includes(value) || value.startsWith('LICENSES/'),
       focusedUnit: unit(
         'test/release-version-check.test.mts',
         'test/case-portability-lifecycle.test.mts',

@@ -45,6 +45,7 @@ import {
   dependencyAnalysisFailure,
   importedTestConsumers,
   leafComponentContracts,
+  readVerificationSourceInventory,
 } from '../tools/verification-ownership.mts';
 
 function rawProfile(): Record<string, unknown> {
@@ -392,7 +393,8 @@ describe('verification architecture contracts', () => {
     assert.ok(plan.focusedBrowserChecks.every(isPlaywrightFunctionalSpec));
 
     const closure = checkVerificationOwnershipMap();
-    assert.equal(closure.assignedFiles, closure.maintainedFiles);
+    assert.equal(closure.assignedFiles + closure.conservativeFallbackPaths.length, closure.maintainedFiles);
+    assert.equal(closure.maintainedFiles, readVerificationSourceInventory().length);
     assert.ok(closure.schemaFamilies > 0 && closure.capabilities > 0 && closure.cliOperations > 0);
     assert.ok(closure.privacyProfiles > 0 && closure.privacyConsumerFlows > 0);
     assert.ok(closure.browserRequiredSupportPaths > 0);
@@ -400,7 +402,17 @@ describe('verification architecture contracts', () => {
     assert.throws(() => buildVerificationOwnershipPlan(['lib/helper;touch.mts']), /repository-relative/u);
     assert.throws(() => buildVerificationOwnershipPlan(['lib/$(id).mts']), /repository-relative/u);
     assert.throws(() => buildVerificationOwnershipPlan(['lib/safe-fetch.mts', 'lib/safe-fetch.mts']), /must not repeat/u);
-    assert.throws(() => buildVerificationOwnershipPlan(['unowned-root.cfg']), /Unknown maintained ownership area/u);
+    const unknown = buildVerificationOwnershipPlan(['unowned-root.cfg']);
+    assert.deepEqual(unknown.conservativeFallbackPaths, ['unowned-root.cfg']);
+    assert.deepEqual(unknown.focusedUnitChecks, readVerificationTestInventory().filter(file => file.startsWith('test/')).sort());
+    assert.deepEqual(unknown.focusedBrowserChecks, readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
+    assert.match(unknown.assignments[0]!.selectionNotes.join(' '), /No unique classified owner/u);
+    const fallbackCommands = buildFocusedVerificationExecution(unknown).commands.map(command => command.id);
+    assert.ok(fallbackCommands.includes('check') && fallbackCommands.includes('typecheck'));
+    assert.ok(fallbackCommands.includes('schema:inventory') && fallbackCommands.includes('privacy:check'));
+    const notices = buildVerificationOwnershipPlan(['frontend/static/third-party-notices.txt']);
+    assert.ok(notices.mandatorySpecialisedChecks.includes('licences'));
+    assert.deepEqual(notices.conservativeFallbackPaths, []);
     assert.throws(
       () => assertDeclaredVerificationTest('test/absent.test.mts', 'unit'),
       /does not exist/u,
@@ -413,6 +425,36 @@ describe('verification architecture contracts', () => {
       () => assertDeclaredVerificationTest('e2e/accessibility.setup.ts', 'browser'),
       /invalid test-file identity/u,
     );
+  });
+
+  test('source inventory follows Git across root files, assets, additions, deletions and ignored output', () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'verification-source-inventory-'));
+    const git = (...args: string[]) => {
+      const child = spawnSync('git', args, { cwd: directory, encoding: 'utf8' });
+      assert.ifError(child.error);
+      assert.equal(child.status, 0, child.stderr);
+    };
+    try {
+      git('init', '--quiet');
+      mkdirSync(path.join(directory, 'frontend/static'), { recursive: true });
+      mkdirSync(path.join(directory, 'fixtures'), { recursive: true });
+      writeFileSync(path.join(directory, '.gitignore'), 'frontend/build/\nlocal-only.txt\n');
+      const tracked = ['.gitignore', 'server.mts', 'netlify.toml', 'fixtures/data.json', 'frontend/static/icon.png', 'deleted.txt'];
+      for (const file of tracked.filter(file => file !== '.gitignore')) writeFileSync(path.join(directory, file), 'fixture');
+      git('add', '--', ...tracked);
+      rmSync(path.join(directory, 'deleted.txt'));
+      writeFileSync(path.join(directory, 'new-module.mts'), 'export const value = 1;');
+      writeFileSync(path.join(directory, 'local-only.txt'), 'not source');
+      mkdirSync(path.join(directory, 'frontend/build'), { recursive: true });
+      writeFileSync(path.join(directory, 'frontend/build/index.html'), 'generated');
+      assert.deepEqual(readVerificationSourceInventory(directory), [...tracked, 'new-module.mts'].sort());
+      const actual = readVerificationSourceInventory();
+      for (const file of ['server.mts', 'netlify.toml', 'fixtures/rdap-registry-fixtures.mts', 'frontend/static/favicon.ico']) {
+        assert.ok(actual.includes(file), file);
+      }
+      assert.ok(actual.every(file => !file.startsWith('frontend/build/') && !file.startsWith('frontend/.svelte-kit/')));
+      assert.throws(() => readVerificationSourceInventory(path.join(directory, 'absent')));
+    } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
   test('selects derived coverage for each structural change owner', () => {

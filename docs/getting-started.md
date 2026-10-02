@@ -120,7 +120,10 @@ changes select offline document checks; documents included in the CLI also
 select package-document checks. Unit selection retains resolved runtime consumers,
 tests reachable from unresolved local imports, and missing test roots. No resolved
 consumer or an unavailable dependency graph selects the full unit inventory.
-Browser selection remains deliberately conservative.
+Browser selection remains deliberately conservative. The inventory includes all
+tracked files and unignored additions, excluding ignored build output and private
+files. A missing or ambiguous owner is reported explicitly and selects complete
+unit and functional browser inventories, compiler checks and specialised checks.
 
 Complete required hosted checks must pass against the current merge candidate
 before merge or deployment. A routine contribution does not require a second
@@ -302,7 +305,7 @@ The less common commands below each have one narrow purpose:
 | `npm run schema:inventory` | Verify current schema ownership, compatibility and evidence-storage baselines. |
 | `npm run capabilities:check` | Verify generated capability and public-product projections. |
 | `npm run privacy:check` | Verify the generated privacy/data-flow catalogue. |
-| `npm run verification:ownership:check` | Ensure every tracked verification surface has one owner. |
+| `npm run verification:ownership:check` | Account for every tracked file and unignored addition; report classified owners and conservative fallbacks separately. |
 | `npm run verification:timing:check` | Check the retained timing profile without accepting a new candidate. |
 | `npm run test:duration-health -- --report=/absolute/path` | Compare medians from exactly three complete unit profiles (repeat `--report` three times) without rewriting the retained timing baseline. |
 | `npm run frontend:loading-report` | Measure every route and check public/workspace isolation. Use `-- --json` to save measurements and `-- --compare=report.json` to show changes against an earlier report. |

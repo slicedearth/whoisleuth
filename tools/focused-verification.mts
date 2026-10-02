@@ -214,14 +214,15 @@ export function buildFocusedVerificationExecution(
   // project, even when those consumers need no behavioural test rerun.
   const sharedPaths = typedPaths.filter(value => !value.startsWith('frontend/src/')
     && !value.startsWith('test/') && !value.startsWith('e2e/') && value !== 'playwright.config.ts');
-  const sharedSourceChanged = sharedPaths.length > 0;
+  const fullCompilerPaths = [...sharedPaths, ...plan.conservativeFallbackPaths];
+  const sharedSourceChanged = fullCompilerPaths.length > 0;
   const frontendPaths = typedPaths.filter((value) => value.startsWith('frontend/src/'));
-  const frontendChanged = frontendPaths.length > 0;
+  const frontendChanged = frontendPaths.length > 0 || plan.conservativeFallbackPaths.length > 0;
   // Svelte check already checks the frontend TypeScript project. Do not also
   // typecheck the server, CLI, test and browser-test projects for a UI edit.
-  if (frontendChanged) commands.push(npmCommand('check', frontendPaths));
+  if (frontendChanged) commands.push(npmCommand('check', [...frontendPaths, ...plan.conservativeFallbackPaths]));
   const compilerProjects = new Map<string, string[]>();
-  if (sharedSourceChanged) commands.push(npmCommand('typecheck', sharedPaths));
+  if (sharedSourceChanged) commands.push(npmCommand('typecheck', fullCompilerPaths));
   for (const file of typedPaths) {
     if (sharedSourceChanged) break;
     if (file.startsWith('frontend/src/')) continue;

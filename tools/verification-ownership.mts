@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Buffer } from 'node:buffer';
+import { execFileSync } from 'node:child_process';
 import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,6 +39,7 @@ export type VerificationOwnershipAssignment = Readonly<{
 export type VerificationOwnershipPlan = Readonly<{
   mapVersion: typeof VERIFICATION_OWNERSHIP_MAP_VERSION;
   changedPaths: readonly string[];
+  conservativeFallbackPaths: readonly string[];
   assignments: readonly VerificationOwnershipAssignment[];
   ownershipAreas: readonly string[];
   impactAreas: readonly string[];
@@ -66,6 +68,14 @@ function functionalBrowserInventory(): readonly string[] {
 const FUNCTIONAL_BROWSER_INVENTORY = functionalBrowserInventory();
 
 const RULES = createVerificationRules(REPOSITORY_ROOT, FUNCTIONAL_BROWSER_INVENTORY);
+const CONSERVATIVE_FALLBACK: VerificationRule = Object.freeze({
+  id: 'unclassified', area: 'unclassified surface: conservative verification', priority: -1,
+  matches: () => true,
+  focusedUnit: Object.freeze(readVerificationTestInventory().filter(file => file.startsWith('test/'))),
+  focusedBrowser: FUNCTIONAL_BROWSER_INVENTORY,
+  specialised: Object.freeze([...new Set(RULES.flatMap(rule => rule.specialised))].sort()),
+  browserRequired: true,
+});
 export function browserSpecsForPrefixes(prefixes: readonly string[], inventory = FUNCTIONAL_BROWSER_INVENTORY): readonly string[] {
   return selectBrowserSpecs(prefixes, inventory);
 }
@@ -154,10 +164,10 @@ function matchingRules(changedPath: string): readonly VerificationRule[] {
 
 function ownershipRule(changedPath: string, matches: readonly VerificationRule[] = RULES.filter((rule) => rule.matches(changedPath))): VerificationRule {
   const owners = matches.filter((rule) => !rule.impactOnly);
-  if (!owners.length) throw new TypeError(`Unknown maintained ownership area for ${changedPath}.`);
+  if (!owners.length) return CONSERVATIVE_FALLBACK;
   const priority = Math.max(...owners.map((rule) => rule.priority));
   const selected = owners.filter((rule) => rule.priority === priority);
-  if (selected.length !== 1) throw new TypeError(`Ambiguous verification ownership for ${changedPath}.`);
+  if (selected.length !== 1) return CONSERVATIVE_FALLBACK;
   return selected[0]!;
 }
 
@@ -221,7 +231,9 @@ export function buildVerificationOwnershipPlan(
       changedPath,
       ownershipArea: owner.area,
       impactAreas: uniqueSorted(impacts.map((rule) => rule.area)),
-      selectionNotes: Object.freeze(unexplainedInterface
+      selectionNotes: Object.freeze(owner === CONSERVATIVE_FALLBACK
+        ? ['No unique classified owner: select complete unit and functional browser inventories, compiler checks and all specialised checks.']
+        : unexplainedInterface
         ? [unclassifiedRoutes.length
           ? `Full browser coverage: no classified route owner for ${unclassifiedRoutes.join(', ')}.`
           : 'Full browser coverage: no consuming route could be established for this interface.']
@@ -236,6 +248,7 @@ export function buildVerificationOwnershipPlan(
   return Object.freeze({
     mapVersion: VERIFICATION_OWNERSHIP_MAP_VERSION,
     changedPaths: Object.freeze(changedPaths),
+    conservativeFallbackPaths: Object.freeze(changedPaths.filter(file => ownershipRule(file) === CONSERVATIVE_FALLBACK)),
     assignments: Object.freeze(assignments),
     ownershipAreas: uniqueSorted(assignments.map((item) => item.ownershipArea)),
     impactAreas: uniqueSorted(assignments.flatMap((item) => item.impactAreas)),
@@ -294,7 +307,7 @@ export function dependencyAnalysisFailure(stage: string, error: unknown): string
 export async function createVerificationOwnershipPlan(rawPaths: readonly string[]): Promise<VerificationOwnershipPlan> {
   const initial = buildVerificationOwnershipPlan(rawPaths);
   const importedPaths = initial.changedPaths.filter((file) => /\.(?:[cm]?[jt]s|json|svelte)$/u.test(file)
-    && ownershipRule(file).id !== 'editor-configuration'
+    && !['editor-configuration', CONSERVATIVE_FALLBACK.id].includes(ownershipRule(file).id)
     && !file.startsWith('e2e/') && !/^test\/[^/]+\.test\.mts$/u.test(file));
   if (!importedPaths.length) return initial;
   const inventory = readVerificationTestInventory().filter((file) => file.startsWith('test/'));
@@ -382,27 +395,19 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
   return Object.freeze({ ...plan, interpretation: Object.freeze([...plan.interpretation, explanation]) });
 }
 
-function maintainedInventory(): readonly string[] {
-  const roots = ['packages', 'lib', 'cli', 'bin', 'netlify/functions', 'frontend/src', 'tools', 'test', 'e2e', 'docs', '.github/workflows'];
-  const files: string[] = [
-    '.nvmrc', 'README.md', 'PRIVACY.md', 'SECURITY.md', 'package-lock.json',
-    'package.json', 'playwright.config.ts', 'tsconfig.json',
-  ];
-  for (const entry of readdirSync(path.join(REPOSITORY_ROOT, 'frontend'), { withFileTypes: true })) {
-    if (entry.isFile()) files.push(`frontend/${entry.name}`);
-  }
-  const visit = (relative: string): void => {
-    for (const entry of readdirSync(path.join(REPOSITORY_ROOT, relative), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const child = `${relative}/${entry.name}`;
-      if (entry.isDirectory()) visit(child);
-      else if (entry.isFile()) {
-        files.push(child);
-        if (files.length > MAX_VERIFICATION_INVENTORY_FILES) throw new TypeError('Maintained ownership inventory exceeds its file bound.');
-      }
-    }
-  };
-  for (const root of roots) visit(root);
-  return Object.freeze(files.sort());
+/** Include every tracked identity, even deleted files, plus unignored additions.
+ * Ignored build output and private local files are never source inputs. */
+export function readVerificationSourceInventory(repositoryRoot = REPOSITORY_ROOT): readonly string[] {
+  const bytes = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--'], {
+    cwd: repositoryRoot, timeout: 10_000,
+    maxBuffer: MAX_VERIFICATION_INVENTORY_FILES * (MAX_VERIFICATION_CHANGED_PATH_LENGTH + 1),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  if (!text.endsWith('\0')) throw new TypeError('Verification source inventory is empty or incomplete.');
+  const files = [...new Set(text.slice(0, -1).split('\0'))];
+  if (files.length > MAX_VERIFICATION_INVENTORY_FILES) throw new TypeError('Verification source inventory exceeds its file bound.');
+  return Object.freeze(files.map(normaliseChangedPath).sort());
 }
 
 function readDependencyRuleNames(): readonly string[] {
@@ -425,8 +430,9 @@ function readDependencyRuleNames(): readonly string[] {
 
 export function checkVerificationOwnershipMap() {
   validateRules();
-  const inventory = maintainedInventory();
+  const inventory = readVerificationSourceInventory();
   const assignments = inventory.map((file) => ownershipRule(file));
+  const fallbackPaths = inventory.filter((file, index) => assignments[index] === CONSERVATIVE_FALLBACK);
   for (const rule of RULES.filter((candidate) => candidate.impactOnly)) {
     if (!inventory.some((file) => rule.matches(file))) {
       throw new TypeError(`Verification impact rule ${rule.id} does not match the maintained inventory.`);
@@ -448,7 +454,11 @@ export function checkVerificationOwnershipMap() {
     family.owner,
     ...('metadata' in family ? family.metadata.hooks.map((hook) => hook.module) : []),
   ]);
-  for (const owner of schemaOwners) ownershipRule(normaliseChangedPath(owner));
+  for (const owner of schemaOwners) {
+    if (!inventory.includes(normaliseChangedPath(owner)) || ownershipRule(owner) === CONSERVATIVE_FALLBACK) {
+      throw new TypeError(`Schema owner ${owner} must have a present, classified source path.`);
+    }
+  }
   if (CAPABILITY_MANIFEST.capabilities.length < 1 || CAPABILITY_MANIFEST.cliOperations.length < 1
     || new Set(CAPABILITY_MANIFEST.capabilities.map((item) => item.id)).size !== CAPABILITY_MANIFEST.capabilities.length
     || new Set(CAPABILITY_MANIFEST.cliOperations.map((item) => item.command)).size !== CAPABILITY_MANIFEST.cliOperations.length) {
@@ -469,7 +479,8 @@ export function checkVerificationOwnershipMap() {
   return Object.freeze({
     mapVersion: VERIFICATION_OWNERSHIP_MAP_VERSION,
     maintainedFiles: inventory.length,
-    assignedFiles: assignments.length,
+    assignedFiles: assignments.length - fallbackPaths.length,
+    conservativeFallbackPaths: Object.freeze(fallbackPaths),
     ownershipAreas: new Set(assignments.map((item) => item.area)).size,
     impactAreas: new Set(inventory.flatMap((file) => matchingRules(file).map((rule) => rule.area))).size,
     schemaFamilies: SCHEMA_LIFECYCLE_REGISTRY.length,
@@ -487,7 +498,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   try {
     if (args.length === 1 && args[0] === '--check') {
       const result = checkVerificationOwnershipMap();
-      process.stdout.write(`Verification ownership map v${result.mapVersion}: ${result.assignedFiles}/${result.maintainedFiles} files assigned across ${result.ownershipAreas} owner and ${result.impactAreas} impact areas.\n`);
+      process.stdout.write(`Verification ownership map v${result.mapVersion}: ${result.maintainedFiles} Git-visible files; ${result.assignedFiles} classified, ${result.conservativeFallbackPaths.length} explicitly covered by conservative fallback, across ${result.ownershipAreas} owner and ${result.impactAreas} impact areas.\n`);
       process.stdout.write(`Canonical closure: ${result.schemaFamilies} schema families, ${result.schemaOwnerPaths} owner paths, ${result.capabilities} capabilities, ${result.cliOperations} CLI operations, ${result.privacyProfiles} privacy profiles, ${result.privacyConsumerFlows} privacy consumer flows, ${result.blockingDependencyRules} blocking dependency rules.\n`);
       return 0;
     }
