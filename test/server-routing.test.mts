@@ -9,6 +9,7 @@ import express from 'express';
 
 import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from '../lib/security-headers.mts';
 import { checkPrerenderedHtmlRateLimit, getClientIp, PRERENDERED_HTML_RATE_LIMIT } from '../lib/rate-limit.mts';
+import { csr as missingPageClientRouting } from '../frontend/src/routes/404/+page.ts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
@@ -124,6 +125,7 @@ describe('canonical route redirects', () => {
   });
 
   test('serves only the fixed missing-page artefact and retains status with or without a build', async () => {
+    assert.equal(missingPageClientRouting, false, 'Unknown URLs must not activate client routing from the fixed missing-page document');
     const directory = await mkdtemp(join(tmpdir(), 'missing-page-'));
     const filename = join(directory, '404.html');
     await writeFile(filename, '<!doctype html><title>Page not found</title><a href="/">Home</a>');
