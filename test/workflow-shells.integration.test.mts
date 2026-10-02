@@ -32,7 +32,7 @@ const operation = args.shift();
 assert.ok(operation === 'ci' || operation === 'run');
 if (operation === 'run' && args[0] === '--silent') args.shift();
 const command = operation === 'ci' ? 'ci' : args.shift();
-assert.ok(['ci', 'toolchain:check', 'test:properties', 'verification:timing:check', 'sources:health', 'test:profile', 'test:duration-health', 'verification:timing:update-candidate'].includes(command));
+assert.ok(['ci', 'toolchain:check', 'test:properties', 'test:mutation', 'verification:timing:check', 'sources:health', 'test:profile', 'test:duration-health', 'verification:timing:update-candidate'].includes(command));
 const log = process.env.TEST_CALL_LOG;
 const calls = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse) : [];
 const call = { command, args };
@@ -41,7 +41,7 @@ const index = calls.length;
 if (String(index) === process.env.TEST_FAIL_CALL) process.exit(23);
 if (command === 'ci') {
   assert.deepEqual([...args].sort(), ['--audit=false', '--ignore-scripts', '--include=optional']);
-} else if (['toolchain:check', 'test:properties', 'verification:timing:check'].includes(command)) {
+} else if (['toolchain:check', 'test:properties', 'test:mutation', 'verification:timing:check'].includes(command)) {
   assert.deepEqual(args, []);
   if (command === 'test:properties') {
     assert.equal(process.env.WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER, '10');
@@ -74,9 +74,10 @@ if (command === 'ci') {
 
 type HealthStep = { run?: string; uses?: string; if?: string; with?: Record<string, unknown>; env?: Record<string, string> };
 const healthWorkflow = parse(readFileSync(new URL('../.github/workflows/test-health.yml', import.meta.url), 'utf8'));
-const healthSteps = Object.values(healthWorkflow.jobs as Record<string, { steps: HealthStep[] }>).flatMap(job => job.steps);
+const healthJobs = healthWorkflow.jobs as Record<string, { steps: HealthStep[] }>;
+const healthSteps = requiredValue(healthJobs.profile).steps;
 
-const expectedHealthCommands = ['ci', 'toolchain:check', 'test:properties', 'verification:timing:check',
+const expectedHealthCommands = ['ci', 'toolchain:check', 'test:properties', 'test:mutation', 'verification:timing:check',
   'sources:health', 'sources:health', 'test:profile', 'test:profile', 'test:profile',
   'test:duration-health', 'verification:timing:update-candidate'];
 
@@ -153,6 +154,34 @@ function capturedCommands(source: string, failure = false) {
   return { status: result.status, calls: result.stdout.trim().split('\n').filter(Boolean)
     .map(line => JSON.parse(line) as { argv: string[]; multiplier: string; seed: string }) };
 }
+
+test('scheduled cross-browser job executes its own preparation and preserves failure evidence', () => {
+  const steps = requiredValue(healthJobs['cross-browser']).steps;
+  const calls = steps.filter(step => step.run).flatMap(step => {
+    const result = capturedCommands(requiredValue(step.run));
+    assert.equal(result.status, 0);
+    return result.calls.map(call => ({ ...call, step }));
+  });
+  assert.deepEqual(calls.map(call => call.argv), [
+    ['npm', 'ci', '--include=optional', '--ignore-scripts', '--audit=false'],
+    ['npm', 'run', 'verification:ci', '--', '--group=browser-build'],
+    ['npm', 'run', 'test:e2e:critical:install'],
+    ['npm', 'run', 'test:e2e:cross-browser'],
+    ['npm', 'run', 'test:e2e:summary'],
+    ['npm', 'run', 'verification:artifacts', '--', '--cleanup=browser'],
+  ]);
+  for (const call of calls.slice(0, 4)) {
+    assert.equal(call.step.if, undefined);
+    assert.equal(capturedCommands(requiredValue(call.step.run), true).status, 23);
+  }
+  for (const call of calls.slice(4)) assert.equal(call.step.if, 'always()');
+  const upload = requiredValue(steps.find(step => step.uses?.startsWith('actions/upload-artifact@')));
+  assert.equal(upload.if, 'always()');
+  assert.deepEqual(String(upload.with?.path).trim().split(/\s+/u), [
+    'playwright-results.json', 'playwright-report/', 'test-results/',
+  ]);
+  assert.ok(steps.indexOf(upload) < steps.indexOf(calls.at(-1)!.step), 'Evidence must be retained before cleanup');
+});
 
 test('scheduled browser execution preserves its invocation and failure contract, not shell spelling', () => {
   const workflow = parse(readFileSync(new URL('../.github/workflows/e2e-stress.yml', import.meta.url), 'utf8'));
