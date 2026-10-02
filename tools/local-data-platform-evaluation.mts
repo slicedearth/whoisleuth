@@ -152,7 +152,7 @@ export function buildLocalDataPlatformEvaluation(options: Readonly<{ now?: () =>
       recommendedCandidate: 'native_indexeddb',
       rationale: boundedDetail('The verified non-destructive migration now uses the dependency-free IndexedDB provider while retaining collection bounds and explicit rollback copies.'),
       migrationApproved: true,
-      independentFutureWork: Object.freeze(['encryption', 'pwa', 'synchronization']),
+      independentFutureWork: Object.freeze(['pwa', 'synchronization']),
     }),
     limitations: Object.freeze([
       boundedDetail('Declared store budgets are safety ceilings, not a measurement of one user workspace or a browser quota guarantee.'),
@@ -171,7 +171,7 @@ export function formatLocalDataPlatformEvaluation(report: ReturnType<typeof buil
     `Capacity above reference: ${report.current.exceedsReferenceByMiB} MiB`,
     `Decision: ${report.decision.state}`,
     `Candidate: ${recommended?.id || 'none'} (${recommended?.productionDependency ? 'dependency required' : 'no production dependency'})`,
-    'Encryption, PWA support, and synchronisation remain separately gated.',
+    'Encrypted named workspaces are available. PWA support and synchronisation are not provided.',
     'Use --json for the complete versioned report.',
   ].join('\n');
 }

@@ -637,6 +637,10 @@ and any referral after the first registry hop receive the canonical plain
 domain. A suffix-specific, fixture-backed adapter may format only the first
 query sent to the registry that IANA referred; it cannot select the endpoint,
 extend the referral depth, or affect existence authority.
+The current response profile is UTF-8 only, decoded after complete bounded
+receipt so split multibyte characters are preserved. Invalid UTF-8 makes that
+hop unavailable; encodings are not guessed, and independent RDAP evidence is
+unaffected.
 
 `parseWhoisChain` exposes compatibility scalars and normalised structures:
 

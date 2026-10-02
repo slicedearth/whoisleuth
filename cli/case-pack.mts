@@ -532,6 +532,7 @@ export function formatCliCasePack(document: ReturnType<typeof buildCliCasePack>)
     `Cases      ${document.cases.length}`,
     `Reports    ${document.packet.reports.length}`,
     `Digest     ${document.integrity.digestSha256}`,
+    'Included for every audience: domain evidence, Case, pin and decision identifiers, tags, decision summaries and rationale. Review these before sharing.',
     '',
     ...document.packet.redactionManifest.excluded.map((item) => `Excluded: ${item}`),
     '',

@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 14 September 2026.
+Last updated: 2 October 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -253,10 +253,12 @@ Saved settings reviews also retain source times, completeness, the profile
 identifier and a digest of its collection settings. They do not retain raw
 DNS or registry responses.
 
-Public CLI Case packs clear identifiers, actions, observed-effect reviews and
-closure records for the public audience. Trusted and internal Case packs and
-ordinary Case or workspace exports can contain exact investigated hostnames and
-analyst context.
+Public CLI Case packs exclude Brand Profile references, actions, observed-effect
+reviews and closure records. Every audience, including public, retains domain
+evidence, Case, pin and decision identifiers, tags, decision summaries and
+rationale. These fields can contain analyst context; review them before sharing.
+Trusted and internal packs and ordinary Case or workspace exports can contain
+additional analyst records and exact investigated hostnames.
 
 Failed local reads, quota errors, partial collections and unsupported versions
 remain explicit. They do not become empty collections or evidence of absence.

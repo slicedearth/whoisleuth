@@ -21,6 +21,8 @@ import { buildCliCasePack } from '../cli/case-pack.mts';
 import { assertBoundedJsonStructure, parseBoundedJson } from '../packages/analysis/bounded-json.mts';
 import { LOOKUP_EVIDENCE_SCHEMA, LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
 import { BROWSER_LOCAL_COLLECTION_MANIFEST } from '../packages/contracts/browser-local-collection-manifest.mts';
+import { LOCAL_DATA_DATABASE_NAME, LOCAL_DATA_DATABASE_VERSION, LOCAL_DATA_RECORD_STORE,
+  LOCAL_DATA_MANIFEST_STORE, LOCAL_DATA_BINARY_STORE } from '../packages/contracts/browser-local-storage.mts';
 
 export const EVIDENCE_STORAGE_MEASUREMENT_SCHEMA = 'whoisleuth.evidence-storage-measurement';
 export const EVIDENCE_STORAGE_MEASUREMENT_VERSION = 2;
@@ -654,9 +656,9 @@ export async function buildEvidenceStorageMeasurementProfile(
       productionStorageChanged: false,
       liveTargets: false,
       eligibleFields: EVIDENCE_FIELDS,
-      browserDatabase: 'whoisleuth-browser-data-v1',
-      browserDatabaseVersion: 1,
-      browserObjectStores: Object.freeze(['records', 'manifests']),
+      browserDatabase: LOCAL_DATA_DATABASE_NAME,
+      browserDatabaseVersion: LOCAL_DATA_DATABASE_VERSION,
+      browserObjectStores: Object.freeze([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE, LOCAL_DATA_BINARY_STORE]),
       browserCodec: 'json-v1',
       browserCollectionCount: BROWSER_LOCAL_COLLECTION_MANIFEST.length,
     }),
@@ -664,6 +666,7 @@ export async function buildEvidenceStorageMeasurementProfile(
     limitations: Object.freeze([
       'The corpus contains reserved synthetic journeys and frozen current-format fixtures; it does not inspect browser profiles or investigation data.',
       'IndexedDB contract bytes are deterministic JSON projections of stored records and manifests, not an estimate of browser-engine page, key, or B-tree overhead.',
+      'The database descriptor names the current stores; measured JSON projections exclude original binary files and encrypted-record overhead.',
       'Quota ratios compare serialised Case bytes with the application Case ceiling; they are not browser-origin quota estimates.',
       'Portable evidence bytes are measured by rebuilding the same current archive or Case-pack with only evidence history, pins, decisions, and response actions removed.',
       'All scenarios are synthetic; their duplication rates do not establish representative real-world usage.',

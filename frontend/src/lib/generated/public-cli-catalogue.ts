@@ -751,7 +751,7 @@ const SHARED_COMMAND_OPTIONS = [
     "option": "--profile",
     "scope": "command",
     "usage": "--profile \u003cvalue>",
-    "description": "Select the registry fixture capability profile.",
+    "description": "Select a catalogue profile; find its ID with registry-support \u003csuffix> --json.",
     "values": [],
     "repeatable": false,
     "ranges": [],
@@ -2042,11 +2042,12 @@ export const PUBLIC_CLI_CATALOGUE = {
         "dataSent": [
           "normalised_target",
           "registry_query",
-          "whois_query",
           "dns_question",
+          "whois_query",
           "homepage_request",
           "tls_handshake",
-          "public_ip_address"
+          "public_ip_address",
+          "selected_url_request"
         ],
         "recipients": [
           "registry_service",
@@ -2173,8 +2174,8 @@ export const PUBLIC_CLI_CATALOGUE = {
         "dataSent": [
           "normalised_target",
           "registry_query",
-          "whois_query",
           "dns_question",
+          "whois_query",
           "homepage_request",
           "tls_handshake"
         ],
@@ -2556,8 +2557,8 @@ export const PUBLIC_CLI_CATALOGUE = {
         "dataSent": [
           "normalised_target",
           "registry_query",
-          "whois_query",
           "dns_question",
+          "whois_query",
           "homepage_request",
           "tls_handshake"
         ],
@@ -3235,7 +3236,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "group": "utilities",
       "common": false,
       "usage": "whoisleuth registry-scaffold --profile \u003cvalue> --suffix \u003cvalue> --scenario \u003cregistered|not_found|inconclusive>",
-      "example": "whoisleuth registry-scaffold --profile example-profile --suffix test --scenario registered",
+      "example": "whoisleuth registry-scaffold --profile nic-io-colon --suffix ac --scenario registered",
       "boundary": "The output is a sanitised template only. Its command-owned --profile selects fixture capability, --config is rejected, and contributors must not paste live responses or personal registration data into fixtures.",
       "collection": {
         "mode": "offline",
@@ -3453,7 +3454,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "common": true,
       "usage": "whoisleuth verify-artifact [\u003csource>] [--passphrase-file \u003cfile>] [--manifest \u003cfile>] [--manifest-entry \u003cmanifest-entry>] [--package] [--bagit] [--folder \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
       "example": "whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit",
-      "boundary": "Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; ordinary package review also counts original references with matching bytes. Ordinary folders allow only the declared layout; BagIt allows bounded nested payloads and checks SHA-256/SHA-512 manifests without interpreting payloads. Symbolic links are refused. BagIt fetch.txt is never fetched; missing files, mismatches and unsupported algorithms remain explicit. Package digests describe bytes, not filesystem metadata or authenticity. In scripts, use --strict-exit: incomplete verification returns 4. Default exit 0 means the report was produced, not that its checks passed.",
+      "boundary": "Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; ordinary package review also counts original references with matching bytes. Ordinary folders allow only the declared layout; BagIt allows bounded nested payloads and checks SHA-256/SHA-512 manifests without interpreting payloads. Symbolic links are refused. BagIt fetch.txt is never fetched; missing files, mismatches and unsupported algorithms remain explicit. Package digests describe bytes, not filesystem metadata or authenticity. In scripts, use --strict-exit: incomplete verification returns 4. Unencrypted workspace archives always return 4 under --strict-exit because section digests do not cover mutable root metadata; structure-only formats can pass their narrower contract. Default exit 0 means the report was produced, not that its checks passed.",
       "collection": {
         "mode": "offline",
         "scope": "Reads one selected bounded artefact, ZIP or explicit evidence folder and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity."
@@ -4707,7 +4708,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "common": true,
       "usage": "whoisleuth case-pack [\u003csource>] --audience \u003cinternal|trusted|public> --reviewed [--json] [--quiet] [--no-color]",
       "example": "whoisleuth case-pack cases.json --audience trusted --reviewed --json",
-      "boundary": "The command is an offline handoff from the browser Case workflow: it creates a new package, never creates or mutates a durable Case, never mutates the source archive, and requires an explicit review acknowledgement.",
+      "boundary": "The command creates a separate offline package without changing the source or durable Cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, Case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.",
       "collection": {
         "mode": "offline",
         "scope": "Reads one bounded Case export from schemas 15 or 16 or 17 and writes a separate audience-specific Case-pack v2."

@@ -69,7 +69,7 @@ describe('local data platform evaluation', () => {
     assert.equal(report.decision.state, 'native_indexeddb_in_production');
     assert.equal(report.decision.recommendedCandidate, 'native_indexeddb');
     assert.equal(report.decision.migrationApproved, true);
-    assert.deepEqual(report.decision.independentFutureWork, ['encryption', 'pwa', 'synchronization']);
+    assert.deepEqual(report.decision.independentFutureWork, ['pwa', 'synchronization']);
     assert.ok(report.candidates.length <= MAX_LOCAL_DATA_EVALUATION_CANDIDATES);
 
     const native = report.candidates.find((candidate) => candidate.id === 'native_indexeddb');
@@ -124,7 +124,7 @@ describe('local data platform evaluation', () => {
     const output = formatLocalDataPlatformEvaluation(report);
     assert.ok(output.includes(`${DECLARED_BROWSER_STORE_BYTES / 1024 / 1024} MiB across ${BROWSER_LOCAL_COLLECTIONS.length} stores`));
     assert.match(output, /native_indexeddb \(no production dependency\)/);
-    assert.match(output, /Encryption, PWA support, and synchronisation remain separately gated/);
+    assert.match(output, /Encrypted named workspaces are available/);
 
     assert.deepEqual(parseArguments([]), { json: false });
     assert.deepEqual(parseArguments(['--json']), { json: true });

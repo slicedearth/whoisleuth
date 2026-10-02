@@ -412,7 +412,9 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   {
     id: 'public-case-pack',
     clauses: [
-      /Public CLI case packs clear identifiers, actions, observed-effect reviews,? and closure records/iu,
+      /Public CLI Case packs exclude Brand Profile references, actions, observed-effect reviews and closure records/iu,
+      /Every audience, including public, retains domain evidence, Case, pin and decision identifiers, tags, decision summaries and rationale/iu,
+      /review them before sharing/iu,
     ],
   },
   {

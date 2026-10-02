@@ -7,6 +7,7 @@ import {
   buildCliCasePack,
   MAX_CASE_PACK_CASES,
   verifyCliCasePack,
+  formatCliCasePack,
 } from '../cli/case-pack.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
@@ -48,6 +49,20 @@ function resign<T extends Record<string, unknown>>(value: T): T {
 }
 
 describe('CLI case pack', () => {
+  test('public sharing discloses preserved analyst reasoning and identifiers without weakening redaction', () => {
+    const pinned = createCase({ domain: 'case.example', tags: ['internal-label'], evidencePin: { label: 'Observed page', value: 'Source observation', observedAt: NOW } }, NOW);
+    const record = updateCase([pinned], pinned.id, { decision: {
+      summary: 'Review externally', rationale: 'Analyst-authored reasoning', evidencePinIds: [pinned.evidencePins[0]!.id],
+    } }, NOW).record;
+    const pack = buildCliCasePack(JSON.stringify({ version: CASE_SCHEMA_VERSION, cases: [record] }), { audience: 'public', reviewed: true }, NOW);
+    assert.equal(pack.cases[0]?.id, record.id);
+    assert.deepEqual(pack.cases[0]?.tags, ['internal-label']);
+    assert.equal(pack.cases[0]?.evidencePins[0]?.id, pinned.evidencePins[0]?.id);
+    assert.equal(pack.cases[0]?.decisions[0]?.id, record.decisions[0]?.id);
+    assert.equal(pack.cases[0]?.decisions[0]?.rationale, 'Analyst-authored reasoning');
+    assert.match(formatCliCasePack(pack), /Included for every audience:.*identifiers, tags, decision summaries and rationale/u);
+    assert.deepEqual(verifyCliCasePack(pack), { caseCount: 1 });
+  });
   test('requires deliberate review and applies the public audience boundary', () => {
     assert.throws(() => buildCliCasePack(JSON.stringify(exportedCases()), { audience: 'public', reviewed: false }, NOW), /requires --reviewed/iu);
     const pack = buildCliCasePack(JSON.stringify(exportedCases()), { audience: 'public', reviewed: true }, NOW);

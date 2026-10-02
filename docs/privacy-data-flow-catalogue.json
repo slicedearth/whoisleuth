@@ -2670,8 +2670,8 @@
       "dataSent": [
         "normalised_target",
         "registry_query",
-        "whois_query",
         "dns_question",
+        "whois_query",
         "homepage_request",
         "tls_handshake"
       ],
@@ -3165,7 +3165,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "The command is an offline handoff from the browser Case workflow: it creates a new package, never creates or mutates a durable Case, never mutates the source archive, and requires an explicit review acknowledgement.",
+        "The command creates a separate offline package without changing the source or durable Cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, Case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -3763,8 +3763,8 @@
       "dataSent": [
         "normalised_target",
         "registry_query",
-        "whois_query",
         "dns_question",
+        "whois_query",
         "homepage_request",
         "tls_handshake"
       ],
@@ -5013,18 +5013,18 @@
       "dataSent": [
         "normalised_target",
         "registry_query",
-        "whois_query",
         "dns_question",
+        "whois_query",
         "homepage_request",
         "tls_handshake",
-        "public_ip_address"
+        "public_ip_address",
+        "selected_url_request"
       ],
       "dataDeliberatelyNotSent": [
         "browser_local_records",
         "unselected_local_files",
         "cookies_and_session_data",
         "unrelated_evidence_values",
-        "complete_query_bearing_urls",
         "credentials"
       ],
       "recipientClasses": [
@@ -7051,7 +7051,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; ordinary package review also counts original references with matching bytes. Ordinary folders allow only the declared layout; BagIt allows bounded nested payloads and checks SHA-256/SHA-512 manifests without interpreting payloads. Symbolic links are refused. BagIt fetch.txt is never fetched; missing files, mismatches and unsupported algorithms remain explicit. Package digests describe bytes, not filesystem metadata or authenticity. In scripts, use --strict-exit: incomplete verification returns 4. Default exit 0 means the report was produced, not that its checks passed.",
+        "Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; ordinary package review also counts original references with matching bytes. Ordinary folders allow only the declared layout; BagIt allows bounded nested payloads and checks SHA-256/SHA-512 manifests without interpreting payloads. Symbolic links are refused. BagIt fetch.txt is never fetched; missing files, mismatches and unsupported algorithms remain explicit. Package digests describe bytes, not filesystem metadata or authenticity. In scripts, use --strict-exit: incomplete verification returns 4. Unencrypted workspace archives always return 4 under --strict-exit because section digests do not cover mutable root metadata; structure-only formats can pass their narrower contract. Default exit 0 means the report was produced, not that its checks passed.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -11673,7 +11673,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -11733,7 +11732,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -11806,7 +11804,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -11837,7 +11834,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -11888,7 +11884,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -11939,7 +11934,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -12019,7 +12013,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -12050,7 +12043,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -12124,7 +12116,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -12156,7 +12147,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -12439,7 +12429,6 @@
       "retentionEffect": "operator_controlled_output",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -12465,7 +12454,6 @@
       "retentionEffect": "operator_controlled_output",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -12523,7 +12511,6 @@
       "retentionEffect": "operator_controlled_output",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -12677,7 +12664,6 @@
       "retentionEffect": "operator_controlled_output",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "third_party_disclosure"
       ],
       "policyState": "current"
@@ -13053,7 +13039,6 @@
       "retentionEffect": "operator_controlled_output",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "third_party_disclosure"
       ],
       "policyState": "current"
@@ -13158,7 +13143,6 @@
       "retentionEffect": "operator_controlled_output",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -13796,7 +13780,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -14094,7 +14077,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -14738,7 +14720,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -14787,7 +14768,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -14834,7 +14814,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -14881,7 +14860,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -14929,7 +14907,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -14977,7 +14954,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -15024,7 +15000,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -15072,7 +15047,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -15121,7 +15095,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -15170,7 +15143,6 @@
       "retentionEffect": "deliberate_local_file",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"

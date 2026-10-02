@@ -66,6 +66,32 @@ test('ordinary analyst review retention is distinct from deliberate workspace ex
   assert.equal(archive.processingClasses.includes('browser_local_retention'), false);
 });
 
+test('verification-only file consumers are not reported as producing an exported file', () => {
+  for (const id of ['case.consumer.packet-verify', 'case.consumer.encrypted-workspace-verify']) {
+    const flow = PRIVACY_DATA_FLOW_CATALOGUE.schemaConsumerFlows.find(item => item.id === id);
+    assert.ok(flow, id);
+    assert.equal(flow.emittedContract, null);
+    assert.ok(flow.processingClasses.includes('offline_processing_no_request'));
+    assert.equal(flow.processingClasses.includes('deliberate_local_file_export'), false);
+  }
+  for (const flow of PRIVACY_DATA_FLOW_CATALOGUE.schemaConsumerFlows) {
+    if (flow.emittedContract === null) assert.equal(flow.processingClasses.includes('deliberate_local_file_export'), false, flow.id);
+  }
+});
+
+test('parent CLI disclosure covers every variant and admits the selected URL only for Lookup', () => {
+  for (const command of CAPABILITY_MANIFEST.cliOperations) for (const variant of command.variants ?? []) {
+    for (const data of variant.disclosedData) if (data !== 'none') assert.ok(command.disclosedData.includes(data), `${command.command}: ${variant.id}: ${data}`);
+  }
+  const lookup = CAPABILITY_MANIFEST.cliOperations.find(item => item.command === 'lookup');
+  assert.ok(lookup?.disclosedData.includes('selected_url_request'));
+  for (const name of ['bulk', 'discover-scan']) assert.equal(CAPABILITY_MANIFEST.cliOperations.find(item => item.command === name)?.disclosedData.includes('selected_url_request'), false);
+  const flow = PRIVACY_DATA_FLOW_CATALOGUE.cliOperationFlows.find(item => item.id === 'command.cli.lookup');
+  assert.ok(flow);
+  assert.ok(flow.dataSent.includes('selected_url_request'));
+  assert.equal(flow.dataDeliberatelyNotSent.includes('complete_query_bearing_urls'), false);
+});
+
 test('the catalogue writer derives fixture bytes and digest without a second hand-maintained declaration', () => {
   const metadata = renderPrivacyCatalogueFixtureMetadata('abc');
   assert.match(metadata, /bytes: 3,/u);

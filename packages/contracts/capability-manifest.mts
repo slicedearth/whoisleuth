@@ -1411,7 +1411,6 @@ function passiveCliOperation(
   command: string,
   capabilityId: CapabilityId,
   options: Readonly<{
-    disclosedData: readonly CapabilityDataClass[];
     recipients: readonly CapabilityRecipientClass[];
     scoringEffect?: CapabilityScoringEffect;
     networkMode?: CapabilityNetworkMode;
@@ -1425,10 +1424,15 @@ function passiveCliOperation(
     partialResults?: CapabilityPartialResults;
     outcomes?: readonly CapabilityOutcomeState[];
     documentStates?: readonly string[];
-    variants?: readonly CliExecutionVariant[];
     privacyLimitations: readonly string[];
-  }>,
+  } & (
+    | { variants: readonly CliExecutionVariant[]; disclosedData?: never }
+    | { variants?: undefined; disclosedData: readonly CapabilityDataClass[] }
+  )>,
 ): CliOperationDefinition {
+  const disclosures = options.variants
+    ? [...new Set(options.variants.flatMap(variant => variant.disclosedData))]
+    : options.disclosedData;
   return freezeCliOperation({
     recordId: `command.cli.${command}`,
     command,
@@ -1437,7 +1441,7 @@ function passiveCliOperation(
     planes: options.planes ?? ['local_cli_network'],
     trigger: 'explicit_cli_command',
     networkMode: options.networkMode ?? 'bounded_passive',
-    disclosedData: options.disclosedData,
+    disclosedData: disclosures.length > 1 ? disclosures.filter(value => value !== 'none') : disclosures,
     recipients: options.recipients,
     requestBudget: options.requestBudget ?? 'collector_specific',
     responseBudget: options.responseBudget ?? 'collector_specific',
@@ -1518,7 +1522,6 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
     return passiveCliOperation(command, capabilityId, {
       planes: ['local_cli_offline', 'local_cli_network'],
       networkMode: 'conditional_bounded_passive',
-      disclosedData: ['fixed_diagnostic_probe'],
       recipients: ['dns_resolver', 'target_public_service', 'registry_service'],
       requestBudget: 'variant_specific',
       responseBudget: 'bounded_runtime_report',
@@ -1577,11 +1580,6 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
     return passiveCliOperation(command, capabilityId, {
       planes: ['local_cli_offline', 'local_cli_network'],
       networkMode: 'conditional_bounded_passive',
-      disclosedData: [
-        'normalised_target', 'registry_query', 'whois_query', 'dns_question',
-        'homepage_request', 'tls_handshake',
-        ...(lookupCommand === 'lookup' ? ['public_ip_address' as const] : []),
-      ],
       recipients: ['registry_service', 'dns_resolver', 'target_public_service'],
       requestBudget: 'variant_specific',
       scoringEffect: 'bounded_risk_and_acquisition_input',
@@ -1691,7 +1689,6 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
     return passiveCliOperation(command, capabilityId, {
       planes: ['local_cli_offline', 'local_cli_network'],
       networkMode: 'conditional_bounded_passive',
-      disclosedData,
       recipients,
       requestBudget: 'variant_specific',
       authorisation: 'explicit_network_approval',

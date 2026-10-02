@@ -85,6 +85,11 @@ offline CLI workflow below.
 When several incident Cases share a domain, select the intended Case before
 retaining replay evidence. Case packs preserve each current Case ID separately;
 trusted and public packs exclude analyst-entered incident titles.
+Every audience retains tags, decision summaries and rationale as well as domain
+evidence and Case, pin and decision IDs. Public does not mean anonymous.
+Browser Lookup evidence can be verified or packaged in the CLI. `brief`,
+`export`, `compare`, `registry-doctor` and `source-report` instead require a
+saved CLI Lookup; they do not reconstruct it from a browser export.
 
 Process selected local input:
 
@@ -576,6 +581,11 @@ For scripts, use `whoisleuth verify-artifact evidence.json --json --strict-exit`
 An incomplete verification returns **4** with that option. Without it, **0**
 means a report was produced, not that the artefact passed verification; inspect
 the report's state and checks.
+Unencrypted workspace archives retain mutable root metadata outside their
+section digests, so they return 4 under `--strict-exit` even when all supported
+section checks pass. Structure-only exports can pass their narrower contract;
+strict exit is not a ranking of cryptographic assurance. `interchange-report`
+separately describes import/export support and is not the full verifier inventory.
 
 ## Command details
 

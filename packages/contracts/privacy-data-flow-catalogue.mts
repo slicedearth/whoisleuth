@@ -508,10 +508,11 @@ function schemaStorage(kind: string): Readonly<{ storageClass: string; retention
 function schemaProcessingClasses(
   requestMode: string,
   retentionEffect: string,
+  emitsContract: boolean,
 ): readonly PrivacyProcessingClassId[] {
   const classes: PrivacyProcessingClassId[] = ['transient_processing'];
   if (retentionEffect === 'browser_indexeddb') classes.push('browser_local_retention');
-  if (retentionEffect === 'deliberate_local_file' || retentionEffect === 'operator_controlled_output') {
+  if (emitsContract && (retentionEffect === 'deliberate_local_file' || retentionEffect === 'operator_controlled_output')) {
     classes.push('deliberate_local_file_export');
   }
   if (requestMode !== 'none') classes.push('third_party_disclosure');
@@ -703,7 +704,7 @@ function buildUncheckedPrivacyDataFlowCatalogue(
         privacyProfileId: edge.privacyProfileId,
         requestMode: edge.requestMode,
         retentionEffect: edge.retentionEffect,
-        processingClasses: schemaProcessingClasses(edge.requestMode, edge.retentionEffect),
+        processingClasses: schemaProcessingClasses(edge.requestMode, edge.retentionEffect, Boolean(edge.emittedContract)),
         policyState: edge.policyState,
       });
     }

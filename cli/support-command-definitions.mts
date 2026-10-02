@@ -145,13 +145,13 @@ export const SUPPORT_COMMAND_DEFINITIONS = Object.freeze({
   "registry-scaffold": commandSeed({
     reference: {
       description: 'Create a bounded synthetic WHOIS fixture scaffold for one existing capability profile.',
-      example: 'whoisleuth registry-scaffold --profile example-profile --suffix test --scenario registered',
+      example: 'whoisleuth registry-scaffold --profile nic-io-colon --suffix ac --scenario registered',
       boundary: 'The output is a sanitised template only. Its command-owned --profile selects fixture capability, --config is rejected, and contributors must not paste live responses or personal registration data into fixtures.',
     },
     collection: { scope: 'Reads the embedded registry capability catalogue and prints one synthetic fixture template.' },
     summary: 'Create a sanitised registry fixture scaffold',
     options: ['--profile', '--suffix', '--scenario'],
-    optionOverrides: { '--profile': text('Select the registry fixture capability profile.', true) },
+    optionOverrides: { '--profile': text('Select a catalogue profile; find its ID with registry-support <suffix> --json.', true) },
     positionals: NO_POSITIONALS,
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--profile', '--suffix', '--scenario'] }),

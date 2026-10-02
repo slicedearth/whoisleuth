@@ -67,10 +67,11 @@
       "actions"
     ],
     "browserDatabase": "whoisleuth-browser-data-v1",
-    "browserDatabaseVersion": 1,
+    "browserDatabaseVersion": 2,
     "browserObjectStores": [
       "records",
-      "manifests"
+      "manifests",
+      "files"
     ],
     "browserCodec": "json-v1",
     "browserCollectionCount": 16
@@ -468,6 +469,7 @@
   "limitations": [
     "The corpus contains reserved synthetic journeys and frozen current-format fixtures; it does not inspect browser profiles or investigation data.",
     "IndexedDB contract bytes are deterministic JSON projections of stored records and manifests, not an estimate of browser-engine page, key, or B-tree overhead.",
+    "The database descriptor names the current stores; measured JSON projections exclude original binary files and encrypted-record overhead.",
     "Quota ratios compare serialised Case bytes with the application Case ceiling; they are not browser-origin quota estimates.",
     "Portable evidence bytes are measured by rebuilding the same current archive or Case-pack with only evidence history, pins, decisions, and response actions removed.",
     "All scenarios are synthetic; their duplication rates do not establish representative real-world usage.",

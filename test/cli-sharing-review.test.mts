@@ -30,6 +30,15 @@ function savedLookup(overrides: Record<string, unknown> = {}): string {
 }
 
 describe('CLI sharing review', () => {
+  test('uses the verified outer Case-pack identity rather than the nested Case collection version', async () => {
+    const source = readFileSync(new URL('./fixtures/case-lifecycle/cli-case-pack-v2-case-v15-current.json', import.meta.url), 'utf8');
+    const report = await buildSharingReview(source, {
+      marking: 'clear', recipientScope: 'public', purpose: 'Reviewed synthetic handoff',
+      humanReviewed: true, personalDataReviewed: true, redactionsConfirmed: true,
+    }, NOW);
+    assert.deepEqual(report.artifact, { schema: 'whoisleuth.cli.case-pack', version: 2, integrity: 'verified' });
+    assert.equal(report.privacy.artifactMetadataFieldsEmitted, 2);
+  });
   test('keeps structure-only evidence explicit while allowing a fully reviewed matching scope', async () => {
     const report = await buildSharingReview(savedLookup(), {
       marking: 'amber',

@@ -91,8 +91,10 @@ async function buildSharingReview(
   const effective = importedRank > requestedRank ? strictestImported! : options.marking;
 
   let integrity: SharingReviewDocument['artifact']['integrity'] = 'unsupported';
+  let verifiedIdentity: Readonly<{ schema: string | null; version: number | null }> | null = null;
   try {
     const verification = await verifyOfflineArtifact(raw);
+    verifiedIdentity = verification.artifact;
     integrity = verification.state === 'verified' && hasVerifiedWholeArtifactIntegrity(verification)
       ? 'verified'
       : verification.state === 'integrity_valid'
@@ -140,8 +142,8 @@ async function buildSharingReview(
     caution: findings.filter((finding) => finding.state === 'caution').length,
     pass: findings.filter((finding) => finding.state === 'pass').length,
   };
-  const artifactSchema = boundedMetadataText(artifact.schema);
-  const rawArtifactVersion = artifact.version ?? artifact.schemaVersion;
+  const artifactSchema = boundedMetadataText(verifiedIdentity ? verifiedIdentity.schema : artifact.schema);
+  const rawArtifactVersion = verifiedIdentity ? verifiedIdentity.version : artifact.version ?? artifact.schemaVersion;
   const artifactVersion = Number.isSafeInteger(rawArtifactVersion)
     && Number(rawArtifactVersion) >= 1
     && Number(rawArtifactVersion) <= 10_000

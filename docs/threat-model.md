@@ -143,6 +143,11 @@ tabs unlock independently, and no passphrase-reset service exists. Unlocked
 same-origin code, privileged extensions and a compromised device remain outside
 this protection.
 
+The local application's session cookie is scoped to `127.0.0.1`, not its port.
+Another server visited on that host can receive it; per-port names prevent
+collisions, not disclosure. Exact origin admission does not change browser
+cookie scope. Use a dedicated browser profile when other local servers are in use.
+
 ### Import, export, and cryptographic overclaim
 
 An envelope, structure, digest, signature, trust chain, timestamp, DNSSEC proof,

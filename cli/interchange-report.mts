@@ -152,6 +152,7 @@ export async function buildInterchangeFidelityReport(
     }),
     limitations: Object.freeze([
       'The file did not match a registered interchange contract. Its supplied schema text and contents are not echoed.',
+      'This is an import/export compatibility catalogue, not the complete verifier inventory. verify-artifact may support this file independently.',
       'This report makes no request and does not establish that evidence is accurate, current, complete, or safe to share.',
     ]),
   });
@@ -247,6 +248,7 @@ export async function buildInterchangeFidelityReport(
       blockedSectionCount, prunedRecordCount,
     }),
     limitations: Object.freeze([
+      ...(contract.id === 'lookup_evidence' ? ['CLI read support means offline verification and packaging. brief, export, compare, registry-doctor and source-report require a saved CLI Lookup, not this browser evidence export.'] : []),
       'Compatibility describes declared field groups and supported operations, not byte-for-byte equality or evidence truth.',
       'The report emits only registered metadata, counts, and fixed field-group identifiers. Targets, notes, contacts, passphrases, and evidence values are not included.',
       'A verified integrity envelope detects file changes but does not establish author identity, source accuracy, currency, completeness, or sharing authority.',
@@ -258,7 +260,7 @@ export function formatInterchangeFidelityReport(report: InterchangeFidelityRepor
   const browser = report.compatibility.browser;
   const cli = report.compatibility.cli;
   const nextAction = !report.recognised
-    ? 'Choose a supported WHOISleuth export and run verify-artifact before trying to import it.'
+    ? 'Run verify-artifact for independent verification support. Import/export compatibility is not registered here.'
     : !report.artifact.versionSupported
       ? 'Use a WHOISleuth release that supports this exact version, or re-export it with its last supported release.'
       : !report.verification.assuranceSatisfied
@@ -272,7 +274,7 @@ export function formatInterchangeFidelityReport(report: InterchangeFidelityRepor
               : 'Retain the verification result and use only the operations declared above.';
   return [
     'Interchange fidelity report',
-    `Recognised     ${report.recognised ? 'yes' : 'no'}`,
+    `Interchange contract ${report.recognised ? 'registered' : 'not registered'}`,
     `Artifact       ${report.artifact.id ?? 'unrecognised'}`,
     `Version        ${report.artifact.version ?? 'unavailable'}${report.artifact.versionSupported ? '' : ' (unsupported)'}`,
     `Verification   ${report.verification.state}`,

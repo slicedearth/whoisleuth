@@ -6,11 +6,12 @@ import {
 import { localDataManifestMatches as manifestMatchesExpected, type LocalDataStorage, type LocalDataStorageCommit } from '../../../packages/workspace/local-data-storage.mts';
 import type { BrowserLocalStoredBinary } from './browser-local-binaries.ts';
 
-export const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
-export const LOCAL_DATA_DATABASE_VERSION = 2;
-export const LOCAL_DATA_RECORD_STORE = 'records';
-export const LOCAL_DATA_MANIFEST_STORE = 'manifests';
-export const LOCAL_DATA_BINARY_STORE = 'files';
+import {
+  LOCAL_DATA_DATABASE_VERSION, LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE, LOCAL_DATA_BINARY_STORE,
+} from '../../../packages/contracts/browser-local-storage.mts';
+export {
+  LOCAL_DATA_DATABASE_NAME, LOCAL_DATA_DATABASE_VERSION, LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE, LOCAL_DATA_BINARY_STORE,
+} from '../../../packages/contracts/browser-local-storage.mts';
 
 const RECORD_COLLECTION_INDEX = 'collection';
 const RECORD_ORDER_INDEX = 'collection-order';

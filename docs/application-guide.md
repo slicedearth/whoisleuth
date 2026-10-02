@@ -859,8 +859,9 @@ Exports are deliberate local actions. Review them before sharing:
 - normalised Lookup evidence excludes raw registration payloads and expanded
   contacts. Current schema 29 and published v2 schemas 27 and 28 retain that boundary;
   exact v1 schema 26 can contain public contact fields;
-- Case, workspace and trusted Case-pack files can identify investigated
-  hostnames and contain analyst records;
+- Case, workspace and all Case-pack audiences can identify investigated
+  hostnames and contain analyst records. Public packs retain Case, pin and
+  decision identifiers, tags, decision summaries and rationale;
 - graph, campaign and defensive exports identify their selected scope; and
 - screenshots from authorised local capture preserve visible rendered content.
 
