@@ -857,7 +857,9 @@ Exports are deliberate local actions. Review them before sharing:
 
 Local importers bound and validate an entire file before preview or merge.
 Profile, watchlist, shortlist and template merges retain local records when the incoming
-timestamp is older, equal or missing. Imported Bulk sessions, saved views,
+timestamp is older, equal or missing. An unknown local watchlist time also
+prevents automatic replacement. Missing or invalid watchlist times stay unknown
+in history and exports; they are not plotted as dated observations. Imported Bulk sessions, saved views,
 review rows, website snapshots and templates that exceed capacity are skipped
 without evicting saved work. Case imports fill available note and evidence-history
 slots without displacing local entries; omitted imports and any workspace-wide

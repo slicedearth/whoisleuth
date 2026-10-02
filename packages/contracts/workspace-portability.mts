@@ -61,8 +61,8 @@ export const MAX_CAMPAIGN_INPUT_RECORDS = 500;
 export const MAX_CAMPAIGN_STORE_BYTES = 512 * 1024;
 
 export const WATCHLIST_SCHEMA = 'whoisleuth.watchlists';
-export const WATCHLIST_SCHEMA_VERSION = 3;
-export const WATCHLIST_BROWSER_SUPPORTED_VERSIONS = Object.freeze([2, WATCHLIST_SCHEMA_VERSION]);
+export const WATCHLIST_SCHEMA_VERSION = 4;
+export const WATCHLIST_BROWSER_SUPPORTED_VERSIONS = Object.freeze([2, 3, WATCHLIST_SCHEMA_VERSION]);
 export const WATCHLIST_EXPORT_SUPPORTED_VERSIONS = WATCHLIST_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_WATCHLISTS = 100;
 export const MAX_WATCHLIST_INPUTS = MAX_WATCHLISTS * 4;
@@ -720,6 +720,16 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
 ]);
 
 const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly Pick<SchemaLifecycleFixture, 'id' | 'path' | 'bytes' | 'sha256' | 'schema' | 'version'>[] = Object.freeze([
+  {
+    id: 'workspace.browser.watchlist.v4', path: 'test/fixtures/workspace-lifecycle/browser-watchlist-v4.json',
+    bytes: 76, sha256: '059930ee54d1bc65ac68ef6d3a8ac8cd8e53f682fe9a857512e2b6c57e93d5fe',
+    schema: 'whoisleuth.browser.watchlist-store', version: 4,
+  },
+  {
+    id: 'workspace.portable.watchlist.v4', path: 'test/fixtures/workspace-lifecycle/portable-watchlist-v4.json',
+    bytes: 120, sha256: '496f1ec39add1d3fe080ad8f9f991639cfbbe659ddb1c58932ac6ff563ce32aa',
+    schema: 'whoisleuth.watchlists', version: 4,
+  },
   {
     id: 'workspace.browser.watchlist.v3', path: 'test/fixtures/workspace-lifecycle/browser-watchlist-v3.json',
     bytes: 76, sha256: '740246c1666c332ae907a5b40364e03a4f008484fce7b1c6dce8082a6ac7b654',

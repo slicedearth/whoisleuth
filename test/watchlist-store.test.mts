@@ -72,11 +72,11 @@ test('current envelopes and internal maps require explicit timestamp zones', () 
     version: WATCHLIST_SCHEMA_VERSION,
     watchlists: { Priority: zoneLess },
   }).watchlists.Priority;
-  assert.equal(current?.updatedAt, '1970-01-01T00:00:00.000Z');
-  assert.equal(current?.history[0]?.checkedAt, '1970-01-01T00:00:00.000Z');
+  assert.equal(current?.updatedAt, null);
+  assert.equal(current?.history[0]?.checkedAt, null);
   const internal = normalizeWatchlistStore({ Priority: zoneLess }).watchlists.Priority;
-  assert.equal(internal?.updatedAt, '1970-01-01T00:00:00.000Z');
-  assert.equal(internal?.history[0]?.checkedAt, '1970-01-01T00:00:00.000Z');
+  assert.equal(internal?.updatedAt, null);
+  assert.equal(internal?.history[0]?.checkedAt, null);
 });
 
 test('store recovery caps input collection work and retained watchlists', () => {
@@ -123,6 +123,33 @@ test('imports reject unrelated, malformed, and future schemas', () => {
   assert.throws(() => mergeWatchlistStores({}, { schema: WATCHLIST_SCHEMA, version: 1, watchlists: {} }), /supported WHOISleuth watchlist export/);
   assert.throws(() => mergeWatchlistStores({}, { schema: 'whoisleuth.watchlists', version: WATCHLIST_SCHEMA_VERSION + 1, watchlists: {} }), /newer schema/);
   assert.equal(watchlistStoreVersion({ schema: WATCHLIST_SCHEMA, version: 2.5, watchlists: {} }), 2.5);
+});
+
+test('unknown local or incoming update times cannot authorise replacing a watchlist', () => {
+  for (const [localTime, incomingTime] of [[null, NOW], [NOW, null], [null, null]]) {
+    const local = { Local: entry({ updatedAt: localTime }) };
+    const result = mergeWatchlistStores(local, { schema: WATCHLIST_SCHEMA, version: WATCHLIST_SCHEMA_VERSION,
+      watchlists: { Local: entry({ updatedAt: incomingTime, results: [{ domain: 'different.example' }] }) } });
+    assert.equal(result.updated, 0);
+    assert.equal(result.skipped, 1);
+    assert.deepEqual(result.watchlists, normalizeWatchlistStore(local).watchlists);
+  }
+});
+
+test('unknown history times survive current serialisation and export while genuine epoch times remain exact', () => {
+  for (const version of [2, 3, 4]) {
+    const input = { schema: WATCHLIST_SCHEMA, version, watchlists: {
+      Unknown: entry({ updatedAt: 'invalid' }), Epoch: entry({ updatedAt: '1970-01-01T00:00:00.000Z' }),
+    } };
+    const normalized = normalizeWatchlistStore(input);
+    assert.equal(normalized.watchlists.Unknown?.updatedAt, null);
+    assert.equal(normalized.watchlists.Unknown?.history[0]?.checkedAt, null);
+    assert.equal(normalized.watchlists.Epoch?.history[0]?.checkedAt, '1970-01-01T00:00:00.000Z');
+    assert.deepEqual(JSON.parse(serializeWatchlistStore(normalized)), normalized);
+    const exported = buildWatchlistExport(normalized, NOW);
+    assert.equal(exported.version, 4);
+    assert.deepEqual(mergeWatchlistStores({}, exported).watchlists, normalized.watchlists);
+  }
 });
 
 test('a normal store remains below its dedicated UTF-8 byte budget', () => {

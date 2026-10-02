@@ -16,6 +16,14 @@ function changeByField(changes: history.WatchlistChange[], field: string) {
 }
 
 describe('watchlist history', () => {
+  test('explicitly invalid collection clocks stay unknown rather than becoming the current time', () => {
+    for (const checkedAt of [null, 'invalid', '2026-01-01T12:00:00']) {
+      const appended = history.appendWatchlistScan(null, [{ domain: 'example.test' }], { checkedAt });
+      assert.equal(appended.entry.updatedAt, null);
+      assert.equal(appended.entry.history[0]?.checkedAt, null);
+    }
+    assert.ok(history.appendWatchlistScan(null, []).entry.updatedAt);
+  });
   test('upgrades the old latest-snapshot schema without losing results', () => {
     const oldEntry = {
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -228,9 +236,9 @@ describe('watchlist history', () => {
         conclusiveCount: 999999, changeCount: 999999, omittedChanges: -1, changes,
       }],
     });
-    assert.equal(entry.updatedAt, '1970-01-01T00:00:00.000Z');
+    assert.equal(entry.updatedAt, null);
     const event = firstEvent(entry);
-    assert.equal(event.checkedAt, '1970-01-01T00:00:00.000Z');
+    assert.equal(event.checkedAt, null);
     assert.equal(event.mode, 'saved');
     assert.equal(event.resultCount, 1);
     assert.equal(event.conclusiveCount, 0);

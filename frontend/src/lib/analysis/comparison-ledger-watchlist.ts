@@ -3,6 +3,7 @@ import {
   MAX_WATCHLISTS,
   normalizeWatchlistName,
 } from './watchlist-store.ts';
+import { sha256IdentityHex } from '../../../../packages/evidence/record-identity.mts';
 import {
   normalizeWatchlistEntry,
   watchlistFieldLabel,
@@ -153,7 +154,8 @@ export function buildWatchlistComparisonCandidates(
     for (let index = 0; index < entry.history.length; index += 1) {
       const event = entry.history[index];
       if (!event || (index === 0 && emptyInitialWatchlistEvent(event))) continue;
-      const eventIdentity = [name.toLowerCase(), event.checkedAt, event.mode] as const;
+      const eventIdentity = [name.toLowerCase(), event.checkedAt, event.mode,
+        ...(!event.checkedAt ? [sha256IdentityHex(new TextEncoder().encode(JSON.stringify(event)))] : [])] as const;
       const ownerId = stableComparisonLedgerId('watchlist-event', eventIdentity);
       if (seenEvents.has(ownerId)) {
         counters.duplicateRecords += 1;

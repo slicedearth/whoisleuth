@@ -19,6 +19,7 @@
   }
 </script>
 
+{#if activity.undatedChecks}<p class="fallback-note">{activity.undatedChecks} saved check{activity.undatedChecks === 1 ? ' has' : 's have'} an unknown time and {activity.undatedChecks === 1 ? 'is' : 'are'} not included in the dated activity chart. Open the watchlist history for details.</p>{/if}
 {#if activity.days.length}
   <VisualizationFrame
     id="watchlist-activity"

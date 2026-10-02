@@ -36,6 +36,18 @@ import type {
   LifecycleEventInput,
 } from '../frontend/src/lib/analysis/visualization-models.ts';
 
+test('the monitor timeline discloses undated checks without plotting an invented epoch', () => {
+  const result = projectMonitorTimeline([
+    { id: 'unknown', checkedAt: null, mode: 'saved', groups: [{ key: 'mail', label: 'Mail', changeCount: 1 }] },
+    { id: 'epoch', checkedAt: '1970-01-01T00:00:00.000Z', mode: 'saved', groups: [{ key: 'mail', label: 'Mail', changeCount: 1 }] },
+  ]);
+  assert.equal(result.undatedEvents, 1);
+  assert.deepEqual(result.events.map(event => event.id), ['epoch']);
+  const activity = projectWatchlistActivity([{ checkedAt: null, changeCount: 1, resultCount: 1, conclusiveCount: 1 }]);
+  assert.equal(activity.undatedChecks, 1);
+  assert.equal(activity.totalChecks, 0);
+});
+
 describe('bounded visualization models', () => {
   test('orders and caps valid lifecycle events without treating spacing as duration', () => {
     const events: LifecycleEventInput[] = [

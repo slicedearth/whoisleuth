@@ -5,7 +5,7 @@
   } from '$lib/analysis/visualization-models.ts';
 
   type TimelineEvent = {
-    checkedAt: string;
+    checkedAt: string | null;
     mode: string;
     groups: Array<{ key: string; label: string; changes: unknown[] }>;
   };
@@ -15,7 +15,7 @@
     formatDate,
   }: {
     events: TimelineEvent[];
-    formatDate: (value: string) => string;
+    formatDate: (value: string | null) => string;
   } = $props();
 
   const timeline = $derived(projectMonitorTimeline(events.map((event, index): MonitorTimelineInput => ({
@@ -30,6 +30,7 @@
   }))));
 </script>
 
+{#if timeline.undatedEvents}<p class="undated">{timeline.undatedEvents} retained check{timeline.undatedEvents === 1 ? ' has' : 's have'} an unknown time and cannot be placed on the dated chart. The details remain below.</p>{/if}
 {#if timeline.events.length && timeline.lanes.length}
   <section class="timeline" aria-labelledby="domain-change-timeline-title">
     <header><div><p class="eyebrow">Change sequence</p><h4 id="domain-change-timeline-title">Observed domain timeline</h4></div>{#if timeline.truncated}<span>Partial visual</span>{/if}</header>
@@ -79,6 +80,7 @@
 {/if}
 
 <style>
+  .undated{color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .timeline{min-width:0;margin-top:15px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
   h4{margin:2px 0 0;font:700 var(--text-sm) var(--mono)}

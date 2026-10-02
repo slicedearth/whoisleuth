@@ -156,7 +156,8 @@ export function mergeWatchlistStores(localRaw: unknown, importedRaw: unknown) {
     assertHistoricalQuality(entry, importedVersion);
     const normalized = normalizeWatchlistEntry(entry);
     if (Object.prototype.hasOwnProperty.call(local, name)) {
-      if (normalized.updatedAt <= local[name]!.updatedAt) { skipped++; continue; }
+      const localTime = local[name]!.updatedAt;
+      if (!normalized.updatedAt || !localTime || normalized.updatedAt <= localTime) { skipped++; continue; }
       updated++;
     }
     else if (Object.keys(local).length >= MAX_WATCHLISTS) { skipped++; continue; }

@@ -65,7 +65,7 @@ export interface WatchlistChange {
 }
 
 export interface WatchlistHistoryEvent {
-  checkedAt: string;
+  checkedAt: string | null;
   mode: WatchlistScanMode;
   resultCount: number;
   conclusiveCount: number;
@@ -76,7 +76,7 @@ export interface WatchlistHistoryEvent {
 }
 
 export interface WatchlistEntry {
-  updatedAt: string;
+  updatedAt: string | null;
   results: CompactWatchlistRecord[];
   baseline: WatchlistComparableRecord[];
   history: WatchlistHistoryEvent[];
@@ -95,7 +95,7 @@ export interface WatchlistHistoryGroup {
 }
 
 export interface WatchlistDomainHistoryEvent {
-  checkedAt: string;
+  checkedAt: string | null;
   mode: WatchlistScanMode;
   groups: WatchlistHistoryGroup[];
 }
@@ -243,13 +243,6 @@ function boundedText(
   if (typeof value !== 'string' || CONTROL_RE.test(value)) return allowNull ? null : '';
   const normalized = value.slice(0, maximum * 4).replace(/\s+/g, ' ').trim().slice(0, maximum).trim();
   return normalized || (allowNull ? null : '');
-}
-
-function isoTimestamp(
-  value: unknown,
-  fallback = new Date(0).toISOString(),
-): string {
-  return normalizeExplicitIsoTimestamp(value) ?? fallback;
 }
 
 function boundedInteger(value: unknown, maximum: number, fallback = 0): number {
@@ -544,7 +537,7 @@ function initialHistoryEvent(
   baseline: WatchlistComparableRecord[],
 ): WatchlistHistoryEvent {
   return {
-    checkedAt: entry.updatedAt || new Date(0).toISOString(),
+    checkedAt: entry.updatedAt,
     mode: 'saved',
     resultCount: Array.isArray(entry.results) ? entry.results.length : baseline.length,
     conclusiveCount: baseline.filter((record) => hasString(CONCLUSIVE_AVAILABILITY, record.availability)).length,
@@ -574,7 +567,7 @@ export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
         : [];
       const rawMode = event.mode;
       return {
-        checkedAt: isoTimestamp(event.checkedAt, new Date(0).toISOString()),
+        checkedAt: normalizeExplicitIsoTimestamp(event.checkedAt),
         mode: typeof rawMode === 'string' && ['fast', 'deep', 'saved'].includes(rawMode)
           ? rawMode as WatchlistScanMode
           : 'saved',
@@ -589,7 +582,7 @@ export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
     }).slice(-MAX_WATCHLIST_HISTORY_EVENTS)
     : [];
   const normalized = {
-    updatedAt: isoTimestamp(input.updatedAt, new Date(0).toISOString()),
+    updatedAt: normalizeExplicitIsoTimestamp(input.updatedAt),
     results,
     baseline,
     history,
@@ -616,7 +609,7 @@ export function appendWatchlistScan(
   results: unknown,
   options: AppendWatchlistScanOptions = {},
 ) {
-  const checkedAt = isoTimestamp(options.checkedAt, new Date().toISOString());
+  const checkedAt = options.checkedAt === undefined ? new Date().toISOString() : normalizeExplicitIsoTimestamp(options.checkedAt);
   const mode: WatchlistScanMode = typeof options.mode === 'string' && ['fast', 'deep', 'saved'].includes(options.mode)
     ? options.mode as WatchlistScanMode
     : 'saved';

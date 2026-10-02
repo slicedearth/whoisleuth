@@ -8234,10 +8234,11 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.watchlist-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 3,
+      "currentVersion": 4,
       "supportedVersions": [
         2,
-        3
+        3,
+        4
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
@@ -9390,10 +9391,11 @@
       "schema": "whoisleuth.watchlists",
       "lifecycleSchema": "whoisleuth.watchlists",
       "coverageClass": "registered_schema",
-      "currentVersion": 3,
+      "currentVersion": 4,
       "supportedVersions": [
         2,
-        3
+        3,
+        4
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -14658,7 +14660,8 @@
           "schema": "whoisleuth.browser.watchlist-store",
           "versions": [
             2,
-            3
+            3,
+            4
           ],
           "mode": "direct",
           "discriminator": null
@@ -14666,7 +14669,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.watchlist-store",
-        "version": 3,
+        "version": 4,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -15105,7 +15108,8 @@
           "schema": "whoisleuth.watchlists",
           "versions": [
             2,
-            3
+            3,
+            4
           ],
           "mode": "direct",
           "discriminator": null
@@ -15130,7 +15134,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.watchlists",
-        "version": 3,
+        "version": 4,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",

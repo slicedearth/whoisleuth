@@ -41,6 +41,53 @@ test('incomplete web collection is visible while a usable Watchlist baseline sur
   await expectNoHorizontalOverflow(page);
 });
 
+test('unknown Watchlist times remain visible and portable without invented dates', async ({ page }) => {
+  await seed(page, { Undated: { ...entry('undated.invalid'), updatedAt: null, history: [{
+    checkedAt: null, mode: 'saved', resultCount: 1, conclusiveCount: 1, changeCount: 1, omittedChanges: 0,
+    changes: [{ domain: 'undated.invalid', field: 'nameservers', before: ['ns1.example.test'],
+      after: ['ns2.example.test'], kind: 'infrastructure_changed', tone: 'warn' }],
+  }] } });
+  const row = page.getByRole('row', { name: /Undated/ });
+  await expect(row).toContainText('Time unknown');
+  await row.getByRole('button', { name: 'History', exact: true }).click();
+  await page.getByLabel('History focus', { exact: true }).selectOption('undated.invalid');
+  await expect(page.locator('.history')).toContainText('cannot be placed on the dated chart');
+  await expect(page.locator('.domain-events')).toContainText('Time unknown');
+  await expect(page.locator('.domain-events')).not.toContainText('1970');
+  const stored = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
+  expect(stored.records[0]!.value.updatedAt).toBeNull();
+  expect(stored.records[0]!.value.history[0]!.checkedAt).toBeNull();
+  const downloadEvent = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export JSON', exact: true }).click();
+  const download = await downloadEvent;
+  const stream = await download.createReadStream();
+  if (!stream) throw new Error('Watchlist export stream is unavailable.');
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  const exported = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  expect(exported.version).toBe(4);
+  expect(exported.watchlists.Undated.history[0].checkedAt).toBeNull();
+  for (const theme of ['dark', 'light']) for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
+    await expect(page.locator('.domain-events')).toContainText('Time unknown');
+    await expect(page.locator('.history-summary')).toContainText('Times unknown');
+    await expectNoHorizontalOverflow(page);
+    if (width === 320) {
+      const table = page.getByRole('region', { name: 'Saved watchlists', exact: true });
+      await table.focus();
+      await page.keyboard.press('ArrowRight');
+      await expect.poll(() => table.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+      await row.getByRole('button', { name: 'History', exact: true }).focus();
+      await expect(row.getByRole('button', { name: 'History', exact: true })).toBeInViewport();
+      await table.evaluate(element => element.scrollLeft = 0);
+    }
+    if (process.env.WHOISLEUTH_E2E_VISUAL_EVIDENCE === '1') {
+      await test.info().attach(`watchlist-unknown-${theme}-${width}`, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+    }
+  }
+});
+
 for (const all of [false, true]) test(`a committed watchlist ${all ? 'clear' : 'deletion'} remains visible when rereading fails`, async ({ page }) => {
   await seed(page, { Priority: entry('priority.invalid'), Other: entry('other.invalid') });
   const before = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 2 });

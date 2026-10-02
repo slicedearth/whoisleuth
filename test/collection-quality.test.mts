@@ -7,7 +7,7 @@ import { isWebCollectionQuality, normalizeWebCollectionQuality, webCollectionQua
 import { compareCaseEvidence, caseEvidenceIncomparableReasons, normalizeSnapshot } from '../packages/cases/case-evidence-model.mts';
 import { publishedCaseEvidenceTimelineForVerification } from '../packages/cases/case-evidence-model.mts';
 import { appendWatchlistScan, normalizeWatchlistEntry } from '../packages/workspace/watchlist-history.mts';
-import { buildWatchlistExport, mergeWatchlistStores, normalizeWatchlistStore } from '../packages/workspace/watchlist-store.mts';
+import { buildWatchlistExport, mergeWatchlistStores, normalizeWatchlistStore, WATCHLIST_SCHEMA_VERSION } from '../packages/workspace/watchlist-store.mts';
 import { normalizeBulkSessionStore, serializeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
 import { fromBulkSessionResult, toBulkSessionResult } from '../frontend/src/lib/analysis/bulk-result-model.ts';
 import { buildLookupWatchlistRecord } from '../frontend/src/lib/analysis/lookup-watchlist-handoff.ts';
@@ -182,10 +182,10 @@ describe('Watchlist qualified baselines', () => {
     const handoff = requiredValue(buildLookupWatchlistRecord('example.test', raw(), 'deep'));
     const entry = appendWatchlistScan(null, [handoff], { checkedAt: NOW }).entry;
     const document = buildWatchlistExport({ Review: entry }, NOW);
-    assert.equal(document.version, 3);
+    assert.equal(document.version, WATCHLIST_SCHEMA_VERSION);
     assert.deepEqual(mergeWatchlistStores({}, document).watchlists.Review!.results[0]!.webCollectionQuality, COMPLETE);
     assert.throws(() => normalizeWatchlistStore({ ...document, version: 2 }), /requires Watchlist schema/u);
-    assert.throws(() => normalizeWatchlistStore({ ...document, version: 4 }), /unsupported/u);
+    assert.throws(() => normalizeWatchlistStore({ ...document, version: WATCHLIST_SCHEMA_VERSION + 1 }), /unsupported/u);
     const legacy = normalizeWatchlistStore({ schema: document.schema, version: 2, watchlists: { Review: { results: [raw({ webCollectionQuality: undefined })] } } });
     assert.equal(legacy.watchlists.Review!.results[0]!.webCollectionQuality, undefined);
   });

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { evidenceTime } from '$lib/analysis/evidence-time';
   import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { goto } from '$app/navigation';
   import { parseBoundedJson } from '$lib/bounded-json';
@@ -115,7 +116,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     conclusiveCount:event.conclusiveCount,
   }))));
   async function refresh(){const hadSnapshot=watchlistsSourceState==='ready';watchlistsRefreshing=true;try{watchlists=await loadWatchlists();watchlistsSourceState='ready';if(selected&&!watchlists[selected])selected='';}catch(cause){if(!hadSnapshot)watchlistsSourceState='unavailable';throw cause;}finally{watchlistsRefreshing=false;}}
-  function date(value:string){const parsed=new Date(value);return Number.isNaN(parsed.getTime())?value:parsed.toLocaleString();}
+  function date(value:string|null){return evidenceTime(value)?.readable ?? 'Time unknown';}
   async function reconcileCommittedWatchlists(committed:Watchlists,saved:string){
     watchlists=committed;
     if(selected&&!watchlists[selected])selected='';

@@ -823,6 +823,19 @@ describe('retained comparison adapters', () => {
     assert.equal(omissionOnly.truncated, true);
   });
 
+  test('distinct undated watchlist events retain material identities without an invented latest date', () => {
+    const first = watchlistEvent({ checkedAt: null });
+    const second = watchlistEvent({ checkedAt: null, changes: [{ ...first.changes[0], after: 'Different later title' }] });
+    const entry = { updatedAt: null, results: [], baseline: [], history: [first, second] };
+    const input = { watchlists: { Undated: entry } };
+    const index = buildComparisonLedgerIndex(input);
+    assert.equal(index.items.length, 2);
+    assert.equal(new Set(index.items.map(item => item.ownerId)).size, 2);
+    assert.ok(index.items.every(item => !item.later.observedAt));
+    const reordered = buildComparisonLedgerIndex({ watchlists: { Undated: { ...entry, history: [second, first] } } });
+    assert.deepEqual(index.items.map(item => item.id).sort(), reordered.items.map(item => item.id).sort());
+  });
+
   test('suppresses duplicate exact rows without counting them as detail-bound omissions', () => {
     const change = {
       domain: 'duplicate-row.reservation.invalid',
