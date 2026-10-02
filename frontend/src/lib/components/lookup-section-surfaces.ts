@@ -37,7 +37,7 @@ export function lookupSectionSurfaces(
     },
     'advanced-evidence': {
       intelligence: {
-        visible: view.threatIntelligenceProviders.length > 0,
+        visible: view.threatIntelligenceProviders.length > 0 || view.threatIntelligenceWithheld.length > 0,
         load: () => import('./LookupExternalIntelligence.svelte'),
       },
     },

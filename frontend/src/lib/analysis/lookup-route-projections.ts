@@ -95,6 +95,7 @@ export function buildLookupObservationProjection(
     const id = String(identity.id || '').trim();
     if (id) evidenceObservedAtById[`external-${id}`] = rec(provider.observation).observedAt;
   }
+  if (lookupView.threatIntelligenceWithheld.length) evidenceObservedAtById['external-withheld'] = null;
   return { lookupObservedAt, evidenceObservedAtById };
 }
 

@@ -107,6 +107,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     sslbl,
     threatIntelligence,
     threatIntelligenceProviders,
+    threatIntelligenceWithheld,
     dnsEvidence,
     dnsRecords,
     httpEvidence,
@@ -369,6 +370,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     rdapParsed,
     whoisParsed,
     threatIntelligenceProviders,
+    threatIntelligenceWithheld,
   });
   const scoreCoverage = evidenceCoverage.entries
     .filter((entry) => ['rdap', 'whois', 'availability', 'registrar-rdap', 'dns', 'http', 'page-identity'].includes(entry.id)

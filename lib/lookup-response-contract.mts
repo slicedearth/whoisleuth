@@ -184,6 +184,7 @@ type LookupViewModel = {
   readonly sslbl: JsonObject;
   readonly threatIntelligence: JsonObject;
   readonly threatIntelligenceProviders: JsonObject[];
+  readonly threatIntelligenceWithheld: readonly WithheldThreatIntelligence[];
   readonly dnsEvidence: JsonObject;
   readonly dnsRecords: JsonObject;
   readonly httpEvidence: JsonObject;
@@ -350,20 +351,35 @@ function normalizeThreatFinding(value: unknown, providerId: string): JsonObject 
   };
 }
 
-function normalizeThreatProvider(value: unknown, expectedDomain: string): JsonObject | null {
+export type WithheldThreatIntelligence = Readonly<{
+  providerId: string | null;
+  label: string;
+  count: number | null;
+  reason: string;
+}>;
+
+type ThreatProviderProjection = { provider: JsonObject; withheld: null } | { provider: null; withheld: WithheldThreatIntelligence };
+
+function normalizeThreatProvider(value: unknown, expectedDomain: string): ThreatProviderProjection {
   const input = record(value);
+  const identity = record(input.provider);
+  const providerId = boundedThreatText(identity.id, 80);
+  const providerDefinition = providerId && Object.hasOwn(THREAT_INTELLIGENCE_PROVIDERS, providerId)
+    ? THREAT_INTELLIGENCE_PROVIDERS[providerId] : null;
+  const withheld = (reason: string): ThreatProviderProjection => ({ provider: null, withheld: {
+    providerId: providerDefinition ? providerId : null,
+    label: providerDefinition ? `${providerDefinition.label} record` : 'Unrecognised provider record',
+    count: 1, reason,
+  } });
   if (input.schema !== THREAT_INTELLIGENCE_SCHEMA
-    || input.version !== THREAT_INTELLIGENCE_CONTRACT_VERSION) return null;
+    || input.version !== THREAT_INTELLIGENCE_CONTRACT_VERSION) return withheld('Unsupported provider format; evidence was withheld.');
   const target = record(input.target);
   if (target.type !== 'domain'
     || target.exposure !== 'registrable_domain'
-    || target.value !== expectedDomain) return null;
-  const identity = record(input.provider);
-  const providerId = boundedThreatText(identity.id, 80);
-  const providerDefinition = providerId ? THREAT_INTELLIGENCE_PROVIDERS[providerId] : null;
-  if (!providerId || !providerDefinition) return null;
+    || target.value !== expectedDomain) return withheld('The provider target did not match this Lookup; evidence was withheld.');
+  if (!providerId || !providerDefinition) return withheld('The provider identity was not recognised; evidence was withheld.');
   const state = boundedThreatText(input.state, 32);
-  if (!state || !THREAT_INTELLIGENCE_STATES.has(state as ThreatIntelligenceResultState)) return null;
+  if (!state || !THREAT_INTELLIGENCE_STATES.has(state as ThreatIntelligenceResultState)) return withheld('The provider result state was not supported; evidence was withheld.');
   const observationInput = record(input.observation);
   const limitations = Array.isArray(observationInput.limitations)
     ? observationInput.limitations
@@ -389,7 +405,7 @@ function normalizeThreatProvider(value: unknown, expectedDomain: string): JsonOb
       ? `${omitted} invalid or over-limit provider finding${omitted === 1 ? ' was' : 's were'} omitted from this view.`
       : 'Provider findings were not a supported array and were withheld from this view.');
   }
-  return {
+  return { withheld: null, provider: {
     schema: THREAT_INTELLIGENCE_SCHEMA,
     version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
     provider: {
@@ -410,14 +426,17 @@ function normalizeThreatProvider(value: unknown, expectedDomain: string): JsonOb
       complete: projectionIncomplete ? false : typeof observationInput.complete === 'boolean' ? observationInput.complete : null,
       truncated: projectionTruncated ? true : typeof observationInput.truncated === 'boolean' ? observationInput.truncated : null,
     },
-  };
+  } };
 }
 
-function projectThreatProviders(values: readonly unknown[], expectedDomain: string): JsonObject[] {
+function projectThreatProviders(values: readonly unknown[], expectedDomain: string): { providers: JsonObject[]; withheld: WithheldThreatIntelligence[] } {
   const grouped = new Map<string, { first: JsonObject; signatures: Set<string> }>();
+  const withheld: WithheldThreatIntelligence[] = [];
+  const unexamined = Math.max(0, values.length - MAX_THREAT_INTELLIGENCE_PROVIDERS * 2);
   for (const value of values.slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS * 2)) {
-    const provider = normalizeThreatProvider(value, expectedDomain);
-    if (!provider) continue;
+    const projection = normalizeThreatProvider(value, expectedDomain);
+    if (projection.withheld) { withheld.push(projection.withheld); continue; }
+    const provider = projection.provider;
     const providerId = String(record(provider.provider).id || '');
     if (!providerId) continue;
     const signature = JSON.stringify(provider);
@@ -428,22 +447,26 @@ function projectThreatProviders(values: readonly unknown[], expectedDomain: stri
       grouped.set(providerId, { first: provider, signatures: new Set([signature]) });
     }
   }
-  return [...grouped.values()].slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS).map(({ first, signatures }) => (
-    signatures.size === 1
+  if (unexamined) withheld.push({ providerId: null, label: 'Additional provider records', count: unexamined,
+    reason: 'The provider-record review bound was exceeded; these records were not examined.' });
+  const withheldIds = new Set(withheld.map((item) => item.providerId).filter(Boolean));
+  const providers = [...grouped.values()].slice(0, MAX_THREAT_INTELLIGENCE_PROVIDERS).map(({ first, signatures }) => (
+    signatures.size === 1 && !withheldIds.has(String(record(first.provider).id)) && unexamined === 0
       ? first
       : {
           ...first,
           state: 'partial',
-          detail: 'Conflicting records were returned for this provider; no conclusive provider projection is available.',
+          detail: 'Conflicting or unvalidated provider records prevent a conclusive provider projection.',
           findings: [],
           observation: {
             observedAt: null,
-            limitations: ['Conflicting records for the same provider identity were withheld rather than resolved by array order.'],
+            limitations: ['Conflicting or unvalidated records were withheld rather than resolved by array order.'],
             complete: false,
             truncated: null,
           },
         }
   ));
+  return { providers, withheld };
 }
 
 function optionalBoundedText(value: unknown, maxLength: number): boolean {
@@ -1205,11 +1228,20 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
     ? canonicalRegistrableDomain(response.registrableDomain)
       ?? canonicalRegistrableDomain(availability.domain)
     : null;
-  const providers = expectedThreatDomain
+  const threatProjection = expectedThreatDomain
     && rawThreatIntelligence.version === THREAT_INTELLIGENCE_ENVELOPE_VERSION
     && Array.isArray(rawThreatIntelligence.providers)
     ? projectThreatProviders(rawThreatIntelligence.providers, expectedThreatDomain)
-    : [];
+    : { providers: [], withheld: Object.keys(rawThreatIntelligence).length ? [{
+      providerId: null,
+      label: 'External-intelligence data',
+      count: Array.isArray(rawThreatIntelligence.providers) ? rawThreatIntelligence.providers.length : null,
+      reason: !expectedThreatDomain ? 'External intelligence was not bound to a domain Lookup and was withheld.'
+        : rawThreatIntelligence.version !== THREAT_INTELLIGENCE_ENVELOPE_VERSION
+          ? 'The external-intelligence envelope uses an unsupported version; its records were withheld.'
+          : 'External-intelligence records were not a supported array and were withheld.',
+    }] : [] };
+  const { providers, withheld } = threatProjection;
   const threatIntelligence: JsonObject = providers.length
     ? { version: THREAT_INTELLIGENCE_ENVELOPE_VERSION, providers }
     : {};
@@ -1246,6 +1278,7 @@ function createLookupViewModel(response: LookupHttpResponse | null): LookupViewM
     sslbl,
     threatIntelligence,
     threatIntelligenceProviders: providers,
+    threatIntelligenceWithheld: withheld,
     dnsEvidence,
     dnsRecords: record(dnsEvidence.records),
     httpEvidence,

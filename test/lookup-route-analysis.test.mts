@@ -390,6 +390,11 @@ describe('Lookup route analysis', () => {
     assert.equal(analysis.risk?.factors.some((factor) => factor.family === 'external-intelligence'), false);
     assert.equal(analysis.lookupObservedAt, '2026-07-01T01:05:00.000Z');
     assert.equal(analysis.evidenceObservedAtById['external-urlscan_search'], undefined);
+    assert.equal(analysis.evidenceObservedAtById['external-withheld'], null);
+    assert.equal(lookupView.threatIntelligenceWithheld[0]?.count, 2);
+    const withheld = analysis.evidenceCoverage.entries.find((entry) => entry.id === 'external-withheld');
+    assert.equal(withheld?.state, 'unsupported');
+    assert.match(withheld?.limitations.join(' ') ?? '', /not evidence of no findings/u);
   });
 
   test('requires an explicit observed source state before presenting task actions', () => {

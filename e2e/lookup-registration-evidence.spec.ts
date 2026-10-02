@@ -1199,6 +1199,46 @@ test('locally omitted provider findings remain visibly partial with accessible q
   }
 });
 
+for (const unsupported of ['provider', 'envelope'] as const) {
+  test(`unsupported ${unsupported} evidence remains visible without usable providers`, async ({ page }, testInfo) => {
+    let requests = 0;
+    await page.route('**/api/lookup?*', route => {
+      requests += 1;
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        query: 'example.test', type: 'domain', registrableDomain: 'example.test',
+        availability: { state: 'registered', domain: 'example.test' },
+        rdap: { parsed: {} }, whois: { parsed: {}, chain: [] },
+        diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+        threatIntelligence: { version: unsupported === 'envelope' ? 999 : 1, providers: [{
+          schema: THREAT_INTELLIGENCE_SCHEMA, version: unsupported === 'provider' ? 999 : THREAT_INTELLIGENCE_CONTRACT_VERSION,
+          provider: { id: 'urlscan_search', label: 'Untrusted private label' },
+          target: { type: 'domain', value: 'example.test', exposure: 'registrable_domain' },
+          state: 'success', findings: [{ category: 'phishing', detail: 'Untrusted private finding' }],
+        }] },
+      }) });
+    });
+    await page.locator('#query').fill('example.test');
+    await page.getByRole('button', { name: 'Run lookup' }).click();
+    const advanced = page.locator('#advanced-evidence');
+    await expect(advanced).toContainText('0 usable external providers');
+    await expect(advanced).toContainText('1 provider record withheld');
+    await page.getByRole('button', { name: 'Expand Advanced evidence' }).click();
+    const notice = page.getByRole('region', { name: 'Withheld external-intelligence records' });
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText('This is not evidence of no findings');
+    await expect(notice).toContainText(unsupported === 'provider' ? 'Unsupported provider format' : 'unsupported version');
+    await expect(notice).not.toContainText('Untrusted private');
+    await expect(page.locator('.threat-intelligence article')).toHaveCount(0);
+    expect(requests).toBe(1);
+    for (const width of [320, 1280]) for (const theme of ['dark', 'light'] as const) {
+      await page.setViewportSize({ width, height: 800 });
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await page.locator('.threat-intelligence').screenshot({ path: testInfo.outputPath(`withheld-${unsupported}-${width}-${theme}.png`) });
+    }
+  });
+}
+
 test('a Lookup case stores the registrar name rather than stringifying its entity', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,

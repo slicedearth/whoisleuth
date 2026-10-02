@@ -230,6 +230,10 @@ test('registration disclosure and optional sections require their own evidence c
   assert.equal(empty['case-response'].workspace.visible, false);
   assert.equal(empty['advanced-evidence'].intelligence.visible, false);
   assert.equal(empty['web-evidence'], web);
+  const withheldOnly = lookupSectionSurfaces({ ...view, threatIntelligenceWithheld: [{
+    providerId: null, label: 'External-intelligence data', count: null, reason: 'Unsupported format',
+  }] }, { domainResult: true, caseSection: false, web });
+  assert.equal(withheldOnly['advanced-evidence'].intelligence.visible, true);
   const evidence = {
     ...view,
     registryAccess: { suffix: 'test' },

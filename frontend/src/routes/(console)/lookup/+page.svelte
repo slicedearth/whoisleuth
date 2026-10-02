@@ -218,6 +218,9 @@
   );
   const diagnostics = $derived(lookupView.diagnostics);
   const threatIntelligenceProviders = $derived(lookupView.threatIntelligenceProviders);
+  const threatIntelligenceWithheld = $derived(lookupView.threatIntelligenceWithheld);
+  const withheldProviderCount = $derived(threatIntelligenceWithheld.some(item => item.count === null)
+    ? null : threatIntelligenceWithheld.reduce((total, item) => total + (item.count ?? 0), 0));
   const dnsEvidence = $derived(lookupView.dnsEvidence);
   const dnsRecords = $derived(lookupView.dnsRecords);
   const httpEvidence = $derived(lookupView.httpEvidence);
@@ -501,7 +504,7 @@
     return buildLookupResultSectionLinks({
       hasWebEvidence,
       domainResult: session.observation.response?.type === 'domain',
-      hasExternalIntelligence: threatIntelligenceProviders.length > 0,
+      hasExternalIntelligence: threatIntelligenceProviders.length > 0 || threatIntelligenceWithheld.length > 0,
       hasCaseSection,
       task: session.task,
     });
@@ -911,7 +914,8 @@
           label="Advanced evidence"
           description="Open optional external intelligence and the full validated lookup response only when the investigation requires their additional detail."
           metrics={[
-            `${threatIntelligenceProviders.length} external providers`,
+            `${threatIntelligenceProviders.length} usable external providers`,
+            ...(threatIntelligenceWithheld.length ? [withheldProviderCount ? `${withheldProviderCount} provider record${withheldProviderCount === 1 ? '' : 's'} withheld` : 'External data withheld'] : []),
             'Full response available',
           ]}
           expanded={sectionNavigation.visible('advanced-evidence')}
@@ -934,6 +938,7 @@
                 onready={restoreDeferredLookupTarget}
                 props={{
                   providers: threatIntelligenceProviders,
+                  withheld: threatIntelligenceWithheld,
                   riskContext: externalRiskContext,
                   riskModelVersion: risk?.modelVersion ?? null,
                   showValue: show,
