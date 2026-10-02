@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { HANDOFF_SOURCE_LABELS } from '$lib/candidate-handoff-core';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { goto } from '$app/navigation';
   import { page as routePage } from '$app/state';
@@ -1418,7 +1419,7 @@
   profileName={profile?.name||''}
   profileContextState={profileSourceState}
   handoffCount={handoff?.candidates.length||0}
-  handoffSource={handoff?.source.replaceAll('-',' ')||''}
+  handoffSource={handoff ? HANDOFF_SOURCE_LABELS[handoff.source] : ''}
   handoffContextTruncated={handoff?.generatedCandidatesTruncated===true}
   {input}
   setInput={(value)=>input=value}

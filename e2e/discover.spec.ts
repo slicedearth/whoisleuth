@@ -173,7 +173,7 @@ test('registry-scoped nameserver results disclose their lower-bound scope and co
   await page.getByRole('button', { name: 'Continue to Bulk with 1' }).click();
   await expect(page).toHaveURL(/\/bulk/);
   await expect(page.locator('#domains')).toHaveValue('matched.example');
-  await expect(page.locator('.handoff')).toContainText('Loaded 1 candidate from nameserver');
+  await expect(page.locator('.handoff')).toContainText('Loaded 1 candidate from Nameservers');
 });
 
 test('lookalike generation discloses its limits and paginates every retained candidate', async ({ page }) => {
@@ -752,7 +752,7 @@ test('Continue to Bulk loads canonical domains and CT provenance survives the ha
   const textarea = page.locator('#domains');
   await expect(textarea).toHaveValue(/example\.invalid/);
   await expect(textarea).toHaveValue(/other\.invalid/);
-  await expect(page.locator('.handoff')).toContainText('Loaded 2 candidates from certificate transparency');
+  await expect(page.locator('.handoff')).toContainText('Loaded 2 candidates from Certificates');
 });
 
 test.describe('CT provenance badge in Bulk results', () => {

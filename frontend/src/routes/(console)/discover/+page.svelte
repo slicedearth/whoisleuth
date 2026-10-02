@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { HANDOFF_SOURCE_LABELS } from '$lib/candidate-handoff-core';
   import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { goto } from '$app/navigation';
   import { getContext, onMount } from 'svelte';
@@ -741,10 +742,10 @@
   {#if mode==='nameserver'&&rdapSearchDisabled}<p class="feature-disabled" role="note">{rdapSearchDisabled.reason||'RDAP nameserver search is disabled by deployment policy.'}</p>{/if}
   {#if profile&&mode!=='nameserver'}<div class="profile-context"><span>Active profile: <strong>{profile.name}</strong></span><button class="btn small" onclick={useProfile}>Use profile defaults</button></div>{/if}
   <div class="modes" role="tablist" aria-label="Discovery method">
-    <button id="discovery-tab-typosquat" role="tab" aria-controls="discovery-method-panel" aria-selected={mode==='typosquat'} tabindex={mode==='typosquat'?0:-1} class:active={mode==='typosquat'} onclick={()=>selectMode('typosquat')} onkeydown={tabKeydown}>Lookalikes</button>
-    <button id="discovery-tab-keyword" role="tab" aria-controls="discovery-method-panel" aria-selected={mode==='keyword'} tabindex={mode==='keyword'?0:-1} class:active={mode==='keyword'} onclick={()=>selectMode('keyword')} onkeydown={tabKeydown}>Name ideas</button>
-    <button id="discovery-tab-certificate-transparency" role="tab" aria-controls="discovery-method-panel" aria-selected={mode==='certificate-transparency'} tabindex={mode==='certificate-transparency'?0:-1} class:active={mode==='certificate-transparency'} onclick={()=>selectMode('certificate-transparency')} onkeydown={tabKeydown}>Certificates</button>
-    <button id="discovery-tab-nameserver" role="tab" aria-controls="discovery-method-panel" aria-selected={mode==='nameserver'} tabindex={mode==='nameserver'?0:-1} class:active={mode==='nameserver'} onclick={()=>selectMode('nameserver')} onkeydown={tabKeydown}>Nameservers</button>
+    {#each ['typosquat', 'keyword', 'certificate-transparency', 'nameserver'] as method}
+      {@const id = method as Mode}
+      <button id={`discovery-tab-${id}`} role="tab" aria-controls="discovery-method-panel" aria-selected={mode===id} tabindex={mode===id?0:-1} class:active={mode===id} onclick={()=>selectMode(id)} onkeydown={tabKeydown}>{HANDOFF_SOURCE_LABELS[id]}</button>
+    {/each}
   </div>
   <div id="discovery-method-panel" role="tabpanel" aria-labelledby={`discovery-tab-${mode}`}>
   <div class="fields">

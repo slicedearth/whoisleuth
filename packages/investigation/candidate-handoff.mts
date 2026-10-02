@@ -27,14 +27,16 @@ export const MAX_MUTATION_TYPES = 30;
 export const MAX_MUTATION_TYPE_LENGTH = 80;
 export const MAX_SOURCE_LENGTH = MAX_CANDIDATE_SOURCE_LENGTH;
 
-export const HANDOFF_SOURCES = [
-  'typosquat',
-  'keyword',
-  'certificate-transparency',
-  'nameserver',
-  'watchlist',
-  'manual',
-] as const;
+export const HANDOFF_SOURCE_LABELS = Object.freeze({
+  typosquat: 'Lookalikes',
+  keyword: 'Name ideas',
+  'certificate-transparency': 'Certificates',
+  nameserver: 'Nameservers',
+  watchlist: 'Watchlist',
+  manual: 'Manual selection',
+} as const);
+export type HandoffSource = keyof typeof HANDOFF_SOURCE_LABELS;
+export const HANDOFF_SOURCES = Object.freeze(Object.keys(HANDOFF_SOURCE_LABELS) as HandoffSource[]);
 
 const DISCOVER_HANDOFF_SOURCES = new Set<HandoffSource>([
   'typosquat',
@@ -42,8 +44,6 @@ const DISCOVER_HANDOFF_SOURCES = new Set<HandoffSource>([
   'certificate-transparency',
   'nameserver',
 ]);
-
-export type HandoffSource = typeof HANDOFF_SOURCES[number];
 
 export type CertificateTransparencyProvenance = CtProvenance;
 
