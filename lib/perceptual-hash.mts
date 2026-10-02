@@ -36,11 +36,25 @@ type DecodedImage = {
 
 type IcoEntry = { area: number; dataOffset: number; size: number };
 type DibPalette = { start: number; count: number };
+type DecodeWork = { encodedBytes: number; pixels: number };
 
 // Bound the decode work on attacker-controlled image bytes. Real favicons top
 // out around 256x256; larger inputs above this ceiling remain exact-only
 // evidence rather than causing unbounded pixel allocation.
 const MAX_DIM = 1024;
+
+// Permit two maximum-sized decode attempts (more than a normal resolution
+// pyramid), while bounding aggregate inflation/filtering across a container.
+// Encoded payloads may consume at most the container's byte length in total;
+// ordinary non-overlapping entries never exceed that bound.
+const MAX_DECODE_PIXELS = 2 * MAX_DIM * MAX_DIM;
+
+function admitPixels(work: DecodeWork, width: number, height: number): boolean {
+  const count = width * height;
+  if (count > work.pixels) return false;
+  work.pixels -= count;
+  return true;
+}
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
@@ -72,7 +86,7 @@ function paethPredictor(a: number, b: number, c: number): number {
 // { width, height, pixels } with pixels as RGBA bytes, or null for anything
 // outside that subset (or malformed input). CRCs are intentionally not
 // verified - we're computing a fuzzy hash, not validating integrity.
-function decodePng(buf: Buffer): DecodedImage | null {
+function decodePng(buf: Buffer, work: DecodeWork): DecodedImage | null {
   const CHANNELS: Record<number, number> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
   let width = 0;
   let height = 0;
@@ -105,7 +119,7 @@ function decodePng(buf: Buffer): DecodedImage | null {
     } else if (type === 'tRNS') {
       transparency = data;
     } else if (type === 'IDAT') {
-      idatParts.push(Buffer.from(data));
+      idatParts.push(data);
     } else if (type === 'IEND') {
       break;
     }
@@ -122,6 +136,7 @@ function decodePng(buf: Buffer): DecodedImage | null {
     || (colorType === 3 && (!palette || transparency.length > palette.length / 3))
     || colorType === 4 || colorType === 6)) return null;
   if (idatParts.length === 0) return null;
+  if (!admitPixels(work, width, height)) return null;
 
   // A valid non-interlaced 8-bit PNG decompresses to exactly one filter byte
   // plus one scanline per row. Cap the inflate at that size so a malicious
@@ -208,7 +223,7 @@ function decodePng(buf: Buffer): DecodedImage | null {
 // palettized and 24/32-bit truecolour. The stored height is doubled (it
 // includes the 1-bpp AND transparency mask). Non-alpha and legacy all-zero
 // alpha images use that mask; meaningful 32-bit alpha remains authoritative.
-function decodeDib(buf: Buffer): DecodedImage | null {
+function decodeDib(buf: Buffer, work: DecodeWork): DecodedImage | null {
   if (buf.length < 40) return null;
   const headerSize = buf.readUInt32LE(0);
   if (headerSize < 40 || headerSize > buf.length) return null;
@@ -241,6 +256,7 @@ function decodeDib(buf: Buffer): DecodedImage | null {
   const maskRowSize = Math.ceil(width / 32) * 4;
   const maskPresent = maskStart + maskRowSize * height <= buf.length;
   if (bitCount !== 32 && !maskPresent) return null;
+  if (!admitPixels(work, width, height)) return null;
 
   const paletteColor = (index: number): [number, number, number] => {
     if (!palette || index >= palette.count) return [0, 0, 0];
@@ -298,9 +314,10 @@ function decodeDib(buf: Buffer): DecodedImage | null {
 // one is in a variant we don't decode (e.g. a 4-bit-palette PNG sub-entry
 // alongside a plain BMP one). A multi-size favicon.ico only needs one usable
 // entry, and any size hashes to nearly the same dHash since it downsamples.
-function decodeIco(buf: Buffer): DecodedImage | null {
+function decodeIco(buf: Buffer, work: DecodeWork): DecodedImage | null {
   const count = buf.readUInt16LE(4);
-  if (count < 1 || 6 + count * 16 > buf.length) return null;
+  const directoryEnd = 6 + count * 16;
+  if (count < 1 || directoryEnd > buf.length) return null;
   const entries: IcoEntry[] = [];
   for (let i = 0; i < count; i += 1) {
     const entry = 6 + i * 16;
@@ -308,13 +325,19 @@ function decodeIco(buf: Buffer): DecodedImage | null {
     const h = buf[entry + 1] || 256;
     const size = buf.readUInt32LE(entry + 8);
     const dataOffset = buf.readUInt32LE(entry + 12);
-    if (dataOffset + size > buf.length || size < 1) continue;
+    if (dataOffset < directoryEnd || dataOffset + size > buf.length || size < 1) continue;
     entries.push({ area: w * h, dataOffset, size });
   }
   entries.sort((a, b) => b.area - a.area);
+  const visited = new Set<string>();
   for (const { dataOffset, size } of entries) {
+    const identity = `${dataOffset}:${size}`;
+    if (visited.has(identity)) continue;
+    visited.add(identity);
+    if (size > work.encodedBytes) return null;
+    work.encodedBytes -= size;
     const payload = buf.subarray(dataOffset, dataOffset + size);
-    const image = isPng(payload) ? decodePng(payload) : decodeDib(payload);
+    const image = isPng(payload) ? decodePng(payload, work) : decodeDib(payload, work);
     if (image) return image;
   }
   return null;
@@ -322,8 +345,9 @@ function decodeIco(buf: Buffer): DecodedImage | null {
 
 function decodeImage(buf: unknown): DecodedImage | null {
   if (!Buffer.isBuffer(buf)) return null;
-  if (isPng(buf)) return decodePng(buf);
-  if (isIco(buf)) return decodeIco(buf);
+  const work: DecodeWork = { encodedBytes: buf.length, pixels: MAX_DECODE_PIXELS };
+  if (isPng(buf)) return decodePng(buf, work);
+  if (isIco(buf)) return decodeIco(buf, work);
   return null;
 }
 
