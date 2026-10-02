@@ -901,13 +901,13 @@ describe('Lookup HTTP response contract', () => {
 
   test('accepts only the bounded official registrar-standing projection', () => {
     const standing = buildRegistrarStanding({
-      registrarIanaId: '4318',
+      registrarIanaId: '900003',
       now: new Date('2026-09-03T12:00:00.000Z'),
     });
     const represented = {
       registrarStanding: standing,
-      rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '4318' } },
-      whois: { parsed: { domainName: 'EXAMPLE.TEST', registrarIanaId: '04318' }, chain: [] },
+      rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '900003' } },
+      whois: { parsed: { domainName: 'EXAMPLE.TEST', registrarIanaId: '0900003' }, chain: [] },
     };
     const parsed = parseLookupHttpResponse(response(represented));
     assert.equal(parsed.ok, true);

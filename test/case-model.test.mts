@@ -1227,8 +1227,8 @@ describe('compareCaseEvidence', () => {
 
   test('ignores casing-only and order-only differences', () => {
     const changes = model.compareCaseEvidence(
-      snap({ registrar: 'GoDaddy', nameservers: ['A.NS.example', 'b.ns.example'] }),
-      snap({ registrar: 'godaddy', nameservers: ['b.ns.example.', 'a.ns.example'] }),
+      snap({ registrar: 'Example Registrar', nameservers: ['A.NS.example', 'b.ns.example'] }),
+      snap({ registrar: 'example registrar', nameservers: ['b.ns.example.', 'a.ns.example'] }),
     );
     assert.equal(changes.length, 0);
   });

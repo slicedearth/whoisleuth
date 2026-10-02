@@ -245,10 +245,10 @@ test('replay retains separately attributed registrar accreditation and complianc
   const document = evidence();
   document.generatedAt = '2026-09-03T12:00:00.000Z';
   const sources = document.sources as Record<string, Record<string, unknown>>;
-  (sources.rdap!.parsed as Record<string, unknown>).registrarIanaId = '4318';
-  (sources.whois!.parsed as Record<string, unknown>).registrarIanaId = '04318';
+  (sources.rdap!.parsed as Record<string, unknown>).registrarIanaId = '900003';
+  (sources.whois!.parsed as Record<string, unknown>).registrarIanaId = '0900003';
   (document.analysis as Record<string, unknown>).registrarStanding = buildRegistrarStanding({
-    registrarIanaId: '4318',
+    registrarIanaId: '900003',
     now: new Date('2026-09-03T12:00:00.000Z'),
   });
   const replay = await parseLookupEvidenceReplay(JSON.stringify(document));
@@ -267,7 +267,7 @@ test('replay retains separately attributed registrar accreditation and complianc
   );
 
   (document.analysis as Record<string, unknown>).registrarStanding = buildRegistrarStanding({
-    registrarIanaId: '4318',
+    registrarIanaId: '900003',
     now: new Date('2026-09-03T12:00:00.000Z'),
   });
   document.generatedAt = '2026-09-03T08:00:00.000Z';

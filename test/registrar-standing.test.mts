@@ -29,20 +29,20 @@ import {
 const OBSERVED_AT = '2026-09-03T06:51:00.000Z';
 const CSV = `"ID",Registrar Name,Status,RDAP Base URL\n`
   + `2,"Example, Registrar",Accredited,https://rdap.example.test/\n`
-  + `4318,Example Provider,Accredited,\n`
+  + `900003,Example Provider,Accredited,\n`
   + `5000,Former Provider,Terminated,\n`;
 const HTML = `<!doctype html><html><body>
   <div id="2026-Termination">
-    <div class="compliance-notice" data-id="27-08-2026" id="notice-1367">
-      <a href="/uploads/compliance_notice/attachment/1367/notice.pdf">ICANN Sends Notice of Termination to Registrar</a>
-      (Example Provider (IANA#4318)) <span class="action"></span>
+    <div class="compliance-notice" data-id="13-07-2026" id="notice-90000001">
+      <a href="/uploads/compliance_notice/attachment/90000001/notice.pdf">ICANN Sends Notice of Termination to Registrar</a>
+      (Example Provider (IANA#900003)) <span class="action"></span>
     </div>
   </div>
   <div id="2026-Suspension"><i class="no_result">No notices.</i></div>
   <div id="2026-Breach">
-    <div class="compliance-notice" data-id="26-08-2026" id="notice-1365">
-      <a href="/uploads/compliance_notice/attachment/1365/breach.pdf">ICANN Sends Notice of Breach to Registrar</a>
-      (Example Provider (IANA #4318)) <span class="action"><strong>Escalated</strong> to <em>Termination</em></span>
+    <div class="compliance-notice" data-id="12-07-2026" id="notice-90000002">
+      <a href="/uploads/compliance_notice/attachment/90000002/breach.pdf">ICANN Sends Notice of Breach to Registrar</a>
+      (Example Provider (IANA #900003)) <span class="action"><strong>Escalated</strong> to <em>Termination</em></span>
     </div>
   </div>
   <div id="2026-Non-Renewal"><i class="no_result">No notices.</i></div>
@@ -85,39 +85,39 @@ describe('registrar standing catalogue maintenance', () => {
     const notices = parseIcannComplianceNotices(HTML, 2026);
     assert.deepEqual(rows, [
       { id: 2, status: 'Accredited' },
-      { id: 4318, status: 'Accredited' },
       { id: 5000, status: 'Terminated' },
+      { id: 900003, status: 'Accredited' },
     ]);
     assert.deepEqual(notices, [
       {
-        noticeId: 'notice-1367',
-        ianaId: 4318,
+        noticeId: 'notice-90000001',
+        ianaId: 900003,
         type: 'termination',
-        issuedOn: '2026-08-27',
-        sourceUrl: 'https://www.icann.org/uploads/compliance_notice/attachment/1367/notice.pdf',
+        issuedOn: '2026-07-13',
+        sourceUrl: 'https://www.icann.org/uploads/compliance_notice/attachment/90000001/notice.pdf',
         indexOutcome: null,
       },
       {
-        noticeId: 'notice-1365',
-        ianaId: 4318,
+        noticeId: 'notice-90000002',
+        ianaId: 900003,
         type: 'breach',
-        issuedOn: '2026-08-26',
-        sourceUrl: 'https://www.icann.org/uploads/compliance_notice/attachment/1365/breach.pdf',
+        issuedOn: '2026-07-12',
+        sourceUrl: 'https://www.icann.org/uploads/compliance_notice/attachment/90000002/breach.pdf',
         indexOutcome: 'Escalated to Termination',
       },
     ]);
   });
 
   test('rejects duplicate IDs, malformed rows, changed notice structure and off-origin links', () => {
-    assert.throws(() => parseIanaRegistrarCsv(`${CSV}4318,Duplicate,Accredited,\n`), /repeated ID 4318/u);
+    assert.throws(() => parseIanaRegistrarCsv(`${CSV}900003,Duplicate,Accredited,\n`), /repeated ID 900003/u);
     assert.throws(() => parseIanaRegistrarCsv(CSV.replace('Accredited', 'Unknown')), /unsupported status/u);
     assert.throws(() => parseIcannComplianceNotices(HTML.replace('id="2026-Breach"', 'id="changed"'), 2026), /2026-Breach/u);
     assert.throws(() => parseIcannComplianceNotices(
-      HTML.replace('/uploads/compliance_notice/attachment/1367/notice.pdf', 'https://untrusted.example/notice.pdf'),
+      HTML.replace('/uploads/compliance_notice/attachment/90000001/notice.pdf', 'https://untrusted.example/notice.pdf'),
       2026,
     ), /unexpected source URL/u);
     assert.throws(() => parseIcannComplianceNotices(
-      HTML.replace('/uploads/compliance_notice/attachment/1367/notice.pdf', 'https://www.icann.org:444/uploads/compliance_notice/attachment/1367/notice.pdf'),
+      HTML.replace('/uploads/compliance_notice/attachment/90000001/notice.pdf', 'https://www.icann.org:444/uploads/compliance_notice/attachment/90000001/notice.pdf'),
       2026,
     ), /unexpected source URL/u);
     assert.throws(() => buildRegistrarStandingSnapshot({
@@ -132,9 +132,9 @@ describe('registrar standing catalogue maintenance', () => {
 
   test('renders no registrar names or source HTML into the runtime catalogue', () => {
     const rendered = renderRegistrarStandingCatalogue(fixtureCatalogue());
-    assert.match(rendered, /"encodedStatuses": "2:A,4318:A,5000:T"/u);
+    assert.match(rendered, /"encodedStatuses": "2:A,5000:T,900003:A"/u);
     assert.doesNotMatch(rendered, /Example Provider|Example, Registrar|<!doctype/iu);
-    assert.match(rendered, /notice-1367/u);
+    assert.match(rendered, /notice-90000001/u);
   });
 
   test('writes an explicit reviewed update atomically beneath the selected repository root', async () => {
@@ -274,11 +274,11 @@ describe('registrar standing catalogue maintenance', () => {
 describe('registrar standing interpretation', () => {
   test('keeps accreditation and compliance separate when an official termination notice is present', () => {
     const standing = buildRegistrarStanding({
-      registrarIanaId: '04318',
+      registrarIanaId: '0900003',
       catalogue: fixtureCatalogue(),
       now: new Date('2026-09-03T12:00:00.000Z'),
     });
-    assert.equal(standing.ianaId, '4318');
+    assert.equal(standing.ianaId, '900003');
     assert.equal(standing.accreditation.state, 'accredited');
     assert.equal(standing.compliance.state, 'matching_actions');
     assert.equal(standing.assessment.state, 'notice_present');
@@ -289,7 +289,7 @@ describe('registrar standing interpretation', () => {
 
   test('does not infer a dated outcome or target maliciousness from the notice index', () => {
     const standing = buildRegistrarStanding({
-      registrarIanaId: '4318',
+      registrarIanaId: '900003',
       catalogue: fixtureCatalogue(),
       now: new Date('2026-09-12T00:00:00.000Z'),
     });
@@ -341,7 +341,7 @@ describe('registrar standing interpretation', () => {
     assert.equal(unavailable.accreditation.sourceHealth, 'unavailable');
     assert.equal(unavailable.assessment.state, 'unknown');
 
-    const valid = buildRegistrarStanding({ registrarIanaId: '4318', catalogue: fixtureCatalogue(), now: new Date(OBSERVED_AT) });
+    const valid = buildRegistrarStanding({ registrarIanaId: '900003', catalogue: fixtureCatalogue(), now: new Date(OBSERVED_AT) });
     const offOrigin = structuredClone(valid) as unknown as { compliance: { actions: Array<{ sourceUrl: string }> } };
     offOrigin.compliance.actions[0]!.sourceUrl = 'https://untrusted.example/notice.pdf';
     assert.equal(validRegistrarStanding(offOrigin), false);
@@ -349,7 +349,7 @@ describe('registrar standing interpretation', () => {
     wrongNotice.compliance.actions[0]!.sourceUrl = 'https://www.icann.org/uploads/compliance_notice/attachment/9999/notice.pdf';
     assert.equal(validRegistrarStanding(wrongNotice), false);
     const alternatePort = structuredClone(valid) as unknown as { compliance: { actions: Array<{ sourceUrl: string }> } };
-    alternatePort.compliance.actions[0]!.sourceUrl = 'https://www.icann.org:444/uploads/compliance_notice/attachment/1367/notice.pdf';
+    alternatePort.compliance.actions[0]!.sourceUrl = 'https://www.icann.org:444/uploads/compliance_notice/attachment/90000001/notice.pdf';
     assert.equal(validRegistrarStanding(alternatePort), false);
     const excess = structuredClone(valid) as unknown as { compliance: { actions: Array<unknown> } };
     excess.compliance.actions = Array.from({ length: MAX_REGISTRAR_COMPLIANCE_ACTIONS + 1 }, () => excess.compliance.actions[0]);
@@ -370,7 +370,7 @@ describe('registrar standing interpretation', () => {
     };
     wrongCounts.iana.counts.Accredited += 1;
     assert.equal(buildRegistrarStanding({
-      registrarIanaId: '4318',
+      registrarIanaId: '900003',
       catalogue: wrongCounts,
       now: new Date(OBSERVED_AT),
     }).assessment.state, 'unknown');
@@ -413,7 +413,7 @@ describe('registrar standing interpretation', () => {
     futureCatalogue.iana.observedAt = future;
     futureCatalogue.icann.reviewedAt = future;
     assert.equal(buildRegistrarStanding({
-      registrarIanaId: '4318',
+      registrarIanaId: '900003',
       catalogue: futureCatalogue,
       now: new Date(OBSERVED_AT),
     }).assessment.state, 'unknown');

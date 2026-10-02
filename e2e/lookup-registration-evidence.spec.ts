@@ -19,9 +19,10 @@ import { verifyOfflineInvestigationPackage } from '../cli/investigation-package-
 
 const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
 
-// Every value here is deliberately dotless (no TLD), so classifyQuery on the
-// server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
-// never trigger a live lookup, only client-side parsing/navigation.
+// Valid suffix and registry scenarios use injected API responses; invalid
+// inputs are rejected locally. No registry, WHOIS or DNS service is contacted.
+// The routing-pivot scenario needs a public address to exercise its admission
+// policy; documentation ranges are deliberately ineligible for those links.
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {

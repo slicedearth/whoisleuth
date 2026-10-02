@@ -431,7 +431,7 @@ describe('lookup evidence export', () => {
   test('binds registrar standing to the unambiguous retained registration identity', () => {
     const response = fixtureResponse();
     response.registrarStanding = buildRegistrarStanding({
-      registrarIanaId: '4318',
+      registrarIanaId: '900003',
       now: new Date('2026-09-03T12:00:00.000Z'),
     });
     assert.throws(

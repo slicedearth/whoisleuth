@@ -67,12 +67,12 @@ function boundedHttpEvidence(redirectCount = MAX_HTTP_EVIDENCE_REDIRECTS) {
 
 describe('Lookup browser request boundary', () => {
   test('returns invalid-response rather than a network failure for malformed registrar action dates', async () => {
-    const standing = buildFixtureRegistrarStanding({ registrarIanaId: '4318', now: new Date('2026-09-03T12:00:00.000Z') });
+    const standing = buildFixtureRegistrarStanding({ registrarIanaId: '900003', now: new Date('2026-09-03T12:00:00.000Z') });
     assert.equal(validRegistrarStanding(standing), true);
     assert.ok(standing.compliance.actions.length > 0);
     const valid = { ...response(),
       registrarStanding: standing,
-      rdap: { parsed: { domain: 'example.test', registrarIanaId: '4318' } },
+      rdap: { parsed: { domain: 'example.test', registrarIanaId: '900003' } },
     };
     assert.equal(parseLookupHttpResponse(valid).ok, true);
     for (const issuedOn of ['2026-13-01', '2026-00-01', '2026-02-30', '2026-01-00', '2026-01-32']) {

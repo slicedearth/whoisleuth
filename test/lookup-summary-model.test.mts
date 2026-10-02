@@ -70,7 +70,7 @@ test('builds bounded assessment signals and separately attributed diagnostics', 
       parsed: { conformance: ['rdap_level_0'] },
     },
     registrarStanding: buildRegistrarStanding({
-      registrarIanaId: '4318',
+      registrarIanaId: '900003',
       now: new Date('2026-09-03T12:00:00.000Z'),
     }),
     registryComparison: {

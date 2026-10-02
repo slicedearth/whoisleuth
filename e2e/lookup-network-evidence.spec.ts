@@ -13,7 +13,7 @@ import { analyzeWebsiteTechnology } from '../lib/website-technology.mts';
 import { analyzeWebsiteSecurityPosture } from '../lib/website-security-posture.mts';
 import { expectLookupTargetAligned } from './lookup-design-fixtures';
 
-// Lookup fixtures use reserved targets or locally rejected inputs. The shared
+// Lookup fixtures use injected protocol responses or locally rejected inputs. The shared
 // browser and server guards prevent live collection.
 
 test.beforeEach(async ({ page }) => {
@@ -64,10 +64,10 @@ for (const viewport of [
             observedAt: '2026-09-01T00:00:00.000Z', durationMs: 10,
             detail: 'Network registration was retained, but the source record is incomplete. Some IP RDAP contact records or fields were omitted during bounded normalisation.',
             limitations: ['Some IP RDAP contact records or fields were omitted during bounded normalisation.'],
-            endpoint: { address: '93.184.216.34', family: 4, selectedFrom: 'tls_connection' },
-            rdap: { endpoint: 'https://network.example/rdap/ip/93.184.216.34', httpStatus: 200,
+            endpoint: { address: '192.0.2.34', family: 4, selectedFrom: 'tls_connection' },
+            rdap: { endpoint: 'https://network.example/rdap/ip/192.0.2.34', httpStatus: 200,
               transportSecurity: 'https', fetchedAt: '2026-09-01T00:00:00.000Z', attempts: [] },
-            network: { name: 'Example network', holder: 'Example network holder', cidrs: ['93.184.216.0/24'] },
+            network: { name: 'Example network', holder: 'Example network holder', cidrs: ['192.0.2.0/24'] },
             diagnostics: { requestCount: 1, addressSource: 'tls_connection', httpStatus: 200, cidrCount: 1 },
             abuseRouting: [],
           },
@@ -397,7 +397,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
           scanMode: 'deep', source: 'tls', durationMs: 42, complete: true, truncated: false,
           limitations: ['This is a point-in-time TLS handshake fixture.'],
           diagnostics: { connectionAttempts: 1, resolvedAddressCount: 1, discardedFields: 0 },
-          connectedAddress: '93.184.216.34', connectedFamily: 4, port: 443, sniHost: 'http-evidence.test',
+          connectedAddress: '192.0.2.34', connectedFamily: 4, port: 443, sniHost: 'http-evidence.test',
           protocol: 'TLSv1.3', alpnProtocol: 'h2',
           cipher: { name: 'TLS_AES_256_GCM_SHA384', standardName: 'TLS_AES_256_GCM_SHA384', version: 'TLSv1.3' },
           ephemeralKey: { type: 'ECDH', name: 'X25519', size: 253 },
@@ -980,7 +980,7 @@ test('TLS evidence presents one-connection certificate evidence without narrow-w
           scanMode: 'deep', source: 'tls', durationMs: 42, complete: true, truncated: false,
           limitations: ['This is a point-in-time TLS handshake to one validated public address.'],
           diagnostics: { connectionAttempts: 1, resolvedAddressCount: 1, discardedFields: 0 },
-          connectedAddress: '93.184.216.34', connectedFamily: 4, port: 443, sniHost: 'tls-evidence.test',
+          connectedAddress: '192.0.2.34', connectedFamily: 4, port: 443, sniHost: 'tls-evidence.test',
           protocol: 'TLSv1.3', alpnProtocol: 'h2',
           cipher: { name: 'TLS_AES_256_GCM_SHA384', standardName: 'TLS_AES_256_GCM_SHA384', version: 'TLSv1.3' },
           ephemeralKey: { type: 'ECDH', name: 'X25519', size: 253 },
@@ -1023,9 +1023,9 @@ test('TLS evidence presents one-connection certificate evidence without narrow-w
   await expect(card).not.toHaveAttribute('open', '');
   await expect(card.getByRole('heading', { name: 'TLS and certificate evidence' })).toBeVisible();
   await expect(card.locator(':scope > summary .evidence-status')).toHaveText('success');
-  await expect(card.getByText('93.184.216.34', { exact: true })).toBeHidden();
+  await expect(card.getByText('192.0.2.34', { exact: true })).toBeHidden();
   await card.locator(':scope > summary').click();
-  await expect(card.getByText('93.184.216.34', { exact: true })).toBeVisible();
+  await expect(card.getByText('192.0.2.34', { exact: true })).toBeVisible();
   await expect(card.getByText('TLSv1.3', { exact: true })).toBeVisible();
   await expect(card.getByText('Not authorised', { exact: true })).toBeVisible();
   await expect(card.getByText('Certificate not authorised', { exact: true })).toBeVisible();

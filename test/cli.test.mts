@@ -802,9 +802,9 @@ test('terminal lookup separately attributes represented registrar RDAP diagnosti
 
 test('terminal lookup surfaces official registrar standing without classifying the domain', () => {
   const result = lookupResult({
-    rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '4318' } },
+    rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '900003' } },
     registrarStanding: buildRegistrarStanding({
-      registrarIanaId: '4318',
+      registrarIanaId: '900003',
       now: new Date('2026-09-03T12:00:00.000Z'),
     }),
   });
@@ -820,20 +820,20 @@ test('terminal lookup surfaces official registrar standing without classifying t
   const verbose = formatTerminalLookup(document, { detail: 'verbose' });
   assert.match(summary, /Registrar standing Official termination notice found/u);
   assert.doesNotMatch(summary, /malicious|safe/u);
-  assert.match(verbose, /Registrar ID\s+4318/u);
+  assert.match(verbose, /Registrar ID\s+900003/u);
   assert.match(verbose, /Accreditation\s+Accredited · source Current/u);
-  assert.match(verbose, /Official notice Termination · 2026-08-27/u);
+  assert.match(verbose, /Official notice Termination · 2026-07-13/u);
   assert.doesNotMatch(verbose, /effective/u);
-  assert.match(verbose, /Notice source\s+https:\/\/www\.icann\.org\/uploads\/compliance_notice\/attachment\/1367\//u);
+  assert.match(verbose, /Notice source\s+https:\/\/www\.icann\.org\/uploads\/compliance_notice\/attachment\/90000001\//u);
   assert.match(verbose, /Standing scope Provider standing is context, not a classification of this domain/u);
 
   const unavailable = formatTerminalLookup(buildCliLookupDocument(
     'example.test',
     classifiedDomain('example.test'),
     lookupResult({
-      rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '4318' } },
+      rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '900003' } },
       registrarStanding: buildRegistrarStanding({
-        registrarIanaId: '4318',
+        registrarIanaId: '900003',
         catalogue: {},
         now: new Date('2026-09-03T12:00:00.000Z'),
       }),

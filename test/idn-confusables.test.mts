@@ -49,7 +49,7 @@ describe('punycode decoding and dual domain representation', () => {
 
 describe('script analysis', () => {
   test('detects a Latin and Cyrillic mixture within one label', () => {
-    const result = analysis(domainToASCII('раypal.com'));
+    const result = analysis(domainToASCII('еxample.test'));
     assert.equal(result.hasIdn, true);
     assert.equal(result.mixedScript, true);
     assert.deepEqual(firstLabel(result).scripts, ['Cyrillic', 'Latin']);

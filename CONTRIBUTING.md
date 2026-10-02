@@ -359,6 +359,12 @@ Automated browser checks, simulated sessions and elapsed time alone are not
 evidence of human usability.
 
 Do not include credentials, private investigations or local paths in source,
-fixtures or reports. Automated tests use deterministic reserved targets and
-must not perform live collection. Report security issues through
+fixtures or reports. Automated tests use deterministic fixtures and must not
+perform live collection. Prefer reserved names and documentation addresses for
+display, export and replay. Real suffixes, catalogue/provider identifiers and
+address-policy boundaries are appropriate when those exact values define the
+contract being tested; inject their transport responses. Do not rewrite
+digest-bound historical fixtures. Synthetic registrar observations must not
+attribute invented compliance actions to real registrar identifiers.
+Report security issues through
 [the security policy](SECURITY.md).

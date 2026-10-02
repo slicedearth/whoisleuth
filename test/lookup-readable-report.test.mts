@@ -353,14 +353,14 @@ describe('browser-local readable Lookup report', () => {
   test('retains direct official notice evidence without turning provider standing into a domain verdict', () => {
     const report = buildLookupReadableReport(lookupResponse({
       rdap: {
-        parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '4318' },
+        parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '900003' },
       },
       whois: {
-        parsed: { domainName: 'EXAMPLE.TEST', registrarIanaId: '4318' },
+        parsed: { domainName: 'EXAMPLE.TEST', registrarIanaId: '900003' },
         chain: [],
       },
       registrarStanding: buildRegistrarStanding({
-        registrarIanaId: '4318',
+        registrarIanaId: '900003',
         now: new Date('2026-09-03T12:00:00.000Z'),
       }) as unknown as JsonObject,
     }), {
@@ -369,16 +369,16 @@ describe('browser-local readable Lookup report', () => {
     });
 
     assert.match(report, /Official notice 1/u);
-    assert.match(report, /Termination issued 2026\\-08\\-27/u);
-    assert.ok(report.includes('www\\.icann\\.org/uploads/compliance\\_notice/attachment/1367'));
+    assert.match(report, /Termination issued 2026\\-07\\-13/u);
+    assert.ok(report.includes('www\\.icann\\.org/uploads/compliance\\_notice/attachment/90000001'));
     assert.match(report, /not whether this domain is malicious/iu);
     assert.doesNotMatch(report, /proves? (?:the )?domain (?:is )?malicious/iu);
 
     const unavailable = buildLookupReadableReport(lookupResponse({
-      rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '4318' } },
+      rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '900003' } },
       whois: { parsed: {}, chain: [] },
       registrarStanding: buildRegistrarStanding({
-        registrarIanaId: '4318',
+        registrarIanaId: '900003',
         catalogue: {},
         now: new Date('2026-09-03T12:00:00.000Z'),
       }) as unknown as JsonObject,

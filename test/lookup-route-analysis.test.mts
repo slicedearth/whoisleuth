@@ -202,7 +202,7 @@ describe('Lookup route analysis', () => {
     const baseline = response();
     const withStanding = response({
       registrarStanding: buildRegistrarStanding({
-        registrarIanaId: '4318',
+        registrarIanaId: '900003',
         now: new Date('2026-09-03T12:00:00.000Z'),
       }) as unknown as NonNullable<LookupHttpResponse['registrarStanding']>,
     });

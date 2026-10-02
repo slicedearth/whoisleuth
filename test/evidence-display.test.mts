@@ -160,7 +160,7 @@ describe('formatSnapshotValue', () => {
   });
 
   test('returns string for plain strings', () => {
-    assert.equal(display.formatSnapshotValue('registrar', 'GoDaddy'), 'GoDaddy');
+    assert.equal(display.formatSnapshotValue('registrar', 'Example Registrar'), 'Example Registrar');
   });
 });
 
