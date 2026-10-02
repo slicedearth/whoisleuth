@@ -19,6 +19,8 @@
   function stateLabel(state: DomainPostureMatrixState): string {
     if (state === 'approved_window') return 'Approved window';
     if (state === 'not_configured') return 'Not configured';
+    if (state === 'not_due') return 'Not due';
+    if (state === 'due') return 'Review due';
     return state[0]?.toUpperCase() + state.slice(1);
   }
 
@@ -125,6 +127,7 @@
   td em,.mobile-rows em{color:var(--muted);font-size:var(--text-2xs);font-style:normal}
   .state-aligned>strong,.state-aligned dt+dd>strong{color:var(--success)}
   .state-drift>strong,.state-drift dt+dd>strong{color:var(--danger)}
+  .state-due>strong,.state-due dt+dd>strong{color:var(--amber)}
   .state-approved_window>strong,.state-approved_window dt+dd>strong,.state-review>strong,.state-review dt+dd>strong,.state-suppressed>strong,.state-suppressed dt+dd>strong{color:var(--amber)}
   .state-unavailable>strong,.state-unavailable dt+dd>strong,.state-unknown>strong,.state-unknown dt+dd>strong,.state-unsupported>strong,.state-unsupported dt+dd>strong{color:var(--muted)}
   .mobile-rows{display:none}

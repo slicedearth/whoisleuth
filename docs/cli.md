@@ -551,6 +551,12 @@ and `unavailable` queries do not. Omitted queries are not queried. Version-1
 inputs remain readable but establish query scope only for supplied records.
 An expected empty set alone cannot establish an observed empty answer.
 
+Domain-control review version 3 keeps renewal reminders separate from observed
+configuration: `due` and `not_due` describe the chosen review date, not DNS or
+registration changes. Incomplete evidence remains `partial` even when a reminder
+is due. Terminal and JUnit summaries report due reminders separately. Previous
+review and monitor checkpoints retain their original versioned interpretation.
+
 ## Exit codes
 
 See the [exit-code reference](cli-reference.md#files-output-and-automation).

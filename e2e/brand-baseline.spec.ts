@@ -1416,7 +1416,7 @@ test('official-site baseline controls fit a narrow mobile viewport without horiz
   expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(box!.x + box!.width);
 });
 
-test('cross-domain posture matrix links exact retained baselines and observations without collection', async ({ page }) => {
+test('cross-domain posture matrix links exact retained baselines and observations without collection', async ({ page }, testInfo) => {
   await page.clock.setFixedTime(new Date(ISO));
   let postureRequests = 0;
   await page.route('**/api/domain-posture**', (route) => {
@@ -1432,6 +1432,7 @@ test('cross-domain posture matrix links exact retained baselines and observation
         domain: 'stored.example',
         nameservers: ['ns1.stored.example'],
         ds: ['12345 13 2 abcdef'],
+        renewalReviewAt: '2026-07-12T00:00:00.000Z',
         observationHistory: [{
           observedAt: '2026-07-12T00:00:00.000Z',
           context: brandPostureObservationContext(requiredValue(normalizeBrandProfile({ ...profileFixture(), officialDomains: ['stored.example', 'unavailable.example', 'unset.example'] }), 'The profile fixture is invalid.'), 'stored.example'),
@@ -1453,6 +1454,8 @@ test('cross-domain posture matrix links exact retained baselines and observation
   const storedRow = matrix.locator('tbody tr', { hasText: 'stored.example' });
   await expect(storedRow).toContainText('Aligned');
   await expect(storedRow).toContainText('Unsupported');
+  await expect(storedRow).toContainText('Review due');
+  await expect(storedRow).not.toContainText('Drift');
   const unavailableRow = matrix.locator('tbody tr', { hasText: 'unavailable.example' });
   await expect(unavailableRow).toContainText('Unavailable');
   const unconfiguredRow = matrix.locator('tbody tr', { hasText: 'unset.example' });
@@ -1468,7 +1471,19 @@ test('cross-domain posture matrix links exact retained baselines and observation
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(matrix.locator('.mobile-rows')).toBeVisible();
+  await expect(matrix.locator('.mobile-rows')).toContainText('Review due');
   await expectNoHorizontalOverflow(page);
+  if (captureVisualEvidenceEnabled()) {
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      for (const theme of ['light', 'dark'] as const) {
+        await useTheme(page, theme);
+        await expectNoHorizontalOverflow(page);
+        await matrix.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath(`renewal-comparison-${width}-${theme}.png`) });
+      }
+    }
+  }
 });
 
 test('retained certificate events replay reviewed expectations without mobile overflow', async ({ page }) => {

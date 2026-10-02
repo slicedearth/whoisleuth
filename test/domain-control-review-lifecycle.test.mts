@@ -103,12 +103,16 @@ describe('domain-control review schema lifecycle', () => {
       [
         [DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, 1, 'input', true, false, 'reject'],
         [DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, 2, 'input', true, false, 'reject'],
+        [DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, 3, 'input', true, false, 'reject'],
         [DOMAIN_CONTROL_REVIEW_SCHEMA, 1, 'document', true, false, 'reject'],
-        [DOMAIN_CONTROL_REVIEW_SCHEMA, 2, 'document', true, true, 'reject'],
+        [DOMAIN_CONTROL_REVIEW_SCHEMA, 2, 'document', true, false, 'reject'],
+        [DOMAIN_CONTROL_REVIEW_SCHEMA, 3, 'document', true, true, 'reject'],
         [CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, 1, 'input', true, false, 'reject'],
         [CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, 2, 'input', true, false, 'reject'],
+        [CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, 3, 'input', true, false, 'reject'],
         [CLI_DOMAIN_CONTROL_REVIEW_SCHEMA, 1, 'document', false, false, 'not_applicable'],
-        [CLI_DOMAIN_CONTROL_REVIEW_SCHEMA, 2, 'document', false, true, 'not_applicable'],
+        [CLI_DOMAIN_CONTROL_REVIEW_SCHEMA, 2, 'document', false, false, 'not_applicable'],
+        [CLI_DOMAIN_CONTROL_REVIEW_SCHEMA, 3, 'document', false, true, 'not_applicable'],
       ],
     );
     assert.equal(recursivelyFrozen(DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE), true);
@@ -156,8 +160,11 @@ describe('domain-control review schema lifecycle', () => {
       GENERATED_AT,
     );
     assert.equal(formatJsonDocument(cliOutput), rawById.get(`cli-domain-control-review-v${CLI_DOMAIN_CONTROL_REVIEW_VERSION}`));
-    const historical = rawById.get('domain-control-review-v1')!;
-    assert.equal(formatJsonDocument(nodeReviewModule.validateDomainControlReviewDocument(JSON.parse(historical))), historical);
+    for (const version of [1, 2]) {
+      const historical = rawById.get(`domain-control-review-v${version}`)!;
+      assert.equal(formatJsonDocument(nodeReviewModule.validateDomainControlReviewDocument(JSON.parse(historical))), historical);
+      assert.equal(nodeReviewModule.reviewDomainControlManifest(JSON.parse(rawById.get(`domain-control-review-input-v${version}`)!), GENERATED_AT).version, 3);
+    }
     assert.equal(nodeReviewModule.reviewDomainControlManifest(
       JSON.parse(rawById.get('domain-control-review-input-v1')!), GENERATED_AT,
     ).version, DOMAIN_CONTROL_REVIEW_VERSION);
@@ -423,7 +430,7 @@ describe('domain-control review schema lifecycle', () => {
     const monitor = edges.find((edge) => edge.operation === 'embed-review-after-bounded-passive-collection');
     assert.ok(monitor);
     assert.deepEqual(monitor.acceptedContracts.map(({ schema, versions, mode }) => ({ schema, versions, mode })), [
-      { schema: DOMAIN_CONTROL_REVIEW_SCHEMA, versions: [1, 2], mode: 'embedded' },
+      { schema: DOMAIN_CONTROL_REVIEW_SCHEMA, versions: [1, 2, 3], mode: 'embedded' },
     ]);
     assert.equal(monitor.requestMode, 'explicit_bounded_passive_deep');
     assert.equal(monitor.retentionEffect, 'operator_controlled_output');

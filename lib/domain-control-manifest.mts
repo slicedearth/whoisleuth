@@ -31,6 +31,8 @@ import {
   DOMAIN_CONTROL_REVIEW_INPUT_KEYS,
   DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
   DOMAIN_CONTROL_REVIEW_LIMITATIONS,
+  domainControlReviewCountKeys,
+  domainControlReviewLimitations,
   DOMAIN_CONTROL_REVIEW_MANIFEST_SUMMARY_KEYS,
   DOMAIN_CONTROL_REVIEW_OBSERVATION_FIELD_KEYS,
   DOMAIN_CONTROL_REVIEW_OBSERVATION_KEYS,
@@ -39,9 +41,7 @@ import {
   DOMAIN_CONTROL_REVIEW_VERSION,
   PUBLIC_DOMAIN_CONTROL_REVIEW_VERSION,
   SUPPORTED_DOMAIN_CONTROL_REVIEW_VERSIONS,
-  PUBLIC_DOMAIN_CONTROL_REVIEW_COUNT_KEYS,
   PUBLIC_DOMAIN_CONTROL_REVIEW_COMPARISON_KEYS,
-  PUBLIC_DOMAIN_CONTROL_REVIEW_LIMITATIONS,
   MAX_DOMAIN_CONTROL_REVIEW_OBSERVATIONS,
   MAX_DOMAIN_CONTROL_REVIEW_SOURCE_LENGTH,
   MAX_DOMAIN_CONTROL_REVIEW_TEXT_LENGTH,
@@ -403,24 +403,28 @@ function renewalComparison(entry: DomainControlEntry, now: string): DomainContro
   });
   const due = Date.parse(entry.renewalReviewAt) <= Date.parse(now);
   return Object.freeze({
-    field: 'renewalReviewAt', state: due ? 'due' : 'aligned', desired: Object.freeze([entry.renewalReviewAt]), observed: Object.freeze([]), source: null, observedAt: null,
+    field: 'renewalReviewAt', state: due ? 'due' : 'not_due', desired: Object.freeze([entry.renewalReviewAt]), observed: Object.freeze([]), source: null, observedAt: null,
     explanation: due ? 'The configured renewal review date is due.' : 'The configured renewal review date is still in the future.',
     expectation: 'expect_records',
   });
 }
 
-function aggregateComparisonState(comparisons: readonly DomainControlComparison[], legacy = false) {
-  if (comparisons.some((item) => item.state === 'drift' || item.state === 'due')) return 'drift' as const;
+function aggregateComparisonState(comparisons: readonly DomainControlComparison[], version = DOMAIN_CONTROL_REVIEW_VERSION) {
+  if (comparisons.some((item) => item.state === 'drift' || (version < 3 && item.state === 'due'))) return 'drift' as const;
   if (comparisons.some((item) => ['partial', 'unavailable', 'unsupported'].includes(item.state))) return 'partial' as const;
-  if (legacy || comparisons.some((item) => item.state === 'aligned')) return 'aligned' as const;
-  return comparisons.some((item) => item.state === 'observed') ? 'observed' as const : 'not_configured' as const;
+  if (comparisons.some((item) => item.state === 'due')) return 'due' as const;
+  if (version === 1 || comparisons.some((item) => item.state === 'aligned')) return 'aligned' as const;
+  if (comparisons.some((item) => item.state === 'observed')) return 'observed' as const;
+  return comparisons.some((item) => item.state === 'not_due') ? 'not_due' as const : 'not_configured' as const;
 }
 
-function aggregateDomainState(domains: readonly { state: ReturnType<typeof aggregateComparisonState> }[], legacy = false) {
+function aggregateDomainState(domains: readonly { state: ReturnType<typeof aggregateComparisonState> }[], version = DOMAIN_CONTROL_REVIEW_VERSION) {
   if (domains.some((item) => item.state === 'drift')) return 'drift' as const;
   if (domains.some((item) => item.state === 'partial')) return 'partial' as const;
-  if (legacy || domains.some((item) => item.state === 'aligned')) return 'aligned' as const;
-  return domains.some((item) => item.state === 'observed') ? 'observed' as const : 'not_configured' as const;
+  if (domains.some((item) => item.state === 'due')) return 'due' as const;
+  if (version === 1 || domains.some((item) => item.state === 'aligned')) return 'aligned' as const;
+  if (domains.some((item) => item.state === 'observed')) return 'observed' as const;
+  return domains.some((item) => item.state === 'not_due') ? 'not_due' as const : 'not_configured' as const;
 }
 
 export function reviewDomainControlManifest(input: unknown, generatedAtValue = new Date().toISOString()) {
@@ -482,10 +486,10 @@ export function validateDomainControlReviewDocument(
     throw new TypeError(`Domain control review document must use ${DOMAIN_CONTROL_REVIEW_SCHEMA} version ${DOMAIN_CONTROL_REVIEW_VERSION}.`);
   }
   const legacy = root.version === PUBLIC_DOMAIN_CONTROL_REVIEW_VERSION;
-  const countKeys = legacy ? PUBLIC_DOMAIN_CONTROL_REVIEW_COUNT_KEYS : DOMAIN_CONTROL_REVIEW_COUNT_KEYS;
+  const countKeys = domainControlReviewCountKeys(root.version as number);
   const comparisonKeys = legacy ? new Set<string>(PUBLIC_DOMAIN_CONTROL_REVIEW_COMPARISON_KEYS) : REVIEW_COMPARISON_KEYS;
   const recordMaximum = legacy ? MAX_CANONICAL_DOMAIN_CONTROL_RECORDS : MAX_DOMAIN_CONTROL_RECORDS;
-  const limitations = legacy ? PUBLIC_DOMAIN_CONTROL_REVIEW_LIMITATIONS : DOMAIN_CONTROL_REVIEW_LIMITATIONS;
+  const limitations = domainControlReviewLimitations(root.version as number);
   const generatedAt = exactReviewTimestamp(root.generatedAt, 'Domain control review document generatedAt');
   const manifestInput = exactReviewRecord(root.manifest, REVIEW_MANIFEST_KEYS, 'Domain control review document manifest');
   const manifestGeneratedAt = exactReviewTimestamp(manifestInput.generatedAt, 'Domain control review document manifest generatedAt');
@@ -590,13 +594,13 @@ export function validateDomainControlReviewDocument(
           || (expectation === 'unconfigured' && (state !== 'not_configured' || observed.length || source !== null || observedAt !== null))
           || (state === 'not_configured' && expectation !== 'unconfigured')
           || (state === 'observed' && expectation !== 'observe_only')
-          || (['aligned', 'drift', 'due'].includes(state) && ['unconfigured', 'observe_only'].includes(expectation))) {
+          || (['aligned', 'drift', 'due', 'not_due'].includes(state) && ['unconfigured', 'observe_only'].includes(expectation))) {
           throw new TypeError('Domain control review comparison expectation is inconsistent.');
         }
         if (expectedField === 'renewalReviewAt' && expectation === 'expect_records') {
           if (desired.length !== 1 || normalizeExplicitIsoTimestamp(desired[0]) !== desired[0]
-            || state !== (Date.parse(desired[0]!) <= Date.parse(generatedAt) ? 'due' : 'aligned')) throw new TypeError('Domain control renewal review state is inconsistent.');
-        } else if (state === 'due') throw new TypeError('Only renewal review dates can be due.');
+            || state !== (Date.parse(desired[0]!) <= Date.parse(generatedAt) ? 'due' : root.version === 2 ? 'aligned' : 'not_due')) throw new TypeError('Domain control renewal review state is inconsistent.');
+        } else if (state === 'due' || state === 'not_due') throw new TypeError('Only renewal review dates can be due or not due.');
         if (expectedField !== 'renewalReviewAt' && ['aligned', 'drift', 'observed'].includes(state)) {
           if (!source || domainControlEvidenceAdmission(observedAt, generatedAt)) throw new TypeError('Domain control review requires current source timing for a conclusive comparison.');
           const equal = desired.length === observed.length && desired.every((value, index) => value === observed[index]);
@@ -618,7 +622,7 @@ export function validateDomainControlReviewDocument(
         ...(expectation !== undefined ? { expectation } : {}),
       });
     });
-    const expectedState = aggregateComparisonState(comparisons, legacy);
+    const expectedState = aggregateComparisonState(comparisons, root.version as number);
     if (item.state !== expectedState) {
       throw new TypeError(`Domain control review document domain ${domainIndex + 1} state is inconsistent.`);
     }
@@ -632,7 +636,7 @@ export function validateDomainControlReviewDocument(
       throw new TypeError('Domain control review document counts are inconsistent.');
     }
   }
-  const expectedState = expired ? 'expired' : aggregateDomainState(domains, legacy);
+  const expectedState = expired ? 'expired' : aggregateDomainState(domains, root.version as number);
   if (root.state !== expectedState) throw new TypeError('Domain control review document state is inconsistent.');
   const ignoredObservationCount = exactReviewInteger(
     root.ignoredObservationCount,

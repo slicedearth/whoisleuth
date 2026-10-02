@@ -55,7 +55,7 @@ describe('CLI one-shot domain control monitor', () => {
     const report = await runDomainControlMonitor(passport, previous, {
       executeLookup: async () => result('example.test'), now: () => '2026-08-21T00:00:00.000Z', limit: 1, concurrency: 1,
     });
-    assert.equal(report.version, 2);
+    assert.equal(report.version, 3);
     assert.equal(report.flightRecorder.summary.observedChanges, 0);
     const priorEvents = report.flightRecorder.events.filter((event) => event.capturedAt === '2026-08-20T00:00:00.000Z');
     assert.equal(priorEvents.length, 13);

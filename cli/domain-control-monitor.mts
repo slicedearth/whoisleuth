@@ -10,12 +10,9 @@ import {
   DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA,
   DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
   DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
-  PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
 } from '../packages/contracts/domain-control-flight-recorder.mts';
 import {
   DOMAIN_CONTROL_REVIEW_SCHEMA,
-  DOMAIN_CONTROL_REVIEW_VERSION,
-  PUBLIC_DOMAIN_CONTROL_REVIEW_VERSION,
   CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
   CLI_DOMAIN_CONTROL_REVIEW_VERSION,
 } from '../packages/contracts/domain-control-review.mts';
@@ -25,6 +22,7 @@ import {
   PUBLIC_CLI_DOMAIN_CONTROL_MONITOR_VERSION,
   SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS,
   DOMAIN_CONTROL_MONITOR_COLLECTION_KEYS,
+  DOMAIN_CONTROL_MONITOR_EMBEDDED_VERSIONS,
   DOMAIN_CONTROL_MONITOR_FAILURE_CATEGORIES,
   DOMAIN_CONTROL_MONITOR_FAILURE_KEYS,
   DOMAIN_CONTROL_MONITOR_LIMITATIONS,
@@ -117,8 +115,7 @@ function previousSnapshot(input: string | null, currentGeneratedAt: string): Pre
     throw new CliUsageError(`Previous monitor snapshot must use ${CLI_DOMAIN_CONTROL_MONITOR_SCHEMA} supported version ${SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS.join(' or ')}.`);
   }
   const legacy = root.version === PUBLIC_CLI_DOMAIN_CONTROL_MONITOR_VERSION;
-  const reviewVersion = legacy ? PUBLIC_DOMAIN_CONTROL_REVIEW_VERSION : DOMAIN_CONTROL_REVIEW_VERSION;
-  const flightVersion = legacy ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION : DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION;
+  const { review: reviewVersion, flightRecorder: flightVersion } = DOMAIN_CONTROL_MONITOR_EMBEDDED_VERSIONS[root.version as number]!;
   let previousGeneratedAt: string;
   try {
     previousGeneratedAt = requireIsoTimestamp(root.generatedAt, 'Previous monitor snapshot generatedAt');
@@ -367,6 +364,7 @@ export function formatDomainControlMonitor(document: Awaited<ReturnType<typeof r
     `Succeeded    ${document.collection.succeeded}`,
     `Failed       ${document.collection.failed}`,
     `Review       ${document.review.state}`,
+    `Due          ${document.review.counts.due ?? 0}`,
     `Unexpected   ${document.flightRecorder.summary.unexpectedChanges}`,
     '',
   ].join('\n');

@@ -355,6 +355,7 @@ export function formatCliDomainControlReview(document: ReturnType<typeof buildCl
     `Domains     ${review.domains.length}`,
     `Lookups     ${document.input.lookupsReceived}`,
     `Drift       ${review.counts.drift ?? 0}`,
+    `Due         ${review.counts.due ?? 0}`,
     `Incomplete  ${(review.counts.partial ?? 0) + (review.counts.unavailable ?? 0) + (review.counts.unsupported ?? 0)}`,
     '',
     ...review.domains.map((item) => `${item.domain}  ${item.state}`),

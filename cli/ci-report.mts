@@ -52,9 +52,12 @@ function junitCases(document: UnknownRecord): JunitCase[] {
 }
 
 export function formatCliJunit(document: unknown): string {
-  const cases = junitCases(record(document));
+  const root = record(document);
+  const cases = junitCases(root);
   const failures = cases.filter((item) => item.failure).length;
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="WHOISleuth" tests="${cases.length}" failures="${failures}">\n${cases.map((item) => `  <testcase classname="whoisleuth" name="${xml(item.name)}">${item.failure ? `<failure message="${xml(item.failure)}" />` : ''}</testcase>`).join('\n')}\n</testsuite>\n`;
+  const reminders = root.schema === CLI_DOMAIN_CONTROL_MONITOR_SCHEMA
+    ? `\n  <system-out>${xml(`Renewal reviews due: ${Number(record(record(root.review).counts).due ?? 0)}`)}</system-out>` : '';
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="WHOISleuth" tests="${cases.length}" failures="${failures}">\n${cases.map((item) => `  <testcase classname="whoisleuth" name="${xml(item.name)}">${item.failure ? `<failure message="${xml(item.failure)}" />` : ''}</testcase>`).join('\n')}${reminders}\n</testsuite>\n`;
 }
 
 export function buildPostureSarif(document: unknown) {

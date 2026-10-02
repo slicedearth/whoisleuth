@@ -85,7 +85,8 @@ describe('cross-domain posture matrix', () => {
     assert.equal(review.cells.find((cell) => cell.field === 'mx')?.state, 'suppressed');
     assert.equal(review.cells.find((cell) => cell.field === 'caa')?.state, 'review');
     assert.equal(review.cells.find((cell) => cell.field === 'ds')?.state, 'unsupported');
-    assert.equal(review.cells.find((cell) => cell.field === 'renewalReviewAt')?.state, 'drift');
+    assert.equal(review.cells.find((cell) => cell.field === 'renewalReviewAt')?.state, 'due');
+    assert.equal(matrix.stateCounts.due, 1);
     assert.equal(aligned.cells.find((cell) => cell.field === 'nameservers')?.state, 'aligned');
     assert.equal(aligned.cells.find((cell) => cell.field === 'mx')?.state, 'unknown');
     assert.equal(unavailable.cells.find((cell) => cell.field === 'nameservers')?.state, 'unavailable');
