@@ -24,6 +24,10 @@ test('literal command quoting prevents shell interpolation while the installed g
   const target = 'https://example.test/\'$(touch marker)&x=1';
   assert.equal(quoteCommandArgument("a'b", 'posix'), "'a'\"'\"'b'");
   assert.equal(quoteCommandArgument("a'b", 'powershell'), "'a''b'");
+  for (const quote of ["'", '\u2018', '\u2019', '\u201a', '\u201b']) {
+    const value = `Example${quote}s Shop; $(not-a-command)`;
+    assert.equal(quoteCommandArgument(value, 'powershell'), `'Example${quote}${quote}s Shop; $(not-a-command)'`);
+  }
   for (const shell of ['posix', 'powershell'] as const) {
     const built = buildCliCommand('lookup', commandDefinition('lookup').grammar, { positionals: [target], options: { '--deep': [''], '--plan': [''], '--json': [''] }, shell });
     assert.equal(built.parsed.positionalValue('target'), target);

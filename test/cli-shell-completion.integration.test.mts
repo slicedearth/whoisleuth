@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { CLI_COMMANDS } from '../cli/arguments.mts';
 import { RUNNABLE_INVESTIGATION_PLAN_RECIPES } from '../cli/command-reference.mts';
 import { buildShellCompletion } from '../cli/completion.mts';
+import { quoteCommandArgument } from '../packages/analysis/cli-command-builder.mts';
 import { unitTestExecutablePath } from '../tools/toolchain-compatibility.mts';
 import {
   SHELL_COMPLETION_PROCESS_OPTIONS,
@@ -21,6 +22,30 @@ import {
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 describe('CLI shell completion integration', () => {
+  test('the native parser keeps every command-builder apostrophe form within one literal argument', () => {
+    const values = ["'", '\u2018', '\u2019', '\u201a', '\u201b'].flatMap(quote => [
+      `Example${quote}s Shop`, `x${quote}; Write-Output sentinel; ${quote}`, `x${quote}$(sentinel)${quote}`,
+    ]);
+    const cases = values.map(value => ({ value, literal: quoteCommandArgument(value, 'powershell') }));
+    const probe = spawnSync(unitTestExecutablePath('pwsh'), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', `
+      $ErrorActionPreference = 'Stop'
+      $items = [Console]::In.ReadToEnd() | ConvertFrom-Json
+      foreach ($item in $items) {
+        $native = "'" + [System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($item.value) + "'"
+        if ($native -cne $item.literal) { throw 'Escaping differs from the native literal escaper.' }
+        $tokens = $null; $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput(('& whoisleuth ''lookup'' ' + $item.literal), [ref]$tokens, [ref]$errors)
+        if ($errors.Count -ne 0 -or $ast.EndBlock.Statements.Count -ne 1) { throw 'Expected one valid statement.' }
+        $pipeline = $ast.EndBlock.Statements[0]
+        if ($pipeline.PipelineElements.Count -ne 1) { throw 'Expected one command.' }
+        $elements = $pipeline.PipelineElements[0].CommandElements
+        if ($elements.Count -ne 3 -or $elements[2].GetType().Name -ne 'StringConstantExpressionAst' -or $elements[2].Value -cne $item.value) { throw 'Input did not remain one unchanged literal argument.' }
+      }
+      [Console]::Out.Write($items.Count)
+    `], { ...SHELL_COMPLETION_PROCESS_OPTIONS, input: JSON.stringify(cases) });
+    assertSuccessfulShellProcess(probe, 'Command-builder literal parsing');
+    assert.equal(Number(probe.stdout), cases.length);
+  });
   test('reports an unavailable shell with its bounded process diagnostic', () => {
     const unavailable = spawnSync(
       'whoisleuth-unavailable-shell-fixture',

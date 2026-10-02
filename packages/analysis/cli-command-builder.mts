@@ -10,7 +10,8 @@ export function isBuildableCliOption(option: CliOptionSpec): boolean {
 /** Literal arguments only. Never interpolate into a command or evaluate a shell. */
 export function quoteCommandArgument(value: string, shell: CommandShell): string {
   if (!value || value.length > MAX_CLI_ARGUMENT_LENGTH || hasUnsafeCliText(value)) throw new Error('Each argument must contain bounded, visible text without line breaks.');
-  return `'${shell === 'powershell' ? value.replaceAll("'", "''") : value.replaceAll("'", "'\"'\"'")}'`;
+  // PowerShell recognises typographic apostrophes as single-quote delimiters too.
+  return `'${shell === 'powershell' ? value.replace(/['\u2018-\u201b]/gu, quote => quote + quote) : value.replaceAll("'", "'\"'\"'")}'`;
 }
 
 export function buildCliCommand(command: string, grammar: CliCommandGrammar, input: Readonly<{
