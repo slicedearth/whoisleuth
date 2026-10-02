@@ -2,6 +2,7 @@
   import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { onMount, tick } from 'svelte';
   import Pagination from './Pagination.svelte';
+  import InvestigationHistory from './InvestigationHistory.svelte';
   import { reloadDeferredModulePage } from '$lib/deferred-module';
   import {
     MAX_INVESTIGATION_SEARCH_QUERY_LENGTH,
@@ -28,6 +29,7 @@
   let resultList = $state<HTMLOListElement>();
   let pending = $state(false);
   let queryError = $state('');
+  let historyEntity = $state<string | null>(null);
   let completed = $state.raw<{ session: InvestigationSearchSession; query: string; page: number; response: InvestigationSearchResponse } | null>(null);
   let focusRequest: { query: string; page: number } | null = null;
   const index = $derived(session?.summary ?? null);
@@ -145,6 +147,13 @@
       </details>
     {/if}
     <a class="result-action" href={result.href} onclick={event => openResult(event, result.href)}>{result.action} <span aria-hidden="true">→</span></a>
+    <details class="history-disclosure" open={historyEntity === result.entityId} ontoggle={event => {
+      if (event.currentTarget.open) historyEntity = result.entityId;
+      else if (historyEntity === result.entityId) historyEntity = null;
+    }}>
+      <summary>Retained history</summary>
+      {#if historyEntity === result.entityId}<InvestigationHistory {session} entityId={result.entityId} onopen={openResult} />{/if}
+    </details>
   </article>
 {/snippet}
 
@@ -164,7 +173,7 @@
     bind:this={queryInput}
     type="search"
     bind:value={query}
-    oninput={() => { resultPage = 1; focusRequest = null; }}
+    oninput={() => { resultPage = 1; focusRequest = null; historyEntity = null; }}
     maxlength={MAX_INVESTIGATION_SEARCH_QUERY_LENGTH}
     autocomplete="off"
     autocapitalize="none"
@@ -263,12 +272,13 @@
   .error{color:var(--danger)}
   .source-warning,.index-limitations,.limitations{margin-top:12px;color:var(--muted);font-size:var(--text-xs)}
   .search-details{margin-top:14px;color:var(--muted);font-size:var(--text-xs)}
+  .history-disclosure{margin-top:14px}
   summary{cursor:pointer;font:700 var(--text-xs) var(--mono)}
   .source-warning ul,.index-limitations ul,.limitations ul{margin:8px 0 0;padding-left:20px;line-height:1.5}
   .result-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0 0;padding:0;list-style:none}
   .recent-work{margin-top:18px;padding-top:15px;border-top:1px solid var(--border)}
   .recent-work>p{margin:8px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
-  .result-card{height:100%;min-width:0;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);padding:15px}
+  .result-card{min-width:0;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);padding:15px}
   .result-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .type-badge{color:var(--accent2);font:700 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}
   h3{margin:4px 0 0;overflow-wrap:anywhere;font:700 var(--text-md) var(--mono)}

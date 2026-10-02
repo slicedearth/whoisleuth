@@ -1,5 +1,5 @@
 import type { InvestigationProjectionInput, InvestigationStoreName } from './analysis/investigation-projection.ts';
-import type { InvestigationSearchResponse } from './analysis/investigation-search.ts';
+import type { InvestigationHistory, InvestigationSearchResponse } from './analysis/investigation-search.ts';
 import type { InvestigationContextPreview } from './analysis/investigation-context-preview.ts';
 import type { InvestigationSearchSummary, SearchWorkerOperation, SearchWorkerRequest, SearchWorkerResponse } from './investigation-search-worker-model.ts';
 
@@ -7,6 +7,7 @@ export type InvestigationSearchSession = Readonly<{
   summary: InvestigationSearchSummary;
   search: (query: string, options?: Readonly<{ page?: number; pageSize?: number }>) => Promise<InvestigationSearchResponse>;
   preview: (query: string, page?: number) => Promise<InvestigationContextPreview>;
+  history: (entityId: string, page?: number) => Promise<InvestigationHistory>;
   dispose: () => void;
 }>;
 type Pending = {
@@ -97,6 +98,11 @@ export async function createInvestigationSearchSession(
       async preview(query: string, page?: number) {
         const reply = await request({ kind: 'preview', query, ...(page === undefined ? {} : { page }) });
         if (reply.kind !== 'preview') throw new Error('Saved context could not return results.');
+        return reply.result;
+      },
+      async history(entityId: string, page?: number) {
+        const reply = await request({ kind: 'history', entityId, ...(page === undefined ? {} : { page }) });
+        if (reply.kind !== 'history') throw new Error('Saved history could not return results.');
         return reply.result;
       },
       dispose: abort,

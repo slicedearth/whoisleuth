@@ -4,6 +4,7 @@
 
 import {
   INVESTIGATION_OBSERVATION_KINDS,
+  MAX_PROJECTION_REFERENCES,
   type InvestigationEntityType,
   type InvestigationObservationKind,
   type InvestigationSourceState,
@@ -95,6 +96,36 @@ export interface InvestigationSearchResponse {
   totalMatches: number;
   truncated: boolean;
   detail: string;
+}
+
+export interface InvestigationHistoryEntry {
+  id: string;
+  sourceStore: InvestigationStoreName;
+  recordId: string;
+  source: string;
+  observedAt: string;
+  kind: InvestigationObservationKind;
+  complete: boolean | null;
+  truncated: boolean | null;
+  limitations: string[];
+  href: string;
+  action: string;
+}
+
+/** Disposable view over the retained projection, never a saved history store. */
+export interface InvestigationHistory {
+  state: 'ready' | 'unavailable';
+  entityId: string;
+  label: string;
+  canonical: string;
+  entries: InvestigationHistoryEntry[];
+  total: number;
+  page: number;
+  pageCount: number;
+  firstObservedAt: string | null;
+  lastObservedAt: string | null;
+  partial: boolean;
+  limitations: string[];
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -385,6 +416,10 @@ function pivotFor(entity: IndexedEntity, observation: IndexedObservation): { hre
   if (entity.type === 'brand') {
     return { href: `/brands?profile=${encodeURIComponent(entity.canonical)}`, action: 'Open profile' };
   }
+  return sourcePivotFor(entity, observation);
+}
+
+function sourcePivotFor(entity: IndexedEntity, observation: IndexedObservation): { href: string; action: string } {
   if (observation.store === 'cases') {
     return { href: `/monitor?case=${encodeURIComponent(observation.recordId)}`, action: 'Open source case' };
   }
@@ -405,6 +440,71 @@ function evidenceClassification(observation: IndexedObservation): 'derived' | 'n
   if (observation.kind === 'retained_relationship_observation') return 'derived';
   if (observation.kind === 'scan_relationship_evidence') return 'normalized';
   return null;
+}
+
+/** Retains independent observations rather than using search's preferred source. */
+export function investigationHistory(
+  rawProjection: unknown,
+  entityId: unknown,
+  requestedPage = 1,
+): InvestigationHistory {
+  const unavailable: InvestigationHistory = {
+    state: 'unavailable', entityId: '', label: '', canonical: '', entries: [], total: 0,
+    page: 1, pageCount: 1, firstObservedAt: null, lastObservedAt: null, partial: true,
+    limitations: ['The selected saved item is unavailable in this projection.'],
+  };
+  const projection = readBoundedInvestigationProjection(rawProjection);
+  const id = exactIdentity(entityId);
+  if (projection.state !== 'ready' || !id) return unavailable;
+  const matches = projection.entities.filter(value => record(value)?.id === id);
+  const entity = matches.length === 1 ? normalizeEntity(matches[0]) : null;
+  if (!entity) return unavailable;
+
+  const references = new Set(entity.observationIds);
+  const duplicates = duplicateIdentities(projection.observations);
+  const observations: IndexedObservation[] = [];
+  let withheld = 0;
+  for (const raw of projection.observations) {
+    const value = record(raw);
+    // The reverse link recovers admitted observations beyond a capped entity
+    // reference list, without guessing associations from a shared domain string.
+    const linked = references.has(exactIdentity(value?.id))
+      || (Array.isArray(value?.entityIds) && value.entityIds.slice(0, MAX_PROJECTION_REFERENCES).includes(id));
+    if (!linked) continue;
+    const observation = normalizeObservation(raw);
+    if (!observation || duplicates.has(observation.id)) { withheld += 1; continue; }
+    observations.push(observation);
+  }
+  observations.sort((left, right) => right.observedAt.localeCompare(left.observedAt)
+    || left.id.localeCompare(right.id));
+  const pageCount = Math.max(1, Math.ceil(observations.length / MAX_INVESTIGATION_SEARCH_RESULTS));
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? Math.min(pageCount, requestedPage) : 1;
+  const sources = normalizeSources(projection.sources);
+  const partial = projection.truncated || entity.observationsTruncated || withheld > 0
+    || Object.values(sources).some(source => ['invalid', 'unsupported', 'unavailable'].includes(source.state) || source.truncated)
+    || observations.some(observation => observation.complete !== true || observation.truncated === true);
+  return {
+    state: 'ready', entityId: id, label: entity.label, canonical: entity.canonical,
+    entries: observations.slice((page - 1) * MAX_INVESTIGATION_SEARCH_RESULTS, page * MAX_INVESTIGATION_SEARCH_RESULTS)
+      .map(observation => ({
+        id: observation.id, sourceStore: observation.store, recordId: observation.recordId,
+        source: observation.source, observedAt: observation.observedAt, kind: observation.kind,
+        complete: observation.complete, truncated: observation.truncated, limitations: observation.limitations,
+        // For an indicator, every row must open its own source, not a selected
+        // representative Case or a fresh network collection.
+        ...sourcePivotFor(entity, observation),
+      })),
+    total: observations.length, page, pageCount,
+    firstObservedAt: observations.at(-1)?.observedAt ?? null,
+    lastObservedAt: observations[0]?.observedAt ?? null,
+    partial,
+    limitations: boundedStrings([
+      'This interval describes retained observations, not when an indicator was created or stopped being used.',
+      ...(withheld ? [`${withheld} malformed, undated or ambiguous source records could not be shown.`] : []),
+      ...(entity.observationsTruncated ? ['The source marks its references as incomplete; all linked observations admitted by this projection remain pageable.'] : []),
+      ...boundedStrings(projection.limitations, MAX_INVESTIGATION_SEARCH_LIMITATIONS),
+    ], MAX_INVESTIGATION_SEARCH_LIMITATIONS),
+  };
 }
 
 function emptyIndex(

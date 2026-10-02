@@ -4,6 +4,7 @@ import { describe, test } from 'node:test';
 
 import {
   buildInvestigationSearchIndex,
+  investigationHistory,
   INVESTIGATION_SEARCH_SCHEMA,
   INVESTIGATION_SEARCH_VERSION,
   MAX_INVESTIGATION_SEARCH_QUERY_LENGTH,
@@ -35,6 +36,57 @@ import {
 const EARLY = '2026-07-01T00:00:00.000Z';
 const LATE = '2026-07-19T00:00:00.000Z';
 const SHA = 'a'.repeat(64);
+
+test('retained history preserves independent source records, chronology and every admitted page', () => {
+  const projection = indexedProjection(1);
+  const entity = projection.entities[0]!;
+  projection.observations = Array.from({ length: 123 }, (_, index) => ({
+    id: `history-${index}`, kind: 'case_evidence', store: 'cases', recordId: `incident-${index}`,
+    source: 'lookup', observedAt: new Date(Date.parse(EARLY) + index * 60_000).toISOString(),
+    complete: index !== 37, truncated: index === 37, limitations: index === 37 ? ['Source was partial.'] : [],
+    entityIds: [entity.id],
+  }));
+  entity.observationIds = projection.observations.slice(0, 100).map(row => row.id);
+  entity.observationsTruncated = true;
+  const before = structuredClone(projection);
+  const first = investigationHistory(projection, entity.id);
+  assert.equal(first.total, 123);
+  assert.equal(first.pageCount, 3);
+  assert.equal(first.entries.length, 50);
+  assert.equal(first.firstObservedAt, EARLY);
+  assert.equal(first.lastObservedAt, '2026-07-01T02:02:00.000Z');
+  assert.equal(first.entries[0]?.recordId, 'incident-122');
+  assert.equal(first.entries[0]?.href, '/monitor?case=incident-122');
+  const entries = [1, 2, 3].flatMap(page => investigationHistory(projection, entity.id, page).entries);
+  assert.equal(new Set(entries.map(row => row.id)).size, 123);
+  assert.equal(entries.find(row => row.recordId === 'incident-37')?.complete, false);
+  assert.equal(investigationHistory(projection, entity.id, 999).page, 3);
+  assert.equal(investigationHistory(projection, entity.id, Number.NaN).page, 1);
+  assert.deepEqual(projection, before);
+});
+
+test('retained history refuses ambiguous identities and never exposes arbitrary source properties', () => {
+  const projection = indexedProjection(1);
+  const entity = projection.entities[0]!;
+  const source = projection.observations[0]!;
+  const baseline = investigationHistory(projection, entity.id);
+  assert.equal(baseline.total, 1);
+  assert.equal(baseline.state, 'ready');
+  assert.equal(investigationHistory({ ...projection, version: 999 }, entity.id).state, 'unavailable');
+  assert.equal(investigationHistory(projection, 'missing').state, 'unavailable');
+  assert.equal(investigationHistory({ ...projection, entities: [entity, entity] }, entity.id).state, 'unavailable');
+  assert.equal(investigationHistory({ ...projection, observations: [source, source] }, entity.id).total, 0);
+  const result = investigationHistory({ ...projection, observations: [
+    { ...source, raw: 'private-message-sentinel', credentials: 'private-secret-sentinel' },
+    { ...source, id: 'unrelated', entityIds: ['another-entity'], recordId: 'must-not-appear' },
+  ] }, entity.id);
+  assert.equal(result.total, 1);
+  assert.doesNotMatch(JSON.stringify(result), /private-message-sentinel|private-secret-sentinel|must-not-appear/u);
+  const undated = investigationHistory({ ...projection, observations: [{ ...source, observedAt: 'bad' }] }, entity.id);
+  assert.equal(undated.partial, true);
+  assert.equal(undated.total, 0);
+  assert.match(undated.limitations.join(' '), /1 malformed, undated or ambiguous/u);
+});
 
 function snapshot(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {

@@ -57,6 +57,10 @@ Search results are paged; every indexed match is reachable. The coverage
 disclosure identifies unavailable collections and omitted fields or records.
 Search stays in the browser and operates over bounded normalised fields; it does
 not start collection or inspect raw upstream payloads.
+Open **Retained history** on a result to see its separate observations and source
+records. Every admitted observation is pageable, including separate Cases for the
+same indicator. The first and last dates describe saved evidence, not an
+indicator's creation or disappearance.
 
 Campaign and investigation-template editors keep later typing when an earlier
 save completes. If another tab changes the fields being edited, the save is rejected

@@ -111,6 +111,46 @@ test('dashboard local search exposes future-store limitations without indexing f
   await expect(page.getByText('future-case', { exact: true })).toHaveCount(0);
 });
 
+test('saved-work history keeps independent incidents navigable without starting collection', async ({ page }) => {
+  const collections: string[] = [];
+  page.on('request', request => {
+    if (new URL(request.url()).pathname === '/api/lookup') collections.push(request.url());
+  });
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [
+      caseRecord('incident-first', 'shared.example'),
+      { ...caseRecord('incident-second', 'shared.example'), updatedAt: '2026-07-20T00:00:00.000Z' },
+    ] },
+  });
+  await openDashboardSecondaryWorkspaces(page);
+  await page.getByRole('searchbox', { name: 'Search saved work' }).fill('shared.example');
+  const result = page.locator('.result-card').filter({ has: page.locator('.type-badge', { hasText: /^Domain$/u }) });
+  await expect(result).toHaveCount(1);
+  await result.getByText('Retained history', { exact: true }).click();
+  const history = result.getByRole('region', { name: 'Retained observation history' });
+  await expect(history.getByRole('heading', { name: '2 retained observations' })).toBeVisible();
+  await expect(history.getByRole('link', { name: 'Open source case' })).toHaveCount(2);
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expect(history.getByRole('heading', { name: '2 retained observations' })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await test.info().attach(`retained-history-${viewport.width}-${theme}`, {
+        body: await result.screenshot(), contentType: 'image/png',
+      });
+    }
+  }
+  const source = history.locator('a[href="/monitor?case=incident-first"]');
+  await source.focus();
+  await expect(source).toBeFocused();
+  await source.press('Enter');
+  await expect(page).toHaveURL('/cases?case=incident-first');
+  await expect(page.locator('.case-heading', { hasText: 'shared.example' })).toBeVisible();
+  expect(collections).toEqual([]);
+});
+
 test('dashboard local search remains usable without horizontal overflow on narrow mobile screens', async ({ page }) => {
   await seedInvestigationStores(page);
   await page.setViewportSize({ width: 320, height: 700 });

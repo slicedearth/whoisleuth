@@ -6,7 +6,7 @@ import {
   type InvestigationSearchSummary, type SearchWorkerRequest, type SearchWorkerResponse,
 } from '../frontend/src/lib/investigation-search-worker-model.ts';
 import { buildInvestigationProjection } from '../frontend/src/lib/analysis/investigation-projection.ts';
-import { buildInvestigationSearchIndex, searchInvestigationIndex } from '../frontend/src/lib/analysis/investigation-search.ts';
+import { buildInvestigationSearchIndex, investigationHistory, searchInvestigationIndex } from '../frontend/src/lib/analysis/investigation-search.ts';
 import { projectInvestigationContextPreview } from '../frontend/src/lib/analysis/investigation-context-preview.ts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.ts';
 
@@ -69,7 +69,26 @@ test('worker queries match the pure owner while transferring only summary and re
     handle({ id: page + 2000, kind: 'preview', query: 'target', page });
     assert.deepEqual(replies.shift(), { id: page + 2000, kind: 'preview', result: projectInvestigationContextPreview(index, 'target', page) });
   }
+  const entityId = index.entries[0]!.entityId;
+  handle({ id: 5000, kind: 'history', entityId });
+  const history = replies.shift();
+  assert.ok(history?.kind === 'history');
+  assert.deepEqual(history.result.entries, investigationHistory(buildInvestigationProjection(collections), entityId).entries);
+  assert.ok(history.result.total > 0);
+  assert.equal('cases' in history.result, false);
   assert.deepEqual(collections, before);
+});
+
+test('session routes paged history through the same cancellable worker', async () => {
+  const { worker, session } = await prepared();
+  const pending = session.history('entity-1', 3);
+  assert.deepEqual(worker.messages.at(-1), { id: 2, kind: 'history', entityId: 'entity-1', page: 3 });
+  const result = investigationHistory(null, 'entity-1');
+  worker.reply({ id: 2, kind: 'history', result });
+  assert.deepEqual(await pending, result);
+  session.dispose();
+  await assert.rejects(session.history('entity-1'), { name: 'AbortError' });
+  assert.equal(worker.terminated, 1);
 });
 
 test('worker preserves explicit unavailable-source coverage rather than treating it as empty', () => {
