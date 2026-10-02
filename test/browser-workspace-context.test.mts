@@ -76,6 +76,38 @@ test('unsupported capabilities and invalid operation deadlines fail before creat
   await assert.rejects(directory.remove(readBrowserWorkspace(ROW), FIRST), /Switch away/);
 });
 
+test('refused native lock callbacks fulfil while their callers still receive the exact failure', async () => {
+  const callbacks: Array<{ name: string; options: LockOptions; fulfilled: boolean }> = [];
+  const locks = {
+    async request(name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<unknown>) {
+      const observed = { name, options, fulfilled: false };
+      callbacks.push(observed);
+      const outcome = await callback(null);
+      observed.fulfilled = true;
+      return outcome;
+    },
+  } as unknown as LockManager;
+  const directory = createBrowserWorkspaceDirectory({ locks });
+  await assert.rejects(directory.acquire(FIRST), {
+    message: 'The workspace is in use or being deleted. Close its other tabs or finish its recovery rehearsal before opening it.',
+  });
+  await assert.rejects(directory.remove(readBrowserWorkspace(ROW), 'default'), {
+    message: 'This workspace is open in another tab. Close its tabs before deleting it.',
+  });
+  assert.deepEqual(callbacks, [
+    { name: `whoisleuth-workspace:${browserWorkspaceDatabaseName(FIRST)}`, options: { mode: 'shared', ifAvailable: true }, fulfilled: true },
+    { name: `whoisleuth-workspace:${browserWorkspaceDatabaseName(FIRST)}`, options: { mode: 'exclusive', ifAvailable: true }, fulfilled: true },
+  ]);
+});
+
+test('native lock-manager failures remain rejected without invoking workspace storage', async () => {
+  const failure = new Error('Lock manager unavailable');
+  const locks = { request: () => Promise.reject(failure) } as unknown as LockManager;
+  const directory = createBrowserWorkspaceDirectory({ locks });
+  await assert.rejects(directory.acquire(FIRST), cause => cause === failure);
+  await assert.rejects(directory.remove(readBrowserWorkspace(ROW), 'default'), cause => cause === failure);
+});
+
 test('encrypted workspace tab material stays in memory and is cleared when locking', () => {
   const original = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
   Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, get() { throw new Error('Encrypted transient state must not reach session storage.'); } });

@@ -192,7 +192,10 @@ test('encrypted package creation and unlock preserve exact files, private state 
   expect(await page.evaluate(secret => JSON.stringify({ ...localStorage, ...sessionStorage }).includes(secret), passphrase)).toBe(false);
   expect(requests).toEqual([]);
   page.off('request', recordPackageRequest);
-  await page.goto('/cases'); await page.goto('/dashboard'); await openDashboardSecondaryWorkspaces(page);
+  await page.goto('/cases');
+  await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
+  await page.goto('/dashboard');
+  await openDashboardSecondaryWorkspaces(page);
   await expect(page.getByLabel('Unlock package passphrase', { exact: true })).toHaveCount(0);
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
 });

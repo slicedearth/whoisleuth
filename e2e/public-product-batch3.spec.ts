@@ -217,6 +217,7 @@ test('reference pages expose the first recipe on mobile and constrain wide prose
     await expect(firstCommand.getByRole('button', { name: 'Copy run-once help command' })).toBeVisible();
     await expect(firstCommand.locator('code')).toBeInViewport({ ratio: 1 });
     const copy = firstCommand.getByRole('button', { name: 'Copy run-once help command' });
+    await copy.scrollIntoViewIfNeeded();
     await copy.focus();
     await expect(copy).toBeFocused();
     await expect(copy).toBeInViewport({ ratio: 1 });

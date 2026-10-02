@@ -61,7 +61,9 @@
     };
     const afterPrint = () => { for (const detail of openedForPrint.splice(0)) detail.open = false; };
     const revealHash = () => {
-      const target = document.getElementById(location.hash.slice(1));
+      const fragment = location.hash.slice(1);
+      if (!fragment) return;
+      const target = document.getElementById(fragment);
       if (!target || !article.contains(target)) return;
       revealDocumentationTarget(target);
       target.scrollIntoView({ block: 'start' });
