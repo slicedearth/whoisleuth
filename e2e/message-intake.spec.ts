@@ -51,11 +51,14 @@ test('local message review exposes destination mismatch and fills Lookup without
   await page.getByText('Review a message, link or selected file', { exact: true }).click();
   const intake = page.locator('details.intake');
   await intake.getByLabel('Input type').selectOption('email');
-  await intake.getByLabel('Select a file').setInputFiles({ name: 'selected.eml', mimeType: 'message/rfc822', buffer: Buffer.from('From: private@brand.example\r\nContent-Type: text/html\r\n\r\n<a href="https://destination.test/private?token=private-value">https://brand.example</a>') });
+  await intake.getByLabel('Select a file').setInputFiles({ name: 'selected.eml', mimeType: 'message/rfc822', buffer: Buffer.from('From: private@brand.example\r\nContent-Type: text/html\r\n\r\n<a href="https://destination.test/private?token=private-value">https://brand.example</a><a href="https://user:secret@excluded.example/">Excluded credentialed link</a>') });
   await expect(intake.locator('.file-selection')).toContainText('selected.eml');
   await intake.getByRole('button', { name: 'Review locally', exact: true }).click();
   await expect(intake.getByRole('heading', { name: 'Extracted destinations' })).toBeFocused();
   await expect(intake.getByText('different from the link destination', { exact: false })).toBeVisible();
+  await expect(intake).toContainText('Partial analysis');
+  await expect(intake).toContainText('Links containing credentials were not reviewed (1).');
+  await expect(intake.getByRole('button', { name: 'Use excluded.example in Lookup', exact: true })).toHaveCount(0);
   await intake.getByRole('button', { name: 'Use destination.test in Lookup', exact: true }).click();
   await expect(page.locator('#query')).toHaveValue('destination.test');
   await expect(page.locator('#query')).toBeFocused();

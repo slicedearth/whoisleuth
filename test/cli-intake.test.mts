@@ -43,6 +43,19 @@ test('CLI partial review uses explicit exit policy and QR refuses binary stdin',
   assert.equal(await runCli(['intake', 'qr', '--json'], { stdout: capture().stream, stderr: capture().stream }), 2);
 });
 
+test('excluded destinations affect strict exit without exposing private text or authorising requests', async () => {
+  const stdout = capture(), stderr = capture();
+  const code = await runCli(['intake', 'text', '--strict-exit'], {
+    stdin: Readable.from(['https://user:secret@example.test/private https://admitted.example/']),
+    stdout: stdout.stream, stderr: stderr.stream, now: () => now,
+    runUnifiedLookup: async () => { throw new Error('Collection is forbidden'); },
+  });
+  assert.equal(code, 4);
+  assert.match(stdout.read(), /Links containing credentials were not reviewed \(1\)/u);
+  assert.doesNotMatch(stdout.read() + stderr.read(), /secret|\/private/u);
+  assert.equal(stderr.read(), '');
+});
+
 test('browser worker, Case projection and CLI use the same source and privacy contract', async () => {
   const file = new Blob(['https://selected.example/private?token=secret']);
   const reply = await runMessageIntakeOperation({ kind: 'text', file, reviewedAt: now });

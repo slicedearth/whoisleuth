@@ -72,6 +72,37 @@ test('HAR minimisation preserves sequence and unknown timings without private re
   assert.equal(invalid.report.harReview!.invalidEntries, 1); assert.equal(invalid.report.coverage.state, 'partial');
 });
 
+test('DOCX settings and nested relationship parts disclose unused external declarations', async () => {
+  const parts: Record<string, Uint8Array> = selectedDocxEntries();
+  const relationships = (type: string) => text(`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="r1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" TargetMode="External" Target="https://private-resource.example/secret"/></Relationships>`);
+  parts['word/_rels/settings.xml.rels'] = relationships('attachedTemplate');
+  parts['word/_rels/webSettings.xml.rels'] = relationships('frame');
+  parts['word/custom/_rels/other.xml.rels'] = relationships('image');
+  const result = await reviewSelectedInput(zipSync(parts), 'docx', NOW);
+  assert.ok(result.report.documentReview?.notes.includes('4 external non-link resources were declared but not requested.'));
+  assert.equal(result.report.coverage.state, 'partial');
+  assert.doesNotMatch(JSON.stringify(result), /private-resource|secret/u);
+  assert.ok(result.report.links.some(link => link.hostname === 'docx-link.example'));
+  parts['word/_rels/settings.xml.rels'] = text('<Relationships');
+  const partial = await reviewSelectedInput(zipSync(parts), 'docx', NOW);
+  assert.match(partial.report.documentReview!.notes.join(' '), /relationship part could not be fully decoded/u);
+  assert.ok(partial.report.links.some(link => link.hostname === 'docx-link.example'));
+});
+
+test('HAR destination exclusions remain partial without dropping the admitted timeline', async () => {
+  const input = text(JSON.stringify({ log: { version: '1.2', entries: [
+    { request: { url: 'https://127.0.0.1/private', method: 'GET' }, response: { status: 200 } },
+    { request: { url: 'https://target.example:8443/private', method: 'GET' }, response: { status: 404 } },
+  ] } }));
+  const result = await reviewSelectedInput(input, 'har', NOW);
+  assert.equal(result.report.harReview?.entries.length, 2);
+  assert.equal(result.report.coverage.state, 'partial');
+  assert.equal(result.report.coverage.rejectedLinks, 2);
+  assert.equal(result.report.coverage.boundsReached.length, 2);
+  assert.deepEqual(result.targets, []);
+  assert.doesNotMatch(JSON.stringify(result), /\/private/u);
+});
+
 test('selected inputs share worker and CLI results, cancellation and binary input policy', async () => {
   for (const [kind, bytes] of [['docx', selectedDocxFixture()], ['har', selectedHarFixture()], ['pdf', selectedPdfFixture()]] as const) {
     const direct = await reviewSelectedInput(bytes, kind, NOW);

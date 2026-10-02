@@ -155,6 +155,9 @@ Add a repeatable `--reported-action`, such as `entered_device_code` or
 reported action. The report does not infer a stolen session from domain evidence.
 `--strict-exit` returns 4 for a partial review. QR review supports still PNGs;
 no decoded result is not proof that a symbol is absent.
+Excluded links and unsupported QR payloads make the review partial, with
+category counts rather than private payload text. Bare QR hostnames are not
+automatically treated as URLs.
 
 ### Contextual reviews
 

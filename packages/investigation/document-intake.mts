@@ -43,11 +43,12 @@ export async function createDocumentIntake(bytes: Uint8Array, kind: 'pdf' | 'doc
       if (imagePixels > MAX_DOCUMENT_TOTAL_IMAGE_PIXELS) { partial('Further image pixels exceed the aggregate QR review bound.'); return; }
       const decoded = decodeQrPixels(image);
       const location = await part({ kind: 'image', page, identity: original ? 'original_part_bytes' : 'decoded_rgba_pixels', state: decoded.bounded || decoded.structured ? 'partial' : 'reviewed' }, original ?? new Uint8Array(image.pixels.buffer, image.pixels.byteOffset, image.pixels.byteLength));
-      if (location) for (const value of decoded.texts) links.addText(value, 'document_qr', location);
+      if (location) for (const value of decoded.texts) links.addQr(value, 'document_qr', location);
       if (decoded.bounded || decoded.structured) partial('Some QR candidates were bounded or require multi-symbol reassembly.');
     },
     finish(): MessageIntakeResult {
       const result = links.result();
+      for (const limitation of result.limitations) partial(limitation);
       if (result.bounded) partial('Further extracted links exceed the review bound.');
       return { targets: result.targets, report: { ...base, links: result.links,
         coverage: { ...base.coverage, state: state === 'reviewed' ? 'reviewed' : 'partial', reviewedParts: parts.length, rejectedLinks: result.rejected },

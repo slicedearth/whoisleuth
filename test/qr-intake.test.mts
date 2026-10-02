@@ -6,6 +6,7 @@ import { zlibSync } from 'fflate';
 import { reviewQrInput } from '../packages/investigation/qr-intake.mts';
 import { decodeEvidencePng } from '../packages/evidence/png-pixels.mts';
 import { updateCrc32 } from '../packages/interchange/crc32.mts';
+import { createDocumentIntake } from '../packages/investigation/document-intake.mts';
 
 function image(value: string, inverted = false) {
   const qr = new Encoder().encode(new Byte(value)), width = (qr.size + 8) * 4, data = new Uint8Array(width * width * 4);
@@ -61,6 +62,24 @@ test('a decoded non-URL QR is not executed or reported as a collected target', a
   assert.equal(result.report.coverage.reviewedParts, 1);
   assert.deepEqual(result.report.links, []);
   assert.equal(JSON.stringify(result.report).includes('private'), false);
+  assert.equal(result.report.coverage.state, 'partial');
+  assert.deepEqual(result.report.coverage.boundsReached, ['QR network settings were not interpreted (1).']);
+});
+
+test('embedded QR content and excluded document links retain the same coverage reasons', async () => {
+  const selected = image('WIFI:T:WPA;S:private-name;P:private-password;;');
+  const review = await createDocumentIntake(selected, 'pdf', now);
+  await review.image(decodeEvidencePng(selected), 1);
+  await review.destinations(['https://user:secret@example.test/private'], 1);
+  const result = review.finish();
+  assert.equal(result.report.coverage.state, 'partial');
+  assert.equal(result.report.documentReview?.state, 'partial');
+  assert.equal(result.report.coverage.rejectedLinks, 1);
+  assert.deepEqual(result.report.documentReview?.notes, [
+    'Links containing credentials were not reviewed (1).', 'QR network settings were not interpreted (1).',
+  ]);
+  assert.deepEqual(result.targets, []);
+  assert.doesNotMatch(JSON.stringify(result), /secret|private/u);
 });
 
 test('blank, corrupt, oversized and truncated PNGs remain distinct from decoded QR content', async () => {

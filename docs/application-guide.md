@@ -122,6 +122,8 @@ beside a URL displayed in the message, expands supplied redirect parameters and
 identifies authorisation-request fields. Choosing a destination fills Lookup;
 it does not start a request. Exact URLs are available in a private disclosure
 and omitted from the minimised review download.
+Excluded destinations and unsupported QR payloads are counted by category;
+the preview remains partial and does not turn them into collection targets.
 Email authentication is grouped by message part and physical header position.
 Expand **Review reported authentication sources** to inspect the reporting
 service, evaluated domains and malformed or duplicated values. Receiver-trust

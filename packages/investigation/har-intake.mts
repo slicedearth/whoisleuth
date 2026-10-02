@@ -51,6 +51,6 @@ export async function reviewHarInput(bytes: Uint8Array, reviewedAt: string): Pro
   }
   const extracted = links.result();
   return { targets: extracted.targets, report: { ...base, links: extracted.links, harReview: { entries, invalidEntries },
-    coverage: { ...base.coverage, state: invalidEntries || extracted.bounded ? 'partial' : 'reviewed', reviewedParts: entries.length,
-      rejectedLinks: extracted.rejected, boundsReached: extracted.bounded ? ['Destination list; the admitted request timeline remains available'] : [] } } };
+    coverage: { ...base.coverage, state: invalidEntries || extracted.bounded || extracted.rejected ? 'partial' : 'reviewed', reviewedParts: entries.length,
+      rejectedLinks: extracted.rejected, boundsReached: [...extracted.limitations, ...(extracted.bounded ? ['Destination list; the admitted request timeline remains available'] : [])] } } };
 }

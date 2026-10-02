@@ -162,6 +162,10 @@ cookie or authorisation material, downloads, compressed response bodies,
 non-HTML content, invalid or credentialed target URLs, excessive HTML, and
 mismatched supported record digests are excluded. The importer never executes
 page content or makes a request.
+Each header block is limited to 64 KiB. Repeatable headers and folded whitespace
+are supported; malformed HTTP records are excluded individually. Invalid WARC
+framing or conflicting record lengths reject the archive because record
+boundaries cannot be trusted.
 
 For each retained response, the importer keeps only the normalised domain,
 HTTP(S) origin, bounded title, response status, WARC observation time,

@@ -43,6 +43,38 @@ test('unsupported links and work limits remain visible', () => {
   assert.equal(intake.result().bounded, true);
 });
 
+test('excluded destinations make message review partial with fixed private-safe reasons', async () => {
+  const input = '<a href="https://user:secret@example.test/private">one</a><a href="http://127.0.0.1/private">two</a><a href="https://example.test:8443/private">three</a><a href="javascript:privateCode()">four</a><a href="https://admitted.example/">five</a>';
+  const result = await reviewMessageInput(bytes(`Content-Type: text/html\r\n\r\n${input}`), 'email', now);
+  assert.equal(result.report.coverage.state, 'partial');
+  assert.equal(result.report.coverage.rejectedLinks, 4);
+  assert.deepEqual(result.report.coverage.boundsReached, [
+    'Links containing credentials were not reviewed (1).',
+    'Non-HTTP(S) links were not reviewed (1).',
+    'Links using non-default ports were not reviewed (1).',
+    'IP-address or non-registrable-host links were not reviewed (1).',
+  ]);
+  assert.deepEqual(result.targets.map(target => target.exactUrl), ['https://admitted.example/']);
+  assert.doesNotMatch(JSON.stringify(result.report), /secret|private|127\.0\.0\.1|8443/u);
+});
+
+test('QR payload categories distinguish unsupported content without offering it for collection', async () => {
+  const result = await reviewMessageInput(bytes('selected image'), 'qr', now, [
+    'WIFI:T:WPA;S:https://not-a-link.example;P:secret;;', 'BEGIN:VCARD\nFN:Private Person\nEND:VCARD',
+    'javascript:privateCode()', 'bare.example', 'private note', 'https://admitted.example/',
+  ]);
+  assert.equal(result.report.coverage.state, 'partial');
+  assert.equal(result.report.coverage.rejectedLinks, 0);
+  assert.deepEqual(result.report.coverage.boundsReached, [
+    'QR network settings were not interpreted (1).', 'QR contact details were not interpreted (1).',
+    'QR non-HTTP(S) payloads were not interpreted (1).',
+    'QR hostnames without an HTTP(S) scheme were not offered for collection (1).',
+    'QR text without an HTTP(S) link was not interpreted (1).',
+  ]);
+  assert.deepEqual(result.targets.map(target => target.exactUrl), ['https://admitted.example/']);
+  assert.doesNotMatch(JSON.stringify(result.report), /secret|private|Private Person|bare\.example|not-a-link/u);
+});
+
 test('email review separates claimed identities, reported authentication and actual links', async () => {
   const source = 'From: Example Support <private-sender@brand.example>\r\nReply-To: person@different.test\r\nAuthentication-Results: mail.example; spf=pass; dkim=fail; dmarc=fail\r\nSubject: private subject\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<a href="https://destination.test/secret?token=private-value">https://brand.example</a><script>https://not-executed.example/</script><p>Copy and paste into the terminal to verify you are human.</p>';
   const result = await reviewMessageInput(bytes(source), 'email', now);

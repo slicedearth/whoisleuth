@@ -9,7 +9,7 @@ import { MAX_MESSAGE_INTAKE_BYTES, MAX_INTAKE_LINKS, MAX_INTAKE_URL_LENGTH } fro
 const WORD_NAMESPACES = new Set(['http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'http://purl.oclc.org/ooxml/wordprocessingml/main']);
 const RELATIONSHIP_NAMESPACES = new Set(['http://schemas.openxmlformats.org/package/2006/relationships', 'http://purl.oclc.org/ooxml/package/relationships']);
 const WORD_PART = /^word\/(?:document|header\d+|footer\d+|footnotes|endnotes|comments)\.xml$/u;
-const RELATIONSHIP_PART = /^word\/_rels\/(?:document|header\d+|footer\d+|footnotes|endnotes|comments)\.xml\.rels$/u;
+const RELATIONSHIP_PART = /^word\/(?:[^/]+\/)*_rels\/[^/]+\.rels$/u;
 const MEDIA_PART = /^word\/media\/[^/]+$/u;
 
 function archiveKey(name: string): string {
@@ -44,7 +44,7 @@ export async function reviewDocxInput(bytes: Uint8Array, reviewedAt: string) {
     },
   });
   if (!files.has('[Content_Types].xml') || !files.has('word/document.xml')) throw new TypeError('The selected archive is not a supported DOCX document.');
-  let nodes = 0, declaredMain = false;
+  let nodes = 0, declaredMain = false, externalResources = 0;
   function parseXml(input: Uint8Array, callbacks: { open?: (tag: SaxesTagNS) => void; close?: (tag: SaxesTagNS) => void; text?: (value: string) => void }) {
     const parser = new SaxesParser({ xmlns: true });
     let depth = 0;
@@ -82,7 +82,7 @@ export async function reviewDocxInput(bytes: Uint8Array, reviewedAt: string) {
         parseXml(body, { open(tag) {
           if (tag.local !== 'Relationship' || !RELATIONSHIP_NAMESPACES.has(tag.uri) || attr(tag, 'TargetMode') !== 'External') return;
           const type = attr(tag, 'Type'), target = attr(tag, 'Target');
-          if (type !== 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink' && type !== 'http://purl.oclc.org/ooxml/officeDocument/relationships/hyperlink') { review.partial('External non-link resources were declared but not requested.'); return; }
+          if (type !== 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink' && type !== 'http://purl.oclc.org/ooxml/officeDocument/relationships/hyperlink') { externalResources++; return; }
           if (!target || target.length > MAX_INTAKE_URL_LENGTH || destinations.length >= MAX_INTAKE_LINKS) { review.partial('Some relationship targets exceed the link review bound.'); return; }
           destinations.push(target);
         } });
@@ -93,6 +93,7 @@ export async function reviewDocxInput(bytes: Uint8Array, reviewedAt: string) {
       catch { review.partial('An embedded image was unsupported, malformed or outside the pixel review bounds.'); }
     }
   }
+  if (externalResources) review.partial(`${externalResources} external non-link resources were declared but not requested.`);
   if (unsupportedParts) review.partial(`${unsupportedParts} embedded objects or non-PNG images were not decoded.`);
   // Text/relationships are declarations in the selected package, not a rendered page.
   review.partial('DOCX page layout, vector artwork, embedded objects and non-PNG images are not rendered. Link relationships can include unused declarations.');

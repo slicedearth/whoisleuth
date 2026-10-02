@@ -124,13 +124,17 @@ export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeK
   else if (kind === 'qr') {
     if (!Array.isArray(qrText) || qrText.length > MAX_MESSAGE_PARTS || qrText.some(value => typeof value !== 'string' || value.length > 8_192)) throw new TypeError('QR review requires bounded decoded text.');
     reviewedParts = qrText.length;
-    for (const value of qrText) text(value, 'qr');
+    for (const value of qrText) {
+      for (const hint of requestedActionHints(value)) actionHints.add(hint);
+      links.addQr(value);
+    }
   } else {
     reviewedParts = 1;
     const value = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
     if (kind === 'calendar') calendar(value); else text(value, 'text');
   }
   const result = links.result();
+  for (const limitation of result.limitations) bounds.add(limitation);
   if (result.bounded) bounds.add('Link extraction');
   return { report: { ...base,
     coverage: { state: bounds.size || unreviewedAttachments || partialAuthentication ? 'partial' : 'reviewed', reviewedParts, unreviewedAttachments, rejectedLinks: result.rejected, boundsReached: [...bounds] },
