@@ -1,5 +1,5 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
-import { test, expect } from './fixtures';
+import { test, expect, isLookupEndpointUrl } from './fixtures';
 import AxeBuilder from '@axe-core/playwright';
 import { identityEventExample, identityEventScope } from '../fixtures/identity-event-examples.mts';
 import { expectNoHorizontalOverflow, useTheme, readBrowserLocalCollection } from './helpers';
@@ -8,7 +8,7 @@ import { CASE_SCHEMA_VERSION } from '../packages/cases/case-record-contracts.mts
 
 test('identity preview compares only explicit scope and retains the minimised report through the Case owner', async ({ page }, testInfo) => {
   let collections = 0;
-  await page.route('**/api/lookup', route => { collections++; return route.abort(); });
+  await page.route(url => isLookupEndpointUrl(url.href), route => { collections++; return route.abort(); });
   await openSeededTimelineCase(page, 'incident.example', [caseRecord({ domain: 'incident.example' })], CASE_SCHEMA_VERSION);
   await page.getByText('Review a message, link or selected file', { exact: true }).click();
   const intake = page.locator('details.intake');

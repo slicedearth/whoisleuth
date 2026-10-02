@@ -1,10 +1,28 @@
 import { expect, test } from '@playwright/test';
 import { createServer } from 'node:net';
 import { BASE_URL } from './constants.ts';
-import { ALLOWED_ORIGIN, installNetworkGuard, installBrowserGuards, isAllowedRequestOrigin, test as guardedTest } from './fixtures';
+import { ALLOWED_ORIGIN, installNetworkGuard, installBrowserGuards, isAllowedRequestOrigin, isLookupEndpointUrl, test as guardedTest } from './fixtures';
 
 guardedTest('the default context receives the service-worker block before guard installation', async ({ serviceWorkers }) => {
   expect(serviceWorkers).toBe('block');
+});
+
+guardedTest('offline collection interceptors match both query-bearing and body-bearing Lookup requests', async ({ page }) => {
+  const requests: string[] = [];
+  await page.route(url => isLookupEndpointUrl(url.href), async route => {
+    requests.push(`${route.request().method()} ${new URL(route.request().url()).pathname}${new URL(route.request().url()).search}`);
+    await route.fulfill({ status: 200, json: { intercepted: true } });
+  });
+  await page.goto('/dashboard');
+  const results = await page.evaluate(async () => Promise.all([
+    fetch('/api/lookup?q=fixture.example.test&mode=fast').then(response => response.json()),
+    fetch('/api/lookup', { method: 'POST', body: '{}' }).then(response => response.json()),
+  ]));
+  expect(results).toEqual([{ intercepted: true }, { intercepted: true }]);
+  expect(requests.sort()).toEqual(['GET /api/lookup?q=fixture.example.test&mode=fast', 'POST /api/lookup']);
+  for (const url of ['https://example.invalid/api/lookup?q=fixture.example.test', `${ALLOWED_ORIGIN}/api/lookup-extra`, `${ALLOWED_ORIGIN}/api/lookup/other`]) {
+    expect(isLookupEndpointUrl(url)).toBe(false);
+  }
 });
 
 // Exercises the predicate every spec's automatic network guard

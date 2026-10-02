@@ -9,6 +9,7 @@ import { MAX_PROFILE_IMPORT_BYTES, MAX_PROFILE_STORE_BYTES, serialiseWorkspacePo
 import { brandProfileStoreAtBytes, denseBrandHistoryStore, richBrandHistoryProfiles } from '../test/brand-profile-capacity-fixture.mts';
 import { beginBrowserInteractionReadiness, readBrowserInteractionReadiness } from './performance-sampling';
 import { productionChunkPath } from './production-build';
+import { holdFixtureResponse } from './held-response';
 
 const NOW = '2026-09-09T00:00:00.000Z';
 
@@ -213,24 +214,45 @@ test('leaving Brands cancels held file preparation before the collection can cha
   await expect(page.getByLabel('Import JSON', { exact: true })).toBeEnabled();
   const before = await readBrowserLocalCollection(page, 'brand_profiles');
   const profile = normalizeBrandProfile({ id: 'cancelled-import', name: 'Cancelled import', createdAt: NOW, updatedAt: NOW });
-  const pattern = `**${productionChunkPath('src/lib/workers/browser-local-data.worker.ts')}`;
-  let held = 0;
-  let release = () => {};
-  const barrier = new Promise<void>((resolve) => { release = resolve; });
-  await page.route(pattern, async (route) => { held += 1; await barrier; await route.abort('failed'); });
-  try {
-    await selectProfileFile(page, serialiseWorkspacePortableJson(buildBrandProfileExport([profile], NOW)), async () => {
-      await expect.poll(() => held).toBe(1);
+  const workerPath = productionChunkPath('src/lib/workers/browser-local-data.worker.ts');
+  await page.evaluate(pathname => {
+    const counts = { created: 0, terminated: 0, replies: 0 };
+    Reflect.set(window, '__importWorkerCounts', counts);
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      readonly tracked: boolean;
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        this.tracked = new URL(String(url), window.location.href).pathname === pathname;
+        if (this.tracked) { counts.created++; this.addEventListener('message', () => { counts.replies++; }); }
+      }
+      override terminate() { if (this.tracked) counts.terminated++; super.terminate(); }
+    };
+  }, workerPath);
+  const held = await holdFixtureResponse(page, url => url.pathname === workerPath, {
+    status: 200, contentType: 'text/javascript', body: await readFile(`frontend/build${workerPath}`),
+  });
+  const content = serialiseWorkspacePortableJson(buildBrandProfileExport([profile], NOW));
+  await selectProfileFile(page, content, async () => {
+      await held.received;
       await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toHaveText('Importing Brand Profiles…');
       await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: /^Dashboard(?:\s|$)/u }).click();
       await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
-      release();
-    });
-  } finally { release(); await page.unroute(pattern); }
+      expect(await page.evaluate(() => Reflect.get(window, '__importWorkerCounts'))).toEqual({ created: 1, terminated: 1, replies: 0 });
+      await held.release();
+  });
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: /^Brands(?:\s|$)/u }).click();
   await expect(page.getByLabel('Import JSON', { exact: true })).toBeEnabled();
   expect(await readBrowserLocalCollection(page, 'brand_profiles')).toEqual(before);
   await expect(page.getByRole('radio', { name: 'Set Cancelled import active', exact: true })).toHaveCount(0);
+  await selectProfileFile(page, content, () => expect(page.getByRole('status', { name: 'Brand Profile action status' })).toHaveText('Imported 1 new and 0 updated profiles.'));
+  const after = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(after.manifest.revision).toBe(before.manifest.revision + 1);
+  expect(after.records[0]!.value).toEqual(profile);
+  const completed = await page.evaluate(() => Reflect.get(window, '__importWorkerCounts'));
+  expect(completed.created).toBeGreaterThan(1);
+  expect(completed.terminated).toBe(completed.created);
+  expect(completed.replies).toBe(completed.created - 1);
 });
 
 test('an unavailable preparation module leaves the collection readable and gives a reload recovery', async ({ page }) => {

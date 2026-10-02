@@ -1,5 +1,5 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
-import { expect, test } from './fixtures';
+import { expect, test, isLookupEndpointUrl } from './fixtures';
 import { caseRecord, openSeededTimelineCase, openCaseResponseWorkspace } from './case-test-fixtures';
 import { currentActionFixture, caseWorkspaceActionStatus } from './case-response-fixtures';
 import { openCaseSection } from './console-navigation';
@@ -17,7 +17,7 @@ function action(id = 'active') {
 test('the response queue links receipts and questions without inferring removal or starting collection', async ({ page }, testInfo) => {
   await page.clock.install({ time: new Date(NOW) });
   let collections = 0;
-  await page.route('**/api/lookup', route => { collections++; return route.abort(); });
+  await page.route(url => isLookupEndpointUrl(url.href), route => { collections++; return route.abort(); });
   const record = caseRecord({ domain: 'queue.example', actions: [action()], assertions: [{ id: 'question', kind: 'next_step',
     statement: 'Is the reported page still observed?', rationale: '', state: 'open', evidencePinIds: [],
     recheck: { targetHostname: 'page.queue.example', baselinePinId: null, conditions: 'Compare the reported page' }, createdAt: NOW, updatedAt: NOW }] });

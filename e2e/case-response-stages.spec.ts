@@ -1,7 +1,7 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCasePacket, openCaseSection } from './console-navigation';
 import { readFile } from 'node:fs/promises';
-import { expect, test } from './fixtures';
+import { expect, test, isLookupEndpointUrl } from './fixtures';
 import {
   expectNoHorizontalOverflow,
   failNextBrowserLocalCollectionReadAfterWrite,
@@ -319,7 +319,7 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   test.slow();
   await page.clock.setFixedTime('2026-09-10T10:00:00.000Z');
   let collectionRequests = 0;
-  await page.route('**/api/lookup', async (route) => { collectionRequests += 1; await route.abort(); });
+  await page.route(url => isLookupEndpointUrl(url.href), async (route) => { collectionRequests += 1; await route.abort(); });
   await page.setViewportSize({ width: 390, height: 844 });
   await openCasesView(page);
   await createCase(page, 'quick-stages.invalid');

@@ -27,7 +27,7 @@ export function isAllowedRequestOrigin(url: string, allowedOrigin: string = ALLO
 
 // Exact origin + exact pathname, not a string prefix - `/api/lookup` as a
 // prefix would also match `/api/lookup-other` or `/api/lookup/whatever`.
-function isLookupEndpointUrl(url: string, allowedOrigin: string = ALLOWED_ORIGIN): boolean {
+export function isLookupEndpointUrl(url: string, allowedOrigin: string = ALLOWED_ORIGIN): boolean {
   try {
     const parsed = new URL(url);
     return parsed.origin === allowedOrigin && parsed.pathname === '/api/lookup';

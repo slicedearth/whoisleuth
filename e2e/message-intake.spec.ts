@@ -1,5 +1,5 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
-import { test, expect } from './fixtures';
+import { test, expect, isLookupEndpointUrl } from './fixtures';
 import { openSeededTimelineCase, caseRecord } from './case-test-fixtures';
 import { openCaseSection } from './console-navigation';
 import { expectNoHorizontalOverflow, readBrowserLocalCollection, useTheme } from './helpers';
@@ -8,7 +8,7 @@ import AxeBuilder from '@axe-core/playwright';
 
 test('authentication headers retain separate receiver choices, nested provenance and private-safe exports', async ({ page }, testInfo) => {
   let collections = 0;
-  await page.route('**/api/lookup', route => { collections++; return route.abort(); });
+  await page.route(url => isLookupEndpointUrl(url.href), route => { collections++; return route.abort(); });
   await page.goto('/lookup');
   await page.getByText('Review a message, link or selected file', { exact: true }).click();
   const intake = page.locator('details.intake');
@@ -46,7 +46,7 @@ test('authentication headers retain separate receiver choices, nested provenance
 
 test('local message review exposes destination mismatch and fills Lookup without collecting', async ({ page }, testInfo) => {
   let lookups = 0;
-  await page.route('**/api/lookup', route => { lookups++; return route.abort(); });
+  await page.route(url => isLookupEndpointUrl(url.href), route => { lookups++; return route.abort(); });
   await page.goto('/lookup');
   await page.getByText('Review a message, link or selected file', { exact: true }).click();
   const intake = page.locator('details.intake');

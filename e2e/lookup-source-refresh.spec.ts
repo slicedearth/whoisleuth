@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
+import { holdFixtureResponse } from './held-response';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, useTheme } from './helpers';
 
 const EARLIER = '2026-07-13T00:00:00.000Z';
@@ -98,19 +99,20 @@ test('refreshed facts survive section navigation and save through the existing C
 });
 
 test('cancelling a held source response does not retain late evidence', async ({ page }) => {
-  let release: (() => void) | undefined;
-  await page.route('**/api/rdap?*', async route => {
-    await new Promise<void>(resolve => { release = resolve; });
-    await route.fulfill({ json: { query: DOMAIN, type: 'domain', upstreamStatus: 200, fetchedAt: LATER,
-      parsed: { domain: DOMAIN, registrar: { name: 'Late registrar' } } } });
+  const held = await holdFixtureResponse(page, url => url.pathname === '/api/rdap', {
+    json: { query: DOMAIN, type: 'domain', upstreamStatus: 200, fetchedAt: LATER,
+      parsed: { domain: DOMAIN, registrar: { name: 'Late registrar' } } },
   });
   await start(page);
   const refresh = page.locator('.source-refresh');
   await refresh.getByRole('button', { name: 'Refresh Registry RDAP', exact: true }).click();
-  await expect.poll(() => Boolean(release)).toBe(true);
+  const request = await held.received;
+  const failed = page.waitForEvent('requestfailed', candidate => candidate === request);
   await refresh.getByRole('button', { name: 'Cancel source refresh' }).click();
   await expect(refresh.getByRole('status')).toContainText('cancelled');
-  release!();
+  await held.release();
+  await failed;
+  expect(request.failure()).not.toBeNull();
   await expect(refresh.getByRole('button', { name: 'Refresh Registry RDAP', exact: true })).toBeEnabled();
   await expect(refresh.getByRole('button', { name: 'Refresh Registry RDAP', exact: true })).toBeFocused();
   await expect(refresh.locator('.refresh-results > li')).toHaveCount(0);

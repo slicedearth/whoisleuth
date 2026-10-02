@@ -1,5 +1,5 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
-import { test, expect } from './fixtures';
+import { test, expect, isLookupEndpointUrl } from './fixtures';
 import type { Locator, Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { selectedPdfFixture, selectedDocxFixture, selectedHarFixture } from '../fixtures/selected-input-examples.mts';
@@ -13,7 +13,7 @@ const selectedDocuments = [
 
 async function openOfflineIntake(page: Page) {
   let collections = 0;
-  await page.route('**/api/lookup', route => { collections++; return route.abort(); });
+  await page.route(url => isLookupEndpointUrl(url.href), route => { collections++; return route.abort(); });
   await page.goto('/lookup');
   await page.getByText('Review a message, link or selected file', { exact: true }).click();
   return { intake: page.locator('details.intake'), collectionCount: () => collections };
