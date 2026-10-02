@@ -291,7 +291,7 @@
   },
   "flightRecorder": {
     "schema": "whoisleuth.domain-control-flight-recorder",
-    "version": 2,
+    "version": 3,
     "generatedAt": "2026-08-20T00:00:00.000Z",
     "domains": [
       "example.test"
@@ -299,86 +299,25 @@
     "observationCount": 1,
     "events": [
       {
-        "id": "example.test:registrar:2026-08-20T00:00:00.000Z:1",
+        "id": "example.test:caa_policy:2026-08-20T00:00:00.000Z:1",
         "domain": "example.test",
-        "field": "registrar",
+        "field": "caa_policy",
         "observedAt": "2026-08-20T00:00:00.000Z",
         "capturedAt": "2026-08-20T00:00:00.000Z",
         "kind": "first_observation",
         "state": "observed",
         "before": [],
         "after": [
-          "Example Registrar"
+          "0 issue ca.example"
         ],
-        "source": "Registry RDAP",
+        "source": "DNS CAA",
         "approvedWindow": null,
+        "collectionDepth": "deep",
+        "changeInterval": null,
         "explanation": "The first complete source-timed value for this field was retained."
       },
       {
-        "id": "example.test:registrar_lock:2026-08-20T00:00:00.000Z:2",
-        "domain": "example.test",
-        "field": "registrar_lock",
-        "observedAt": "2026-08-20T00:00:00.000Z",
-        "capturedAt": "2026-08-20T00:00:00.000Z",
-        "kind": "first_observation",
-        "state": "observed",
-        "before": [],
-        "after": [
-          "required"
-        ],
-        "source": "Registry RDAP",
-        "approvedWindow": null,
-        "explanation": "The first complete source-timed value for this field was retained."
-      },
-      {
-        "id": "example.test:registry_dnssec:2026-08-20T00:00:00.000Z:3",
-        "domain": "example.test",
-        "field": "registry_dnssec",
-        "observedAt": "2026-08-20T00:00:00.000Z",
-        "capturedAt": "2026-08-20T00:00:00.000Z",
-        "kind": "first_observation",
-        "state": "observed",
-        "before": [],
-        "after": [
-          "signed"
-        ],
-        "source": "Registry RDAP",
-        "approvedWindow": null,
-        "explanation": "The first complete source-timed value for this field was retained."
-      },
-      {
-        "id": "example.test:registry_nameservers:2026-08-20T00:00:00.000Z:4",
-        "domain": "example.test",
-        "field": "registry_nameservers",
-        "observedAt": "2026-08-20T00:00:00.000Z",
-        "capturedAt": "2026-08-20T00:00:00.000Z",
-        "kind": "first_observation",
-        "state": "observed",
-        "before": [],
-        "after": [
-          "ns1.example.test",
-          "ns2.example.test"
-        ],
-        "source": "Registry RDAP",
-        "approvedWindow": null,
-        "explanation": "The first complete source-timed value for this field was retained."
-      },
-      {
-        "id": "example.test:whois_nameservers:2026-08-20T00:00:00.000Z:5",
-        "domain": "example.test",
-        "field": "whois_nameservers",
-        "observedAt": "2026-08-20T00:00:00.000Z",
-        "capturedAt": "2026-08-20T00:00:00.000Z",
-        "kind": "incomplete_observation",
-        "state": "partial",
-        "before": [],
-        "after": [],
-        "source": "WHOIS",
-        "approvedWindow": null,
-        "explanation": "The source is unsupported. Retained values are incomplete; this is not evidence that a prior value disappeared or changed."
-      },
-      {
-        "id": "example.test:delegated_nameservers:2026-08-20T00:00:00.000Z:6",
+        "id": "example.test:delegated_nameservers:2026-08-20T00:00:00.000Z:2",
         "domain": "example.test",
         "field": "delegated_nameservers",
         "observedAt": "2026-08-20T00:00:00.000Z",
@@ -392,10 +331,12 @@
         ],
         "source": "DNS NS",
         "approvedWindow": null,
+        "collectionDepth": "deep",
+        "changeInterval": null,
         "explanation": "The first complete source-timed value for this field was retained."
       },
       {
-        "id": "example.test:delegation_ds:2026-08-20T00:00:00.000Z:7",
+        "id": "example.test:delegation_ds:2026-08-20T00:00:00.000Z:3",
         "domain": "example.test",
         "field": "delegation_ds",
         "observedAt": "2026-08-20T00:00:00.000Z",
@@ -408,74 +349,12 @@
         ],
         "source": "DNS delegation",
         "approvedWindow": null,
+        "collectionDepth": "deep",
+        "changeInterval": null,
         "explanation": "The first complete source-timed value for this field was retained."
       },
       {
-        "id": "example.test:mail_exchangers:2026-08-20T00:00:00.000Z:8",
-        "domain": "example.test",
-        "field": "mail_exchangers",
-        "observedAt": "2026-08-20T00:00:00.000Z",
-        "capturedAt": "2026-08-20T00:00:00.000Z",
-        "kind": "first_observation",
-        "state": "observed",
-        "before": [],
-        "after": [
-          "10 mail.example.test"
-        ],
-        "source": "DNS MX",
-        "approvedWindow": null,
-        "explanation": "The first complete source-timed value for this field was retained."
-      },
-      {
-        "id": "example.test:caa_policy:2026-08-20T00:00:00.000Z:9",
-        "domain": "example.test",
-        "field": "caa_policy",
-        "observedAt": "2026-08-20T00:00:00.000Z",
-        "capturedAt": "2026-08-20T00:00:00.000Z",
-        "kind": "first_observation",
-        "state": "observed",
-        "before": [],
-        "after": [
-          "0 issue ca.example"
-        ],
-        "source": "DNS CAA",
-        "approvedWindow": null,
-        "explanation": "The first complete source-timed value for this field was retained."
-      },
-      {
-        "id": "example.test:tls_certificate:2026-08-20T00:00:00.000Z:10",
-        "domain": "example.test",
-        "field": "tls_certificate",
-        "observedAt": "2026-08-20T00:00:00.000Z",
-        "capturedAt": "2026-08-20T00:00:00.000Z",
-        "kind": "first_observation",
-        "state": "observed",
-        "before": [],
-        "after": [
-          "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-        ],
-        "source": "TLS",
-        "approvedWindow": null,
-        "explanation": "The first complete source-timed value for this field was retained."
-      },
-      {
-        "id": "example.test:tls_public_key:2026-08-20T00:00:00.000Z:11",
-        "domain": "example.test",
-        "field": "tls_public_key",
-        "observedAt": "2026-08-20T00:00:00.000Z",
-        "capturedAt": "2026-08-20T00:00:00.000Z",
-        "kind": "first_observation",
-        "state": "observed",
-        "before": [],
-        "after": [
-          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        ],
-        "source": "TLS",
-        "approvedWindow": null,
-        "explanation": "The first complete source-timed value for this field was retained."
-      },
-      {
-        "id": "example.test:http_origin:2026-08-20T00:00:00.000Z:12",
+        "id": "example.test:http_origin:2026-08-20T00:00:00.000Z:4",
         "domain": "example.test",
         "field": "http_origin",
         "observedAt": "2026-08-20T00:00:00.000Z",
@@ -488,10 +367,30 @@
         ],
         "source": "HTTP",
         "approvedWindow": null,
+        "collectionDepth": "deep",
+        "changeInterval": null,
         "explanation": "The first complete source-timed value for this field was retained."
       },
       {
-        "id": "example.test:page_identity:2026-08-20T00:00:00.000Z:13",
+        "id": "example.test:mail_exchangers:2026-08-20T00:00:00.000Z:5",
+        "domain": "example.test",
+        "field": "mail_exchangers",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "10 mail.example.test"
+        ],
+        "source": "DNS MX",
+        "approvedWindow": null,
+        "collectionDepth": "deep",
+        "changeInterval": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:page_identity:2026-08-20T00:00:00.000Z:6",
         "domain": "example.test",
         "field": "page_identity",
         "observedAt": "2026-08-20T00:00:00.000Z",
@@ -504,7 +403,134 @@
         ],
         "source": "Static page identity",
         "approvedWindow": null,
+        "collectionDepth": "deep",
+        "changeInterval": null,
         "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:registrar:2026-08-20T00:00:00.000Z:7",
+        "domain": "example.test",
+        "field": "registrar",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "Example Registrar"
+        ],
+        "source": "Registry RDAP",
+        "approvedWindow": null,
+        "collectionDepth": "deep",
+        "changeInterval": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:registrar_lock:2026-08-20T00:00:00.000Z:8",
+        "domain": "example.test",
+        "field": "registrar_lock",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "required"
+        ],
+        "source": "Registry RDAP",
+        "approvedWindow": null,
+        "collectionDepth": "deep",
+        "changeInterval": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:registry_dnssec:2026-08-20T00:00:00.000Z:9",
+        "domain": "example.test",
+        "field": "registry_dnssec",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "signed"
+        ],
+        "source": "Registry RDAP",
+        "approvedWindow": null,
+        "collectionDepth": "deep",
+        "changeInterval": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:registry_nameservers:2026-08-20T00:00:00.000Z:10",
+        "domain": "example.test",
+        "field": "registry_nameservers",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "ns1.example.test",
+          "ns2.example.test"
+        ],
+        "source": "Registry RDAP",
+        "approvedWindow": null,
+        "collectionDepth": "deep",
+        "changeInterval": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:tls_certificate:2026-08-20T00:00:00.000Z:11",
+        "domain": "example.test",
+        "field": "tls_certificate",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        ],
+        "source": "TLS",
+        "approvedWindow": null,
+        "collectionDepth": "deep",
+        "changeInterval": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:tls_public_key:2026-08-20T00:00:00.000Z:12",
+        "domain": "example.test",
+        "field": "tls_public_key",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "source": "TLS",
+        "approvedWindow": null,
+        "collectionDepth": "deep",
+        "changeInterval": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:whois_nameservers:2026-08-20T00:00:00.000Z:13",
+        "domain": "example.test",
+        "field": "whois_nameservers",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "incomplete_observation",
+        "state": "partial",
+        "before": [],
+        "after": [],
+        "source": "WHOIS",
+        "approvedWindow": null,
+        "collectionDepth": "deep",
+        "changeInterval": null,
+        "explanation": "The source is unsupported. Retained values are incomplete; this is not evidence that a prior value disappeared or changed."
       }
     ],
     "summary": {
@@ -521,7 +547,8 @@
       "Source fields remain separate. A collection failure, partial result, unsupported source, or missing field never becomes evidence that a prior value disappeared.",
       "Approved windows label expected timing but do not delete evidence or establish that a change was authorised, successful, safe, or complete.",
       "Observed changes can reflect publication lag or different collection conditions and require analyst review.",
-      "Capture time and source observation time remain separate. Unknown, conflicting or non-increasing source times cannot establish an observed change."
+      "Capture time and source observation time remain separate. Unknown, conflicting or non-increasing source times cannot establish an observed change.",
+      "A change interval is bounded by comparable complete source observations, not an exact change time. Incomplete observations inside it remain explicit. An approved window must contain the whole interval."
     ]
   },
   "limitations": [

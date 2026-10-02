@@ -15,8 +15,8 @@ import {
 export const DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA = 'whoisleuth.domain-control-flight-recorder.input';
 export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA = 'whoisleuth.domain-control-flight-recorder';
 export const PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION = 1;
-export const DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION = 2;
-export const SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS = [PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION, DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION] as const;
+export const DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION = 3;
+export const SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS = [PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION, 2, DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION] as const;
 
 export const MIN_FLIGHT_RECORDER_OBSERVATIONS = 1;
 export const MAX_FLIGHT_RECORDER_OBSERVATIONS = 200;
@@ -108,11 +108,14 @@ export const PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS = Object.freeze([
   'approvedWindow',
   'explanation',
 ] as const);
-export const DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS = Object.freeze([...PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS, 'capturedAt'] as const);
-export const DOMAIN_CONTROL_FLIGHT_RECORDER_APPROVED_WINDOW_KEYS = Object.freeze([
+export const SOURCE_TIMED_FLIGHT_RECORDER_EVENT_KEYS = Object.freeze([...PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS, 'capturedAt'] as const);
+export const DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS = Object.freeze([...SOURCE_TIMED_FLIGHT_RECORDER_EVENT_KEYS, 'collectionDepth', 'changeInterval'] as const);
+export const FLIGHT_RECORDER_CHANGE_INTERVAL_KEYS = Object.freeze(['after', 'by', 'incompleteObservations'] as const);
+export const HISTORICAL_FLIGHT_RECORDER_APPROVED_WINDOW_KEYS = Object.freeze([
   'id',
   'reason',
 ] as const);
+export const DOMAIN_CONTROL_FLIGHT_RECORDER_APPROVED_WINDOW_KEYS = Object.freeze([...HISTORICAL_FLIGHT_RECORDER_APPROVED_WINDOW_KEYS, 'startsAt', 'endsAt'] as const);
 export const PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_SUMMARY_KEYS = Object.freeze([
   'firstObservations',
   'observedChanges',
@@ -130,9 +133,13 @@ export const PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS = Object.freeze([
 ] as const);
 
 export type DomainControlFlightRecorderField = typeof DOMAIN_CONTROL_FLIGHT_RECORDER_FIELDS[number];
-export const DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS = Object.freeze([
+export const SOURCE_TIMED_FLIGHT_RECORDER_LIMITATIONS = Object.freeze([
   ...PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS,
   'Capture time and source observation time remain separate. Unknown, conflicting or non-increasing source times cannot establish an observed change.',
+] as const);
+export const DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS = Object.freeze([
+  ...SOURCE_TIMED_FLIGHT_RECORDER_LIMITATIONS,
+  'A change interval is bounded by comparable complete source observations, not an exact change time. Incomplete observations inside it remain explicit. An approved window must contain the whole interval.',
 ] as const);
 export type DomainControlObservationState = 'observed' | 'partial' | 'unavailable' | 'unsupported';
 
@@ -257,14 +264,22 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
       scope: 'repository',
     },
   ] as const).flatMap((fixture) => {
-    const version = DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION;
-    const id = fixture.id.replace(/v\d+$/u, `v${version}`);
-    const content = fixture.role === 'input'
-      ? { bytes: 2108, sha256: '6998ea864355dd0802b3b6f2c4905f8c84136ad0d4ac9cad1a0fd63dca523b60' }
-      : { bytes: 4649, sha256: '8f3168d101291166f34cede351bc176a934e7997920cd8c22ec00d642ec000df' };
     return [
       { ...fixture, role: fixture.role === 'input' ? 'input' as const : 'historical' as const, expectation: 'accepted_exact' as const, expectedOutputFixtureId: null },
-      { ...fixture, ...content, id, path: `test/fixtures/${id}.json`, version, expectedOutputFixtureId: fixture.expectedOutputFixtureId?.replace(/v\d+$/u, `v${version}`) ?? null },
+      ...([2, DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION] as const).map(version => {
+        const id = fixture.id.replace(/v\d+$/u, `v${version}`);
+        const content = version === 2
+          ? fixture.role === 'input'
+            ? { bytes: 2108, sha256: '6998ea864355dd0802b3b6f2c4905f8c84136ad0d4ac9cad1a0fd63dca523b60' }
+            : { bytes: 4649, sha256: '8f3168d101291166f34cede351bc176a934e7997920cd8c22ec00d642ec000df' }
+          : fixture.role === 'input'
+            ? { bytes: 2108, sha256: '3d9b91dfd34754482047cde64d6343676ec4747267677fcbcc989a65fbd9a6c6' }
+            : { bytes: 5597, sha256: 'ab6a82cfecfb8238a72fbe2dcd4a68a1fd888990e5070eff9d98a337796624d6' };
+        return { ...fixture, ...content, id, path: `test/fixtures/${id}.json`, version,
+          role: fixture.role === 'input' ? 'input' as const : version === DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION ? 'current' as const : 'historical' as const,
+          expectation: version === DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION ? fixture.expectation : 'accepted_exact' as const,
+          expectedOutputFixtureId: version === DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION ? fixture.expectedOutputFixtureId?.replace(/v\d+$/u, `v${version}`) ?? null : null };
+      }),
     ];
   }),
   metadata: {
@@ -290,11 +305,12 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
         versions: [version],
         objects: [
           { path: '$', requiredKeys: DOMAIN_CONTROL_FLIGHT_RECORDER_ROOT_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-          { path: '$.events[]', requiredKeys: version === PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS : DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-          { path: '$.events[].approvedWindow', requiredKeys: DOMAIN_CONTROL_FLIGHT_RECORDER_APPROVED_WINDOW_KEYS, optionalKeys: [], unknownKeys: 'reject' },
+          { path: '$.events[]', requiredKeys: version === 1 ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS : version === 2 ? SOURCE_TIMED_FLIGHT_RECORDER_EVENT_KEYS : DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS, optionalKeys: [], unknownKeys: 'reject' },
+          { path: '$.events[].approvedWindow', requiredKeys: version >= 3 ? DOMAIN_CONTROL_FLIGHT_RECORDER_APPROVED_WINDOW_KEYS : HISTORICAL_FLIGHT_RECORDER_APPROVED_WINDOW_KEYS, optionalKeys: [], unknownKeys: 'reject' },
+          ...(version >= 3 ? [{ path: '$.events[].changeInterval', requiredKeys: FLIGHT_RECORDER_CHANGE_INTERVAL_KEYS, optionalKeys: [], unknownKeys: 'reject' as const }] : []),
           { path: '$.summary', requiredKeys: version === PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_SUMMARY_KEYS : DOMAIN_CONTROL_FLIGHT_RECORDER_SUMMARY_KEYS, optionalKeys: [], unknownKeys: 'reject' },
         ],
-        fixedArrays: [{ path: '$.limitations', values: version === PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS : DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS }],
+        fixedArrays: [{ path: '$.limitations', values: version === 1 ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS : version === 2 ? SOURCE_TIMED_FLIGHT_RECORDER_LIMITATIONS : DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS }],
         normalisation: 'preserve_document',
         target: null,
       },

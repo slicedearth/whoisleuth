@@ -26,6 +26,10 @@ import {
   PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS,
   PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_SUMMARY_KEYS,
   PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS,
+  SOURCE_TIMED_FLIGHT_RECORDER_EVENT_KEYS,
+  SOURCE_TIMED_FLIGHT_RECORDER_LIMITATIONS,
+  FLIGHT_RECORDER_CHANGE_INTERVAL_KEYS,
+  HISTORICAL_FLIGHT_RECORDER_APPROVED_WINDOW_KEYS,
   PUBLIC_MAX_FLIGHT_RECORDER_INPUT_VALUES,
   PUBLIC_MAX_FLIGHT_RECORDER_VALUES,
   PUBLIC_MAX_FLIGHT_RECORDER_VALUE_LENGTH,
@@ -459,24 +463,27 @@ function matchingWindow(
   windows: readonly ApprovedWindow[],
   domain: string,
   field: DomainControlFlightRecorderField,
-  observedAt: string,
+  after: string,
+  by: string,
 ): ApprovedWindow | null {
-  const time = Date.parse(observedAt);
   return windows.find((window) => (
     window.domain === domain
     && window.fields.includes(field)
-    && Date.parse(window.startsAt) <= time
-    && time <= Date.parse(window.endsAt)
+    && Date.parse(window.startsAt) <= Date.parse(after)
+    && Date.parse(by) <= Date.parse(window.endsAt)
   )) ?? null;
 }
 
 type RecorderEventKind = 'first_observation' | 'observed_change' | 'collection_change' | 'recovered' | 'incomplete_observation';
+type ChangeInterval = Readonly<{ after: string; by: string; incompleteObservations: number }>;
 type RecorderEvent = Readonly<{
   id: string; domain: string; field: DomainControlFlightRecorderField;
   observedAt: string | null; capturedAt?: string;
   kind: RecorderEventKind; state: 'observed' | 'partial';
   before: readonly string[]; after: readonly string[]; source: string;
-  approvedWindow: Readonly<{ id: string; reason: string }> | null; explanation: string;
+  approvedWindow: Readonly<{ id: string; reason: string; startsAt?: string; endsAt?: string }> | null; explanation: string;
+  collectionDepth?: DomainControlFlightRecorderObservation['collectionDepth'];
+  changeInterval?: ChangeInterval | null;
 }>;
 export type DomainControlFlightRecorderDocument = Readonly<{
   schema: typeof DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA;
@@ -559,12 +566,22 @@ export function buildDomainControlFlightRecorder(inputRaw: unknown, generatedAtV
     collectionDepth: DomainControlFlightRecorderObservation['collectionDepth']; complete: boolean;
   }>;
   const latest = new Map<string, Previous>();
+  const lastComplete = new Map<string, Previous>();
+  const incompleteSince = new Map<string, number>();
   const events: RecorderEvent[] = [];
   let incompleteFields = 0;
   for (const item of observationTimeline(observations)) {
-    for (const field of item.fields) {
+    const fields = [...item.fields];
+    for (const [key, previous] of latest) {
+      if (key.startsWith(`${item.domain}\u0000`) && !fields.some(field => field.id === previous.field.id)) {
+        fields.push({ id: previous.field.id, source: 'Not supplied in this capture', state: 'unavailable', observedAt: null, values: [] });
+      }
+    }
+    fields.sort((a, b) => ordinalCompare(a.id, b.id));
+    for (const field of fields) {
       const key = `${item.domain}\u0000${field.id}`;
       const previous = latest.get(key);
+      let baseline = lastComplete.get(key);
       let complete = field.state === 'observed' && field.observedAt !== null
         && Date.parse(field.observedAt) <= Date.parse(item.capturedAt) && item.collectionDepth !== 'unknown';
       const sameContext = previous?.field.source === field.source && previous.collectionDepth === item.collectionDepth;
@@ -575,42 +592,59 @@ export function buildDomainControlFlightRecorder(inputRaw: unknown, generatedAtV
         : Date.parse(field.observedAt) > Date.parse(item.capturedAt) ? 'The source observation time is later than capture.'
           : item.collectionDepth === 'unknown' ? 'Collection conditions are unknown or conflicting.'
             : `The source is ${field.state}.`;
-      if (complete && previous?.complete && (!sameContext
-        || Date.parse(field.observedAt!) <= Date.parse(previous.field.observedAt!))) {
+      const contextChanged = baseline && field.source !== 'Not supplied in this capture'
+        && (baseline.field.source !== field.source || (item.collectionDepth !== 'unknown' && baseline.collectionDepth !== item.collectionDepth));
+      if (contextChanged) {
+        if (complete) { complete = false; limitation = 'The source identity or collection conditions changed.'; }
+        lastComplete.delete(key);
+        baseline = undefined;
+      } else if (complete && baseline && Date.parse(field.observedAt!) <= Date.parse(baseline.field.observedAt!)) {
         complete = false;
-        limitation = !sameContext ? 'The source identity or collection conditions changed.'
-          : 'The source observation time did not increase.';
+        limitation = 'The source observation time did not increase.';
       }
       latest.set(key, { field, collectionDepth: item.collectionDepth, complete });
       let kind: RecorderEventKind;
       let explanation: string;
       let before: readonly string[] = [];
       let approved: ApprovedWindow | null = null;
+      let changeInterval: ChangeInterval | null = null;
       if (!complete) {
+        incompleteSince.set(key, (incompleteSince.get(key) ?? 0) + 1);
         incompleteFields += 1;
         kind = previous?.complete ? 'collection_change' : 'incomplete_observation';
         before = previous?.complete ? previous.field.values : [];
         explanation = `${limitation} Retained values are incomplete; this is not evidence that a prior value disappeared or changed.`;
+      } else if (baseline && !sameValues(baseline.field.values, field.values)) {
+        kind = 'observed_change';
+        before = baseline.field.values;
+        changeInterval = Object.freeze({ after: baseline.field.observedAt!, by: field.observedAt!, incompleteObservations: incompleteSince.get(key) ?? 0 });
+        approved = matchingWindow(windows, item.domain, field.id, changeInterval.after, changeInterval.by);
+        explanation = `Comparable complete observations contain different values. The change occurred after ${changeInterval.after} and by ${changeInterval.by}; its exact time is unknown.`
+          + (changeInterval.incompleteObservations ? ` ${changeInterval.incompleteObservations} incomplete observation(s) occurred in this interval.` : '')
+          + (approved ? ' The recorded approved window contains the entire interval.' : ' No recorded approved window contains the entire interval.');
       } else if (!previous) {
         kind = 'first_observation';
         explanation = 'The first complete source-timed value for this field was retained.';
       } else if (!previous.complete) {
         kind = 'recovered';
-        explanation = 'A complete source-timed value is available after an incomplete observation; this does not establish a value change.';
+        explanation = baseline
+          ? 'The recovered complete value matches the last comparable complete observation. Intervening changes during the incomplete interval remain unknown.'
+          : 'A complete source-timed value is available after an incomplete observation; this does not establish a value change.';
       } else {
-        if (sameValues(previous.field.values, field.values)) continue;
-        kind = 'observed_change';
-        before = previous.field.values;
-        approved = matchingWindow(windows, item.domain, field.id, field.observedAt!);
-        explanation = approved
-          ? 'Two complete observations from the same source changed during the recorded change window.'
-          : 'Two complete observations from the same source, with increasing source times, contain different values.';
+        lastComplete.set(key, { field, collectionDepth: item.collectionDepth, complete });
+        incompleteSince.delete(key);
+        continue;
+      }
+      if (complete) {
+        lastComplete.set(key, { field, collectionDepth: item.collectionDepth, complete });
+        incompleteSince.delete(key);
       }
       events.push(Object.freeze({
         id: `${item.domain}:${field.id}:${item.capturedAt}:${events.length + 1}`,
         domain: item.domain, field: field.id, observedAt: field.observedAt, capturedAt: item.capturedAt,
         kind, state: complete ? 'observed' : 'partial', before: Object.freeze([...before]), after: field.values,
-        source: field.source, approvedWindow: approved ? Object.freeze({ id: approved.id, reason: approved.reason }) : null,
+        source: field.source, approvedWindow: approved ? Object.freeze({ id: approved.id, reason: approved.reason, startsAt: approved.startsAt, endsAt: approved.endsAt }) : null,
+        collectionDepth: item.collectionDepth, changeInterval,
         explanation,
       }));
     }
@@ -677,6 +711,7 @@ export function validateDomainControlFlightRecorderDocument(
     throw new TypeError(`Domain control flight-recorder document must use ${DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA} supported version ${SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS.join(' or ')}.`);
   }
   const legacy = root.version === PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION;
+  const intervalVersion = root.version === DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION;
   const generatedAt = requireIsoTimestamp(root.generatedAt, 'Domain control flight-recorder document generatedAt');
   if (generatedAt !== root.generatedAt) {
     throw new TypeError('Domain control flight-recorder document generatedAt must use its canonical timestamp form.');
@@ -723,10 +758,13 @@ export function validateDomainControlFlightRecorderDocument(
   };
   const seenIds = new Set<string>();
   const latest = new Map<string, RecorderEvent>();
+  const lastComplete = new Map<string, RecorderEvent>();
+  const incompleteSince = new Map<string, number>();
   let lastCapture = -Infinity;
   const events: RecorderEvent[] = eventInput.map((eventValue, index) => {
     const label = `Domain control flight-recorder document event ${index + 1}`;
-    const event = exactRecord(eventValue, legacy ? new Set(PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS) : EVENT_KEYS, label);
+    const event = exactRecord(eventValue, legacy ? new Set(PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS)
+      : intervalVersion ? EVENT_KEYS : new Set(SOURCE_TIMED_FLIGHT_RECORDER_EVENT_KEYS), label);
     const eventDomain = requireDomainName(event.domain, `${label}.domain`);
     if (eventDomain !== event.domain || !domains.includes(eventDomain)) {
       throw new TypeError(`${label}.domain must be present in the document domain list.`);
@@ -753,19 +791,42 @@ export function validateDomainControlFlightRecorderDocument(
     if (!legacy && expectedState === 'observed' && (observedAt === null || Date.parse(observedAt) > Date.parse(capturedAt!))) {
       throw new TypeError(`${label} cannot claim a complete observation without a source time at or before capture.`);
     }
+    const collectionDepth = intervalVersion ? event.collectionDepth : undefined;
+    if (intervalVersion && (collectionDepth !== 'deep' && collectionDepth !== 'fast' && collectionDepth !== 'unknown'
+      || expectedState === 'observed' && collectionDepth === 'unknown')) {
+      throw new TypeError(`${label} has invalid collection conditions.`);
+    }
     const before = exactRecorderValues(event.before, `${label}.before`, legacy, event.field as DomainControlFlightRecorderField, expectedState === 'observed');
     const after = exactRecorderValues(event.after, `${label}.after`, legacy, event.field as DomainControlFlightRecorderField, expectedState === 'observed');
     if (((event.kind === 'first_observation' || event.kind === 'recovered') && before.length)
       || (legacy && event.kind === 'collection_change' && after.length)) {
       throw new TypeError(`${label} before/after values are inconsistent.`);
     }
-    let approvedWindow: Readonly<{ id: string; reason: string }> | null = null;
+    let changeInterval: ChangeInterval | null = null;
+    if (intervalVersion && event.changeInterval !== null) {
+      const interval = exactRecord(event.changeInterval, new Set(FLIGHT_RECORDER_CHANGE_INTERVAL_KEYS), `${label}.changeInterval`);
+      const after = requireIsoTimestamp(interval.after, `${label}.changeInterval.after`);
+      const by = requireIsoTimestamp(interval.by, `${label}.changeInterval.by`);
+      if (kind !== 'observed_change' || after !== interval.after || by !== interval.by || by !== observedAt || Date.parse(after) >= Date.parse(by)) {
+        throw new TypeError(`${label} has an inconsistent change interval.`);
+      }
+      changeInterval = Object.freeze({ after, by, incompleteObservations: exactRecorderInteger(interval.incompleteObservations, 0, MAX_FLIGHT_RECORDER_OBSERVATIONS, `${label}.changeInterval.incompleteObservations`) });
+    }
+    if (intervalVersion && (kind === 'observed_change') !== (changeInterval !== null)) throw new TypeError(`${label} must retain its change interval.`);
+    let approvedWindow: RecorderEvent['approvedWindow'] = null;
     if (event.approvedWindow !== null) {
       if (event.kind !== 'observed_change') throw new TypeError(`${label}.approvedWindow is inconsistent.`);
-      const window = exactRecord(event.approvedWindow, EVENT_APPROVED_WINDOW_KEYS, `${label}.approvedWindow`);
+      const window = exactRecord(event.approvedWindow, intervalVersion ? EVENT_APPROVED_WINDOW_KEYS : new Set(HISTORICAL_FLIGHT_RECORDER_APPROVED_WINDOW_KEYS), `${label}.approvedWindow`);
+      const startsAt = intervalVersion ? requireIsoTimestamp(window.startsAt, `${label}.approvedWindow.startsAt`) : undefined;
+      const endsAt = intervalVersion ? requireIsoTimestamp(window.endsAt, `${label}.approvedWindow.endsAt`) : undefined;
+      if (intervalVersion && (!changeInterval || startsAt !== window.startsAt || endsAt !== window.endsAt
+        || Date.parse(startsAt!) > Date.parse(changeInterval.after) || Date.parse(endsAt!) < Date.parse(changeInterval.by))) {
+        throw new TypeError(`${label}.approvedWindow does not contain the change interval.`);
+      }
       approvedWindow = Object.freeze({
         id: exactRecorderText(window.id, `${label}.approvedWindow.id`, MAX_FLIGHT_RECORDER_WINDOW_ID_LENGTH),
         reason: exactRecorderText(window.reason, `${label}.approvedWindow.reason`, MAX_FLIGHT_RECORDER_WINDOW_REASON_LENGTH),
+        ...(intervalVersion ? { startsAt: startsAt!, endsAt: endsAt! } : {}),
       });
       kindCounts.approved_change += 1;
     }
@@ -783,16 +844,31 @@ export function validateDomainControlFlightRecorderDocument(
       source: exactRecorderText(event.source, `${label}.source`, MAX_FLIGHT_RECORDER_SOURCE_LENGTH),
       approvedWindow,
       explanation: exactRecorderText(event.explanation, `${label}.explanation`, legacy ? PUBLIC_MAX_FLIGHT_RECORDER_VALUE_LENGTH : MAX_FLIGHT_RECORDER_VALUE_LENGTH),
+      ...(intervalVersion ? { collectionDepth: collectionDepth as DomainControlFlightRecorderObservation['collectionDepth'], changeInterval } : {}),
     });
     if (!legacy) {
-      const previous = latest.get(`${eventDomain}\u0000${event.field}`);
+      const key = `${eventDomain}\u0000${event.field}`;
+      const previous = intervalVersion ? lastComplete.get(key) : latest.get(key);
       if (seenIds.has(result.id) || (kind === 'observed_change' && (!previous || previous.state !== 'observed'
         || previous.source !== result.source || Date.parse(previous.observedAt!) >= Date.parse(result.observedAt!)
-        || !sameValues(previous.after, before) || sameValues(before, after)))) {
+        || !sameValues(previous.after, before) || sameValues(before, after)
+        || intervalVersion && (previous.collectionDepth !== result.collectionDepth || !changeInterval
+          || Date.parse(changeInterval.after) < Date.parse(previous.observedAt!)
+          || changeInterval.incompleteObservations !== (incompleteSince.get(key) ?? 0))))) {
         throw new TypeError(`${label} has a duplicate identity or an unsupported observed-change claim.`);
       }
       seenIds.add(result.id);
-      latest.set(`${eventDomain}\u0000${event.field}`, result);
+      latest.set(key, result);
+      if (intervalVersion) {
+        if (expectedState === 'observed') {
+          lastComplete.set(key, result);
+          incompleteSince.delete(key);
+        } else {
+          incompleteSince.set(key, (incompleteSince.get(key) ?? 0) + 1);
+          if (previous && result.source !== 'Not supplied in this capture'
+            && (previous.source !== result.source || result.collectionDepth !== 'unknown' && previous.collectionDepth !== result.collectionDepth)) lastComplete.delete(key);
+        }
+      }
     }
     return result;
   });
@@ -813,7 +889,8 @@ export function validateDomainControlFlightRecorderDocument(
       throw new TypeError('Domain control flight-recorder document summary is inconsistent.');
     }
   }
-  const limitations = legacy ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS : DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS;
+  const limitations = legacy ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS
+    : intervalVersion ? DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS : SOURCE_TIMED_FLIGHT_RECORDER_LIMITATIONS;
   const limitationsInput = boundedDataArray(
     root.limitations,
     'Domain control flight-recorder document limitations',
@@ -825,7 +902,7 @@ export function validateDomainControlFlightRecorderDocument(
   }
   const document = Object.freeze({
     schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA,
-    version: legacy ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION : DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
+    version: root.version as DomainControlFlightRecorderDocument['version'],
     generatedAt,
     domains: Object.freeze(domains),
     observationCount,

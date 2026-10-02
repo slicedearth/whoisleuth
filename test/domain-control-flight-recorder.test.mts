@@ -49,7 +49,7 @@ describe('domain-control flight recorder', () => {
       approvedWindows: [{
         id: 'dns-change-1',
         domain: 'example.test',
-        startsAt: '2026-08-01T23:30:00.000Z',
+        startsAt: firstAt,
         endsAt: '2026-08-02T00:30:00.000Z',
         fields: ['delegated_nameservers'],
         reason: 'Reviewed nameserver migration.',

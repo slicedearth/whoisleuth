@@ -430,6 +430,12 @@ remain analyst selections. No external file is inferred or extracted automatical
 disagreement and unavailable evidence separate. Distinct labels do not verify
 independent collection; timing and shared caches can affect the comparison.
 
+`domain-control-flight-recorder` retains the last comparable complete observation
+across failed or partial collections. A changed recovery records the interval
+between complete source observations; it does not assign the change to the
+recovery time. An approved window must contain that entire interval. Historical
+report versions remain readable without acquiring this newer qualification.
+
 For example, registry review can reuse its collection without extracting files:
 
 ```sh

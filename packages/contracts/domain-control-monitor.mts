@@ -8,7 +8,7 @@ export const SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS = [PUBLIC_CLI_DOMAIN_
 export const DOMAIN_CONTROL_MONITOR_EMBEDDED_VERSIONS: Readonly<Record<number, Readonly<{ review: number; flightRecorder: number }>>> = Object.freeze({
   1: Object.freeze({ review: 1, flightRecorder: 1 }),
   2: Object.freeze({ review: 2, flightRecorder: 2 }),
-  3: Object.freeze({ review: 3, flightRecorder: 2 }),
+  3: Object.freeze({ review: 3, flightRecorder: 3 }),
 });
 
 export const MAX_DOMAIN_CONTROL_MONITOR_INPUT_BYTES = 16 * 1024 * 1024;
@@ -115,7 +115,7 @@ export const DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE = defineSchemaLifecycleFami
     },
     {
       id: 'domain-control-monitor-v3', path: 'test/fixtures/domain-control-monitor-v3.json',
-      bytes: 18_133, sha256: '636adebe41253faec1bb7abdbc4db42e37a97caf8fcc9de7370271635053e2c2',
+      bytes: 19_215, sha256: 'a7233a0b52b282e3ad8097b9bd71bf15125b743e60a421cfec765cb8b9456563',
       contentDigestSha256: null, schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, version: CLI_DOMAIN_CONTROL_MONITOR_VERSION,
       role: 'current', expectation: 'accepted_exact', expectedOutputFixtureId: null, scope: 'repository',
     },
