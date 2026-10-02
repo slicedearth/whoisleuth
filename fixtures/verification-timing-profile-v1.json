@@ -1,6 +1,6 @@
 {
   "profileVersion": 1,
-  "inventoryFingerprint": "8b415fa5066993664b6490497bf2333ace1f87ed62845a1f96f705332705ddda",
+  "inventoryFingerprint": "3e99850bde98e7c3f26bf1cd7b6f0d47046b227c225748e034144adcadc2bee9",
   "provenance": [
     {
       "id": "browser-local-start-60400ba9",
@@ -2563,13 +2563,6 @@
       "file": "test/lookup-claim-readiness.test.mts",
       "lane": "unit",
       "weightMs": 5,
-      "sampleCount": 3,
-      "provenanceId": "unit-local-structural-ownership-20260906"
-    },
-    {
-      "file": "test/lookup-decision-review-model.test.mts",
-      "lane": "unit",
-      "weightMs": 23,
       "sampleCount": 3,
       "provenanceId": "unit-local-structural-ownership-20260906"
     },

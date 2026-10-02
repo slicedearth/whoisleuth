@@ -22,7 +22,7 @@ async function start(page: Page, selected = false) {
   await page.locator('#query').fill(DOMAIN);
   await page.getByRole('radio', { name: /Deep/u }).check();
   await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
-  await page.getByRole('button', { name: 'Expand Source quality evidence', exact: true }).click();
+  await page.getByRole('button', { name: 'Expand details: Source quality evidence', exact: true }).click();
   await page.locator('#source-quality .records-disclosure > summary').click();
   await expect(page.locator('.source-refresh')).toBeVisible();
 }
@@ -46,8 +46,8 @@ test('refreshed facts survive section navigation and save through the existing C
   await expect(comparison).toContainText('Original registrar');
   await expect(comparison).toContainText('Updated registrar');
   await expect(comparison).toContainText(LATER);
-  await page.getByRole('button', { name: 'Collapse Source quality evidence', exact: true }).click();
-  await page.getByRole('button', { name: 'Expand Source quality evidence', exact: true }).click();
+  await page.getByRole('button', { name: 'Collapse details: Source quality evidence', exact: true }).click();
+  await page.getByRole('button', { name: 'Expand details: Source quality evidence', exact: true }).click();
   await page.locator('#source-quality .records-disclosure > summary').click();
   await expect(refresh.locator('.refresh-results > li')).toHaveCount(1);
   expect(requests).toBe(1);

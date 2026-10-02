@@ -379,7 +379,7 @@ test('an unavailable Profile context stays inconclusive in Bulk rows, sessions, 
   await expect(row.locator('td[data-label="Risk"]')).toContainText('Inconclusive');
   await expect(row.locator('td[data-label="Risk"]')).toContainText('Excluded from Risk comparison');
   await selectBulkResultView(page, 'Review');
-  await page.getByLabel('Current row monitor list').fill('Unavailable context review');
+  await page.getByLabel('Monitor list for the current row').fill('Unavailable context review');
   await expect(page.getByRole('button', { name: 'Save current to Monitor' })).toBeDisabled();
   await openBulkFilters(page);
   await expect(page.getByRole('button', { name: 'Save to Monitor' })).toBeDisabled();

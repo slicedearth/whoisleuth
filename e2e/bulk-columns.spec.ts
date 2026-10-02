@@ -41,7 +41,7 @@ test('saved Bulk columns survive reload without collecting targets or dropping r
   expect(JSON.stringify(preset)).not.toContain('columns.example');
   await page.reload();
   await openBulkWorkspaceTools(page, 'review');
-  await page.getByRole('combobox', { name: 'Saved Bulk review view' }).selectOption({ label: 'Evidence columns' });
+  await page.getByRole('combobox', { name: 'Saved view for Bulk review' }).selectOption({ label: 'Evidence columns' });
   await page.getByRole('button', { name: 'Load view', exact: true }).click();
   await expect(page.getByRole('status', { name: 'Bulk review action status', exact: true })).toContainText('No scan was started');
   expect(requests).toBe(1);

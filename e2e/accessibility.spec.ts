@@ -245,7 +245,7 @@ test('scans representative public initial, error, populated, and expanded states
   await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
   await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
   await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
-  await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Registration evidence' }).click();
   const mobileComparison = page.locator('.lane-card').first();
   await expect(mobileComparison).toBeVisible();
   await mobileComparison.locator('summary').click();

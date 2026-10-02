@@ -707,15 +707,41 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
 
   const cockpit = page.getByRole('region', { name: 'Review one result' });
   await expect(cockpit).toContainText('1 of 2');
-  await cockpit.getByRole('button', { name: 'Mark reviewed' }).click();
-  await cockpit.getByRole('button', { name: 'Next unresolved' }).click();
+  const markReviewed = cockpit.getByRole('button', { name: 'Mark reviewed' });
+  await expect(markReviewed).not.toHaveAttribute('aria-keyshortcuts');
+  await cockpit.getByRole('button', { name: 'Enable shortcuts' }).click();
+  await expect(markReviewed).toHaveAttribute('aria-keyshortcuts', 'Alt+R');
+  // Option changes the character on some layouts, but not the physical key.
+  expect(await cockpit.evaluate(element => {
+    const event = new KeyboardEvent('keydown', { key: '®', code: 'KeyR', altKey: true, bubbles: true, cancelable: true });
+    element.querySelector<HTMLButtonElement>('[aria-pressed="true"]')!.dispatchEvent(event);
+    return event.defaultPrevented;
+  })).toBe(true);
+  await expect(cockpit.locator('.review-state')).toHaveText('reviewed');
+  await cockpit.getByRole('button', { name: 'Next unresolved' }).focus();
+  await page.keyboard.press('Alt+ArrowRight');
   await expect(cockpit.getByRole('heading', { level: 3 })).toHaveText('right-review.example');
+  await expect(page).toHaveURL(/\/bulk/u);
+  const monitorName = cockpit.getByLabel('Monitor list for the current row');
+  await monitorName.focus();
+  expect(await monitorName.evaluate(element => {
+    const event = new KeyboardEvent('keydown', { key: '®', code: 'KeyR', altKey: true, bubbles: true, cancelable: true });
+    element.dispatchEvent(event); return event.defaultPrevented;
+  })).toBe(false);
+  for (const extra of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { repeat: true }, { isComposing: true }]) {
+    expect(await markReviewed.evaluate((element, flags) => {
+      const event = new KeyboardEvent('keydown', { key: 'r', code: 'KeyR', altKey: true, bubbles: true, cancelable: true, ...flags });
+      element.dispatchEvent(event); return event.defaultPrevented;
+    }, extra)).toBe(false);
+  }
+  await cockpit.getByRole('button', { name: 'Disable shortcuts' }).click();
+  await expect(markReviewed).not.toHaveAttribute('aria-keyshortcuts');
   await expect(cockpit.getByText('Evidence freshness')).toBeVisible();
   await cockpit.getByRole('button', { name: 'Create case' }).click();
   await expect(cockpit.getByLabel('Case disposition')).toBeEnabled();
   await cockpit.getByLabel('Case disposition').selectOption('suspicious');
   await expect(cockpit.getByRole('status')).toContainText('Marked right-review.example as Suspicious');
-  await cockpit.getByLabel('Current row monitor list').fill('Focused review');
+  await cockpit.getByLabel('Monitor list for the current row').fill('Focused review');
   await cockpit.getByRole('button', { name: 'Save current to Monitor' }).click();
   await expect(cockpit.getByRole('status')).toContainText('Saved right-review.example to Focused review');
   const storedCase = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value;
@@ -858,7 +884,7 @@ test('persists named review views and per-domain review state without restarting
 
   await page.reload();
   await openBulkWorkspaceTools(page, 'review');
-  await page.getByLabel('Saved Bulk review view').selectOption({ label: 'Limited active review' });
+  await page.getByLabel('Saved view for Bulk review').selectOption({ label: 'Limited active review' });
   await page.getByRole('button', { name: 'Load view' }).click();
   await expect(page.getByLabel('Filter by review state')).toHaveValue('reviewing');
   await expect(page.locator('.results-table')).toHaveCount(0);

@@ -51,7 +51,7 @@
   } = $derived(analysis);
 
   const sources = $derived({
-    comparisonSummary: `RDAP / WHOIS comparison · ${comparison.counts.conflict} conflicts · ${sourceOnlyCount} source-only · ${redactedComparisonCount} redacted · ${limitedComparisonCount} unavailable/incomplete · ${comparison.counts.equivalent} equivalent`,
+    comparisonSummary: `RDAP / WHOIS comparison · ${comparison.counts.conflict} ${comparison.counts.conflict === 1 ? 'conflict' : 'conflicts'} · ${sourceOnlyCount} source-only · ${redactedComparisonCount} redacted · ${limitedComparisonCount} unavailable/incomplete · ${comparison.counts.equivalent} equivalent`,
     comparisonRows: registryDisplay.comparisonRows,
     comparisonHasConflicts: comparison.counts.conflict > 0,
     rdapError: boundedTechnologyText(rdap.error, 240),
@@ -76,7 +76,7 @@
     description="Compare authoritative registry evidence with separately attributed registrar RDAP and WHOIS publications."
     metrics={[
       `${registryDisplay.comparisonMetrics.equivalent} equivalent`,
-      `${registryDisplay.comparisonMetrics.conflict} conflicts`,
+      `${registryDisplay.comparisonMetrics.conflict} ${registryDisplay.comparisonMetrics.conflict === 1 ? 'conflict' : 'conflicts'}`,
       `${registryDisplay.comparisonMetrics.limitedOrSourceOnly} limited or source-only`,
     ]}
     expanded={controls.expanded}

@@ -295,7 +295,7 @@
     <header bind:this={consoleHeader} inert={commandOpen} aria-hidden={commandOpen?'true':undefined}>
       <a href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark small"><BrandMark /></span><strong>WHOISleuth</strong></a>
       <div class="console-header-actions">
-        <button class="command-trigger" type="button" aria-label="Open console navigation" bind:this={commandTrigger} onpointerenter={() => preloadBestEffort(() => import('$lib/console-command-navigation'))} onfocus={() => preloadBestEffort(() => import('$lib/console-command-navigation'))} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Search</strong></button>
+        <button class="command-trigger" type="button" aria-label="Search console navigation" bind:this={commandTrigger} onpointerenter={() => preloadBestEffort(() => import('$lib/console-command-navigation'))} onfocus={() => preloadBestEffort(() => import('$lib/console-command-navigation'))} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Search</strong></button>
         <span class="sign-out-control">
           <button class="console-sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>
           {#if logoutError}<span class="sign-out-error" role="alert">{logoutError}</span>{/if}

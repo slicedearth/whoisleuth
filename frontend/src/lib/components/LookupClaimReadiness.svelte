@@ -90,7 +90,7 @@
                 type="button"
                 class="btn small"
                 disabled={exportingClaim !== null}
-                aria-label={`Download portable passport for ${entry.label}`}
+                aria-label={`${exportingClaim === entry.id ? 'Preparing…' : 'Download passport'} for ${entry.label}`}
                 onclick={() => void exportPassport(entry.id)}
               >{exportingClaim === entry.id ? 'Preparing…' : 'Download passport'}</button>
             {/if}

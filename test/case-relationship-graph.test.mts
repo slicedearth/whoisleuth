@@ -12,6 +12,7 @@ import {
   MAX_RELATIONSHIP_GRAPH_HIDDEN,
   MAX_RELATIONSHIP_GRAPH_PINS,
   MAX_RELATIONSHIP_GRAPH_RELATIONSHIPS,
+  RELATIONSHIP_GRAPH_LABEL_LAYOUT,
   projectCaseRelationshipGraph,
 } from '../frontend/src/lib/analysis/case-relationship-graph.ts';
 import {
@@ -182,6 +183,11 @@ describe('case relationship graph projection', () => {
     const before = structuredClone(cases);
     const graph = buildCaseRelationshipGraph(cases);
     assert.ok(graph.caseNodes.every((node) => node.displayLabel.endsWith('…')));
+    for (const node of graph.caseNodes) {
+      const { inset, endPadding, glyphAdvance } = RELATIONSHIP_GRAPH_LABEL_LAYOUT;
+      assert.ok(node.displayLabel.length * glyphAdvance <= node.width - inset - endPadding);
+      assert.equal(node.label, cases.find(record => record.id === node.caseId)?.domain);
+    }
     assert.deepEqual(cases, before);
   });
 

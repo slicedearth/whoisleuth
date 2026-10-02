@@ -43,7 +43,7 @@
     <div class="view-group" role="presentation">
       <HorizontalNavigation label="Monitor views" activeKey={view}>
         {#each group.views as tab}
-          <button role="tab" id={`tab-${tab.view}`} aria-selected={view === tab.view} aria-controls="monitor-view-panel" tabindex={view === tab.view ? 0 : -1} class:active={view === tab.view} onpointerenter={() => preloadView(tab.view)} onfocus={() => preloadView(tab.view)} onclick={() => setView(tab.view)} onkeydown={tabKeydown}>{tab.label} <span aria-label={counts[tab.view] === null ? countStates[tab.view] === 'loading' ? 'count loading' : 'count unavailable' : `${counts[tab.view]} saved`}>{counts[tab.view] ?? '—'}</span></button>
+          <button role="tab" id={`tab-${tab.view}`} aria-selected={view === tab.view} aria-controls="monitor-view-panel" tabindex={view === tab.view ? 0 : -1} class:active={view === tab.view} onpointerenter={() => preloadView(tab.view)} onfocus={() => preloadView(tab.view)} onclick={() => setView(tab.view)} onkeydown={tabKeydown}>{tab.label} <span aria-hidden="true">{counts[tab.view] ?? '—'}</span><span class="sr-only">{counts[tab.view] === null ? countStates[tab.view] === 'loading' ? 'count loading' : 'count unavailable' : `${counts[tab.view]} saved`}</span></button>
         {/each}
       </HorizontalNavigation>
     </div>

@@ -8,7 +8,8 @@ import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts'
 import { openCaseSection } from './console-navigation';
 import { expectNoHorizontalOverflow, readBrowserLocalCollection, useTheme } from './helpers';
 import { failNextFileWrite } from './case-attachment-fixtures';
-import { contextInputs } from '../test/context-review-fixtures.mts';
+import { contextInputs, platformObject, incidentStage } from '../test/context-review-fixtures.mts';
+import { MAX_CONTEXT_RECORDS } from '../packages/contracts/context-review.mts';
 
 async function openReview(page: Page, name: string) {
   await openCasesView(page); await createCase(page, 'example.test'); await openCaseSection(page, 'Evidence');
@@ -101,6 +102,34 @@ test('platform continuity reloads editable observations and keeps provider claim
   const input = files.map(value => JSON.parse(value)).find(value => value.schema === 'whoisleuth.platform-continuity.input');
   expect(input.evidence).toHaveLength(2); expect(input.evidence[0].observedAt).toBe('2026-09-20T00:00:00.000Z'); expect(input.evidence[0].recheck).toBe('not_reproduced');
   await openCaseSection(page, 'Assessment'); await openCaseSection(page, 'Evidence'); await expect(report).toBeVisible();
+});
+
+test('capacity explanations preserve editing and recover after removing a draft record', async ({ page }) => {
+  const review = await openReview(page, 'Platform objects and version continuity');
+  await review.getByLabel('Load an earlier platform review input').setInputFiles({ name: 'objects.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({
+    schema: 'whoisleuth.platform-continuity.input', version: 1,
+    evidence: Array.from({ length: MAX_CONTEXT_RECORDS }, (_, index) => ({ ...platformObject(), objectId: `object-${index}` })),
+  })) });
+  await expect(review.getByRole('button', { name: 'Add object observation', exact: true })).toBeDisabled();
+  await expect(review.getByRole('status').filter({ hasText: 'observation limit is reached' })).toBeVisible();
+  await review.getByRole('button', { name: 'Edit observation 1', exact: true }).click();
+  await expect(review.getByLabel('Stable object ID')).toBeEnabled();
+  await review.getByLabel('Stable object ID').fill('updated-object');
+  await review.getByRole('button', { name: 'Update object observation', exact: true }).click();
+  await review.getByRole('button', { name: /^Remove observation / }).first().click();
+  await expect(review.getByRole('button', { name: 'Add object observation', exact: true })).toBeEnabled();
+  await expect(review.getByText(/observation limit is reached/)).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Trace an incident', exact: true }).click();
+  const sequence = page.getByRole('region', { name: 'Incident sequence and reported actions', exact: true });
+  await sequence.getByLabel('Load an earlier incident-sequence input').setInputFiles({ name: 'sequence.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({
+    schema: 'whoisleuth.incident-sequence.input', version: 1,
+    evidence: Array.from({ length: MAX_CONTEXT_RECORDS }, (_, index) => ({ ...incidentStage(), id: `stage-${index}` })),
+  })) });
+  await expect(sequence.getByRole('button', { name: 'Add incident stage', exact: true })).toBeDisabled();
+  await expect(sequence.getByRole('status').filter({ hasText: 'stage limit is reached' })).toBeVisible();
+  await sequence.getByRole('button', { name: /^Remove stage / }).first().click();
+  await expect(sequence.getByRole('button', { name: 'Add incident stage', exact: true })).toBeEnabled();
 });
 
 test('storefront review requires current authority and preserves a failed-save draft for deliberate retry', async ({ page }, testInfo) => {

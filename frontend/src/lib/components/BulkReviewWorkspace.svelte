@@ -87,7 +87,7 @@
       </select>
     </label>
     <label for="bulk-review-saved-view">Saved view
-      <select id="bulk-review-saved-view" aria-label="Saved Bulk review view" bind:value={selectedId}>
+      <select id="bulk-review-saved-view" aria-label="Saved view for Bulk review" bind:value={selectedId}>
         <option value="">Choose a saved view</option>
         {#each store.presets as preset}<option value={preset.id}>{preset.name}</option>{/each}
       </select>

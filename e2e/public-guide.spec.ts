@@ -164,7 +164,7 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expectNoHorizontalOverflow(page);
 });
 
-test('public resources offer task-specific source boundaries on desktop and mobile', async ({ page }) => {
+test('public resources offer task-specific source boundaries on desktop and mobile', async ({ page }, testInfo) => {
   await page.goto('/resources');
 
   await expect(page.getByRole('heading', { name: 'Guides for common investigation tasks' })).toBeVisible();
@@ -194,7 +194,16 @@ test('public resources offer task-specific source boundaries on desktop and mobi
 
   await page.setViewportSize({ width: 320, height: 700 });
   await page.reload();
-  await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
+  const evidenceTable = page.getByRole('table', { name: 'Evidence sources and limitations' });
+  await expect(evidenceTable).toBeVisible();
+  await expect(evidenceTable.getByRole('columnheader')).toHaveText(['Source', 'Useful for', 'Important limit']);
+  await expect(evidenceTable.getByRole('row').nth(1).locator('.mobile-column-label')).toHaveText(['Source', 'Useful for', 'Important limit']);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    await expectNoHorizontalOverflow(page);
+    await evidenceTable.scrollIntoViewIfNeeded();
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`resource-table-${theme}.png`) });
+  }
   await page.getByRole('button', { name: 'Browse documentation', exact: true }).click();
   const articleSections = page.getByRole('dialog');
   await expect(articleSections.locator('.page-sections').getByRole('link')).toHaveCount(5);

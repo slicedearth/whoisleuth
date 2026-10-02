@@ -56,11 +56,13 @@
   } = $props();
 
   let enabled = $state(false);
+  let cockpit: HTMLElement;
   let cursor = $state(0);
   const current = $derived(rows[cursor] ?? null);
   const currentCases = $derived(current ? casesForDomain(caseRecords, current.domain) : []);
   const officialLookupUrl = $derived(current ? officialRegistryLookupFor(current.domain) : null);
   const unresolved = $derived(reviewAvailable?rows.filter((row) => row.reviewState !== 'reviewed' && row.reviewState !== 'deferred').length:0);
+  const canMove = $derived(rows.length > 1 && nextBulkReviewIndex(rows, cursor, 1) !== cursor);
 
   $effect(() => {
     if (!rows.length) cursor = 0;
@@ -73,18 +75,22 @@
   }
 
   function editableTarget(target: EventTarget | null): boolean {
-    return target instanceof HTMLElement
-      && (target.matches('input, select, textarea, button, a') || target.isContentEditable);
+    if (!(target instanceof Element)) return false;
+    if (target.closest('input, select, textarea, a, summary, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"], [role="tab"]')) return true;
+    const control = target.closest('button, [role="button"]');
+    return Boolean(control && (!cockpit?.contains(control) || control.matches(':disabled, [aria-disabled="true"]')));
   }
 
   function handleKeydown(event: KeyboardEvent): void {
-    if (!enabled || !event.altKey || editableTarget(event.target) || !current) return;
-    if (event.key === 'ArrowRight') move(1);
-    else if (event.key === 'ArrowLeft') move(-1);
-    else if (event.key.toLowerCase() === 'r' && reviewAvailable) setReviewState(current.resultIndex, 'reviewed');
-    else if (event.key.toLowerCase() === 'd' && reviewAvailable) setReviewState(current.resultIndex, 'deferred');
-    else if (event.key.toLowerCase() === 's' && shortlistAvailable) toggleSaved(current.resultIndex);
-    else if (event.key.toLowerCase() === 'i') void inspectDomain(current.resultIndex);
+    if (!enabled || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey
+      || event.isComposing || event.repeat || event.defaultPrevented || event.getModifierState('AltGraph')
+      || editableTarget(event.target) || !current) return;
+    if (event.code === 'ArrowRight' && canMove) move(1);
+    else if (event.code === 'ArrowLeft' && canMove) move(-1);
+    else if (event.code === 'KeyR' && reviewAvailable) setReviewState(current.resultIndex, 'reviewed');
+    else if (event.code === 'KeyD' && reviewAvailable) setReviewState(current.resultIndex, 'deferred');
+    else if (event.code === 'KeyS' && shortlistAvailable) toggleSaved(current.resultIndex);
+    else if (event.code === 'KeyI') void inspectDomain(current.resultIndex);
     else return;
     event.preventDefault();
   }
@@ -92,7 +98,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<section class="cockpit card" aria-labelledby="review-cockpit-title">
+<section bind:this={cockpit} class="cockpit card" aria-labelledby="review-cockpit-title">
   <header>
     <div>
       <p class="eyebrow">Focused review</p>
@@ -125,16 +131,16 @@
         </div>
       {/if}
       <div class="navigation">
-        <button class="btn" type="button" aria-keyshortcuts="Alt+ArrowLeft" onclick={() => move(-1)}>Previous unresolved</button>
-        <button class="btn" type="button" aria-keyshortcuts="Alt+ArrowRight" onclick={() => move(1)}>Next unresolved</button>
+        <button class="btn" type="button" disabled={!canMove} aria-keyshortcuts={enabled && canMove ? 'Alt+ArrowLeft' : undefined} onclick={() => move(-1)}>Previous unresolved</button>
+        <button class="btn" type="button" disabled={!canMove} aria-keyshortcuts={enabled && canMove ? 'Alt+ArrowRight' : undefined} onclick={() => move(1)}>Next unresolved</button>
       </div>
       <div class="actions">
         <button class="btn" type="button" disabled={!reviewAvailable} onclick={() => setReviewState(current.resultIndex, 'reviewing')}>Mark reviewing</button>
-        <button class="btn" type="button" disabled={!reviewAvailable} aria-keyshortcuts="Alt+R" onclick={() => setReviewState(current.resultIndex, 'reviewed')}>Mark reviewed</button>
-        <button class="btn" type="button" disabled={!reviewAvailable} aria-keyshortcuts="Alt+D" onclick={() => setReviewState(current.resultIndex, 'deferred')}>Defer</button>
-        <button class="btn" type="button" disabled={!shortlistAvailable} aria-keyshortcuts="Alt+S" aria-pressed={shortlistAvailable?current.shortlisted:undefined} onclick={() => toggleSaved(current.resultIndex)}>{shortlistAvailable?(current.shortlisted?'Remove shortlist':'Shortlist'):'Shortlist unavailable'}</button>
+        <button class="btn" type="button" disabled={!reviewAvailable} aria-keyshortcuts={enabled && reviewAvailable ? 'Alt+R' : undefined} onclick={() => setReviewState(current.resultIndex, 'reviewed')}>Mark reviewed</button>
+        <button class="btn" type="button" disabled={!reviewAvailable} aria-keyshortcuts={enabled && reviewAvailable ? 'Alt+D' : undefined} onclick={() => setReviewState(current.resultIndex, 'deferred')}>Defer</button>
+        <button class="btn" type="button" disabled={!shortlistAvailable} aria-keyshortcuts={enabled && shortlistAvailable ? 'Alt+S' : undefined} aria-pressed={shortlistAvailable?current.shortlisted:undefined} onclick={() => toggleSaved(current.resultIndex)}>{shortlistAvailable?(current.shortlisted?'Remove shortlist':'Shortlist'):'Shortlist unavailable'}</button>
         {#if !caseAvailable}<span class="unavailable-action">Case unavailable</span>{:else if current.caseRecord}<a class="btn" href={`/monitor?case=${encodeURIComponent(current.caseRecord.id)}`}>Open case</a>{:else if currentCases.length}<span>Choose an incident below.</span>{:else}<button class="btn" type="button" onclick={() => trackCase(current.resultIndex)}>Create case</button>{/if}
-        <button class="btn accent" type="button" aria-keyshortcuts="Alt+I" onclick={() => inspectDomain(current.resultIndex)}>Inspect in Lookup</button>
+        <button class="btn accent" type="button" aria-keyshortcuts={enabled ? 'Alt+I' : undefined} onclick={() => inspectDomain(current.resultIndex)}>Inspect in Lookup</button>
       </div>
       <div class="handoffs">
         {#if caseAvailable && currentCases.length > 1}<CasePicker id="bulk-review-incident" records={currentCases} selectedId={current.caseRecord?.id ?? ''} select={(id) => selectIncident(current!.domain, id)} />{/if}
@@ -154,7 +160,7 @@
         <label>
           <span>Monitor list</span>
           <input
-            aria-label="Current row monitor list"
+            aria-label="Monitor list for the current row"
             maxlength="100"
             placeholder="Focused review"
             value={watchlistName}

@@ -607,13 +607,13 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
     .evaluateAll(elements => [...new Set(elements.map(element => `#${element.id}`))]);
   expect(evidenceTargets).toContain('#evidence-sslbl');
   for (const target of evidenceTargets) {
-    await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+    await page.getByRole('button', { name: 'Collapse details: Web and DNS evidence' }).click();
     await expect(page.locator(target)).toHaveCount(0);
     await page.evaluate(hash => {
       window.history.replaceState(window.history.state, '', window.location.pathname);
       window.location.hash = hash;
     }, target);
-    await expect(page.getByRole('button', { name: 'Collapse Web and DNS evidence' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Collapse details: Web and DNS evidence' })).toBeVisible();
     await expect(page.locator(target)).toBeVisible();
     await expectLookupTargetAligned(page, target);
   }

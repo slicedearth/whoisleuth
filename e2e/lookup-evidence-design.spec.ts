@@ -29,7 +29,7 @@ test('the service review retains all admitted nameserver and mail dependencies p
   await page.goto('/lookup');
   await page.locator('#query').fill('dependencies.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  await page.getByRole('button', { name: 'Expand Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Web and DNS evidence' }).click();
   const review = page.locator('details.dependency-review');
   await review.locator(':scope > summary').click();
   await expect(review.locator('.dependency-grid > article')).toHaveCount(25);
@@ -236,13 +236,13 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await linkedVisualNode.dispatchEvent('pointerup', { pointerId: 1, pointerType: 'touch', clientX: 50, clientY: 20, button: 0 });
   expect(await page.evaluate(() => window.location.hash)).toBe(hashBeforeDrag);
 
-  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Web and DNS evidence' }).click();
   await expect(page.locator('#evidence-dns')).toHaveCount(0);
   await dnsSource.press('Enter');
   await expect(page).toHaveURL(/#evidence-dns$/);
   await expect(page.locator('#evidence-dns')).toBeInViewport();
 
-  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Web and DNS evidence' }).click();
   await expect(page.locator('#evidence-dns')).toHaveCount(0);
   await page.evaluate(() => {
     window.history.replaceState(window.history.state, '', window.location.pathname);
@@ -253,7 +253,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   const registrySource = sourceRail.getByRole('link', { name: /Registry RDAP.*success/i });
   await expect(registrySource).toHaveAttribute('href', '#evidence-registry');
-  await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Registration evidence' }).click();
   await expect(page.locator('#evidence-registry')).toHaveCount(0);
   await registrySource.press('Enter');
   await expect(page).toHaveURL(/#evidence-registry$/);
@@ -537,7 +537,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(currentFreshness).toContainText('Current');
   await expect(staleFreshness).toContainText('Stale');
   const freshnessPlacement = await rdapQualityRow.locator('.observed').evaluate((cell) => {
-    const observed = cell.querySelector<HTMLElement>(':scope > span:first-child')!;
+    const observed = cell.querySelector<HTMLElement>(':scope > .observation-time')!;
     const freshness = cell.querySelector<HTMLElement>(':scope > .freshness')!;
     return {
       observedBottom: observed.getBoundingClientRect().bottom,
@@ -585,8 +585,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(coverage).toContainText('Freshness policy · analyst-defined');
   await expect(coverage).toContainText('Thresholds organise source-refresh suggestions');
 
-  await page.getByRole('button', { name: 'Collapse Source quality evidence' }).click();
-  await page.getByRole('button', { name: 'Expand Source quality evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Source quality evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Source quality evidence' }).click();
   await recordsDisclosure.locator(':scope > summary').click();
   await freshnessDisclosure.locator(':scope > summary').click();
   await expect(coverage.getByRole('combobox', { name: 'Policy', exact: true })).toHaveValue('analyst-custom');
@@ -867,6 +867,21 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     return navigation ? sectionTop >= navigation.getBoundingClientRect().bottom + 4 : false;
   })).toBe(true);
   await expect(sectionPicker).toHaveValue('#advanced-evidence');
+
+  if (await recordsDisclosure.getAttribute('open') === null) await recordsDisclosure.locator(':scope > summary').click();
+  await expect(sourceQualityTable).toBeVisible();
+  await expect(sourceQualityTable.getByRole('columnheader')).toHaveCount(5);
+  await expect(qualityRows.first().locator('.mobile-column-label')).toHaveText(['Source', 'State', 'Observed', 'Timing', 'Supports']);
+  for (const disclosure of [page.locator('.collection-preflight'), page.locator('.score-detail').first()]) {
+    const summary = disclosure.locator(':scope > summary');
+    await expect(summary).toHaveCount(1);
+    const wasOpen = await disclosure.getAttribute('open') !== null;
+    expect(await summary.evaluate(element => ({ display: getComputedStyle(element).display, marker: getComputedStyle(element).listStyleType }))).toEqual({ display: 'list-item', marker: wasOpen ? 'disclosure-open' : 'disclosure-closed' });
+    await summary.focus(); await page.keyboard.press('Enter');
+    await expect.poll(() => disclosure.getAttribute('open')).toBe(wasOpen ? null : '');
+    await page.keyboard.press('Enter');
+    await expect.poll(() => disclosure.getAttribute('open')).toBe(wasOpen ? '' : null);
+  }
 
   const downloadPromise = page.waitForEvent('download');
   await page.locator('.export-menu > summary').click();

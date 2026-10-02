@@ -58,7 +58,7 @@
         <p>Set a Brand Profile active to view its explicitly associated case-review work.</p>
       {/if}
     </div>
-    <strong class:numeric={numericMetric}>{metricText}{#if numericMetric}{' '}<span class="sr-only">review items</span>{/if}</strong>
+    <strong class:numeric={numericMetric}>{metricText}{#if numericMetric}{' '}<span class="sr-only">{inbox.items.length === 1 ? 'review item' : 'review items'}</span>{/if}</strong>
   </div>
 
   {#if unavailable}

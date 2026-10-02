@@ -56,7 +56,7 @@ test('selected URL collection is deliberate and retains scope without its path o
   }
   await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
   await expect(page.locator('.result-head')).toContainText('Web evidence concerns the selected URL, not a homepage check.');
-  await page.getByRole('button', { name: 'Expand Web and DNS evidence', exact: true }).click();
+  await page.getByRole('button', { name: 'Expand details: Web and DNS evidence', exact: true }).click();
   const http = page.locator('.source-checkpoint', { has: page.locator('summary', { hasText: 'Pin HTTP facts to Case' }) });
   await http.locator('summary').click();
   await http.getByRole('button', { name: 'Save lookup to Case', exact: true }).click();
@@ -99,7 +99,7 @@ test('subdomain evidence keeps its collection identity through display, Case sto
   const header = page.locator('.result-head');
   await expect(header.getByRole('heading', { name: hostname, exact: true })).toBeVisible();
   await expect(header).toContainText(`Registration: example.test. DNS, TLS and web observation target: ${hostname}.`);
-  await page.getByRole('button', { name: 'Expand Web and DNS evidence', exact: true }).click();
+  await page.getByRole('button', { name: 'Expand details: Web and DNS evidence', exact: true }).click();
   await expect(page.locator('#evidence-dns')).toContainText(`Point-in-time resolver evidence for ${hostname}.`);
   const dns = page.locator('.source-checkpoint', { has: page.locator('summary', { hasText: 'Pin DNS facts to Case' }) });
   await dns.locator('summary').click();
@@ -136,7 +136,7 @@ test('pins source-local facts through the Case writer and preserves selections a
   await page.goto('/lookup');
   await page.locator('#query').fill(domain);
   await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
-  await page.getByRole('button', { name: 'Expand Web and DNS evidence', exact: true }).click();
+  await page.getByRole('button', { name: 'Expand details: Web and DNS evidence', exact: true }).click();
   const dns = page.locator('.source-checkpoint', { has: page.locator('summary', { hasText: 'Pin DNS facts to Case' }) });
   await dns.locator('summary').click();
   await dns.getByRole('button', { name: 'Save lookup to Case', exact: true }).click();
@@ -181,7 +181,7 @@ test('source pinning rejects undated evidence and does not carry a selection int
   await page.goto('/lookup');
   await page.locator('#query').fill('dated-selection.invalid');
   await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
-  await page.getByRole('button', { name: 'Expand Web and DNS evidence', exact: true }).click();
+  await page.getByRole('button', { name: 'Expand details: Web and DNS evidence', exact: true }).click();
   const dns = page.locator('.source-checkpoint', { has: page.locator('summary', { hasText: 'Pin DNS facts to Case' }) });
   await dns.locator('summary').click();
   await dns.getByRole('button', { name: 'Save lookup to Case', exact: true }).click();
@@ -191,7 +191,7 @@ test('source pinning rejects undated evidence and does not carry a selection int
   await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Run lookup', exact: true })).toBeEnabled();
   // The existing result-anchor owner reopens the family named by the URL.
-  await expect(page.getByRole('button', { name: 'Collapse Web and DNS evidence', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Collapse details: Web and DNS evidence', exact: true })).toBeVisible();
   await expect(dns).not.toHaveAttribute('open');
   await dns.locator('summary').click();
   await expect(nameservers).toBeDisabled();

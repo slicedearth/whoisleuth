@@ -249,8 +249,8 @@
             <li>
               <details>
                 <summary>
-                  <span><strong>{item.domain}</strong><small>{when(item.observedAt)} · {certificate.issuer || 'Issuer unavailable'}</small></span>
-                  <code>{certificate.fingerprintSha256.slice(0, 16)}…</code>
+                  <span class="disclosure-heading"><span><strong>{item.domain}</strong><small>{when(item.observedAt)} · {certificate.issuer || 'Issuer unavailable'}</small></span>
+                  <code>{certificate.fingerprintSha256.slice(0, 16)}…</code></span>
                 </summary>
                 <dl>
                   <dt>Leaf SHA-256</dt><dd><code>{certificate.fingerprintSha256}</code></dd>
@@ -308,11 +308,11 @@
   .certificate-inventory>p{margin:7px 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .certificate-inventory>ul{display:grid;gap:7px;margin:10px 0 0;padding:0;list-style:none}
   .certificate-inventory li{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
-  .certificate-inventory summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px;cursor:pointer}
+  .certificate-inventory summary{padding:9px;cursor:pointer}
   .certificate-inventory summary span{min-width:0}
   .certificate-inventory summary strong,.certificate-inventory summary small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .certificate-inventory summary small{margin-top:2px;color:var(--muted);font-size:var(--text-2xs)}
-  .certificate-inventory summary>code{flex:none;color:var(--muted);font-size:var(--text-2xs)}
+  .certificate-inventory summary code{flex:none;color:var(--muted);font-size:var(--text-2xs)}
   .certificate-inventory dl{display:grid;grid-template-columns:minmax(100px,140px) minmax(0,1fr);gap:6px 10px;margin:0;padding:10px;border-top:1px solid var(--border);font-size:var(--text-xs)}
   .certificate-inventory dd{min-width:0;margin:0;overflow-wrap:anywhere}
   .certificate-inventory dd code{overflow-wrap:anywhere}
@@ -320,6 +320,6 @@
   .message:empty{display:none}
   @media(max-width:700px){
     header{flex-direction:column}.comparison-controls{grid-template-columns:1fr}.toolbar{width:100%}.toolbar>*{flex:1}
-    .certificate-inventory summary{align-items:start;flex-direction:column}.certificate-inventory dl{grid-template-columns:1fr;gap:3px}.certificate-inventory dt{margin-top:6px}
+    .certificate-inventory .disclosure-heading{align-items:start;flex-direction:column}.certificate-inventory dl{grid-template-columns:1fr;gap:3px}.certificate-inventory dt{margin-top:6px}
   }
 </style>

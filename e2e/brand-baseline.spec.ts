@@ -211,7 +211,7 @@ test('Brand Profile saving preserves a newer editable draft', async ({ page }) =
 test('Brand refresh preserves separate profile, allowlist and account-control drafts', async ({ page }) => {
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, { [PROFILES_KEY]: currentBrandProfileBrowserStore([profileFixture()]), [ACTIVE_KEY]: 'profile-1' });
-  await page.getByRole('button', { name: 'Edit Stored Brand (profile-1)', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Stored Brand', exact: true }).click();
   await page.getByLabel('Brand name', { exact: true }).fill('Unsaved profile name');
   const allowlist = page.getByRole('region', { name: 'Allowlist', exact: true });
   await allowlist.getByLabel('Add domains').fill('submitted.example');
@@ -330,7 +330,7 @@ test('account controls preserve failed and later drafts without refreshing untou
 test('a committed Brand review with failed refresh retains drafts and retries only the read', async ({ page }) => {
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, { [PROFILES_KEY]: currentBrandProfileBrowserStore([profileFixture()]), [ACTIVE_KEY]: 'profile-1' });
-  await page.getByRole('button', { name: 'Edit Stored Brand (profile-1)', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Stored Brand', exact: true }).click();
   await page.getByLabel('Brand name', { exact: true }).fill('Retained primary draft');
   const allowlist = page.getByRole('region', { name: 'Allowlist', exact: true });
   await allowlist.getByLabel('Add domains').fill('unadded.example');
@@ -399,7 +399,7 @@ test('Brand editors reject same-clock peer changes without replacing unsaved dra
   await page.clock.setFixedTime(ISO);
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, { [PROFILES_KEY]: currentBrandProfileBrowserStore([profileFixture()]), [ACTIVE_KEY]: 'profile-1' });
-  await page.getByRole('button', { name: 'Edit Stored Brand (profile-1)', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Stored Brand', exact: true }).click();
   await page.getByLabel('Brand name', { exact: true }).fill('Local name draft');
   const allowlist = page.getByRole('region', { name: 'Allowlist', exact: true });
   await allowlist.getByLabel('Add domains').fill('local.example');
@@ -411,7 +411,7 @@ test('Brand editors reject same-clock peer changes without replacing unsaved dra
   try {
     await peer.clock.setFixedTime(ISO);
     await peer.goto('/brands');
-    await peer.getByRole('button', { name: 'Edit Stored Brand (profile-1)', exact: true }).click();
+    await peer.getByRole('button', { name: 'Edit Stored Brand', exact: true }).click();
     await peer.getByLabel('Brand name', { exact: true }).fill('Peer profile');
     await peer.getByRole('button', { name: 'Save profile', exact: true }).click();
     await expect(peer.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved "Peer profile"');
@@ -452,7 +452,7 @@ for (const peerChangesBaseline of [false, true]) {
         desiredPostureBaselines: [{ domain: 'stored.example', nameservers: ['ns.original.example'], updatedAt: ISO }],
       }]), [ACTIVE_KEY]: 'profile-1',
     });
-    await page.getByRole('button', { name: 'Edit Stored Brand (profile-1)', exact: true }).click();
+    await page.getByRole('button', { name: 'Edit Stored Brand', exact: true }).click();
     await page.getByLabel('Official domains').fill('kept.example');
     page.once('dialog', async dialog => {
       expect(dialog.message()).toContain('Remove expected settings for 1 official domain (stored.example)');
@@ -494,12 +494,12 @@ for (const peerChangesBaseline of [false, true]) {
 test('deleting a Brand Profile preserves later typing as a distinct new-identity draft', async ({ page, context }) => {
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, { [PROFILES_KEY]: currentBrandProfileBrowserStore([profileFixture()]), [ACTIVE_KEY]: 'profile-1' });
-  await page.getByRole('button', { name: 'Edit Stored Brand (profile-1)', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Stored Brand', exact: true }).click();
   const peer = await context.newPage();
   await peer.goto('/brands');
-  await expect(peer.getByRole('button', { name: 'Edit Stored Brand (profile-1)', exact: true })).toBeVisible();
+  await expect(peer.getByRole('button', { name: 'Edit Stored Brand', exact: true })).toBeVisible();
   const dialogPromise = page.waitForEvent('dialog');
-  const deletion = page.getByRole('button', { name: 'Delete Stored Brand (profile-1)', exact: true }).click();
+  const deletion = page.getByRole('button', { name: 'Delete Stored Brand', exact: true }).click();
   const dialog = await dialogPromise;
   // The confirmation follows the fresh Case-impact read. Hold only the
   // subsequent write, using the other tab while confirmation is open.
@@ -507,7 +507,7 @@ test('deleting a Brand Profile preserves later typing as a distinct new-identity
   try {
     await dialog.accept();
     await deletion;
-    await expect(page.getByRole('button', { name: 'Delete Stored Brand (profile-1)', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Delete Stored Brand', exact: true })).toBeDisabled();
     await page.getByLabel('Brand name', { exact: true }).fill('Later retained profile');
   } finally { await release(); await peer.close(); }
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Deleted "Stored Brand"');
@@ -762,7 +762,7 @@ test('public HTML baselines migrate unchanged and a deliberate recapture adopts 
   expect(website.records[0]?.value.identity).toEqual(publishedIdentity);
   expect(website.records[0]?.value.profileProvenance.pageFingerprint).toEqual({ version: 1, state: 'known' });
   expect(requests).toBe(0);
-  await page.getByRole('button', { name: 'Edit Example account (baseline-profile)', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Example account', exact: true }).click();
   await page.getByText('Official-site identity', { exact: true }).click();
   await page.getByRole('button', { name: 'Update official-site baseline' }).click();
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Captured a complete page baseline');
@@ -985,7 +985,7 @@ test('editing the active profile invalidates its in-flight posture audit before 
   await page.getByRole('button', { name: 'Review official domains' }).click();
   await auditStarted;
   await openBrandProfileList(page);
-  await page.getByRole('button', { name: 'Edit Stored Brand (profile-1)' }).click();
+  await page.getByRole('button', { name: 'Edit Stored Brand' }).click();
   await page.getByLabel('Official domains').fill('changed.example');
   await page.getByRole('button', { name: 'Save profile' }).click();
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved "Stored Brand"');

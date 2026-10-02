@@ -760,7 +760,7 @@ test('measures a deferred Lookup evidence family from deterministic fixture evid
       await page.locator('#query').fill(target);
       await page.getByRole('button', { name: 'Run lookup' }).click();
       await expect(familyToggle).toBeEnabled();
-      await expect(familyToggle).toHaveAttribute('aria-label', 'Expand Web and DNS evidence');
+      await expect(familyToggle).toHaveAttribute('aria-label', 'Expand details: Web and DNS evidence');
       await expect(dnsHeading).toHaveCount(0);
     },
     action: async () => {
@@ -858,7 +858,7 @@ test('measures Case Response section activation through usable response controls
 });
 
 test('measures command navigation and preserves shortcut focus recovery', async ({ page }, testInfo) => {
-  const trigger = page.getByRole('button', { name: 'Open console navigation' });
+  const trigger = page.getByRole('button', { name: 'Search console navigation' });
   const dialog = page.getByRole('dialog', { name: 'Go to' });
   const search = page.getByRole('combobox', { name: 'Search pages and tools' });
 

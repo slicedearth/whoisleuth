@@ -210,7 +210,7 @@ test('mail review retains fifty thousand rows, reaches the last row and exports 
     await expect(pages.getByRole('status')).toHaveText('Page 1000 of 1000');
     await expect(results.getByText('sender-49999.example', { exact: true })).toBeVisible();
     await expectFocusedResultsVisible(page, results, results.locator('tbody tr').first());
-    await workbench.getByRole('searchbox', { name: 'Search DMARC report 1' }).fill('sender-49999.example');
+    await workbench.getByRole('searchbox', { name: 'Search rows: DMARC report 1' }).fill('sender-49999.example');
     await expect(results.locator('tbody tr')).toHaveCount(1);
     await expect(pages).toHaveCount(0);
     const pending = page.waitForEvent('download');

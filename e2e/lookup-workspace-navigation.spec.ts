@@ -17,8 +17,8 @@ test('Lookup evidence navigation and its target remain below the console header'
     await useTheme(page, theme);
     for (const [width, height] of [[1280, 720], [1024, 768], [390, 844], [320, 700], [1920, 1080], [2560, 1440]]) {
       await page.setViewportSize({ width: width!, height: height! });
-      const expand = page.getByRole('button', { name: 'Expand Registration evidence', exact: true });
-      if (!await expand.count()) await page.getByRole('button', { name: 'Collapse Registration evidence', exact: true }).click();
+      const expand = page.getByRole('button', { name: 'Expand details: Registration evidence', exact: true });
+      if (!await expand.count()) await page.getByRole('button', { name: 'Collapse details: Registration evidence', exact: true }).click();
       await expand.click();
       await expectLookupTargetAligned(page, '#registry');
       await expect(page.locator('#registry [data-deferred-state="loading"]')).toHaveCount(0);
@@ -74,7 +74,7 @@ test('Lookup keeps completed evidence identity and a return to the saved Case wi
   await expect(page).toHaveURL(`/cases?case=${id}`);
   await page.getByRole('link', { name: 'Return to Lookup', exact: true }).click();
   await expect(header.getByRole('heading', { name: domain, exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Collapse Case and response evidence', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Collapse details: Case and response evidence', exact: true })).toBeVisible();
   expect(collections).toBe(1);
   const after = await readBrowserLocalCollection(page, 'cases');
   expect(after.manifest.revision).toBe(before.manifest.revision);

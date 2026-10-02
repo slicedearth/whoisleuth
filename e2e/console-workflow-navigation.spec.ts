@@ -14,7 +14,7 @@ test('navigation readiness includes loaded, usable destinations rather than only
   await page.route(`**${chunk}`, async route => { await pending; await route.continue(); });
   try {
     await page.goto('/dashboard');
-    await expect(page.getByRole('button', { name: 'Open console navigation', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Search console navigation', exact: true })).toBeEnabled();
     await beginBrowserInteractionReadiness(page, { start: { event: 'keydown', key: 'k', controlOrMeta: true }, targets: COMMAND_NAVIGATION_READINESS });
     await page.keyboard.press('Control+K');
     const dialog = page.getByRole('dialog', { name: 'Go to' });
@@ -28,7 +28,7 @@ test('navigation readiness includes loaded, usable destinations rather than only
     await dialog.getByRole('combobox').fill('lookup');
     await expect(dialog.getByRole('option', { name: /^Lookup /u })).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('button', { name: 'Open console navigation', exact: true })).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Search console navigation', exact: true })).toBeFocused();
   } finally { release(); }
 });
 
@@ -42,7 +42,7 @@ test('search remains escapable while its destinations are loading or unavailable
   });
   try {
     await page.goto('/dashboard');
-    const trigger = page.getByRole('button', { name: 'Open console navigation', exact: true });
+    const trigger = page.getByRole('button', { name: 'Search console navigation', exact: true });
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: 'Go to' });
     await expect(dialog.getByRole('status').filter({ hasText: 'Loading destinations' })).toBeVisible();
@@ -178,7 +178,7 @@ test('global saved-work search opens an existing Case without collecting and res
   await page.route('**/api/lookup**', async route => { collectionRequests.push(route.request().url()); await route.abort(); });
   await seedWork(page);
   await page.goto('/lookup');
-  const trigger = page.getByRole('button', { name: 'Open console navigation', exact: true });
+  const trigger = page.getByRole('button', { name: 'Search console navigation', exact: true });
   await trigger.click();
   const dialog = page.getByRole('dialog', { name: 'Go to' });
   await dialog.getByRole('button', { name: 'Saved work', exact: true }).click();
@@ -222,7 +222,7 @@ test('global and embedded saved-work search keep independent labels and query dr
   const embeddedInput = embedded.getByRole('searchbox', { name: 'Search saved work' });
   await embeddedInput.fill('embedded query');
   const embeddedId = await embeddedInput.getAttribute('id');
-  await page.getByRole('button', { name: 'Open console navigation', exact: true }).click();
+  await page.getByRole('button', { name: 'Search console navigation', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Go to' });
   await dialog.getByRole('button', { name: 'Saved work', exact: true }).click();
   const globalInput = dialog.getByRole('searchbox', { name: 'Search saved work' });

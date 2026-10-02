@@ -191,7 +191,7 @@ test('lookalike generation discloses its limits and paginates every retained can
   await expect(page.locator('.status')).toContainText('Generation limits were reached');
   await expect(page.locator('.candidate')).toHaveCount(100);
   await expect(page.getByRole('status').filter({ hasText: 'Showing 1–100 of 2000 matching candidates' })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="all"]')).toHaveText('All candidates (2000)');
+  await expect(page.getByRole('combobox', { name: 'Show candidate scope' }).locator('option[value="all"]')).toHaveText('All candidates (2000)');
   await expect(page.locator('.sort-guidance')).toContainText('Generated candidates are ordered by visible review cues');
   await expect(page.locator('.sort-guidance')).toContainText('Generated candidates are ordered by visible review cues, then generation paths and domain.');
 
@@ -219,7 +219,7 @@ test('lookalike generation discloses its limits and paginates every retained can
   await page.getByRole('button', { name: 'Reset view' }).click();
   await expect(page.locator('.candidate')).toHaveCount(100);
   await expect(page.getByRole('status').filter({ hasText: 'Showing 1–100 of 2000 matching candidates' })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'Candidate scope' })).toHaveValue('all');
+  await expect(page.getByRole('combobox', { name: 'Show candidate scope' })).toHaveValue('all');
   await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toHaveValue('review-signals');
   await page.getByRole('button', { name: 'Clear filtered (1)' }).click();
   await expect(page.getByRole('heading', { name: '0 selected of 2000' })).toBeVisible();
@@ -296,9 +296,9 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
   await expect(references.getByRole('listitem').last()).toBeVisible();
   await expect(candidate.getByRole('checkbox')).toBeChecked({ checked: selectedBeforeReview });
   await expect(page.getByText('Visual matches and review cues are leads for further review, not findings.', { exact: true })).toBeVisible();
-  const reviewCueScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="review-cues"]');
-  const unicodeScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="unicode"]');
-  const referenceScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="reference"]');
+  const reviewCueScope = page.getByRole('combobox', { name: 'Show candidate scope' }).locator('option[value="review-cues"]');
+  const unicodeScope = page.getByRole('combobox', { name: 'Show candidate scope' }).locator('option[value="unicode"]');
+  const referenceScope = page.getByRole('combobox', { name: 'Show candidate scope' }).locator('option[value="reference"]');
   await expect(reviewCueScope).toHaveText(/Has review cues \([1-9]\d*\)/u);
   await expect(unicodeScope).toHaveText(/Internationalised \([1-9]\d*\)/u);
   await expect(referenceScope).toHaveText(/Source or profile match \([1-9]\d*\)/u);
@@ -312,9 +312,9 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
   await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toHaveValue('review-signals');
   await expect(page.locator('.sort-guidance')).toContainText('Generated candidates are ordered by visible review cues');
 
-  await page.getByRole('combobox', { name: 'Candidate scope' }).selectOption('review-cues');
+  await page.getByRole('combobox', { name: 'Show candidate scope' }).selectOption('review-cues');
   await expect(candidate).toBeVisible();
-  await page.getByRole('combobox', { name: 'Candidate scope' }).selectOption('reference');
+  await page.getByRole('combobox', { name: 'Show candidate scope' }).selectOption('reference');
   await expect(candidate).toBeVisible();
   await page.getByRole('combobox', { name: 'Candidate sort' }).selectOption('review-signals');
   await expect(candidate).toBeVisible();
@@ -324,8 +324,8 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
 
   const checkbox = candidate.locator('input[type="checkbox"]');
   await checkbox.check();
-  await expect(page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="selected"]')).toHaveText('Selected only (1)');
-  await page.getByRole('combobox', { name: 'Candidate scope' }).selectOption('selected');
+  await expect(page.getByRole('combobox', { name: 'Show candidate scope' }).locator('option[value="selected"]')).toHaveText('Selected only (1)');
+  await page.getByRole('combobox', { name: 'Show candidate scope' }).selectOption('selected');
   await expect(candidate).toBeVisible();
   await checkbox.focus();
   await page.keyboard.press('Space');
@@ -354,7 +354,7 @@ test('serializes local IDN policy provenance while a selected file is being read
       });
     };
   });
-  const suffix = policy.getByLabel('Registry table suffix');
+  const suffix = policy.getByLabel('Registry suffix');
   const file = policy.locator('input[type="file"]');
   await suffix.fill('invalid');
   await file.setInputFiles({
@@ -383,7 +383,7 @@ test('candidate filters remain contained at mobile width', async ({ page }) => {
   await page.getByRole('textbox', { name: 'TLDs' }).fill('invalid');
   await page.getByRole('button', { name: 'Generate candidates' }).click();
 
-  await expect(page.getByRole('combobox', { name: 'Candidate scope' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Show candidate scope' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Mutation family' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Candidate sort' })).toBeVisible();
   await expectNoHorizontalOverflow(page);

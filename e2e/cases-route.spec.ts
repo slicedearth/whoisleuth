@@ -40,7 +40,7 @@ test('direct and legacy Cases navigation restore the same canonical selection', 
 
 test('the command palette includes the direct Cases destination', async ({ page }) => {
   await page.goto('/dashboard');
-  await page.getByRole('button', { name: 'Open console navigation' }).click();
+  await page.getByRole('button', { name: 'Search console navigation' }).click();
   const dialog = page.getByRole('dialog', { name: 'Go to' });
   await dialog.getByRole('combobox', { name: 'Search pages and tools' }).fill('Cases');
   await dialog.getByRole('option', { name: /^Cases\b/u }).click();

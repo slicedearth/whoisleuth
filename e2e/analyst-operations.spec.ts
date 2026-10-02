@@ -497,7 +497,7 @@ test('focused inbox reviews keep separate drafts, exact times and keyboard-safe 
   await expect(form.getByLabel('Rationale', { exact: true })).toHaveValue('Retained draft for the first independent review.');
   await expect(form.getByRole('combobox', { name: 'Review outcome', exact: true })).toHaveValue('open');
 
-  const exact = first.getByRole('button', { name: /^Copy exact observation time for Complete reviewed handoff for first\.inbox\.example:/u });
+  const exact = first.getByRole('button', { name: /Copy exact observation time for Complete reviewed handoff for first\.inbox\.example:/u });
   await expect(exact.locator('time')).toContainText('UTC');
   const timestamp = await exact.getAttribute('title');
   expect(timestamp).toBeTruthy();

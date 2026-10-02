@@ -12,8 +12,8 @@
 
 <details class="collection-preflight" bind:open>
   <summary>
-    <span>{preflight.heading}</span>
-    <small>{preflight.targetCount || 'No'} target{preflight.targetCount === 1 ? '' : 's'}</small>
+    <span class="disclosure-heading"><span>{preflight.heading}</span>
+    <small>{preflight.targetCount || 'No'} target{preflight.targetCount === 1 ? '' : 's'}</small></span>
   </summary>
   <div class="preflight-body">
     <p>{preflight.summary}</p>
@@ -37,7 +37,7 @@
 
 <style>
   .collection-preflight{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-md);background:rgb(var(--bg-rgb) / .42)}
-  summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 12px;cursor:pointer}
+  summary{padding:10px 12px;cursor:pointer}
   summary span{font:700 var(--text-xs) var(--mono)}
   summary small{color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   .preflight-body{display:grid;gap:10px;padding:0 12px 12px;border-top:1px solid var(--border)}

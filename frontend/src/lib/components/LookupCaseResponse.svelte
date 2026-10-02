@@ -614,7 +614,7 @@
           <span>{route.contact}</span>
           <p><b>{route.channel}</b> · source: {route.source}</p>
           {#if route.limitations.length}<ul
-              >{#each route.limitations.slice(0, 3) as limitation}<li>{limitation}</li>{/each}</ul
+              >{#each route.limitations as limitation}<li>{limitation}</li>{/each}</ul
             >{/if}
           {#if route.officialSourceUrl}<p class="route-source"
               ><a href={route.officialSourceUrl} target="_blank" rel="noreferrer"

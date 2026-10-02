@@ -44,6 +44,7 @@
 <section class="context-review" aria-label="Platform objects and version continuity"><h3>Platform objects and version continuity</h3><div class="body">
   <p>Keep an account, tenant, application, extension, package or page tied to its stable platform ID. Record version observations and outcomes per object.</p>
   <LocalFileInput label="Load an earlier platform review input" accept=".json,application/json" maximumBytes={MAX_CONTEXT_INPUT_BYTES} disabled={loading || mutationBusy} onselect={load} />
+  {#if rows.length >= MAX_CONTEXT_RECORDS}<p role="status">The {MAX_CONTEXT_RECORDS}-observation limit is reached. You can edit existing observations, or remove one below before adding another.</p>{/if}
   <form onsubmit={add}><fieldset disabled={loading || mutationBusy || editing === null && rows.length >= MAX_CONTEXT_RECORDS}><legend>{editing === null ? 'Add an object observation' : `Edit observation ${editing + 1}`}</legend><div class="fields">
     <label>Platform origin<input required type="url" maxlength="500" bind:value={platformOrigin} placeholder="https://platform.example.test"></label><label>Object type<select bind:value={objectType}>{#each PLATFORM_OBJECT_TYPES as item}<option value={item}>{item}</option>{/each}</select></label>
     <label>Stable object ID<input required maxlength="240" bind:value={objectId}></label><label>Version (if supplied)<input maxlength="100" bind:value={version}></label>

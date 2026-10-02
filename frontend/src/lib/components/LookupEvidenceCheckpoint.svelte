@@ -124,7 +124,7 @@
   {#if transitionComparison.length}
     <section class="transition-review" aria-labelledby={`${headingId}-transition-review`}>
       <header>
-        <div><p class="eyebrow">Post-acquisition verification</p><h5 id={`${headingId}-transition-review`}>Reviewed transition plan</h5></div>
+        <div><p class="eyebrow">Acquisition transition review</p><h5 id={`${headingId}-transition-review`}>Reviewed transition plan</h5></div>
         <span>{transitionComparison.length} planned fact{transitionComparison.length === 1 ? '' : 's'}</span>
       </header>
       <div class="comparison">
@@ -137,6 +137,7 @@
               <div><dt>Current</dt><dd>{item.after ?? 'Unavailable in this observation'}</dd></div>
             </dl>
             <small>{item.source} · {item.observedAt ?? 'Observation time unavailable'}</small>
+            {#each item.limitations as limitation}<small>{limitation}</small>{/each}
           </article>
         {/each}
       </div>

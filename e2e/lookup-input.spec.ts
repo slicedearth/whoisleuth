@@ -289,7 +289,7 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   releaseLookup?.();
 
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
-  await page.getByRole('button', { name: 'Expand Source quality evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Source quality evidence' }).click();
   const coverage = page.getByRole('region', { name: 'Evidence coverage' });
   await expect(coverage).toBeVisible();
   await expect(coverage.getByRole('group', { name: 'Evidence coverage summary' })).toContainText('2.4 s total');
@@ -839,7 +839,7 @@ test('a malformed public session response does not clear the current Lookup form
     });
   };
   await context.route('**/api/session', unavailableSession);
-  await page.getByRole('button', { name: 'Open console navigation' }).click();
+  await page.getByRole('button', { name: 'Search console navigation' }).click();
   await page.getByLabel('Search pages and tools').fill('Overview');
   const publicPagePromise = page.waitForEvent('popup');
   await page.getByRole('option', { name: /Overview/u }).click();
@@ -1023,7 +1023,7 @@ test(`security.txt ${publication.state} collection retains its route deadline an
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await requestPromise;
 
-  await page.getByRole('button', { name: 'Expand Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Web and DNS evidence' }).click();
   const disclosure = page.locator('details.security-txt');
   await expect(disclosure).not.toHaveAttribute('open', '');
   await disclosure.locator('summary').click();

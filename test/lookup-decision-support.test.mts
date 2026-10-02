@@ -73,6 +73,18 @@ const refreshPlan: LookupSourceRefreshPlan = {
   limitations: [],
 };
 
+test('priority summaries disclose omitted disagreements and uncertainties without inflating retained counts', () => {
+  const fields = Array.from({ length: 24 }, (_, index) => ({ label: `Field ${index}`,
+    status: index < 18 ? 'conflict' : 'whois_incomplete', rdapDisplay: 'First value', whoisDisplay: 'Second value' }));
+  const support = buildLookupDecisionSupport({ task: 'general', coverage, refreshPlan, registryComparison: { fields } });
+  assert.equal(support.entries.length, 16);
+  assert.deepEqual(support.counts, { conflicts: 16, uncertainties: 0 });
+  assert.deepEqual(support.omittedCounts, { conflicts: 2, uncertainties: 6 });
+  assert.ok(support.entries.every(entry => entry.state === 'conflict'));
+  const complete = buildLookupDecisionSupport({ task: 'general', coverage, refreshPlan, registryComparison: { fields: fields.slice(0, 3) } });
+  assert.deepEqual(complete.omittedCounts, { conflicts: 0, uncertainties: 0 });
+});
+
 test('action ranking is exact for every task and preserves source order as the final tie-breaker', () => {
   const actions = [
     { id: 'generic-medium-first', priority: 'medium' },

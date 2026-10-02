@@ -227,7 +227,7 @@ test('adds and removes exact associations by keyboard, restores focus, and prese
   await expect(inbox).toContainText('inconclusive');
 
   const profileCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Fixture profile', exact: true }) });
-  await profileCard.getByRole('button', { name: `Edit Fixture profile (${PROFILE_ID})` }).click();
+  await profileCard.getByRole('button', { name: 'Edit Fixture profile' }).click();
   const editor = page.getByRole('form', { name: 'Brand Profile', exact: true });
   await expect(page.getByLabel('Brand name')).toBeFocused();
   await expect.poll(() => editor.evaluate((element) => {
@@ -235,12 +235,12 @@ test('adds and removes exact associations by keyboard, restores focus, and prese
     return Boolean(inboxElement && (element.compareDocumentPosition(inboxElement) & Node.DOCUMENT_POSITION_FOLLOWING));
   })).toBe(true);
   const dialogPromise = page.waitForEvent('dialog');
-  const clickPromise = profileCard.getByRole('button', { name: `Delete Fixture profile (${PROFILE_ID})` }).click();
+  const clickPromise = profileCard.getByRole('button', { name: 'Delete Fixture profile' }).click();
   const dialog = await dialogPromise;
   expect(dialog.message()).toContain('1 linked case will retain this identifier and appear unresolved after deletion.');
   await dialog.accept();
   await clickPromise;
-  await expect(page.getByRole('button', { name: `Edit Second fixture profile (${SECOND_PROFILE_ID})` })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Edit Second fixture profile' })).toBeFocused();
 
   await expect(inbox.getByRole('heading', { name: 'Unresolved profile references' })).toBeVisible();
   await expect(inbox).toContainText(PROFILE_ID);
@@ -536,10 +536,10 @@ test('closes Brand Profile source truth after a post-ready storage failure', asy
   await expect(metric).toHaveText('No active profile');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('radio', { name: 'Set Fixture profile active' }).check();
-  await expect(metric).toHaveText('1 review items');
+  await expect(metric).toHaveText('1 review item');
 
   const profileCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Fixture profile', exact: true }) });
-  await profileCard.getByRole('button', { name: `Edit Fixture profile (${PROFILE_ID})` }).click();
+  await profileCard.getByRole('button', { name: 'Edit Fixture profile' }).click();
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'brand_profiles');
   await page.getByRole('button', { name: 'Save profile' }).click();
 
@@ -570,7 +570,7 @@ test('installs complete committed profile snapshots across stale tabs and prefer
   await expect(secondPage.getByRole('status').filter({hasText:'Saved "Concurrent fixture profile"'})).toBeVisible();
 
   const profileCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Fixture profile', exact: true }) });
-  await profileCard.getByRole('button', { name: `Edit Fixture profile (${PROFILE_ID})` }).click();
+  await profileCard.getByRole('button', { name: 'Edit Fixture profile' }).click();
   await page.getByLabel('Brand name').fill('Committed fixture profile');
   await page.evaluate((key) => {
     const originalSetItem = Storage.prototype.setItem;
@@ -590,7 +590,7 @@ test('installs complete committed profile snapshots across stale tabs and prefer
 
   await page.reload();
   const committedCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Committed fixture profile', exact: true }) });
-  await expect(committedCard.getByRole('button', { name: `Delete Committed fixture profile (${PROFILE_ID})` })).toBeEnabled();
+  await expect(committedCard.getByRole('button', { name: 'Delete Committed fixture profile' })).toBeEnabled();
   await page.evaluate((key) => {
     const originalGetItem = Storage.prototype.getItem;
     Storage.prototype.getItem = function getItem(name: string) {
@@ -599,7 +599,7 @@ test('installs complete committed profile snapshots across stale tabs and prefer
     };
   }, ACTIVE_PROFILE_KEY);
   const dialogPromise = page.waitForEvent('dialog');
-  const deletePromise = committedCard.getByRole('button', { name: `Delete Committed fixture profile (${PROFILE_ID})` }).click();
+  const deletePromise = committedCard.getByRole('button', { name: 'Delete Committed fixture profile' }).click();
   const dialog = await dialogPromise;
   await dialog.accept();
   await deletePromise;
@@ -617,7 +617,7 @@ test('installs complete committed profile snapshots across stale tabs and prefer
 test('profile deletion separates a committed read failure from a rejected write', async ({ page }) => {
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, storageEntries([], [profileFixture()], ''), { destination: '/brands' });
-  const deleteButton=page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`});
+  const deleteButton=page.getByRole('button',{name:'Delete Fixture profile'});
   await expect(deleteButton).toBeVisible();
   await failNextBrowserLocalCollectionReadAfterWrite(page,'brand_profiles');
   const dialogPromise=page.waitForEvent('dialog');
@@ -631,13 +631,13 @@ test('profile deletion separates a committed read failure from a rejected write'
 
   await page.reload();
   await migrateLegacyBrowserData(page, storageEntries([], [profileFixture()], ''), { destination: '/brands' });
-  await expect(page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Delete Fixture profile'})).toBeVisible();
   const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
   await failBrowserLocalManifestWrites(page,'brand_profiles');
   const retryDialogPromise=page.waitForEvent('dialog');
-  const retryPromise=page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`}).click();
+  const retryPromise=page.getByRole('button',{name:'Delete Fixture profile'}).click();
   const retryDialog=await retryDialogPromise;await retryDialog.accept();await retryPromise;
-  await expect(page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`})).toBeFocused();
+  await expect(page.getByRole('button',{name:'Delete Fixture profile'})).toBeFocused();
   await expect(page.locator('#brand-profile-source-state')).toHaveCount(0);
   await expect(page.getByRole('status').filter({hasText:'Could not delete profile'})).toContainText(/write|storage|quota/iu);
   await expect(page.getByRole('button',{name:'New profile'})).toBeEnabled();
@@ -751,7 +751,7 @@ test('rereads cases before profile deletion and discloses unknown impact on fail
   await failNextBrowserLocalCollectionRead(page, 'cases');
   const profileCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Fixture profile', exact: true }) });
   const dialogPromise = page.waitForEvent('dialog');
-  const clickPromise = profileCard.getByRole('button', { name: `Delete Fixture profile (${PROFILE_ID})` }).click();
+  const clickPromise = profileCard.getByRole('button', { name: 'Delete Fixture profile' }).click();
   const dialog = await dialogPromise;
   expect(dialog.message()).toContain('Linked-case impact cannot be checked because cases could not be read.');
   expect(dialog.message()).not.toContain('0 linked cases');
@@ -765,7 +765,7 @@ test('rereads cases before profile deletion and discloses unknown impact on fail
   await expect(profileCard).toBeVisible();
 
   const retryDialogPromise = page.waitForEvent('dialog');
-  const retryClickPromise = profileCard.getByRole('button', { name: `Delete Fixture profile (${PROFILE_ID})` }).click();
+  const retryClickPromise = profileCard.getByRole('button', { name: 'Delete Fixture profile' }).click();
   const retryDialog = await retryDialogPromise;
   expect(retryDialog.message()).toContain('1 linked case will retain this identifier and appear unresolved after deletion.');
   await retryDialog.dismiss();

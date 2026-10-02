@@ -157,7 +157,7 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
   await page.getByRole('button', { name: 'Inspect suspicious domain' }).click();
   await expect(page.getByRole('heading', { name: 'northstar-login.example', exact: true })).toBeFocused();
   await expect(page.getByRole('button', { name: 'Open synthetic Case' })).toBeVisible();
-  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   const evidence = page.getByRole('region', { name: 'Where this result came from', exact: true });
   await expect(evidence).toBeVisible();
   for (const theme of ['light', 'dark'] as const) {
@@ -257,27 +257,27 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(page.locator('#demo-evidence-registry')).toHaveCount(0);
   await expect(page.locator('.dns-card')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Registration evidence' }).click();
   await expect(page.locator('#demo-evidence-registry')).toBeVisible();
   const authorityTrace = page.getByRole('region', { name: 'Registration authority trace' });
   await expect(authorityTrace).toContainText('primary publication for domain existence');
   await expect(authorityTrace).toContainText('cannot decide domain existence');
 
-  await page.getByRole('button', { name: 'Expand Web, DNS, and TLS evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Web, DNS, and TLS evidence' }).click();
   await expect(page.locator('#demo-evidence-registry')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'DNS evidence' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'HTTP evidence' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'TLS and certificate evidence' })).toBeVisible();
   await expect(page.getByText('Also separated in the signed-in Console')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   await expect(page.locator('.dns-card')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Where this result came from' })).toBeVisible();
   await page.getByRole('link', { name: /^Registry/ }).click();
   await expect(page.locator('#demo-evidence-registry')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Collapse Registration evidence' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('button', { name: 'Collapse details: Registration evidence' })).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('#demo-family-web .family-details')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   const relationshipTabs = page.getByRole('tablist', { name: 'Synthetic relationship and history view' });
   const evidenceTab = relationshipTabs.getByRole('tab', { name: /^Evidence/ });
   await evidenceTab.focus();
@@ -285,7 +285,7 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(relationshipTabs.getByRole('tab', { name: /^Timeline/ })).toBeFocused();
   await expect(page.getByRole('heading', { name: 'Observed lifecycle' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Expand Source quality evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Source quality evidence' }).click();
   await expect(page.getByRole('heading', { name: 'Where this result came from' })).toHaveCount(0);
   await expect(page.getByRole('img', { name: 'Overlapping collection timing for 4 source branches' })).toBeVisible();
   await expect(page.locator('.timing-summary')).toContainText('Network context');
@@ -446,10 +446,10 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await expect.poll(activeStageCenterOffset).toBeLessThanOrEqual(3);
 
   await page.setViewportSize({ width: 360, height: 760 });
-  await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Registration evidence' }).click();
   await expect(page.getByRole('region', { name: 'Exact source comparisons' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
-  await page.getByRole('button', { name: 'Expand Web, DNS, and TLS evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Web, DNS, and TLS evidence' }).click();
   await expect(page.getByRole('heading', { name: 'TLS and certificate evidence' })).toBeVisible();
   await page.setViewportSize({ width: 393, height: 852 });
   await expectNoHorizontalOverflow(page);

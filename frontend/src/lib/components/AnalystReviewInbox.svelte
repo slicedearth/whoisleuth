@@ -217,7 +217,7 @@
       <h2 id="review-inbox-title" tabindex="-1">Retained review items</h2>
       {#if focusedCaseId}<p>Associated with the selected Case.</p>{/if}
     </div>
-    {#if inbox.items.length || inbox.truncated}<strong aria-label={`${scopedItems.length} retained review items${focusedCaseId ? ' for the selected Case' : ''}`}>{scopedItems.length}</strong>{/if}
+    {#if inbox.items.length || inbox.truncated}<strong>{scopedItems.length}<span class="sr-only"> retained review {scopedItems.length === 1 ? 'item' : 'items'}{focusedCaseId ? ' for the selected Case' : ''}</span></strong>{/if}
   </div>
   {/if}
 

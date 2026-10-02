@@ -177,7 +177,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'Could a shared certificate, platform or edge explain the relationship?',
     ]),
     references: Object.freeze([
-      Object.freeze({ label: 'IETF RFC 9162: Certificate Transparency', href: 'https://www.rfc-editor.org/rfc/rfc9162', description: 'Defines the current Certificate Transparency log protocol.' }),
+      Object.freeze({ label: 'IETF RFC 9162: Certificate Transparency', href: 'https://www.rfc-editor.org/rfc/rfc9162', description: 'Defines the newer version of the Certificate Transparency log protocol.' }),
       Object.freeze({ label: 'Certificate Transparency project', href: 'https://certificate.transparency.dev/', description: 'Explains the public-log ecosystem and its operational model.' }),
     ]),
     demoHref: '/demo',

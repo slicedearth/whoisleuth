@@ -23,6 +23,10 @@
   const currentPage=$derived(Math.min(page,pageCount));
   const pagedProfiles=$derived(profiles.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE));
   const focusedIndex=$derived(profiles.findIndex((profile)=>profile.id===(focusId||activeId)));
+  function actionSubject(profile: BrandProfile): string {
+    return profiles.some(other => other.id !== profile.id && other.name === profile.name)
+      ? `${profile.name} (${profile.id})` : profile.name;
+  }
   function setPage(value:number){page=Math.min(pageCount,Math.max(1,Math.trunc(value)));}
   async function removeAndFocus(profile:BrandProfile){
     if(!remove||busy)return;
@@ -64,8 +68,8 @@
           {:else}<p class="baseline-status"><strong>Page baseline</strong><span>Not captured</span></p>{/if}
           {#if !readOnly && edit && remove}
             <footer class="toolbar">
-              <button id={`brand-profile-edit-${profile.id}`} class="btn" aria-label={`Edit ${profile.name} (${profile.id})`} disabled={busy} onclick={() => edit?.(profile)}>Edit</button>
-              <button class="btn danger" aria-label={`Delete ${profile.name} (${profile.id})`} disabled={busy} onclick={() => void removeAndFocus(profile)}>Delete</button>
+              <button id={`brand-profile-edit-${profile.id}`} class="btn" aria-label={`Edit ${actionSubject(profile)}`} disabled={busy} onclick={() => edit?.(profile)}>Edit</button>
+              <button class="btn danger" aria-label={`Delete ${actionSubject(profile)}`} disabled={busy} onclick={() => void removeAndFocus(profile)}>Delete</button>
             </footer>
           {/if}
         </article>

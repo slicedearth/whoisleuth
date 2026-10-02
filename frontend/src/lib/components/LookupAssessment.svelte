@@ -172,7 +172,7 @@
         {/if}
 
         <details class="score-detail" aria-label="Risk triage explanation">
-          <summary><span>Explain Risk triage</span><small>Exact model result, factors and sensitivity</small></summary>
+          <summary><span class="disclosure-heading"><span>Explain Risk triage</span><small>Exact model result, factors and sensitivity</small></span></summary>
           <div class="score-detail-body">
             <dl class="exact-score">
               <div><dt>Exact model result</dt><dd>{risk.score}/100</dd></div>
@@ -229,7 +229,7 @@
           {#each opportunity.evidenceQuality.limitations as limitation}<li>{limitation}</li>{/each}
         </ul>
         <details class="score-detail" aria-label="Opportunity acquisition-readiness explanation">
-          <summary><span>Explain Opportunity context</span><small>Exact model result, dimensions and factors</small></summary>
+          <summary><span class="disclosure-heading"><span>Explain Opportunity context</span><small>Exact model result, dimensions and factors</small></span></summary>
           <div class="score-detail-body">
             <dl class="exact-score">
               <div><dt>Exact model result</dt><dd>{opportunity.score}/100</dd></div>
@@ -271,7 +271,7 @@
   .coverage-state.state-unknown strong{color:var(--muted)}
   .material-limitations{display:grid;gap:4px;margin:9px 0 0;padding-left:18px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .score-detail{min-width:0;margin-top:11px;border-top:1px solid var(--border)}
-  .score-detail>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 1px 0;color:var(--accent);font:700 var(--text-xs) var(--mono);cursor:pointer}
+  .score-detail>summary{padding:11px 1px 0;color:var(--accent);font:700 var(--text-xs) var(--mono);cursor:pointer}
   .score-detail>summary small{color:var(--muted);font:400 var(--text-2xs) var(--font-sans);text-align:right}
   .score-detail>summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
   .score-detail-body{min-width:0;padding-top:10px}
@@ -308,7 +308,7 @@
     .exact-score{grid-template-columns:repeat(2,minmax(0,1fr))}
   }
   @media(max-width:650px){
-    .triage-band>header,.score-detail>summary{align-items:flex-start;flex-direction:column}
+    .triage-band>header,.score-detail>summary>.disclosure-heading{align-items:flex-start;flex-direction:column}
     .model-label{flex:initial}
     .score-detail>summary small{text-align:left}
     .factor-chart{display:none}

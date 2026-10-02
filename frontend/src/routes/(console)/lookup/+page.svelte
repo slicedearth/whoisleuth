@@ -679,6 +679,7 @@
           {lookupDecisionFacts}
           signals={lookupSummary.signals}
           readiness={lookupClaimReadiness}
+          omittedComparisons={lookupAnalysis.lookupDecisionSupport.omittedCounts}
         />
 
         {#if availability.applicable !== false}

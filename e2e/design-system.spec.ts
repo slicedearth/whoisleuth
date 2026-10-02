@@ -104,7 +104,7 @@ test('the protected Console opens through an intentional responsive loading stat
 test('the console command palette filters destinations and remains keyboard operable', async ({ page }) => {
   const commandCount = consoleCommandNavigation.length;
   await page.goto('/dashboard');
-  const trigger = page.getByRole('button', { name: 'Open console navigation' });
+  const trigger = page.getByRole('button', { name: 'Search console navigation' });
   await expect(trigger).toBeVisible();
   await expect(trigger.locator('.shortcut-wide')).toBeVisible();
   await expect(trigger.locator('.shortcut-wide')).toHaveText('Ctrl/⌘ K');
@@ -273,7 +273,7 @@ test('the console command palette keeps every destination heading readable on mo
   for (const width of [400, 430, 489, 500]) {
     await page.setViewportSize({ width, height: 700 });
     await page.goto('/dashboard');
-    await page.getByRole('button', { name: 'Open console navigation' }).click();
+    await page.getByRole('button', { name: 'Search console navigation' }).click();
     const dialog = page.getByRole('dialog', { name: 'Go to' });
     await expect(dialog).toBeVisible();
     const options = dialog.getByRole('option');

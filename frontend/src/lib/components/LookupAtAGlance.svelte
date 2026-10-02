@@ -15,17 +15,21 @@
     lookupDecisionFacts,
     signals,
     readiness,
+    omittedComparisons = { conflicts: 0, uncertainties: 0 },
   }: {
     reviewActions: LookupReviewActionModel;
     lookupDecisionFacts: readonly DecisionFact[];
     signals: readonly LookupSummarySignal[];
     readiness: LookupClaimReadiness;
+    omittedComparisons?: Readonly<{ conflicts: number; uncertainties: number }> | undefined;
   } = $props();
 
-  const notableSignals = $derived.by(() => {
+  const availableSignals = $derived.by(() => {
     const priority = signals.filter((signal) => signal.tone !== 'neutral');
-    return (priority.length ? priority : signals).slice(0, 4);
+    return priority.length ? priority : signals;
   });
+  let allSignalsOpen = $state(false);
+  const notableSignals = $derived(allSignalsOpen ? availableSignals : availableSignals.slice(0, 4));
   const nextReviews = $derived(reviewActions.recommendedNextReviews);
   const furtherReviews = $derived(nextReviews.rankedItems.slice(nextReviews.displayedCount));
   let allReviewsOpen = $state(false);
@@ -149,6 +153,10 @@
     </div>
   </header>
 
+  {#if omittedComparisons.conflicts || omittedComparisons.uncertainties}
+    <p class="summary-omissions">Counts cover comparisons in this summary. {omittedComparisons.conflicts} additional disagreement{omittedComparisons.conflicts === 1 ? '' : 's'} and {omittedComparisons.uncertainties} unresolved comparison{omittedComparisons.uncertainties === 1 ? '' : 's'} remain in <a href="#registry">registration sources</a> or <a href="#web-evidence">web and DNS evidence</a>.</p>
+  {/if}
+
   {#if openQuestions.length}
     <details class="open-questions">
       <summary>Questions needing evidence ({openQuestions.length})</summary>
@@ -213,6 +221,7 @@
       {:else}
         <p class="empty">No compact observation is available. Review the source-quality section before drawing a conclusion.</p>
       {/if}
+      {#if availableSignals.length > 4}<button type="button" class="btn small" aria-expanded={allSignalsOpen} onclick={() => allSignalsOpen = !allSignalsOpen}>{allSignalsOpen ? 'Show fewer observations' : `Show all ${availableSignals.length} observations (${notableSignals.length} shown)`}</button>{/if}
     </section>
 
     <section aria-labelledby="lookup-next-review-title">

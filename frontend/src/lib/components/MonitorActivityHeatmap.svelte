@@ -28,7 +28,7 @@
     description="Saved checks over 28 days, ending at the latest check. Each column covers seven days; dates use UTC. Empty cells have no saved check."
     metric={activity.totalChanges}
     metricLabel="material changes"
-    visualLabel={`${activity.totalChecks} retained watchlist checks with ${activity.totalChanges} material changes from ${activity.windowStart} through ${activity.windowEnd}, grouped by UTC calendar day`}
+    visualLabel={`${activity.totalChecks} retained watchlist ${activity.totalChecks === 1 ? 'check' : 'checks'} with ${activity.totalChanges} material ${activity.totalChanges === 1 ? 'change' : 'changes'} from ${activity.windowStart} through ${activity.windowEnd}, grouped by UTC calendar day`}
     legend={activityLegend}
     legendLabel="Watchlist activity cell key"
   >

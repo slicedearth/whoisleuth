@@ -517,12 +517,12 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
 
   await page.locator('#query').fill('registrar-source.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  await expect(page.getByRole('button', { name: 'Expand Web and DNS evidence' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Expand details: Web and DNS evidence' })).toBeVisible();
   await expandLookupFamilies(page);
 
-  const registrationSummary = page.getByRole('button', { name: 'Collapse Registration evidence' });
+  const registrationSummary = page.getByRole('button', { name: 'Collapse details: Registration evidence' });
   await expect(registrationSummary).toContainText('7 equivalent');
-  await expect(registrationSummary).toContainText('1 conflicts');
+  await expect(registrationSummary).toContainText('1 conflict');
 
   const evidenceQuality = page.locator('#evidence-quality');
   await evidenceQuality.locator(':scope > details').first().locator(':scope > summary').click();
@@ -631,13 +631,13 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
     .getByRole('tab', { name: /^Evidence/ }).click();
   const networkSource = page.getByRole('list', { name: 'Evidence item status' }).locator('a[href="#evidence-network"]');
   await expect(networkSource).toHaveCount(1);
-  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Web and DNS evidence' }).click();
   await expect(page.locator('#evidence-network')).toHaveCount(0);
   await networkSource.focus();
   await networkSource.press('Enter');
   await expect(page).toHaveURL(/#evidence-network$/);
   await expect(page.locator('#evidence-network')).toBeInViewport();
-  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Web and DNS evidence' }).click();
   await expect(page.locator('#evidence-network')).toHaveCount(0);
   await page.evaluate(() => { window.location.hash = '#evidence-network-context'; });
   await expect(page).toHaveURL(/#evidence-network$/);
@@ -756,8 +756,10 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await checkpoint.getByRole('button', { name: 'Save 2 checkpoint facts' }).click();
   await expect(page.locator('.case-status')).toContainText('with a reviewed transition plan');
   await expect(checkpoint.getByRole('heading', { name: 'Reviewed transition plan' })).toBeVisible();
-  await expect(checkpoint).toContainText('verified preserved');
-  await expect(checkpoint).toContainText('change not observed');
+  const transition = checkpoint.getByRole('region', { name: 'Reviewed transition plan' });
+  await expect(transition.locator('article[data-state="indeterminate"]')).toHaveCount(2);
+  await expect(transition.locator('article')).toHaveCount(2);
+  await expect(transition.getByText('A transition requires a source observation strictly later than the pinned observation.')).toHaveCount(2);
   await expectNoHorizontalOverflow(page);
 });
 
@@ -1222,7 +1224,7 @@ for (const unsupported of ['provider', 'envelope'] as const) {
     const advanced = page.locator('#advanced-evidence');
     await expect(advanced).toContainText('0 usable external providers');
     await expect(advanced).toContainText('1 provider record withheld');
-    await page.getByRole('button', { name: 'Expand Advanced evidence' }).click();
+    await page.getByRole('button', { name: 'Expand details: Advanced evidence' }).click();
     const notice = page.getByRole('region', { name: 'Withheld external-intelligence records' });
     await expect(notice).toBeVisible();
     await expect(notice).toContainText('This is not evidence of no findings');

@@ -30,7 +30,7 @@
 <span class="evidence-timestamp">
   {#if time}
     {#if copyable}
-      <button type="button" class="timestamp" title={time.exact} aria-label={`Copy exact ${label}: ${time.exact}`} onclick={copy}>
+      <button type="button" class="timestamp" title={time.exact} aria-label={`${time.readable} — Copy exact ${label}: ${time.exact}`} onclick={copy}>
         <time datetime={time.datetime}>{time.readable}</time><span class="copy-hint" aria-hidden="true">Copy</span>
       </button>
       <span class:sr-only={status !== 'failed'} aria-live="polite" aria-atomic="true">{status === 'copied' ? `Exact ${label} copied.` : status === 'failed' ? 'Clipboard unavailable. Select the exact timestamp below.' : ''}</span>

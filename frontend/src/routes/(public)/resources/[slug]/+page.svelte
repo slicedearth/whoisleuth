@@ -68,7 +68,7 @@
     <div class="evidence-table" role="table" aria-label="Evidence sources and limitations">
       <div class="table-head" role="row"><span role="columnheader">Source</span><span role="columnheader">Useful for</span><span role="columnheader">Important limit</span></div>
       {#each resource.evidence as item}
-        <div role="row"><div role="cell"><strong>{item.source}</strong></div><span role="cell">{item.usefulFor}</span><span role="cell">{item.limitation}</span></div>
+        <div role="row"><div role="cell"><span class="mobile-column-label" aria-hidden="true">Source</span><strong>{item.source}</strong></div><span role="cell"><span class="mobile-column-label" aria-hidden="true">Useful for</span>{item.usefulFor}</span><span role="cell"><span class="mobile-column-label" aria-hidden="true">Important limit</span>{item.limitation}</span></div>
       {/each}
     </div>
   </section>
@@ -107,5 +107,6 @@
   .primary-references .section-intro>p:not(.eyebrow){margin:0;color:var(--muted);line-height:1.65}.primary-references ul{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:8px;margin:0;padding:0;list-style:none}.primary-references a{display:grid;height:100%;gap:8px;padding:16px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.primary-references a:hover,.primary-references a:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06)}.primary-references strong{color:var(--accent);font:650 .9375rem var(--font-sans);line-height:1.5}.primary-references span:not(.sr-only){color:var(--muted);font-size:.9375rem;line-height:1.6}
   .questions ul{display:grid;gap:12px;max-width:72ch;margin:0;padding-left:20px}.questions li{padding-left:4px;font-size:var(--text-sm);line-height:1.6}
   .repository{margin:20px 0 48px;padding-top:30px;border-top:1px solid var(--border)}.repository p{margin:0;color:var(--muted);line-height:1.65}.repository a{display:inline-flex;margin-top:13px;color:var(--accent);font:700 var(--text-2xs) var(--mono)}
-  @media(max-width:760px){.evidence-table{border:0;overflow:visible}.evidence-table .table-head{display:none}.evidence-table>div{grid-template-columns:1fr;gap:6px;margin-top:8px;padding:15px;border:1px solid var(--border);border-radius:var(--radius-md)}.evidence-table>div>div strong::before{content:'Source · ';color:var(--muted);font:650 var(--text-2xs) var(--mono)}}
+  .mobile-column-label{display:none}
+  @media(max-width:760px){.evidence-table{border:0;overflow:visible}.evidence-table .table-head{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.evidence-table>div{grid-template-columns:1fr;gap:6px;margin-top:8px;padding:15px;border:1px solid var(--border);border-radius:var(--radius-md)}.mobile-column-label{display:block;margin-bottom:2px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}}
 </style>

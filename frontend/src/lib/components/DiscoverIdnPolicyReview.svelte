@@ -14,6 +14,7 @@
   let error = $state('');
   let loading = $state(false);
   let reviewGeneration = 0;
+  let showAllExceptions = $state(false);
 
   const unicodeCandidates = $derived(candidates.filter((candidate) => candidate.unicodeDomain && candidate.unicodeDomain !== candidate.domain));
   const reviews = $derived(policy ? reviewRegistryIdnCandidates(policy, unicodeCandidates) : []);
@@ -73,10 +74,10 @@
 
 {#if unicodeCandidates.length}
   <details class="idn-policy card">
-    <summary><span><span class="eyebrow">Optional local policy</span><strong>Registry IDN feasibility</strong></span><span>{unicodeCandidates.length} Unicode candidate{unicodeCandidates.length === 1 ? '' : 's'}</span></summary>
+    <summary><span class="disclosure-heading"><span><span class="eyebrow">Optional local policy</span><strong>Registry IDN feasibility</strong></span><span>{unicodeCandidates.length} Unicode candidate{unicodeCandidates.length === 1 ? '' : 's'}</span></span></summary>
     <p class="intro">Import a reviewed RFC 7940 LGR XML file and name its DNS-safe suffix. The file stays in this browser tab. This checks only individual code-point repertoire membership and never claims that a label is registrable.</p>
     <div class="controls">
-      <label>Registry suffix<input value={suffix} maxlength="253" placeholder="test" aria-label="Registry table suffix" disabled={loading} oninput={updateSuffix}></label>
+      <label>Registry suffix<input value={suffix} maxlength="253" placeholder="test" aria-label="Registry suffix" disabled={loading} oninput={updateSuffix}></label>
       <label class="file">LGR XML file<input type="file" accept=".xml,application/xml,text/xml" disabled={loading} onchange={selectFile}></label>
       <button class="btn" onclick={review} disabled={!selectedFile || !suffix.trim() || loading}>{loading ? 'Reviewing…' : 'Review local table'}</button>
     </div>
@@ -90,10 +91,11 @@
       <p class="source">Source: <strong>{policy.sourceName}</strong> · {policy.codePointCount.toLocaleString()} code points · <code>{policy.sourceDigestSha256}</code></p>
       {#if counts.notListed}
         <div class="exceptions">
-          {#each reviews.filter((item) => item.state === 'not_listed').slice(0, 12) as item}
+          {#each reviews.filter((item) => item.state === 'not_listed').slice(0, showAllExceptions ? reviews.length : 12) as item}
             <div><strong>{item.unicodeDomain}</strong><span>{item.unlistedCodePoints.join(', ')}</span></div>
           {/each}
         </div>
+        {#if counts.notListed > 12}<p class="source"><button class="btn small" type="button" aria-expanded={showAllExceptions} onclick={() => showAllExceptions = !showAllExceptions}>{showAllExceptions ? 'Show fewer exceptions' : `Show all ${counts.notListed} exceptions (12 shown)`}</button></p>{/if}
       {/if}
       <ul>{#each policy.limitations as limitation}<li>{limitation}</li>{/each}</ul>
     {/if}
@@ -102,11 +104,10 @@
 
 <style>
   .idn-policy{margin-top:16px;padding:0}
-  summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:var(--card-pad);cursor:pointer;list-style:none}
-  summary::-webkit-details-marker{display:none}
-  summary>span:first-child{display:grid;gap:4px}
+  summary{padding:var(--card-pad);cursor:pointer}
+  .disclosure-heading>span:first-child{display:grid;gap:4px}
   summary strong{font-size:var(--text-lg)}
-  summary>span:last-child{color:var(--muted);font:600 var(--text-xs) var(--mono)}
+  .disclosure-heading>span:last-child{color:var(--muted);font:600 var(--text-xs) var(--mono)}
   .idn-policy[open]{padding-bottom:var(--card-pad)}
   .idn-policy[open] summary{border-bottom:1px solid var(--border)}
   .intro,.source,.idn-policy ul{margin:14px var(--card-pad) 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
@@ -124,5 +125,5 @@
   .exceptions div{display:flex;justify-content:space-between;gap:8px;min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}
   .exceptions strong{min-width:0;overflow-wrap:anywhere;font-size:var(--text-xs)}
   .exceptions span{color:var(--muted);font:var(--text-2xs) var(--mono)}
-  @media(max-width:700px){summary{align-items:flex-start}.controls,.summary-grid,.exceptions{grid-template-columns:1fr}.controls button{width:100%}}
+  @media(max-width:700px){summary .disclosure-heading{align-items:flex-start}.controls,.summary-grid,.exceptions{grid-template-columns:1fr}.controls button{width:100%}}
 </style>

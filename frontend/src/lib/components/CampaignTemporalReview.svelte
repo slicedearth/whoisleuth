@@ -52,7 +52,7 @@
   </header>
   <p class="qualification">The dates below are first and last retained observations or publication times. They are not global first-seen or service-activation dates.</p>
 
-  <div class="coverage" aria-label="Retained source coverage by evidence family">
+  <div class="coverage"><h4 class="sr-only">Retained source coverage by evidence family</h4>
     {#each layers as layer}
       {@const item = review.layerCoverage[layer.id]}
       <article class={`layer-${layer.id}`} data-layer={layer.id}>

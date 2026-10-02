@@ -87,7 +87,7 @@
         <p class="eyebrow">Local export review</p>
         <h2 id="calibration-review-title">Confirm Risk calibration dataset</h2>
       </div>
-      <button class="close" type="button" disabled={busy} aria-label="Cancel calibration export" onclick={cancel}>Esc</button>
+      <button class="close" type="button" disabled={busy} aria-label="Cancel calibration export" onclick={cancel}>Cancel <kbd aria-hidden="true">Esc</kbd></button>
     </header>
 
     <div class="review-body">

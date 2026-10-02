@@ -195,7 +195,7 @@
         <p class="eyebrow">Navigation</p>
         <h2 id="command-palette-title">Go to</h2>
       </div>
-      <button type="button" class="palette-close" aria-label="Close command palette" onclick={close}>Esc</button>
+      <button type="button" class="palette-close" aria-label="Close command palette" onclick={close}>Close <kbd aria-hidden="true">Esc</kbd></button>
     </header>
     <div class="search-modes" role="group" aria-label="Search scope"><button type="button" aria-pressed={mode === 'pages'} onclick={() => void selectMode('pages')}>Pages and tools</button><button type="button" aria-pressed={mode === 'saved'} onclick={() => void selectMode('saved')}>Saved work</button><button type="button" aria-pressed={mode === 'documentation'} onclick={() => void selectMode('documentation')}>Documentation</button></div>
     {#if mode === 'saved'}

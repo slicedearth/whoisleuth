@@ -46,6 +46,11 @@
   function select(key: string, checked: boolean) {
     selected = checked ? [...selected, key] : selected.filter(value => value !== key);
   }
+  function describePreview(checked: CaseReviewReturn): string {
+    const additions = checked.rows.filter(row => row.state === 'new').length;
+    const conflicts = checked.rows.filter(row => row.state === 'conflict').length;
+    return `Review ${additions} new ${additions === 1 ? 'entry' : 'entries'} and ${conflicts} ${conflicts === 1 ? 'conflict' : 'conflicts'}. Nothing has been saved.`;
+  }
   async function selectFile(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -64,9 +69,7 @@
       const checked = previewCaseReviewReturn(baseline, value, await sha256ArtifactBytes(bytes));
       if (revision !== generation) return;
       preview = checked;
-      const additions = checked.rows.filter(row => row.state === 'new').length;
-      const conflicts = checked.rows.filter(row => row.state === 'conflict').length;
-      message = `Review ${additions} new ${additions === 1 ? 'entry' : 'entries'} and ${conflicts} ${conflicts === 1 ? 'conflict' : 'conflicts'}. Nothing has been saved.`;
+      message = describePreview(checked);
     } catch (cause) {
       if (revision === generation) message = cause instanceof Error ? cause.message : 'Could not read the review file.';
     } finally {
@@ -85,7 +88,7 @@
       if (revision !== generation || current.signal.aborted) return false;
       preview = checked;
       packageMessage = `${packaged.encryption === 'verified' ? 'Encrypted container authenticated. ' : 'Unencrypted package. '}Every packaged file matches its manifest. ${packaged.attachments.length - packaged.missing.length} of ${packaged.attachments.length} Case file references have matching bytes. Originals remain in the selected package and are not imported by accepting entries.`;
-      message = `Review ${checked.rows.filter(row => row.state === 'new').length} new entries and ${checked.rows.filter(row => row.state === 'conflict').length} conflicts. Nothing has been saved.`;
+      message = describePreview(checked);
       return true;
     } catch (cause) { if (revision === generation && !current.signal.aborted) message = cause instanceof Error ? cause.message : 'The package could not be verified.'; return false; }
     finally { passphrase = undefined; if (packageController === current) { packageController = null; parsing = false; } }

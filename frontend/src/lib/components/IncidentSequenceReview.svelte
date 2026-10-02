@@ -57,6 +57,7 @@
 <section class="context-review" aria-label="Incident sequence and reported actions"><h3>Incident sequence and reported actions</h3><div class="body">
   <p>Arrange sourced message, page and account events in the order you want to review.</p>
   <LocalFileInput label="Load an earlier incident-sequence input" accept=".json,application/json" maximumBytes={MAX_CONTEXT_INPUT_BYTES} disabled={loading || mutationBusy} onselect={load} />
+  {#if stages.length >= MAX_CONTEXT_RECORDS}<p role="status">The {MAX_CONTEXT_RECORDS}-stage limit is reached. Remove a stage from the list below before adding another.</p>{/if}
   <form onsubmit={add}><fieldset disabled={loading || mutationBusy || stages.length >= MAX_CONTEXT_RECORDS}><legend>Add a stage</legend>
     <div class="fields"><label>Stage kind<select bind:value={kind}>{#each INCIDENT_STAGE_KINDS as value}<option value={value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
       <label>Evidence basis<select bind:value={basis}>{#each INCIDENT_STAGE_BASES as value}<option value={value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label></div>

@@ -104,7 +104,7 @@ test('Lookup recheck owns an explicit outcome draft and retains a saved question
   await expect.poll(async () => (await readBrowserLocalCollection(page, 'cases')).records[0]!.value.evidenceHistory.length).toBe(2);
   // Reveal was cancelled, so reopen the section deliberately after confirming
   // persistence. A missing comparison cannot be hidden by automatic scrolling.
-  await page.getByRole('button', { name: 'Expand Case and response evidence', exact: true }).click();
+  await page.getByRole('button', { name: 'Expand details: Case and response evidence', exact: true }).click();
   const comparison = card.locator('.recheck-comparison'), form = comparison.getByRole('form', { name: 'Record Lookup recheck' });
   await expect(form).toBeVisible();
   const save = form.getByRole('button', { name: 'Record reviewed recheck outcome' });

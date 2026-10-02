@@ -6,7 +6,7 @@ import { documentationSearchDocuments } from '../frontend/src/lib/documentation-
 
 test('the console palette searches documentation without reading saved work or retaining the query', async ({ page }) => {
   await page.goto('/dashboard');
-  const trigger = page.getByRole('button', { name: 'Open console navigation' });
+  const trigger = page.getByRole('button', { name: 'Search console navigation' });
   await trigger.click();
   const dialog = page.getByRole('dialog', { name: 'Go to', exact: true });
   await dialog.getByRole('button', { name: 'Documentation', exact: true }).click();
