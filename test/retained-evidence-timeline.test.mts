@@ -95,7 +95,8 @@ test('all admitted pins remain searchable beyond the former 2,000-entry projecti
 
 test('full relationship membership stays searchable and unavailable clocks never become current', () => {
   const domains = Array.from({ length: 50 }, (_, index) => `member-${String(index).padStart(2, '0')}.example`);
-  const relationship = createRelationshipObservation({ type: 'ip_address', value: '192.0.2.10', domains }, { retainedAt: STORED_AT });
+  // Synthetic, never queried; current infrastructure admission requires public scope.
+  const relationship = createRelationshipObservation({ type: 'ip_address', value: '11.12.13.14', domains }, { retainedAt: STORED_AT });
   for (const observedAt of [null, '', '2026-07-20T00:00:00', '2026-07-22T00:00:00.000Z']) {
     const timeline = buildRetainedEvidenceTimeline({ relationships: [{ ...relationship, observedAt }], now: STORED_AT });
     assert.equal(timeline.items[0]?.freshness, 'unknown');
@@ -192,7 +193,7 @@ test('retained evidence timeline keeps observation, storage, source, and owner c
   });
   const relationship = createRelationshipObservation({
     type: 'ip_address',
-    value: '203.0.113.8',
+    value: '11.12.13.14',
     domains: ['timeline.invalid', 'related.invalid'],
   }, {
     observedAt: OBSERVED_AT,

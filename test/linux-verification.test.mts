@@ -21,13 +21,15 @@ describe('isolated Linux verification', () => {
       assert.deepEqual(await parseLinuxVerificationArguments([`--group=${group}`]), expected);
       assert.deepEqual(await parseLinuxVerificationArguments(['--group', group]), expected);
     }
-    assert.deepEqual(await parseLinuxVerificationArguments(['--focused', '--list', 'test/linux-verification.test.mts']), {
-      mode: 'focused', arguments: ['--focused', '--list', 'test/linux-verification.test.mts'],
-    });
+    for (const changedPath of ['test/linux-verification.test.mts', 'unknown/file.mts']) {
+      assert.deepEqual(await parseLinuxVerificationArguments(['--focused', '--list', changedPath]), {
+        mode: 'focused', arguments: ['--focused', '--list', changedPath],
+      });
+    }
     for (const args of [
       ['--focused'], ['--focused', '--changed'], ['--focused', '--list'],
       ['--focused', '../outside.mts'], ['--focused', '/absolute.mts'], ['--focused', 'tools/../outside.mts'],
-      ['--focused', 'tools/$(command).mts'], ['--focused', 'unknown/file.mts'],
+      ['--focused', 'tools/$(command).mts'],
       ['--focused', 'test/linux-verification.test.mts', 'test/linux-verification.test.mts'],
       ['--focused', '--full'], ['--group=unknown'], ['--group=unit', '--full'],
       ['--full', '--list'], ['--build-image', '--full'], ['--privileged'],
