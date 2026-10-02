@@ -1,9 +1,6 @@
 import type { CaseResponsePacket } from './case-response-packet-types.mts';
 import { RESPONSE_AUTHORISATION_CONFIRMATION_IDS, responseContactLabel as contactLabel } from './case-response-packet-vocabulary.mts';
-
-function escapeMarkdown(value: string): string {
-  return value.replace(/([\\`*_[\]<>|])/gu, '\\$1').replace(/\r?\n/gu, ' ');
-}
+import { escapeCaseMarkdownInline as escapeMarkdown } from './case-markdown.mts';
 
 /** Render only the projected packet, never the source Case or private inputs. */
 export function renderCaseResponsePacket(packet: CaseResponsePacket): { markdown: string; email: string } {
@@ -153,12 +150,12 @@ export function renderCaseResponsePacket(packet: CaseResponsePacket): { markdown
     `Reviewed packet SHA-256: ${digestSha256}`,
     'Attach the reviewed packet (and any separately reviewed evidence files) through the recipient’s approved submission channel; this message does not embed or transmit attachments.',
     '',
-    responseLifecycle.latestProviderOutcome
-      ? `Provider outcome time: ${responseLifecycle.latestProviderOutcome.occurredAt} (${responseLifecycle.latestProviderOutcome.outcome.replaceAll('_', ' ')})`
-      : `Provider outcome time: Withheld because the typed event state is ${responseLifecycle.providerOutcomeState}.`,
-    responseLifecycle.latestObservedChangeAt
-      ? `Independently observed change time: ${responseLifecycle.latestObservedChangeAt}`
-      : `Independently observed change time: Withheld because the independent change state is ${responseLifecycle.observedChangeState}.`,
+    ...(responseLifecycle.latestProviderOutcome
+      ? [`Provider outcome time: ${responseLifecycle.latestProviderOutcome.occurredAt} (${responseLifecycle.latestProviderOutcome.outcome.replaceAll('_', ' ')})`]
+      : []),
+    ...(responseLifecycle.latestObservedChangeAt
+      ? [`Independently observed change time: ${responseLifecycle.latestObservedChangeAt}`]
+      : []),
     '',
     'Please review this report under the applicable abuse and acceptable-use policies.',
     '',

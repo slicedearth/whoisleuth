@@ -22,6 +22,7 @@ import { createCase, updateCase } from '../frontend/src/lib/analysis/case-model.
 import { validateOfflineArtifactStructure } from '../cli/offline-artifact-validation.mts';
 import { buildCaseResponseReviewInputs } from '../packages/cases/case-response-packet.mts';
 import { validateCaseResponseReviewInputs } from '../packages/cases/case-response-review-inputs.mts';
+import { renderCaseResponsePacket } from '../packages/cases/case-response-packet-render.mts';
 
 const NOW = '2026-07-28T02:00:00.000Z';
 
@@ -139,6 +140,41 @@ function packetInput(caseRecord: ReturnType<typeof reviewedCase>) {
 }
 
 describe('case response packet', () => {
+  test('keeps Markdown prose and URLs inert while preserving exact JSON and email evidence', async () => {
+    const record = reviewedCase();
+    for (const harm of ['# Injected heading', '- Injected bullet', '1. Injected list', '---', '[Link](https://other.example/)']) {
+      const input = { ...packetInput(record), observedHarm: harm };
+      const result = await buildCaseResponsePacket(record, input, NOW);
+      assert.equal(result.json.incident.observedHarm, harm);
+      assert.ok(result.email.includes(harm));
+      assert.equal(result.markdown.split('\n').includes(harm), false);
+      assert.ok(result.email.includes(input.abusiveUrls[0]!));
+      assert.equal(result.json.incident.abusiveUrls[0], input.abusiveUrls[0]);
+      assert.ok(result.markdown.includes('https\\://report.example/sign-in?campaign=one'));
+      assert.ok(await verifyCaseResponsePacketIntegrity(result.json));
+    }
+  });
+
+  test('recipient email omits absent lifecycle placeholders and preserves independently available outcomes', async () => {
+    const record = reviewedCase();
+    const { json } = await buildCaseResponsePacket(record, packetInput(record), NOW);
+    assert.ok(json.responseLifecycle.latestProviderOutcome);
+    for (const provider of [false, true]) for (const change of [false, true]) {
+      const packet: Parameters<typeof renderCaseResponsePacket>[0] = { ...json, responseLifecycle: { ...json.responseLifecycle,
+        latestProviderOutcome: provider ? json.responseLifecycle.latestProviderOutcome : null,
+        latestObservedChangeAt: change ? NOW : null,
+      } };
+      const before: string = JSON.stringify(packet);
+      const rendered = renderCaseResponsePacket(packet);
+      assert.equal(rendered.email.includes('Provider outcome time:'), provider);
+      assert.equal(rendered.email.includes('Independently observed change time:'), change);
+      assert.doesNotMatch(rendered.email, /Withheld because|typed event state|independent change state/u);
+      assert.match(rendered.markdown, /Provider outcome time:/u);
+      assert.match(rendered.markdown, /Independently observed change time:/u);
+      assert.equal(JSON.stringify(packet), before);
+    }
+  });
+
   test('selected observation hostnames survive offline packet verification and bind the reviewed digest', async () => {
     const caseRecord = reviewedCase();
     const input = packetInput(caseRecord);

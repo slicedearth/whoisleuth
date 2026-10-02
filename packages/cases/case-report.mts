@@ -23,6 +23,7 @@ import {
 import { buildCaseResponseLifecycleSummary, CASE_EVIDENCE_RELATION_STANCES } from './case-response-model.mts';
 import { normalizeCaseBrandProfileIds } from './case-brand-profile-references.mts';
 import { CASE_RECHECK_CONDITIONS } from './case-recheck-model.mts';
+import { escapeCaseMarkdownInline as escapeMarkdownInline } from './case-markdown.mts';
 import {
   CASE_REPORT_SCHEMA,
   CASE_REPORT_SCHEMA_VERSION,
@@ -119,17 +120,6 @@ type CaseReportJson = {
   responseLifecycle: ReturnType<typeof buildCaseResponseLifecycleSummary>;
   limitations: string;
 };
-
-function escapeMarkdownInline(text: unknown): string {
-  return String(text)
-    .replace(/[\r\n\u2028\u2029]+/g, ' ')
-    .replace(/([\\`*_{}\[\]<>()#+!|~])/g, '\\$1')
-    // GFM autolinks bare URLs independently of ordinary link syntax. Break
-    // the scheme or the first `www.` separator without making normal domains,
-    // dates, and prose noisy in the report source.
-    .replace(/\b([a-z][a-z0-9+.-]{1,31}):(?=\/\/)/gi, '$1\\:')
-    .replace(/\bwww\.(?=\S)/gi, 'www\\.');
-}
 
 /**
  * Escapes a multiline note body for safe inclusion in a Markdown blockquote.
