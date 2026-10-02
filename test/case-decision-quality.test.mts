@@ -124,6 +124,25 @@ test('multiple selected types merge checks without downgrading a required check'
   );
 });
 
+test('timed readiness requires an explicit valid observation time, not the record creation time', () => {
+  const base = createCase({ domain: 'review.example', tags: caseTagsWithTypes([], ['phishing']) }, NOW);
+  for (const observedAt of [null, '', 'invalid', '2026-09-01', '2026-09-01T08:00:00', NOW, '2026-09-01T18:00:00+10:00']) {
+    for (const kind of ['evidencePin', 'sighting'] as const) {
+      const saved = updateCase([base], base.id, kind === 'evidencePin' ? {
+        evidencePin: { label: 'Page observation', source: 'Local capture', value: 'Page title', observedAt: NOW },
+      } : { sighting: { state: 'analyst_confirmed', category: 'website', source: 'Local capture', observedAt: NOW } }, NOW).record;
+      // Exercise the projection independently of the normaliser's own timestamp validation.
+      const record = kind === 'evidencePin'
+        ? { ...saved, evidencePins: saved.evidencePins.map((pin) => ({ ...pin, observedAt })) }
+        : { ...saved, sightings: saved.sightings.map((sighting) => ({ ...sighting, observedAt })) };
+      const row = buildCaseTypeEvidenceReadiness(record).rows.find((item) => item.id === 'timed_observation');
+      const usable = observedAt === NOW || observedAt === '2026-09-01T18:00:00+10:00';
+      assert.equal(row?.state, usable ? 'present' : 'missing', `${kind}: ${observedAt}`);
+      assert.equal(row?.evidence, usable ? '1 retained timed observation' : 'No retained source observation with a usable time');
+    }
+  }
+});
+
 test('free-text plans and negated assertions do not satisfy typed malware evidence', () => {
   let record = createCase({
     domain: 'review.example',

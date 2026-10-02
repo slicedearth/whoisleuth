@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow } from './helpers';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
 
 // Data-heavy Lookup evidence presentation and accessibility coverage.
@@ -8,6 +9,41 @@ function analystQuestion(page: import('@playwright/test').Page) {
   return page.getByRole('region', { name: 'Question and depth guidance' })
     .getByLabel('Analyst question');
 }
+
+test('the service review retains all admitted nameserver and mail dependencies plus the HTTP host', async ({ page }, testInfo) => {
+  const fixture = sectionedLookupFixture('dependencies.example');
+  Object.assign(fixture.availability.dns, {
+    status: 'success', complete: true,
+    diagnostics: { cname: { status: 'not_found' }, https: { status: 'not_found' }, ns: { status: 'success' }, mx: { status: 'success' } },
+    records: {
+      ...fixture.availability.dns.records,
+      ns: Array.from({ length: 12 }, (_, index) => `ns-${index}.provider.example`),
+      mx: Array.from({ length: 12 }, (_, index) => ({ priority: index, exchange: `mx-${index}.provider.example` })),
+    },
+  });
+  let requests = 0;
+  await page.route('**/api/lookup?*', route => {
+    requests += 1;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture) });
+  });
+  await page.goto('/lookup');
+  await page.locator('#query').fill('dependencies.example');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await page.getByRole('button', { name: 'Expand Web and DNS evidence' }).click();
+  const review = page.locator('details.dependency-review');
+  await review.locator(':scope > summary').click();
+  await expect(review.locator('.dependency-grid > article')).toHaveCount(25);
+  await expect(review).toContainText('25 dependency observations retained');
+  await expect(review.locator('.dependency-grid').getByText('mx-11.provider.example', { exact: true })).toBeVisible();
+  await expect(review.locator('.dependency-grid > article').filter({ hasText: 'HTTP' })).toContainText('www.dependencies.example');
+  expect(requests).toBe(1);
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark']) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
+    await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await review.screenshot({ path: testInfo.outputPath(`dependencies-${width}-${theme}.png`) });
+  }
+});
 
 test('a data-heavy Lookup result groups evidence into navigable sections', {
   tag: [

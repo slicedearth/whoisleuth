@@ -91,6 +91,7 @@
     }
     return { nodes: [...nodes.values()], links };
   });
+  const unreviewed = $derived(Object.entries(review.unreviewedRecords).filter(([, count]) => count > 0));
 
   function dependencyStateLabel(dependency: ServiceDependencyReview['dependencies'][number]): string {
     if (dependency.state !== 'unsupported') return dependency.state.replaceAll('_', ' ');
@@ -108,6 +109,9 @@
     <span class:attention={review.state === 'review'} class:unavailable={review.state === 'unavailable'}>{review.label}</span>
   </summary>
   <div class="body">
+    {#if unreviewed.length}
+      <p role="note">Records not reviewed: {unreviewed.map(([kind, count]) => `${count} ${kind}`).join(', ')}. Their validity and dependencies are unknown. The accepted DNS records remain available in DNS evidence.</p>
+    {/if}
     <p class="intro">Surface observed DNS and HTTP service dependencies for a conservative manual review. WHOISleuth does not follow targets or test whether a service can be claimed.</p>
     <label class="scope-control">
       <span>Reviewed service scope <small>Optional, local to this Lookup view</small></span>
