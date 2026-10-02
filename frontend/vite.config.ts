@@ -1,15 +1,12 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import { readFile } from 'node:fs/promises';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { build, defineConfig, type Plugin } from 'vite';
-import { normalizeBoundedSemanticVersion } from '../packages/analysis/semantic-version.mts';
+import { frontendBuildIdentity } from './build-identity.ts';
 import { browserThirdPartyNoticesPlugin } from '../tools/third-party-notices.mts';
 import { frontendWorkerBuild } from '../tools/frontend-worker-build.mts';
 
 const THEME_INIT_PATH = fileURLToPath(new URL('./src/theme-init.ts', import.meta.url));
 const THEME_INIT_ASSET = 'theme-init.js';
-const ROOT_PACKAGE_PATH = fileURLToPath(new URL('../package.json', import.meta.url));
 
 export const LOCAL_API_PROXY = {
   target: 'http://localhost:3000',
@@ -17,30 +14,6 @@ export const LOCAL_API_PROXY = {
   // browser-facing development host instead of rewriting it to the API host.
   changeOrigin: false,
 };
-
-async function applicationVersion(): Promise<string> {
-  const document = JSON.parse(await readFile(ROOT_PACKAGE_PATH, 'utf8')) as { version?: unknown };
-  return normalizeBoundedSemanticVersion(document.version, 'Root package');
-}
-
-function buildRevision(): string {
-  const candidates = [
-    process.env.WHOISLEUTH_BUILD_REVISION,
-    process.env.COMMIT_REF,
-    process.env.DEPLOY_COMMIT_REF,
-    process.env.GITHUB_SHA,
-  ];
-  for (const value of candidates) {
-    const normalized = String(value ?? '').trim().toLowerCase();
-    if (/^[a-f0-9]{7,64}$/u.test(normalized)) return normalized;
-  }
-  try {
-    const local = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().toLowerCase();
-    return /^[a-f0-9]{7,64}$/u.test(local) ? local : 'local';
-  } catch {
-    return 'local';
-  }
-}
 
 async function compileThemeInitializer(mode: string): Promise<string> {
   // Bundle the same preference owners used by the client into the blocking
@@ -100,11 +73,12 @@ function themeInitializerPlugin(): Plugin {
 }
 
 export default defineConfig(async () => {
+  const identity = frontendBuildIdentity();
   const workerBuild = frontendWorkerBuild(fileURLToPath(new URL('.', import.meta.url)));
   return {
     define: {
-      __WHOISLEUTH_VERSION__: JSON.stringify(await applicationVersion()),
-      __WHOISLEUTH_BUILD_REVISION__: JSON.stringify(buildRevision()),
+      __WHOISLEUTH_VERSION__: JSON.stringify(identity.applicationVersion),
+      __WHOISLEUTH_BUILD_REVISION__: JSON.stringify(identity.buildRevision),
     },
     plugins: [
       themeInitializerPlugin(),
