@@ -5,6 +5,38 @@ import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
 import { PUBLIC_REFERENCE_DESTINATIONS } from '../frontend/src/lib/public-reference-navigation';
 import { glossaryTerms, guideFaqs, publicGuideGoals, resultStates, toolGuides, referenceGuides } from '../frontend/src/lib/public-guide';
 
+test('missing-page artefact provides usable navigation without a client runtime', async ({ browser, request }, testInfo) => {
+  const missing = await request.get('/missing-page?private=not-for-display');
+  expect(missing.status()).toBe(404);
+  const body = await missing.text();
+  expect(body).toContain('Page not found');
+  expect(body).not.toContain('not-for-display');
+  expect(body).not.toContain('Cannot GET');
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  try {
+    const page = await context.newPage();
+    for (const theme of ['light', 'dark'] as const) {
+      await page.goto('/404');
+      // Exercise both CSS palettes while application scripts remain disabled.
+      await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
+      await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow');
+      for (const viewport of [{ width: 320, height: 700 }, { width: 390, height: 844 }, { width: 1024, height: 768 }, { width: 1280, height: 720 }]) {
+        await page.setViewportSize(viewport);
+        await expect(page.getByRole('heading', { level: 1, name: 'Page not found' })).toBeVisible();
+        await expect(page.getByRole('navigation', { name: 'Continue browsing' }).getByRole('link')).toHaveCount(3);
+        await expectNoHorizontalOverflow(page);
+        if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`not-found-${theme}-${viewport.width}.png`), fullPage: true });
+      }
+    }
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('link', { name: 'WHOISleuth', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('link', { name: 'Homepage', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/$/u);
+  } finally { await context.close(); }
+});
+
 for (const theme of ['light', 'dark'] as const) {
   test(`every reference introduction remains readable on mobile and tablet in ${theme}`, async ({ page }, testInfo) => {
     test.slow();

@@ -622,6 +622,22 @@ function apiErrorHandler(error: unknown, _req: RequestLike, res: ResponseLike, n
 }
 
 app.use('/api', apiErrorHandler);
+app.use('/api', (_req: Request, res: Response) => {
+  res.status(404).json({ error: 'Endpoint not found', errorCode: 'NOT_FOUND' });
+});
+
+function notFoundPageHandler(filename: string) {
+  return (req: Request, res: Response) => {
+    res.status(404).setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    if (req.method !== 'GET' && req.method !== 'HEAD') return res.type('text/plain').send('Not found\n');
+    return res.sendFile(filename, error => {
+      if (error && !res.headersSent && !res.destroyed) res.status(404).type('text/plain').send('Not found\n');
+    });
+  };
+}
+
+app.use(prerenderedHtmlRateLimit, notFoundPageHandler(path.join(svelteBuildDir, '404.html')));
 
 // Static-file and non-API errors must not fall through to the environment-
 // dependent development renderer, which includes internal stack traces.
@@ -651,5 +667,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   startServer();
 }
 
-export { app, isHttps, usesSecureCookies, requestOriginContext, requireAuth, requireNetworkRequestAdmission, rateLimit, requireFeature, apiErrorHandler, pageErrorHandler, registerNetworkApiRoutes, sendPrerenderedHtmlFile, sendUnexpectedApiError, startServer };
+export { app, isHttps, usesSecureCookies, requestOriginContext, requireAuth, requireNetworkRequestAdmission, rateLimit, requireFeature, apiErrorHandler, pageErrorHandler, registerNetworkApiRoutes, sendPrerenderedHtmlFile, sendUnexpectedApiError, notFoundPageHandler, startServer };
 export type { NetworkRouteServices };

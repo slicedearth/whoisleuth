@@ -7,6 +7,7 @@ import { WHOISLEUTH_SITE_ORIGIN } from '../packages/analysis/project-metadata.mt
 
 const PRERENDERED_ROUTE_DEFINITIONS = Object.freeze([
   { path: '/', indexed: true },
+  { path: '/404', indexed: false },
   { path: '/brands', indexed: false },
   { path: '/bulk', indexed: false },
   { path: '/cases', indexed: false },

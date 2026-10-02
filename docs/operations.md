@@ -352,6 +352,11 @@ Static routes such as `/lookup`, `/bulk`, and `/monitor` are independent
 prerendered entries. API routes are rewrites to thin functions that call the
 same shared modules as Express.
 
+The build includes `404.html`, which the static host serves for unknown page
+addresses with HTTP 404. Express serves the same page and returns bounded JSON
+for unknown `/api/` endpoints. Neither response reflects the requested address;
+the page needs no client runtime and is excluded from search indexing.
+
 Bulk makes one compact `/api/lookup` call per domain with bounded browser
 concurrency. It does not hold one serverless invocation open for the complete
 list.
