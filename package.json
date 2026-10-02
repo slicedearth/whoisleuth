@@ -147,6 +147,11 @@
     "tldts": "^7.4.14",
     "undici": "^8.11.0"
   },
+  "overrides": {
+    "retire": {
+      "basic-ftp": "6.2.1"
+    }
+  },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
