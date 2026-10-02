@@ -992,6 +992,16 @@ describe('continuous integration workflow', () => {
       assert.equal(upload.if, 'always()');
       assert.equal(upload.with?.['retention-days'], 14);
     }
+    assert.ok(workflowSteps(workflow).some(step => step.run === 'npm run test:mutation'));
+    const browserJob = requiredValue(Object.values(workflow.jobs).find(job =>
+      job.steps.some(step => step.run === 'npm run test:e2e:cross-browser')));
+    assert.equal(browserJob.env?.WHOISLEUTH_E2E_USE_BUILD, '1');
+    const commands = browserJob.steps.flatMap(step => step.run ? [step.run] : []);
+    const suite = commands.indexOf('npm run test:e2e:cross-browser');
+    const build = commands.indexOf('npm run verification:ci -- --group=browser-build');
+    const browsers = commands.indexOf('npm run test:e2e:critical:install');
+    assert.ok(build >= 0 && build < suite, 'verify the production build before browser execution');
+    assert.ok(browsers >= 0 && browsers < suite, 'install the declared engines before browser execution');
   });
 });
 

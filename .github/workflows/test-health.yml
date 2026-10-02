@@ -39,6 +39,8 @@ jobs:
           WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER: '10'
           WHOISLEUTH_FAST_CHECK_SEED: ${{ github.run_number }}
         run: npm run test:properties
+      - name: Exercise critical regression assertions
+        run: npm run test:mutation
       - name: Verify retained timing contract without rewriting it
         run: npm run verification:timing:check
       - name: Report offline retained source health
@@ -91,3 +93,45 @@ jobs:
             ${{ runner.temp }}/verification-timing-unit-candidate.json
           if-no-files-found: ignore
           retention-days: 14
+
+  cross-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      WHOISLEUTH_E2E_USE_BUILD: '1'
+      WHOISLEUTH_PLAYWRIGHT_RUN_LABEL: weekly-cross-browser
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --include=optional --ignore-scripts --audit=false
+      - name: Build and verify the frontend
+        run: npm run verification:ci -- --group=browser-build
+      - name: Install pinned browser engines
+        run: npm run test:e2e:critical:install
+      - name: Run complete cross-browser specifications without retries
+        run: npm run test:e2e:cross-browser
+      - name: Summarise browser results
+        if: always()
+        run: npm run test:e2e:summary
+      - name: Retain browser evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: weekly-cross-browser-evidence
+          path: |
+            playwright-results.json
+            playwright-report/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Clean generated browser artefacts
+        if: always()
+        run: npm run verification:artifacts -- --cleanup=browser

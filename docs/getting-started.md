@@ -275,7 +275,8 @@ navigation. Run that same isolated packet against a verified build with
 The targeted cross-browser packet reuses complete functional specifications in
 Firefox and WebKit: authentication, workspace isolation and encryption, Case
 recovery and returns, offline evidence, source progress and public navigation.
-It keeps the same production server, fixture guards and zero-retry policy:
+It runs weekly in Test health and keeps the same production server, fixture
+guards and zero-retry policy. Run it locally with:
 
 ```bash
 npx playwright install firefox webkit

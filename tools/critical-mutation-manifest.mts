@@ -17,7 +17,13 @@ export type CriticalMutant = Readonly<{
     | 'evidence_completeness'
     | 'protocol_null_mx'
     | 'observation_time_order'
-    | 'comparison_source_qualification';
+    | 'comparison_source_qualification'
+    | 'private_import_fields'
+    | 'replay_source_qualification'
+    | 'client_deadline_bound'
+    | 'retained_fixture_freshness'
+    | 'retired_contract_refusal'
+    | 'verification_inventory_identity';
   search: string;
   replacement: string;
   focusedTests: readonly string[];
@@ -39,6 +45,39 @@ export function isCriticalMutationSource(relativePath: string): boolean {
 }
 
 export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.freeze([
+  Object.freeze({
+    id: 'lookup-import-rejects-private-fields', area: 'private_import_fields',
+    search: "const source = record(value, 'Lookup evidence RDAP source');",
+    replacement: "const source = record(value, 'Lookup evidence RDAP source'); delete source.raw;",
+    focusedTests: Object.freeze(['test/lookup-evidence-replay.test.mts']), timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'replay-requires-admitted-source-state', area: 'replay_source_qualification',
+    search: "return complete === true && ['complete', 'success', 'provided'].includes(canonical);",
+    replacement: 'return complete === true;',
+    focusedTests: Object.freeze(['test/lookup-evidence-replay-diff.test.mts']), timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'injected-client-deadline-remains-bounded', area: 'client_deadline_bound',
+    search: 'Math.min(LOOKUP_CLIENT_TIMEOUT_MS, Math.max(1, Math.round(Number(options.timeoutMs))))',
+    replacement: 'Math.max(1, Math.round(Number(options.timeoutMs)))',
+    focusedTests: Object.freeze(['test/lookup-request.test.mts']), timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'retained-fixture-age-affects-health', area: 'retained_fixture_freshness',
+    search: 'ageDays < 0 || ageDays > maxAgeDays', replacement: 'false',
+    focusedTests: Object.freeze(['test/registry-fixture-tooling.test.mts']), timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'retired-contract-cannot-be-read-or-written', area: 'retired_contract_refusal',
+    search: '|| contract.readable\n        || contract.emitted\n        || !contract.exactKeys', replacement: '|| !contract.exactKeys',
+    focusedTests: Object.freeze(['test/schema-lifecycle-variants.test.mts']), timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'timing-profile-rejects-unknown-tests', area: 'verification_inventory_identity',
+    search: 'if (missing.length || unknown.length)', replacement: 'if (missing.length)',
+    focusedTests: Object.freeze(['test/verification-architecture.test.mts']), timeoutMs: 20_000,
+  }),
   Object.freeze({
     id: 'authority-dns-delegation-required',
     area: 'authority_availability',
