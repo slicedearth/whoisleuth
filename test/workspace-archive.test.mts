@@ -441,6 +441,46 @@ describe('portable workspace archive', () => {
     assert.deepEqual(archive.sections.cases.cases[0]?.brandProfileIds, ['profile-one']);
   });
 
+  test('restores populated current collections through serialisation, preview and the actual merge path', async () => {
+    const source = input();
+    const before = structuredClone(source);
+    const archive = JSON.parse(JSON.stringify(await buildWorkspaceArchive(source, { generatedAt: NOW })));
+    const target = emptyInput();
+    const preview = await previewWorkspaceArchive(archive, target, { selectedSectionIds: [...WORKSPACE_ARCHIVE_SECTION_IDS] });
+    assert.equal(preview.unsupportedCount, 0);
+    assert.ok(preview.sections.every(section => section.status === 'ready'));
+    const restored = mergeReadyWorkspaceArchiveData(target, preview.sections.filter(section => section.id !== 'settings'), NOW);
+    const document = (id: string) => {
+      const result = restored.find(section => section.id === id);
+      assert.ok(result, `${id}: restoration result`);
+      return result.document;
+    };
+    const first = (id: string) => {
+      const records = document(id);
+      assert.ok(Array.isArray(records), id);
+      assert.equal(records.length, 1, id);
+      return recordValue(records[0]);
+    };
+    // Independent retained values catch a reader silently returning defaults
+    // even when an empty lifecycle fixture would still round-trip.
+    assert.equal(first('cases').domain, 'archive-one.invalid');
+    assert.deepEqual(first('cases').brandProfileIds, ['profile-one']);
+    assert.equal(first('campaigns').name, 'Archive review');
+    assert.deepEqual(first('brandProfiles').officialDomains, ['official.invalid']);
+    assert.equal(first('shortlist').availability, 'unknown');
+    assert.deepEqual(first('detectionRules').conditions, [{ field: 'status', operator: 'equals', value: 'new' }]);
+    assert.deepEqual(first('relationshipObservations').domains, ['archive-one.invalid', 'archive-two.invalid']);
+    assert.equal(first('bulkSessions').state, 'partial');
+    assert.equal(first('websiteSnapshots').domain, 'archive-one.invalid');
+    assert.equal(first('investigationTemplates').id, 'template-one');
+    assert.ok(Object.hasOwn(recordValue(document('watchlists')), 'Review'));
+    assert.equal((recordValue(document('bulkReview')).rows as unknown[]).length, 1);
+    assert.deepEqual(preview.sections.find(section => section.id === 'settings')?.normalizedSettings,
+      { activeProfileId: 'profile-one', theme: 'light' });
+    assert.deepEqual(source, before);
+    assert.deepEqual(target, emptyInput());
+  });
+
   test('accepts an exact version 5 archive and migrates it to an empty Review Item section', async () => {
     const archive = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
     removeSections(archive, ['analystReviewState', 'caseViews']);

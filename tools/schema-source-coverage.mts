@@ -54,7 +54,7 @@ export const MAX_SCHEMA_SOURCE_MANIFEST_BYTES = 2 * 1024 * 1024;
 export const SCHEMA_SOURCE_ROOTS = Object.freeze([
   'bin',
   'cli',
-  'frontend/src',
+  'frontend',
   'lib',
   'netlify/functions',
   'packages',
@@ -77,11 +77,6 @@ const SCHEMA_SOURCE_EXEMPT_FILES = new Set([
   'DISCLOSURE',
   'LICENSE',
   'NOTICE',
-  'frontend/analysis-tsconfig.json',
-  'frontend/package.json',
-  'frontend/svelte.config.ts',
-  'frontend/tsconfig.json',
-  'frontend/vite.config.ts',
   'netlify.toml',
   'package-lock.json',
   'package.json',
@@ -90,6 +85,7 @@ const SCHEMA_SOURCE_EXEMPT_FILES = new Set([
   'tsconfig.json',
 ]);
 const SCHEMA_SOURCE_IGNORED_DIRECTORY_NAMES = new Set([
+  '.svelte-kit',
   'build',
   'coverage',
   'node_modules',
@@ -184,6 +180,7 @@ type SourceTraversalState = {
   directories: number;
   entries: number;
   declaredBytes: number;
+  visiblePaths: ReadonlySet<string> | null;
 };
 
 function validateNonSourceFileLedger(): void {
@@ -240,6 +237,8 @@ async function collectFiles(
     for (const entry of entries) {
       const relative = path.posix.join(relativeDirectory, entry.name);
       const absolute = path.join(absoluteDirectory, entry.name);
+      if (state.visiblePaths && !state.visiblePaths.has(relative)) continue;
+      if (pathInside(relative, SCHEMA_SOURCE_EXEMPT_ROOTS)) continue;
       if (entry.isDirectory() && (
         SCHEMA_SOURCE_IGNORED_DIRECTORY_NAMES.has(entry.name)
         || relative === 'frontend/src/lib/generated'
@@ -318,13 +317,14 @@ async function gitSourceManifest(repositoryRoot: string): Promise<string[] | nul
   return paths.sort(ordinalCompare);
 }
 
-async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> {
+async function validateSchemaSourceScope(repositoryRoot: string): Promise<string[] | null> {
   const coveredRoots = new Set<string>(SCHEMA_SOURCE_ROOTS);
   const coveredFiles = new Set<string>(SCHEMA_SOURCE_ROOT_FILES);
   const manifest = await gitSourceManifest(repositoryRoot);
   if (manifest) {
     const observedNonSourceFiles = new Set<string>();
     for (const relative of manifest) {
+      if (pathInside(relative, SCHEMA_SOURCE_EXEMPT_ROOTS)) continue;
       if (pathInside(relative, coveredRoots)) {
         if (SOURCE_EXTENSIONS.has(path.extname(relative).toLowerCase())) continue;
         if (isConventionalMarkdown(relative) || isFrontendStylesheet(relative) || isBuildScript(relative)) continue;
@@ -346,7 +346,7 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
         throw new TypeError(`Schema source non-source file allowance is stale or missing: ${relative}`);
       }
     }
-    return;
+    return manifest;
   }
   let directories = 0;
   let entriesSeen = 0;
@@ -393,19 +393,31 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
     }
   };
   await visit(repositoryRoot, '', 0);
+  return null;
 }
 
 export async function discoverSchemaSources(
   repositoryRoot = DEFAULT_SCHEMA_SOURCE_REPOSITORY_ROOT,
 ): Promise<SchemaSourceDiscovery> {
   validateNonSourceFileLedger();
-  await validateSchemaSourceScope(repositoryRoot);
+  const manifest = await validateSchemaSourceScope(repositoryRoot);
+  // Discover checkout source from the same Git-visible inventory validated
+  // above; ignored editor and generated files are not additional inputs.
+  const visiblePaths = manifest ? new Set(manifest) : null;
+  for (const relative of manifest ?? []) {
+    let parent = path.posix.dirname(relative);
+    while (parent !== '.') {
+      visiblePaths!.add(parent);
+      parent = path.posix.dirname(parent);
+    }
+  }
   const traversal: SourceTraversalState = {
     files: [],
     nonSourceFiles: new Set<string>(),
     directories: 0,
     entries: 0,
     declaredBytes: 0,
+    visiblePaths,
   };
   for (const relativeRoot of SCHEMA_SOURCE_ROOTS) {
     await collectFiles(repositoryRoot, relativeRoot, traversal);

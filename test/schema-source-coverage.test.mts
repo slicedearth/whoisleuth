@@ -27,7 +27,7 @@ const POLICY_STATIC_EVALUATION_STEPS = 4_096;
 const POLICY_SOURCE_ROOTS = Object.freeze([
   'bin',
   'cli',
-  'frontend/src',
+  'frontend',
   'lib',
   'netlify/functions',
   'packages',
@@ -459,6 +459,22 @@ describe('schema source coverage', () => {
     await rm(path.join(root, 'frontend/src/styles/linked.css'));
     await writeFile(path.join(root, 'frontend/src/lib/components/stage.html'), '<script>{"schema":"whoisleuth.hidden"}</script>');
     await assert.rejects(discoverSchemaSources(root), /unclassified source path.*stage\.html/u);
+  });
+
+  test('discovers frontend build helpers without a filename exception and excludes generated and static assets', async (t) => {
+    const root = await fixtureRepository(t);
+    await writeFile(path.join(root, 'frontend/build-helper.ts'), 'export const revision = "fixture";\n');
+    await writeFile(path.join(root, 'frontend/vite.config.ts'), 'export default {};\n');
+    for (const directory of ['.svelte-kit', 'build', 'static']) {
+      await mkdir(path.join(root, 'frontend', directory));
+      await writeFile(path.join(root, 'frontend', directory, 'output.bin'), 'not source');
+    }
+    const expected = ['frontend/build-helper.ts', 'frontend/vite.config.ts', 'server.mts'];
+    assert.deepEqual((await discoverSchemaSources(root)).files, expected);
+    execFileSync('git', ['init', '--quiet'], { cwd: root, stdio: 'pipe' });
+    await writeFile(path.join(root, '.gitignore'), 'frontend/.svelte-kit/\nfrontend/build/\n.DS_Store\n');
+    await writeFile(path.join(root, 'frontend/.DS_Store'), 'ignored editor metadata');
+    assert.deepEqual((await discoverSchemaSources(root)).files, expected);
   });
 
   test('discovers ordinary modules and conventional documentation without per-file exceptions', async (t) => {
