@@ -5,6 +5,9 @@ import { recordValue, requiredValue, stringValue } from './value-assertions.mts'
 import { promises as dns } from 'node:dns';
 import { deferred } from './deferred.mts';
 import { fetchRdapFromBases } from '../lib/rdap.mts';
+import { skippedDnsIntelligence } from '../lib/dns-intelligence.mts';
+import { skippedTlsObservation } from '../lib/tls-intelligence.mts';
+import { skippedHttpObservation } from '../lib/http-intelligence.mts';
 
 test('RDAP absence confidence follows the deciding endpoint transport, including redirected failover', async () => {
   for (const scheme of ['http', 'https']) {
@@ -72,7 +75,13 @@ test('cancelling concurrent delegation and WHOIS does not leak a rejection or st
 async function availability(domain: string, options: unknown): Promise<Record<string, unknown>> {
   return recordValue(await checkDomainAvailability(
     domain,
-    options as Parameters<typeof checkDomainAvailability>[1],
+    {
+      collectDnsIntelligence: async () => skippedDnsIntelligence('Not collected by this registration fixture.'),
+      collectTlsIntelligence: async () => skippedTlsObservation(),
+      fetchHomepage: async () => ({ text: null, status: 'skipped', detail: 'Not collected by this registration fixture.', http: skippedHttpObservation() }),
+      fetchFaviconHash: async () => null,
+      ...options as Parameters<typeof checkDomainAvailability>[1],
+    },
   ));
 }
 

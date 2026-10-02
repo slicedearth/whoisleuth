@@ -1,8 +1,10 @@
 ARG PRIMARY_NODE_IMAGE
 ARG COMPATIBILITY_NODE_IMAGE
 ARG BROWSER_IMAGE
+ARG REDIS_IMAGE
 FROM ${PRIMARY_NODE_IMAGE} AS primary-node
 FROM ${COMPATIBILITY_NODE_IMAGE} AS compatibility-node
+FROM ${REDIS_IMAGE} AS redis-verification
 FROM ${BROWSER_IMAGE}
 
 ARG CODEQL_VERSION=2.27.1
@@ -35,11 +37,13 @@ RUN case "$TARGETARCH" in \
     && chmod +x /opt/pwsh/pwsh && rm /tmp/powershell.tar.gz
 COPY --from=primary-node /usr/local/ /usr/local/
 COPY --from=compatibility-node /usr/local/ /opt/node-compat/
+COPY --from=redis-verification /usr/local/bin/redis-server /usr/local/bin/redis-cli /opt/redis/bin/
 COPY linux-verification-entrypoint.sh /usr/local/bin/verify-checkout
 RUN chmod 755 /usr/local/bin/verify-checkout
 ENV PATH="/opt/codeql:/opt/pwsh:${PATH}" \
     WHOISLEUTH_CLI_RUNTIME_NODE=/opt/node-compat/bin/node \
     WHOISLEUTH_BROWSER_SYSTEM_DEPS=preinstalled \
+    WHOISLEUTH_VERIFICATION_REDIS_BIN_DIR=/opt/redis/bin \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     CI=1
 USER pwuser

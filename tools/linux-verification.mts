@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CI_CLI_RUNTIME_NODE_MAJOR, CI_COMMAND_GROUPS, parseCiVerificationArguments } from './ci-verification.mts';
 import { codeqlRamMegabytes } from './local-codeql.mts';
+import { REDIS_VERIFICATION_IMAGE } from './redis-verification.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECCOMP_SHA256 = 'cc3e61cabda6bbc1e53e54d27ba4d55a9d3be829b6dd1a596f4a7b31b1cc7849';
@@ -64,6 +65,7 @@ export function linuxVerificationImages(primary: string, browser: string, compat
     PRIMARY_NODE_IMAGE: `node:${primary}-bookworm-slim`,
     COMPATIBILITY_NODE_IMAGE: `node:${compatibility}-bookworm-slim`,
     BROWSER_IMAGE: `mcr.microsoft.com/playwright:v${browser}-noble`,
+    REDIS_IMAGE: REDIS_VERIFICATION_IMAGE,
   });
 }
 
@@ -75,7 +77,7 @@ export function linuxVerificationImageReference(reference: string, manifest: unk
   if (matches.length !== 1 || typeof matches[0]?.digest !== 'string' || !/^sha256:[a-f0-9]{64}$/u.test(matches[0].digest)) {
     throw new Error(`The verification image has no unique immutable manifest for ${platform}.`);
   }
-  return `${reference}@${matches[0].digest}`;
+  return `${reference.split('@')[0]}@${matches[0].digest}`;
 }
 
 export async function linuxVerificationRunArguments(options: Readonly<{

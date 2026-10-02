@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { linuxVerificationEnvironment, linuxVerificationImageReference, linuxVerificationImages, linuxVerificationRunArguments, parseLinuxVerificationArguments } from '../tools/linux-verification.mts';
 import { CI_COMMAND_GROUPS, criticalBrowserInstallArguments } from '../tools/ci-verification.mts';
+import { REDIS_VERIFICATION_IMAGE } from '../tools/redis-verification.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -61,6 +62,7 @@ describe('isolated Linux verification', () => {
     const manifest = { manifests: [amd, arm, { platform: { os: 'unknown', architecture: 'unknown' } }] };
     assert.equal(linuxVerificationImageReference('node:24.19.0-bookworm-slim', manifest, 'linux/arm64'), `node:24.19.0-bookworm-slim@${arm.digest}`);
     assert.equal(linuxVerificationImageReference('node:24.19.0-bookworm-slim', manifest, 'linux/amd64'), `node:24.19.0-bookworm-slim@${amd.digest}`);
+    assert.equal(linuxVerificationImageReference(REDIS_VERIFICATION_IMAGE, manifest, 'linux/arm64'), `redis:7.2.16-bookworm@${arm.digest}`);
     for (const invalid of [null, {}, { manifests: [amd] }, { manifests: [arm, arm] }, { manifests: [{ ...arm, digest: 'mutable' }] }]) {
       assert.throws(() => linuxVerificationImageReference('node:24.19.0-bookworm-slim', invalid, 'linux/arm64'), /unique immutable manifest/u);
     }
@@ -89,6 +91,7 @@ describe('isolated Linux verification', () => {
       PRIMARY_NODE_IMAGE: 'node:24.19.0-bookworm-slim',
       COMPATIBILITY_NODE_IMAGE: 'node:26-bookworm-slim',
       BROWSER_IMAGE: 'mcr.microsoft.com/playwright:v1.62.1-noble',
+      REDIS_IMAGE: REDIS_VERIFICATION_IMAGE,
     });
     for (const invalid of ['latest', '24', '24.19.0\n--privileged']) {
       assert.throws(() => linuxVerificationImages(invalid, '1.62.1'));

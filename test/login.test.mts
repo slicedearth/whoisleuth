@@ -7,6 +7,9 @@ import { recordValue, requiredValue } from './value-assertions.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
+// Exercise the function's trusted runtime boundary, with independent clients
+// for ordinary cases rather than consuming one shared unidentified bucket.
+process.env.SITE_ID = '01234567-89ab-cdef-0123-456789abcdef';
 
 const loginModule = await import('../netlify/functions/login.mts');
 const {
@@ -15,15 +18,17 @@ const {
   runLoginFunction,
 } = loginModule;
 const testDirectory = dirname(fileURLToPath(import.meta.url));
+let nextClient = 1;
+const clientHeaders = () => ({ 'x-nf-client-connection-ip': `2001:db8::${(nextClient++).toString(16)}` });
 
 function request(headers: Record<string, string>, password = process.env.SITE_PASSWORD) {
-  return runLoginFunction({ httpMethod: 'POST', headers, body: JSON.stringify({ password }) });
+  return runLoginFunction({ httpMethod: 'POST', headers: { ...clientHeaders(), ...headers }, body: JSON.stringify({ password }) });
 }
 
 function rawRequest(body: string) {
   return runLoginFunction({
     httpMethod: 'POST',
-    headers: { origin: 'https://example.com', host: 'example.com' },
+    headers: { ...clientHeaders(), origin: 'https://example.com', host: 'example.com' },
     body,
   });
 }
@@ -125,6 +130,7 @@ describe('login handler origin enforcement', () => {
     const response = await loginHandler(new Request('https://example.com/api/login', {
       method: 'POST',
       headers: {
+        ...clientHeaders(),
         'Content-Type': 'application/json',
         host: 'example.com',
         origin: 'https://example.com',
@@ -167,7 +173,7 @@ describe('login handler origin enforcement', () => {
   test('rejects malformed UTF-8 at the modern Request boundary', async () => {
     const response = await loginHandler(new Request('https://example.com/api/login', {
       method: 'POST',
-      headers: { host: 'example.com', origin: 'https://example.com' },
+      headers: { ...clientHeaders(), host: 'example.com', origin: 'https://example.com' },
       body: new Uint8Array([0xc3, 0x28]),
     }));
 

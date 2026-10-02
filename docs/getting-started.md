@@ -12,6 +12,11 @@ tasks.
 - Chromium for browser end-to-end tests
 - Bash, zsh, Fish and PowerShell (`pwsh`) for completion integration tests;
   these are not required by the unit or coverage lane
+- A local Docker engine for distributed-budget integration tests. These run the
+  actual scripts in a digest-pinned Redis container with synthetic state, no
+  network, published ports, persistent storage or host mounts. The first run
+  downloads the pinned image. The prepared Linux verification image includes
+  the same binaries and uses a private Unix socket instead of nested containers.
 
 Use the committed lockfile. Do not replace it with an independently resolved
 dependency tree.
