@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import express from 'express';
 
 import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from '../lib/security-headers.mts';
+import { checkPrerenderedHtmlRateLimit, getClientIp, PRERENDERED_HTML_RATE_LIMIT } from '../lib/rate-limit.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
@@ -183,5 +184,28 @@ describe('canonical route redirects', () => {
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('content-security-policy'), HTTP_BASELINE_CONTENT_SECURITY_POLICY);
+  });
+
+  test('missing pages enforce the shared HTML admission boundary before their file handler', async (t) => {
+    const now = Date.now();
+    t.mock.method(Date, 'now', () => now);
+    const identity = getClientIp({}, '127.0.0.1');
+    const admitted = await fetch(`${origin}/first-missing-page`);
+    assert.equal(admitted.status, 404);
+    await admitted.text();
+
+    // Fill the actual shared bucket without hundreds of redundant HTTP calls.
+    for (let index = 0; index < PRERENDERED_HTML_RATE_LIMIT.limit; index += 1) {
+      checkPrerenderedHtmlRateLimit(identity);
+    }
+    const refused = await fetch(`${origin}/another-missing-page`);
+    assert.equal(refused.status, 429);
+    assert.equal((await refused.json()).errorCode, 'RATE_LIMITED');
+    assert.ok(Number(refused.headers.get('retry-after')) > 0);
+    assert.doesNotMatch(refused.headers.get('content-type') ?? '', /text\/html/u);
+
+    const session = await fetch(`${origin}/api/session`);
+    assert.equal(session.status, 200, 'HTML capacity must not consume the independent API boundary');
+    await session.text();
   });
 });

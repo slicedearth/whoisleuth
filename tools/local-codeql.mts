@@ -141,6 +141,12 @@ const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
   // now has its own bounded request middleware. CodeQL does not recognize the
   // project-local limiter, so retain only this exact reviewed fingerprint.
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c95b56b6acb3e65b:1', primaryLocationStartColumnFingerprint: '23', reason: 'false_positive' as const }),
+  // Missing-page file responses use that same HTML limiter before the handler.
+  // An actual HTTP regression checks admitted 404, saturated 429/Retry-After
+  // and the independent session path. The analyser does not model this custom
+  // middleware factory. The isolated fixture only tests fixed-file semantics.
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '44571d1430ac2cda:1', primaryLocationStartColumnFingerprint: '34', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'test/server-routing.test.mts', primaryLocationLineHash: '36dabe8dfbdc8902:1', primaryLocationStartColumnFingerprint: '34', reason: 'used_in_tests' as const }),
   // Contact-route verification is preceded by its own bounded per-identity
   // limiter. CodeQL models the token verification as authorization but does
   // not follow the project-local Express middleware factory.
