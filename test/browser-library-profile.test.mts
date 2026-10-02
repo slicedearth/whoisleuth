@@ -14,6 +14,7 @@ import {
   MAX_SCRIPT_ELEMENTS,
   analyzeBrowserLibraries,
 } from '../lib/browser-library-profile.mts';
+import { MAX_SCRIPT_REFERENCE_LENGTH } from '../lib/static-html-analysis.mts';
 import { CISA_KEV_CATALOG } from '../lib/generated/cisa-kev-catalog.mts';
 import { RETIRE_BROWSER_CATALOG } from '../lib/generated/retire-browser-catalog.mts';
 import { sanitizeLookupChildProfiles } from '../lib/lookup-child-profile-contract.mts';
@@ -124,6 +125,29 @@ describe('bounded browser-library profile', () => {
     ]);
     assert.equal(requiredValue(profile.findings[1]).advisoryCount, 0);
     assert.equal(requiredValue(profile.findings[1]).knownExploitedCount, 0);
+  });
+
+  test('reference patterns share the isolated deadline and cannot turn a timeout into absence', async context => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const reference = `/${'1'.repeat(MAX_SCRIPT_REFERENCE_LENGTH - 1)}`;
+    const pending = analyzeBrowserLibraries({
+      html: Array.from({ length: MAX_SCRIPT_ELEMENTS }, () => `<script src="${reference}"></script>`).join(''),
+      observedAt: OBSERVED_AT,
+    });
+    context.mock.timers.tick(750);
+    const result = await pending;
+    assert.equal(result.status, 'partial');
+    assert.equal(result.complete, false);
+    assert.equal(result.truncated, true);
+    assert.equal(result.diagnostics.referencesExamined, MAX_SCRIPT_ELEMENTS);
+    assert.equal(result.diagnostics.referenceSignatureTimedOut, true);
+    assert.equal(result.diagnostics.inlineSignatureTimedOut, false);
+    assert.match(result.limitations.join(' '), /URL, filename and inline signature matching exceeded/u);
+    assert.doesNotMatch(JSON.stringify(result), /111111111111/u);
+    context.mock.timers.reset();
+    const recovered = await analyzeBrowserLibraries({ html: '<script src="/assets/angular-1.7.0.min.js"></script>', observedAt: OBSERVED_AT });
+    assert.equal(recovered.status, 'success');
+    assert.equal(recovered.findings[0]?.id, 'angularjs');
   });
 
   test('keeps an unmatched page neutral rather than claiming no libraries exist', async () => {

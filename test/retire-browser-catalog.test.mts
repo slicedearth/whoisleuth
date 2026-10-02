@@ -130,6 +130,11 @@ describe('pinned browser-library catalogue projection', () => {
         vulnerabilities: [],
       },
     }), { timeoutMs: 100 }), /isolated time limit/iu);
+    for (const uri of ['^([0-9]+)+$', '^/([0-9]+)+$']) {
+      assert.throws(() => qualifyRepositoryExpressions(projectRepository({
+        fixture: { extractors: { uri: [uri] }, vulnerabilities: [] },
+      }), { timeoutMs: 100 }), /isolated time limit/iu);
+    }
   });
 
   test('requires one explicit source and either check or write mode', () => {
