@@ -1,8 +1,6 @@
 <p align="center"><img src="frontend/static/favicon.svg" width="64" height="64" alt="WHOISleuth mark" /></p>
 <h1 align="center">WHOISleuth</h1>
 
-Retained multi-host infrastructure evidence supports exact hostname and alias owners, distinct certificate wildcard patterns, independently sourced provider roles, and qualified historical comparison. See [infrastructure observations](docs/infrastructure-observations.md) for local import, deliberate pivots, limits, and compatibility.
-
 <p align="center">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg" alt="License: AGPL-3.0-only" />
   <img src="https://img.shields.io/badge/node-%3E%3D24-brightgreen" alt="Node >= 24" />
@@ -53,6 +51,10 @@ WHOISleuth uses three analyst jobs: **Investigate**, **Respond** and **Assure**.
 The public [Resources hub](https://www.whoisleuth.com/resources) is the shortest
 user guide. [Application documentation](docs/application-guide.md) covers the
 browser tools and saved work.
+
+The [infrastructure inventory](docs/infrastructure-observations.md) reviews
+retained hostnames, DNS, certificate names and provider roles, with source-linked
+topology and historical comparison.
 
 The optional [local application](packages/local-application/README.md) runs the
 same Console on loopback with an explicitly selected filesystem workspace.

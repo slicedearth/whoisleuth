@@ -5,16 +5,16 @@ import { normalizeDomain } from '../evidence/domain-name.mts';
 import { canonicalIpAddress } from '../contracts/ip-address.mts';
 import { parseBoundedJson } from '../analysis/bounded-json.mts';
 import { technologyEvidenceRoles } from '../../lib/technology-evidence-role.mts';
-import { INFRASTRUCTURE_OBSERVATION_SCHEMA, INFRASTRUCTURE_OBSERVATION_VERSION, MAX_INFRASTRUCTURE_OBSERVATION_BYTES } from '../contracts/external-observation-interchange.mts';
+import {
+  INFRASTRUCTURE_OBSERVATION_SCHEMA, INFRASTRUCTURE_OBSERVATION_VERSION, MAX_INFRASTRUCTURE_OBSERVATION_BYTES,
+  MAX_INFRASTRUCTURE_HOSTS, MAX_INFRASTRUCTURE_DNS_ROWS, MAX_INFRASTRUCTURE_CERTIFICATES,
+  MAX_INFRASTRUCTURE_ROLES, MAX_INFRASTRUCTURE_SOURCES, MAX_INFRASTRUCTURE_LIMITATIONS, INFRASTRUCTURE_DNS_TYPES,
+} from '../contracts/external-observation-interchange.mts';
 
 export { INFRASTRUCTURE_OBSERVATION_SCHEMA, INFRASTRUCTURE_OBSERVATION_VERSION, MAX_INFRASTRUCTURE_OBSERVATION_BYTES };
-export const MAX_INFRASTRUCTURE_HOSTS = 128;
-export const MAX_INFRASTRUCTURE_DNS_ROWS = 512;
-export const MAX_INFRASTRUCTURE_CERTIFICATES = 32;
-export const MAX_INFRASTRUCTURE_ROLES = 128;
+export { MAX_INFRASTRUCTURE_HOSTS, MAX_INFRASTRUCTURE_DNS_ROWS, MAX_INFRASTRUCTURE_CERTIFICATES, MAX_INFRASTRUCTURE_ROLES, INFRASTRUCTURE_DNS_TYPES };
 export const INFRASTRUCTURE_SOURCE_FAMILIES = ['dns', 'certificate_log', 'tls', 'technology', 'ip_registration', 'routing', 'origin_observation', 'analyst'] as const;
 export const INFRASTRUCTURE_PROVIDER_ROLES = ['dns_operator', 'observed_edge', 'application_platform', 'framework_runtime', 'embedded_dependency', 'address_registration', 'routing_origin', 'observed_origin'] as const;
-export const INFRASTRUCTURE_DNS_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'PTR'] as const;
 export type InfrastructureProviderRole = typeof INFRASTRUCTURE_PROVIDER_ROLES[number];
 export type InfrastructureSource = { id: string; name: string; family: typeof INFRASTRUCTURE_SOURCE_FAMILIES[number]; evidenceClass: 'local_observation' | 'provider_report'; reference: string | null };
 export type InfrastructureDnsObservation = { sourceId: string; queriedName: string; ownerName: string; type: typeof INFRASTRUCTURE_DNS_TYPES[number]; observedAt: string; outcome: 'answered' | 'no_data' | 'nxdomain' | 'failed' | 'not_checked'; values: string[]; complete: boolean; truncated: boolean };
@@ -58,9 +58,9 @@ export function readInfrastructureObservation(raw: unknown): InfrastructureObser
   const scope = exact(root.scope, ['hostnames', 'dnsTypes', 'selection'], 'Infrastructure scope');
   const selection = enumeration(scope.selection, ['explicit_hosts', 'certificate_names'] as const, 'Selection scope');
   const hostnames = unique(array(scope.hostnames, 'Selected hostnames', MAX_INFRASTRUCTURE_HOSTS, selection === 'explicit_hosts' ? 1 : 0).map(hostname), 'Selected hostnames');
-  const dnsTypes = unique(array(scope.dnsTypes, 'Selected DNS types', 6).map(value => enumeration(value, INFRASTRUCTURE_DNS_TYPES, 'DNS type')), 'Selected DNS types');
+  const dnsTypes = unique(array(scope.dnsTypes, 'Selected DNS types', INFRASTRUCTURE_DNS_TYPES.length).map(value => enumeration(value, INFRASTRUCTURE_DNS_TYPES, 'DNS type')), 'Selected DNS types');
   const coverage = exact(root.coverage, ['state', 'truncated', 'detail'], 'Infrastructure coverage');
-  const sources = unique(array(root.sources, 'Infrastructure sources', 16, 1).map(rawSource => {
+  const sources = unique(array(root.sources, 'Infrastructure sources', MAX_INFRASTRUCTURE_SOURCES, 1).map(rawSource => {
     const source = exact(rawSource, ['id', 'name', 'family', 'evidenceClass', 'reference'], 'Infrastructure source');
     const reference = source.reference === null ? null : text(source.reference, 'Source reference', 300);
     if (reference !== null && /[?#]|\b(?:cookie|password|bearer)\s*[:=]/iu.test(reference)) throw new TypeError('Source references must not retain query strings, fragments or credentials.');
@@ -125,7 +125,7 @@ export function readInfrastructureObservation(raw: unknown): InfrastructureObser
   });
   unique(roles, 'Provider-role observation identities', row => JSON.stringify([row.sourceId, row.subjectType, row.subject, row.role, row.providerId, row.observedAt]));
   if (roles.some(row => row.subjectType === 'address' && !dns.some(answer => answer.values.includes(row.subject)))) throw new TypeError('Provider-role addresses must have explicit supporting DNS address observations within the snapshot.');
-  const result: InfrastructureObservation = { schema: INFRASTRUCTURE_OBSERVATION_SCHEMA, version: INFRASTRUCTURE_OBSERVATION_VERSION, id: identifier(root.id, 'Snapshot ID'), target: hostname(root.target), observedAt: at(root.observedAt), mode: enumeration(root.mode, ['supplied', 'selected_lookup', 'certificate_log'] as const, 'Collection mode'), scope: { hostnames, dnsTypes, selection: enumeration(scope.selection, ['explicit_hosts', 'certificate_names'] as const, 'Selection scope') }, coverage: { state: enumeration(coverage.state, ['complete', 'partial', 'failed'] as const, 'Coverage state'), truncated: flag(coverage.truncated), detail: text(coverage.detail, 'Coverage detail', 500) }, sources, dns, certificates, roles, limitations: unique(strings(root.limitations, 'Infrastructure limitations', 12, 300), 'Infrastructure limitations') };
+  const result: InfrastructureObservation = { schema: INFRASTRUCTURE_OBSERVATION_SCHEMA, version: INFRASTRUCTURE_OBSERVATION_VERSION, id: identifier(root.id, 'Snapshot ID'), target: hostname(root.target), observedAt: at(root.observedAt), mode: enumeration(root.mode, ['supplied', 'selected_lookup', 'certificate_log'] as const, 'Collection mode'), scope: { hostnames, dnsTypes, selection: enumeration(scope.selection, ['explicit_hosts', 'certificate_names'] as const, 'Selection scope') }, coverage: { state: enumeration(coverage.state, ['complete', 'partial', 'failed'] as const, 'Coverage state'), truncated: flag(coverage.truncated), detail: text(coverage.detail, 'Coverage detail', 500) }, sources, dns, certificates, roles, limitations: unique(strings(root.limitations, 'Infrastructure limitations', MAX_INFRASTRUCTURE_LIMITATIONS, 300), 'Infrastructure limitations') };
   if ([...dns, ...certificates, ...roles].some(row => row.observedAt > result.observedAt)) throw new TypeError('Snapshot time cannot precede one of its retained observations.');
   if (result.coverage.state === 'complete' && (result.coverage.truncated || dns.some(row => !row.complete || row.truncated || ['failed', 'not_checked'].includes(row.outcome)) || certificates.some(row => !row.namesComplete) || roles.some(row => !row.complete))) throw new TypeError('Complete snapshot coverage cannot contain incomplete observations.');
   if (result.coverage.state === 'complete' && hostnames.some(host => dnsTypes.some(type => !dns.some(row => row.queriedName === host && row.type === type)))) throw new TypeError('Complete DNS coverage requires every explicitly selected host/type pair.');

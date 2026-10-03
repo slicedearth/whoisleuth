@@ -23,6 +23,13 @@ export const MAX_CONVERSION_INPUT_ROWS = MAX_EXTERNAL_FINDINGS * 4;
 export const INFRASTRUCTURE_OBSERVATION_SCHEMA = 'whoisleuth.infrastructure-observation';
 export const INFRASTRUCTURE_OBSERVATION_VERSION = 1;
 export const MAX_INFRASTRUCTURE_OBSERVATION_BYTES = 128 * 1024;
+export const MAX_INFRASTRUCTURE_HOSTS = 128;
+export const MAX_INFRASTRUCTURE_DNS_ROWS = 512;
+export const MAX_INFRASTRUCTURE_CERTIFICATES = 32;
+export const MAX_INFRASTRUCTURE_ROLES = 128;
+export const MAX_INFRASTRUCTURE_SOURCES = 16;
+export const MAX_INFRASTRUCTURE_LIMITATIONS = 12;
+export const INFRASTRUCTURE_DNS_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'PTR'] as const;
 export const INFRASTRUCTURE_COMPARISON_INPUT_SCHEMA = 'whoisleuth.infrastructure-comparison.input';
 export const INFRASTRUCTURE_COMPARISON_INPUT_VERSION = 1;
 export const MAX_INFRASTRUCTURE_COMPARISON_INPUT_BYTES = 2 * MAX_INFRASTRUCTURE_OBSERVATION_BYTES + 1_024;
@@ -201,13 +208,13 @@ export const EXTERNAL_OBSERVATION_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLif
     boundProfiles: [{ id: 'external-interchange.infrastructure.bounds', bounds: [
       { id: 'raw-bytes', path: '$', phase: 'raw_intake', unit: 'bytes', minimum: 1, maximum: MAX_INFRASTRUCTURE_OBSERVATION_BYTES, handling: 'reject' },
       { id: 'serialised-bytes', path: '$', phase: 'serialised', unit: 'bytes', minimum: 1, maximum: MAX_INFRASTRUCTURE_OBSERVATION_BYTES, handling: 'reject' },
-      { id: 'hostnames', path: 'scope.hostnames', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: 128, handling: 'reject' },
-      { id: 'dns-rows', path: 'dns', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: 512, handling: 'reject' },
-      { id: 'certificate-rows', path: 'certificates', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: 32, handling: 'reject' },
-      { id: 'role-rows', path: 'roles', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: 128, handling: 'reject' },
-      { id: 'sources', path: 'sources', phase: 'pre_accumulation', unit: 'items', minimum: 1, maximum: 16, handling: 'reject' },
-      { id: 'dns-types', path: 'scope.dnsTypes', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: 6, handling: 'reject' },
-      { id: 'limitations', path: 'limitations', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: 12, handling: 'reject' },
+      { id: 'hostnames', path: 'scope.hostnames', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: MAX_INFRASTRUCTURE_HOSTS, handling: 'reject' },
+      { id: 'dns-rows', path: 'dns', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: MAX_INFRASTRUCTURE_DNS_ROWS, handling: 'reject' },
+      { id: 'certificate-rows', path: 'certificates', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: MAX_INFRASTRUCTURE_CERTIFICATES, handling: 'reject' },
+      { id: 'role-rows', path: 'roles', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: MAX_INFRASTRUCTURE_ROLES, handling: 'reject' },
+      { id: 'sources', path: 'sources', phase: 'pre_accumulation', unit: 'items', minimum: 1, maximum: MAX_INFRASTRUCTURE_SOURCES, handling: 'reject' },
+      { id: 'dns-types', path: 'scope.dnsTypes', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: INFRASTRUCTURE_DNS_TYPES.length, handling: 'reject' },
+      { id: 'limitations', path: 'limitations', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: MAX_INFRASTRUCTURE_LIMITATIONS, handling: 'reject' },
     ] }, { id: 'external-interchange.infrastructure-comparison.bounds', bounds: [
       { id: 'raw-bytes', path: '$', phase: 'raw_intake', unit: 'bytes', minimum: 1, maximum: MAX_INFRASTRUCTURE_COMPARISON_INPUT_BYTES, handling: 'reject' },
       { id: 'serialised-bytes', path: '$', phase: 'serialised', unit: 'bytes', minimum: 1, maximum: MAX_INFRASTRUCTURE_COMPARISON_INPUT_BYTES, handling: 'reject' },

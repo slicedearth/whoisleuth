@@ -2,6 +2,7 @@ import { brandPostureObservationContext, currentDesiredPostureObservation, desir
 import { caseWorkspaceHref } from './case-response-stage.ts';
 import { buildDesiredPostureComparisonsFromObservation } from './owned-domain-posture-review.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { MAX_CASES, MAX_CASE_EVIDENCE_PINS } from '../../../../packages/contracts/case-portability.mts';
 import { readInfrastructureObservation, compareInfrastructureObservations, type InfrastructureObservation } from '../../../../packages/investigation/infrastructure-observation.mts';
 import type { BulkSession } from './bulk-session-model.ts';
 import type { CaseRecord } from './case-model.ts';
@@ -60,9 +61,9 @@ function timestamp(value: unknown, fallback: string): string {
 /** At most one bounded latest-pair review per Case; retained snapshots are never replaced. */
 function infrastructureItems(cases: readonly CaseRecord[], now: string): AnalystReviewItem[] {
   const output: AnalystReviewItem[] = [];
-  for (const record of cases.slice(0, 500)) {
+  for (const record of cases.slice(0, MAX_CASES)) {
     const snapshots: { pinId: string; observation: InfrastructureObservation }[] = [];
-    for (const pin of record.evidencePins.slice(0, 100)) {
+    for (const pin of record.evidencePins.slice(0, MAX_CASE_EVIDENCE_PINS)) {
       const raw = pin.infrastructureObservation;
       if (!raw) continue;
       try { snapshots.push({ pinId: pin.id, observation: readInfrastructureObservation(raw) }); } catch { /* Future/malformed evidence remains unavailable. */ }
@@ -226,7 +227,7 @@ function comparisonItems(input: Readonly<{
 }
 
 function packetItems(cases: readonly CaseRecord[], now: string): AnalystReviewItem[] {
-  return cases.slice(0, 500).flatMap((record) => record.actions
+  return cases.slice(0, MAX_CASES).flatMap((record) => record.actions
     .filter((action) => action.type.endsWith('_report') && !['submitted', 'acknowledged', 'terminal'].includes(action.state))
     .map((action) => item({
       stable: [record.id, action.id, 'response-packet-readiness'],
@@ -250,7 +251,7 @@ function packetItems(cases: readonly CaseRecord[], now: string): AnalystReviewIt
 
 function ruleItems(cases: readonly CaseRecord[], rules: readonly DetectionRule[], now: string): AnalystReviewItem[] {
   const output: AnalystReviewItem[] = [];
-  for (const record of cases.slice(0, 500)) {
+  for (const record of cases.slice(0, MAX_CASES)) {
     const evaluation = evaluateDetectionRules(record, rules);
     for (const match of evaluation.matchedRules) {
       output.push(item({
@@ -311,7 +312,7 @@ export function buildLocalAnalystReviewProjection(input: Readonly<{
   }
   const lowerBoundFamilies = new Set<AnalystReviewEvidenceFamily>();
   if (comparison.totalIsLowerBound) lowerBoundFamilies.add('comparison');
-  if ((input.cases?.length ?? 0) > 500) {
+  if ((input.cases?.length ?? 0) > MAX_CASES) {
     lowerBoundFamilies.add('packet');
     lowerBoundFamilies.add('rule');
   }
