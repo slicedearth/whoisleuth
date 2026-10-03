@@ -4,7 +4,7 @@ import { exact, text, enumeration, array, strings, iso, boolean } from '../evide
 import { normalizeDomain } from '../evidence/domain-name.mts';
 import { canonicalIpAddress } from '../contracts/ip-address.mts';
 import { parseBoundedJson } from '../analysis/bounded-json.mts';
-import { technologyEvidenceRoles } from '../../lib/technology-evidence-role.mts';
+import { technologyEvidenceRoles } from '../evidence/technology-evidence-role.mts';
 import {
   INFRASTRUCTURE_OBSERVATION_SCHEMA, INFRASTRUCTURE_OBSERVATION_VERSION, MAX_INFRASTRUCTURE_OBSERVATION_BYTES,
   MAX_INFRASTRUCTURE_HOSTS, MAX_INFRASTRUCTURE_DNS_ROWS, MAX_INFRASTRUCTURE_CERTIFICATES,
