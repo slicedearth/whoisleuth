@@ -337,9 +337,13 @@ describe('encrypted portable workspace archives', () => {
       const session = archive.sections.bulkSessions.sessions[0] as unknown as Record<string, unknown>;
       assert.ok(session);
       for (const row of session.results as Array<Record<string, unknown>>) {
+        // Neither field existed in the public schema 4/5 compact row shape.
+        Reflect.deleteProperty(row, 'hasExternalPasswordForm');
+        Reflect.deleteProperty(row, 'webCollectionQuality');
         row.profileContext = structuredClone(session.profileContext);
         if (version === 4) row.relationship = { ...(row.relationship as Record<string, unknown>), version: 2 };
       }
+      assert.equal(mergeBulkSessions([], archive.sections.bulkSessions).added, 1, `${version}: valid historical base`);
       attack.mutate(session);
       const manifestEntry = archive.manifest.sections.find((entry) => entry.id === 'bulkSessions');
       assert.ok(manifestEntry);
