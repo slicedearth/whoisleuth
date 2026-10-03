@@ -96,7 +96,7 @@ const VERSION_16_ACCESS_SUFFIXES = [
 ];
 const VERSION_18_FIXTURE_SUFFIXES = [
   { id: 'andorra-rdds-colon', suffixes: ['ad'], rdapAccessProfile: 'iana-bootstrap' },
-  { id: 'nic-bh-icann-colon', suffixes: ['bh'], rdapAccessProfile: 'no-iana-service' },
+  { id: 'nic-bh-icann-colon', suffixes: ['bh'], rdapAccessProfile: 'iana-bootstrap' },
   { id: 'cc-registry-colon', suffixes: ['cc'], rdapAccessProfile: 'iana-bootstrap' },
   { id: 'nic-cr-contact-indirection', suffixes: ['cr'], rdapAccessProfile: 'iana-bootstrap' },
   { id: 'nic-dz-colon', suffixes: ['dz'], rdapAccessProfile: 'no-iana-service' },
@@ -108,7 +108,7 @@ const VERSION_18_FIXTURE_SUFFIXES = [
 ];
 const VERSION_19_NO_MACHINE_SUFFIXES = [
   'xn--mgbai9azgqp6j', 'xn--mgbayh7gpa', 'xn--mgbc0a9azcg',
-  'xn--mgbcpq6gpa1a', 'xn--mgbpl2fh', 'xn--wgbh1c',
+  'xn--mgbpl2fh', 'xn--wgbh1c',
 ];
 const VERSION_19_RDAP_ONLY_SUFFIXES = ['na', 'pn'];
 const VERSION_19_SHARED_FIXTURE_SUFFIXES = [
@@ -148,7 +148,7 @@ const VERSION_24_PROMOTED_SUFFIXES = new Set(['xn--90ae', 'xn--l1acc', 'xn--wgbl
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 30);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 31);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
@@ -393,7 +393,7 @@ describe('registry capability metadata', () => {
     assert.equal(covered, 11);
   });
 
-  test('records the version nineteen 20-suffix service and fixture batch', () => {
+  test('retains the earlier service and fixture identities with current access metadata', () => {
     const allProfiles = listRegistryCapabilities();
     const profiles = new Map(allProfiles.map((entry) => [entry.id, entry]));
 
@@ -443,14 +443,19 @@ describe('registry capability metadata', () => {
       assert.equal(diagnostic.whoisAccessProfile, 'no-iana-service', suffix);
       assert.equal(diagnostic.rdapAccessProfile, 'iana-bootstrap', suffix);
     }
+  });
 
-    assert.equal(
-      VERSION_19_SHARED_FIXTURE_SUFFIXES.length
-        + omProfile.suffixes.length
-        + VERSION_19_NO_MACHINE_SUFFIXES.length
-        + VERSION_19_RDAP_ONLY_SUFFIXES.length,
-      20,
-    );
+  test('retains catalogue identities while reflecting newly published registration services', () => {
+    const profiles = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
+    const latin = required(profiles.get('nic-bh-icann-colon'));
+    const international = required(profiles.get('no-iana-machine-service-xn--mgbcpq6gpa1a'));
+    assert.equal(latin.rdapAccessProfile, 'iana-bootstrap');
+    assert.equal(latin.whoisAccessProfile, 'iana-referral');
+    assert.deepEqual(latin.fixtureScenarios, ['registered', 'not_found']);
+    assert.equal(international.rdapAccessProfile, 'iana-bootstrap');
+    assert.equal(international.whoisAccessProfile, 'no-iana-service');
+    assert.deepEqual(international.fixtureScenarios, []);
+    assert.match(international.limitation, /RDAP bootstrap service but no domain WHOIS referral/u);
   });
 
   test('records the version twenty 25-suffix fixture-backed service batch', () => {

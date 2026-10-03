@@ -80,18 +80,18 @@ type RegistryCapabilitySeed = Pick<
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
 >>;
 
-const REGISTRY_CAPABILITIES_VERSION = 30;
+const REGISTRY_CAPABILITIES_VERSION = 31;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const REGISTRY_STANDARDS_COVERAGE_SNAPSHOT = Object.freeze({
   schema: REGISTRY_STANDARDS_COVERAGE_SCHEMA,
   version: 1,
-  verifiedAt: '2026-09-23',
+  verifiedAt: '2026-10-03',
   sources: Object.freeze({
-    rootZoneVersion: '2026092300',
-    rootZoneLastUpdatedAt: '2026-09-23T07:07:01.000Z',
-    rootZoneTldSetSha256: 'aa0a75a9860b2cba07d7fe8172f4546d981be3674bf6764fb0d5f39a45940d25',
-    rdapBootstrapPublication: '2026-09-16T19:00:03.000Z',
+    rootZoneVersion: '2026100200',
+    rootZoneLastUpdatedAt: '2026-10-02T07:07:02.000Z',
+    rootZoneTldSetSha256: '71093802743b87ee52fac5dd4f662cafd0133dae5089ac6c2e34ee73cebfc836',
+    rdapBootstrapPublication: '2026-09-30T23:00:03.000Z',
     rdapBootstrapVersion: '1.0',
     urls: Object.freeze([
       'https://data.iana.org/TLD/tlds-alpha-by-domain.txt',
@@ -100,15 +100,15 @@ const REGISTRY_STANDARDS_COVERAGE_SNAPSHOT = Object.freeze({
     ]),
   }),
   counts: Object.freeze({
-    activeTlds: 1438,
+    activeTlds: 1437,
     countryCode: 309,
-    nonCountryCode: 1129,
-    generic: 1111,
+    nonCountryCode: 1128,
+    generic: 1110,
     genericRestricted: 3,
     sponsored: 14,
     infrastructure: 1,
-    rdapBootstrapServiceGroups: 591,
-    genericAndRestrictedRdapCovered: 1114,
+    rdapBootstrapServiceGroups: 592,
+    genericAndRestrictedRdapCovered: 1113,
     sponsoredRdapCovered: 12,
     infrastructureRdapCovered: 0,
   }),
@@ -162,7 +162,7 @@ const VERSION_16_NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
 ]);
 const VERSION_19_NO_IANA_MACHINE_SERVICE_SUFFIXES = Object.freeze([
   'xn--mgbai9azgqp6j', 'xn--mgbayh7gpa', 'xn--mgbc0a9azcg',
-  'xn--mgbcpq6gpa1a', 'xn--mgbpl2fh', 'xn--wgbh1c',
+  'xn--mgbpl2fh', 'xn--wgbh1c',
 ]);
 const VERSION_19_RDAP_ONLY_SUFFIXES = Object.freeze(['na', 'pn']);
 const VERSION_20_FIXTURE_SUFFIXES = Object.freeze([
@@ -401,6 +401,14 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
     documentationUrls: [`https://www.iana.org/domains/root/db/${suffix}.html`],
     limitation: RDAP_ONLY_MACHINE_SERVICE_LIMITATION,
   })),
+  {
+    id: 'no-iana-machine-service-xn--mgbcpq6gpa1a', suffixes: ['xn--mgbcpq6gpa1a'], registryClass: 'country-code',
+    whoisParserProfile: 'generic-colon', fixtureScenarios: [],
+    coverageState: 'access_documented', whoisAccessProfile: 'no-iana-service',
+    rdapAccessProfile: 'iana-bootstrap', verificationFiles: [],
+    documentationUrls: ['https://www.iana.org/domains/root/db/xn--mgbcpq6gpa1a.html'],
+    limitation: RDAP_ONLY_MACHINE_SERVICE_LIMITATION,
+  },
   ...VERSION_20_FIXTURE_SUFFIXES.map((suffix): RegistryCapabilitySeed => ({
     id: `iana-cc-colon-${suffix}`,
     suffixes: [suffix],
@@ -1133,7 +1141,7 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
   {
     id: 'nic-bh-icann-colon', suffixes: ['bh'], registryClass: 'country-code',
     whoisParserProfile: 'icann-style-colon', fixtureScenarios: ['registered', 'not_found'],
-    rdapAccessProfile: 'no-iana-service',
+    rdapAccessProfile: 'iana-bootstrap',
     documentationUrls: ['https://www.iana.org/domains/root/db/bh.html'],
   },
   {
