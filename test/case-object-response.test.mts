@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { createCase, updateCase, buildCaseExport, projectCaseForAudience, normalizeCaseStore, serializeCaseStore } from '../packages/cases/case-model.mts';
 import { buildCaseIncidentCoverage } from '../packages/cases/case-workflow-metadata.mts';
-import { readCaseResponseObject, readCaseResponseObjects } from '../packages/cases/case-response-object.mts';
+import { caseResponseObjectChoices, selectedCaseResponseObject, readCaseResponseObject, readCaseResponseObjects } from '../packages/cases/case-response-object.mts';
 import { caseRecheckComparisonBlockers, caseRecheckAnswerContext, assertCaseObjectObservationOutcome } from '../packages/cases/case-recheck-model.mts';
 import { buildCaseReport } from '../packages/cases/case-report.mts';
 import { buildCaseResponseReviewInputs, validateCaseResponseReviewInputs } from '../packages/cases/case-response-packet.mts';
@@ -13,7 +13,7 @@ function scoped() {
   let record = createCase({ domain: 'incident.example', incidentTarget: 'https://incident.example/one' }, NOW);
   record = updateCase([record], record.id, { incidentTarget: 'https://incident.example/two' }, NOW).record;
   const objects = record.workflowMetadata!.incidentTargets.map(target => ({ kind: 'page' as const, identifier: target.url, incidentTargetId: target.id }));
-  record = updateCase([record], record.id, { action: { type: 'hosting_report', recipient: 'Example hosting desk', contactSource: 'Analyst reviewed route', responseObjects: objects } }, NOW).record;
+  record = updateCase([record], record.id, { action: { type: 'network_hosting_report', recipient: 'Example hosting desk', contactSource: 'Analyst reviewed route', responseObjects: objects } }, NOW).record;
   return { record, objects };
 }
 function transition(record: ReturnType<typeof createCase>, nextState: string, extra: Record<string, unknown> = {}) {
@@ -106,6 +106,12 @@ test('retained historical URL snapshots stay visible without binding to changed 
   const historical = rows.find(row => row.responseObject.identifier === objects[0]!.identifier)!;
   assert.equal(historical.targetRetained, false);
   assert.equal(historical.providerEvents.at(-1)?.outcome, 'removed');
+  const choice = caseResponseObjectChoices(changed).find(choice => choice.value === JSON.stringify(objects[0]))!;
+  assert.match(choice.label, /historical/);
+  assert.deepEqual(selectedCaseResponseObject(changed, choice.value), objects[0]);
+  const later = transition(changed, 'terminal', { sourceClass: 'provider', responseObjects: [objects[0]], objectOutcome: 'restored', providerOutcome: 'partially_remediated' });
+  assert.equal(buildCaseIncidentCoverage(later).find(row => row.responseObject.identifier === objects[0]!.identifier)!.providerEvents.at(-1)?.outcome, 'restored');
+  assert.throws(() => transition(changed, 'terminal', { sourceClass: 'provider', responseObjects: [{ ...objects[0], identifier: 'https://incident.example/arbitrary' }], objectOutcome: 'removed' }), /changed|not retained/);
   const replacement = rows.find(row => row.responseObject.identifier === 'https://incident.example/replacement')!;
   assert.equal(replacement.targetRetained, true);
   assert.equal(replacement.providerEvents.length, 0);

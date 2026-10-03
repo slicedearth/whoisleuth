@@ -215,7 +215,7 @@ posture comparisons, evidence-gap queues and response preflight from retained
 records without another request. Derived views do not create evidence, prove a
 target state or silently mark an item reviewed.
 
-Creating or refreshing a Case is deliberate. Current Case schema 17 can retain
+Creating or refreshing a Case is deliberate. Current Case schema 18 can retain
 the exact normalised submitted hostname and the DNS, TLS and web observation
 hostname on a new evidence snapshot, analyst
 decision confidence and its basis, and a response route's observation and
@@ -245,10 +245,10 @@ They contain domain identities, minimised original observations, review notes,
 expiry and withdrawal records. Previewing or revising them makes no requests;
 only deliberate downloads create output files. STIX and MISP exports are not
 submitted or applied automatically. Content digests do not authenticate authors.
-Exact public v1 Case schema 12 and published-v2 schemas 13–16
+Exact public v1 Case schema 12 and published-v2 schemas 13–17
 remain readable and migrate directly; migrated fields can remain null, unknown
 or blank because WHOISleuth does not reconstruct them from weaker evidence.
-Case report v13 JSON and Markdown do not add the snapshot hostname.
+Case report v14 JSON and Markdown do not add the snapshot hostname.
 Explicitly selected evidence pins can include their own observation hostname
 in response packets; this remains distinct from the Case's registration domain.
 
@@ -321,6 +321,22 @@ are rejected. Deliberate retention of an exact Incident URL in a Case remains
 separate from that collection request.
 
 Case types, incident links and investigation context are structured local fields.
+Manually reviewed response actions can bind up to 20 exact typed objects. Each
+event retains its immutable scope; partial provider outcomes require a selected
+affected subset. Evidence pins, saved comparison questions, independent reviews
+and object closures can retain the same exact object identity. Missing historical
+bindings remain unknown. An unavailable observation is not removal, and dispute
+or restoration does not establish malicious recurrence or report causation.
+Technical state-change outcomes require complete baseline/current evidence for
+the exact same object under comparable conditions. Procedural disputes and
+warnings retain source attribution separately. Already-retained historical
+identities remain usable after incident-link edits; replacement URLs do not
+inherit their histories.
+Object closure leaves other objects and the Case unchanged. No action submits a
+report or triggers collection. Exact identifiers can contain sensitive paths,
+queries or fragments: review them before saving or sharing. Public Case packs
+remove pin object scopes and infrastructure observations with other private
+response records; trusted/internal packs and ordinary backups retain them.
 Public CLI Case packs retain the types but exclude incident URLs and the private
 objective; trusted/internal packs and ordinary backups retain those details.
 Migrated historical tags and assertions remain preserved as original text.

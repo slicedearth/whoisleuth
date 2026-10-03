@@ -46,7 +46,7 @@ export function buildCaseResponseProgress(
     evidenceHandoffStage,
     {
       id: 'outcome_tracking', ...CASE_RESPONSE_STAGE_DEFINITIONS.outcome_tracking,
-      status: record.closures.records.length ? 'complete' : record.observedEffects.reviews.length || record.actions.some((action) => ['submitted', 'acknowledged', 'terminal'].includes(action.state)) ? 'in_progress' : 'not_started',
+      status: record.closures.records.some(closure => closure.responseObject === undefined) ? 'complete' : record.observedEffects.reviews.length || record.closures.records.length || record.actions.some((action) => ['submitted', 'acknowledged', 'terminal'].includes(action.state)) ? 'in_progress' : 'not_started',
       summary: `${countLabel(record.observedEffects.reviews.length, 'independent effect review')} and ${countLabel(record.closures.records.length, 'deliberate closure')}.`,
       nextRequirement: !record.observedEffects.reviews.length ? 'Keep provider outcomes separate and record an independently observed effect when reviewed.' : !record.closures.records.length ? 'Review follow-up and, when justified, record a deliberate closure reason.' : 'Review whether follow-up remains due.',
     },

@@ -6,17 +6,21 @@
   import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
+  import CaseResponseObjectSelect from './CaseResponseObjectSelect.svelte';
+  import { selectedCaseResponseObject } from '../../../../packages/cases/case-response-object.mts';
   import { MAX_RESPONSE_RATIONALE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
 
   let { record, mutationBusy, persist }: { record: CaseRecord; mutationBusy: boolean; persist: PersistCaseResponse } = $props();
-  const draft = createCaseDraft(() => record.id, 'recheck-question', { question: '', targetHostname: '', baselinePinId: '', conditions: '' });
+  const draft = createCaseDraft(() => record.id, 'recheck-question', { question: '', targetHostname: '', baselinePinId: '', conditions: '', responseObject: '' });
   const questions = $derived(caseRecheckQuestions(record.assertions));
   let error = $state('');
   async function save() {
     error = '';
     try {
-      const recheck = readCaseRecheckContext({ targetHostname: (draft.value.targetHostname || caseLookupTarget(record)).trim().toLowerCase(),
-        baselinePinId: draft.value.baselinePinId || null, conditions: draft.value.conditions.trim() });
+      const responseObject = selectedCaseResponseObject(record, draft.value.responseObject);
+      const objectHostname = responseObject ? responseObject.kind === 'domain' || responseObject.kind === 'hostname' ? responseObject.identifier : new URL(responseObject.identifier).hostname : null;
+      const recheck = readCaseRecheckContext({ targetHostname: objectHostname ?? (draft.value.targetHostname || caseLookupTarget(record)).trim().toLowerCase(),
+        baselinePinId: draft.value.baselinePinId || null, conditions: draft.value.conditions.trim(), ...(responseObject ? { responseObject } : {}) });
       const unchanged = draft.capture();
       if (!await draft.persist(persist, { assertion: { kind: 'next_step', statement: draft.value.question.trim(), state: 'open',
         evidencePinIds: recheck?.baselinePinId ? [recheck.baselinePinId] : [], ...(recheck ? { recheck } : {}) } }, 'Saved the recheck question. No collection was started.') || !unchanged()) return;
@@ -34,6 +38,7 @@
           <li>
             <strong>{question.statement}</strong>
             <p>{question.recheck!.targetHostname} · {question.recheck!.conditions}</p>
+            {#if question.recheck!.responseObject}<p>Exact object: {question.recheck!.responseObject.kind.replaceAll('_', ' ')} · {question.recheck!.responseObject.identifier}</p><small>Prepare recheck opens a hostname lookup only; it does not collect this exact object. Use reviewed local evidence for the stated object and conditions.</small>{/if}
             <div class="button-row">
               <a class="btn" href={`/lookup?q=${encodeURIComponent(question.recheck!.targetHostname)}&case=${encodeURIComponent(record.id)}`}>Prepare recheck</a>
               <button class="btn" type="button" disabled={mutationBusy} aria-label={`Resolve question: ${question.statement}`}
@@ -46,6 +51,7 @@
     <form class="stack" data-recovery-form={draft.form} aria-label="Save a recheck question" oninput={() => { error = ''; draft.changed(); }} onsubmit={event => { event.preventDefault(); void save(); }}>
       <label class="field">Question<textarea bind:value={draft.value.question} maxlength={MAX_RESPONSE_RATIONALE_LENGTH} rows="2" required placeholder="Is the reported page still being served?"></textarea></label>
       <label class="field">Target hostname<input bind:value={draft.value.targetHostname} placeholder={caseLookupTarget(record)} maxlength="253" autocapitalize="none" spellcheck="false" /></label>
+      <CaseResponseObjectSelect {record} label="Object to recheck" bind:value={draft.value.responseObject} />
       <CaseEvidencePinSelect label="Baseline evidence" pins={record.evidencePins} bind:value={draft.value.baselinePinId} emptyLabel="No retained baseline" />
       <label class="field">Comparison conditions<textarea bind:value={draft.value.conditions} maxlength={MAX_RESPONSE_RATIONALE_LENGTH} rows="2" required placeholder="Page or evidence to compare, collection method and relevant viewport or location. Do not include credentials."></textarea></label>
       {#if error}<p class="notice" role="alert">{error}</p>{/if}

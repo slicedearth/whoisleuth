@@ -56,6 +56,12 @@ The [infrastructure inventory](docs/infrastructure-observations.md) reviews
 retained hostnames, DNS, certificate names and provider roles, with source-linked
 topology and historical comparison.
 
+Response actions can concern several exact domain, page or platform objects in
+one manually reviewed record. Event scopes, provider claims, independent
+comparisons and deliberate object closures remain separate; one resolved object
+does not close another. Historical missing bindings remain unknown. Console and
+the [offline Case file commands](docs/cli.md#local-case-files) submit no reports.
+
 The optional [local application](packages/local-application/README.md) runs the
 same Console on loopback with an explicitly selected filesystem workspace.
 Saved records, drafts and original files stay in that folder, not IndexedDB.

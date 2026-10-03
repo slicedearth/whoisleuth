@@ -10,6 +10,8 @@
   import { reviewClock } from '$lib/review-clock.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
+  import CaseResponseObjectSelect from './CaseResponseObjectSelect.svelte';
+  import { CASE_RESPONSE_OBJECT_OUTCOMES, selectedCaseResponseObject, type CaseResponseObjectOutcome } from '../../../../packages/cases/case-response-object.mts';
 
   let { record, mode, mutationBusy, persist, onreviewrecipient, metadata }: {
     record: CaseRecord;
@@ -27,7 +29,7 @@
     quickOutcomeDetail: '',
     quickOccurredAt: '',
     quickEvidencePinId: '',
-    quickLimitations: ''
+    quickLimitations: '', responseObjects: [] as string[], objectOutcome: '' as '' | CaseResponseObjectOutcome
   });
   const quickAction = $derived(record.actions.find((action) => action.id === quickActionDraft.value.quickActionId)
     ?? (quickActionDraft.value.quickActionId ? null : record.actions.find((action) => action.state !== 'terminal') ?? record.actions.at(-1))
@@ -44,6 +46,8 @@
     quickActionDraft.value.quickOccurredAt = '';
     quickActionDraft.value.quickEvidencePinId = '';
     quickActionDraft.value.quickLimitations = '';
+    quickActionDraft.value.responseObjects = [];
+    quickActionDraft.value.objectOutcome = '';
   }
 
   async function selectQuickAction(id: string): Promise<boolean> {
@@ -66,6 +70,10 @@
 
   async function advanceQuickAction(action: CaseActionRecord) {
     if (action.state === 'terminal') return;
+    selectionError = '';
+    let responseObjects;
+    try { responseObjects = quickActionDraft.value.responseObjects.map(value => selectedCaseResponseObject(record, value)!); }
+    catch (cause) { selectionError = cause instanceof Error ? cause.message : 'Review the selected objects.'; return; }
     const unchanged = quickActionDraft.capture();
     const nextState: CaseActionState = action.state === 'drafting' ? 'ready_for_review'
       : action.state === 'ready_for_review' ? 'reviewed'
@@ -97,6 +105,8 @@
           providerOutcome: recordsProviderOutcome ? quickActionDraft.value.quickProviderOutcome || null : null,
           outcomeDetail: recordsProviderOutcome ? quickActionDraft.value.quickOutcomeDetail || null : null,
           originActionId: action.originActionId,
+          ...(recordsProviderOutcome && responseObjects.length ? { responseObjects } : {}),
+          ...(recordsProviderOutcome && quickActionDraft.value.objectOutcome ? { objectOutcome: quickActionDraft.value.objectOutcome } : {}),
         },
       },
     }, `${quickActionVerb(action)} recorded for ${record.domain}.`) || !unchanged()) return;
@@ -113,7 +123,10 @@
   export async function selectReceipt(actionId: string): Promise<boolean> {
     return quickAction?.id === actionId || await selectQuickAction(actionId);
   }
+  let selectionError = $state('');
 </script>
+
+{#if selectionError}<p role="alert">{selectionError} The draft remains available.</p>{/if}
 
 <CaseDraftRecovery draft={quickActionDraft} />
 {#if mode === 'quick' && quickAction}
@@ -127,13 +140,18 @@
       <label class="field">Provider outcome<select bind:value={quickActionDraft.value.quickProviderOutcome}><option value="">Select the observed response</option>{#each CASE_PROVIDER_OUTCOMES.filter((value) => value !== 'withdrawn' && !(quickAction.state === 'acknowledged' && value === 'no_response')) as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
       <label class="field">Reference<input bind:value={quickActionDraft.value.quickActionReference} maxlength="500" placeholder="Ticket, message, or provider reference"></label>
       <label class="field">Outcome detail<textarea bind:value={quickActionDraft.value.quickOutcomeDetail} maxlength="2000" rows="2"></textarea></label>
+      {#if quickAction.responseObjects?.length}
+        <CaseResponseObjectSelect {record} label="Objects affected by the provider result" multiple objects={quickAction.responseObjects} bind:values={quickActionDraft.value.responseObjects} />
+        <label class="field">Reported object outcome<select bind:value={quickActionDraft.value.objectOutcome}><option value="">No typed object outcome</option>{#each CASE_RESPONSE_OBJECT_OUTCOMES as outcome}<option value={outcome}>{outcome.replaceAll('_', ' ')}</option>{/each}</select></label>
+        <p class="notice">Select the affected objects explicitly. A provider result does not independently establish removal or resolve other objects.</p>
+      {/if}
     {/if}
     {#if ['authorised', 'submitted', 'acknowledged'].includes(quickAction.state)}
       <label class="field">Event time <small>UTC; leave blank only when recording the event as it happens</small><input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={quickActionDraft.value.quickOccurredAt}></label>
       <details><summary>Event evidence and limitations</summary><div class="stack"><CaseEvidencePinSelect label="Receipt evidence" pins={record.evidencePins} bind:value={quickActionDraft.value.quickEvidencePinId} /><label class="field">Receipt limitations <small>one per line</small><textarea bind:value={quickActionDraft.value.quickLimitations} maxlength="2000" rows="2"></textarea></label></div></details>
     {/if}
     {#if quickAction.state !== 'terminal'}
-      <button id={`quick-action-advance-${record.id}`} class="primary" type="submit" disabled={quickActionDraft.state.busy || mutationBusy || quickAction.state === 'authorised' && !quickActionDraft.value.quickActionReference.trim() || ['submitted', 'acknowledged'].includes(quickAction.state) && !quickActionDraft.value.quickProviderOutcome}>{quickActionVerb(quickAction)}</button>
+      <button id={`quick-action-advance-${record.id}`} class="primary" type="submit" disabled={quickActionDraft.state.busy || mutationBusy || quickAction.state === 'authorised' && !quickActionDraft.value.quickActionReference.trim() || ['submitted', 'acknowledged'].includes(quickAction.state) && (!quickActionDraft.value.quickProviderOutcome || Boolean(quickAction.responseObjects?.length && (quickActionDraft.value.objectOutcome || quickActionDraft.value.quickProviderOutcome === 'provider_reports_resolved') && !quickActionDraft.value.responseObjects.length))}>{quickActionVerb(quickAction)}</button>
     {:else}
       <p class="notice">This action is terminal. Its retained history is immutable.</p>
     {/if}

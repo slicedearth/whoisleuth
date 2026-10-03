@@ -54,14 +54,27 @@ export function sameCaseResponseObject(left: CaseResponseObject | undefined, rig
   return left !== undefined && right !== undefined && left.kind === right.kind && left.identifier === right.identifier && left.incidentTargetId === right.incidentTargetId;
 }
 
-/** New writes validate against the intended Case; retained snapshots are not re-adjudicated. */
-export function assertCaseResponseObject(object: CaseResponseObject | undefined, record: Pick<CaseRecord, 'domain' | 'workflowMetadata'>): void {
+type CaseResponseScopeRecord = Pick<CaseRecord, 'domain' | 'workflowMetadata'> & Partial<Pick<CaseRecord, 'evidencePins' | 'evidenceHistory' | 'actions' | 'observedEffects' | 'closures' | 'assertions'>>;
+
+/** Explicit retained snapshots permit follow-up without retargeting edited links. */
+export function retainedCaseResponseObjects(record: Partial<Pick<CaseRecord, 'actions' | 'observedEffects' | 'evidencePins' | 'closures' | 'assertions'>>): readonly CaseResponseObject[] {
+  const objects = [...(record.actions ?? []).flatMap(action => [...action.responseObjects ?? [], ...action.history.flatMap(event => event.responseObjects ?? [])]),
+    ...(record.observedEffects?.reviews ?? []).flatMap(review => review.responseObject ? [review.responseObject] : []),
+    ...(record.evidencePins ?? []).flatMap(pin => pin.responseObject ? [pin.responseObject] : []),
+    ...(record.closures?.records ?? []).flatMap(closure => closure.responseObject ? [closure.responseObject] : []),
+    ...(record.assertions ?? []).flatMap(assertion => assertion.recheck?.responseObject ? [assertion.recheck.responseObject] : [])];
+  return [...new Map(objects.map(object => [JSON.stringify(object), object])).values()];
+}
+
+/** New identities require current metadata; exact historical identities remain usable. */
+export function assertCaseResponseObject(object: CaseResponseObject | undefined, record: CaseResponseScopeRecord): void {
   if (!object) return;
   if (object.kind === 'domain') {
     if (object.identifier !== record.domain) throw new TypeError('The response domain must match this Case.');
   } else if (object.kind === 'hostname') {
     if (object.identifier !== record.domain && !object.identifier.endsWith(`.${record.domain}`)) throw new TypeError('The response hostname must belong to this Case domain.');
-  } else if (!record.workflowMetadata?.incidentTargets.some(target => target.id === object.incidentTargetId && target.url === object.identifier)) {
+  } else if (!record.workflowMetadata?.incidentTargets.some(target => target.id === object.incidentTargetId && target.url === object.identifier)
+    && !retainedCaseResponseObjects(record).some(retained => sameCaseResponseObject(retained, object))) {
     throw new TypeError('The selected exact incident object changed or is not retained in this Case. Refresh and review it before saving.');
   }
 }
@@ -73,12 +86,16 @@ export function assertCaseObjectOutcome(outcome: CaseResponseObjectOutcome | und
   if (outcome === 'restricted' && object.kind !== 'social_account' && object.kind !== 'app' && object.kind !== 'other') throw new TypeError('Account restriction requires account, app or explicitly other scope.');
 }
 
-export function caseResponseObjectChoices(record: Pick<CaseRecord, 'domain' | 'workflowMetadata'> & Partial<Pick<CaseRecord, 'evidencePins' | 'evidenceHistory'>>) {
+export function caseResponseObjectChoices(record: CaseResponseScopeRecord) {
   const objects: CaseResponseObject[] = [{ kind: 'domain', identifier: record.domain, incidentTargetId: null }];
   const hosts = new Set([...(record.evidencePins ?? []).map(pin => pin.observationHostname), ...(record.evidenceHistory ?? []).map(snapshot => snapshot.inputHostname)].filter((value): value is string => Boolean(value)));
   for (const identifier of hosts) if (identifier === record.domain || identifier.endsWith(`.${record.domain}`)) objects.push({ kind: 'hostname', identifier, incidentTargetId: null });
   for (const target of record.workflowMetadata?.incidentTargets ?? []) for (const kind of CASE_RESPONSE_OBJECT_KINDS.filter(kind => kind !== 'domain' && kind !== 'hostname')) objects.push({ kind, identifier: target.url, incidentTargetId: target.id });
-  return objects.map(object => ({ value: JSON.stringify(object), label: `${object.kind.replaceAll('_', ' ')} · ${object.identifier}`, object }));
+  objects.push(...retainedCaseResponseObjects(record));
+  return [...new Map(objects.map(object => [JSON.stringify(object), object])).values()].map(object => {
+    const historical = Boolean(object.incidentTargetId && !record.workflowMetadata?.incidentTargets.some(target => target.id === object.incidentTargetId && target.url === object.identifier));
+    return { value: JSON.stringify(object), label: `${object.kind.replaceAll('_', ' ')} · ${object.identifier}${historical ? ' · historical / no current incident link' : ''}`, object };
+  });
 }
 
 export function selectedCaseResponseObject(record: Parameters<typeof caseResponseObjectChoices>[0], value: string): CaseResponseObject | undefined {

@@ -15,6 +15,8 @@
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   import DocumentationSearch from './DocumentationSearch.svelte';
   import CaseEvidenceRelationships from './CaseEvidenceRelationships.svelte';
+  import CaseResponseObjectSelect from './CaseResponseObjectSelect.svelte';
+  import { selectedCaseResponseObject } from '../../../../packages/cases/case-response-object.mts';
 
   let { record, mode, mutationBusy, persist }: {
     record: CaseRecord;
@@ -34,7 +36,7 @@
     pinSource: 'lookup evidence',
     pinObservedAt: '',
     pinCompleteness: 'complete' as typeof CASE_PIN_COMPLETENESS[number],
-    pinLimitations: ''
+    pinLimitations: '', responseObject: ''
   });
   const sightingDraft = createCaseDraft(() => record.id, 'sighting', {
     sightingState: 'observed_by_deployment' as typeof CASE_SIGHTING_STATES[number],
@@ -57,6 +59,10 @@
   }
 
   async function addPin() {
+    selectionError = '';
+    let responseObject;
+    try { responseObject = selectedCaseResponseObject(record, pinDraft.value.responseObject); }
+    catch (cause) { selectionError = cause instanceof Error ? cause.message : 'Review the selected object.'; return; }
     const unchanged = pinDraft.capture();
     if (!await pinDraft.persist(persist, {
       evidencePin: {
@@ -66,6 +72,7 @@
         observedAt: isoFromUtcInput(pinDraft.value.pinObservedAt),
         completeness: pinDraft.value.pinCompleteness,
         limitations: list(pinDraft.value.pinLimitations),
+        ...(responseObject ? { responseObject, sourceState: 'reviewed', observationHostname: responseObject.kind === 'domain' || responseObject.kind === 'hostname' ? responseObject.identifier : new URL(responseObject.identifier).hostname } : {}),
       },
     }, `Pinned analyst-selected evidence for ${record.domain}.`) || !unchanged()) return;
     pinDraft.value.pinLabel = '';
@@ -89,7 +96,10 @@
     sightingDraft.value.sightingLimitations = '';
   }
 
+  let selectionError = $state('');
 </script>
+
+{#if selectionError}<p role="alert">{selectionError} The draft remains available.</p>{/if}
 
 <section class="case-response-stage" aria-label="Case observations">
   <details id={`case-response-observation-${record.id}`} bind:open={expanded}>
@@ -97,6 +107,7 @@
     <DocumentationSearch initialQuery="evidence" label="Evidence guidance" />
     <form class="response-form" data-recovery-form={pinDraft.form} oninput={pinDraft.changed} onsubmit={(event) => { event.preventDefault(); void addPin(); }}>
       <p class="notice">Date and time fields use UTC.</p>
+      <CaseResponseObjectSelect {record} label="Object observed by this evidence" bind:value={pinDraft.value.responseObject} />
       <div class="two-columns">
         <label class="field">Label
           <input bind:value={pinDraft.value.pinLabel} maxlength="80" required placeholder="Observed login form">

@@ -850,7 +850,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     path: 'test/fixtures/case-lifecycle/case-response-packet-v12.json',
     bytes: 12276,
     sha256: '2f35363026f10b5eb7f7c0c3ece9c69ae776b4366510512302d7c43e8baee099',
-    contentDigestSha256: "sha256:603558cc7a9112ab759b7dd01f44c53c9408ed6d71db19f562fced2629d5c437",
+    contentDigestSha256: 'sha256:4fa4e033ef4cc7943d6ee95e513f27a982f35d0e3da402cda78bc9df28db9e05',
     schema: CASE_RESPONSE_PACKET_SCHEMA,
     version: CASE_RESPONSE_PACKET_VERSION,
     role: 'current' as const,

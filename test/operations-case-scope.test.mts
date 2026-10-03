@@ -44,6 +44,20 @@ test('partial analyst resolution leaves every other object and Case independent 
   }
 });
 
+test('typed and historical object rows do not multiply current incident-link counts', () => {
+  let record = incident('scoped');
+  const target = record.workflowMetadata!.incidentTargets[0]!;
+  const page = { kind: 'page', identifier: target.url, incidentTargetId: target.id };
+  const advertisement = { ...page, kind: 'advertisement' };
+  record = updateCase([record], record.id, { action: { type: 'internal_review', recipient: 'Example reviewer', responseObjects: [page, advertisement] } }, BEFORE).record;
+  const first = buildOperationsScopeReview([record], 'ready');
+  assert.equal(first.rows[0]!.coverage.length, 2); assert.equal(first.openObjects, 1);
+  const changed = { ...record, workflowMetadata: { ...record.workflowMetadata!, incidentTargets: [{ ...target, url: 'https://shared.example/replacement' }] } };
+  const historical = buildOperationsScopeReview([changed], 'ready');
+  assert.equal(historical.rows[0]!.coverage.length, 3); assert.equal(historical.openObjects, 1);
+  assert.equal(historical.rows[0]!.coverage.filter(row => !row.targetRetained).length, 2);
+});
+
 test('provider-reported resolution is separate from unavailable independent review and open objects', () => {
   let record = incident('provider-case');
   let actions = appendCaseAction([], { type: 'registrar_report', recipient: 'Fixture recipient' }, BEFORE);

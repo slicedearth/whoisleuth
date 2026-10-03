@@ -286,6 +286,34 @@ selected file, including an envelope when supplied. No provider API is contacted
 
 ### Local Case files
 
+Manual response scope is explicit and offline. `case incident-link` takes
+`{"url":"https://example.test/reported-page"}`; use its retained ID to bind
+`responseObjects` on `case action`. Each object contains `kind`, `identifier`
+and `incidentTargetId` (null for the Case domain or an associated hostname).
+New URL objects must match that exact retained link. Exact historical identities
+already retained in response records remain selectable after a link edit or
+removal; they are not rebound to its replacement. An action may bind up to 20
+objects; missing historical scope stays unknown.
+
+`case action-event` takes `{"id":"action-id","transition":{...}}`, using
+the same reviewed, authorised and manually submitted workflow as Console.
+After submission, a typed `objectOutcome` such as `removed`, `restricted`,
+`suspended`, `delisted`, `restored` or `disputed` requires explicit event
+`responseObjects`: a partial receipt never applies to all objects by default.
+Acknowledgement is a workflow event, not independently observed remediation.
+
+`case recheck-question` saves `statement` and `recheck` comparison conditions.
+Pins, questions and recheck input can retain one `responseObject`; exact-object
+non-reproduction requires matching complete baseline/current evidence, a later
+observation and comparable conditions. Hostname similarity is insufficient.
+Independent removal, restriction, suspension, delisting, transfer and restoration
+use those same comparison requirements. Disputes and warnings retain procedural
+source attribution separately; provider claims are not independent observations.
+`case close-object` requires one `responseObject` and the usual typed closure
+reason/evidence links. It leaves the Case and other objects unchanged.
+All these JSON operations require `--input`, `--output`, deliberate file
+replacement and the existing digest/lease checks. No report or request is sent.
+
 Create a working file, inspect its Case IDs, then append a note:
 
 ```sh

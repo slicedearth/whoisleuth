@@ -16,6 +16,8 @@
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   import CaseActionReceipt from './CaseActionReceipt.svelte';
   import CaseRequestedEvidence from './CaseRequestedEvidence.svelte';
+  import CaseResponseObjectSelect from './CaseResponseObjectSelect.svelte';
+  import { selectedCaseResponseObject, CASE_RESPONSE_OBJECT_OUTCOMES, type CaseResponseObjectOutcome } from '../../../../packages/cases/case-response-object.mts';
 
   let { record, mode, mutationBusy, persist, onadvanced }: {
     record: CaseRecord;
@@ -61,7 +63,8 @@
     actionDueAt: '',
     actionFollowUpAt: '',
     actionOriginId: '',
-    selectedActionId: ''
+    selectedActionId: '',
+    responseObjects: [] as string[],
   });
   const transitionDraft = createCaseDraft(() => record.id, 'action-transition', {
     transitionActionId: '',
@@ -73,7 +76,8 @@
     transitionEvidencePinId: '',
     transitionLimitations: '',
     transitionProviderOutcome: '' as '' | typeof CASE_PROVIDER_OUTCOMES[number],
-    transitionOutcomeDetail: ''
+    transitionOutcomeDetail: '',
+    responseObjects: [] as string[], objectOutcome: '' as '' | CaseResponseObjectOutcome
   });
   const selectedAction = $derived(record.actions.find((action) => action.id === actionDraft.value.selectedActionId) ?? null);
   const selectedActionIdentityLocked = $derived(Boolean(selectedAction
@@ -109,6 +113,7 @@
       dueAt: isoFromUtcInput(actionDraft.value.actionDueAt),
       followUpAt: isoFromUtcInput(actionDraft.value.actionFollowUpAt),
       originActionId: actionDraft.value.actionOriginId || null,
+      ...(actionDraft.value.responseObjects.length ? { responseObjects: actionDraft.value.responseObjects.map(value => selectedCaseResponseObject(record, value)!) } : selectedAction?.responseObjects === undefined ? {} : { responseObjects: [] }),
     };
   }
 
@@ -123,6 +128,7 @@
     actionDraft.value.actionDueAt = '';
     actionDraft.value.actionFollowUpAt = '';
     actionDraft.value.actionOriginId = '';
+    actionDraft.value.responseObjects = [];
   }
 
   async function selectAction(id: string): Promise<boolean> {
@@ -142,6 +148,7 @@
     actionDraft.value.actionDueAt = utcInputFromIso(action.dueAt);
     actionDraft.value.actionFollowUpAt = utcInputFromIso(action.followUpAt);
     actionDraft.value.actionOriginId = action.originActionId || '';
+    actionDraft.value.responseObjects = (action.responseObjects ?? []).map(object => JSON.stringify(object));
     return true;
   }
 
@@ -154,10 +161,13 @@
   }
 
   async function saveAction() {
+    selectionError = '';
+    let input: ReturnType<typeof actionInput>;
+    try { input = actionInput(); } catch (cause) { selectionError = cause instanceof Error ? cause.message : 'Review the selected objects.'; return; }
     const unchanged = actionDraft.capture();
     const patch = actionDraft.value.selectedActionId
-      ? { actionUpdate: { id: actionDraft.value.selectedActionId, ...actionInput() } }
-      : { action: actionInput() };
+      ? { actionUpdate: { id: actionDraft.value.selectedActionId, ...input } }
+      : { action: input };
     if (!await actionDraft.persist(persist, patch, `${actionDraft.value.selectedActionId ? 'Updated' : 'Recorded'} a case action for ${record.domain}.`, () => document.getElementById(`quick-action-advance-${record.id}`)) || !unchanged()) return;
     clearAction();
   }
@@ -178,6 +188,8 @@
     transitionDraft.value.transitionLimitations = '';
     transitionDraft.value.transitionProviderOutcome = '';
     transitionDraft.value.transitionOutcomeDetail = '';
+    transitionDraft.value.responseObjects = [];
+    transitionDraft.value.objectOutcome = '';
   }
 
   function setTransitionSourceClass(value: string) {
@@ -193,6 +205,10 @@
 
   async function addActionTransition() {
     if (!transitionAction) return;
+    selectionError = '';
+    let responseObjects;
+    try { responseObjects = transitionDraft.value.responseObjects.map(value => selectedCaseResponseObject(record, value)!); }
+    catch (cause) { selectionError = cause instanceof Error ? cause.message : 'Review the selected objects.'; return; }
     const unchanged = transitionDraft.capture();
     if (!await transitionDraft.persist(persist, {
       actionUpdate: {
@@ -208,6 +224,8 @@
           providerOutcome: transitionDraft.value.transitionProviderOutcome || null,
           outcomeDetail: transitionDraft.value.transitionOutcomeDetail || null,
           originActionId: transitionAction.originActionId,
+          ...(responseObjects.length ? { responseObjects } : {}),
+          ...(transitionDraft.value.objectOutcome ? { objectOutcome: transitionDraft.value.objectOutcome } : {}),
         },
       },
     }, `Appended a ${transitionDraft.value.transitionNextState.replaceAll('_', ' ')} action event for ${record.domain}.`) || !unchanged()) return;
@@ -216,10 +234,14 @@
     if (unchanged() && transitionAction) transitionDraft.value.transitionNextState = nextTransitionState(transitionAction, 'analyst');
   }
 
+  let selectionError = $state('');
 </script>
+
+{#if selectionError}<p role="alert">{selectionError} The draft remains available.</p>{/if}
 
 {#snippet metadataForm()}
   <form class="stack" data-recovery-form={actionDraft.form} oninput={actionDraft.changed} onsubmit={(event) => { event.preventDefault(); void saveAction(); }}>
+    <CaseResponseObjectSelect {record} label="Objects concerned by this action" multiple bind:values={actionDraft.value.responseObjects} disabled={selectedActionIdentityLocked} />
     <p class="notice">Date and time fields use UTC.</p>
     {#if record.actions.length}
       <label class="field">Action metadata<select value={actionDraft.value.selectedActionId} oninput={(event) => event.stopPropagation()} onchange={async (event) => { const select = event.currentTarget; await selectAction(select.value); select.value = actionDraft.value.selectedActionId; }}><option value="">Create a new action</option>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>
@@ -265,6 +287,7 @@
           <small>Route observed {action.routeObservedAt ?? 'time unavailable'}</small>
           <small>Route review after {action.routeReviewAfter ?? 'not recorded'} · follow-up {action.followUpAt ?? 'not scheduled'}</small>
           {#if action.originActionId}<small>Originating action: {action.originActionId}</small>{/if}
+          <small>Object binding: {action.responseObjects?.length ? action.responseObjects.map(object => `${object.kind.replaceAll('_', ' ')}: ${object.identifier}`).join('; ') : 'Unknown'}</small>
           {#if action.amendment}<small>Amends submitted packet SHA-256: {action.amendment.packetDigestSha256}</small>{/if}
           {#if action.reference}<p>Latest reference: {action.reference}</p>{/if}
           {#if action.providerOutcome}<p>Latest typed provider outcome: {action.providerOutcome.replaceAll('_', ' ')}{action.outcome ? ` · ${action.outcome}` : ''}</p>{:else if action.outcome}<p>Recorded legacy outcome detail: {action.outcome}</p>{/if}
@@ -276,6 +299,8 @@
                 <small>Event ID {event.id} · {event.applied ? 'applied to projection' : 'retained concurrent conflict'}</small>
                 {#if event.providerOutcome}<p>Provider outcome: {event.providerOutcome.replaceAll('_', ' ')}{event.outcomeDetail ? ` · ${event.outcomeDetail}` : ''}</p>{:else if event.outcomeDetail}<p>Recorded outcome detail: {event.outcomeDetail}</p>{/if}
                 {#if event.reference}<p>Reference: {event.reference}</p>{/if}
+                {#if event.responseObjects?.length}<small>Event scope: {event.responseObjects.map(object => `${object.kind.replaceAll('_', ' ')}: ${object.identifier}`).join('; ')}</small>{/if}
+                {#if event.objectOutcome}<p>Reported object outcome: {event.objectOutcome.replaceAll('_', ' ')} · {event.sourceClass}. Not independently verified by this event.</p>{/if}
                 {#if event.evidencePinId}<CaseLinkedEvidence pins={record.evidencePins} ids={[event.evidencePinId]} />{/if}
                 {#if event.originActionId}<small>Originating action: {event.originActionId}</small>{/if}
                 {#if event.limitations.length}<small>Limitations: {event.limitations.join('; ')}</small>{/if}
@@ -306,6 +331,11 @@
             <p class="notice">Date and time fields use UTC.</p>
             <div><strong id={`transition-title-${record.id}`}>Append transition for {transitionAction.recipient}</strong><span>Current projection: {transitionAction.state.replaceAll('_', ' ')}</span></div>
             {#if legalTransitionStates.length}
+              {#if transitionAction.responseObjects?.length && ['submitted', 'acknowledged'].includes(transitionAction.state)}
+                <CaseResponseObjectSelect {record} label="Objects affected by this event" multiple objects={transitionAction.responseObjects} bind:values={transitionDraft.value.responseObjects} />
+                <label class="field">Reported object outcome<select bind:value={transitionDraft.value.objectOutcome}><option value="">No typed object outcome</option>{#each CASE_RESPONSE_OBJECT_OUTCOMES as outcome}<option value={outcome}>{outcome.replaceAll('_', ' ')}</option>{/each}</select></label>
+                <p class="notice">A typed result concerns only the explicitly selected objects. It is a source-attributed claim, not an independent recheck.</p>
+              {/if}
               <div class="two-columns">
                 <label class="field">Event source<select value={transitionDraft.value.transitionSourceClass} onchange={(event) => setTransitionSourceClass(event.currentTarget.value)}>{#each userActionEventSourceClasses as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
                 <label class="field">Next state<select value={transitionDraft.value.transitionNextState} onchange={(event) => setTransitionNextState(event.currentTarget.value)}>{#each legalTransitionStates as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>

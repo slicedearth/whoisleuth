@@ -17,6 +17,7 @@ import { caseRecheckAnswerContext } from '../packages/cases/case-recheck-model.m
 import { createCase, updateCase } from '../packages/cases/case-record-operations.mts';
 import { buildCaseExport, serializeCaseStore } from '../packages/cases/case-storage-model.mts';
 import { mergeCases } from '../packages/cases/case-migration-model.mts';
+import { buildCaseIncidentCoverage } from '../packages/cases/case-workflow-metadata.mts';
 import type { CliDependencies } from '../cli/runner-types.mts';
 import { caseStoreAtCapacity } from './workspace-backup-capacity-fixture.mts';
 
@@ -57,6 +58,44 @@ test('Case grammar keeps mutations explicit and every operation offline', () => 
     ['case', 'pin', 'cases.json', '--output', 'next.json'], ['case', 'show', 'cases.json', '--expect-file-digest', 'not-a-digest'],
     ['case', 'show', 'cases.json', '--network'], ['case', 'show', 'cases.json', '--quiet'],
   ]) assert.throws(() => parseCliArguments(argv), { message: /.+/u }, argv.join(' '));
+});
+
+test('offline response authoring shares one receipt and closes only its explicitly affected object', async context => {
+  const root = await directory(context), file = await initialFile(root), inputFile = join(root, 'operation.json');
+  const mutate = async (operation: string, input: unknown) => {
+    await writeFile(inputFile, JSON.stringify(input));
+    return invoke(['case', operation, file, '--input', inputFile, '--output', file, '--force']);
+  };
+  for (const url of ['https://example.test/one', 'https://example.test/two']) {
+    const result = await mutate('incident-link', { url });
+    assert.equal(result.code, EXIT_CODES.SUCCESS, result.stderr);
+  }
+  let record = readEditableCaseExport(await readFile(file, 'utf8'))[0]!;
+  const objects = record.workflowMetadata!.incidentTargets.map(target => ({ kind: 'page', identifier: target.url, incidentTargetId: target.id }));
+  let result = await mutate('action', { type: 'network_hosting_report', recipient: 'Example response desk', contactSource: 'Analyst-reviewed route', responseObjects: objects });
+  assert.equal(result.code, EXIT_CODES.SUCCESS, result.stderr);
+  record = readEditableCaseExport(await readFile(file, 'utf8'))[0]!;
+  const id = record.actions[0]!.id;
+  for (const nextState of ['ready_for_review', 'reviewed', 'authorised', 'submitted']) {
+    result = await mutate('action-event', { id, transition: { nextState, sourceClass: 'analyst', provenance: 'Reviewed manual event' } });
+    assert.equal(result.code, EXIT_CODES.SUCCESS, result.stderr);
+  }
+  const before = await readFile(file, 'utf8');
+  result = await mutate('action-event', { id, transition: { nextState: 'acknowledged', sourceClass: 'provider', provenance: 'Provider correspondence', providerOutcome: 'provider_reports_resolved', objectOutcome: 'removed' } });
+  assert.equal(result.code, EXIT_CODES.USAGE); assert.equal(await readFile(file, 'utf8'), before);
+  result = await mutate('action-event', { id, transition: { nextState: 'acknowledged', sourceClass: 'provider', provenance: 'Provider correspondence', reference: 'EXAMPLE-RECEIPT', providerOutcome: 'provider_reports_resolved', responseObjects: [objects[0]], objectOutcome: 'removed' } });
+  assert.equal(result.code, EXIT_CODES.SUCCESS, result.stderr);
+  result = await mutate('close-object', { responseObject: objects[0], reason: 'provider_reported_resolution_not_independently_checked', summary: 'Provider reported one page removed; independent review remains pending.', actionId: id });
+  assert.equal(result.code, EXIT_CODES.SUCCESS, result.stderr);
+  record = readEditableCaseExport(await readFile(file, 'utf8'))[0]!;
+  assert.notEqual(record.status, 'closed'); assert.equal(record.actions.length, 1);
+  const coverage = buildCaseIncidentCoverage(record);
+  assert.equal(coverage[0]!.providerEvents.at(-1)?.outcome, 'removed'); assert.equal(coverage[0]!.closures.length, 1);
+  assert.equal(coverage[1]!.providerEvents.length, 0); assert.equal(coverage[1]!.closures.length, 0);
+  assert.ok(coverage.every(row => row.observationCoverage === 'unknown'));
+  const shown = await invoke(['case', 'show', file]);
+  assert.equal(shown.code, EXIT_CODES.SUCCESS, shown.stderr); assert.match(shown.stdout, /reported removed/u);
+  assert.match(shown.stdout, /https:\/\/example\.test\/one/u);
 });
 
 test('editable admission preserves immutable public and current fixtures and rejects lossy or future inputs', () => {

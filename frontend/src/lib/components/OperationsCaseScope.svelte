@@ -23,7 +23,7 @@
   {#if sourceState !== 'ready'}
     <p role="status">Case scope {sourceState === 'loading' ? 'is loading' : 'is unavailable'}. Object counts and outcomes are withheld.</p>
   {:else}
-    <p>{review.rows.length} separate Cases · {review.openObjects} open incident links · {review.analystResolvedObjects} analyst-resolved links · {review.unknownObjectCoverage} links with unknown exact-object action and observation coverage.</p>
+    <p>{review.rows.length} separate Cases · {review.openObjects} open incident links · {review.analystResolvedObjects} analyst-resolved links · {review.unknownObjectCoverage} exact objects with unknown action or observation coverage.</p>
     <p>{campaignDomains ? "Population: retained Cases matching this campaign's domains; same-domain incidents remain separate." : 'Population: all inspected retained Cases, independent of the action-report time window.'} Link counts are analyst metadata, not observed activity or removal.</p>
     {#if review.casesOmitted}<p>{review.casesOmitted} Cases outside the inspection cap. Counts and missing-member coverage are incomplete.</p>{/if}
     {#if review.missingDomains?.length}<details><summary>{review.missingDomains.length} campaign domain{review.missingDomains.length === 1 ? '' : 's'} without an inspected Case</summary><ul>{#each review.missingDomains as domain}<li><code>{domain}</code> · object coverage unavailable</li>{/each}</ul></details>{/if}
@@ -49,8 +49,8 @@
       </table></div>
       {#if pages > 1}<nav aria-label="Case outcome scope pages"><button class="btn" type="button" disabled={currentPage <= 1} onclick={() => page = currentPage - 1}>Previous Case scope</button><span>Page {currentPage} of {pages}</span><button class="btn" type="button" disabled={currentPage >= pages} onclick={() => page = currentPage + 1}>Next Case scope</button></nav>{/if}
     {:else}<p>No Cases in this inspected population; no resolution conclusion follows.</p>{/if}
-    <details><summary>Dispute, restoration and recurrence coverage</summary><p>Unavailable: current records do not type dispute, restoration or incident recurrence. A restored page, later change, review expiry or return to review does not establish recurrence. A future recurrence assessment needs a comparable baseline for the same condition and object, with procedural context kept separate.</p></details>
-    <p>Provider assertions, changed observations, non-reproduction under stated conditions and unavailable reviews are distinct. None establishes exact-object removal, report causation or common ownership. These details stay in page memory and are excluded from aggregate JSON.</p>
+    <details><summary>Dispute, restoration and recurrence coverage</summary><p>Explicit object event snapshots and independent reviews can retain dispute and restoration outcomes. Historical missing bindings remain unknown. A restored page, later change, review expiry or return to review does not establish malicious recurrence. Recurrence assessment remains unavailable without a comparable baseline for the same condition and object; procedural context stays separate.</p></details>
+    <p>Provider assertions, independently stated object outcomes, non-reproduction under stated conditions and unavailable reviews are distinct. None establishes permanent removal, report causation or common ownership. These details stay in page memory and are excluded from aggregate JSON.</p>
   {/if}
 </details>
 

@@ -160,12 +160,12 @@ function parseCaseArguments(parsed: ParsedCommandArguments<CaseArguments['action
     throw new CliUsageError('Only case note accepts and requires --text or --note-file.');
   }
   if (
-    ['pin', 'link', 'withdraw-link', 'assess', 'recheck'].includes(operation)
+    ['pin', 'link', 'withdraw-link', 'assess', 'recheck', 'incident-link', 'action', 'action-event', 'recheck-question', 'close-object'].includes(operation)
       ? !inputSource
       : inputSource !== null
   ) {
     throw new CliUsageError(
-      'Only case pin, link, withdraw-link, assess and recheck accept and require --input.',
+      'This Case mutation requires --input; show, open and note do not accept it.',
     );
   }
   if (expectedFileDigest !== null && (!source || !/^sha256:[a-f0-9]{64}$/u.test(expectedFileDigest))) {

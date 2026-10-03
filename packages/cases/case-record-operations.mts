@@ -376,7 +376,7 @@ export function updateCase(
   if (!current) throw new Error('That case no longer exists.');
   const workflowMetadata = updateCaseWorkflowMetadata(current.workflowMetadata
     ?? readCaseWorkflowFields(current, current.domain, current.assertions).workflowMetadata, patch, current.domain, now);
-  const scopedCase = { domain: current.domain, workflowMetadata };
+  const scopedCase = { ...current, workflowMetadata };
   for (const raw of [patch.evidencePin, ...(Array.isArray(patch.evidencePins) ? patch.evidencePins : []), patch.observedEffectReview, patch.closure]) {
     assertCaseResponseObject(readCaseResponseObject(objectRecord(raw).responseObject), scopedCase);
   }

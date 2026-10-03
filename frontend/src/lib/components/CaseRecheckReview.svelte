@@ -18,11 +18,14 @@
   import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
+  import CaseResponseObjectSelect from './CaseResponseObjectSelect.svelte';
+  import { selectedCaseResponseObject, CASE_RESPONSE_OBJECT_OUTCOMES, type CaseResponseObjectOutcome } from '../../../../packages/cases/case-response-object.mts';
   import {
     CASE_RECHECK_CONDITIONS,
     selectCaseRecheckQuestion,
     caseRecheckComparisonWarnings,
     assertRecheckNonReproduction,
+    assertCaseObjectObservationOutcome,
     type CaseRecheckAnswerContext,
   } from '../../../../packages/cases/case-recheck-model.mts';
 
@@ -52,6 +55,7 @@
     questionId: '',
     questionUpdatedAt: '',
     conditionsMatch: 'unknown' as CaseRecheckAnswerContext['conditionsMatch'],
+    responseObject: '', objectOutcome: '' as '' | CaseResponseObjectOutcome,
   });
   const sourceClasses = CASE_OBSERVED_EFFECT_SOURCE_CLASSES.filter((value) => value !== 'import');
   const selected = $derived(
@@ -130,6 +134,13 @@
       return;
     }
     const unchanged = draft.capture();
+    let responseObject;
+    try {
+      responseObject = recheck?.responseObject ?? selectedCaseResponseObject(record, draft.value.responseObject);
+      assertCaseObjectObservationOutcome(draft.value.objectOutcome || undefined, recheck ?? undefined,
+        retained?.completeness ?? draft.value.effectCompleteness, record.evidencePins, retained ? selected : undefined,
+        retained?.observedAt ?? manualTime ?? new Date().toISOString());
+    } catch (cause) { error = cause instanceof Error ? cause.message : 'Review the exact-object comparison.'; return; }
     if (
       !(await draft.persist(
         persist,
@@ -146,6 +157,8 @@
             // Source limitations remain on the linked pin; this field records the analyst's additional qualifications.
             limitations: list(draft.value.effectLimitations),
             ...(recheck ? { recheck } : {}),
+            ...(responseObject ? { responseObject } : {}),
+            ...(draft.value.objectOutcome ? { objectOutcome: draft.value.objectOutcome } : {}),
           },
         },
         `Recorded an independent observed-effect review for ${record.domain}.`,
@@ -157,6 +170,7 @@
     draft.value.effectEvidencePinId = '';
     draft.value.effectSightingId = '';
     draft.value.effectUsePinMetadata = false;
+    draft.value.objectOutcome = '';
   }
 </script>
 
@@ -213,6 +227,9 @@
       draft.changed();
     }}
   />
+  {#if recheck?.responseObject}<p class="notice">Object: {recheck.responseObject.kind.replaceAll('_', ' ')} · {recheck.responseObject.identifier}. Current evidence must explicitly concern this same object.</p>
+  {:else}<CaseResponseObjectSelect {record} label="Object independently observed" bind:value={draft.value.responseObject} />{/if}
+  <label class="field">Independent object outcome<select bind:value={draft.value.objectOutcome}><option value="">No typed object outcome</option>{#each CASE_RESPONSE_OBJECT_OUTCOMES as outcome}<option value={outcome}>{outcome.replaceAll('_', ' ')}</option>{/each}</select><small>Technical outcomes require complete, later evidence and a complete baseline for the same object under comparable conditions. Disputes and warnings retain procedural attribution separately. No outcome establishes report causation or campaign elimination; unavailable collection is not removal.</small></label>
   {#if selected}
     <label class="choice source-choice"
       ><input type="checkbox" bind:checked={draft.value.effectUsePinMetadata} />Use selected source details</label

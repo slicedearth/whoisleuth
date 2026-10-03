@@ -81,7 +81,7 @@ type CliCommandDefinition = Readonly<{
   }>;
 }>;
 
-const CLI_CASE_OPERATIONS = ['show', 'open', 'note', 'pin', 'link', 'withdraw-link', 'assess', 'recheck'] as const;
+const CLI_CASE_OPERATIONS = ['show', 'open', 'note', 'pin', 'link', 'withdraw-link', 'assess', 'recheck', 'incident-link', 'action', 'action-event', 'recheck-question', 'close-object'] as const;
 const CLI_INDICATOR_OPERATIONS = ['revise', 'inspect', 'stix', 'misp'] as const;
 
 const CLI_META_ACTIONS: readonly CliMetaAction[] = Object.freeze([

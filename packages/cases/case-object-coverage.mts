@@ -1,15 +1,11 @@
 // Derived local view; append-only owners retain the evidence and event clocks.
 import type { CaseRecord } from './case-record-contracts.mts';
 import type { CaseIncidentTarget } from './case-workflow-metadata.mts';
-import { sameCaseResponseObject, type CaseResponseObject } from './case-response-object.mts';
+import { retainedCaseResponseObjects, sameCaseResponseObject, type CaseResponseObject } from './case-response-object.mts';
 
 export function buildCaseIncidentCoverage(record: Pick<CaseRecord, 'workflowMetadata'> & Partial<Pick<CaseRecord, 'createdAt' | 'updatedAt' | 'actions' | 'observedEffects' | 'evidencePins' | 'closures' | 'assertions'>>) {
   const objects = new Map<string, { target: CaseIncidentTarget; object: CaseResponseObject; targetRetained: boolean }>();
-  const explicit = [...(record.actions ?? []).flatMap(action => [...action.responseObjects ?? [], ...action.history.flatMap(event => event.responseObjects ?? [])]),
-    ...(record.observedEffects?.reviews ?? []).flatMap(review => review.responseObject ? [review.responseObject] : []),
-    ...(record.evidencePins ?? []).flatMap(pin => pin.responseObject ? [pin.responseObject] : []),
-    ...(record.closures?.records ?? []).flatMap(closure => closure.responseObject ? [closure.responseObject] : []),
-    ...(record.assertions ?? []).flatMap(assertion => assertion.recheck?.responseObject ? [assertion.recheck.responseObject] : [])];
+  const explicit = retainedCaseResponseObjects(record);
   for (const target of record.workflowMetadata?.incidentTargets ?? []) {
     const matching = explicit.filter(object => object.incidentTargetId === target.id && object.identifier === target.url);
     for (const object of matching.length ? matching : [{ kind: 'other' as const, identifier: target.url, incidentTargetId: target.id }]) objects.set(JSON.stringify(object), { target, object, targetRetained: true });

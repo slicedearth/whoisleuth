@@ -712,7 +712,19 @@ assertions remain retained when their metadata is migrated. Exact public inciden
 links can be retained for web or social-platform
 content, resolved without erasing history, and carried into a response packet.
 **Exact incident-object coverage** keeps each link's analyst status separate from
-unknown action binding and independent observation coverage. Operations reports
+explicit action binding and independent observation coverage. Manually reviewed
+actions can bind up to 20 typed domain, hostname, page, advertisement, social,
+messaging, storefront, app or other objects in one shared reporting record.
+Choose the affected subset on each provider result; acknowledgement is not
+removal. Event snapshots remain immutable, and already-retained historical
+identities stay selectable after a link edit without binding to its replacement.
+Missing historical bindings remain unknown. Pins, saved recheck questions and
+independent reviews can concern the same exact object. Technical outcomes need
+complete later evidence, a complete exact-object baseline and comparable
+conditions. Procedural disputes and warnings retain their source separately.
+Deliberate object closure leaves other objects and the Case status unchanged;
+whole-Case closure remains a separate analyst decision. No control submits a
+report or starts collection. Operations reports
 offer a local contributor drill-down and a paged Case scope view, independent of
 the report's time window. Campaigns show the same view for Cases matching their
 domains; same-domain incidents remain separate. Provider outcomes remain separate
