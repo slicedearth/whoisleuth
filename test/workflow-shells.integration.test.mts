@@ -74,7 +74,10 @@ if (command === 'ci') {
 
 type HealthStep = { run?: string; uses?: string; if?: string; with?: Record<string, unknown>; env?: Record<string, string> };
 const healthWorkflow = parse(readFileSync(new URL('../.github/workflows/test-health.yml', import.meta.url), 'utf8'));
-const healthJobs = healthWorkflow.jobs as Record<string, { steps: HealthStep[] }>;
+const healthJobs = healthWorkflow.jobs as Record<string, {
+  steps: HealthStep[];
+  strategy?: { matrix?: { browser?: string[] } };
+}>;
 const healthSteps = requiredValue(healthJobs.profile).steps;
 
 const expectedHealthCommands = ['ci', 'toolchain:check', 'test:properties', 'test:mutation', 'verification:timing:check',
@@ -140,14 +143,14 @@ for (const failure of [null, ...expectedHealthCommands.map((_, index) => index)]
 
 // Resolve shell quoting and flag ordering without invoking a package manager,
 // browser or installer. Only argument vectors and the two public test knobs leave the shell.
-function capturedCommands(source: string, failure = false) {
+function capturedCommands(source: string, failure = false, environment: Record<string, string> = {}) {
   const capture = 'process.stdout.write(JSON.stringify({argv:process.argv.slice(1),multiplier:process.env.WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER,seed:process.env.WHOISLEUTH_FAST_CHECK_SEED})+"\\n");if(process.env.TEST_COMMAND_FAIL==="1")process.exit(23)';
   const declarations = ['npm', 'node', 'playwright'].map(command =>
     `${command}() { "$TEST_NODE" -e '${capture}' ${command} "$@"; }`).join('\n');
   const result = spawnSync(unitTestExecutablePath('bash'), ['-e', '-c', `${declarations}\n${source}`], {
     encoding: 'utf8', timeout: 10_000,
     env: { ...process.env, TEST_NODE: process.execPath, TEST_COMMAND_FAIL: failure ? '1' : '0',
-      WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER: '', WHOISLEUTH_FAST_CHECK_SEED: '' },
+      WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER: '', WHOISLEUTH_FAST_CHECK_SEED: '', ...environment },
   });
   assert.ifError(result.error);
   assert.equal(result.signal, null);
@@ -155,33 +158,36 @@ function capturedCommands(source: string, failure = false) {
     .map(line => JSON.parse(line) as { argv: string[]; multiplier: string; seed: string }) };
 }
 
-test('scheduled cross-browser job executes its own preparation and preserves failure evidence', () => {
-  const steps = requiredValue(healthJobs['cross-browser']).steps;
-  const calls = steps.filter(step => step.run).flatMap(step => {
-    const result = capturedCommands(requiredValue(step.run));
-    assert.equal(result.status, 0);
-    return result.calls.map(call => ({ ...call, step }));
+for (const browser of requiredValue(healthJobs['cross-browser']?.strategy?.matrix?.browser)) {
+  test(`scheduled ${browser} job executes its own preparation and preserves failure evidence`, () => {
+    const steps = requiredValue(healthJobs['cross-browser']).steps;
+    const environment = { WHOISLEUTH_CROSS_BROWSER_PROJECT: browser };
+    const calls = steps.filter(step => step.run).flatMap(step => {
+      const result = capturedCommands(requiredValue(step.run), false, environment);
+      assert.equal(result.status, 0);
+      return result.calls.map(call => ({ ...call, step }));
+    });
+    assert.deepEqual(calls.map(call => call.argv), [
+      ['npm', 'ci', '--include=optional', '--ignore-scripts', '--audit=false'],
+      ['npm', 'run', 'verification:ci', '--', '--group=browser-build'],
+      ['npm', 'run', 'test:e2e:critical:install'],
+      ['npm', 'run', 'test:e2e:cross-browser', '--', `--project=${browser}`],
+      ['npm', 'run', 'test:e2e:summary'],
+      ['npm', 'run', 'verification:artifacts', '--', '--cleanup=browser'],
+    ]);
+    for (const call of calls.slice(0, 4)) {
+      assert.equal(call.step.if, undefined);
+      assert.equal(capturedCommands(requiredValue(call.step.run), true, environment).status, 23);
+    }
+    for (const call of calls.slice(4)) assert.equal(call.step.if, 'always()');
+    const upload = requiredValue(steps.find(step => step.uses?.startsWith('actions/upload-artifact@')));
+    assert.equal(upload.if, 'always()');
+    assert.deepEqual(String(upload.with?.path).trim().split(/\s+/u), [
+      'playwright-results.json', 'playwright-report/', 'test-results/',
+    ]);
+    assert.ok(steps.indexOf(upload) < steps.indexOf(calls.at(-1)!.step), 'Evidence must be retained before cleanup');
   });
-  assert.deepEqual(calls.map(call => call.argv), [
-    ['npm', 'ci', '--include=optional', '--ignore-scripts', '--audit=false'],
-    ['npm', 'run', 'verification:ci', '--', '--group=browser-build'],
-    ['npm', 'run', 'test:e2e:critical:install'],
-    ['npm', 'run', 'test:e2e:cross-browser'],
-    ['npm', 'run', 'test:e2e:summary'],
-    ['npm', 'run', 'verification:artifacts', '--', '--cleanup=browser'],
-  ]);
-  for (const call of calls.slice(0, 4)) {
-    assert.equal(call.step.if, undefined);
-    assert.equal(capturedCommands(requiredValue(call.step.run), true).status, 23);
-  }
-  for (const call of calls.slice(4)) assert.equal(call.step.if, 'always()');
-  const upload = requiredValue(steps.find(step => step.uses?.startsWith('actions/upload-artifact@')));
-  assert.equal(upload.if, 'always()');
-  assert.deepEqual(String(upload.with?.path).trim().split(/\s+/u), [
-    'playwright-results.json', 'playwright-report/', 'test-results/',
-  ]);
-  assert.ok(steps.indexOf(upload) < steps.indexOf(calls.at(-1)!.step), 'Evidence must be retained before cleanup');
-});
+}
 
 test('scheduled browser execution preserves its invocation and failure contract, not shell spelling', () => {
   const workflow = parse(readFileSync(new URL('../.github/workflows/e2e-stress.yml', import.meta.url), 'utf8'));
@@ -231,6 +237,14 @@ test('stress and property scripts keep independent repetition, retry and seed ex
   assert.equal(parsed.values.workers, '1');
   assert.equal(parsed.values.retries, '0');
   assert.equal(parsed.values['repeat-each'], '10');
+  const crossBrowser = run('test:e2e:cross-browser');
+  assert.equal(crossBrowser.argv[0], 'playwright');
+  const crossBrowserArgs = parseArgs({ args: crossBrowser.argv.slice(1), allowPositionals: true,
+    options: { config: { type: 'string' }, workers: { type: 'string' }, retries: { type: 'string' } } });
+  assert.deepEqual(crossBrowserArgs.positionals, ['test']);
+  assert.deepEqual(crossBrowserArgs.values, Object.assign(Object.create(null), {
+    config: 'e2e/cross-browser.config.ts', workers: '1', retries: '0',
+  }));
   const properties = run('test:properties');
   assert.deepEqual(properties.argv.slice(0, 2), ['node', '--test']);
   assert.ok(properties.argv.includes('test/verification-state-machines.test.mts'));
