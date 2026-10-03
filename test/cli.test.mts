@@ -1123,7 +1123,8 @@ test('terminal deep-domain presentation omits malformed DNS records and URL rela
   assert.match(output, /Technology\s+Partial · 1 indicator/u);
   assert.match(output, /Indicators\s+Fixture technology/u);
   assert.match(output, /Nameservers\s+Unavailable · identity does not establish operator or web-host ownership/u);
-  assert.doesNotMatch(output, /^A\s+|Canonical\s+|must-not-render|\[object Object\]/mu);
+  assert.match(output, /^A\s+DNS answer could not be read completely$/mu);
+  assert.doesNotMatch(output, /Canonical\s+|must-not-render|\[object Object\]/mu);
 });
 
 test('terminal deep lookup summarizes current website evidence without exposing raw details', () => {
