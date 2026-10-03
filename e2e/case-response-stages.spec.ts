@@ -467,6 +467,10 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   await outcome.getByRole('combobox', { name: 'Completeness', exact: true }).selectOption('partial');
   await outcome.getByLabel('Limitations', { exact: false }).first().fill('One source failed; this does not establish takedown.');
   await outcome.getByRole('button', { name: 'Record independent outcome', exact: true }).click();
+  await outcome.getByRole('combobox', { name: 'Reason', exact: true }).selectOption('independently_not_reproduced');
+  await expect(outcome.getByRole('status').filter({ hasText: 'No complete not-reproduced review' })).toBeVisible();
+  await expect(outcome.getByRole('combobox', { name: 'Independent review', exact: true }).locator('option')).toHaveCount(1);
+  await expect(outcome.getByRole('list', { name: 'Deliberate case closures' })).toHaveCount(0);
   await outcome.getByRole('combobox', { name: 'Reason', exact: true }).selectOption('unable_to_proceed');
   await outcome.getByLabel('Closure summary', { exact: true }).fill('Closed without asserting removal; independent evidence remains incomplete.');
   await outcome.getByRole('button', { name: 'Close case with reason', exact: true }).click();

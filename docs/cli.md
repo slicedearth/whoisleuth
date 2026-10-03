@@ -146,6 +146,10 @@ their focused help. They do not use the hosted login or hosted usage controls.
 `lookup --plan` lists planned source families and disclosure targets before
 collection. `doctor` is offline unless `--network` is selected.
 
+Deep Lookup reports IPv4 and IPv6 results separately, including empty answers,
+NODATA, resolver-reported missing names and query failures. These outcomes remain
+distinct in evidence exports; none alone establishes domain removal.
+
 Plans are target-specific: Fast IP and ASN plans contain RDAP only; Deep IP
 adds WHOIS and eligible reverse DNS, while Deep ASN adds WHOIS. Domain-only web,
 TLS and selected intelligence do not apply to address or ASN targets.

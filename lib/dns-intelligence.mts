@@ -1,5 +1,5 @@
 // Bounded DNS evidence for investigative deep scans. This collector keeps
-// authoritative absence distinct from resolver failure, preserves only record
+// resolver-reported negative answers distinct from failures, preserves only record
 // types that aid domain triage, and never treats shared infrastructure as proof
 // of common ownership or maliciousness.
 
@@ -21,6 +21,7 @@ import {
 import { isPrivateAddress } from './safe-fetch.mts';
 import { resolveServiceBindingRecords } from './service-binding-dns.mts';
 import { canonicalRegistrableDomain } from '../packages/analysis/registrable-domain.mts';
+import { DNS_QUERY_OUTCOMES, dnsQueryFailureOutcome, type DnsQueryOutcome } from '../packages/evidence/dns-query-outcome.mts';
 
 type MxRecord = { priority: number; exchange: string };
 type CaaRecord = { critical: number; tag: string; value: string };
@@ -34,7 +35,7 @@ type SoaRecord = {
   minttl: number;
 };
 type NormalizedRecords<T> = { records: T[]; truncated: boolean; discarded: number };
-type DnsQueryResult<T> = NormalizedRecords<T> & { status: 'success' | 'not_found' | 'error'; error: string | null };
+type DnsQueryResult<T> = NormalizedRecords<T> & { status: 'success' | 'not_found' | 'error'; error: string | null; detail: DnsQueryOutcome };
 type DnsResolver = (value: string) => Promise<unknown>;
 type DnsIntelligenceOptions = {
   resolvers?: Record<string, DnsResolver>;
@@ -90,7 +91,6 @@ const MAX_SERVICE_ALPN_IDS = 16;
 const MAX_SERVICE_ADDRESS_HINTS = 8;
 const MAX_CAA_TREE_QUERIES = 8;
 const DNS_CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/u;
-const MISSING_CODES = new Set(['ENODATA', 'ENOTFOUND', 'ENONAME']);
 
 function skippedDnsIntelligence(
   detail = 'DNS intelligence is disabled by deployment policy.',
@@ -475,7 +475,7 @@ function normalizePtr(records: unknown): NormalizedRecords<string> {
 
 function withTimeout<T>(factory: () => Promise<T> | T, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('DNS query timed out')), timeoutMs);
+    const timer = setTimeout(() => reject(Object.assign(new Error('DNS query timed out'), { code: 'ETIMEOUT' })), timeoutMs);
     Promise.resolve().then(factory).then(
       (value) => { clearTimeout(timer); resolve(value); },
       (error) => { clearTimeout(timer); reject(error); }
@@ -489,14 +489,16 @@ async function query<T>(factory: () => Promise<unknown>, normalize: (value: unkn
     const unusable = !normalized.records.length && (normalized.truncated || normalized.discarded > 0);
     return {
       status: unusable ? 'error' : normalized.records.length ? 'success' : 'not_found',
+      detail: unusable ? 'invalid_response' : normalized.records.length ? 'records' : 'empty_answer',
       records: normalized.records,
       error: unusable ? 'The returned record family could not be retained completely; absence is unknown.' : null,
       truncated: normalized.truncated,
       discarded: normalized.discarded || 0,
     };
   } catch (error) {
-    if (error && typeof error === 'object' && MISSING_CODES.has(String((error as NodeJS.ErrnoException).code))) return { status: 'not_found', records: [], error: null, truncated: false, discarded: 0 };
-    return { status: 'error', records: [], error: boundedError(error), truncated: false, discarded: 0 };
+    const detail = dnsQueryFailureOutcome(error && typeof error === 'object' ? (error as NodeJS.ErrnoException).code : undefined);
+    const missing = DNS_QUERY_OUTCOMES[detail].status === 'not_found';
+    return { status: missing ? 'not_found' : 'error', detail, records: [], error: missing ? null : boundedError(error), truncated: false, discarded: 0 };
   }
 }
 
@@ -809,6 +811,7 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
     diagnostics: {
       ...Object.fromEntries(Object.entries(queries).map(([name, item]) => [name, {
         status: item.status,
+        detail: item.detail,
         error: item.error,
         truncated: item.truncated,
         discarded: item.discarded,

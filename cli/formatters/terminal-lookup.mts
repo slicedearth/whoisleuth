@@ -1,4 +1,5 @@
 import { registryAccessProfileLabel } from '../registry-access.mts';
+import { dnsAddressFamilyEvidence } from '../../packages/evidence/dns-query-outcome.mts';
 import { appendTechnologyLines } from './terminal-technology.mts';
 import { appendDeliveryMetadataLines, appendPublicationMetadataLines } from './terminal-metadata.mts';
 import { securityPostureReview, summarizeSecurityPostureReview } from '../../lib/website-security-posture.mts';
@@ -324,6 +325,10 @@ function formatTerminalLookup(
     if (Object.keys(dns).length) {
       dnsLines.push(`Evidence       ${titleCase(dns.status)}`);
       dnsLines.push(`Completeness   ${dns.complete === true ? 'Complete' : 'Incomplete'}`);
+      for (const family of ['a', 'aaaa'] as const) {
+        const evidence = dnsAddressFamilyEvidence(dns, family);
+        if (evidence.value) dnsLines.push(`${family.toUpperCase().padEnd(14)} ${safeTerminalValue(evidence.value)}`);
+      }
       const recordTypes = [
         ['a', 'A'], ['aaaa', 'AAAA'], ['cname', 'CNAME'], ['ns', 'NS'],
         ['mx', 'MX'], ['spf', 'SPF'], ['dmarc', 'DMARC'], ['caa', 'CAA'],

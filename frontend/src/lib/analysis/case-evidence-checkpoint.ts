@@ -19,6 +19,8 @@ import type {
 import type { LookupEvidenceReplay } from './lookup-evidence-replay.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import { lookupObservationHostname } from '../../../../packages/evidence/lookup-target.mts';
+import { dnsAddressFamilyEvidence } from '../../../../packages/evidence/dns-query-outcome.mts';
+import { MAX_CASE_CHECKPOINT_FACTS } from '../../../../packages/contracts/case-portability.mts';
 
 export const CASE_EVIDENCE_CHECKPOINT_VERSION = 1;
 // This bounded selection accommodates separately attributed registration and
@@ -251,6 +253,13 @@ export function buildLookupCheckpointFacts(
     registrationFact('registration.nameservers', 'Published nameservers', (parsed) => parsed.nameservers),
     { field: 'dns.nameservers', category: 'dns', label: 'Nameservers', value: factValue(dnsRecords.ns), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
     { field: 'dns.addresses', category: 'dns', label: 'A and AAAA addresses', value: factValue([...normalizedStrings(dnsRecords.a), ...normalizedStrings(dnsRecords.aaaa)]), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
+    ...(['a', 'aaaa'] as const).map((family) => {
+      const evidence = dnsAddressFamilyEvidence(dns, family);
+      return { field: `dns.${family}`, category: 'dns' as const, label: `${family.toUpperCase()} address result`,
+        value: evidence.value, source: 'DNS', sourceState: evidence.state, observedAt: dnsObservedAt,
+        collectionDepth: depth, completeness: evidence.complete ? 'complete' as const : 'partial' as const,
+        truncated: evidence.truncated, limitations: sourceLimitations(dns.limitations) };
+    }),
     { field: 'dns.mx', category: 'dns', label: 'MX hosts', value: factValue(availability.mxHosts ?? dnsRecords.mx), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
     { field: 'dns.caa', category: 'dns', label: 'CAA records', value: factValue(caaRecords(dnsRecords.caa)), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true || (Array.isArray(dnsRecords.caa) && dnsRecords.caa.length > 20) ? true : null, limitations: sourceLimitations(dns.limitations) },
     { field: 'dns.spf', category: 'dns', label: 'SPF publication', value: factValue(availability.hasSpf), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
@@ -275,7 +284,8 @@ export function buildLookupCheckpointFacts(
   ];
 
   return specifications.map<CheckpointFact>((fact) => {
-    const observation = fact.category === 'dns' ? dns : fact.category === 'tls' ? tls
+    const observation = fact.field === 'dns.a' || fact.field === 'dns.aaaa' ? null
+      : fact.category === 'dns' ? dns : fact.category === 'tls' ? tls
       : ['http', 'page_identity'].includes(fact.category) ? http
       : fact.category === 'network' ? network : fact.category === 'disclosure' ? securityTxt : null;
     const incomplete = observation?.complete === false;
@@ -306,6 +316,8 @@ export function buildLookupCheckpointFacts(
 }
 
 const REPLAY_CHECKPOINT_FIELDS = Object.freeze({
+  'dns.a': Object.freeze({ field: 'dns.a', category: 'dns' as const }),
+  'dns.aaaa': Object.freeze({ field: 'dns.aaaa', category: 'dns' as const }),
   'registration.registrar': Object.freeze({ field: 'registration.registrar', category: 'registration' as const }),
   'registration.created': Object.freeze({ field: 'registration.created', category: 'registration' as const }),
   'registration.expires': Object.freeze({ field: 'registration.expires', category: 'registration' as const }),
@@ -384,7 +396,10 @@ export function checkpointPinInputs(
     transitionExpectations?: Readonly<Record<string, CaseTransitionExpectation>>;
   }> = {},
 ): Array<Omit<CaseEvidencePin, 'createdAt' | 'id'>> {
-  const selected = new Set(selectedFields.slice(0, MAX_CHECKPOINT_FACTS));
+  if (selectedFields.length > MAX_CASE_CHECKPOINT_FACTS) {
+    throw new Error(`Select at most ${MAX_CASE_CHECKPOINT_FACTS} checkpoint facts. No selection was saved.`);
+  }
+  const selected = new Set(selectedFields);
   const id = options.checkpointId && /^[A-Za-z0-9_-]{1,64}$/u.test(options.checkpointId)
     ? options.checkpointId
     : checkpointId();

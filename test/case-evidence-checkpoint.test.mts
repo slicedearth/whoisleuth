@@ -15,8 +15,34 @@ import type { LookupEvidenceReplay } from '../frontend/src/lib/analysis/lookup-e
 import { normalizeCaseEvidencePins } from '../frontend/src/lib/analysis/case-response-model.ts';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
 import type { LookupHttpResponse } from '../lib/lookup-response-contract.mts';
+import { MAX_CASE_CHECKPOINT_FACTS } from '../packages/contracts/case-portability.mts';
 
 const OBSERVED_AT = '2026-07-29T01:00:00.000Z';
+
+test('per-family DNS checkpoints preserve negative outcomes and IPv6 independently of unrelated failures', () => {
+  const result = response({ availability: { ...response().availability, dns: { status: 'partial', complete: false, observedAt: OBSERVED_AT,
+    records: { a: [], aaaa: ['2001:db8::1'] }, diagnostics: {
+      a: { status: 'not_found', detail: 'no_data' }, aaaa: { status: 'success', detail: 'records' }, mx: { status: 'error' },
+    } } } });
+  const facts = buildLookupCheckpointFacts(result, { collectionDepth: 'deep' });
+  assert.ok(facts.length <= MAX_CHECKPOINT_FACTS);
+  assert.equal(facts.at(-1)?.field, 'disclosure.security_txt_contacts');
+  const ipv4 = facts.find(fact => fact.field === 'dns.a')!;
+  const ipv6 = facts.find(fact => fact.field === 'dns.aaaa')!;
+  assert.equal(ipv4.value, 'No data for this record type (NODATA)');
+  assert.equal(ipv4.completeness, 'complete');
+  assert.equal(ipv6.value, '2001:db8::1');
+  assert.equal(ipv6.completeness, 'complete');
+  const pins = normalizeCaseEvidencePins(checkpointPinInputs(facts, ['dns.a', 'dns.aaaa'], { checkpointId: 'dns-checkpoint' }), OBSERVED_AT);
+  assert.equal(pins.length, 2);
+  const later = facts.map(fact => ({ ...fact, observedAt: '2026-07-30T01:00:00.000Z' }));
+  assert.ok(compareCheckpointPins(pins, later).every(item => item.state === 'equal'));
+  for (const family of ['dns.a', 'dns.aaaa']) {
+    const failure = later.map(fact => fact.field === family ? { ...fact, value: 'DNS query timed out', sourceState: 'error', completeness: 'partial' as const } : fact);
+    assert.equal(compareCheckpointPins(pins, failure).find(item => item.field === family)?.state, 'unavailable');
+  }
+  assert.throws(() => checkpointPinInputs(facts, Array.from({ length: MAX_CASE_CHECKPOINT_FACTS + 1 }, (_, index) => `field-${index}`)), /No selection was saved/u);
+});
 
 function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpResponse {
   return {
@@ -159,7 +185,7 @@ describe('case evidence checkpoints', () => {
       assert.equal(fact.completeness, 'unknown', fact.field);
       assert.match(fact.limitations.join(' '), /source observation time is unavailable/u);
     }
-    assert.deepEqual(checkpointPinInputs(facts, facts.map(fact => fact.field)), []);
+    for (const fact of facts) assert.deepEqual(checkpointPinInputs(facts, [fact.field]), []);
   });
 
   test('registration fallback keeps the selected publisher health and observation time', () => {

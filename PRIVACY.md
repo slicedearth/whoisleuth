@@ -208,6 +208,8 @@ hostname on a new evidence snapshot, analyst
 decision confidence and its basis, and a response route's observation and
 review times. Pins and sightings with unknown observation times retain null;
 saving them does not create a source observation time.
+Selected DNS pins can retain separate IPv4 and IPv6 resolver outcomes and their
+source observation times, without additional queries.
 Saved recheck questions retain an analyst-entered hostname, comparison conditions
 and optional baseline reference. Answers retain the question context as reviewed.
 These remain browser-local until exported and are excluded from public Case

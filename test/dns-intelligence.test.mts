@@ -45,6 +45,33 @@ function resolvers(overrides: Partial<DnsResolvers> = {}): DnsResolvers {
   };
 }
 
+test('address-family outcomes separate empty data, name errors and resolver failures without extra queries', async () => {
+  for (const [code, detail, status] of [
+    [null, 'empty_answer', 'not_found'], ['ENODATA', 'no_data', 'not_found'],
+    ['ENOTFOUND', 'name_not_found', 'not_found'], ['ETIMEOUT', 'timeout', 'error'],
+    ['ESERVFAIL', 'server_failure', 'error'], ['EREFUSED', 'refused', 'error'],
+    ['ENONAME', 'error', 'error'],
+  ] as const) {
+    const queries: string[] = [];
+    const result = await collectDnsIntelligence('example.test', { resolvers: resolvers({
+      resolve4: async () => { queries.push('A'); if (code) throw Object.assign(new Error('Fixture resolver outcome'), { code }); return []; },
+      resolve6: async () => { queries.push('AAAA'); return ['2001:db8::1']; },
+    }) });
+    assert.deepEqual(queries.sort(), ['A', 'AAAA']);
+    assert.deepEqual(result.records.a, []);
+    assert.deepEqual(result.records.aaaa, ['2001:db8::1']);
+    assert.equal(recordValue(result.diagnostics.a).detail, detail);
+    assert.equal(recordValue(result.diagnostics.a).status, status);
+    assert.equal(recordValue(result.diagnostics.aaaa).detail, 'records');
+    assert.equal(result.complete, status !== 'error');
+    assert.equal(result.hasMx, false);
+  }
+  const deadline = await collectDnsIntelligence('example.test', { timeoutMs: 1,
+    resolvers: resolvers({ resolve4: () => new Promise(() => {}) }) });
+  assert.equal(recordValue(deadline.diagnostics.a).detail, 'timeout');
+  assert.equal(deadline.complete, false);
+});
+
 test('resolver MX metadata does not discard otherwise complete mail records', async () => {
   const result = await collectDnsIntelligence('example.test', { resolvers: resolvers({
     resolveMx: async () => [
@@ -60,7 +87,7 @@ test('resolver MX metadata does not discard otherwise complete mail records', as
   assert.equal(result.complete, true);
   assert.equal(result.hasMx, true);
   assert.equal(result.hasNullMx, false);
-  assert.deepEqual(result.diagnostics.mx, { status: 'success', truncated: false, discarded: 0 });
+  assert.deepEqual(result.diagnostics.mx, { status: 'success', detail: 'records', truncated: false, discarded: 0 });
 });
 
 test('native MX resolver records retain their meaning through the collector', async (t) => {

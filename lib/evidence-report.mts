@@ -1,4 +1,5 @@
 import { registryAccessProfileLabel } from './registry-access.mts';
+import { dnsAddressFamilyEvidence } from '../packages/evidence/dns-query-outcome.mts';
 import {
   buildPortableGeneratorMetadata,
   portableGeneratorAttribution,
@@ -283,6 +284,8 @@ function buildLookupEvidenceReport(
       title: 'DNS and mail',
       fields: [
         reportField('DNS status', displayLabel(dns.status)),
+        reportField('A address result', dnsAddressFamilyEvidence(dns, 'a').value),
+        reportField('AAAA address result', dnsAddressFamilyEvidence(dns, 'aaaa').value),
         reportField('Observed', dns.observedAt),
         reportField('Name servers', listText(availability.nameservers)),
         reportField('MX hosts', listText(availability.mxHosts)),

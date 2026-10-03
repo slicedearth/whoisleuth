@@ -27,6 +27,53 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/lookup');
 });
 
+test('DNS review separates IPv4 negative answers from working IPv6 and failed queries', async ({ page }, testInfo) => {
+  let requests = 0;
+  let outcome = 'no_data';
+  await page.route('**/api/lookup?*', async route => {
+    requests += 1;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      query: 'example.test', type: 'domain', inputHostname: 'example.test', registrableDomain: 'example.test',
+      rdap: { parsed: {} }, whois: { parsed: {}, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' } },
+      availability: { state: 'registered', domain: 'example.test', dns: {
+        version: 1, source: 'dns', status: 'partial', complete: false, observedAt: '2026-09-01T00:00:00.000Z',
+        records: { a: [], aaaa: ['2001:db8::1'] }, diagnostics: {
+          a: { status: outcome === 'timeout' ? 'error' : 'not_found', detail: outcome },
+          aaaa: { status: 'success', detail: 'records' }, mx: { status: 'error' },
+        },
+      } },
+    }) });
+  });
+  for (const [detail, label] of [
+    ['no_data', 'No data for this record type (NODATA)'],
+    ['name_not_found', 'Name not found by resolver'],
+    ['timeout', 'DNS query timed out'],
+  ]) {
+    outcome = detail!;
+    await page.locator('#query').fill('example.test');
+    await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+    await expandLookupFamilies(page);
+    const card = page.locator('.dns-card');
+    if (await card.getAttribute('open') === null) await card.locator(':scope > summary').click();
+    await expect(card.getByText(label!, { exact: true })).toBeVisible();
+    await expect(card.getByText('2001:db8::1', { exact: true })).toBeVisible();
+    if (detail === 'no_data') {
+      for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 },
+        { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+        await page.setViewportSize(viewport);
+        for (const theme of ['light', 'dark'] as const) {
+          await useTheme(page, theme);
+          await expectNoHorizontalOverflow(page);
+          await card.scrollIntoViewIfNeeded();
+          if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`dns-outcome-${viewport.width}-${theme}.png`) });
+        }
+      }
+    }
+  }
+  expect(requests).toBe(3);
+});
+
 for (const viewport of [
   { width: 1280, height: 720 }, { width: 1024, height: 768 },
   { width: 390, height: 844 }, { width: 320, height: 700 },

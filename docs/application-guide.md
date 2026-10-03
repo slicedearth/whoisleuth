@@ -251,6 +251,12 @@ Web & DNS includes the selected endpoint's IP RDAP record, separate from domain
 registration. Its summary names sources with partial, unavailable or unknown
 evidence.
 
+IPv4 (A) and IPv6 (AAAA) results distinguish an empty answer, no data for that
+record type, a resolver-reported missing name, and a failed query. A missing
+IPv4 answer does not hide a working IPv6 answer. Selected Case checkpoints keep
+each family's result and source time; older unspecified negative answers remain
+unspecified.
+
 The evidence graph retains every supported relationship from the admitted
 Lookup evidence. Lenses, visual grouping and the searchable, paginated list
 change the view, not the retained data. Projection input coverage distinguishes
@@ -677,6 +683,14 @@ requires a complete observation under comparable conditions. A failed source,
 different target or another review of the baseline cannot establish it. Lookup
 leaves the outcome and completeness for the analyst to select; unchanged fields
 do not select a verdict. Follow-up times are entered in UTC.
+
+An **Independently not reproduced** closure needs a complete linked review;
+limited reviews remain in the history and can support other closure reasons.
+For a DNS-removal assessment, repeat observations of the same hostname and
+compare both address families under comparable conditions. No address data is
+not the same as a missing name, and a timeout establishes neither. The review
+history retains the observations; it does not calculate a takedown time or
+automatically classify removal.
 
 The saved reporting-route review includes platform reports. Filter by source
 review state or search by domain, recipient or source; pagination exposes all

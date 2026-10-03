@@ -2,7 +2,6 @@
   import {
     compareAcquisitionTransitionPins,
     compareCheckpointPins,
-    MAX_CHECKPOINT_FACTS,
     type CheckpointFact,
   } from '$lib/analysis/case-evidence-checkpoint.ts';
   import type {
@@ -12,6 +11,7 @@
   import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import CopyButton from './CopyButton.svelte';
   import { evidenceFactCitation } from '$lib/analysis/evidence-copy.ts';
+  import { MAX_CASE_CHECKPOINT_FACTS } from '../../../../packages/contracts/case-portability.mts';
 
   let {
     facts,
@@ -50,7 +50,7 @@
 
   function toggle(field: string, checked: boolean) {
     selectedFields = checked
-      ? [...new Set([...selectedFields, field])].slice(0, MAX_CHECKPOINT_FACTS)
+      ? [...new Set([...selectedFields, field])].slice(0, MAX_CASE_CHECKPOINT_FACTS)
       : selectedFields.filter((item) => item !== field);
     if (!checked) {
       const { [field]: _removed, ...rest } = transitionExpectations;
@@ -92,6 +92,7 @@
   </header>
 
   {#if selectable.length}
+    {#if selectedFields.length >= MAX_CASE_CHECKPOINT_FACTS}<p role="status">{MAX_CASE_CHECKPOINT_FACTS} facts selected. Save this checkpoint before selecting more.</p>{/if}
     {#if allowTransition}<label class="transition-toggle">
       <input type="checkbox" disabled={actionBusy} checked={transitionMode} onchange={(event) => setTransitionMode(event.currentTarget.checked)}>
       <span><strong>Plan an acquisition transition</strong><small>Declare whether each selected fact should be preserved, changed, or manually reviewed. A later Lookup verifies only what its sources can observe.</small></span>
@@ -99,7 +100,7 @@
     <div class="fact-grid independent-grid">
       {#each selectable as fact (fact.field)}
         <div class="copyable-fact"><label>
-          <input type="checkbox" disabled={actionBusy || !fact.observedAt} checked={selectedFields.includes(fact.field)} onchange={(event) => toggle(fact.field, event.currentTarget.checked)}>
+          <input type="checkbox" disabled={actionBusy || !fact.observedAt || selectedFields.length >= MAX_CASE_CHECKPOINT_FACTS && !selectedFields.includes(fact.field)} checked={selectedFields.includes(fact.field)} onchange={(event) => toggle(fact.field, event.currentTarget.checked)}>
           <span>
             <strong>{fact.label}</strong>
             <small>{fact.value}</small>

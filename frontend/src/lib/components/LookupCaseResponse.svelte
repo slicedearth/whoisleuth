@@ -23,7 +23,7 @@
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import CasePicker from './CasePicker.svelte';
   import LookupRecheckReview from './LookupRecheckReview.svelte';
-  import { MAX_CASE_OBJECTIVE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
+  import { MAX_CASE_OBJECTIVE_LENGTH, MAX_CASE_CHECKPOINT_FACTS } from '../../../../packages/contracts/case-portability.mts';
 
   import type {
     LookupCaseState,
@@ -190,6 +190,7 @@
   }
 
   function toggleConclusionFact(field: string, selected: boolean) {
+    if (selected && draft.conclusionEvidence.length >= MAX_CASE_CHECKPOINT_FACTS) return;
     draft.conclusionEvidence = selected
       ? [...draft.conclusionEvidence, { field, stance: 'supports' }]
       : draft.conclusionEvidence.filter((item) => item.field !== field);
@@ -430,6 +431,9 @@
                 ></summary
               >
               {#if selectableConclusionFacts.length}
+                {#if draft.conclusionEvidence.length >= MAX_CASE_CHECKPOINT_FACTS}
+                  <p role="status">A conclusion can link up to {MAX_CASE_CHECKPOINT_FACTS} facts. Deselect a fact to choose another.</p>
+                {/if}
                 <div class="conclusion-facts">
                   {#each selectableConclusionFacts as fact (fact.field)}
                     {@const selected = draft.conclusionEvidence.some(
@@ -442,7 +446,7 @@
                           checked={selected}
                           onchange={(event) =>
                             toggleConclusionFact(fact.field, event.currentTarget.checked)}
-                          disabled={actionBusy}
+                          disabled={actionBusy || !selected && draft.conclusionEvidence.length >= MAX_CASE_CHECKPOINT_FACTS}
                         />
                         <span
                           ><strong>{fact.label}</strong><small>{fact.value}</small><small

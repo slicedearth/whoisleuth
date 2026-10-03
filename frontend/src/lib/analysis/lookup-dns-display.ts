@@ -10,6 +10,7 @@ import {
 import { MAX_LOOKUP_DNS_RECORDS_PER_TYPE, MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS } from '../../../../lib/lookup-network-evidence-bounds.mts';
 import { MAX_OBSERVATION_DIAGNOSTICS } from '../../../../packages/evidence/observation.mts';
 import { normalizeMxRecord } from '../../../../packages/evidence/domain-control-runtime.mts';
+import { dnsAddressFamilyEvidence } from '../../../../packages/evidence/dns-query-outcome.mts';
 
 function httpsServiceBindingValue(value: unknown): string {
   const record = rec(value);
@@ -156,6 +157,10 @@ export function buildLookupDnsDisplay(input: {
     }
     if (projection.malformed) return 'Not established (malformed evidence)';
     if (incompleteSource) return 'Not established (partial source)';
+    if (name === 'a' || name === 'aaaa') {
+      const family = dnsAddressFamilyEvidence({ ...dnsEvidence, records: dnsRecords }, name);
+      if (family.value && (family.outcome !== null || diagnostic.status === 'not_found')) return family.value;
+    }
     if (dnsEvidence.status === 'skipped' || diagnostic.status === 'skipped') return 'Not evaluated';
     if (diagnostic.status === 'success' || diagnostic.status === 'not_found') return 'Not observed';
     if (diagnostic.status === 'error' || diagnostic.status === 'partial'

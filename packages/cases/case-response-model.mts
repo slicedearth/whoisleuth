@@ -320,6 +320,7 @@ export function appendCaseEvidencePins(
   now: string,
 ): CaseEvidencePin[] {
   if (!Array.isArray(raw) || !raw.length) throw new Error('An evidence checkpoint requires at least one selected fact.');
+  if (raw.length > MAX_CASE_CHECKPOINT_FACTS) throw new Error(`A checkpoint can retain at most ${MAX_CASE_CHECKPOINT_FACTS} selected facts. No evidence was saved.`);
   let output = [...current];
   let added = 0;
   for (const item of raw.slice(0, MAX_CASE_CHECKPOINT_FACTS)) {

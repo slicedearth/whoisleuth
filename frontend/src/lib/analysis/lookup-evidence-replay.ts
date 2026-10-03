@@ -38,6 +38,7 @@ import {
   validPagePublicationMetadata,
 } from '../../../../lib/homepage-metadata-contract.mts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { dnsAddressFamilyEvidence } from '../../../../packages/evidence/dns-query-outcome.mts';
 
 export const LOOKUP_EVIDENCE_REPLAY_MAX_BYTES = LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES;
 export const LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES = LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES;
@@ -560,6 +561,13 @@ export async function parseLookupEvidenceReplay(
   const replaySourcesById = new Map(replaySources.map((item) => [item.id, item]));
 
   const facts: LookupEvidenceReplayFact[] = [];
+  for (const family of ['a', 'aaaa'] as const) {
+    const evidence = dnsAddressFamilyEvidence(dns, family);
+    if (evidence.value) facts.push({
+      id: `dns.${family}`, label: `${family.toUpperCase()} address result`, value: evidence.value,
+      sourceId: 'dns', source: 'DNS', sourceState: evidence.state, sourceComplete: evidence.complete,
+    });
+  }
   addFact(facts, 'registration.domain', 'Domain', [
     { value: rdapParsed.domain, sourceId: 'rdap' },
     { value: whoisParsed.domain ?? whoisParsed.domainName, sourceId: 'whois' },
