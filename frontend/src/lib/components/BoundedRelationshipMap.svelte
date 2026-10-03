@@ -96,11 +96,15 @@
     const controlX = (link.sourceX + link.targetX) / 2 - deltaY / distance * curve;
     const controlY = (link.sourceY + link.targetY) / 2 + deltaX / distance * curve;
     const targetNode = graph.nodes.find(node => node.id === link.targetId);
-    // Leave directed arrowheads outside the existing node shapes and labels.
-    const inset = directed ? targetNode?.kind === 'target'
-      ? Math.min(distance / 2, Math.max(24, (targetNode.labelWidth + 24) / 2)) : 24 : 0;
-    const targetX = link.targetX - deltaX / distance * inset;
-    const targetY = link.targetY - deltaY / distance * inset;
+    // Intersect the final curve tangent with the padded node rectangle. Using
+    // label width as a circular radius leaves vertical arrows far from a box.
+    const halfWidth = targetNode?.kind === 'target' ? (targetNode.labelWidth + 20) / 2 + 4 : 22;
+    const halfHeight = targetNode?.kind === 'target'
+      ? (targetNode.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 17) / 2 + 4 : 22;
+    const tangentX = link.targetX - controlX, tangentY = link.targetY - controlY;
+    const inset = directed ? Math.min(0.5, halfWidth / Math.abs(tangentX), halfHeight / Math.abs(tangentY)) : 0;
+    const targetX = link.targetX - tangentX * inset;
+    const targetY = link.targetY - tangentY * inset;
     return `M ${link.sourceX} ${link.sourceY} Q ${controlX} ${controlY} ${targetX} ${targetY}`;
   };
 </script>
@@ -316,6 +320,8 @@
     .focus-status{align-items:flex-start;flex-direction:column}
   }
   @container(max-width:660px){
+    header{flex-direction:column;align-items:stretch}
+    .map-summary{max-width:none;justify-content:flex-start}.map-summary strong{white-space:normal}
     .map-frame{display:none}
     .map-mobile{display:grid;gap:7px;margin-top:11px}
     .map-mobile ul{display:grid;gap:7px;margin:0;padding:0;list-style:none}
