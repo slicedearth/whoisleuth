@@ -4,6 +4,7 @@
   import EvidenceTimestamp from '$lib/components/EvidenceTimestamp.svelte';
   import MonitorDomainTimeline from '$lib/components/MonitorDomainTimeline.svelte';
   import WatchlistDomainMetadata from '$lib/components/WatchlistDomainMetadata.svelte';
+  import type { WatchBrandNames } from '$lib/analysis/watchlist-context-labels';
   import {
     fieldLabels,
     formatValue,
@@ -32,6 +33,7 @@
     openCase,
     formatDate,
     refresh,
+    brandNames,
   }: {
     watchlists: Watchlists;
     names: string[];
@@ -50,6 +52,7 @@
     openCase: (domain: string) => void;
     formatDate: (value: string | null) => string;
     refresh: () => Promise<unknown>;
+    brandNames: WatchBrandNames;
   } = $props();
 
   const PAGE_SIZE=25;
@@ -128,7 +131,7 @@
 {/if}
 
 {#if entry}
-  <WatchlistDomainMetadata name={selected} {entry} onrefresh={refresh} />
+  <WatchlistDomainMetadata name={selected} {entry} {brandNames} onrefresh={refresh} />
   <section id="watchlist-history" class="history card" aria-labelledby="watchlist-history-title" tabindex="-1">
     <header class="section-head">
       <div>

@@ -67,7 +67,7 @@ const MONITOR_VIEW_COLLECTIONS = Object.freeze({
     'relationships',
     'website-snapshots',
   ]),
-  watchlists: Object.freeze(['watchlists']),
+  watchlists: Object.freeze(['watchlists', 'profiles']),
   cases: Object.freeze([]),
   certificates: Object.freeze(['cases', 'profiles', 'analyst-review-state']),
   campaigns: Object.freeze(['campaigns', 'cases', 'profiles', 'relationships']),

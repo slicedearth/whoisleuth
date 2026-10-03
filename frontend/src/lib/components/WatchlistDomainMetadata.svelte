@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
+  import { watchContextBrandDisplay, type WatchBrandNames } from '$lib/analysis/watchlist-context-labels';
   import type { WatchlistEntry } from '$lib/watchlists';
   import { updateWatchContexts } from '$lib/watchlists';
   import {
@@ -17,7 +18,8 @@
     name,
     entry,
     onrefresh,
-  }: { name: string; entry: WatchlistEntry; onrefresh: () => Promise<unknown> } = $props();
+    brandNames,
+  }: { name: string; entry: WatchlistEntry; onrefresh: () => Promise<unknown>; brandNames: WatchBrandNames } = $props();
   let filter = $state('all'),
     search = $state(''),
     page = $state(1),
@@ -36,6 +38,7 @@
         domain: metadata.domain,
         context,
         candidate: metadata.candidate,
+        brand: watchContextBrandDisplay(context.brandProfileId, brandNames),
         key: `${metadata.domain}:${context.brandProfileId ?? ''}`,
       })),
     ),
@@ -44,7 +47,7 @@
   let contextsHeading = $state<HTMLHeadingElement>();
   const filteredRows = $derived(
     all
-      .filter((row) => (filter === 'all' || row.context.priority === filter) && (!search.trim() || `${row.domain} ${row.context.brandProfileId ?? 'Watchlist-only context'} ${row.context.reason}`.toLowerCase().includes(search.trim().toLowerCase())))
+      .filter((row) => (filter === 'all' || row.context.priority === filter) && (!search.trim() || `${row.domain} ${row.brand.label} ${row.context.brandProfileId ?? ''} ${row.context.reason}`.toLowerCase().includes(search.trim().toLowerCase())))
       .sort((a, b) =>
         sort === 'priority'
           ? (a.context.priority === 'unassigned' ? 5 : Number(a.context.priority.slice(1))) -
@@ -173,18 +176,16 @@
         <label
           ><input
             type="checkbox"
-            aria-label={`${row.domain} — ${row.context.brandProfileId ? `Brand ${row.context.brandProfileId}` : 'Watchlist-only context'}`}
+            aria-label={`${row.domain} — ${row.brand.label}`}
+            aria-description={row.brand.description}
             checked={selected.has(row.key)}
             onchange={(event) => toggle(row.key, event.currentTarget.checked)}
             disabled={busy}
           /><strong>{row.domain}</strong></label
         >
         <p>{WATCH_PRIORITIES.find((option) => option.value === row.context.priority)?.label}</p>
-        <p
-          >{row.context.brandProfileId
-            ? `Exact Brand identifier: ${row.context.brandProfileId}`
-            : 'Watchlist-only context'}</p
-        >
+        <p>{row.brand.label}</p>
+        {#if row.context.brandProfileId}<details><summary>Exact Brand identity</summary><p>{row.brand.description}</p></details>{/if}
         <p>Reason: {row.context.reason || 'Unassigned; historical evidence was not rewritten.'}</p>
         <p
           >Analyst changed: {row.context.changedAt || 'Unknown'} · next review: {row.context
@@ -248,8 +249,8 @@
           Additional requests: 0.</p
         ><ul
           >{#each chosen as row}<li
-              >{row.domain} · {row.context.brandProfileId || 'Watchlist-only'} · {row.context
-                .priority} → {priority}</li
+              >{row.domain} · {row.brand.label} · {row.context
+                .priority} → {priority}{#if row.context.brandProfileId}<details><summary>Exact Brand identity</summary><p>{row.brand.description}</p></details>{/if}</li
             >{/each}</ul
         ><button class="btn" onclick={() => void save()} disabled={!chosen.length}
           >Apply reviewed context changes</button

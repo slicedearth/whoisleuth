@@ -111,7 +111,9 @@ test('retained candidate review hands off exact local context without collection
   await expect(metadata).toContainText(
     '1 retained domains · 0 latest observed results · 0 retained checks',
   );
-  await metadata.getByRole('checkbox', { name: 'candidate.example — Brand example-brand', exact: true }).check();
+  const watchContext = metadata.getByRole('checkbox', { name: 'candidate.example — Brand Example Brand', exact: true });
+  await expect(watchContext).toHaveAccessibleDescription('Exact Brand identifier: example-brand');
+  await watchContext.check();
   await metadata.getByLabel('New analyst priority').selectOption('p1');
   await metadata
     .getByLabel('New watch reason')
@@ -250,9 +252,12 @@ test('invalid edits remove a valid handoff preview without writing or unhandled 
 test('domain context pages preserve exact selections beyond 200 and distinguish shared Brands', async ({ page }) => {
   const context: WatchDomainContext = { brandProfileId: null, priority: 'unassigned', reason: '', changedAt: null, reviewDueAt: null };
   const metadata: WatchDomainMetadata[] = Array.from({ length: 200 }, (_, index) => ({ domain: `domain-${String(index).padStart(3, '0')}.example`, contexts: [context], candidate: null }));
-  metadata.push({ domain: 'shared.example', contexts: [{ ...context, brandProfileId: 'first-brand' }, { ...context, brandProfileId: 'second-brand' }], candidate: null });
+  metadata.push({ domain: 'shared.example', contexts: [{ ...context, brandProfileId: 'first-brand' }, { ...context, brandProfileId: 'second-brand' }, { ...context, brandProfileId: 'missing-brand' }], candidate: null });
   await page.goto('/monitor');
-  await migrateLegacyBrowserData(page, { 'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', { Paged: { updatedAt: null, results: [], baseline: [], history: [], domainMetadata: metadata } }) }, { clearStorage: true, destination: '/monitor' });
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', { Paged: { updatedAt: null, results: [], baseline: [], history: [], domainMetadata: metadata } }),
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([{ ...profile, id: 'first-brand', name: 'First Brand', candidateObservations: [] }, { ...profile, id: 'second-brand', name: 'Second Brand', candidateObservations: [] }]),
+  }, { clearStorage: true, destination: '/monitor?view=watchlists' });
   await openConsoleView(page, 'watchlists');
   await page.getByRole('row', { name: /Paged/ }).getByRole('button', { name: 'History', exact: true }).click();
   const workspace = page.locator('.domain-metadata');
@@ -261,13 +266,19 @@ test('domain context pages preserve exact selections beyond 200 and distinguish 
   const pages = workspace.getByRole('navigation', { name: 'Domain context pages' });
   await pages.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(pages.getByRole('status')).toHaveText('Page 2 of 2');
-  await expect(workspace.locator('.metadata-grid > article')).toHaveCount(2);
-  const first = workspace.getByRole('checkbox', { name: 'shared.example — Brand first-brand', exact: true });
-  const second = workspace.getByRole('checkbox', { name: 'shared.example — Brand second-brand', exact: true });
+  await expect(workspace.locator('.metadata-grid > article')).toHaveCount(3);
+  const first = workspace.getByRole('checkbox', { name: 'shared.example — Brand First Brand', exact: true });
+  const second = workspace.getByRole('checkbox', { name: 'shared.example — Brand Second Brand', exact: true });
   await expect(first).toBeVisible();
   await expect(second).toBeVisible();
+  await expect(first).toHaveAccessibleDescription('Exact Brand identifier: first-brand');
+  await expect(second).toHaveAccessibleDescription('Exact Brand identifier: second-brand');
+  await expect(workspace.getByRole('checkbox', { name: 'shared.example — Brand name unavailable (missing-brand)', exact: true })).toBeEnabled();
   await first.check();
   await second.check();
+  await workspace.getByLabel('Search domain contexts').fill('First Brand');
+  await expect(first).toBeChecked();
+  await expect(second).toHaveCount(0);
   await workspace.getByLabel('Search domain contexts').fill('shared.example');
   await expect(first).toBeChecked();
   await expect(second).toBeChecked();
@@ -277,15 +288,15 @@ test('domain context pages preserve exact selections beyond 200 and distinguish 
   await workspace.getByRole('button', { name: 'Preview selected priority changes' }).click();
   const preview = workspace.getByRole('region', { name: 'Domain priority change preview' });
   await expect(preview).toContainText('domain-000.example');
-  await expect(preview).toContainText('first-brand');
-  await expect(preview).toContainText('second-brand');
+  await expect(preview).toContainText('Brand First Brand');
+  await expect(preview).toContainText('Brand Second Brand');
   await preview.getByRole('button', { name: 'Apply reviewed context changes' }).click();
   await expect(workspace.getByRole('status').filter({ hasText: 'exact domain contexts changed' })).toContainText('3 exact domain contexts changed');
   const stored = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
   const retained = stored.records[0]!.value.domainMetadata;
   expect(retained.find(row => row.domain === 'domain-000.example')!.contexts[0]!.priority).toBe('p1');
   expect(retained.find(row => row.domain === 'domain-199.example')!.contexts[0]!.priority).toBe('unassigned');
-  expect(retained.find(row => row.domain === 'shared.example')!.contexts.map(row => [row.brandProfileId, row.priority])).toEqual([['first-brand', 'p1'], ['second-brand', 'p1']]);
+  expect(retained.find(row => row.domain === 'shared.example')!.contexts.map(row => [row.brandProfileId, row.priority])).toEqual([['first-brand', 'p1'], ['second-brand', 'p1'], ['missing-brand', 'unassigned']]);
 });
 
 test('conflicting exception import orders leave the browser store unchanged', async ({ page }) => {

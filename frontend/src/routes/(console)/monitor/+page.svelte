@@ -17,6 +17,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   import CaseLifecycleReview from '$lib/components/CaseLifecycleReview.svelte';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import { loadProfiles, type BrandProfile } from '$lib/brand-profiles';
+  import { buildWatchBrandNames } from '$lib/analysis/watchlist-context-labels';
   import { buildInvestigationCaseRelationships } from '$lib/analysis/case-relationships.ts';
   import { buildCaseRelationshipClusters } from '$lib/analysis/case-relationship-clusters.ts';
   import { buildCaseDecisionQualityReport } from '$lib/analysis/case-decision-quality.ts';
@@ -139,6 +140,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   let brandProfiles=$state<BrandProfile[]>([]);
 
   let brandProfilesSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
+  const watchBrandNames=$derived(buildWatchBrandNames(brandProfiles,brandProfilesSourceState));
   let bulkSessions=$state.raw<BulkSession[]>([]);
   let bulkSessionsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let websiteSnapshots=$state.raw<WebsiteProfileSnapshot[]>([]);
@@ -496,7 +498,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   {#if watchlistsSourceState==='ready'}
     {#if watchlistsRefreshing}<p class="refresh-status" role="status" aria-live="polite">Refreshing watchlists while the last readable snapshot remains available.</p>{/if}
     <DeferredSurface load={()=>import('$lib/components/MonitorActivityHeatmap.svelte')} loadingLabel="Loading watchlist activity…" unavailableLabel="Watchlist activity could not be loaded." props={{events:watchlistActivity}} />
-    <DeferredSurface load={()=>import('$lib/components/WatchlistWorkspace.svelte')} loadingLabel="Loading watchlist workspace…" unavailableLabel="The watchlist workspace could not be loaded." onready={restoreWatchlistTarget} props={{watchlists,names,entry,selected,setSelected:(value:string)=>selected=value,history,changedOnly,setChangedOnly:(value:boolean)=>changedOnly=value,message,downloadWatchlists,importFile,clearAll,rescan,remove,refresh,openCase:openWatchlistCase,formatDate:date}} placeholder="workspace" />
+    <DeferredSurface load={()=>import('$lib/components/WatchlistWorkspace.svelte')} loadingLabel="Loading watchlist workspace…" unavailableLabel="The watchlist workspace could not be loaded." onready={restoreWatchlistTarget} props={{watchlists,names,entry,selected,setSelected:(value:string)=>selected=value,history,changedOnly,setChangedOnly:(value:boolean)=>changedOnly=value,message,downloadWatchlists,importFile,clearAll,rescan,remove,refresh,brandNames:watchBrandNames,openCase:openWatchlistCase,formatDate:date}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={watchlistsSourceState} title="Watchlists unavailable" detail="Saved watchlists could not be read, so their count, empty state, imports, and local mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
   {/if}

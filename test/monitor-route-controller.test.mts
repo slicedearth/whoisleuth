@@ -41,6 +41,7 @@ describe('Monitor route controller', () => {
       ['analyst-review-state', 'cases', 'watchlists', 'bulk-sessions', 'relationships', 'website-snapshots'],
     );
     assert.deepEqual(monitorViewCollections('cases'), []);
+    assert.deepEqual(monitorViewCollections('watchlists'), ['watchlists', 'profiles']);
     for (const path of ['/monitor?domain=case.example', '/monitor?investigation=1&domain=case.example']) {
       assert.equal(monitorViewFromUrl(new URL(path, 'https://example.test')), 'cases');
     }
@@ -116,5 +117,24 @@ describe('Monitor route controller', () => {
       appendUnavailableCollectionStatus(firstStatus, 'watchlists'),
       /cases, watchlists/u,
     );
+  });
+  it('loads direct Watchlists names through the existing independently fulfilled coordinator', async () => {
+    const controller = createMonitorCollectionLoader();
+    const calls: string[] = [];
+    let watchlistReady = false, profilesUnavailable = false;
+    const ensure = (key: 'watchlists' | 'profiles') => controller.load(key, async () => {
+      calls.push(key);
+      if (key === 'watchlists') watchlistReady = true;
+      else {
+        try { throw new Error('Fixture profile read unavailable'); }
+        catch { profilesUnavailable = true; }
+      }
+    });
+    const keys = monitorViewCollections('watchlists');
+    await Promise.all(keys.map(key => ensure(key as 'watchlists' | 'profiles')));
+    await Promise.all(keys.map(key => ensure(key as 'watchlists' | 'profiles')));
+    assert.deepEqual(calls, ['watchlists', 'profiles']);
+    assert.equal(watchlistReady, true);
+    assert.equal(profilesUnavailable, true);
   });
 });

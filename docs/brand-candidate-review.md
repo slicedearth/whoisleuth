@@ -22,6 +22,9 @@ review contexts and preview field-scoped bulk edits. Changed contexts invalidate
 stale edits; unrelated contexts and evidence remain intact. Search or page through
 all retained contexts without raising the 200-row render bound; selections remain
 exact across pages and filters. Shared-domain controls identify their Brand context.
+Context labels, searches and edit previews use readable saved Brand names, with
+exact identifiers available separately. If names cannot be read or a Brand is
+missing, an explicit name-unavailable label preserves usable context review.
 
 Source-qualified registration, DNS, mail and page transitions can produce a
 focused review item against the retained concern. Incomplete checks do not erase
