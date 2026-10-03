@@ -30,12 +30,14 @@ Public guides share documentation search, section navigation and print layouts.
 Search finds tasks, commands, examples and glossary terms without reading saved
 work. Direct links open the relevant tool guidance or glossary section.
 
-Use **Practise with real Case forms** in the demo to choose a sign-in-page,
-conflicting-source or provider-resolution scenario. Pin a supplied observation,
+Use **Practise with real Case forms** in the demo to choose a supplied incident,
+conflicting-source or provider-response scenario. Pin an observation,
 record an evidence-linked conclusion and review an incomplete later capture.
 The forms and validation match the Console, but the practice Case and drafts
 remain only on that page. Restarting, reloading or leaving discards them. The
-exercise offers no collection, reporting or export controls. Changing scenario
+exercise makes no collection, submission or export. The credential-page exercise
+rehearses separate recipient reviews, simulated deliveries and page-only closure;
+the requested-evidence exercise prepares a drafting amendment. Changing scenario
 requires confirming that its Case and drafts should be discarded. Feedback
 checks retained relationships and states, not the quality of free-text reasoning.
 
@@ -168,7 +170,10 @@ The same review is available in Case Evidence. Save its minimised report and
 source hash, optionally retaining the private original separately. In Case
 Response, **Account and device recovery** provides guidance from reported
 actions such as entering a password, granting consent or running a command.
-Record recovery, provider reporting and later availability as separate outcomes.
+Selected recommendations can become open follow-ups with optional evidence links;
+they are not completed recovery actions. Incoming notices can be compared locally
+with a selected action's recipient and delivery reference. This comparison stays
+in page memory and does not authenticate the sender or enter the saved intake.
 
 - **Fast** is registration-led triage. It uses RDAP and bounded authoritative
   DNS fallback where required, while explicitly skipping richer WHOIS, website
@@ -651,10 +656,16 @@ fields, separate from free-form tags and assertions. Historical tags and
 assertions remain retained when their metadata is migrated. Exact public incident
 links can be retained for web or social-platform
 content, resolved without erasing history, and carried into a response packet.
+**Exact incident-object coverage** keeps each link's analyst status separate from
+unknown action binding and independent observation coverage. Operations reports
+offer a local contributor drill-down; downloaded reports remain aggregate-only.
 
 For supported platform hostnames, the Case workspace shows freshness-bounded
 official safety or rights-reporting routes matched to the selected Case types.
 Each route includes a preparation checklist from its reviewed guidance.
+For a custom host or advertisement, select its reporting platform explicitly when
+supported by the evidence. The selection lasts only for this visit; it does not
+classify the host or change the saved incident link.
 The analyst must verify the current route and authority before opening it.
 WHOISleuth creates only a drafting action and never submits the complaint.
 
