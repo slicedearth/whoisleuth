@@ -358,15 +358,11 @@ test('command and return links preserve open-in-new-tab activation @timing-sensi
     const expectedDetail = href!.startsWith('#command-') ? href!.slice('#command-'.length) : null;
     const destination = await openNativeLinkInNewTab(page, link);
     try {
-      // Read the actual document and usable destination together. The string
-      // URL matcher also waits for engine navigation bookkeeping, which can
-      // remain pending after this native modified-click destination is ready.
-      await expect.poll(() => destination.evaluate(() => ({
-        href: location.href,
-        ready: document.readyState,
-        clientReady: document.querySelector('[data-testid="public-cli-catalogue"]')?.getAttribute('data-client-ready'),
-        detail: document.querySelector('[data-command-detail]')?.getAttribute('data-command-detail') ?? null,
-      }))).toEqual({ href: expectedHref, ready: 'complete', clientReady: 'true', detail: expectedDetail });
+      await destination.waitForURL(url => url.href === expectedHref, { waitUntil: 'load' });
+      await expect(destination.getByTestId('public-cli-catalogue')).toHaveAttribute('data-client-ready', 'true');
+      const details = destination.locator('[data-command-detail]');
+      await expect(details).toHaveCount(expectedDetail ? 1 : 0);
+      if (expectedDetail) await expect(details).toHaveAttribute('data-command-detail', expectedDetail);
     } finally {
       await destination.close();
       await page.bringToFront();

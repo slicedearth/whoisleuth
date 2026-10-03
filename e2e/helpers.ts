@@ -54,6 +54,9 @@ export async function openNativeLinkInNewTab(page: Page, link: Locator): Promise
     link.click({ modifiers: ['ControlOrMeta', 'Shift'] }),
   ]);
   await destination.bringToFront();
+  // A new Page can still own its initial empty document. Wait for the actual
+  // fixture navigation before consumers inspect its DOM or execution context.
+  await destination.waitForURL(url => url.href === target, { waitUntil: 'domcontentloaded' });
   return destination;
 }
 
