@@ -3,6 +3,7 @@ import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyB
 import { createCase, updateCase } from '../packages/cases/case-model.mts';
 import { appendCaseObservedEffectReview } from '../packages/cases/case-response-outcomes.mts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 
 const AT = '2026-09-22T00:00:00.000Z';
 function records() {
@@ -39,11 +40,15 @@ test('campaign domain scope keeps incident IDs and unresolved objects separate w
   await expect(scope).toContainText('Unavailable: current records do not type dispute, restoration or incident recurrence');
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
-    for (const width of [320, 390, 1280]) {
+    for (const width of [320, 390, 1024, 1280, 1920]) {
       await page.setViewportSize({ width, height: 844 });
       const region = scope.getByRole('region', { name: 'Remaining Case object and outcome scope', exact: true });
       await expect(region).toBeVisible();
       await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) {
+        await scope.evaluate(element => window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - 140, behavior: 'instant' }));
+        await page.screenshot({ path: test.info().outputPath(`operations-scope-${theme}-${width}.png`) });
+      }
     }
   }
   const region = scope.getByRole('region', { name: 'Remaining Case object and outcome scope', exact: true });
@@ -78,10 +83,19 @@ test('local scope pages keep the full denominator but render at most ten separat
   await scope.locator(':scope > summary').click();
   await expect(scope).toContainText('12 separate Cases');
   await expect(scope.getByRole('link')).toHaveCount(10);
+  const caseLinks = () => scope.getByRole('link').evaluateAll(links => links.map(link => link.getAttribute('href')));
+  const expected = cases.map(record => `/cases?case=${record.id}&section=response`);
+  const firstPage = await caseLinks();
+  expect(new Set(firstPage).size).toBe(10);
+  expect(firstPage.every(href => expected.includes(href!))).toBe(true);
   await scope.getByRole('button', { name: 'Next Case scope', exact: true }).click();
   await expect(scope.getByRole('link')).toHaveCount(2);
+  const secondPage = await caseLinks();
+  expect([...firstPage, ...secondPage].sort()).toEqual([...expected].sort());
+  expect(new Set([...firstPage, ...secondPage]).size).toBe(expected.length);
   await expect(scope).toContainText('Page 2 of 2');
   await scope.getByRole('button', { name: 'Previous Case scope', exact: true }).click();
   await expect(scope.getByRole('link')).toHaveCount(10);
+  expect(await caseLinks()).toEqual(firstPage);
   await expect(scope).toContainText('Page 1 of 2');
 });

@@ -680,7 +680,11 @@ links can be retained for web or social-platform
 content, resolved without erasing history, and carried into a response packet.
 **Exact incident-object coverage** keeps each link's analyst status separate from
 unknown action binding and independent observation coverage. Operations reports
-offer a local contributor drill-down; downloaded reports remain aggregate-only.
+offer a local contributor drill-down and a paged Case scope view, independent of
+the report's time window. Campaigns show the same view for Cases matching their
+domains; same-domain incidents remain separate. Provider outcomes, independent
+reviews and closure dates have separate columns. Downloaded reports remain
+aggregate-only.
 
 For supported platform hostnames, the Case workspace shows freshness-bounded
 official safety or rights-reporting routes matched to the selected Case types.

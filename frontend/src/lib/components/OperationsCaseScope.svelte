@@ -35,7 +35,7 @@
         <tbody>{#each visible as row (row.record.id)}<tr>
           <td><a href={caseWorkspaceHref(row.record.id, 'response')} aria-label={`${row.record.title || row.record.domain} · Case ${row.record.id}`}>{row.record.title || row.record.domain}</a><small>Case ID: {row.record.id}</small><small>{row.record.domain}</small>{#if row.historyIncomplete}<small>Retained lifecycle history is incomplete.</small>{/if}</td>
           <td>{row.openObjects} open · {row.analystResolvedObjects} analyst-resolved
-            {#if row.coverage.length}<CaseIncidentCoverage record={row.record} />{:else}<small>No incident links retained; exact-object coverage unavailable.</small>{/if}
+            {#if !row.coverage.length}<small>No incident links retained; exact-object coverage unavailable.</small>{/if}
           </td>
           <td>{#if row.lifecycle.latestProviderOutcome}<span>{row.lifecycle.latestProviderOutcome.outcome.replaceAll('_', ' ')}</span><small>Source class: {row.providerEvent?.sourceClass ?? 'unknown'}</small><small>Event: {row.lifecycle.latestProviderOutcome.eventId}</small><time datetime={row.lifecycle.latestProviderOutcome.occurredAt}>{formatEvidenceDate(row.lifecycle.latestProviderOutcome.occurredAt)}</time>{:else}{row.lifecycle.providerOutcomeState === 'ambiguous' ? 'Ambiguous retained outcomes' : 'No typed provider outcome retained'}{/if}</td>
           <td>{#if row.latestReview}<span>{row.latestReview.state.replaceAll('_', ' ')}</span><small>{row.latestReview.sourceClass} · {row.latestReview.completeness}</small><small>Review: {row.latestReview.id}</small><time datetime={row.latestReview.observedAt}>{formatEvidenceDate(row.latestReview.observedAt)}</time>
@@ -43,7 +43,9 @@
             {:else}{row.observedState === 'ambiguous' ? 'Ambiguous latest independent reviews' : 'No independent review retained'}{/if}
             {#if row.lifecycle.latestClosure}<small>Recorded closure: {row.lifecycle.latestClosure.reason.replaceAll('_', ' ')}</small><small>Closure ID: {row.lifecycle.latestClosure.id}</small><time datetime={row.lifecycle.latestClosure.createdAt}>Closure recorded: {formatEvidenceDate(row.lifecycle.latestClosure.createdAt)}</time>{/if}
           </td>
-        </tr>{/each}</tbody>
+        </tr>
+        {#if row.coverage.length}<tr class="object-details"><td colspan="4"><CaseIncidentCoverage record={row.record} /></td></tr>{/if}
+        {/each}</tbody>
       </table></div>
       {#if pages > 1}<nav aria-label="Case outcome scope pages"><button class="btn" type="button" disabled={currentPage <= 1} onclick={() => page = currentPage - 1}>Previous Case scope</button><span>Page {currentPage} of {pages}</span><button class="btn" type="button" disabled={currentPage >= pages} onclick={() => page = currentPage + 1}>Next Case scope</button></nav>{/if}
     {:else}<p>No Cases in this inspected population; no resolution conclusion follows.</p>{/if}
