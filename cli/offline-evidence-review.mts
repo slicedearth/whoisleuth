@@ -32,7 +32,7 @@ import { reviewDnsConvergence } from '../lib/dns-convergence-review.mts';
 import { compareTrustStoreEvidence } from '../lib/trust-store-comparison.mts';
 import { CliUsageError } from './errors.mts';
 import { safeTerminalValue } from './formatters/terminal.mts';
-import { LOCAL_MMDB_QUERY_SCHEMA, reviewLocalMmdb } from './local-mmdb-review.mts';
+import { LOCAL_MMDB_QUERY_SCHEMA, LOCAL_MMDB_QUERY_VERSION, LOCAL_MMDB_REVIEW_SCHEMA, LOCAL_MMDB_REVIEW_VERSION, reviewLocalMmdb } from './local-mmdb-review.mts';
 
 const OFFLINE_EVIDENCE_REVIEW_SCHEMA = 'whoisleuth.cli.offline-evidence-review';
 const OFFLINE_EVIDENCE_REVIEW_VERSION = 1;
@@ -64,7 +64,8 @@ function parseInput(value: unknown): UnknownRecord {
     throw new CliUsageError('Offline evidence review requires one valid bounded JSON document without duplicate keys.');
   }
   const document = record(parsed);
-  if (document.version !== 1 || typeof document.schema !== 'string') {
+  if (typeof document.schema !== 'string' || document.version !== 1
+    && !(document.schema === LOCAL_MMDB_QUERY_SCHEMA && document.version === LOCAL_MMDB_QUERY_VERSION)) {
     throw new CliUsageError('Offline evidence review requires a supported versioned input schema.');
   }
   return document;
@@ -72,6 +73,7 @@ function parseInput(value: unknown): UnknownRecord {
 
 function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toISOString()) {
   const input = parseInput(value);
+  if (input.schema === LOCAL_MMDB_QUERY_SCHEMA) throw new CliUsageError('Local MMDB review requires --mmdb <database-file>.');
   let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store' | ContextReviewKind;
   let result: unknown;
   if ((CONTEXT_INPUT_SCHEMAS as readonly string[]).includes(input.schema as string)) {
@@ -182,7 +184,7 @@ async function buildOfflineEvidenceReviewWithLocalResources(
     version: OFFLINE_EVIDENCE_REVIEW_VERSION,
     generatedAt,
     kind: 'geoip' as const,
-    result: await reviewLocalMmdb(input, options.mmdbPath),
+    result: await reviewLocalMmdb(input, options.mmdbPath, generatedAt),
     limitations: Object.freeze([
       'The review is local and uses only the supplied query metadata and analyst-supplied database. It does not transmit the address or refresh the database.',
     ]),
@@ -191,6 +193,9 @@ async function buildOfflineEvidenceReviewWithLocalResources(
 
 function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvidenceReview>): string {
   const result = record(document.result);
+  if (document.kind === 'geoip' && result.schema === LOCAL_MMDB_REVIEW_SCHEMA && result.version !== LOCAL_MMDB_REVIEW_VERSION) {
+    throw new CliUsageError('Offline evidence review does not support this MMDB result version.');
+  }
   const gate = record(result.gate);
   const counts = record(result.counts);
   const count = (value: unknown): number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
@@ -226,6 +231,26 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
     lines.push(`Help   ${String(help.state ?? 'unavailable').replaceAll('_', ' ')}`);
     lines.push(`Plan   ${String(plan.state ?? 'unavailable').replaceAll('_', ' ')}`);
     if (result.responseInspection !== null) lines.push(`Result ${String(responseInspection.state ?? 'invalid').replaceAll('_', ' ')}`);
+  } else if (document.kind === 'geoip' && result.schema === LOCAL_MMDB_REVIEW_SCHEMA && result.version === LOCAL_MMDB_REVIEW_VERSION) {
+    const database = record(result.database), metadata = record(database.metadata), binaryFormat = record(metadata.binaryFormat);
+    const freshness = record(result.freshness), policy = record(freshness.policy), source = record(result.source), match = record(result.match);
+    lines.push(`Outcome ${safeTerminalValue(result.reason, 'unknown').replaceAll('_', ' ')}`,
+      `Coverage ${safeTerminalValue(result.completeness, 'unavailable')}`,
+      `Database SHA-256 ${safeTerminalValue(database.sha256, 'unavailable')}`,
+      `Database bytes ${safeTerminalValue(database.byteLength, 'unavailable')}`,
+      `Intrinsic type ${safeTerminalValue(metadata.databaseType, 'unavailable')}`,
+      `Built ${safeTerminalValue(metadata.builtAt, 'unavailable')}`,
+      `Binary format ${safeTerminalValue(binaryFormat.major, '?')}.${safeTerminalValue(binaryFormat.minor, '?')} · IP version ${safeTerminalValue(metadata.ipVersion, '?')}`,
+      `Freshness ${safeTerminalValue(freshness.state, 'unknown')} · checked ${safeTerminalValue(freshness.checkedAt, 'unknown')}`,
+      `Age policy ${safeTerminalValue(policy.maxAgeDays, '?')} days · ${safeTerminalValue(policy.rationale, '')}`,
+      `Declared source ${safeTerminalValue(source.label, 'unknown')} · version ${safeTerminalValue(source.version, 'unknown')} · licence ${safeTerminalValue(source.license, 'unknown')}`);
+    if (result.match !== null) {
+      lines.push(`Matched network ${safeTerminalValue(match.network, 'unknown')}`,
+        `Country ${safeTerminalValue(match.countryCode, 'unknown')} · region ${safeTerminalValue(match.region, 'unknown')} · city ${safeTerminalValue(match.city, 'unknown')}`,
+        `ASN ${safeTerminalValue(match.asn, 'unknown')} · network label ${safeTerminalValue(match.asName, 'unknown')}`);
+    }
+  } else if (document.kind === 'geoip') {
+    lines.push('Intrinsic MMDB freshness is not assessed by this result. A version-2 MMDB query can assess a selected local database against an explicit age policy.');
   } else if (document.kind === 'zone_intent') {
     const desired = record(result.desired);
     lines.push(`Desired ${listLength(desired.records)}`);

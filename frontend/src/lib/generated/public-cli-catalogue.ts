@@ -1072,7 +1072,7 @@ const SHARED_COMMAND_OPTIONS = [
     "option": "--mmdb",
     "scope": "command",
     "usage": "--mmdb \u003cfile>",
-    "description": "Use the selected local IP-location database.",
+    "description": "Read one selected local MMDB (up to 512 MiB); version-2 queries require a justified freshness policy.",
     "values": [],
     "repeatable": false,
     "ranges": [],
@@ -4342,10 +4342,10 @@ export const PUBLIC_CLI_CATALOGUE = {
       "common": true,
       "usage": "whoisleuth review-evidence [\u003csource>] [--mmdb \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
       "example": "whoisleuth review-evidence domain-change.json --json --strict-exit",
-      "boundary": "The command reads only the supplied document. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.",
+      "boundary": "The command reads only the supplied document and, with --mmdb, one explicitly selected local database up to 512 MiB. MMDB parsing and lookup run in one disposable worker with a ten-second processing deadline and an 8 KiB result limit. Version-2 MMDB queries require a justified age policy; unavailable or partial current reviews return 4 under --strict-exit. Historical version-1 MMDB queries preserve their output without freshness admission. No database is bundled, downloaded, updated or transmitted. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one bounded versioned evidence or request-planning document and performs no collection."
+        "scope": "Reads one bounded versioned evidence or request-planning document and, only with --mmdb, one selected bounded local database. Performs no collection."
       },
       "inputs": [
         {
@@ -4384,10 +4384,12 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002etlsa-evidence-input",
         "whoisleuth\u002erpki-route-input",
         "whoisleuth\u002elocal-geoip-query",
+        "whoisleuth\u002elocal-mmdb-query",
+        "whoisleuth\u002elocal-mmdb-review",
         "whoisleuth\u002eencrypted-dns-plan-input"
       ],
       "inputLimits": [
-        "Reads one bounded versioned evidence or request-planning document and performs no collection.",
+        "Reads one bounded versioned evidence or request-planning document and, only with --mmdb, one selected bounded local database. Performs no collection.",
         "source: 0-1 file value"
       ],
       "outputLimits": [

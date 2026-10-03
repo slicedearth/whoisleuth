@@ -431,6 +431,16 @@ deliberately selects a local file. Existing files are refused unless replacement
 is explicit. CLI files are not uploaded to WHOISleuth and remain under the
 operator's retention and deletion control.
 
+With explicit `review-evidence --mmdb`, the CLI reads one selected local database
+of at most 512 MiB. It is not bundled, downloaded, updated or transmitted. Current
+version-2 queries retain the exact-byte SHA-256, byte length, intrinsic database
+type, build time, binary/IP versions, review time and analyst-justified age policy,
+separately from declared source/version/licence labels. Only supported coarse
+location and ASN fields survive; local paths and raw records are excluded.
+The review makes no network request. Stale, future, unsupported, missing or
+unusable records remain unavailable context, not location absence. Historical
+version-1 queries retain their previous output without freshness admission.
+
 The offline `case` command creates and updates ordinary local Case files only
 through explicit output. Working files retain private analyst content and file
 references, not attached file bytes. Source/output locks contain only a local

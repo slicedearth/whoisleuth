@@ -48,6 +48,16 @@ function compact(value: string): string {
 
 const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   {
+    id: 'local-mmdb-current-review',
+    clauses: [
+      /reads one selected local database/iu,
+      /not bundled, downloaded, updated or transmitted/iu,
+      /retain the exact-byte SHA-256.*intrinsic database type.*analyst-justified age policy.*separately from declared source\/version\/licence labels/iu,
+      /local paths and raw records are excluded/iu,
+      /version-1 queries retain their previous output without freshness admission/iu,
+    ],
+  },
+  {
     id: 'lesson-template-provenance',
     clauses: [
       /Lesson-based template revisions retain authored guidance, applicability, reason, source-template identity and content hashes of the source template and selected lesson/iu,

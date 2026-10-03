@@ -175,6 +175,52 @@ Excluded links and unsupported QR payloads make the review partial, with
 category counts rather than private payload text. Bare QR hostnames are not
 automatically treated as URLs.
 
+### Local IP-location database review
+
+`review-evidence query.json --mmdb selected.mmdb --json --strict-exit` reads
+one analyst-selected database locally. It never downloads, updates or transmits
+the database. A current query uses this input:
+
+```json
+{
+  "schema": "whoisleuth.local-mmdb-query",
+  "version": 2,
+  "address": "192.0.2.1",
+  "sourceLabel": "Selected local database",
+  "databaseVersion": "Analyst-declared edition",
+  "license": "Analyst-declared licence",
+  "freshnessPolicy": {
+    "maxAgeDays": 90,
+    "rationale": "Quarterly research review; recheck before operational use"
+  }
+}
+```
+
+Replace the reserved example address with the public IP under review. Reserved
+and private addresses are unavailable in current reviews. Select and justify an
+age limit appropriate to the task; the example is not a default or an accuracy
+guarantee. The policy requires positive whole days and a plain-text rationale
+of at most 240 characters. The command's review time is compared with the
+intrinsic build time; a future build, stale database, unsupported format/type,
+miss or unusable record cannot supply current location context. Malformed
+fields remain unknown, with partial coverage when other useful fields survive.
+
+Current output retains SHA-256 of the exact read bytes, byte length, intrinsic
+database type, build time, binary format and IP version. Analyst source, version
+and licence labels remain separate claims. Only coarse network, country, region,
+city and ASN attribution can be returned; no raw record or local path is included.
+The existing version-1 review envelope contains the self-described
+`whoisleuth.local-mmdb-review` version-1 result. Reject future result versions
+rather than treating them as current evidence.
+
+The file must remain a regular, stable file of at most 512 MiB. After the bounded
+read and digest, one disposable worker limits synchronous parsing and lookup to
+ten seconds, with bounded heap/stack and an 8 KiB result. This is not a ten-second
+whole-command or filesystem deadline. Default exit 0 means a report was produced;
+`--strict-exit` returns 4 for unavailable or partial current reviews. Version-1
+queries retain their historical JSON shape and exit behaviour, without intrinsic
+metadata or freshness admission; terminal output identifies that limitation.
+
 ### Contextual reviews
 
 `review-evidence` also accepts [contextual review inputs](contextual-reviews.md)

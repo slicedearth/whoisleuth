@@ -22,6 +22,7 @@ import {
   parseCliLookupDocument,
 } from './compare.mts';
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
+import { LOCAL_MMDB_REVIEW_SCHEMA, LOCAL_MMDB_REVIEW_VERSION } from './local-mmdb-review.mts';
 import EXIT_CODES from './exit-codes.mts';
 import {
   MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
@@ -328,7 +329,8 @@ async function runOfflineEvidenceReviewCommand(
         && ['different', 'missing', 'unexpected', 'incomplete'].some((key) => Number((result.counts as Record<string, unknown>)[key]) > 0))
     );
     const contextPartial = (CONTEXT_REVIEW_KINDS as readonly string[]).includes(document.kind) && result.state === 'partial';
-    if (gate?.pass === false || zoneMismatch || contextPartial) return EXIT_CODES.PARTIAL_FAILURE;
+    const mmdbIncomplete = result.schema === LOCAL_MMDB_REVIEW_SCHEMA && result.version === LOCAL_MMDB_REVIEW_VERSION && result.completeness !== 'complete';
+    if (gate?.pass === false || zoneMismatch || contextPartial || mmdbIncomplete) return EXIT_CODES.PARTIAL_FAILURE;
   }
   return EXIT_CODES.SUCCESS;
 }

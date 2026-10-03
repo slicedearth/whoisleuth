@@ -10,6 +10,11 @@ This page records the common interfaces and the boundaries that matter across
 commands. The generated [privacy/data-flow catalogue](https://github.com/slicedearth/whoisleuth/blob/main/docs/privacy-data-flow-catalogue.md)
 contains the exhaustive recipient, retention and export metadata.
 
+For an explicitly selected local IP-location database, see the
+[MMDB query and compatibility guide](cli.md#local-ip-location-database-review).
+Current reviews retain exact-byte identity and intrinsic metadata, and require
+an analyst-justified freshness policy. No database is downloaded or updated.
+
 ## Installation
 
 Use the [installation guide](cli.md#installation) for runtime requirements,
