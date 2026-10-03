@@ -288,7 +288,7 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
     root.schema !== EXTERNAL_FINDINGS_SCHEMA
     || (root.schemaVersion !== 4 && root.schemaVersion !== 5)
   ) {
-    throw new Error(`External findings must use ${EXTERNAL_FINDINGS_SCHEMA} schema version ${EXTERNAL_FINDINGS_VERSION}.`);
+    throw new Error(`External findings must use ${EXTERNAL_FINDINGS_SCHEMA} schema version 4 or 5.`);
   }
   const sourceValue = record(root.source);
   if (!sourceValue || !hasOnlyKeys(sourceValue, SOURCE_KEYS)) {

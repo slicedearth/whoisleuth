@@ -5,10 +5,9 @@ import { normalizeDomain } from '../evidence/domain-name.mts';
 import { canonicalIpAddress } from '../contracts/ip-address.mts';
 import { parseBoundedJson } from '../analysis/bounded-json.mts';
 import { technologyEvidenceRoles } from '../../lib/technology-evidence-role.mts';
+import { INFRASTRUCTURE_OBSERVATION_SCHEMA, INFRASTRUCTURE_OBSERVATION_VERSION, MAX_INFRASTRUCTURE_OBSERVATION_BYTES } from '../contracts/external-observation-interchange.mts';
 
-export const INFRASTRUCTURE_OBSERVATION_SCHEMA = 'whoisleuth.infrastructure-observation';
-export const INFRASTRUCTURE_OBSERVATION_VERSION = 1;
-export const MAX_INFRASTRUCTURE_OBSERVATION_BYTES = 128 * 1024;
+export { INFRASTRUCTURE_OBSERVATION_SCHEMA, INFRASTRUCTURE_OBSERVATION_VERSION, MAX_INFRASTRUCTURE_OBSERVATION_BYTES };
 export const MAX_INFRASTRUCTURE_HOSTS = 128;
 export const MAX_INFRASTRUCTURE_DNS_ROWS = 512;
 export const MAX_INFRASTRUCTURE_CERTIFICATES = 32;

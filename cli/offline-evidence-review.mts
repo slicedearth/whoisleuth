@@ -33,8 +33,9 @@ import { compareTrustStoreEvidence } from '../lib/trust-store-comparison.mts';
 import { CliUsageError } from './errors.mts';
 import { safeTerminalValue } from './formatters/terminal.mts';
 import { LOCAL_MMDB_QUERY_SCHEMA, LOCAL_MMDB_QUERY_VERSION, LOCAL_MMDB_REVIEW_SCHEMA, LOCAL_MMDB_REVIEW_VERSION, reviewLocalMmdb } from './local-mmdb-review.mts';
-import { INFRASTRUCTURE_OBSERVATION_SCHEMA, infrastructureObservationFacts, compareInfrastructureObservations } from '../packages/investigation/infrastructure-observation.mts';
+import { INFRASTRUCTURE_OBSERVATION_SCHEMA, MAX_INFRASTRUCTURE_OBSERVATION_BYTES, infrastructureObservationFacts, compareInfrastructureObservations } from '../packages/investigation/infrastructure-observation.mts';
 import { exact } from '../packages/evidence/artifact-structure.mts';
+import { INFRASTRUCTURE_COMPARISON_INPUT_SCHEMA, MAX_INFRASTRUCTURE_COMPARISON_INPUT_BYTES } from '../packages/contracts/external-observation-interchange.mts';
 
 const OFFLINE_EVIDENCE_REVIEW_SCHEMA = 'whoisleuth.cli.offline-evidence-review';
 const OFFLINE_EVIDENCE_REVIEW_VERSION = 1;
@@ -79,11 +80,14 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
   let kind: 'infrastructure' | 'infrastructure_comparison' | 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store' | ContextReviewKind;
   let result: unknown;
   if (input.schema === INFRASTRUCTURE_OBSERVATION_SCHEMA) {
+    if (typeof value === 'string' && new TextEncoder().encode(value).byteLength > MAX_INFRASTRUCTURE_OBSERVATION_BYTES) throw new TypeError('Infrastructure snapshot input exceeds its byte bound.');
     kind = 'infrastructure';
     const retained = infrastructureObservationFacts(input);
     result = { ...retained, state: retained.snapshot.coverage.state === 'complete' && !retained.snapshot.coverage.truncated ? 'complete' : 'partial' };
-  } else if (input.schema === 'whoisleuth.infrastructure-comparison.input') {
+  } else if (input.schema === INFRASTRUCTURE_COMPARISON_INPUT_SCHEMA) {
+    if (typeof value === 'string' && new TextEncoder().encode(value).byteLength > MAX_INFRASTRUCTURE_COMPARISON_INPUT_BYTES) throw new TypeError('Infrastructure comparison input exceeds its byte bound.');
     const pair = exact(input, ['schema', 'version', 'earlier', 'later'], 'Infrastructure comparison input');
+    if (new TextEncoder().encode(JSON.stringify(pair)).byteLength > MAX_INFRASTRUCTURE_COMPARISON_INPUT_BYTES) throw new TypeError('Infrastructure comparison input exceeds its byte bound.');
     kind = 'infrastructure_comparison';
     result = compareInfrastructureObservations(pair.earlier, pair.later);
   } else if ((CONTEXT_INPUT_SCHEMAS as readonly string[]).includes(input.schema as string)) {

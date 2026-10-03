@@ -101,3 +101,8 @@ Version 1 has exact keys and refuses future versions. Existing external-findings
 version 4 and typed version-1 row imports preserve their historical meaning;
 version 5 adds the optional exact infrastructure snapshot. No external discovery
 API, new provider, dependency, collector or automatic request is required.
+Current snapshot and version-5 findings exports use compact UTF-8 JSON with a
+terminal line feed so the emitted representation stays within its parser ceiling.
+An offline comparison input is bounded to two snapshot budgets plus 1 KiB of
+framing. Historical version-4 fixture bytes and reader meaning remain unchanged;
+new typed row conversions emit version 5.
