@@ -1,6 +1,6 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
-import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectFocusedResultsVisible, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, useTheme } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectFocusedResultsVisible, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, useTheme } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { productionChunkPath } from './production-build';
 import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
@@ -105,6 +105,136 @@ test('retained infrastructure exposes exact independent sources and keyboard ret
   await detail.getByRole('button', { name: 'Return to inventory results', exact: true }).click();
   await expect(inspect).toBeFocused();
   expect(requests).toEqual([]);
+});
+
+test('optional retained topology preserves full source list, long identity pivots and accessible mobile fallback', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) requests.push(path);
+  });
+  const prefix = 'a'.repeat(63), first = `${prefix}.one.topology.example`, second = `${prefix}.two.topology.example`;
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord('topology-first', first), caseRecord('topology-independent', first), caseRecord('topology-second', second)] },
+    'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', { campaigns: [campaign('topology-campaign', 'Long-name topology review', [first, second])] }),
+  });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 3 });
+  const campaignsBefore = await readBrowserLocalCollection(page, 'campaigns', { minimumRecords: 1 });
+  await openDashboardSecondaryWorkspaces(page);
+  await page.getByText('Browse retained infrastructure', { exact: true }).click();
+  const inventory = page.getByRole('region', { name: 'Retained infrastructure inventory', exact: true });
+  const inspect = inventory.getByRole('list', { name: 'Retained infrastructure identities', exact: true }).getByRole('button', { name: `Inspect retained evidence for ${first}`, exact: true });
+  await inspect.click();
+  const detail = inventory.getByRole('region', { name: 'Selected retained infrastructure evidence', exact: true });
+  const relationships = detail.getByRole('region', { name: 'Directly supported retained relationships', exact: true });
+  const sourceList = relationships.getByRole('list', { name: 'Retained relationship sources', exact: true });
+  await expect(sourceList.getByRole('listitem')).toHaveCount(3);
+  const toggle = relationships.getByRole('button', { name: 'Topology and list', exact: true });
+  await toggle.focus(); await toggle.press('Enter');
+  await expect(toggle).toBeFocused(); await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(relationships.getByRole('region', { name: 'Retained one-hop topology', exact: true })).toBeVisible();
+  await expect(sourceList.getByRole('listitem')).toHaveCount(3);
+  await relationships.getByRole('searchbox', { name: 'Search diagram on this source page', exact: true }).fill('no-diagram-match');
+  await expect(relationships).toContainText('No current-page source rows match this diagram search');
+  await expect(sourceList.getByRole('listitem')).toHaveCount(3);
+  await expect(sourceList.getByRole('link')).toHaveCount(3);
+  await relationships.getByRole('searchbox', { name: 'Search diagram on this source page', exact: true }).fill('');
+  const initialFocus = relationships.getByRole('combobox', { name: 'Focus diagram identity', exact: true });
+  const campaignOption = (await initialFocus.locator('option').allTextContents()).find(value => value.includes('topology-campaign · campaign'));
+  expect(campaignOption).toBeDefined();
+  await initialFocus.selectOption({ label: campaignOption! });
+  await relationships.getByRole('button', { name: 'Show exact source rows for topology-campaign', exact: true }).click();
+  await expect(sourceList.locator('li.highlighted')).toHaveCount(1);
+  await expect(sourceList.locator('li.highlighted')).toBeFocused();
+  await relationships.getByRole('button', { name: 'Inspect retained evidence for topology-campaign', exact: true }).click();
+  await expect(detail.getByRole('heading', { name: 'Retained evidence for Long-name topology review', exact: true })).toBeFocused();
+  await relationships.getByRole('button', { name: 'Topology and list', exact: true }).click();
+  const focus = relationships.getByRole('combobox', { name: 'Focus diagram identity', exact: true });
+  const options = await focus.locator('option').allTextContents();
+  expect(options.filter(value => value.includes(first))).toHaveLength(1);
+  expect(options.filter(value => value.includes(second))).toHaveLength(1);
+  await focus.selectOption({ label: options.find(value => value.includes(second))! });
+  await expect(relationships.locator('.topology-controls > p').filter({ hasText: 'Focused identity [' })).toContainText(`${second} · domain`);
+  await relationships.getByRole('button', { name: `Show exact source rows for ${second}`, exact: true }).click();
+  await expect(sourceList.locator('li.highlighted').first()).toBeFocused();
+  const map = relationships.getByRole('region', { name: 'Retained one-hop topology', exact: true });
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(map.locator('.map-frame svg')).toBeVisible();
+  await expect(map.locator('path[marker-end]')).toHaveCount(5);
+  await map.locator('.map-frame').scrollIntoViewIfNeeded();
+  const box = await map.locator('.map-frame').boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.move(box!.x + box!.width / 2, Math.max(10, Math.min(700, box!.y + box!.height / 2)));
+  const previousScroll = await page.evaluate(() => window.scrollY);
+  await page.mouse.wheel(0, 240);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(previousScroll);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 1920, 2560]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expectNoHorizontalOverflow(page);
+      if (width < 660) {
+        await expect(map.locator('.map-frame')).toBeHidden();
+        await expect(map.locator('.map-mobile')).toBeVisible();
+      }
+      if (captureVisualEvidenceEnabled()) await test.info().attach(`retained-topology-${width}-${theme}`, {
+        body: await relationships.locator('.topology-controls').screenshot(), contentType: 'image/png',
+      });
+    }
+  }
+  await relationships.getByRole('button', { name: 'List only', exact: true }).click();
+  await expect(map).toHaveCount(0);
+  await expect(sourceList.getByRole('listitem')).toHaveCount(5);
+  await sourceList.getByRole('button', { name: `Inspect retained evidence for ${second}`, exact: true }).first().click();
+  await expect(detail.getByRole('heading', { name: `Retained evidence for ${second}`, exact: true })).toBeFocused();
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 3 })).toEqual(before);
+  expect(await readBrowserLocalCollection(page, 'campaigns', { minimumRecords: 1 })).toEqual(campaignsBefore);
+  expect(requests).toEqual([]);
+});
+
+test('retained topology keeps dense source pages complete and resets diagram search on paging', async ({ page }) => {
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION,
+    cases: Array.from({ length: 53 }, (_, index) => caseRecord(`dense-case-${String(index).padStart(3, '0')}`, 'dense-topology.example')),
+  } });
+  await openDashboardSecondaryWorkspaces(page);
+  await page.getByText('Browse retained infrastructure', { exact: true }).click();
+  const inventory = page.getByRole('region', { name: 'Retained infrastructure inventory', exact: true });
+  await inventory.getByRole('combobox', { name: 'Infrastructure type', exact: true }).selectOption('domain');
+  await inventory.getByRole('list', { name: 'Retained infrastructure identities', exact: true }).getByRole('button', { name: 'Inspect retained evidence for dense-topology.example', exact: true }).click();
+  const relationships = inventory.getByRole('region', { name: 'Directly supported retained relationships', exact: true });
+  const sources = relationships.getByRole('list', { name: 'Retained relationship sources', exact: true });
+  await expect(sources.getByRole('listitem')).toHaveCount(50);
+  await relationships.getByRole('button', { name: 'Topology and list', exact: true }).click();
+  await expect(relationships.getByRole('region', { name: 'Retained one-hop topology', exact: true })).toContainText('Partial visual');
+  await expect(sources.getByRole('listitem')).toHaveCount(50);
+  if (captureVisualEvidenceEnabled()) {
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 390, 1024, 1280, 1920, 2560]) {
+        await page.setViewportSize({ width, height: 844 });
+        await test.info().attach(`retained-topology-dense-${width}-${theme}`, {
+          body: await relationships.locator('.topology-controls').screenshot(), contentType: 'image/png',
+        });
+      }
+    }
+  }
+  const search = relationships.getByRole('searchbox', { name: 'Search diagram on this source page', exact: true });
+  await search.fill('no-current-page-diagram-match');
+  await expect(relationships).toContainText('No current-page source rows match this diagram search');
+  await expect(sources.getByRole('listitem')).toHaveCount(50);
+  const pages = relationships.getByRole('navigation', { name: 'Retained relationship pages', exact: true });
+  await pages.getByRole('button', { name: 'Next', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(pages.getByText('Page 2 of 2', { exact: true })).toBeVisible();
+  await expect(relationships.getByRole('heading', { name: '53 one-hop relationships', exact: true })).toBeFocused();
+  await expect(search).toHaveValue('');
+  await expect(sources.getByRole('listitem')).toHaveCount(3);
+  const map = relationships.getByRole('region', { name: 'Retained one-hop topology', exact: true });
+  await expect(map.locator('path[marker-end]')).toHaveCount(3);
+  await expect(relationships).toContainText('Source page 2 of 2 · 3 rows shown');
+  await expect(sources.getByRole('link')).toHaveCount(3);
 });
 
 test('main search and infrastructure filters settle independently while a worker operation is held', async ({ page }) => {

@@ -1,9 +1,11 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import type { InvestigationInfrastructureRelationships, InvestigationInfrastructureRelationship } from '$lib/analysis/investigation-infrastructure.ts';
+  import type { InvestigationInfrastructureRelationships } from '$lib/analysis/investigation-infrastructure.ts';
   import type { InvestigationSearchSession } from '$lib/investigation-search-session';
   import Pagination from './Pagination.svelte';
+  import BoundedRelationshipMap from './BoundedRelationshipMap.svelte';
+  import { INFRASTRUCTURE_RELATIONSHIP_LABELS as labels, projectInfrastructureTopology } from '$lib/analysis/infrastructure-topology.ts';
   let { session, entityId, onopen, onselect }: {
     session: InvestigationSearchSession;
     entityId: string;
@@ -13,21 +15,15 @@
   let page = $state(1), pending = $state(false), error = $state('');
   let response = $state.raw<InvestigationInfrastructureRelationships | null>(null);
   let heading = $state<HTMLHeadingElement>();
+  let sourceList = $state<HTMLOListElement>();
+  let view = $state<'list' | 'topology'>('list'), query = $state(''), focusedEntityId = $state(''), highlightedEntityId = $state('');
+  const topology = $derived(response ? projectInfrastructureTopology(response, query, focusedEntityId) : null);
   let focusPage = false;
-  const labels: Record<InvestigationInfrastructureRelationship['type'], string> = {
-    domain_uses_nameserver_set: 'Nameserver relationship', domain_reached_http_origin: 'Observed HTTP origin',
-    case_documents_domain: 'Case documents domain', brand_declares_official_domain: 'Declared official domain',
-    brand_declares_official_favicon: 'Declared official favicon', domain_observed_favicon: 'Observed favicon',
-    campaign_contains_domain: 'Campaign includes domain', campaign_contains_case: 'Campaign includes Case',
-    domain_presented_certificate: 'Certificate relationship', domain_resolved_to_ip: 'Retained DNS address',
-    domain_aliases_to_domain: 'Retained DNS alias', domain_uses_mail_server: 'Mail-server relationship',
-    domain_exposed_tracking_identifier: 'Tracking identifier', domain_related_by_favicon: 'Derived favicon relationship',
-    domain_loaded_official_asset: 'Official-asset observation',
-  };
   $effect(() => {
     const current = session, selected = entityId, requestedPage = page;
     let active = true;
     pending = true; response = null; error = '';
+    query = ''; focusedEntityId = selected; highlightedEntityId = '';
     void current.infrastructureRelationships(selected, requestedPage).then(async value => {
       if (!active) return;
       response = value; pending = false;
@@ -41,6 +37,12 @@
     });
     return () => { active = false; };
   });
+  function showSources(id: string) {
+    highlightedEntityId = id;
+    const row = sourceList && [...sourceList.children].find(element => element instanceof HTMLLIElement
+      && (element.dataset.from === id || element.dataset.to === id));
+    if (row instanceof HTMLElement) { row.focus({ preventScroll: true }); row.scrollIntoView({ block: 'nearest' }); }
+  }
 </script>
 
 <section class="relationships" aria-label="Directly supported retained relationships" aria-busy={pending}>
@@ -50,20 +52,46 @@
   {:else}
     <h4 bind:this={heading} tabindex="-1">{response.relationshipCount} one-hop relationship{response.relationshipCount === 1 ? '' : 's'}</h4>
     <p>{response.total} retained relationship/source row{response.total === 1 ? '' : 's'}. Independent sources have separate rows.</p>
+    <p>Source page {response.page} of {response.pageCount} · {response.rows.length} rows shown. The optional diagram uses only this page, not full multi-host discovery.</p>
     {#if response.partial}<p>Relationship or source coverage is incomplete.</p>{/if}
     {#if !response.total}<p>No supported one-hop relationship is admitted here. This does not establish absence elsewhere.</p>{/if}
-    <ol aria-label="Retained relationship sources">
+    {#if response.total}
+      <div class="view-controls" role="group" aria-label="Retained relationship view">
+        <button class="btn small" type="button" aria-pressed={view === 'list'} onclick={() => { view = 'list'; highlightedEntityId = ''; }}>List only</button>
+        <button class="btn small" type="button" aria-pressed={view === 'topology'} onclick={() => view = 'topology'}>Topology and list</button>
+      </div>
+    {/if}
+    {#if view === 'topology' && topology}
+      <section class="topology-controls" aria-label="Retained topology controls">
+        <label>Search diagram on this source page<input type="search" bind:value={query} oninput={() => highlightedEntityId = ''} maxlength="200" autocomplete="off" spellcheck="false"></label>
+        <p role="status">{topology.rows.length} of {response.rows.length} current-page source rows match the diagram search. The complete current-page list remains below.</p>
+        {#if topology.focusEntity}
+          <label>Focus diagram identity<select value={topology.focusEntity.id} onchange={event => { focusedEntityId = event.currentTarget.value; highlightedEntityId = ''; }}>{#each topology.diagramEntities as entity (entity.id)}<option value={entity.id}>[{entity.diagramReference}] {entity.canonical} · {entity.type.replaceAll('_', ' ')}</option>{/each}</select></label>
+          <p>Focused identity [{topology.focusEntity.diagramReference}]: {topology.focusEntity.canonical} · {topology.focusEntity.type.replaceAll('_', ' ')}</p>
+          <div class="actions"><button class="btn small" type="button" onclick={() => showSources(topology!.focusEntity!.id)}>Show exact source rows for {topology.focusEntity.canonical}</button>
+            {#if topology.focusEntity.id !== entityId}<button class="btn small" type="button" onclick={() => onselect(topology!.focusEntity!.id, topology!.focusEntity!.label)}>Inspect retained evidence for {topology.focusEntity.canonical}</button>{/if}
+          </div>
+          {#key query}
+            <BoundedRelationshipMap title="Retained one-hop topology" description="Groups organise identity types; arrows follow From → To. Diagram references distinguish abbreviated labels." nodes={topology.nodes} links={topology.links} focusNodeId={topology.focusNodeId} layout="grouped" directed observedLabel="Retained direct or normalised" limitation="Independent sources keep separate links; full attributable evidence remains in the source list below." />
+          {/key}
+        {:else}<p>No current-page source rows match this diagram search. Use the unchanged source list or clear the search.</p>{/if}
+      </section>
+    {/if}
+    <ol bind:this={sourceList} aria-label="Retained relationship sources">
       {#each response.rows as row (row.id)}
         {@const related = row.from.id === entityId ? row.to : row.from}
-        <li>
+        <li tabindex="-1" data-from={row.from.id} data-to={row.to.id} class:highlighted={highlightedEntityId === row.from.id || highlightedEntityId === row.to.id}>
+          {#if highlightedEntityId === row.from.id || highlightedEntityId === row.to.id}<small>Source row for the focused diagram identity</small>{/if}
           <h5>{labels[row.type]}</h5>
           <dl>
-            <div><dt>From</dt><dd>{row.from.canonical} <small>({row.from.type.replaceAll('_', ' ')})</small></dd></div>
-            <div><dt>To</dt><dd>{row.to.canonical} <small>({row.to.type.replaceAll('_', ' ')})</small></dd></div>
+            <div><dt>From</dt><dd>{row.from.canonical} <small>({row.from.type.replaceAll('_', ' ')}) · identity {row.from.id}</small></dd></div>
+            <div><dt>To</dt><dd>{row.to.canonical} <small>({row.to.type.replaceAll('_', ' ')}) · identity {row.to.id}</small></dd></div>
             <div><dt>Classification</dt><dd>{row.classification} · {row.partial ? 'Partial or unknown completeness' : 'Complete retained evidence'}</dd></div>
             <div><dt>Method</dt><dd>{row.method}</dd></div>
+            <div><dt>Admitted source observations</dt><dd>{row.sourceCount}</dd></div>
             {#if row.source}
               <div><dt>Supporting source</dt><dd>{row.source.source} · {row.source.recordId}</dd></div>
+              <div><dt>Source identity</dt><dd>{row.source.id}</dd></div>
               <div><dt>Observed</dt><dd>{formatEvidenceDate(row.source.observedAt, 'Unknown time')}</dd></div>
             {:else}<div><dt>Supporting source</dt><dd>Unavailable; the retained link is not independently attributable from this source row.</dd></div>{/if}
           </dl>
@@ -81,6 +109,7 @@
       {/each}
     </ol>
     <Pagination currentPage={response.page} pageCount={response.pageCount} setPage={value => { if (!pending) { focusPage = true; page = value; } }} ariaLabel="Retained relationship pages" />
+    <details><summary>Retained topology scope and missing evidence</summary><ul>{#each response.limitations as limitation}<li>{limitation}</li>{/each}</ul><p>Grouping and namespace similarity add no observed connections. Inspecting a related identity opens its own retained sources and one-hop relationships. It does not discover additional hosts or establish an observed multi-hop chain.</p></details>
   {/if}
 </section>
 
@@ -91,6 +120,7 @@
   li{min-width:0;border-top:1px solid var(--border);padding-top:12px}dl{display:grid;gap:5px;margin:10px 0}
   dl>div{display:grid;grid-template-columns:8rem minmax(0,1fr);gap:8px}dt,small{color:var(--muted)}dd{margin:0;min-width:0;overflow-wrap:anywhere}
   .actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.actions>*{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+  .view-controls{display:flex;flex-wrap:wrap;gap:8px;margin-block:12px}.view-controls [aria-pressed="true"]{border-color:var(--accent);color:var(--text)}.topology-controls{min-width:0}.topology-controls label{display:grid;gap:6px;max-width:100%;min-width:0;margin-block:12px}.topology-controls input,.topology-controls select{min-width:0;width:100%;min-height:44px}.highlighted{background:var(--panel-raised)}li:focus-visible{outline:2px solid var(--focus);outline-offset:4px}
   a{color:var(--accent);padding-block:6px}details{margin-top:8px}summary{cursor:pointer}ul{padding-left:20px;overflow-wrap:anywhere}
   @media(max-width:640px){dl>div{grid-template-columns:minmax(0,1fr);gap:0}.actions>*{min-height:44px}}
 </style>

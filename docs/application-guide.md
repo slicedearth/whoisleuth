@@ -73,6 +73,19 @@ retained Cases, campaigns, Brand Profiles or relationship records, never an
 automatic Lookup. The inventory and its selections stay disposable in page
 memory; no second evidence store is created.
 
+Choose **Topology and list** in an identity's relationships to arrange the current
+source page by retained identity type. Arrowheads preserve each relationship's
+From → To direction; grouping and namespace similarity are not extra observed
+connections. Independent sources remain separate, even for coinciding links.
+Diagram references distinguish abbreviated labels. Use **Focus diagram identity**
+for the full name, **Show exact source rows** to focus its attributable evidence,
+or **Inspect retained evidence** to pivot to that identity's own one-hop view.
+The diagram search narrows only the current diagram, not the exact source list.
+Page controls reach the remaining source rows; diagram omissions and partial
+coverage are explicit. **List only** provides the same source links and pivots
+without a diagram. Neither view performs collection or establishes a complete
+multi-host, DNS-alias or routing-origin topology.
+
 Counts are not organisation-wide coverage, and retained address or certificate
 relationships do not establish current resolution, origin, ownership or common
 control. Imported DNS observations can be linked to a Case domain when their

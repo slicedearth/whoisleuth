@@ -14,24 +14,34 @@
     nodes,
     links,
     focusNodeId = '',
+    layout = 'force',
+    directed = false,
+    observedLabel = 'Observed',
+    limitation = 'Lines show observed or explicitly derived relationships in the current bounded dataset. They do not establish common ownership or intent.',
   }: {
     title: string;
     description: string;
     nodes: ForceGraphNodeInput[];
     links: ForceGraphLinkInput[];
     focusNodeId?: string;
+    layout?: 'force' | 'grouped';
+    directed?: boolean;
+    observedLabel?: string;
+    limitation?: string;
   } = $props();
 
-  const graph = $derived(projectBoundedForceGraph(nodes, links, { focusNodeId }));
+  const graph = $derived(projectBoundedForceGraph(nodes, links, { focusNodeId, layout }));
+  const componentId = $props.id();
+  const markerId = `${componentId}-direction`;
   let activeGroup = $state('');
   let activeLinkKind = $state<'all' | ForceGraphLinkKind>('all');
-  const linkKindLabels: Readonly<Record<ForceGraphLinkKind, string>> = {
-    observed: 'Observed',
+  const linkKindLabels: Readonly<Record<ForceGraphLinkKind, string>> = $derived({
+    observed: observedLabel,
     partial: 'Partial',
     unknown: 'Unknown',
     derived: 'Derived',
     summary: 'Grouped',
-  };
+  });
   const selectedGroup = $derived(graph.clusters.some((cluster) => cluster.id === activeGroup) ? activeGroup : '');
   const selectedCluster = $derived(graph.clusters.find((cluster) => cluster.id === selectedGroup));
   const graphIdentity = $derived([
@@ -85,7 +95,13 @@
     const curve = Math.min(22, distance * 0.08) * direction;
     const controlX = (link.sourceX + link.targetX) / 2 - deltaY / distance * curve;
     const controlY = (link.sourceY + link.targetY) / 2 + deltaX / distance * curve;
-    return `M ${link.sourceX} ${link.sourceY} Q ${controlX} ${controlY} ${link.targetX} ${link.targetY}`;
+    const targetNode = graph.nodes.find(node => node.id === link.targetId);
+    // Leave directed arrowheads outside the existing node shapes and labels.
+    const inset = directed ? targetNode?.kind === 'target'
+      ? Math.min(distance / 2, Math.max(24, (targetNode.labelWidth + 24) / 2)) : 24 : 0;
+    const targetX = link.targetX - deltaX / distance * inset;
+    const targetY = link.targetY - deltaY / distance * inset;
+    return `M ${link.sourceX} ${link.sourceY} Q ${controlX} ${controlY} ${targetX} ${targetY}`;
   };
 </script>
 
@@ -139,6 +155,7 @@
       aria-label={`${title}. ${graph.nodes.length} nodes and ${graph.links.length} relationships.${graph.truncated ? ` ${omittedInputCount} visual inputs omitted after bounded normalization.` : ''} Exact evidence follows the visual.`}
     >
       <svg class="data-chart" width={graph.width} height={graph.height} viewBox={`0 0 ${graph.width} ${graph.height}`} aria-hidden="true">
+        {#if directed}<defs><marker id={markerId} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 4 L0 8 Z" class="direction-marker" /></marker></defs>{/if}
         <rect width={graph.width} height={graph.height} class="background"></rect>
         {#each graph.nodes.filter((node) => node.kind === 'target') as node (node.id)}
           <circle cx={node.x} cy={node.y} r="96" class="focus-halo"></circle>
@@ -152,6 +169,7 @@
               class:derived={link.kind === 'derived'}
               class:summary={link.kind === 'summary'}
               class:muted={linkIsMuted(link)}
+              marker-end={directed ? `url(#${markerId})` : undefined}
             ><title>{link.detail || link.kind}</title></path>
             <circle
               cx={link.targetX}
@@ -231,12 +249,13 @@
     {#if graph.truncated}
       <p class="visual-limit">The bounded visual omitted {graph.omittedNodeInputs} fact {graph.omittedNodeInputs === 1 ? 'input' : 'inputs'} and {graph.omittedLinkInputs} relationship {graph.omittedLinkInputs === 1 ? 'input' : 'inputs'} after normalisation or display limits. Use the exact evidence below for source detail.</p>
     {/if}
-    <p class="limit">Lines show observed or explicitly derived relationships in the current bounded dataset. They do not establish common ownership or intent.</p>
+    <p class="limit">{limitation}</p>
   </section>
 {/if}
 
 <style>
   .relationship-map{container-type:inline-size;min-width:0;margin:13px 0;padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
+  .direction-marker{fill:var(--muted)}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   h3{margin:2px 0 0;font:700 var(--text-sm) var(--mono)}
   .map-summary{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}

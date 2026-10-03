@@ -275,7 +275,7 @@ function resolveForceGraphLabelCollisions(
 export function projectBoundedForceGraph(
   rawNodes: readonly ForceGraphNodeInput[],
   rawLinks: readonly ForceGraphLinkInput[],
-  options: Readonly<{ focusNodeId?: string }> = {},
+  options: Readonly<{ focusNodeId?: string; layout?: 'force' | 'grouped' }> = {},
 ) {
   const rawNodeCount = Array.isArray(rawNodes) ? rawNodes.length : 0;
   const rawLinkCount = Array.isArray(rawLinks) ? rawLinks.length : 0;
@@ -347,7 +347,7 @@ export function projectBoundedForceGraph(
     const rightLabel = groupLabels.get(right) ?? right;
     return leftLabel.localeCompare(rightLabel) || left.localeCompare(right);
   });
-  const height = Math.max(500, Math.min(700, 450 + Math.max(0, nodes.length - 14) * 16));
+  let height = Math.max(500, Math.min(700, 450 + Math.max(0, nodes.length - 14) * 16));
   const width = 900;
   const centerX = width / 2;
   const centerY = height / 2;
@@ -355,7 +355,22 @@ export function projectBoundedForceGraph(
   const clusterIndex = new Map(groupIds.map((group) => [group, forceGraphClusterIndex(group)]));
   for (const node of nodes) node.clusterIndex = clusterIndex.get(node.group) ?? 0;
 
-  if (nodes.length) {
+  if (options.layout === 'grouped') {
+    // Type/namespace bands are visual organisation, not additional graph edges.
+    let cursor = focusNode ? 225 : 40;
+    if (focusNode) { focusNode.x = centerX; focusNode.y = 112; }
+    for (const group of groupIds) {
+      const members = nodes.filter(node => node.group === group && node !== focusNode);
+      const rowHeight = Math.max(...members.map(node => 62 + node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT), 80);
+      const columns = Math.max(1, Math.floor(width / (Math.max(...members.map(node => node.labelWidth), 54) + 12)));
+      members.forEach((node, index) => {
+        node.x = width / columns * (index % columns + 0.5);
+        node.y = cursor + Math.floor(index / columns) * rowHeight + 22;
+      });
+      cursor += Math.ceil(members.length / columns) * rowHeight + 24;
+    }
+    height = Math.max(500, cursor + 30);
+  } else if (nodes.length) {
     if (focusNode) {
       focusNode.fx = centerX;
       focusNode.fy = centerY;
