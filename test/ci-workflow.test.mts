@@ -100,6 +100,7 @@ type WorkflowFixture = {
     needs?: string[];
     permissions?: Record<string, string>;
     env?: Record<string, string>;
+    strategy?: { 'fail-fast'?: boolean; matrix?: { browser?: string[] } };
     'timeout-minutes'?: number;
     'continue-on-error'?: boolean;
     steps: Array<{
@@ -994,10 +995,20 @@ describe('continuous integration workflow', () => {
     }
     assert.ok(workflowSteps(workflow).some(step => step.run === 'npm run test:mutation'));
     const browserJob = requiredValue(Object.values(workflow.jobs).find(job =>
-      job.steps.some(step => step.run === 'npm run test:e2e:cross-browser')));
+      job.steps.some(step => step.run?.startsWith('npm run test:e2e:cross-browser'))));
     assert.equal(browserJob.env?.WHOISLEUTH_E2E_USE_BUILD, '1');
+    assert.deepEqual(browserJob.strategy?.matrix?.browser, ['firefox', 'webkit']);
+    assert.equal(browserJob.strategy?.['fail-fast'], false);
+    assert.equal(browserJob.env?.WHOISLEUTH_CROSS_BROWSER_PROJECT, '${{ matrix.browser }}');
+    const engines = requiredValue(browserJob.strategy?.matrix?.browser);
+    const label = requiredValue(browserJob.env?.WHOISLEUTH_PLAYWRIGHT_RUN_LABEL);
+    const upload = requiredValue(browserJob.steps.find(step => step.uses?.startsWith('actions/upload-artifact@')));
+    for (const template of [label, String(upload.with?.name)]) {
+      assert.equal(new Set(engines.map(engine => template.replaceAll('${{ matrix.browser }}', engine))).size, engines.length,
+        'each engine must retain separately identifiable evidence');
+    }
     const commands = browserJob.steps.flatMap(step => step.run ? [step.run] : []);
-    const suite = commands.indexOf('npm run test:e2e:cross-browser');
+    const suite = commands.findIndex(command => command.startsWith('npm run test:e2e:cross-browser'));
     const build = commands.indexOf('npm run verification:ci -- --group=browser-build');
     const browsers = commands.indexOf('npm run test:e2e:critical:install');
     assert.ok(build >= 0 && build < suite, 'verify the production build before browser execution');

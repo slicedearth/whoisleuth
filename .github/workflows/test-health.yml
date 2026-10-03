@@ -97,9 +97,14 @@ jobs:
   cross-browser:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [firefox, webkit]
     env:
       WHOISLEUTH_E2E_USE_BUILD: '1'
-      WHOISLEUTH_PLAYWRIGHT_RUN_LABEL: weekly-cross-browser
+      WHOISLEUTH_CROSS_BROWSER_PROJECT: ${{ matrix.browser }}
+      WHOISLEUTH_PLAYWRIGHT_RUN_LABEL: weekly-cross-browser-${{ matrix.browser }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -117,7 +122,7 @@ jobs:
       - name: Install pinned browser engines
         run: npm run test:e2e:critical:install
       - name: Run complete cross-browser specifications without retries
-        run: npm run test:e2e:cross-browser
+        run: npm run test:e2e:cross-browser -- --project="$WHOISLEUTH_CROSS_BROWSER_PROJECT"
       - name: Summarise browser results
         if: always()
         run: npm run test:e2e:summary
@@ -125,7 +130,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: weekly-cross-browser-evidence
+          name: weekly-cross-browser-${{ matrix.browser }}-evidence
           path: |
             playwright-results.json
             playwright-report/
