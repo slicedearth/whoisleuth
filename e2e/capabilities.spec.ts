@@ -2,13 +2,14 @@ import { expect, test } from './fixtures';
 import { normalizeCapabilities } from '../frontend/src/lib/capabilities';
 import { CAPABILITY_MANIFEST } from '../packages/contracts/capability-manifest.mts';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 
 const lookupPlanFeatures = CAPABILITY_MANIFEST.capabilities.flatMap(item => item.legacyCapability ? [{
   id: item.id, status: 'supported', execution: item.legacyCapability.execution,
   scanModes: item.legacyCapability.scanModes,
 }] : []);
 
-test('preflight follows the target while ineligible optional drafts stay off the request plan', async ({ page }) => {
+test('preflight follows the target while ineligible optional drafts stay off the request plan', async ({ page }, testInfo) => {
   const lookups: string[] = [];
   await page.route('**/api/capabilities', route => route.fulfill({ json: {
     version: 1, runtime: 'express', authoritative: true, features: lookupPlanFeatures,
@@ -39,11 +40,15 @@ test('preflight follows the target while ineligible optional drafts stay off the
   await page.locator('#query').fill('portal.example.test');
   await expect(archived).toBeEnabled(); await expect(archived).toBeChecked();
   await expect(sources.locator('[data-source="external_intelligence"]')).toHaveAttribute('data-state', 'included');
-  for (const width of [320, 390, 1280]) {
+  for (const width of [320, 390, 1280, 1920]) {
     await page.setViewportSize({ width, height: 844 });
     for (const theme of ['light', 'dark'] as const) {
       await useTheme(page, theme); await expectNoHorizontalOverflow(page);
       await expect(sources.locator('[data-source="malware_ioc_intelligence"]')).toBeVisible();
+      if (captureVisualEvidenceEnabled()) {
+        await sources.evaluate(element => window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - 140, behavior: 'instant' }));
+        await page.screenshot({ path: testInfo.outputPath(`collection-plan-${width}-${theme}.png`) });
+      }
     }
   }
   expect(lookups).toEqual([]);

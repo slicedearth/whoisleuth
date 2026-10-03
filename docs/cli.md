@@ -146,21 +146,13 @@ their focused help. They do not use the hosted login or hosted usage controls.
 `lookup --plan` lists planned source families and disclosure targets before
 collection. `doctor` is offline unless `--network` is selected.
 
-Lookup planning uses the same target-specific source recipe as collection
-progress. Fast IP and ASN plans contain RDAP only; Deep IP plans add WHOIS and
-eligible public-address reverse DNS, while Deep ASN plans add WHOIS. Domain-only
-web, TLS and selected intelligence are not implied for address or ASN targets.
-The website preflight separates optional providers and reports deployment
-configuration as disabled or unavailable without testing a source. Browser-only
-optional selections do not transfer to a CLI command. Existing templates and
-CLI configuration profiles repeat their supported choices without adding a new
-selection store. Plans do not measure remaining quota, cost, result fan-out or
-an exact request count; completed source quality and deliberate dated refreshes
-remain the evidence review, rather than the current form's draft selections.
-The website's completed-plan review uses the finished target and mode, with
-separate source states and observation times. Original optional consent is not
-retained and is shown as unknown; missing output never proves a source was
-declined or returned no findings.
+Plans are target-specific: Fast IP and ASN plans contain RDAP only; Deep IP
+adds WHOIS and eligible reverse DNS, while Deep ASN adds WHOIS. Domain-only web,
+TLS and selected intelligence do not apply to address or ASN targets.
+Plans do not probe source health or measure remaining quota, cost, result fan-out
+or exact request counts. CLI configuration profiles repeat supported settings;
+optional selections made on the website do not transfer to a CLI command.
+For completed website results, see [Source quality](application-guide.md#lookup).
 
 ### Message and link intake
 

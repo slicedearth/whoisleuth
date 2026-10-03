@@ -130,11 +130,17 @@ Lookup accepts one domain, IP address or ASN. URL-like input is normalised only
 under the explicit supported rules; credentials, unsupported schemes and
 ambiguous targets are rejected.
 
-Before collection, Lookup shows the selected target and source families. Deep
-Lookup reports source states as they arrive; connections that buffer responses
-show them together. A finished source can still be partial, failed or unsupported.
+Before collection, Lookup shows source families for the entered domain, address
+or ASN and the current deployment configuration. Optional providers are listed
+separately. Deep Lookup reports source states as they arrive; connections that
+buffer responses show them together. A finished source can still be partial,
+failed or unsupported.
 Only the final validated result can be saved. Cancelling discards the incomplete
 response; already-admitted requests may finish within their existing bounds.
+Under **Source quality**, expand **Compare the completed plan and source outcomes**
+for the finished target and mode, separately dated source records and diagnostic
+states. Original optional selections are not retained, so missing output does
+not establish that a source was declined or had no findings.
 
 ### Fast and Deep collection
 
@@ -682,8 +688,8 @@ content, resolved without erasing history, and carried into a response packet.
 unknown action binding and independent observation coverage. Operations reports
 offer a local contributor drill-down and a paged Case scope view, independent of
 the report's time window. Campaigns show the same view for Cases matching their
-domains; same-domain incidents remain separate. Provider outcomes, independent
-reviews and closure dates have separate columns. Downloaded reports remain
+domains; same-domain incidents remain separate. Provider outcomes remain separate
+from independent reviews and recorded closure dates. Downloaded reports remain
 aggregate-only.
 
 For supported platform hostnames, the Case workspace shows freshness-bounded
