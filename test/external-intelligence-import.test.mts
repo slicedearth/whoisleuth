@@ -58,6 +58,7 @@ test('source relationship inspection preserves references without importing unsu
   const row = preview.sourceInspection!.relationships[0]!;
   assert.equal(row.sourceState, 'Accepted claim');
   assert.equal(row.targetState, 'Referenced object not present');
+  assert.equal(row.modifiedAt, NOW);
   assert.equal(row.source, domain.id); assert.equal(row.target, relation.target_ref);
   assert.equal(row.createdAt, NOW); assert.deepEqual(row.markings, relation.object_marking_refs);
   const target = createCase({ domain: 'candidate.invalid' }, NOW);
@@ -82,9 +83,15 @@ test('MISP object references remain inspection-only and report missing objects r
   assert.equal(row.source, objectId.toLowerCase());
   assert.equal(row.sourceState, 'Source object not imported as a claim');
   assert.equal(row.targetState, 'Referenced object not present');
+  assert.equal(row.modifiedAt, '2026-07-30T02:00:00.000Z');
   assert.ok(preview.sourceInspection!.transformations.some(value => value.includes('not imported')));
   assert.doesNotMatch(JSON.stringify(preview), /private-reference-comment/u);
   assert.equal(preview.items.length, parseExternalIntelligenceDocument(input, DIGEST).items.length);
+  const invalid = structuredClone(enriched) as { Event: { Object: Array<{ ObjectReference: Array<{ timestamp: unknown }> }> } };
+  invalid.Event.Object[0]!.ObjectReference[0]!.timestamp = 1e20;
+  const invalidTime = parseExternalIntelligenceDocument(invalid, DIGEST);
+  assert.deepEqual(invalidTime.items, preview.items);
+  assert.equal(invalidTime.sourceInspection!.relationships[0]!.modifiedAt, null);
 });
 
 test('current interchange fixtures retain unknown observation times through the browser importer', () => {

@@ -20,7 +20,7 @@ type Pending = {
   reject: (error: Error) => void;
 };
 
-/** One active query and one replaceable queued query bound work during typing. */
+/** One active operation and the latest queued query per operation bound work without cancelling unrelated views. */
 export async function createInvestigationSearchSession(
   collections: InvestigationProjectionInput,
   unavailableStores: readonly InvestigationStoreName[],
@@ -31,7 +31,7 @@ export async function createInvestigationSearchSession(
     : new Worker(new URL('./workers/investigation-search.worker.ts', import.meta.url), { type: 'module', name: 'saved-work-search' });
   let sequence = 0;
   let active: Pending | null = null;
-  let queued: Pending | null = null;
+  const queued = new Map<SearchWorkerOperation['kind'], Pending>();
   let closed = false;
   let closeReason: Error = new DOMException('Saved-work search was cancelled.', 'AbortError');
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -47,9 +47,9 @@ export async function createInvestigationSearchSession(
     worker.onmessageerror = null;
     worker.terminate();
     active?.reject(error);
-    queued?.reject(error);
+    for (const pending of queued.values()) pending.reject(error);
     active = null;
-    queued = null;
+    queued.clear();
   }
   function abort() { close(new DOMException('Saved-work search was cancelled.', 'AbortError')); }
   function start(pending: Pending) {
@@ -64,8 +64,8 @@ export async function createInvestigationSearchSession(
       const pending: Pending = { request: { ...operation, id: ++sequence }, resolve, reject };
       if (!active) start(pending);
       else {
-        queued?.reject(new DOMException('A newer saved-work query replaced this query.', 'AbortError'));
-        queued = pending;
+        queued.get(operation.kind)?.reject(new DOMException('A newer saved-work query replaced this query.', 'AbortError'));
+        queued.set(operation.kind, pending);
       }
     });
   }
@@ -78,9 +78,8 @@ export async function createInvestigationSearchSession(
     if (reply.kind === 'error') completed.reject(new Error(reply.detail));
     else if (reply.kind !== completed.request.kind) completed.reject(new Error('Saved-work search returned an unexpected operation.'));
     else completed.resolve(reply);
-    const next = queued;
-    queued = null;
-    if (next) start(next);
+    const next = queued.values().next().value;
+    if (next) { queued.delete(next.request.kind); start(next); }
   };
   worker.onerror = (event) => {
     event.preventDefault();

@@ -5,8 +5,14 @@ import { currentActionFixture } from './case-response-fixtures';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { createCase, updateCase } from '../packages/cases/case-model.mts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 
 const AT = '2026-09-22T00:00:00.000Z';
+async function capturePanel(page: import('@playwright/test').Page, panel: import('@playwright/test').Locator, name: string) {
+  if (!captureVisualEvidenceEnabled()) return;
+  await panel.evaluate(element => window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - 140, behavior: 'instant' }));
+  await page.screenshot({ path: test.info().outputPath(name) });
+}
 function noticeAction(id: string, recipient: string) {
   return currentActionFixture({ id, type: 'registrar_report', recipient, contactSource: 'Analyst-reviewed fixture route', contactLimitations: ['No live verification'], routeObservedAt: AT, routeReviewAfter: '2026-10-01T00:00:00.000Z', dueAt: null, targetState: 'acknowledged', reference: 'REF-1', followUpAt: null, outcome: null, createdAt: AT, updatedAt: AT });
 }
@@ -26,9 +32,18 @@ test('exact incident coverage preserves resolved and open URLs without object-le
   await expect(coverage).toContainText('Open link');
   await expect(coverage.getByRole('cell', { name: /Unknown action binding/ })).toHaveCount(2);
   await expect(coverage.getByText('About this review', { exact: true })).toHaveCount(1);
+  await page.setViewportSize({ width: 320, height: 844 });
+  const tableRegion = coverage.getByRole('region', { name: 'Incident link coverage table', exact: true });
+  await tableRegion.focus();
+  await tableRegion.press('ArrowRight');
+  await expect.poll(() => tableRegion.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  await tableRegion.evaluate(element => { element.scrollLeft = 0; });
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
-    for (const width of [320, 390, 1280]) { await page.setViewportSize({ width, height: 844 }); await expect(coverage.getByRole('table')).toBeVisible(); await expectNoHorizontalOverflow(page); }
+    for (const width of [320, 390, 1024, 1280, 1920]) {
+      await page.setViewportSize({ width, height: 844 }); await expect(coverage.getByRole('table')).toBeVisible(); await expectNoHorizontalOverflow(page);
+      await capturePanel(page, coverage, `incident-coverage-${theme}-${width}.png`);
+    }
   }
   const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   expect(stored.records[0]!.value.actions).toEqual([]);
@@ -45,21 +60,28 @@ test('notice review stays transient, clears on action and input changes, and nev
   await intake.locator(':scope > summary').click();
   await intake.getByLabel('Input type').selectOption('email');
   const selected = { name: 'notice.eml', mimeType: 'message/rfc822', buffer: Buffer.from('From: private@route.example\r\nReply-To: private@other.example\r\nContent-Type: text/plain\r\n\r\nhttps://route.example/private?token=secret') };
-  await intake.getByLabel('Select a file').setInputFiles(selected);
+  await intake.getByLabel('Select a file', { exact: true }).setInputFiles(selected);
   await intake.getByRole('button', { name: 'Review locally', exact: true }).click();
   const notice = intake.locator('details.notice');
   await notice.locator(':scope > summary').click();
   await notice.getByLabel('Recorded action').selectOption('notice-first');
   await expect(notice).toContainText('from domain: route.example · match');
   await expect(notice).toContainText('reply to domain: other.example · mismatch');
-  await notice.getByLabel('Reported delivery reference (optional, transient)').fill('REF-1');
+  await notice.getByLabel('Reference in the notice (optional, transient)').fill('REF-1');
   await notice.getByLabel('Claimed organisation (optional, transient)').fill('TRANSIENT-CLAIM');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 844 }); await expectNoHorizontalOverflow(page);
+      await capturePanel(page, notice, `notice-${theme}-${width}.png`);
+    }
+  }
   await notice.getByRole('checkbox').check();
   await notice.getByLabel('Recorded action').selectOption('notice-second');
-  await expect(notice.getByLabel('Reported delivery reference (optional, transient)')).toHaveValue('');
+  await expect(notice.getByLabel('Reference in the notice (optional, transient)')).toHaveValue('');
   await expect(notice.getByLabel('Claimed organisation (optional, transient)')).toHaveValue('');
   await expect(notice.getByRole('checkbox')).not.toBeChecked();
-  await intake.getByLabel('Select a file').setInputFiles(selected);
+  await intake.getByLabel('Select a file', { exact: true }).setInputFiles(selected);
   await expect(notice).toHaveCount(0);
   expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(before);
   expect(collections).toBe(0);
@@ -75,16 +97,26 @@ test('conditional recovery follow-up preserves local selection after failed save
   await recovery.getByRole('checkbox', { name: 'Entered a password', exact: true }).check();
   const button = recovery.getByRole('button', { name: 'Record as open follow-up: Review and revoke suspicious account sessions', exact: true });
   await failNextBrowserLocalManifestWrite(page, 'cases');
-  await button.click();
+  await button.focus();
+  await button.press('Enter');
   await expect(button).toBeEnabled();
+  await expect(button).toBeFocused();
   await expect(recovery.getByRole('checkbox', { name: 'Entered a password', exact: true })).toBeChecked();
   expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.assertions).toEqual([]);
-  await button.click();
+  await button.press('Enter');
   await expect(recovery.getByRole('status')).toContainText('Open follow-up recorded');
+  await expect(button).toBeFocused();
   const stored = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
   expect(stored.assertions).toHaveLength(1);
   expect(stored.assertions[0]).toMatchObject({ kind: 'next_step', state: 'open', evidencePinIds: [] });
   expect(stored.actions).toEqual([]);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 844 }); await expectNoHorizontalOverflow(page);
+      await capturePanel(page, recovery, `recovery-${theme}-${width}.png`);
+    }
+  }
   await recovery.getByRole('button', { name: 'Clear local recovery selections', exact: true }).click();
 });
 
@@ -104,7 +136,13 @@ test('operations contributor links keep distinct Case IDs local and aggregate do
   await expect(contributors.getByText('About this review', { exact: true })).toHaveCount(1);
   await expect(contributors.getByRole('link', { name: 'Case contributor-first', exact: true })).toHaveAttribute('href', '/cases?case=contributor-first&section=response');
   await expect(contributors.getByRole('link', { name: 'Case contributor-second', exact: true })).toHaveAttribute('href', '/cases?case=contributor-second&section=response');
-  for (const width of [320, 390, 1280]) { await page.setViewportSize({ width, height: 844 }); await expect(contributors.getByRole('table')).toBeVisible(); await expectNoHorizontalOverflow(page); }
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1280, 1920]) {
+      await page.setViewportSize({ width, height: 844 }); await expect(contributors.getByRole('table')).toBeVisible(); await expectNoHorizontalOverflow(page);
+      await capturePanel(page, contributors, `contributors-${theme}-${width}.png`);
+    }
+  }
   const [download] = await Promise.all([page.waitForEvent('download'), report.getByRole('button', { name: 'Export aggregate JSON', exact: true }).click()]);
   const chunks: Buffer[] = []; for await (const chunk of (await download.createReadStream())!) chunks.push(Buffer.from(chunk));
   const body = Buffer.concat(chunks).toString('utf8');

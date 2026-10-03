@@ -244,12 +244,35 @@ test('session transports preview operations without rerunning a main-thread inde
   } finally { session.dispose(); }
 });
 
+test('independent views cannot replace a queued search and repeated filters retain only their latest request', async () => {
+  const { worker, session } = await prepared();
+  try {
+    const history = session.history('selected');
+    const search = session.search('target');
+    const stale = assert.rejects(session.infrastructure({ query: 'old' }), { name: 'AbortError' });
+    const inventory = session.infrastructure({ query: 'latest' });
+    await stale;
+    assert.equal(worker.messages.length, 2);
+    worker.reply({ id: 2, kind: 'history', result: investigationHistory(null, 'selected') });
+    await history;
+    assert.deepEqual(worker.messages.at(-1), { id: 3, kind: 'search', query: 'target' });
+    worker.reply({ id: 3, kind: 'search', result: { ...idle, query: 'target' } });
+    assert.equal((await search).query, 'target');
+    assert.deepEqual(worker.messages.at(-1), { id: 5, kind: 'infrastructure', options: { query: 'latest' } });
+    const projection = buildInvestigationProjection({});
+    const result = investigationInfrastructure(projection, buildInvestigationSearchIndex(projection));
+    worker.reply({ id: 5, kind: 'infrastructure', result });
+    assert.deepEqual(await inventory, result);
+  } finally { session.dispose(); }
+});
+
 test('disposal rejects active and queued requests and refuses new work', async () => {
   const { worker, session } = await prepared();
   const active = assert.rejects(session.search('active'), { name: 'AbortError' });
   const queued = assert.rejects(session.search('queued'), { name: 'AbortError' });
+  const inventory = assert.rejects(session.infrastructure(), { name: 'AbortError' });
   session.dispose();
-  await Promise.all([active, queued, assert.rejects(session.preview('later'), { name: 'AbortError' })]);
+  await Promise.all([active, queued, inventory, assert.rejects(session.preview('later'), { name: 'AbortError' })]);
   assert.equal(worker.terminated, 1);
   assert.equal(worker.messages.length, 2);
 });

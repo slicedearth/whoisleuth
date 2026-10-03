@@ -275,7 +275,7 @@ test('a custom storefront needs an ephemeral explicit platform choice before pre
   const requests: string[] = [];
   page.on('request', request => {
     const path = new URL(request.url()).pathname;
-    if (path.startsWith('/api/') && path !== '/api/session') requests.push(path);
+    if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) requests.push(path);
   });
   await openCasesView(page);
   await createCase(page, 'custom-store.example');
@@ -297,11 +297,19 @@ test('a custom storefront needs an ephemeral explicit platform choice before pre
   expect(saved.actions).toEqual([expect.objectContaining({ type: 'platform_report', state: 'drafting',
     recipient: 'https://www.shopify.com/legal/tools/report-an-issue/report-a-merchant', routeObservedAt: '2026-10-03T00:00:00.000Z' })]);
   expect(saved.actions[0]!.history.some(event => event.nextState === 'submitted')).toBe(false);
+  const matchedIncident = 'https://reserved-fixture.myshopify.com/products/item-eight';
+  await workspace.getByLabel('Exact HTTP(S) URL').fill(matchedIncident);
+  await workspace.getByRole('button', { name: 'Add incident link', exact: true }).click();
+  const groups = routes.locator('.route-groups > article');
+  await expect(groups).toHaveCount(2);
+  await expect(groups.filter({ hasText: incident })).toContainText('was selected by the analyst');
+  await expect(groups.filter({ hasText: matchedIncident })).toContainText('matched the exact incident hostname');
   await page.reload();
   await openCaseResponseWorkspace(page);
   await openCaseClassification(page);
   await expect(platform).toHaveValue('');
-  await expect(routes.getByRole('button', { name: 'Create drafting action', exact: true })).toHaveCount(0);
+  await expect(groups.filter({ hasText: incident })).toContainText('No reviewed platform route matches this exact hostname');
+  await expect(groups.filter({ hasText: matchedIncident })).toContainText('matched the exact incident hostname');
   expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.actions).toEqual(saved.actions);
   expect(requests).toEqual([]);
 });

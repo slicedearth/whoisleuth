@@ -735,10 +735,39 @@ test('an allowlisted canonical domain is excluded when a profile is active', asy
 
   await expect(page.locator('.candidate')).toHaveCount(1);
   await expect(page.locator('.candidate strong')).toHaveText(['other.invalid']);
-  await expect(page.locator('.status')).toContainText('excluded 1 trusted profile domain');
+  await expect(page.locator('.status')).toContainText('excluded 1 exact profile match');
+  await page.getByText('Excluded by exact profile match (1)', { exact: true }).click();
+  const excluded = page.getByRole('list', { name: 'Excluded discovery candidates', exact: true });
+  await expect(excluded.getByRole('listitem')).toHaveCount(1);
+  await expect(excluded).toContainText('example.invalid');
+  await expect(excluded).toContainText('Exact official-domain declaration');
+  await expect(excluded.getByRole('checkbox')).toHaveCount(0);
   await expect(page.locator('.status')).toContainText('0 first observed · 0 reappeared · 1 continuing since the previous complete search');
   await expect(page.getByRole('button', { name: 'Not in prior complete · 0' })).toBeVisible();
   await expect(page.locator('.ct-history-state.continuing')).toHaveCount(1);
+});
+
+test('fully excluded candidates remain inspectable without being selectable for collection', async ({ page }) => {
+  const profile = {
+    id: 'all-excluded', name: 'Review fixture', officialDomains: ['example.invalid'], productNames: [], tlds: [],
+    approvedPartnerDomains: ['other.invalid'], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
+    trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '',
+    createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile]),
+    'whois-rdap-active-brand-profile-v1': profile.id,
+  });
+  await mockCtSearch(page, structuredResponse);
+  await runCtSearch(page);
+  await expect(page.locator('.candidate')).toHaveCount(0);
+  await page.getByText('Excluded by exact profile match (2)', { exact: true }).click();
+  const excluded = page.getByRole('list', { name: 'Excluded discovery candidates', exact: true });
+  await expect(excluded.getByRole('listitem')).toHaveCount(2);
+  await expect(excluded).toContainText('Exact official-domain declaration');
+  await expect(excluded).toContainText('Exact approved-partner declaration');
+  await expect(excluded.getByRole('checkbox')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Continue to Bulk/u })).toHaveCount(0);
 });
 
 test('Continue to Bulk loads canonical domains and CT provenance survives the handoff', async ({ page }) => {

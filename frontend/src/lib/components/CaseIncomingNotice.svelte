@@ -30,7 +30,7 @@
   <label>Recorded action<select bind:value={actionId} onchange={clearFields}><option value="">Choose an action</option>{#each record.actions as item (item.id)}<option value={item.id}>{item.type.replaceAll('_', ' ')} · {item.recipient} · {item.id}</option>{/each}</select></label>
   {#if action}
     <p>Retained recipient: {action.recipient}. Route source: {action.contactSource ?? 'Not retained'}. Route freshness: {review.routeFreshness}. Source text is not a trusted link or authenticated identity.</p>
-    <label>Reported delivery reference (optional, transient)<input bind:value={reference} maxlength={MAX_RESPONSE_REFERENCE_LENGTH} oninput={() => { confirmed = false; page = 1; }} autocomplete="off" spellcheck="false"></label>
+    <label>Reference in the notice (optional, transient)<input bind:value={reference} maxlength={MAX_RESPONSE_REFERENCE_LENGTH} oninput={() => { confirmed = false; page = 1; }} autocomplete="off" spellcheck="false"></label>
     <label>Claimed organisation (optional, transient)<input bind:value={organisation} maxlength={MAX_RESPONSE_LABEL_LENGTH} oninput={() => confirmed = false} autocomplete="off"></label>
     <ul>{#each visible as comparison}<li><strong>{comparison.label} · {comparison.state}</strong><p>{comparison.explanation}</p></li>{/each}</ul>
     {#if pages > 1}<nav aria-label="Notice comparison pages"><button class="btn" type="button" disabled={currentPage <= 1} onclick={() => page = currentPage - 1}>Previous comparisons</button><span>Page {currentPage} of {pages}</span><button class="btn" type="button" disabled={currentPage >= pages} onclick={() => page = currentPage + 1}>Next comparisons</button></nav>{/if}

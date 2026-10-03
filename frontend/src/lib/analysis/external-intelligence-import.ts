@@ -112,8 +112,8 @@ function optionalIso(value: unknown, label: string): string | null {
 function epochIso(value: unknown): string | null {
   const numeric = typeof value === 'number' ? value : typeof value === 'string' && /^\d{1,12}$/u.test(value) ? Number(value) : NaN;
   if (!Number.isFinite(numeric) || numeric < 0) return null;
-  const parsed = numeric * 1_000;
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  const parsed = new Date(numeric * 1_000);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
 }
 
 function confidence(value: unknown): number | null {

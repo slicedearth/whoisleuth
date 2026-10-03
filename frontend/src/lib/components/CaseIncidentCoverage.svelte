@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { CaseRecord } from '$lib/cases';
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { buildCaseIncidentCoverage } from '../../../../packages/cases/case-workflow-metadata.mts';
   let { record }: { record: CaseRecord } = $props();
   let page = $state(1);
@@ -12,13 +13,14 @@
 <details class="coverage">
   <summary>Exact incident-object coverage · {rows.length} retained links</summary>
   {#if rows.length}
-    <div class="table-wrap"><table>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -- the named overflow region provides native keyboard access to every column -->
+    <div class="table-wrap" role="region" aria-label="Incident link coverage table" tabindex="0"><table>
       <caption>Retained incident links, including analyst-resolved links</caption>
       <thead><tr><th scope="col">Exact object</th><th scope="col">Analyst scope</th><th scope="col">Analyst metadata time</th><th scope="col">Response coverage</th></tr></thead>
       <tbody>{#each visible as row (row.target.id)}<tr>
         <td><code>{row.target.url}</code><small>Hostname: {row.hostname}</small></td>
         <td>{row.target.state === 'resolved' ? 'Analyst-resolved link' : 'Open link'}</td>
-        <td><small>Added: {row.target.createdAt}</small><small>Updated: {row.target.updatedAt}</small></td>
+        <td><small>Added: <time datetime={row.target.createdAt}>{formatEvidenceDate(row.target.createdAt)}</time></small><small>Updated: <time datetime={row.target.updatedAt}>{formatEvidenceDate(row.target.updatedAt)}</time></small></td>
         <td>Unknown action binding<small>Exact-object observation coverage unknown</small></td>
       </tr>{/each}</tbody>
     </table></div>

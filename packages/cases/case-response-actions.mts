@@ -102,7 +102,13 @@ export function compareCaseIncomingNotice(action: CaseActionRecord | null, repor
     state: recipientHostname ? link.hostname.toLowerCase() === recipientHostname ? 'match' : 'mismatch' : 'unknown',
     explanation: 'Hostname context only, not an exact route match or authority check. Supplied destinations have not been opened.',
   });
-  comparisons.push({ label: 'Delivery reference', state: reference && action?.reference ? reference === action.reference ? 'match' : 'mismatch' : 'unknown', explanation: 'Only an explicitly entered reference is compared with the recorded delivery reference. Intake does not retain message references; matching text does not authenticate a notice.' });
+  const deliveryReferences = action?.history.filter(event => event.applied && event.previousState === 'authorised'
+    && event.nextState === 'submitted' && event.sourceClass === 'analyst' && event.reference).map(event => event.reference) ?? [];
+  comparisons.push({ label: 'Delivery reference', state: !reference || !deliveryReferences.length ? 'unknown'
+    : deliveryReferences.includes(reference) ? 'match' : action!.historyOmitted > 0 ? 'unknown' : 'mismatch',
+  explanation: 'Compared with retained, applied submission events only. Acknowledgements and later updates have separate references; missing submission history remains unknown. Matching text does not authenticate a notice.' });
+  comparisons.push({ label: 'Latest action reference', state: reference && action?.reference ? reference === action.reference ? 'match' : 'mismatch' : 'unknown',
+    explanation: 'Compared with the latest retained reference from any applied action event. This may be an acknowledgement or later update, not the delivery reference.' });
   comparisons.push({ label: 'Claimed organisation', state: 'unknown', explanation: organisation ? 'The entered organisation is an analyst-supplied claim. Retained contact-source text is not a structured authenticated organisation identity.' : 'No organisation claim was supplied; no authenticated organisation identity is inferred.' });
   return {
     comparisons,

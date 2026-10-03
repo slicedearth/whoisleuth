@@ -11,6 +11,7 @@ import {
   useTheme,
 } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 
 const DATABASE_NAME = 'whoisleuth-browser-data-v1';
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
@@ -108,6 +109,56 @@ async function seedRegister(
     exact: true,
   })).toBeVisible();
 }
+
+test('allowlist impact previews exact draft entries without saving or reclassifying workspace Cases', async ({ page }) => {
+  await seedRegister(page, '/brands');
+  const manager = page.getByRole('region', { name: 'Allowlist', exact: true });
+  const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  const casesBefore = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const requests: string[] = [];
+  page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) requests.push(request.url()); });
+  await manager.getByText('Preview domain exclusions', { exact: true }).click();
+  const preview = manager.getByLabel('Domains to preview');
+  await preview.fill('official.example\npartner.example\nallowlisted.example\nsub.allowlisted.example\ncase.example');
+  const show = manager.getByRole('button', { name: 'Preview draft effect', exact: true });
+  await show.click();
+  const impact = manager.getByRole('region', { name: 'Domain exclusion impact', exact: true });
+  await expect(impact.getByRole('heading')).toBeFocused();
+  await expect(impact).toContainText('0 would be newly excluded');
+  await manager.getByLabel('Add domains').fill('case.example');
+  await show.click();
+  await expect(impact).toContainText('0 would be newly excluded');
+  await manager.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(impact).toContainText('1 would be newly excluded');
+  await expect(impact.getByRole('listitem').filter({ hasText: 'sub.allowlisted.example' })).toContainText('Draft: Not excluded');
+  await expect(impact.getByRole('listitem').filter({ hasText: /^official\.example/u })).toContainText('Exact official-domain declaration');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 1920]) {
+      await page.setViewportSize({ width, height: 844 }); await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) {
+        await manager.evaluate(element => window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - 90, behavior: 'instant' }));
+        await page.screenshot({ path: test.info().outputPath(`allowlist-${theme}-${width}.png`) });
+      }
+    }
+  }
+  await preview.fill('valid.example\nhttps://invalid.example/path');
+  await show.click();
+  await expect(impact.getByRole('listitem')).toHaveCount(0);
+  await expect(impact).toContainText('No partial preview');
+  await preview.fill(Array.from({ length: 51 }, (_, index) => `preview-${index}.example`).join('\n'));
+  await show.click();
+  await expect(impact.getByRole('listitem')).toHaveCount(50);
+  await impact.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(impact.getByRole('listitem')).toHaveCount(1);
+  await expect(impact.getByRole('heading')).toBeFocused();
+  await preview.fill('');
+  await manager.getByLabel('Add a retained Case domain').selectOption('case.example');
+  await expect(preview).toHaveValue('case.example');
+  expect(await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).toEqual(before);
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(casesBefore);
+  expect(requests).toEqual([]);
+});
 
 async function rawCollectionSnapshot(page: Page, collection: string) {
   return page.evaluate(async ({ databaseName, collectionId }) => {

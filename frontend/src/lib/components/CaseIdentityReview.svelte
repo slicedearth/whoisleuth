@@ -1,8 +1,9 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import type { CaseRecord } from '$lib/cases';
   import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { identityRecoveryFollowUp, reviewIdentityIncident } from '../../../../packages/investigation/identity-incident-review.mts';
-  import { createDraftRevision } from '$lib/controllers/submitted-draft.ts';
+  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft.ts';
   import { trackTransientCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
   import { IDENTITY_ACTIONS, type IdentityAction } from '../../../../packages/contracts/message-intake.mts';
@@ -15,25 +16,30 @@
   const review = $derived(reviewIdentityIncident({ reportedActions: selected }));
   const followUps = $derived(record.assertions.filter(item => item.kind === 'next_step' && item.state === 'open'));
   const internalActions = $derived(record.actions.filter(item => item.type === 'internal_review' || item.type === 'defensive_control'));
+  async function save(patch: Parameters<PersistCaseResponse>[0], message: string) {
+    const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const section = origin?.closest('details.identity'), caseId = record.id;
+    saving = true;
+    try { return await persist(patch, message); }
+    finally {
+      saving = false;
+      await tick();
+      if (record.id === caseId) restoreSubmittedFocus(origin, origin, section);
+    }
+  }
   async function recordFollowUp(stepId: string) {
     if (saving || mutationBusy) return;
     const unchanged = draft.capture();
     const request = identityRecoveryFollowUp([...selected], stepId);
     const relations = pinIds.filter(id => record.evidencePins.some(pin => pin.id === id)).map(evidencePinId => ({ evidencePinId, stance: 'unresolved' as const }));
-    saving = true;
-    try {
-      if (await persist({ assertion: { kind: 'next_step', ...request, state: 'open', evidenceRelations: relations } }, 'Recorded an open internal recovery follow-up.') && unchanged()) saved = 'Open follow-up recorded.';
-    } finally { saving = false; }
+    if (await save({ assertion: { kind: 'next_step', ...request, state: 'open', evidenceRelations: relations } }, 'Recorded an open internal recovery follow-up.') && unchanged()) saved = 'Open follow-up recorded.';
   }
   async function recordActions() {
     if (saving || mutationBusy) return;
     const unchanged = draft.capture();
     const submitted = [...selected];
     const statement = `Reported identity actions: ${IDENTITY_ACTIONS.filter(action => submitted.includes(action.id)).map(action => action.label).join('; ')}`;
-    saving = true;
-    try {
-      if (await persist({ assertion: { kind: 'hypothesis', statement, rationale: 'Analyst-recorded report, not independently verified account telemetry.', state: 'open', evidenceRelations: [] } }, 'Recorded the reported account actions.') && unchanged()) saved = 'Reported actions recorded. Recovery actions and follow-ups are recorded below.';
-    } finally { saving = false; }
+    if (await save({ assertion: { kind: 'hypothesis', statement, rationale: 'Analyst-recorded report, not independently verified account telemetry.', state: 'open', evidenceRelations: [] } }, 'Recorded the reported account actions.') && unchanged()) saved = 'Reported actions recorded. Recovery actions and follow-ups are recorded below.';
   }
 </script>
 

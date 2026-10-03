@@ -74,7 +74,7 @@
       const resolution = resolvePlatformReportingRoutes(target.url, selectedTypes, new Date($reviewClock), manualPlatforms[target.id] || undefined);
       let hostname = 'other host';
       try { hostname = new URL(target.url).hostname; } catch { /* already validated */ }
-      const key = resolution.platform?.id ?? `unsupported:${hostname}`;
+      const key = JSON.stringify([resolution.platform?.id ?? `unsupported:${hostname}`, Boolean(manualPlatforms[target.id])]);
       const existing = groups.get(key);
       if (existing) {
         existing.targets.push(target.url);

@@ -67,7 +67,10 @@ async function seedInvestigationStores(page: import('@playwright/test').Page) {
 
 test('retained infrastructure exposes exact independent sources and keyboard return without collection', async ({ page }) => {
   const requests: string[] = [];
-  page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) requests.push(new URL(request.url()).pathname); });
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) requests.push(path);
+  });
   await page.goto('/dashboard');
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [
     caseRecord('inventory-first', 'shared.example'),
@@ -87,17 +90,60 @@ test('retained infrastructure exposes exact independent sources and keyboard ret
   await expect(detail.getByRole('heading', { name: '2 one-hop relationships', exact: true })).toBeVisible();
   await expect(detail.getByRole('list', { name: 'Retained relationship sources', exact: true }).getByRole('listitem')).toHaveCount(2);
   for (const href of await detail.locator('a').evaluateAll(elements => elements.map(element => element.getAttribute('href')))) expect(href).toMatch(/^\/monitor\?case=/u);
-  for (const width of [1280, 390, 320]) {
+  for (const width of [1920, 1280, 1024, 390, 320]) {
     await page.setViewportSize({ width, height: 844 });
     for (const theme of ['light', 'dark'] as const) {
       await useTheme(page, theme);
       await expectNoHorizontalOverflow(page);
       await expect(detail.getByRole('heading', { name: '2 one-hop relationships', exact: true })).toBeVisible();
+      if (captureVisualEvidenceEnabled()) {
+        await detail.evaluate(element => window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - 140, behavior: 'instant' }));
+        await page.screenshot({ path: test.info().outputPath(`infrastructure-${theme}-${width}.png`) });
+      }
     }
   }
   await detail.getByRole('button', { name: 'Return to inventory results', exact: true }).click();
   await expect(inspect).toBeFocused();
   expect(requests).toEqual([]);
+});
+
+test('main search and infrastructure filters settle independently while a worker operation is held', async ({ page }) => {
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION,
+    cases: [caseRecord('concurrent-views', 'shared.example')],
+  } });
+  const probe = await page.evaluateHandle(() => {
+    const NativeWorker = window.Worker;
+    let held: (() => void) | undefined;
+    let hold = true;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        if (options?.name !== 'saved-work-search') return;
+        const post = this.postMessage.bind(this);
+        this.postMessage = (message: unknown, transfer?: Transferable[] | StructuredSerializeOptions) => {
+          const send = () => { if (Array.isArray(transfer)) post(message, transfer); else post(message, transfer); };
+          if (hold && typeof message === 'object' && message !== null && 'kind' in message && message.kind === 'infrastructure') {
+            hold = false; held = send;
+          } else send();
+        };
+      }
+    };
+    return { held: () => Boolean(held), release: () => { const send = held; held = undefined; send?.(); },
+      restore: () => { const send = held; held = undefined; send?.(); window.Worker = NativeWorker; } };
+  });
+  try {
+    await openDashboardSecondaryWorkspaces(page);
+    await page.getByText('Browse retained infrastructure', { exact: true }).click();
+    await expect.poll(() => probe.evaluate(value => value.held())).toBe(true);
+    await page.getByRole('searchbox', { name: 'Search saved work', exact: true }).fill('shared.example');
+    const inventory = page.getByRole('region', { name: 'Retained infrastructure inventory', exact: true });
+    await inventory.getByRole('searchbox', { name: 'Search retained infrastructure', exact: true }).fill('shared.example');
+    await probe.evaluate(value => value.release());
+    await expect(page.getByRole('list', { name: 'Local investigation search results' })).toContainText('shared.example');
+    await expect(inventory.getByRole('list', { name: 'Retained infrastructure identities' })).toContainText('shared.example');
+    await expect(inventory.getByRole('alert')).toHaveCount(0);
+  } finally { await probe.evaluate(value => value.restore()); await probe.dispose(); }
 });
 
 test('retained infrastructure filters before pagination and exposes every admitted match', async ({ page }) => {
@@ -108,7 +154,7 @@ test('retained infrastructure filters before pagination and exposes every admitt
   await openDashboardSecondaryWorkspaces(page);
   await page.getByText('Browse retained infrastructure', { exact: true }).click();
   const inventory = page.getByRole('region', { name: 'Retained infrastructure inventory', exact: true });
-  await inventory.getByLabel('Infrastructure type', { exact: true }).selectOption('domain');
+  await inventory.getByRole('combobox', { name: 'Infrastructure type', exact: true }).selectOption('domain');
   await inventory.getByRole('searchbox', { name: 'Search retained infrastructure', exact: true }).fill('target-');
   const rows = inventory.getByRole('list', { name: 'Retained infrastructure identities', exact: true });
   const pages = inventory.getByRole('navigation', { name: 'Retained infrastructure pages', exact: true });

@@ -74,6 +74,27 @@ test('missing notice context and free-text route claims remain unknown', async (
   assert.match(bounded.comparisons.find(row => row.label === 'Additional sender context')!.explanation, /1 additional/u);
 });
 
+test('notice references distinguish submission from acknowledgement and incomplete history', async () => {
+  const { report } = await reviewMessageInput(bytes('Selected local notice'), 'text', now);
+  let actions = appendCaseAction([], { type: 'registrar_report', recipient: 'review@route.example' }, now);
+  const id = actions[0]!.id;
+  for (const nextState of ['ready_for_review', 'reviewed', 'authorised', 'submitted'] as const) {
+    actions = appendCaseActionTransition(actions, id, { nextState, sourceClass: 'analyst', reference: nextState === 'submitted' ? 'DELIVERY-1' : null }, now);
+  }
+  actions = appendCaseActionTransition(actions, id, { nextState: 'acknowledged', sourceClass: 'provider', reference: 'ACK-2' }, now);
+  const action = actions[0]!;
+  assert.equal(action.reference, 'ACK-2');
+  for (const [reference, delivery, latest] of [['DELIVERY-1', 'match', 'mismatch'], ['ACK-2', 'mismatch', 'match']] as const) {
+    const review = compareCaseIncomingNotice(action, report, { reference, now });
+    assert.equal(review.comparisons.find(row => row.label === 'Delivery reference')!.state, delivery);
+    assert.equal(review.comparisons.find(row => row.label === 'Latest action reference')!.state, latest);
+  }
+  for (const incomplete of [{ ...action, historyOmitted: 1 }, { ...action, history: action.history.filter(event => event.nextState !== 'submitted') }]) {
+    const review = compareCaseIncomingNotice(incomplete, report, { reference: 'unrecorded', now });
+    assert.equal(review.comparisons.find(row => row.label === 'Delivery reference')!.state, 'unknown');
+  }
+});
+
 test('a requested recovery follow-up remains open after an external resolution', () => {
   assert.throws(() => identityRecoveryFollowUp(['opened_link'], 'password'), /supported/u);
   const request = identityRecoveryFollowUp(['entered_password'], 'sessions');

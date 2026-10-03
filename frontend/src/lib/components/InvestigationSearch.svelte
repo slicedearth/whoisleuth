@@ -62,12 +62,10 @@
         resultList?.focus({ preventScroll: true });
         resultList?.scrollIntoView({ block: 'start' });
       }
-    }).catch((cause: unknown) => {
+    }).catch(() => {
       if (!active) return;
       pending = false;
-      if (!(cause instanceof DOMException && cause.name === 'AbortError')) {
-        queryError = 'Saved-work search could not return results. Reload the page to retry.';
-      }
+      queryError = 'Saved-work search could not return results. Reload the page to retry.';
     });
     return () => { active = false; };
   });
