@@ -47,6 +47,15 @@ describe('offline source-health composition', () => {
       assert.equal(report.networkRequests, 0);
     }
   });
+  test('mixed reporting-route windows name stale and current subsets honestly', async () => {
+    const report = await buildSourceHealthReport({ now: new Date('2027-03-04T00:00:00.000Z') });
+    const routes = report.entries.find(item => item.id === 'platform_reporting_routes');
+    assert.equal(routes?.state, 'stale');
+    assert.match(routes?.detail ?? '', /5 remain within their own review windows/u);
+    const earlier = await buildSourceHealthReport({ now: new Date('2026-09-04T00:00:00.000Z') });
+    assert.match(earlier.entries.find(item => item.id === 'platform_reporting_routes')?.detail ?? '', /5 have a review date later than this clock/u);
+    assert.equal(report.networkRequests, 0);
+  });
   test('composes retained datasets and reviewed evaluations without network work', async () => {
     const report = await buildSourceHealthReport({
       now: new Date('2026-09-03T12:00:00.000Z'),

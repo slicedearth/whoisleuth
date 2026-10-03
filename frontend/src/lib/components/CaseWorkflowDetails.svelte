@@ -20,6 +20,8 @@
   import {
     resolvePlatformReportingRoutes,
     platformReportingCatalogueHealth,
+    INCIDENT_PLATFORMS,
+    type IncidentPlatformId,
     type PlatformReportingResolution,
     type PlatformReportingRoute,
   } from '../../../../packages/cases/platform-reporting-routes.mts';
@@ -50,6 +52,8 @@
   let typesOpenRecordId = $state('');
   let targetUrl = $state('');
   let busy = $state(false);
+  let manualPlatforms = $state<Record<string, IncidentPlatformId | ''>>({});
+  let platformCaseId = $state('');
   const typeDraft = createDraftRevision(() => record.id);
   const targetDraft = createDraftRevision(() => record.id);
   const completeCaseNumber = $derived(caseNumber(record.id));
@@ -67,7 +71,7 @@
   const routeGroups = $derived.by<RouteGroup[]>(() => {
     const groups = new Map<string, RouteGroup>();
     for (const target of incidentTargets) {
-      const resolution = resolvePlatformReportingRoutes(target.url, selectedTypes, new Date($reviewClock));
+      const resolution = resolvePlatformReportingRoutes(target.url, selectedTypes, new Date($reviewClock), manualPlatforms[target.id] || undefined);
       let hostname = 'other host';
       try { hostname = new URL(target.url).hostname; } catch { /* already validated */ }
       const key = resolution.platform?.id ?? `unsupported:${hostname}`;
@@ -87,6 +91,7 @@
   });
 
   $effect(() => {
+    if (platformCaseId !== record.id) { manualPlatforms = {}; platformCaseId = record.id; }
     record.updatedAt;
     if (typesOpenRecordId !== record.id) {
       typesOpen = caseTypeIds(record).length === 0;
@@ -268,7 +273,7 @@
     {#if incidentTargets.length}
       <ol class="target-list">
         {#each incidentTargets as target}
-          <li><a href={target.url} target="_blank" rel="noopener noreferrer">{target.url}<span class="sr-only"> (opens in a new tab)</span></a><button class="btn small" type="button" disabled={busy} onclick={() => void resolveIncidentTarget(target.id)}>Resolve</button></li>
+          <li><div class="target-context"><a href={target.url} target="_blank" rel="noopener noreferrer">{target.url}<span class="sr-only"> (opens in a new tab)</span></a><label>Reporting platform for this incident<select aria-label={`Reporting platform for ${target.url}`} value={manualPlatforms[target.id] ?? ''} onchange={event => manualPlatforms[target.id] = event.currentTarget.value as IncidentPlatformId | ''}><option value="">Match the exact hostname</option>{#each INCIDENT_PLATFORMS as platform}<option value={platform.id}>{platform.label} · analyst-selected</option>{/each}</select></label></div><button class="btn small" type="button" disabled={busy} onclick={() => void resolveIncidentTarget(target.id)}>Resolve</button></li>
         {/each}
       </ol>
     {:else}
@@ -280,8 +285,8 @@
 
   {#if routeGroups.length}
     <section class="reporting-routes" aria-labelledby={`reporting-routes-title-${record.id}`}>
-      <div class="section-heading"><div><h5 id={`reporting-routes-title-${record.id}`}>Official platform routes</h5><p>Matched from exact incident-link hostnames and the selected Case types.</p></div></div>
-      <p class="empty">Retained catalogue: {catalogueHealth.state === 'limited' ? 'review due soon' : catalogueHealth.state} · reviewed {catalogueHealth.reviewedAt.slice(0, 10)} · review after {catalogueHealth.reviewAfter.slice(0, 10)}. No live route check is performed.</p>
+      <div class="section-heading"><div><h5 id={`reporting-routes-title-${record.id}`}>Official platform routes</h5><p>Matched from incident hostnames or your explicit platform choice and the selected Case types. A manual choice is not provider evidence, is not saved and does not contact anyone.</p></div></div>
+      <p class="empty">Retained catalogue: {catalogueHealth.state} · reviewed {catalogueHealth.reviewedAt.slice(0, 10)} to {catalogueHealth.latestReviewedAt.slice(0, 10)} · earliest review deadline {catalogueHealth.reviewAfter.slice(0, 10)}. {catalogueHealth.currentRouteCount} within review windows · {catalogueHealth.staleRouteCount} stale · {catalogueHealth.unavailableRouteCount} not yet reviewable. No live route check is performed.</p>
       <div class="route-groups">
         {#each routeGroups as group (JSON.stringify([record.id, group.key, group.targets]))}
           <article>
@@ -310,6 +315,7 @@
 
 <style>
   .workflow-details{display:grid;gap:13px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .target-context{display:grid;gap:8px;min-width:0;flex:1}.target-context label{display:grid;gap:4px;font-size:var(--text-2xs)}.target-context select{max-width:100%;min-width:0;min-height:44px}
   .route-checklist{display:grid;min-width:0;gap:7px;margin:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.route-checklist legend{padding:0 5px;font-weight:650}.route-checklist label{display:flex;align-items:start;gap:7px;cursor:pointer}.route-checklist input{width:auto;flex:none;margin-top:3px}.route-checklist span{min-width:0;overflow-wrap:anywhere}
   .workflow-details>header,.section-heading,.route-groups article>header,.route>div:first-child{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px}.workflow-details h4,.workflow-details h5{margin:2px 0 0;font:700 var(--text-sm) var(--mono)}
   .case-number{display:grid;grid-template-columns:auto auto;align-items:center;gap:3px 8px;max-width:100%}.case-number>span{grid-column:1/-1;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}.case-number code{max-width:min(100%,430px);padding:5px 7px;background:var(--panel-raised);font-size:var(--text-2xs);overflow-wrap:anywhere;white-space:normal}.case-number button{grid-column:2;grid-row:2}

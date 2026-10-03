@@ -53,6 +53,29 @@ async function isolateCasePractice(page: Page) {
   };
 }
 
+test('requested-evidence practice creates only a drafting amendment without saved-work access', async ({ page }) => {
+  const verifyIsolation = await isolateCasePractice(page);
+  await page.goto('/demo#case-practice');
+  await page.getByRole('combobox', { name: 'Practice scenario', exact: true }).selectOption('requested-amendment');
+  await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
+  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  await practice.getByRole('button', { name: '4. Prepare requested evidence', exact: true }).click();
+  const requested = practice.locator('.requested-evidence');
+  await requested.locator(':scope > summary').click();
+  await requested.getByRole('button', { name: 'Review requested evidence', exact: true }).click();
+  const form = requested.getByRole('form', { name: 'Requested evidence review', exact: true });
+  await expect(form.getByRole('combobox', { name: 'Evidence preparation', exact: true })).toBeFocused();
+  await form.getByRole('checkbox', { name: 'Requested exact-page evidence · Fictional supplied capture', exact: true }).check();
+  await form.getByLabel('Preparation or unavailability reason', { exact: true }).fill('The supplied earlier record is selected; the later capture remains unavailable.');
+  await form.getByRole('button', { name: 'Save evidence preparation', exact: true }).click();
+  await requested.getByRole('button', { name: 'Create drafting amendment', exact: true }).click();
+  await expect(requested.getByRole('button', { name: 'Review amendment · drafting', exact: true })).toBeVisible();
+  await expect(requested.getByText('Delivery recorded', { exact: true })).toHaveCount(0);
+  await requested.getByText('Request source and packet', { exact: true }).click();
+  await expect(requested.locator('code')).toHaveText('a'.repeat(64));
+  await verifyIsolation();
+});
+
 test('real Case forms practise evidence, conclusions and inconclusive rechecks without saved-work access', async ({ page }) => {
   const verifyIsolation = await isolateCasePractice(page);
   await page.goto('/demo#case-practice');
@@ -98,6 +121,37 @@ test('real Case forms practise evidence, conclusions and inconclusive rechecks w
   await recheck.getByRole('button', { name: 'Record independent outcome', exact: true }).click();
   await expect(practice.getByRole('list', { name: 'Practice recheck records' })).toContainText('unavailable · partial · Fictional later capture');
   await expect(recheck.getByRole('button', { name: 'Record independent outcome', exact: true })).toBeFocused();
+  await practice.getByRole('button', { name: '4. Rehearse separate response scopes', exact: true }).click();
+  await practice.getByRole('button', { name: 'Prepare fictional recipient copies', exact: true }).click();
+  await expect(practice.locator('#practice-response')).toBeFocused();
+  const pageCopy = practice.getByRole('region', { name: 'Page recipient material', exact: true });
+  const adCopy = practice.getByRole('region', { name: 'Advertisement recipient material', exact: true });
+  await expect(pageCopy).toContainText('page-review@example.invalid');
+  await expect(adCopy).toContainText('ad-review@example.invalid');
+  await expect(pageCopy).toContainText('https://case-practice.example/offer');
+  await expect(adCopy).toContainText('https://distribution.example/ad/7');
+  for (const copy of [pageCopy, adCopy]) {
+    await copy.getByText('Inspect exact fictional recipient material', { exact: true }).click();
+    const material = JSON.parse(await copy.locator('pre').innerText()) as { selectedEvidence: Record<string, unknown>[] };
+    expect(material.selectedEvidence.length).toBeGreaterThan(0);
+    expect(material.selectedEvidence.every(pin => !Object.hasOwn(pin, 'value'))).toBe(true);
+  }
+  await expect(practice.getByRole('button', { name: 'Record separate simulated deliveries', exact: true })).toBeDisabled();
+  await practice.getByRole('checkbox', { name: 'I reviewed the fictional page recipient’s exact scope and selected references', exact: true }).check();
+  await practice.getByRole('checkbox', { name: 'I reviewed the separate fictional advertisement recipient’s scope and limitations', exact: true }).check();
+  await practice.getByRole('button', { name: 'Confirm fictional disclosure review', exact: true }).click();
+  await practice.getByRole('button', { name: 'Record separate simulated deliveries', exact: true }).click();
+  const records = practice.getByRole('list', { name: 'Practice response records', exact: true });
+  await expect(records).toContainText('Practice-only page delivery reference');
+  await expect(records).toContainText('Practice-only ad delivery reference');
+  await expect(records).toContainText('Practice-only page acknowledgement');
+  await expect(practice.locator('#practice-response')).toBeFocused();
+  await practice.getByRole('button', { name: 'Record supplied independent review and close only the page scope', exact: true }).click();
+  await expect(records.locator(':scope > li').filter({ hasText: 'page-review@example.invalid' })).toContainText('terminal');
+  await expect(records.locator(':scope > li').filter({ hasText: 'ad-review@example.invalid' })).toContainText('submitted');
+  await expect(practice.locator('.practice-status')).toContainText('advertisement remains unresolved');
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
   await verifyIsolation();
 });
 

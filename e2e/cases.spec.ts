@@ -270,6 +270,42 @@ test('@timing-sensitive a case created from Monitor persists across a reload', a
   await expect(page.getByRole('heading', { name: 'tracked.invalid', exact: true })).toBeVisible();
 });
 
+test('a custom storefront needs an ephemeral explicit platform choice before preparing a scoped route', async ({ page }) => {
+  await page.clock.setFixedTime('2026-10-03T12:00:00.000Z');
+  const requests: string[] = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/') && path !== '/api/session') requests.push(path);
+  });
+  await openCasesView(page);
+  await createCase(page, 'custom-store.example');
+  const workspace = await openCaseResponseWorkspace(page);
+  await openCaseClassification(page);
+  const incident = 'https://custom-store.example/products/item-seven';
+  await workspace.getByLabel('Exact HTTP(S) URL').fill(incident);
+  await workspace.getByRole('button', { name: 'Add incident link', exact: true }).click();
+  const routes = workspace.locator('.reporting-routes');
+  await expect(routes.getByRole('button', { name: 'Create drafting action', exact: true })).toHaveCount(0);
+  const platform = workspace.getByRole('combobox', { name: `Reporting platform for ${incident}`, exact: true });
+  await platform.selectOption('shopify');
+  const merchant = routes.locator('.route', { hasText: 'Choose a merchant abuse route' });
+  await expect(merchant).toContainText('evidence of Shopify involvement');
+  await expect(merchant.getByRole('link', { name: /Official guidance/u })).toHaveAttribute('href', 'https://www.shopify.com/legal/tools/report-an-issue/report-a-merchant');
+  await merchant.getByRole('button', { name: 'Create drafting action', exact: true }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Nothing was submitted');
+  const saved = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
+  expect(saved.actions).toEqual([expect.objectContaining({ type: 'platform_report', state: 'drafting',
+    recipient: 'https://www.shopify.com/legal/tools/report-an-issue/report-a-merchant', routeObservedAt: '2026-10-03T00:00:00.000Z' })]);
+  expect(saved.actions[0]!.history.some(event => event.nextState === 'submitted')).toBe(false);
+  await page.reload();
+  await openCaseResponseWorkspace(page);
+  await openCaseClassification(page);
+  await expect(platform).toHaveValue('');
+  await expect(routes.getByRole('button', { name: 'Create drafting action', exact: true })).toHaveCount(0);
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.actions).toEqual(saved.actions);
+  expect(requests).toEqual([]);
+});
+
 test('a Case keeps its stable reference, controlled types, exact incident links and reporting route together', async ({ page }, testInfo) => {
   test.slow();
   await openCasesView(page);

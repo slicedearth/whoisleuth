@@ -248,7 +248,9 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   const reportingReferences = page.locator('#primary-references');
   await expect(reportingReferences.getByRole('heading', { name: 'Official reporting guidance' })).toBeVisible();
   await expect(reportingReferences).toContainText('verify the current reporting route, eligibility and disclosure terms');
-  await expect(reportingReferences.getByRole('link')).toHaveCount(6);
+  await expect(reportingReferences.getByRole('link')).toHaveCount(11);
+  await expect(reportingReferences.getByRole('link', { name: /Google Play: Review app or developer reporting/u })).toHaveAttribute('href', 'https://support.google.com/googleplay/answer/2853570?hl=en');
+  await expect(reportingReferences.getByRole('link', { name: /Shopify: Choose a merchant abuse route/u })).toHaveAttribute('href', 'https://www.shopify.com/legal/tools/report-an-issue/report-a-merchant');
   await expect(reportingReferences.getByRole('link', { name: /TikTok report form/u })).toHaveAttribute('href', 'https://www.tiktok.com/legal/report/feedback');
   await expect(reportingReferences.getByRole('link', { name: /Telegram reporting guidance/u })).toHaveAttribute('href', /telegram\.org\/faq/iu);
   await expectNoHorizontalOverflow(page);
