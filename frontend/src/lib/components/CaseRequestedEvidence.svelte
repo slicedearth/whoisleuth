@@ -24,6 +24,7 @@
   const receipts = $derived(action ? submittedPacketReceipts(action) : []);
   const amendmentDraft = createCaseDraft(() => record.id, 'packet-amendment', { actionId: '', eventId: '' });
   let preparationControl = $state<HTMLSelectElement>();
+  let expanded = $state(false);
 
   async function chooseAction(id: string) {
     if (!await draft.leaveForm()) return;
@@ -31,16 +32,25 @@
     draft.value.packetDigest = '';
   }
 
-  async function prepareRequest(actionId: string, id: string) {
-    if (!await draft.leaveForm()) return;
+  export async function prepareRequest(actionId: string, id: string): Promise<boolean> {
+    let owner = record.actions.find(item => item.id === actionId);
+    if (!owner || !['submitted', 'acknowledged'].includes(owner.state)) return false;
+    if (!latestEvidenceRequests(owner).some(event => event.evidenceRequest.id === id) || !await draft.leaveForm()) return false;
+    // The parent can replace the Case while draft recovery awaits storage.
+    // Initialise from the current leaves, not those captured before that await.
+    owner = record.actions.find(item => item.id === actionId);
+    if (!owner || !['submitted', 'acknowledged'].includes(owner.state)) return false;
+    const current = latestEvidenceRequests(owner).filter(event => event.evidenceRequest.id === id);
+    if (!current.length) return false;
     draft.value.actionId = actionId; draft.value.requestId = id;
-    const current = latestEvidenceRequests(record.actions.find(item => item.id === actionId)!).filter(event => event.evidenceRequest.id === id);
     const request = current.length === 1 ? current[0]?.evidenceRequest : undefined;
     draft.value.pinIds = [...(request?.evidencePinIds ?? [])];
     draft.value.rationale = request?.rationale ?? '';
     draft.value.state = request?.state === 'unavailable' ? 'unavailable' : 'prepared';
+    expanded = true;
     await tick();
     preparationControl?.focus();
+    return true;
   }
 
   async function save() {
@@ -79,7 +89,7 @@
   }
 </script>
 
-<details class="requested-evidence">
+<details class="requested-evidence" bind:open={expanded}>
   <summary>Requested evidence and amendments</summary>
   {#if !eligible.length}<p>Record a packet delivery digest on a submitted action to track a provider's evidence requests.</p>{/if}
   {#if requests.length}

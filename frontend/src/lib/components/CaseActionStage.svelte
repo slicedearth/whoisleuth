@@ -29,6 +29,7 @@
   $effect(() => { expanded = mode === 'quick'; });
 
   let receipt = $state<ReturnType<typeof CaseActionReceipt>>();
+  let requestedEvidence = $state<ReturnType<typeof CaseRequestedEvidence>>();
   let metadataExpanded = $state(false);
 
   async function reviewRecipient(actionId: string) {
@@ -44,6 +45,11 @@
 
   export async function selectReceipt(actionId: string): Promise<boolean> {
     return await receipt?.selectReceipt(actionId) ?? false;
+  }
+  export async function selectEvidenceRequest(actionId: string, requestId: string): Promise<boolean> {
+    expanded = true;
+    await tick();
+    return await requestedEvidence?.prepareRequest(actionId, requestId) ?? false;
   }
   const actionDraft = createCaseDraft(() => record.id, 'action-details', {
     actionType: 'internal_review' as typeof CASE_ACTION_TYPES[number],
@@ -291,7 +297,7 @@
     <summary>{mode === 'quick' ? 'Prepare and track response' : 'Track append-only response actions'}</summary>
     <div class="response-form">
       <CaseActionReceipt bind:this={receipt} {record} {mode} {mutationBusy} {persist} onreviewrecipient={reviewRecipient} metadata={receiptMetadata} />
-      <CaseRequestedEvidence {record} {mutationBusy} {persist} onamendment={async id => { await selectReceipt(id); await reviewRecipient(id); }} />
+      <CaseRequestedEvidence bind:this={requestedEvidence} {record} {mutationBusy} {persist} onamendment={async id => { await selectReceipt(id); await reviewRecipient(id); }} />
       {#if mode === 'advanced'}
         <CaseDraftRecovery draft={transitionDraft} />
         {#if record.actions.length}<label class="field">Action for transition<select value={transitionDraft.value.transitionActionId} onchange={async (event) => { const select = event.currentTarget; await selectTransitionAction(select.value); select.value = transitionDraft.value.transitionActionId; }}><option value="">Select an action</option>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>{/if}

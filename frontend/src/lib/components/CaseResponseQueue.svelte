@@ -4,11 +4,12 @@
   import { caseResponseQueue } from '../../../../packages/cases/case-response-queue.mts';
   import { evidenceTime } from '$lib/analysis/evidence-time.ts';
   import { reviewClock } from '$lib/review-clock.ts';
-  let { record, mutationBusy, onaction, onrecheck }: {
+  let { record, mutationBusy, onaction, onrecheck, onrequest }: {
     record: CaseRecord;
     mutationBusy: boolean;
     onaction: (id: string) => void | Promise<void>;
     onrecheck: (id: string) => void | Promise<void>;
+    onrequest: (actionId: string, requestId: string) => void | Promise<void>;
   } = $props();
   let completed = $state(false);
   const queue = $derived(caseResponseQueue(record, new Date($reviewClock).toISOString()));
@@ -34,6 +35,13 @@
         </div>
         {#if item.action.reference}<p>Reference: {item.action.reference}</p>{/if}
         {#if item.action.providerOutcome}<p>Provider outcome: {item.action.providerOutcome.replaceAll('_', ' ')}{item.action.outcome ? ` · ${item.action.outcome}` : ''}</p>{/if}
+        {#each queue.requestedEvidence.filter(request => request.actionId === item.action.id) as request (request.eventId)}
+          <div class="evidence-request">
+            <strong>{request.request.summary}</strong><p>{request.label}</p>
+            {#if request.deadline}<small>Provider deadline: {time(request.deadline)}{request.due && !request.deliveries.length ? ' · due now' : ''}</small>{/if}
+            {#if request.editable}<button class="btn small" type="button" disabled={mutationBusy} onclick={() => void onrequest(request.actionId, request.request.id)}>Review requested evidence</button>{/if}
+          </div>
+        {/each}
         {#if item.latestEvent.latest.length || item.latestEvent.undated.length}
           <details><summary>Latest applied events · {item.latestEvent.latest.length + item.latestEvent.undated.length}</summary>
             <ol>{#each [...item.latestEvent.latest, ...item.latestEvent.undated] as event (event.id)}<li>{event.nextState.replaceAll('_', ' ')} · {event.sourceClass} · {time(event.occurredAt)}{#if event.reference}<p>{event.reference}</p>{/if}</li>{/each}</ol>
@@ -69,6 +77,7 @@
   h3,h4,p{margin:0}h4{font-size:var(--text-sm)}p,small,li{overflow-wrap:anywhere}p,li{font-size:var(--text-xs);line-height:1.55}small{color:var(--muted)}
   .queue-list{list-style:none;padding:0;margin:0;display:grid;gap:12px}.queue-list>li{display:grid;gap:6px;padding-block:10px;border-bottom:1px solid var(--border);min-width:0}
   .row-title{display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap}.dates{display:grid;gap:4px}.finished{display:flex;align-items:center;gap:8px;min-height:44px;font-size:var(--text-xs)}
+  .evidence-request{display:grid;gap:6px;padding:10px;border-inline-start:2px solid var(--border);min-width:0}
   .recheck-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}section,article{min-width:0}article,.recheck-grid>section{display:grid;gap:8px}.btn{justify-self:start}summary{cursor:pointer;min-height:32px;align-content:center}
   @media(max-width:700px){.recheck-grid{grid-template-columns:1fr}}
 </style>

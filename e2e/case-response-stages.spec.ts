@@ -369,11 +369,26 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   await packet.getByLabel('Abuse category', { exact: true }).fill('Credential phishing');
   await packet.getByLabel('Affected party', { exact: true }).fill('Example organisation');
   await packet.getByLabel('Observed at', { exact: true }).fill('2026-09-10T10:00');
-  await packet.getByLabel(/Exact abusive HTTP/).fill('https://quick-stages.invalid/review');
+  await packet.getByLabel(/Exact abusive HTTP/).fill('https://quick-stages.invalid/review?selected=context');
   await packet.getByLabel('Observed harm', { exact: true }).fill('An observed credential form requires reviewed escalation.');
   await expect(packet.getByRole('checkbox', { name: /Selected page observation/ })).toBeChecked();
   await expect(packet).toContainText('2026-09-20T10:00:00.000Z');
   await openPacketWizardStep(packet, 'Review');
+  const disclosure = packet.getByRole('region', { name: 'Recipient copy review', exact: true });
+  await expect(disclosure).toContainText('https://quick-stages.invalid/review?selected=context');
+  await expect(disclosure).toContainText('Fixture abuse review desk');
+  await expect(disclosure).toContainText('1 selected of 1 retained pins');
+  await expect(disclosure).toContainText('a query or fragment');
+  if (captureVisualEvidenceEnabled()) {
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 1280]) {
+        await page.setViewportSize({ width, height: 844 });
+        await expectNoHorizontalOverflow(page);
+        await testInfo.attach(`packet-disclosure-${width}-${theme}`, { body: await disclosure.screenshot(), contentType: 'image/png' });
+      }
+    }
+  }
   for (const label of ['Infrastructure responsibility', 'Analyst authority', 'Contradiction review', 'Source limitations review']) {
     const section = packet.locator('.readiness-editor section', { hasText: label });
     await section.getByRole('combobox', { name: 'State', exact: true }).selectOption('complete');

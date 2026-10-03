@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { caseResponseQueue } from '../packages/cases/case-response-queue.mts';
+import { caseRequestedEvidenceQueue, caseResponseQueue } from '../packages/cases/case-response-queue.mts';
 import { createCase } from '../packages/cases/case-model.mts';
 import type { CaseActionRecord, CaseObservedEffectReview } from '../packages/cases/case-response-records.mts';
 
@@ -59,4 +59,45 @@ test('question answers link by explicit identity and retain every answer without
   assert.deepEqual(view.questions[0]?.answers.map(answer => answer.id), ['review']);
   assert.equal(view.questions[0]?.question.state, 'open');
   assert.equal(view.independentReviews.latest.length, 2);
+});
+
+test('evidence follow-ups preserve deadlines, concurrent preparations and actual delivery boundaries', () => {
+  const record = createCase({ domain: 'queue.example' }, NOW);
+  const baseEvent = { id: 'request', previousState: 'submitted', nextState: 'acknowledged', occurredAt: NOW,
+    sourceClass: 'provider', provenance: 'Recorded request', reference: null, evidencePinId: null, limitations: [],
+    providerOutcome: 'more_information_requested', outcomeDetail: null, originActionId: null, applied: true,
+    evidenceRequest: { id: 'need-page', packetDigestSha256: 'a'.repeat(64), summary: 'Retain the specific page', dueAt: NOW,
+      state: 'requested', evidencePinIds: [], rationale: '', previousEventIds: [] },
+  } satisfies CaseActionRecord['history'][number];
+  record.actions = [{ ...action, history: [baseEvent] }];
+  const before = structuredClone(record);
+  const pending = caseRequestedEvidenceQueue(record, NOW)[0]!;
+  assert.equal(pending.due, true);
+  assert.equal(pending.label, 'Evidence requested');
+  assert.equal(pending.deliveries.length, 0);
+  assert.equal(caseRequestedEvidenceQueue(record, 'unknown')[0]?.due, null);
+  assert.deepEqual(record, before);
+  const prepared = { ...baseEvent, id: 'prepared', sourceClass: 'analyst' as const,
+    evidenceRequest: { ...baseEvent.evidenceRequest, state: 'prepared' as const, evidencePinIds: ['pin'], previousEventIds: ['request'] } };
+  record.actions[0]!.history.push(prepared);
+  assert.equal(caseRequestedEvidenceQueue(record, NOW)[0]?.label, 'Prepared; delivery not recorded');
+  record.actions.push({ ...action, id: 'amendment', state: 'authorised', originActionId: action.id,
+    amendment: { packetDigestSha256: 'a'.repeat(64), requestEventIds: ['prepared'] }, history: [] });
+  assert.equal(caseRequestedEvidenceQueue(record, NOW)[0]?.deliveries.length, 0, 'a draft or authorised amendment is not delivery');
+  const deliveryEvent: CaseActionRecord['history'][number] = { ...baseEvent, id: 'delivered',
+    previousState: 'authorised', nextState: 'submitted', sourceClass: 'analyst', providerOutcome: null,
+    reference: `response-packet-sha256:${'b'.repeat(64)}` };
+  delete deliveryEvent.evidenceRequest;
+  record.actions[1]!.history.push(deliveryEvent);
+  assert.equal(caseRequestedEvidenceQueue(record, NOW)[0]?.label, 'Delivery recorded');
+  record.actions[0]!.history.push({ ...prepared, id: 'conflicting-preparation', evidenceRequest: {
+    ...prepared.evidenceRequest, state: 'unavailable', evidencePinIds: [], rationale: 'Source is no longer retained',
+  } });
+  const conflict = caseResponseQueue(record, NOW).requestedEvidence;
+  assert.equal(conflict.length, 2);
+  assert.ok(conflict.every(item => item.concurrent));
+  assert.equal(conflict[0]?.eventId, 'conflicting-preparation');
+  assert.equal(conflict[0]?.deliveries.length, 0, 'delivery of one branch cannot settle the other');
+  record.actions[0]!.state = 'terminal';
+  assert.ok(caseRequestedEvidenceQueue(record, NOW).every(item => !item.editable));
 });

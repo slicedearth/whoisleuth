@@ -1,16 +1,20 @@
 <script lang="ts">
   import type { CaseRecord } from '../../../../packages/cases/case-record-contracts.mts';
   import { buildCaseDecisionOverview } from '../../../../packages/cases/case-decision-overview.mts';
+  import { caseRequestedEvidenceQueue } from '../../../../packages/cases/case-response-queue.mts';
   import { evidenceTime } from '$lib/analysis/evidence-time.ts';
   import { caseEvidenceChoiceName, caseRecheckEvidence } from '$lib/analysis/case-evidence-presentation.ts';
   import type { CaseWorkspaceSection } from '$lib/analysis/case-response-stage.ts';
   import { reviewClock } from '$lib/review-clock.ts';
-  let { record, selectSection }: { record: CaseRecord; selectSection: (section: CaseWorkspaceSection) => void | Promise<void> } = $props();
+  let { record, selectSection, onrequest }: { record: CaseRecord; selectSection: (section: CaseWorkspaceSection) => void | Promise<void>;
+    onrequest: (actionId: string, requestId: string) => void | Promise<void> } = $props();
   const overview = $derived(buildCaseDecisionOverview(record, new Date($reviewClock).toISOString()));
   let selectedId = $state('');
   const selected = $derived(overview.claims.find(item => item.assertion.id === selectedId) ?? overview.claims[0]);
   let showGaps = $state(false);
   const next = $derived(overview.reviews[0]);
+  const requests = $derived(caseRequestedEvidenceQueue(record, new Date($reviewClock).toISOString()).filter(item => item.editable && !item.deliveries.length));
+  const request = $derived(requests[0]);
   const labels = { action: 'Action due', follow_up: 'Response follow-up', recheck: 'Independent recheck' };
 </script>
 
@@ -33,10 +37,17 @@
       {:else}<p>No analyst conclusion recorded.</p>{/each}
       <button class="btn small" type="button" onclick={() => void selectSection('assessment')}>Review assessment{overview.earlierConclusions ? ` · ${overview.earlierConclusions} earlier decision${overview.earlierConclusions === 1 ? '' : 's'}` : ''}</button>
     </section>
-    <section aria-label="Next scheduled review">
-      <h4>Next scheduled review</h4>
+    <section aria-label="Response follow-ups">
+      <h4>{request ? 'Requested evidence' : 'Next scheduled review'}</h4>
+      {#if request}
+        <p><strong>{request.label}</strong> · {request.recipient}</p>
+        <p>{request.request.summary}</p>
+        <p>{request.deadline ? `Provider deadline: ${evidenceTime(request.deadline)?.readable}` : 'No provider deadline recorded'}{request.due === true ? ' · due now' : ''}</p>
+        <button class="btn small" type="button" onclick={() => void onrequest(request.actionId, request.request.id)}>Review next evidence request</button>
+        {#if requests.length > 1}<small>{requests.length} undelivered request records across open actions. Concurrent preparations remain separate.</small>{/if}
+      {/if}
       {#if next}<p><strong>{labels[next.kind]}</strong> · {next.label}</p><p>{evidenceTime(next.at)?.readable} · {next.due === null ? 'Current time unavailable' : next.due ? 'Due now' : 'Upcoming'}</p>
-      {:else}<p>No dated review recorded.</p>{/if}
+      {:else if !request}<p>No dated review recorded.</p>{/if}
       <button class="btn small" type="button" onclick={() => void selectSection('response')}>Review response and recheck</button>
     </section>
   </div>

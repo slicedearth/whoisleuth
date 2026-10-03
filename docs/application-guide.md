@@ -583,6 +583,13 @@ action or saved recheck question. Completed actions remain available through a
 view filter. Equally timed independent observations remain separate; a provider
 reply never becomes an independent outcome. Route freshness updates while the
 view is open; catalogue review dates do not claim a live contact check.
+The summary opens outstanding evidence requests directly, keeping provider
+deadlines, concurrent preparations and recorded delivery separate. Before packet
+authorisation, **What this recipient will receive** shows the selected URLs,
+contacts, evidence references and response history. Its expandable fields come
+from the packet writer; pin values and file contents are not attached. The final
+preview also includes the export envelope. Editing this copy leaves private
+Case originals unchanged.
 Evidence, conclusions, assertions, branches,
 actions, outcomes, closure and manual-step forms support recovery after reload.
 Unfinished drafts are excluded from exports and backups; submit or copy any

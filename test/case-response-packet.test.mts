@@ -175,6 +175,27 @@ describe('case response packet', () => {
     }
   });
 
+  test('recipient review fields match the writer without disclosing private originals or unselected evidence', async () => {
+    const record = reviewedCase();
+    record.evidencePins[0]!.value = 'private-pin-value-sentinel';
+    const changed = updateCase([record], record.id, { note: 'private-case-note-sentinel', evidencePin: {
+      label: 'unselected-pin-sentinel', value: 'private-second-pin-sentinel', source: 'Private source', observedAt: NOW,
+    } }, NOW).record;
+    const input = { ...packetInput(changed), selectedEvidencePinIds: [record.evidencePins[0]!.id],
+      abusiveUrls: ['https://report.example/exact?review=selected-fragment#chosen'] };
+    const before = structuredClone(changed);
+    const material = buildCaseResponseReviewInputs(changed, input, NOW);
+    const packet = (await buildCaseResponsePacket(changed, input, NOW)).json;
+    for (const key of ['incident', 'recipientRoute', 'contacts', 'selectedEvidence', 'contradictions', 'artefactReferences', 'escalationHistory', 'responseLifecycle'] as const) {
+      assert.deepEqual(material[key], packet[key]);
+    }
+    assert.deepEqual(material.incident.abusiveUrls, ['https://report.example/exact?review=selected-fragment#chosen']);
+    assert.deepEqual(material.selectedEvidence.map(pin => pin.id), [record.evidencePins[0]!.id]);
+    assert.doesNotMatch(JSON.stringify(material), /private-pin-value-sentinel|private-case-note-sentinel|unselected-pin-sentinel|private-second-pin-sentinel/u);
+    assert.doesNotMatch(JSON.stringify(packet), /private-pin-value-sentinel|private-case-note-sentinel|unselected-pin-sentinel|private-second-pin-sentinel/u);
+    assert.deepEqual(changed, before);
+  });
+
   test('selected observation hostnames survive offline packet verification and bind the reviewed digest', async () => {
     const caseRecord = reviewedCase();
     const input = packetInput(caseRecord);

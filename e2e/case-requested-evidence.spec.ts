@@ -2,6 +2,7 @@ import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-cont
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { caseRecord, openSeededTimelineCase, openCaseResponseWorkspace } from './case-test-fixtures';
+import { openCaseSection } from './console-navigation';
 import { currentActionFixture, caseWorkspaceActionStatus } from './case-response-fixtures';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, useTheme } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
@@ -42,7 +43,21 @@ test('requested evidence preserves failed drafts and creates a separately review
   await form.getByRole('button', { name: 'Record evidence request', exact: true }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('Recorded the provider evidence request.');
   await expect(region.getByRole('list', { name: 'Requested evidence', exact: true })).toContainText('overdue');
-  await region.getByRole('button', { name: 'Review requested evidence', exact: true }).click();
+  await openCaseSection(page, 'Summary');
+  const summary = page.getByRole('group', { name: 'Case summary', exact: true });
+  await expect(summary).toContainText('Provide the retained page evidence');
+  await expect(summary).toContainText('Provider deadline:');
+  if (captureVisualEvidenceEnabled()) {
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 1280]) {
+        await page.setViewportSize({ width, height: 844 });
+        await expectNoHorizontalOverflow(page);
+        await summary.screenshot({ path: testInfo.outputPath(`request-summary-${theme}-${width}.png`) });
+      }
+    }
+  }
+  await summary.getByRole('button', { name: 'Review next evidence request', exact: true }).click();
   await expect(form.getByRole('combobox', { name: 'Evidence preparation', exact: true })).toBeFocused();
   await form.getByRole('checkbox', { name: 'Observed page · Fixture observation', exact: true }).check();
   await form.getByLabel('Preparation or unavailability reason', { exact: true }).fill('The selected source supplies the requested fact.');

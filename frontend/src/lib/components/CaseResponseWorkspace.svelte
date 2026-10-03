@@ -207,6 +207,12 @@
       ?.querySelector<HTMLElement>('form[data-recovery-form="observed-effect"] select')?.focus();
   }
 
+  async function openRequestedEvidence(actionId: string, requestId: string) {
+    presentationMode = 'quick';
+    await openStage('response_decision');
+    if (activeSection === 'response') await actionStage?.selectEvidenceRequest(actionId, requestId);
+  }
+
   async function preparePacketDeliveryRecord(exported: Parameters<ComponentProps<typeof CaseResponsePacketWorkspace>['onpacketexported']>[0]) {
     const action = record.actions.find((item) => item.id === exported.actionId);
     if (record.id !== exported.caseId || !action || !actionStage || JSON.stringify(action) !== exported.actionSignature) {
@@ -247,7 +253,7 @@
       <div><dt>Next action</dt><dd>{currentResponseStage?.label ?? 'Review Case'}</dd></div>
     </dl>
   {/if}
-  <CaseDecisionOverview {record} {selectSection} />
+  <CaseDecisionOverview {record} {selectSection} onrequest={openRequestedEvidence} />
   {#if actionSummary.total}
     <div class="action-summary" role="group" aria-label="Case action outcome summary">
       <span><strong>{actionSummary.active}</strong> active</span>
@@ -312,7 +318,7 @@
         <CaseAssessmentStage {record} {mutationBusy} {persist} {onmessage} mode={presentationMode} />
       </div>
       <div class="case-section" role="group" hidden={activeSection !== 'response'} aria-label="Case response workspace">
-      <CaseResponseQueue {record} {mutationBusy} onaction={openQueuedAction} onrecheck={openQueuedRecheck} />
+      <CaseResponseQueue {record} {mutationBusy} onaction={openQueuedAction} onrecheck={openQueuedRecheck} onrequest={openRequestedEvidence} />
       <CaseIdentityReview {record} {mutationBusy} {persist} />
       <CaseActionStage bind:this={actionStage} {record} {mutationBusy} {persist} mode={presentationMode} onadvanced={() => void openAdvancedStage('response_decision')} />
       <CaseResponsePacketWorkspace

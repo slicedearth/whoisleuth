@@ -3,6 +3,31 @@ import { caseRecheckQuestions } from './case-recheck-model.mts';
 import { latestObservationCohort } from '../evidence/latest-observations.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { responseRouteFreshness } from './response-route-freshness.mts';
+import { evidenceRequestDelivery, latestEvidenceRequests } from './case-requested-evidence.mts';
+
+/** Provider deadlines and preparation states are not delivery or resolution. */
+export function caseRequestedEvidenceQueue(record: CaseRecord, now: string) {
+  const clock = normalizeExplicitIsoTimestamp(now);
+  return record.actions.flatMap(action => {
+    const requests = latestEvidenceRequests(action);
+    return requests.map(event => {
+      const request = event.evidenceRequest;
+      const deliveries = evidenceRequestDelivery(record.actions, action.id, event.id);
+      const deadline = normalizeExplicitIsoTimestamp(request.dueAt);
+      const concurrent = requests.filter(other => other.evidenceRequest.id === request.id).length > 1;
+      const editable = ['submitted', 'acknowledged'].includes(action.state);
+      return { actionId: action.id, recipient: action.recipient, eventId: event.id, request,
+        deliveries, concurrent, editable, deadline,
+        due: deadline && clock ? Date.parse(deadline) <= Date.parse(clock) : null,
+        label: deliveries.length ? 'Delivery recorded' : concurrent ? 'Concurrent preparations need review'
+          : request.state === 'prepared' ? 'Prepared; delivery not recorded'
+          : request.state === 'unavailable' ? 'Cannot provide; response needs review' : 'Evidence requested',
+      };
+    });
+  }).sort((left, right) => Number(Boolean(left.deliveries.length) || !left.editable) - Number(Boolean(right.deliveries.length) || !right.editable)
+    || (left.deadline === null ? right.deadline === null ? 0 : 1 : right.deadline === null ? -1 : Date.parse(left.deadline) - Date.parse(right.deadline))
+    || left.actionId.localeCompare(right.actionId) || left.eventId.localeCompare(right.eventId));
+}
 
 /** View-only work ordering. Provider replies never supply independent observations. */
 export function caseResponseQueue(record: CaseRecord, now: string) {
@@ -27,6 +52,7 @@ export function caseResponseQueue(record: CaseRecord, now: string) {
   });
   return {
     actions, questions,
+    requestedEvidence: caseRequestedEvidenceQueue(record, now),
     independentReviews: latestObservationCohort(record.observedEffects.reviews, review => review.observedAt),
   };
 }
