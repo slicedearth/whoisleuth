@@ -61,17 +61,16 @@ full successful response contains:
   JSON-LD is not fetched. The projection is additive, makes no identity or
   ownership claim, and is never consulted by availability or Risk scoring.
 - `availability.credentialSurfaceProfile`: for eligible deep non-compact
-  domain results with captured HTML, a version-1 projection of capped live
-  input and form start tags. It retains fixed counts for password, email,
-  username, one-time-code, and payment-related semantic declarations, form
-  methods, and same-origin, external-origin, missing, cleartext, or
-  unclassified action relationships. Category counts can overlap, and
-  cleartext is a transport subset of a same-origin or external-origin count.
-  Field names, values, labels, placeholders, arbitrary attributes, complete
-  action URLs, paths, queries, and fragments are never retained. The
-  projection makes no additional request, does not interact with a form,
-  cannot decide availability or Risk, and does not claim a vulnerability,
-  phishing behaviour, ownership, intent, or maliciousness.
+  results with captured HTML, version 2 retains bounded input-purpose counts,
+  form methods, and per-form destination origins. Explicit form associations,
+  enabled submitter overrides and disabled controls are resolved from the static
+  document. Unresolved associations remain incomplete. Version 1 remains readable
+  as aggregate counts only. `availability.hasExternalPasswordForm` is a nullable
+  summary used by Risk model 9: unrelated external forms cannot supply the
+  password form's destination. Older Risk models retain their original rules.
+  Field names, values, labels, IDs, complete action URLs, paths, queries and
+  fragments are excluded. No additional request or form interaction occurs;
+  declared destinations are not observed submissions or proof of phishing.
 - `securityTxt`: only when explicitly selected for a deep single-domain
   request, a bounded normalised disclosure file for the exact submitted
   hostname. Add `security_txt=1` to request it. Fast and compact paths omit it.
@@ -746,7 +745,7 @@ performance, identity, ownership, safety, or maliciousness conclusions.
 ## Evidence export and privacy boundary
 
 Lookup evidence uses schema `whoisleuth.lookup-evidence`. Exact v1 version 26,
-published v2 versions 27 and 28, and current version 29 form its complete durable reader
+published v2 versions 27–29, and current version 30 form its complete durable reader
 boundary. Version 27 added bounded homepage publication and delivery/cache
 metadata and the privacy-minimised registration projection. Version 28 adds a
 bounded registrar-standing projection from the checked-in IANA registrar-ID and

@@ -3617,7 +3617,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "inspect-archive",
       "summary": "Inspect an archive locally",
-      "description": "Summarise or search one current version-9 workspace archive, with exact version-5 and version-6 and version-7 and version-8 support and redacted output by default.",
+      "description": "Summarise or search one current version-10 workspace archive, with exact version-5 and version-6 and version-7 and version-8 and version-9 support and redacted output by default.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth inspect-archive [\u003csource>] [--passphrase-file \u003cfile>] [--search \u003cvalue>] [--require-match] [--reveal] [--expect-content-digest \u003cvalue>] [--json] [--quiet] [--no-color]",
@@ -3625,7 +3625,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "Exact values require --reveal. New content comparisons use the reported sorted-json-v2:sha256 identity with --expect-content-digest; bare sha256 hashes retain their legacy locale-sensitive meaning. Retired and future archives are rejected. The archive is read locally and is never uploaded.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one selected bounded workspace archive v9, retains exact v5 and v6 and v7 and v8 compatibility, and redacts output by default."
+        "scope": "Reads one selected bounded workspace archive v10, retains exact v5 and v6 and v7 and v8 and v9 compatibility, and redacts output by default."
       },
       "inputs": [
         {
@@ -3658,7 +3658,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002eworkspace-archive-inspection"
       ],
       "inputLimits": [
-        "Reads one selected bounded workspace archive v9, retains exact v5 and v6 and v7 and v8 compatibility, and redacts output by default.",
+        "Reads one selected bounded workspace archive v10, retains exact v5 and v6 and v7 and v8 and v9 compatibility, and redacts output by default.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
@@ -4516,7 +4516,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:\u003cdigest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads exact Case schemas 15 or 16 or 17. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 17."
+        "scope": "Reads exact Case schemas 15 or 16 or 17 or 18. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 18."
       },
       "inputs": [
         {
@@ -4569,7 +4569,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-export"
       ],
       "inputLimits": [
-        "Reads exact Case schemas 15 or 16 or 17. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 17.",
+        "Reads exact Case schemas 15 or 16 or 17 or 18. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 18.",
         "operation: 1-1 enum value",
         "source: 0-1 file value"
       ],
@@ -4705,7 +4705,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "case-pack",
       "summary": "Build a reviewed case package",
-      "description": "Package browser-created Case records from schemas 15 or 16 or 17 as a reviewed, audience-specific Case-pack v2 with current schema 17.",
+      "description": "Package browser-created Case records from schemas 15 or 16 or 17 or 18 as a reviewed, audience-specific Case-pack v2 with current schema 18.",
       "group": "respond",
       "common": true,
       "usage": "whoisleuth case-pack [\u003csource>] --audience \u003cinternal|trusted|public> --reviewed [--json] [--quiet] [--no-color]",
@@ -4713,7 +4713,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "The command creates a separate offline package without changing the source or durable Cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, Case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one bounded Case export from schemas 15 or 16 or 17 and writes a separate audience-specific Case-pack v2."
+        "scope": "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 and writes a separate audience-specific Case-pack v2."
       },
       "inputs": [
         {
@@ -4744,7 +4744,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-report"
       ],
       "inputLimits": [
-        "Reads one bounded Case export from schemas 15 or 16 or 17 and writes a separate audience-specific Case-pack v2.",
+        "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 and writes a separate audience-specific Case-pack v2.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
@@ -5671,7 +5671,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "common": true,
       "usage": "whoisleuth export [\u003csource>] [--markdown|--html] [--compact] [--no-attribution]",
       "example": "whoisleuth export lookup.json --markdown",
-      "boundary": "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-29 exports preserve evidence-source attribution and limitations; published v2 schemas 27, 28 and exact v1 schema 26 remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
+      "boundary": "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-30 exports preserve evidence-source attribution and limitations; published v2 schemas 27, 28, 29 and exact v1 schema 26 remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
       "collection": {
         "mode": "offline",
         "scope": "Reads one saved Lookup and writes one bounded report."

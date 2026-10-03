@@ -4,6 +4,7 @@ import * as evidence from '../frontend/src/lib/analysis/evidence-export.ts';
 import { readFileSync } from 'node:fs';
 import { validateLookupEvidenceArtifactStructure } from '../cli/artifact-validation/lookup-evidence.mts';
 import { analyzeStructuredDataIdentity } from '../lib/structured-data-identity.mts';
+import { analyzeCredentialSurfaceProfile } from '../lib/credential-surface-profile.mts';
 import { arrayValue, recordValue, requiredValue } from './value-assertions.mts';
 import {
   httpDeliveryMetadataFixture,
@@ -381,6 +382,31 @@ function fixtureResponse(): Record<string, unknown> {
 }
 
 describe('lookup evidence export', () => {
+  test('preserves attributed form origins in the new epoch without admitting private controls or historical relabelling', () => {
+    const response = fixtureResponse();
+    const profile = analyzeCredentialSurfaceProfile({
+      html: '<form id="private-form" action="https://collector.example/private?secret=fixture"><input type=password name="private-field" value="private-value"></form>',
+      baseUrl: 'https://login.example.com/',
+      observedAt: '2026-07-11T01:02:05.000Z',
+    });
+    Object.assign(recordValue(response.availability), { credentialSurfaceProfile: profile, hasExternalPasswordForm: true });
+    const current = evidence.buildLookupEvidence(response);
+    assert.equal(current.schemaVersion, 30);
+    assert.doesNotThrow(() => validateLookupEvidenceArtifactStructure(current));
+    const availability = recordValue(current.analysis.availability);
+    assert.equal(availability.hasExternalPasswordForm, true);
+    const retained = recordValue(availability.credentialSurfaceProfile);
+    assert.deepEqual(retained.formAttribution, profile.formAttribution);
+    assert.doesNotMatch(JSON.stringify(retained), /private-form|private-field|private-value|\/private|secret=fixture/u);
+    assert.throws(() => validateLookupEvidenceArtifactStructure({ ...current, schemaVersion: 29 }), /form-attribution epoch/u);
+    const conflicting = structuredClone(current);
+    recordValue(conflicting.analysis.availability).hasExternalPasswordForm = false;
+    assert.throws(() => validateLookupEvidenceArtifactStructure(conflicting), /form-attribution consistency/u);
+    const malformed = structuredClone(current);
+    recordValue(recordValue(malformed.analysis.availability).credentialSurfaceProfile).formAttribution = { ...profile.formAttribution, unassociatedInputs: 1 };
+    assert.throws(() => validateLookupEvidenceArtifactStructure(malformed), /form-attribution profile/u);
+  });
+
   test('retains exact published URI validation separately from current privacy-minimised output', () => {
     for (const version of [26, 27, 28]) {
       const historical = JSON.parse(readFileSync(new URL(`./fixtures/lookup-evidence-v${version}.json`, import.meta.url), 'utf8'));

@@ -56,6 +56,7 @@ export interface SavedScanRecord extends WatchlistComparableRecord {
   reusesOfficialAssets?: boolean | null;
   hasPasswordField?: boolean | null;
   hasExternalFormAction?: boolean | null;
+  hasExternalPasswordForm?: boolean | null;
   phishingLanguageMatch?: string | null;
   idnReferenceMatch?: boolean | null;
   pageBaselineMatch?: boolean | null;
@@ -88,6 +89,7 @@ export interface ScanResult {
   reusesOfficialAssets: boolean | null;
   hasPasswordField: boolean;
   hasExternalFormAction: boolean | null;
+  hasExternalPasswordForm: boolean | null;
   phishingLanguageMatch: string | null;
   registrant: BulkContact | null;
   abuseEvidence: BulkAbuseEvidence | null;
@@ -236,6 +238,7 @@ export function toBulkSessionResult(row: ScanResult): BulkSessionResult {
     reusesOfficialAssets: row.reusesOfficialAssets,
     hasPasswordField: row.hasPasswordField,
     hasExternalFormAction: row.hasExternalFormAction,
+    hasExternalPasswordForm: row.hasExternalPasswordForm,
     phishingLanguageMatch: row.phishingLanguageMatch,
     idnReferenceMatch: row.saved.idnReferenceMatch ?? null,
     pageBaselineMatch: row.saved.pageBaselineMatch ?? null,
@@ -280,6 +283,7 @@ export function fromBulkSessionResult(
     reusesOfficialAssets: row.reusesOfficialAssets,
     hasPasswordField: row.hasPasswordField,
     hasExternalFormAction: row.hasExternalFormAction,
+    hasExternalPasswordForm: row.hasExternalPasswordForm,
     phishingLanguageMatch: row.phishingLanguageMatch,
     idnReferenceMatch: row.idnReferenceMatch ?? null,
     pageBaselineMatch: row.pageBaselineMatch ?? null,
@@ -313,6 +317,7 @@ export function fromBulkSessionResult(
     reusesOfficialAssets: row.reusesOfficialAssets,
     hasPasswordField: row.hasPasswordField,
     hasExternalFormAction: row.hasExternalFormAction,
+    hasExternalPasswordForm: row.hasExternalPasswordForm,
     phishingLanguageMatch: row.phishingLanguageMatch,
     registrant: null,
     abuseEvidence: null,

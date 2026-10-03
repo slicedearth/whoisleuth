@@ -154,6 +154,7 @@ export type BulkSessionResult = {
   reusesOfficialAssets: boolean | null;
   hasPasswordField: boolean;
   hasExternalFormAction: boolean | null;
+  hasExternalPasswordForm: boolean | null;
   phishingLanguageMatch: string | null;
   idnReferenceMatch?: boolean | null;
   pageBaselineMatch?: boolean | null;
@@ -521,6 +522,7 @@ export function normalizeBulkSessionResult(
     reusesOfficialAssets: profileClaimsUsable ? nullableBoolean(item.reusesOfficialAssets) : null,
     hasPasswordField: item.hasPasswordField === true,
     hasExternalFormAction: nullableBoolean(item.hasExternalFormAction),
+    hasExternalPasswordForm: nullableBoolean(item.hasExternalPasswordForm),
     phishingLanguageMatch: boundedText(item.phishingLanguageMatch, 300) || null,
     idnReferenceMatch: profileClaimsUsable ? nullableBoolean(item.idnReferenceMatch) : null,
     pageBaselineMatch: profileClaimsUsable ? nullableBoolean(item.pageBaselineMatch) : null,
@@ -575,6 +577,9 @@ export function normalizeBulkSession(value: unknown, sourceStoreVersion?: number
   const results: BulkSessionResult[] = [];
   const seen = new Set<string>();
   for (const candidate of Array.isArray(item.results) ? item.results.slice(0, MAX_BULK_SESSION_ROWS * 2) : []) {
+    if (sourceStoreVersion !== undefined && sourceStoreVersion < 7 && Object.hasOwn(record(candidate) ?? {}, 'hasExternalPasswordForm')) {
+      throw new TypeError('Form attribution requires Bulk schema 7 or later; historical evidence was not reinterpreted.');
+    }
     if (sourceStoreVersion !== undefined && sourceStoreVersion < 6 && record(candidate)?.webCollectionQuality !== undefined) {
       throw new TypeError('Web collection quality requires Bulk schema 6 or later; historical evidence was not reinterpreted.');
     }

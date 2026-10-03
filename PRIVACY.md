@@ -337,6 +337,11 @@ network address and apply its own logging, rate limits and retention.
 
 Homepage HTML is processed transiently within the [request-policy limits](https://www.whoisleuth.com/request-policy).
 Raw HTML is not added to browser-local records or ordinary evidence exports.
+Static form review retains form ordinals, fixed input-purpose counts and declared
+destination origins, including enabled submitter overrides. Field names, IDs,
+values, labels, destination paths, queries and fragments are excluded. A nullable
+password-form destination summary can enter saved evidence and Risk calibration;
+unresolved associations remain unknown. No form is filled or submitted.
 Capture and analysis limits are disclosed as incomplete evidence, not absence.
 
 Deep domain collection can query A, AAAA, CAA and MX once through one selected
@@ -600,9 +605,9 @@ Different exports have different sensitivity:
 
 - a full saved Lookup can contain targets, bounded source endpoints and timings,
   raw RDAP publications, WHOIS response bodies and publicly published contacts;
-- current Lookup evidence schema 29 excludes raw registration payloads,
+- current Lookup evidence schema 30 excludes raw registration payloads,
   expanded contacts, credentials and complete query-bearing URLs. Published v2
-  schemas 27 and 28 and exact v1 schema 26 remain readable; schema 26 may contain public
+  schemas 27–29 and exact v1 schema 26 remain readable; schema 26 may contain public
   contact fields;
 - Case, workspace, Case-pack, graph, campaign and response files can identify
   investigated targets or contain analyst-authored material; and

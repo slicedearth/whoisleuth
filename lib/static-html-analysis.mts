@@ -11,6 +11,7 @@ import {
   MAX_RESPONSE_POLICY_HEADER_BYTES,
 } from './response-policy.mts';
 import { MAX_FAVICON_BYTES, MAX_FAVICON_CANDIDATES } from './outbound-request-bounds.mts';
+import { CREDENTIAL_CATEGORY_NAMES, MAX_CREDENTIAL_FORMS, MAX_CREDENTIAL_INPUTS } from '../packages/evidence/credential-form-attribution.mts';
 import {
   MAX_PAGE_PUBLICATION_DECLARATIONS,
   MAX_PAGE_PUBLICATION_META_ELEMENTS,
@@ -28,7 +29,7 @@ type StaticCspMetaPolicy = {
   beforeScript: boolean;
 };
 
-type StaticCredentialCategory = 'password' | 'email' | 'username' | 'one_time_code' | 'payment';
+type StaticCredentialCategory = typeof CREDENTIAL_CATEGORY_NAMES[number];
 type StaticFormMethod = 'missing' | 'get' | 'post' | 'dialog' | 'other';
 type StaticFormAnalysis = {
   formsObserved: number;
@@ -133,8 +134,8 @@ const MAX_SCRIPT_MEDIA_TYPE_LENGTH = 120;
 const MAX_INLINE_SCRIPT_TOTAL_CHARS = 65_536;
 const MAX_INLINE_SCRIPT_CHARS = MAX_INLINE_SCRIPT_TOTAL_CHARS;
 const MAX_STATIC_VISIBLE_TEXT_CHARS = MAX_STATIC_HTML_CHARS;
-const MAX_STATIC_FORMS = 50;
-const MAX_STATIC_INPUTS = 500;
+const MAX_STATIC_FORMS = MAX_CREDENTIAL_FORMS;
+const MAX_STATIC_INPUTS = MAX_CREDENTIAL_INPUTS;
 const MAX_STATIC_PUBLICATION_META_ELEMENTS = MAX_PAGE_PUBLICATION_META_ELEMENTS;
 const MAX_STATIC_PUBLICATION_DECLARATIONS = MAX_PAGE_PUBLICATION_DECLARATIONS;
 const MAX_STATIC_ROBOTS_DIRECTIVES = MAX_PAGE_PUBLICATION_ROBOTS_DIRECTIVES;
@@ -333,6 +334,23 @@ function stylesheetCandidate(attributes: Array<{ name: string; value: string }>)
   };
 }
 
+export function staticControlDisabled(elements: readonly StaticHtmlElement[], index: number, firstLegends: ReadonlyMap<number, number>): boolean {
+  const hasDisabled = (element: StaticHtmlElement) => element.attributes.some(attribute => attribute.name === 'disabled');
+  if (hasDisabled(elements[index]!)) return true;
+  for (let parent = elements[index]?.parent ?? null; parent !== null; parent = elements[parent]?.parent ?? null) {
+    const fieldset = elements[parent]!;
+    if (!fieldset.html || fieldset.name !== 'fieldset' || !hasDisabled(fieldset)) continue;
+    const legend = firstLegends.get(parent);
+    let underLegend = false;
+    for (let current: number | null = index; current !== null; current = elements[current]?.parent ?? null) {
+      if (current === legend) { underLegend = true; break; }
+      if (current === parent) break;
+    }
+    if (!underLegend) return true;
+  }
+  return false;
+}
+
 function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = {}): StaticHtmlAnalysis {
   const parsed = parseBoundedHtml(value);
   const { inputLimitReached } = parsed;
@@ -345,6 +363,7 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
   const iconCounts: [number, number] = [0, 0];
   const tokens: StaticHtmlToken[] = [];
   const elementStack: number[] = [];
+  const firstLegends = new Map<number, number>();
   const visibleTextParts: string[] = [];
   const structureTokens: string[] = [];
   const scripts: StaticScript[] = [];
@@ -511,6 +530,7 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
       };
       elementStack.push(elements.length);
       elements.push(element);
+      if (htmlElement && tagName === 'legend' && element.parent !== null && !firstLegends.has(element.parent)) firstLegends.set(element.parent, elements.length - 1);
       appendToken({ kind: 'start', element });
       // Foreign drawing attributes are not HTML technology, form or resource
       // inputs. Their per-element omission still reaches fingerprinting, but
@@ -723,7 +743,8 @@ function analyzeStaticHtml(value: unknown, options: StaticHtmlAnalysisOptions = 
           forms.truncated = true;
         } else {
           forms.inputsObserved += 1;
-          const categories = inputCategories(token.attrs);
+          const categories = staticControlDisabled(elements, elements.length - 1, firstLegends)
+            ? { values: [], truncated: false } : inputCategories(token.attrs);
           if (categories.truncated) forms.truncated = true;
           if (categories.values.length) forms.classifiedInputs += 1;
           for (const category of categories.values) forms.categories[category] += 1;
@@ -830,6 +851,7 @@ export {
   MAX_STATIC_VISIBLE_TEXT_CHARS,
   MAX_TAG_LENGTH,
   analyzeStaticHtml,
+  inputCategories as classifyStaticCredentialInput,
 };
 
 export type {

@@ -17,7 +17,7 @@ function row(domain = 'candidate.example'): ScanResult {
       nameservers: [], faviconHash: null, faviconPHash: null, riskFactors: [], mutationTypes: [],
       profileContext: { sourceState: 'ready', activeProfileId: null, profileUpdatedAt: null, limitation: '' } },
     nameservers: [], faviconHash: null, faviconPHash: null, faviconMatch: false, faviconNearMatch: false,
-    reusesOfficialAssets: false, hasPasswordField: false, hasExternalFormAction: null, phishingLanguageMatch: null,
+    reusesOfficialAssets: false, hasPasswordField: false, hasExternalFormAction: null, hasExternalPasswordForm: null, phishingLanguageMatch: null,
     registrant: null, abuseEvidence: null, ct: null, idn: null, dns: null, dnssec: null,
     relationship: relationshipObservation({}), sourceCoverage: [],
   };

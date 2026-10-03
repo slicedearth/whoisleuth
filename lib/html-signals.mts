@@ -8,6 +8,8 @@ import { isIP } from 'node:net';
 import { domainToASCII } from 'node:url';
 
 import { analyzeCredentialSurfaceProfile } from './credential-surface-profile.mts';
+import { attributeCredentialForms } from './credential-form-attribution.mts';
+import { externalPasswordFormObservation } from '../packages/evidence/credential-form-attribution.mts';
 import { analyzeClientBehavior } from './client-behavior-profile.mts';
 import { createObservation } from '../packages/evidence/observation.mts';
 import { createPageFingerprints } from './page-fingerprints.mts';
@@ -714,10 +716,12 @@ async function extractHtmlSignals(html: string, domain: string, options: HtmlSig
   const pageLanguageSignal = detectPageLanguageSignal(html, pageIdentity?.documentLanguage, htmlAnalysis);
   const domainSaleSignal = options.sourceTruncated !== true && domainSaleLandingPage(htmlAnalysis, domain)
     ? 'explicit domain-sale landing-page content' : null;
+  const formAttribution = attributeCredentialForms(htmlAnalysis, documentUrl, options.sourceTruncated);
   return {
     domainSaleSignal,
     pageTitle: htmlAnalysis.title,
     hasPasswordField: htmlAnalysis.forms.categories.password > 0,
+    hasExternalPasswordForm: externalPasswordFormObservation(formAttribution),
     phishingLanguageMatch: pageLanguageSignal?.label ?? null,
     hasExternalFormAction: pageIdentity
       ? pageIdentity.forms.externalActionOrigins.length > 0
@@ -727,6 +731,8 @@ async function extractHtmlSignals(html: string, domain: string, options: HtmlSig
     pageIdentity: pageIdentityOutput,
     credentialSurfaceProfile: includeCredentialSurfaceProfile && htmlAnalysis ? analyzeCredentialSurfaceProfile({
       htmlAnalysis,
+      formAttribution,
+      baseUrl: documentUrl,
       observedAt: options.observedAt,
       sourceTruncated: options.sourceTruncated,
     }) : null,

@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import { expandLookupFamilies, expectNoHorizontalOverflow, useTheme } from './helpers';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
+import { RISK_MODEL_VERSION } from '../packages/analysis/risk-scoring.mts';
 
 // Lookup response bounds, disclosure, analyst-task and URL reconciliation coverage.
 
@@ -379,7 +380,7 @@ test('Lookup task query context is bounded, transient, and changes only result p
   const acquisitionOpportunity = acquisitionAssessment.locator('.opportunity-band');
   await expect(acquisitionRisk).toHaveCount(1);
   await expect(acquisitionRisk).toContainText('Secondary triage');
-  await expect(acquisitionRisk).toContainText(/Risk model v8/u);
+  await expect(acquisitionRisk).toContainText(`Risk model v${RISK_MODEL_VERSION}`);
   await expect(acquisitionRisk).toContainText(/Evidence coverage:/u);
   await expect(acquisitionOpportunity).toHaveCount(1);
   await expect(acquisitionOpportunity).toContainText('Acquisition task only');

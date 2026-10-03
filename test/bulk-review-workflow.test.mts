@@ -148,6 +148,7 @@ function result(
     reusesOfficialAssets: false,
     hasPasswordField: false,
     hasExternalFormAction: null,
+    hasExternalPasswordForm: null,
     phishingLanguageMatch: null,
     riskModelVersion: 5,
     riskFactors: [],

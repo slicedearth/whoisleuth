@@ -28,7 +28,7 @@ export {
 } from '../contracts/risk-calibration.mts';
 export const MAX_RISK_CALIBRATION_EXPORT_RECORDS = MAX_RISK_CALIBRATION_RECORDS;
 
-/** Explicit compatibility adapter from the current Case domain to calibration schema v2. */
+/** Explicit projection from the current Case domain to the calibration contract. */
 const RISK_CALIBRATION_DISPOSITION_PROJECTION = Object.freeze({
   unreviewed: null,
   suspicious: 'suspicious',
@@ -173,6 +173,7 @@ function projectEvidence(snapshot: CaseEvidenceSnapshot): RiskCalibrationEvidenc
   const hasDmarc = optionalBoolean(snapshot.hasDmarc);
   const privacyProtected = optionalBoolean(snapshot.privacyProtected);
   const hasExternalFormAction = optionalBoolean(snapshot.hasExternalFormAction);
+  const hasExternalPasswordForm = optionalBoolean(snapshot.hasExternalPasswordForm);
   const idnReferenceMatch = optionalBoolean(snapshot.idnReferenceMatch);
   const pageBaselineMatch = optionalBoolean(snapshot.pageBaselineMatch);
   const hasActiveBrandProfile = optionalBoolean(snapshot.hasActiveBrandProfile);
@@ -193,6 +194,7 @@ function projectEvidence(snapshot: CaseEvidenceSnapshot): RiskCalibrationEvidenc
     // signal without exporting page text that may contain sensitive content.
     ...(snapshot.phishingLanguageMatch ? { phishingLanguageMatch: 'matched' } : {}),
     ...(hasExternalFormAction !== undefined ? { hasExternalFormAction } : {}),
+    ...(hasExternalPasswordForm !== undefined ? { hasExternalPasswordForm } : {}),
     ...(idnReferenceMatch !== undefined ? { idnReferenceMatch } : {}),
     ...(pageBaselineMatch !== undefined ? { pageBaselineMatch } : {}),
     ...(hasActiveBrandProfile !== undefined ? { hasActiveBrandProfile } : {}),

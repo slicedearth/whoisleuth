@@ -35,6 +35,7 @@ import {
 } from './lookup-contract-primitives.mts';
 import { TECHNOLOGY_EVIDENCE_ROLE_ORDER } from './technology-evidence-role.mts';
 import { MAX_HOMEPAGE_BYTES } from './outbound-request-bounds.mts';
+import { CREDENTIAL_CATEGORY_NAMES, MAX_CREDENTIAL_FORMS, MAX_CREDENTIAL_INPUTS, externalPasswordFormObservation, validCredentialFormAttribution } from '../packages/evidence/credential-form-attribution.mts';
 
 export const TECHNOLOGY_PROFILE_VERSION = 12;
 export const SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS = Object.freeze([10, 11, TECHNOLOGY_PROFILE_VERSION]);
@@ -48,7 +49,7 @@ export const MAX_LIBRARY_FINDINGS = 16;
 export const WEBSITE_SECURITY_POSTURE_VERSION = 3;
 export const MAX_SECURITY_POSTURE_FINDINGS = 32;
 
-export const CREDENTIAL_SURFACE_PROFILE_VERSION = 1;
+export const CREDENTIAL_SURFACE_PROFILE_VERSION = 2;
 
 export const STRUCTURED_DATA_IDENTITY_VERSION = 1;
 export const MAX_STRUCTURED_DATA_ENTITIES = 16;
@@ -104,7 +105,7 @@ const SIMHASH64_RE = /^[a-f0-9]{16}$/u;
 const OID_RE = /^\d{1,10}(?:\.\d{1,10}){1,31}$/u;
 const CREDENTIAL_METHOD_KEYS = Object.freeze(['missing', 'get', 'post', 'dialog', 'other']);
 const CREDENTIAL_ACTION_KEYS = Object.freeze(['sameOrigin', 'external', 'missing', 'cleartext', 'unclassified']);
-const CREDENTIAL_CATEGORY_KEYS = Object.freeze(['password', 'email', 'username', 'one_time_code', 'payment']);
+const CREDENTIAL_CATEGORY_KEYS = CREDENTIAL_CATEGORY_NAMES;
 const TLS_NAME_KEYS = Object.freeze([
   'commonNames', 'organizations', 'organizationalUnits', 'countries', 'localities', 'states',
 ]);
@@ -745,26 +746,33 @@ function securityPostureContractState(value: unknown): ChildContractState {
 }
 
 function credentialSurfaceContractState(value: unknown): ChildContractState {
-  const versionState = childVersionState(value, 'credentialSurfaceVersion', [CREDENTIAL_SURFACE_PROFILE_VERSION]);
+  const versionState = childVersionState(value, 'credentialSurfaceVersion', [1, CREDENTIAL_SURFACE_PROFILE_VERSION]);
   if (versionState !== 'supported') return versionState;
   const profile = value as JsonObject;
   const forms = profile.forms;
   const inputs = profile.inputs;
-  if (!hasExactKeys(profile, [...OBSERVATION_FIELDS, 'credentialSurfaceVersion', 'forms', 'inputs'])
+  if (!hasExactKeys(profile, [...OBSERVATION_FIELDS, 'credentialSurfaceVersion', 'forms', 'inputs', ...(profile.credentialSurfaceVersion === 2 ? ['formAttribution'] : [])])
     || !validProfileObservation(profile, new Set(['success', 'partial']), new Set(['html']))
     || !isJsonObject(forms)
     || !hasExactKeys(forms, ['count', 'methods', 'actions'])
-    || !validUint(forms.count, 50)
-    || !validCredentialCountRecord(forms.methods, CREDENTIAL_METHOD_KEYS, 50)
-    || !validCredentialCountRecord(forms.actions, CREDENTIAL_ACTION_KEYS, 50)
+    || !validUint(forms.count, MAX_CREDENTIAL_FORMS)
+    || !validCredentialCountRecord(forms.methods, CREDENTIAL_METHOD_KEYS, MAX_CREDENTIAL_FORMS)
+    || !validCredentialCountRecord(forms.actions, CREDENTIAL_ACTION_KEYS, MAX_CREDENTIAL_FORMS)
     || CREDENTIAL_METHOD_KEYS.reduce((sum, key) => sum + Number((forms.methods as JsonObject)[key]), 0) !== forms.count
     || CREDENTIAL_ACTION_KEYS.reduce((sum, key) => sum + Number((forms.actions as JsonObject)[key]), 0) !== forms.count
     || !isJsonObject(inputs)
     || !hasExactKeys(inputs, ['count', 'classifiedCount', 'categories'])
-    || !validUint(inputs.count, 500)
-    || !validUint(inputs.classifiedCount, 500)
+    || !validUint(inputs.count, MAX_CREDENTIAL_INPUTS)
+    || !validUint(inputs.classifiedCount, MAX_CREDENTIAL_INPUTS)
     || Number(inputs.classifiedCount) > Number(inputs.count)
-    || !validCredentialCountRecord(inputs.categories, CREDENTIAL_CATEGORY_KEYS, 500)) return 'invalid';
+    || !validCredentialCountRecord(inputs.categories, CREDENTIAL_CATEGORY_KEYS, MAX_CREDENTIAL_INPUTS)) return 'invalid';
+  if (profile.credentialSurfaceVersion === 2 && (!validCredentialFormAttribution(profile.formAttribution)
+    || profile.formAttribution.forms.length !== forms.count
+    || (profile.complete === true && !profile.formAttribution.complete))) return 'invalid';
+  if (profile.credentialSurfaceVersion === 2 && validCredentialFormAttribution(profile.formAttribution)) {
+    const attribution = profile.formAttribution;
+    if (CREDENTIAL_CATEGORY_KEYS.some(key => attribution.forms.reduce((sum, form) => sum + form.categories[key], 0) > Number((inputs.categories as JsonObject)[key]))) return 'invalid';
+  }
   return 'supported';
 }
 
@@ -880,6 +888,13 @@ function sanitizeLookupChildProfiles<T extends LookupChildProfileEnvelope>(value
   replaceChild('tls', 'TLS profile', 'tls', tlsProfileContractState);
   replaceChild('securityPosture', 'Security-posture profile', 'derived', securityPostureContractState);
   replaceChild('credentialSurfaceProfile', 'Credential-surface profile', 'html', credentialSurfaceContractState);
+  if (availability.hasExternalPasswordForm !== undefined && availability.credentialSurfaceProfile != null) {
+    const credential = availability.credentialSurfaceProfile;
+    if (!isJsonObject(credential) || credential.credentialSurfaceVersion !== 2
+      || availability.hasExternalPasswordForm !== externalPasswordFormObservation(credential.formAttribution)) {
+      mutableAvailability().hasExternalPasswordForm = null;
+    }
+  }
   replaceChild('structuredDataIdentity', 'Structured-data identity profile', 'html', structuredDataContractState);
   replaceChild('pageRoleProfile', 'Page-role profile', 'derived', pageRoleContractState);
   replaceChild('clientBehaviorProfile', 'Client-behaviour profile', 'derived', clientBehaviorContractState);
@@ -928,6 +943,7 @@ function sanitizeLookupChildProfiles<T extends LookupChildProfileEnvelope>(value
 
 export {
   sanitizeLookupChildProfiles,
+  credentialSurfaceContractState,
   technologyProfileContractState,
   validSecurityPostureFinding,
   validTlsChainCertificate,

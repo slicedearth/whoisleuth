@@ -33,6 +33,7 @@ const COMPARABLE_FIELDS = Object.freeze([
   'faviconMatch',
   'faviconNearMatch',
   'hasPasswordField',
+  'hasExternalPasswordForm',
   'phishingLanguageMatch',
   'reusesOfficialAssets',
   'riskModelVersion',

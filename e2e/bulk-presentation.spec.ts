@@ -247,7 +247,7 @@ test('IDN official-domain skeleton evidence renders, filters, and contributes on
   await expect(row.getByText('Official-domain skeleton match', { exact: true })).toBeVisible();
   const riskCell = row.locator('td[data-label="Risk"]');
   await expect(riskCell).toContainText('Lower');
-  await expect(riskCell).toContainText('Risk model v8');
+  await expect(riskCell).toContainText(`Risk model v${RISK_MODEL_VERSION}`);
   await riskCell.locator('summary[aria-label*="Inspect Risk model and factors"]').click();
   await expect(riskCell).toContainText('26/100');
   await expect(riskCell).toContainText(/IDN skeleton matches an official Brand Profile domain/u);
@@ -299,7 +299,7 @@ test('risk model v8 exposes capped cross-family corroboration in Bulk triage', a
   const row = page.locator('.results-table tbody tr');
   const riskCell = row.locator('td[data-label="Risk"]');
   await expect(riskCell).toContainText('Elevated');
-  await expect(riskCell).toContainText('Risk model v8');
+  await expect(riskCell).toContainText(`Risk model v${RISK_MODEL_VERSION}`);
   await riskCell.locator('summary[aria-label*="Inspect Risk model and factors"]').click();
   await expect(riskCell).toContainText('79/100');
   await expect(riskCell).toContainText(/Corroborating context across 3 independent evidence families/u);

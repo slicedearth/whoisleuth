@@ -99,9 +99,9 @@ export const MAX_CT_HISTORY_QUERY_LENGTH = 200;
 export const MAX_CT_HISTORY_STORE_BYTES = 1024 * 1024;
 
 export const DETECTION_RULE_SCHEMA = 'whoisleuth.detection-rules';
-export const DETECTION_RULE_SCHEMA_VERSION = 1;
-export const DETECTION_RULE_BROWSER_SUPPORTED_VERSIONS = Object.freeze([DETECTION_RULE_SCHEMA_VERSION]);
-export const DETECTION_RULE_EXPORT_SUPPORTED_VERSIONS = Object.freeze([DETECTION_RULE_SCHEMA_VERSION]);
+export const DETECTION_RULE_SCHEMA_VERSION = 2;
+export const DETECTION_RULE_BROWSER_SUPPORTED_VERSIONS = Object.freeze([1, DETECTION_RULE_SCHEMA_VERSION]);
+export const DETECTION_RULE_EXPORT_SUPPORTED_VERSIONS = DETECTION_RULE_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_DETECTION_RULES = 50;
 export const MAX_RULE_CONDITIONS = 8;
 export const MAX_RULE_INPUT_RECORDS = 250;
@@ -134,8 +134,8 @@ export const MAX_WEBSITE_SNAPSHOT_STORE_BYTES = 512 * 1024;
 export const MAX_WEBSITE_SNAPSHOT_IMPORT_BYTES = 768 * 1024;
 
 export const BULK_SESSION_SCHEMA = 'whoisleuth.bulk-sessions';
-export const BULK_SESSION_SCHEMA_VERSION = 6;
-export const BULK_SESSION_BROWSER_SUPPORTED_VERSIONS = Object.freeze([4, 5, BULK_SESSION_SCHEMA_VERSION]);
+export const BULK_SESSION_SCHEMA_VERSION = 7;
+export const BULK_SESSION_BROWSER_SUPPORTED_VERSIONS = Object.freeze([4, 5, 6, BULK_SESSION_SCHEMA_VERSION]);
 export const SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS = BULK_SESSION_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_BULK_SESSIONS = 10;
 export const MAX_BULK_SESSION_ROWS = 2_000;
@@ -295,7 +295,7 @@ export const CT_HISTORY_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
 export const DETECTION_RULE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.detection-rules', kind: 'browser_store', schema: null, currentVersion: DETECTION_RULE_SCHEMA_VERSION,
   supportedVersions: DETECTION_RULE_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
-  futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite',
+  futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_RULE_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
   note: 'Only allowlisted structured rule fields and operators survive normalisation; the schema string belongs to portable exports.',
 });
@@ -366,7 +366,7 @@ export const SHORTLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
 export const DETECTION_RULE_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.detection-rules', kind: 'export', schema: DETECTION_RULE_SCHEMA, currentVersion: DETECTION_RULE_SCHEMA_VERSION,
   supportedVersions: DETECTION_RULE_EXPORT_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
-  futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge',
+  futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_RULE_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
   note: 'Non-destructive rule merge; imported conditions remain allowlisted and non-executable.',
 });
@@ -720,6 +720,26 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
 ]);
 
 const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly Pick<SchemaLifecycleFixture, 'id' | 'path' | 'bytes' | 'sha256' | 'schema' | 'version'>[] = Object.freeze([
+  {
+    id: 'workspace.browser.detection.v2', path: 'test/fixtures/workspace-lifecycle/browser-detection-v2.json',
+    bytes: 34, sha256: '2db6ae8eb9d24cb86924a7020c6f3eebfa41b5fc5848a53e239465db622c2312',
+    schema: 'whoisleuth.browser.detection-rule-store', version: 2,
+  },
+  {
+    id: 'workspace.portable.detection.v2', path: 'test/fixtures/workspace-lifecycle/portable-detection-v2.json',
+    bytes: 293, sha256: 'bf4409e18ef0b721f5a7e2f14a06f2fada88287114ec17775fef42e7ed38072a',
+    schema: 'whoisleuth.detection-rules', version: 2,
+  },
+  {
+    id: 'workspace.browser.bulk.v7', path: 'test/fixtures/workspace-lifecycle/browser-bulk-v7.json',
+    bytes: 77, sha256: '6b02cbd48a939a34d8f292da2b6bc8e8b59f3ed1b9c106a8e9e271ec0e949459',
+    schema: 'whoisleuth.browser.bulk-session-store', version: 7,
+  },
+  {
+    id: 'workspace.portable.bulk.v7', path: 'test/fixtures/workspace-lifecycle/portable-bulk-v7.json',
+    bytes: 338, sha256: 'f7e14d866eeb4e94b5390086e278348bfa0610ace72776fee4fbf24871ab3393',
+    schema: 'whoisleuth.bulk-sessions', version: 7,
+  },
   {
     id: 'workspace.browser.watchlist.v4', path: 'test/fixtures/workspace-lifecycle/browser-watchlist-v4.json',
     bytes: 76, sha256: '059930ee54d1bc65ac68ef6d3a8ac8cd8e53f682fe9a857512e2b6c57e93d5fe',

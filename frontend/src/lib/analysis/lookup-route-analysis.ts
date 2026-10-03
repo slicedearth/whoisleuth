@@ -526,6 +526,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     reusesOfficialAssets: profileSignals.reusesOfficialAssets ?? null,
     hasPasswordField: availability.hasPasswordField ?? null,
     hasExternalFormAction: availability.hasExternalFormAction ?? null,
+    hasExternalPasswordForm: availability.hasExternalPasswordForm ?? null,
     phishingLanguageMatch: availability.phishingLanguageMatch ?? null,
     privacyProtected: availability.privacyProtected ?? null,
     idnReferenceMatch,

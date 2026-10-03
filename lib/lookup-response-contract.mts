@@ -879,6 +879,7 @@ function validAvailabilityScalars(value: JsonObject): boolean {
     && (value.hasNullMx === undefined || value.hasNullMx === null || typeof value.hasNullMx === 'boolean')
     && (value.hasSpf === undefined || value.hasSpf === null || typeof value.hasSpf === 'boolean')
     && (value.hasDmarc === undefined || value.hasDmarc === null || typeof value.hasDmarc === 'boolean')
+    && (value.hasExternalPasswordForm === undefined || value.hasExternalPasswordForm === null || typeof value.hasExternalPasswordForm === 'boolean')
     && validOptionalStringArray(value.mxHosts, MAX_LOOKUP_DNS_RECORDS_PER_TYPE, 253);
 }
 

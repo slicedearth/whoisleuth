@@ -12,6 +12,7 @@ import {
   toBulkRouteTriageRow,
 } from '../frontend/src/lib/analysis/bulk-route-model.ts';
 import type { ScanResult } from '../frontend/src/lib/analysis/bulk-result-model.ts';
+import { RISK_MODEL_VERSION } from '../packages/analysis/risk-scoring.mts';
 
 function result(overrides: Partial<ScanResult> = {}): ScanResult {
   const domain = overrides.domain ?? 'candidate.example';
@@ -36,7 +37,7 @@ function result(overrides: Partial<ScanResult> = {}): ScanResult {
       nameservers: ['ns1.example'],
       faviconHash: null,
       faviconPHash: null,
-      riskModelVersion: 8,
+      riskModelVersion: RISK_MODEL_VERSION,
       riskScore: 75,
       riskFactors: [{ label: 'Observed review signal', points: 12 }],
       mutationTypes: ['dictionary'],
@@ -55,6 +56,7 @@ function result(overrides: Partial<ScanResult> = {}): ScanResult {
     reusesOfficialAssets: false,
     hasPasswordField: false,
     hasExternalFormAction: null,
+    hasExternalPasswordForm: null,
     phishingLanguageMatch: null,
     registrant: null,
     abuseEvidence: null,
@@ -187,7 +189,7 @@ test('builds triage and table rows without route-owned transformation logic', ()
   assert.equal(display.shortlisted, true);
   assert.equal(display.mutationLabel, 'Dictionary term');
   assert.equal(display.reviewState, 'reviewing');
-  assert.equal(display.risk.modelLabel, 'Risk model v8');
+  assert.equal(display.risk.modelLabel, `Risk model v${RISK_MODEL_VERSION}`);
   assert.equal(display.risk.exactScore, 75);
   assert.match(display.risk.factors[0]?.label ?? '', /Observed review signal/u);
   assert.match(display.responseHref, /monitor\?case=/u);

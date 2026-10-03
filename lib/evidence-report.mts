@@ -309,6 +309,7 @@ function buildLookupEvidenceReport(
         reportField('Redirects', http.redirectCount),
         reportField('Page title', availability.pageTitle),
         reportField('Password field observed', yesNoUnknown(availability.hasPasswordField)),
+        reportField('Password form declares external destination', yesNoUnknown(availability.hasExternalPasswordForm)),
         reportField('Authoritative nameserver evidence', listText(availability.nameservers)),
         reportField('Observed edge, CDN, reverse proxy or WAF', reportTechnologyNames(technologyFindings, 'observed_edge')),
         reportField('Application-platform indicators', reportTechnologyNames(technologyFindings, 'application_platform')),

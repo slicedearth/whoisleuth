@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import { BULK_SESSION_SCHEMA, BULK_SESSION_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { MAX_BULK_SESSIONS } from '../packages/workspace/bulk-session-model.mts';
+import { RISK_MODEL_VERSION } from '../packages/analysis/risk-scoring.mts';
 import { richBulkSessionStore } from '../test/bulk-session-fixture.mts';
 import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
 
@@ -172,7 +173,7 @@ test('saves compact Bulk sessions, restores them after reload, and compares late
   });
   expect(baseline?.results[0]).toMatchObject({
     risk: 6,
-    riskModelVersion: 8,
+    riskModelVersion: RISK_MODEL_VERSION,
     trusted: null,
     faviconMatch: false,
     faviconNearMatch: false,

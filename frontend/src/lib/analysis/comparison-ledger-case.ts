@@ -31,7 +31,7 @@ function caseFamily(field: string): string {
   if (field === 'nameservers') return 'dns';
   if (['hasMx', 'hasSpf', 'hasDmarc'].includes(field)) return 'mail';
   if (field.startsWith('http') || ['activityStatus', 'websiteProbeDetail'].includes(field)) return 'website';
-  if (['pageTitle', 'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'phishingLanguageMatch'].includes(field)) return 'identity';
+  if (['pageTitle', 'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'hasExternalPasswordForm', 'phishingLanguageMatch'].includes(field)) return 'identity';
   if (field.startsWith('risk') || field.startsWith('opportunity')) return 'model';
   if (field === 'mutationTypes') return 'membership';
   return 'other';

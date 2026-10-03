@@ -228,8 +228,8 @@ describe('explainRiskScore / computeRiskScore', () => {
   });
 
   test('stamps the explicit model version and gives ordinary states a low base score', () => {
-    assert.equal(scoring.RISK_MODEL_VERSION, 8);
-    assert.equal(riskExplanation({ availability: 'registered' }).modelVersion, 8);
+    assert.equal(scoring.RISK_MODEL_VERSION, 9);
+    assert.equal(riskExplanation({ availability: 'registered' }).modelVersion, 9);
     assert.equal(scoring.computeRiskScore({ availability: 'registered' }), 6);
     assert.equal(scoring.computeRiskScore({ availability: 'for_sale' }), 4);
     assert.equal(scoring.computeRiskScore({ availability: 'expiring' }), 5);
@@ -285,7 +285,7 @@ describe('explainRiskScore / computeRiskScore', () => {
       availability: 'registered',
       pageBaselineMatch: true,
     });
-    assert.equal(current.modelVersion, 8);
+    assert.equal(current.modelVersion, 9);
     assert.equal(current.score, 6);
     assert.equal(current.factors.some((factor) => factor.label.includes('page-identity')), false);
     assert.equal(previous?.modelVersion, 7);
@@ -296,7 +296,7 @@ describe('explainRiskScore / computeRiskScore', () => {
   test('external password destinations strengthen credential evidence without double counting', () => {
     const explained = riskExplanation({
       availability: 'registered', phishingLanguageMatch: 'verify your account',
-      hasPasswordField: true, hasExternalFormAction: true,
+      hasPasswordField: true, hasExternalFormAction: true, hasExternalPasswordForm: true,
     });
     assert.equal(explained.score, 24);
     assert.equal(explained.families.find((family) => family.id === 'credential-lure')?.contribution, 18);
@@ -434,6 +434,7 @@ describe('explainRiskScore / computeRiskScore', () => {
       phishingLanguageMatch: 'verify your account',
       hasPasswordField: true,
       hasExternalFormAction: true,
+      hasExternalPasswordForm: true,
       threatIntelligence: threatEnvelope([
         threatProvider('urlscan_search', { findings: [{ category: 'phishing', lastObservedAt: '2026-07-12T00:00:00.000Z' }] }),
         threatProvider('urlhaus_host'),
@@ -492,6 +493,7 @@ describe('risk score sensitivity', () => {
       faviconMatch: true,
       hasPasswordField: true,
       hasExternalFormAction: true,
+      hasExternalPasswordForm: true,
       activityStatus: 'active',
       hasMx: true,
       domainAgeDays: 20,

@@ -33,7 +33,8 @@ export const MAIL_REPORT_CANONICALIZATION_ROUTES = Object.freeze([
 export const REGISTRATION_DISCLOSURE_PLAN_SCHEMA = 'whoisleuth.registration-disclosure-plan';
 export const REGISTRATION_DISCLOSURE_PLAN_VERSION = 2;
 export const STATIC_PAGE_PATTERN_PACK_SCHEMA = 'whoisleuth.static-page-pattern-pack';
-export const STATIC_PAGE_PATTERN_PACK_VERSION = 2;
+export const STATIC_PAGE_PATTERN_PACK_VERSION = 3;
+export const STATIC_PAGE_PATTERN_PACK_SUPPORTED_VERSIONS: readonly number[] = [2, STATIC_PAGE_PATTERN_PACK_VERSION];
 export const MAX_STATIC_PAGE_PATTERN_PACK_BYTES = 256 * 1024;
 export const WEB_CAPTURE_SUMMARY_SCHEMA = 'whoisleuth.web-capture-summary';
 export const WEB_CAPTURE_SUMMARY_VERSION = 1;
@@ -137,11 +138,11 @@ const REGISTRATION_DISCLOSURE_COMPATIBILITY = defineSchemaCompatibility({
 });
 const STATIC_PATTERN_PACK_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.static-page-pattern-pack', kind: 'export', schema: STATIC_PAGE_PATTERN_PACK_SCHEMA,
-  currentVersion: STATIC_PAGE_PATTERN_PACK_VERSION, supportedVersions: [STATIC_PAGE_PATTERN_PACK_VERSION],
-  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only',
+  currentVersion: STATIC_PAGE_PATTERN_PACK_VERSION, supportedVersions: STATIC_PAGE_PATTERN_PACK_SUPPORTED_VERSIONS,
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only',
   writeSemantics: 'non_destructive_merge', byteBudget: MAX_STATIC_PAGE_PATTERN_PACK_BYTES,
   owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
-  note: 'Exact-current bounded page-pattern pack imported by explicit analyst action and merged without executing code or starting collection.',
+  note: 'Versions 2 and 3 remain readable. Version 3 can use attributed password-form destinations; older rules retain their declared meaning. Import remains explicit and does not execute code or start collection.',
 });
 
 export function serialiseAnalystInterchangeJson(value: unknown): string {
@@ -232,6 +233,7 @@ export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(
     { descriptor: STATIC_PATTERN_PACK_COMPATIBILITY, lifecycleSchema: STATIC_PAGE_PATTERN_PACK_SCHEMA,
       requiredKeys: ['schema', 'version', 'id', 'label', 'description', 'evidenceBoundary', 'relationship', 'confidence', 'rules'], optionalKeys: [],
       hook: { module: 'packages/interchange/static-page-pattern-packs.mts', exportName: 'validateStaticPagePatternPack', role: 'structure_validator', runtime: 'shared' },
-      fixtures: [{ id: 'static-page-pattern-pack-v2', path: `${F}static-page-pattern-pack-v2.json`, bytes: 1_094, sha256: 'c409e527850bcb924f5be0708a58c5e2c32d98947c42150f6a79765991c0eb6f', version: STATIC_PAGE_PATTERN_PACK_VERSION }] },
+      fixtures: [{ id: 'static-page-pattern-pack-v2', path: `${F}static-page-pattern-pack-v2.json`, bytes: 1_094, sha256: 'c409e527850bcb924f5be0708a58c5e2c32d98947c42150f6a79765991c0eb6f', version: 2 },
+        { id: 'static-page-pattern-pack-v3', path: `${F}static-page-pattern-pack-v3.json`, bytes: 746, sha256: '5be19b621ad604de8c430191a34fcd2d624b22b8bdf9a5cb2653ef7d1b86c71a', version: 3 }] },
   ],
 }));

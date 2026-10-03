@@ -32,7 +32,7 @@ function family(field: string): DomainChangeFamily | null {
   if (field === 'nameservers') return 'dns';
   if (['hasMx', 'hasSpf', 'hasDmarc'].includes(field)) return 'mail';
   if (field.startsWith('http') || ['activityStatus', 'pageTitle', 'websiteProbeDetail', 'faviconMatch', 'faviconNearMatch',
-    'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'pageBaselineMatch'].includes(field)) return 'web';
+    'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'hasExternalPasswordForm', 'pageBaselineMatch'].includes(field)) return 'web';
   return null;
 }
 

@@ -18,6 +18,8 @@ import {
   SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
 } from '../../lib/evidence-export.mts';
 import { validLookupObservationScope } from '../../packages/evidence/lookup-target.mts';
+import { externalPasswordFormObservation } from '../../packages/evidence/credential-form-attribution.mts';
+import { credentialSurfaceContractState } from '../../lib/lookup-child-profile-contract.mts';
 import {
   registrarStandingObservedBy,
   resolveRegistrarIanaId,
@@ -77,7 +79,7 @@ const PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS = [
   'expiresInDays', 'privacyProtected', 'dnssec', 'activityStatus',
   'websiteProbeStatus', 'websiteProbeDetail', 'http', 'deepScanComplete',
   'faviconHash', 'faviconPHash', 'pageTitle', 'hasPasswordField',
-  'phishingLanguageMatch', 'hasExternalFormAction', 'externalAssetHosts',
+  'phishingLanguageMatch', 'hasExternalFormAction', 'hasExternalPasswordForm', 'externalAssetHosts',
   'pageIdentity', 'credentialSurfaceProfile', 'structuredDataIdentity',
   'technologyProfile', 'pageRoleProfile', 'clientBehaviorProfile',
   'securityPosture', 'dns', 'tls', 'hasMx', 'hasNullMx', 'mxHosts', 'hasSpf',
@@ -104,6 +106,15 @@ function validateLookupEvidenceHomepageMetadata(
   availability: UnknownRecord,
   version: number,
 ): void {
+  const credentialProfile = availability.credentialSurfaceProfile === null || availability.credentialSurfaceProfile === undefined
+    ? null : record(availability.credentialSurfaceProfile, 'Lookup evidence credential profile');
+  if (version < 30 && (Object.hasOwn(availability, 'hasExternalPasswordForm') || credentialProfile?.credentialSurfaceVersion === 2)) {
+    fail('Lookup evidence form-attribution epoch');
+  }
+  if (Object.hasOwn(availability, 'hasExternalPasswordForm') && availability.hasExternalPasswordForm !== null) boolean(availability.hasExternalPasswordForm, 'Lookup evidence password-form destination');
+  if (credentialProfile?.credentialSurfaceVersion === 2 && credentialSurfaceContractState(credentialProfile) !== 'supported') fail('Lookup evidence form-attribution profile');
+  if (credentialProfile?.credentialSurfaceVersion === 2 && availability.hasExternalPasswordForm !== undefined
+    && availability.hasExternalPasswordForm !== externalPasswordFormObservation(credentialProfile.formAttribution)) fail('Lookup evidence form-attribution consistency');
   const pageIdentity = availability.pageIdentity === null || availability.pageIdentity === undefined
     ? null
     : record(availability.pageIdentity, 'Lookup evidence page identity');

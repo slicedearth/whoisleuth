@@ -10,6 +10,7 @@ import {
 } from './lookup-display-shared.ts';
 import { MAX_SECURITY_POSTURE_FINDINGS } from '../../../../lib/website-security-posture.mts';
 import { technologyEvidenceRoles } from '../../../../lib/technology-evidence-role.mts';
+import { validCredentialFormAttribution } from '../../../../packages/evidence/credential-form-attribution.mts';
 import {
   MAX_EVIDENCE_PER_TECHNOLOGY,
   MAX_LIBRARY_FINDINGS,
@@ -83,6 +84,7 @@ export function buildLookupPageProfileDisplay(input: {
 
   return {
     credentialSurface: {
+      formAttribution: validCredentialFormAttribution(credentialSurfaceProfile.formAttribution) ? credentialSurfaceProfile.formAttribution : null,
       formCount: boundedCredentialCount(credentialSurfaceForms.count, 50),
       inputCount: boundedCredentialCount(credentialSurfaceInputs.count),
       classifiedCount: boundedCredentialCount(credentialSurfaceInputs.classifiedCount),

@@ -399,6 +399,7 @@
             categories: credentialSurface.categories,
             methods: credentialSurface.methods,
             actions: credentialSurface.actions,
+            formAttribution: credentialSurface.formAttribution,
             limitations: pageDisplay.credentialSurfaceLimitations,
           }}
         /></div

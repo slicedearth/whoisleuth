@@ -51,6 +51,7 @@ type RiskInput = ScoreEvidenceQualityInput & {
   phishingLanguageMatch?: unknown;
   hasPasswordField?: unknown;
   hasExternalFormAction?: unknown;
+  hasExternalPasswordForm?: unknown;
   threatIntelligence?: unknown;
   activityStatus?: unknown;
   hasMx?: unknown;
@@ -68,26 +69,27 @@ const STATE_LABELS: Readonly<Record<string, string>> = Object.freeze({
   registered: 'registered',
 });
 
-// Version 8 keeps unreviewed whole-page similarity as visible review context
-// without assigning it Risk points. Reviewed favicon and official-asset
-// observations remain bounded within the brand-presentation family, generic
-// operational properties remain supporting context, and missing evidence never
-// contributes points.
-export const RISK_MODEL_VERSION = 8;
+// Version 9 requires form-scoped password/destination evidence. Older page-wide
+// flags never establish that a password control belongs to an external form.
+export const RISK_MODEL_VERSION = 9;
 export const RISK_REVIEW_THRESHOLD = 70;
 
 type RiskModelOptions = Readonly<{
   modelVersion: number;
   includePageBaselineMatch: boolean;
+  requireFormAttribution: boolean;
 }>;
 
 const CURRENT_RISK_MODEL: RiskModelOptions = Object.freeze({
   modelVersion: RISK_MODEL_VERSION,
   includePageBaselineMatch: false,
+  requireFormAttribution: true,
 });
+const RISK_MODEL_V8: RiskModelOptions = Object.freeze({ modelVersion: 8, includePageBaselineMatch: false, requireFormAttribution: false });
 const RISK_MODEL_V7: RiskModelOptions = Object.freeze({
   modelVersion: 7,
   includePageBaselineMatch: true,
+  requireFormAttribution: false,
 });
 
 const RISK_STATE_BASE: Readonly<Record<string, number>> = Object.freeze({
@@ -176,7 +178,7 @@ function scoreQuality(input: RiskInput): ScoreEvidenceQuality {
   if ([input.faviconMatch, input.faviconNearMatch, input.reusesOfficialAssets, input.pageBaselineMatch].some(hasBoolean)) {
     observedFamilies.push('brand-presentation');
   }
-  if ([input.hasPasswordField, input.hasExternalFormAction].some(hasBoolean) || typeof input.phishingLanguageMatch === 'string') {
+  if ([input.hasPasswordField, input.hasExternalFormAction, input.hasExternalPasswordForm].some(hasBoolean) || typeof input.phishingLanguageMatch === 'string') {
     observedFamilies.push('credential-lure');
   }
   if (calibrateExternalIntelligenceRisk(input.threatIntelligence, input.domain).eligibleProviderCount > 0) {
@@ -231,8 +233,8 @@ function explainRiskScoreInternal(
   if (typeof input.phishingLanguageMatch === 'string' && input.phishingLanguageMatch.trim()) {
     add('credential-lure', 'Suspicious urgency language observed', 8);
   }
-  if (input.hasPasswordField === true && input.hasExternalFormAction === true) {
-    add('credential-lure', 'Password form submits to an external origin', 10);
+  if (model.requireFormAttribution ? input.hasExternalPasswordForm === true : input.hasPasswordField === true && input.hasExternalFormAction === true) {
+    add('credential-lure', model.requireFormAttribution ? 'Password form declares an external destination' : 'Password form submits to an external origin', 10);
   } else if (input.hasPasswordField === true) {
     add('credential-lure', 'Login/password form present', 5);
   } else if (input.hasExternalFormAction === true) {
@@ -323,6 +325,10 @@ export function computeRiskScore(input: RiskInput): number | null {
 // datasets. Runtime lookups always use the current model above.
 export function explainRiskScoreV7(input: RiskInput): RiskExplanation | null {
   return explainRiskScoreInternal(input, null, RISK_MODEL_V7);
+}
+
+export function explainRiskScoreV8(input: RiskInput): RiskExplanation | null {
+  return explainRiskScoreInternal(input, null, RISK_MODEL_V8);
 }
 
 // Retained only for deterministic offline comparison of reviewed calibration

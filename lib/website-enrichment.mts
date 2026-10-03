@@ -321,6 +321,7 @@ async function enrichWebsite(context: WebsiteContext, options: WebsiteEnrichment
     domainSaleSignal: null,
     pageTitle: null,
     hasPasswordField: false,
+    hasExternalPasswordForm: null,
     phishingLanguageMatch: null,
     hasExternalFormAction: null,
     externalAssetHosts: [],

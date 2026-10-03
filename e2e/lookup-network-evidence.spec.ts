@@ -510,8 +510,9 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
             complete: true, truncated: false, limitations: [],
           },
         },
+        hasExternalPasswordForm: false,
         credentialSurfaceProfile: {
-          credentialSurfaceVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          credentialSurfaceVersion: 2, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'html', durationMs: null, complete: true, truncated: false,
           limitations: [
             'Fixed semantic categories and counts only.',
@@ -527,6 +528,13 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
             count: 4,
             classifiedCount: 3,
             categories: { password: 1, email: 1, username: 1, one_time_code: 0, payment: 0 },
+          },
+          formAttribution: {
+            complete: true, unassociatedInputs: 0,
+            forms: [
+              { index: 1, categories: { password: 1, email: 0, username: 1, one_time_code: 0, payment: 0 }, destinations: [{ relationship: 'same_origin', origin: 'https://login.example.test' }] },
+              { index: 2, categories: { password: 0, email: 1, username: 0, one_time_code: 0, payment: 0 }, destinations: [{ relationship: 'external', origin: 'https://collect.example' }] },
+            ],
           },
         },
         structuredDataIdentity: {
@@ -767,12 +775,22 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   const credentialCard = page.locator('.credential-card');
   await expect(credentialCard).not.toHaveAttribute('open', '');
   await expect(credentialCard.getByRole('heading', { name: 'Credential collection surface' })).toBeVisible();
-  await expect(credentialCard.getByText(/3 classified inputs across 2 forms/)).toBeVisible();
+  await expect(credentialCard.locator(':scope > summary')).toContainText('3 recognised inputs · 2 forms');
   await credentialCard.locator(':scope > summary').click();
   await expect(credentialCard.locator('section').filter({ hasText: 'Input purposes' }).getByText('Password')).toBeVisible();
   await expect(credentialCard.locator('section').filter({ hasText: 'Action relationships' }).getByText('External origin')).toBeVisible();
-  await expect(credentialCard.getByText(/external form submission is common for legitimate/i)).toBeVisible();
-  await expect(credentialCard.getByText(/does not retain field names or content/i)).toBeVisible();
+  const passwordForm = credentialCard.locator('.form-list > li').filter({ hasText: 'Form 1' });
+  await expect(passwordForm).toContainText('Password: 1');
+  await expect(passwordForm).toContainText('Same origin');
+  await expect(passwordForm).not.toContainText('https://collect.example');
+  const otherForm = credentialCard.locator('.form-list > li').filter({ hasText: 'Form 2' });
+  await expect(otherForm).toContainText('Email: 1');
+  await expect(otherForm).toContainText('https://collect.example');
+  await expect(otherForm).not.toContainText('Password:');
+  const scope = credentialCard.locator('.profile-notes');
+  await scope.locator(':scope > summary').focus();
+  await scope.locator(':scope > summary').press('Enter');
+  await expect(scope).toContainText('not a phishing verdict');
   await expect(credentialCard).not.toContainText('secret');
 
   const technologyCard = page.locator('.technology-card');

@@ -101,7 +101,7 @@ export const glossaryTerms: readonly GuideDefinition[] = Object.freeze([
   Object.freeze({ term: 'Certificate Transparency', definition: 'Public logs of issued TLS certificates. A log timestamp records certificate observation, not website activation or maliciousness.' }),
   Object.freeze({ term: 'Confusable', definition: 'A character or label that can look similar to another, including internationalised domain characters.' }),
   Object.freeze({ term: 'Console', definition: 'The complete signed-in area containing the Dashboard, investigation tools, and reference pages.' }),
-  Object.freeze({ term: 'Credential collection surface', definition: 'Fixed counts of semantic password, email, username, one-time-code, or payment-related inputs and form action relationships observed in captured static HTML. It is not a vulnerability or phishing finding.' }),
+  Object.freeze({ term: 'Credential collection surface', definition: 'Input-purpose counts and declared destinations associated with individual forms in captured HTML. Unknown associations remain explicit; the forms are not submitted.' }),
   Object.freeze({ term: 'DANE', definition: 'A method for using DNSSEC-protected TLSA records to authenticate a service certificate or public key. Only validated DNSSEC supports a DANE authentication claim.' }),
   Object.freeze({ term: 'Dashboard', definition: 'The signed-in starting page for Investigate, Respond and Assure work.' }),
   Object.freeze({ term: 'Deep lookup', definition: 'A broader lookup that can add WHOIS, DNS, website, TLS, platform indicators, observed network context and optional enrichment checks to RDAP.' }),
