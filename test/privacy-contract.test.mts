@@ -509,6 +509,17 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
     ],
   },
   {
+    id: 'selected-image-derivation',
+    clauses: [
+      /declared immediate-parent SHA-256 and byte length, editing method and operation kinds/iu,
+      /Parent pixels, Case and attachment identifiers, filenames and edit coordinates are not added/iu,
+      /parent may itself be edited/iu,
+      /Fingerprints can correlate matching files across exports/iu,
+      /not anonymisation or proof of the edits or complete redaction/iu,
+      /Missing declarations leave editing history unknown/iu,
+    ],
+  },
+  {
     id: 'encrypted-file-packages',
     clauses: [
       /Ordinary ZIPs and evidence folders are unencrypted/iu,

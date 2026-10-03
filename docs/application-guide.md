@@ -821,8 +821,11 @@ explicitly delete it after checking the result. Leaving the page preserves it.
 
 Use **Select files for export** to package selected retained originals or
 derivatives with their declared sources and observation times. Missing bytes
-stop the export. The ZIP uses generated entry names; Case metadata, filenames
-and editing instructions stay in the separate JSON backup. Where supported,
+stop the export. Edited images declare their immediate parent fingerprint,
+editing method and operation kinds. The parent may itself be edited and need
+not be selected. These declarations do not prove the edits; missing declarations
+leave editing history unknown. The ZIP uses generated entry names; Case records,
+filenames and edit coordinates stay in the separate JSON backup. Where supported,
 **Write new evidence folder** creates and verifies a new child inside the
 folder you choose. Otherwise, extract the ZIP locally. Neither option is a
 complete workspace backup. **Review evidence folder** on Dashboard checks the

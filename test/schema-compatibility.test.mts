@@ -430,6 +430,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.discovery-observation-snapshot').byteBudget, MAX_DISCOVERY_OBSERVATION_BYTES);
     assert.equal(byId(inventory, 'cli.ct-event-batch').schema, 'whoisleuth.ct-event-batch');
     assert.equal(byId(inventory, 'cli.investigation-manifest').schema, 'whoisleuth.investigation-manifest');
+    assert.equal(byId(inventory, 'cli.investigation-manifest').currentVersion, 4);
+    assert.deepEqual(byId(inventory, 'cli.investigation-manifest').supportedVersions, [2, 3, 4]);
     assert.equal(byId(inventory, 'cli.external-observation-mapping').schema, 'whoisleuth.external-observation-mapping');
     assert.equal(byId(inventory, 'cli.open-asset-model-bridge').schema, 'whoisleuth.open-asset-model-bridge');
     assert.equal(byId(inventory, 'cli.source-reliability-report').schema, 'whoisleuth.source-reliability-report');

@@ -10,13 +10,14 @@ import { decryptInvestigationPackage, encryptInvestigationPackage } from '../../
 import { buildInvestigationBagIt, prepareInvestigationBagIt } from '../../../packages/investigation/investigation-bagit.mts';
 import { assertBagItSelection, inspectBagItEntries, readBagItZip, MAX_BAGIT_ZIP_BYTES, MAX_BAGIT_ENTRIES, type BagItReview } from '../../../packages/interchange/bagit.mts';
 import { compareLocalPngs } from './image-change.ts';
-import type { ImageRegion } from '../../../packages/evidence/image-regions.mts';
+import { readImageDerivationDeclaration, type ImageRegion } from '../../../packages/evidence/image-regions.mts';
 import type { ImageChange } from '../../../packages/comparison/image-change.mts';
 
 export type SelectedInvestigationFile = Readonly<{
   file: Blob;
   mediaType: NonNullable<InvestigationManifestArtifactInput['mediaType']>;
   source: NonNullable<InvestigationManifestArtifactInput['source']>;
+  imageDerivation?: InvestigationManifestArtifactInput['imageDerivation'];
 }>;
 type CapsuleInput = Parameters<typeof buildInvestigationCapsule>[0];
 type BuildResult = Readonly<{ file: Blob; manifest: Awaited<ReturnType<typeof buildInvestigationPackage>>['manifest'] }>;
@@ -154,9 +155,10 @@ export async function runInvestigationPackageOperation(request: InvestigationPac
     if (request.kind === 'build' || request.kind === 'folder' || request.kind === 'bagitBuild' || request.kind === 'bagitFolder') {
       const { files, workflow, generatedAt, applicationVersion } = request.input;
       assertInvestigationFileSelection(files);
-      const selection = files.map(item => ({ file: item.file, mediaType: item.mediaType, source: { ...item.source } }));
+      const selection = files.map(item => ({ file: item.file, mediaType: item.mediaType, source: { ...item.source },
+        imageDerivation: item.imageDerivation == null ? null : readImageDerivationDeclaration(item.imageDerivation) }));
       const artifacts: InvestigationManifestArtifactInput[] = [];
-      for (const selected of selection) artifacts.push({ content: new Uint8Array(await selected.file.arrayBuffer()), mediaType: selected.mediaType, source: selected.source });
+      for (const selected of selection) artifacts.push({ content: new Uint8Array(await selected.file.arrayBuffer()), mediaType: selected.mediaType, source: selected.source, imageDerivation: selected.imageDerivation });
       if (request.kind === 'bagitBuild' || request.kind === 'bagitFolder') {
         if ('passphrase' in request.input) throw new TypeError('BagIt exports are not encrypted.');
         const input = { workflow, configurationDigestSha256: null, artifacts };

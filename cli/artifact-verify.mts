@@ -89,7 +89,7 @@ import {
 } from '../lib/evidence-export.mts';
 
 export const OFFLINE_ARTIFACT_VERIFICATION_SCHEMA = 'whoisleuth.offline-artifact-verification';
-export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 4;
+export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 5;
 export const MAX_OFFLINE_ARTIFACT_BYTES = Math.max(MAX_DOMAIN_CONTROL_MANIFEST_BYTES, MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES);
 export const MAX_OFFLINE_PASSPHRASE_FILE_BYTES = 1024;
 
@@ -822,7 +822,14 @@ export function formatOfflineArtifactVerification(
     lines.push(`Package bytes: ${report.package.digestSha256}`, 'Storage: unchanged; inspection only',
       'Audience: private; review selected file contents before sharing',
       'Signature trust: not checked', 'Trusted timestamp: not checked', 'Factual accuracy: not established');
-    for (const entry of report.package.entries) lines.push(`${entry.id}: ${entry.state} · ${entry.byteLength} bytes · ${entry.mediaType}${entry.issue ? ` · ${entry.issue}` : ''}`);
+    for (const entry of report.package.entries) {
+      lines.push(`${entry.id}: ${entry.state} · ${entry.byteLength} bytes · ${entry.mediaType}${entry.issue ? ` · ${entry.issue}` : ''}`);
+      if (entry.imageDerivation) {
+        const declaration = entry.imageDerivation;
+        lines.push(`  Declared image derivation: ${declaration.method}; ${declaration.operations.join(', ')}`,
+          `  Parent: ${declaration.source.digestSha256} · ${declaration.source.byteLength} bytes`);
+      } else if (entry.mediaType.startsWith('image/')) lines.push('  Editing history: not declared');
+    }
     for (const link of report.package.links) lines.push(`Source link ${link.capsuleEntryId}: ${link.state}${link.sourceEntryId ? ` (${link.sourceEntryId})` : ''}`);
     for (const capture of report.package.captureManifests) {
       lines.push(`Capture manifest ${capture.entryId}: ${capture.state}`);

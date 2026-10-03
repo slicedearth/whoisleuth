@@ -598,7 +598,13 @@ creates a new child folder and reads its files back for verification; handles
 are not saved or used for background access. CLI output requires a new explicit
 path. Cancelled or failed writes may leave partial private output for deliberate
 inspection or deletion. Selected Case-file exports are not complete workspace
-backups and do not include Case metadata or unselected files.
+backups and do not include Case records or unselected files. For edited images,
+they include the declared immediate-parent SHA-256 and byte length, editing
+method and operation kinds. Parent pixels, Case and attachment identifiers,
+filenames and edit coordinates are not added by this declaration. The parent
+may itself be edited. Fingerprints can correlate matching files across exports;
+they are not anonymisation or proof of the edits or complete redaction. Missing
+declarations leave editing history unknown.
 Explicit inline review shows paged JSON text or locally decoded PNG pixels,
 without running document scripts, following links or making page requests.
 Capture attachment checks compare selected bytes with manifest declarations;

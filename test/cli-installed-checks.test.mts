@@ -50,6 +50,8 @@ const packets = [
     label: 'doctor', corrupt: (value: any) => { value.networkRequested = true; }, expected: /Installed offline doctor/u },
   { name: 'evidence', run: (directory: string, run: RunInstalledCli) => checkInstalledCliEvidence(root, directory, run),
     label: 'evidence package verification', corrupt: (value: any) => { value.package.entries[1].byteLength = 9; }, expected: /Installed package round trip/u },
+  { name: 'image derivation', run: (directory: string, run: RunInstalledCli) => checkInstalledCliEvidence(root, directory, run),
+    label: 'selected image derivation verification', corrupt: (value: any) => { value.package.entries[0].imageDerivation.source.byteLength = 99; }, expected: /Installed image review/u },
   { name: 'workflows', run: (directory: string, run: RunInstalledCli) => checkInstalledCliWorkflows(root, directory, run),
     label: 'offline handoff completion', corrupt: (value: any) => { value.networkApprovedForThisRun = true; }, expected: /Installed handoff did not finish offline/u },
   { name: 'incidents', run: (directory: string, run: RunInstalledCli) => checkInstalledCliIncidents(root, directory, version, run),

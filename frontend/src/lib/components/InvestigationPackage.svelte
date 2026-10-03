@@ -235,7 +235,14 @@
             <div class="entry-head"><h4>{item.entry.id}</h4><strong>{item.state === 'rejected' ? 'Rejected' : 'Bytes verified'}</strong></div>
             <p>{item.entry.byteLength.toLocaleString()} bytes · {item.entry.schema ?? 'Opaque or unversioned file'}{item.entry.version ? ` v${item.entry.version}` : ''}</p>
             {#if 'source' in item.entry}<dl class="source-facts"><div><dt>Declared source</dt><dd>{item.entry.source.identity ?? 'Unknown'}</dd></div><div><dt>Source observation</dt><dd>{item.entry.source.observedAt ?? 'Unknown'}</dd></div></dl>{:else}<p>This historical manifest has no source declaration or custody event.</p>{/if}
-            <details><summary>Digests and custody</summary><p class="digest">Raw bytes: {item.entry.contentDigestSha256}</p>{#if item.entry.canonicalDigestSha256}<p class="digest">Canonical JSON: {item.entry.canonicalDigestSha256}</p>{/if}<p>{review.manifest.version === 3 ? `Packaged as entry ${item.entry.sequence} at ${review.manifest.generatedAt}. No earlier custody is established.` : 'The historical manifest records ordering, not a custody time.'}</p></details>
+            {#if 'imageDerivation' in item.entry && item.entry.imageDerivation}
+              {@const derivation = item.entry.imageDerivation}
+              <details class="image-derivation"><summary>Declared image edits: {derivation.operations.map(kind => kind === 'redact' ? 'redaction' : 'outline').join(', ')}</summary>
+                <dl class="source-facts"><div><dt>Method</dt><dd>{derivation.method}</dd></div><div><dt>Parent file</dt><dd class="digest">{derivation.source.digestSha256}</dd></div><div><dt>Parent size</dt><dd>{derivation.source.byteLength.toLocaleString()} bytes</dd></div></dl>
+                <p>The parent may itself be edited and need not be included. This declaration does not prove the edits or complete redaction.</p>
+              </details>
+            {:else if 'mediaType' in item.entry && item.entry.mediaType.startsWith('image/')}<p>Editing history: not declared.</p>{/if}
+            <details><summary>Digests and custody</summary><p class="digest">Raw bytes: {item.entry.contentDigestSha256}</p>{#if item.entry.canonicalDigestSha256}<p class="digest">Canonical JSON: {item.entry.canonicalDigestSha256}</p>{/if}<p>{review.manifest.version >= 3 ? `Packaged as entry ${item.entry.sequence} at ${review.manifest.generatedAt}. No earlier custody is established.` : 'The historical manifest records ordering, not a custody time.'}</p></details>
             {#if item.issue}<p class="error">{item.issue}</p>{/if}
             {#if item.state === 'identity_verified'}
               <div class="entry-actions"><button class="btn" type="button" onclick={() => downloadEntry(item.entry.id, item.interpretation !== 'opaque')} disabled={busy}>Download {item.entry.id}</button>{#if workspace && onworkspace}<button class="primary" type="button" onclick={() => void openWorkspace(item.entry.id)} disabled={busy}>Review workspace {item.entry.id}</button>{/if}

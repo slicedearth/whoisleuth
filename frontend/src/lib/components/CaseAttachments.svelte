@@ -2,6 +2,7 @@
   import { onDestroy, tick } from 'svelte';
   import type { CaseRecord } from '$lib/cases';
   import type { CaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
+  import { declareImageDerivation } from '../../../../packages/evidence/image-regions.mts';
   import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
   import { isoFromUtcInput, utcDateTimeInputAttributes } from '$lib/analysis/case-response-form-values.ts';
   import { prepareCaseAttachmentFiles, readRetainedCaseFile, readRetainedCaseFiles, removeRetainedCaseAttachment, retainCaseAttachments, type SelectedCaseAttachment } from '$lib/case-attachments.ts';
@@ -101,7 +102,9 @@
     signal.throwIfAborted();
     const files = await readRetainedCaseFiles(selected);
     signal.throwIfAborted();
-    return files.map(({ attachment, file }) => ({ file, mediaType: attachment.mediaType, source: { identity: attachment.source, observedAt: attachment.observedAt } }));
+    return files.map(({ attachment, file }) => ({ file, mediaType: attachment.mediaType,
+      source: { identity: attachment.source, observedAt: attachment.observedAt },
+      imageDerivation: attachment.derivation ? declareImageDerivation(attachment.derivation) : null }));
   }
 </script>
 
@@ -122,7 +125,7 @@
     {#if error}<p class="file-error" role="alert">{error}</p>{/if}
     {#if record.attachments?.length}
       <details class="file-export-selection"><summary>Select files for export</summary>
-        <p>Include selected originals or derivatives with their declared sources and observation times. Case records, reference names and editing instructions stay in the separate JSON backup.</p>
+        <p>Include selected files with their declared sources and observation times. Edited images include their parent fingerprint and edit types, not the parent pixels. Case records, filenames and edit coordinates stay in the separate JSON backup.</p>
         <div class="export-selection">
           {#each record.attachments as attachment (attachment.id)}<label><input type="checkbox" bind:group={exportIds} value={attachment.id} disabled={exporting || mutationBusy}> {attachment.fileName} · {attachment.byteLength.toLocaleString('en-AU')} bytes</label>{/each}
         </div>

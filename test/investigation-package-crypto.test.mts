@@ -7,6 +7,9 @@ import { buildInvestigationPackage, MAX_INVESTIGATION_PACKAGE_BYTES } from '../p
 import { decryptInvestigationPackage, encryptInvestigationPackage, inspectEncryptedInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
 import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../packages/contracts/investigation-package-limits.mts';
 import { arrayBuffer } from '../packages/evidence/passphrase-encryption.mts';
+import { readInvestigationManifest } from '../packages/investigation/investigation-manifest.mts';
+import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
+import { verifyOfflineInvestigationPackage } from '../cli/investigation-package-review.mts';
 
 const PASSPHRASE = 'independent package fixture passphrase';
 const CONTENT = new Uint8Array([0, 255, 128, 13, 10, 1]);
@@ -38,6 +41,13 @@ test('encrypted package v1 immutable bytes and current output use the independen
   const retained = await decryptInvestigationPackage(fixture, PASSPHRASE);
   assert.deepEqual(retained.review.contents.get('artifact-1'), CONTENT);
   assert.equal(retained.review.manifest.version, 3);
+  const originalManifest = new TextDecoder().decode(unzipSync(retained.bytes)['manifest.json']);
+  assert.deepEqual(await readInvestigationManifest(originalManifest), JSON.parse(originalManifest));
+  assert.ok(retained.review.manifest.artifacts.every(entry => !Object.hasOwn(entry, 'imageDerivation')));
+  assert.equal((await verifyOfflineArtifact(originalManifest)).state, 'verified');
+  const legacyReport = await verifyOfflineInvestigationPackage(retained.bytes);
+  assert.equal(legacyReport.state, 'verified');
+  assert.equal(legacyReport.package!.entries[0]!.imageDerivation, null);
   const built = await build(), encrypted = await encryptInvestigationPackage(built.bytes, PASSPHRASE);
   assert.equal(Buffer.from(encrypted.subarray(0, 21)).toString('ascii'), 'WHOISLEUTH-ENCRYPTED\0');
   assert.equal(encrypted[21], 1);

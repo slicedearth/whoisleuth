@@ -17,6 +17,29 @@ export type ImageDerivation = Readonly<{
   plan: ImageRegionPlan;
 }>;
 
+/** A shareable declaration, not the private editing plan or proof of a transformation. */
+export type ImageDerivationDeclaration = Readonly<{
+  method: 'png-regions-v1';
+  source: RetainedFileReference;
+  operations: readonly ImageRegion['kind'][];
+}>;
+
+export function readImageDerivationDeclaration(raw: unknown): ImageDerivationDeclaration {
+  const value = exact(raw, ['method', 'source', 'operations'], 'Image derivation declaration');
+  if (value.method !== 'png-regions-v1') throw new TypeError('This image derivation method is unsupported.');
+  const operations = Array.from(array(value.operations, 'Image operations', 2, 1), operation =>
+    enumeration(operation, ['redact', 'outline'] as const, 'Image operation'));
+  if (new Set(operations).size !== operations.length) throw new TypeError('Image operations must be unique.');
+  return Object.freeze({ method: value.method, source: readRetainedFileReference(value.source), operations: Object.freeze(operations) });
+}
+
+/** Retain the immediate parent's fingerprint, without identifiers or region coordinates. */
+export function declareImageDerivation(raw: ImageDerivation): ImageDerivationDeclaration {
+  const derivation = readImageDerivation(raw);
+  const operations = (['redact', 'outline'] as const).filter(kind => derivation.plan.regions.some(region => region.kind === kind));
+  return readImageDerivationDeclaration({ method: derivation.method, source: derivation.source, operations });
+}
+
 export function readEvidenceImageDimensions(width: unknown, height: unknown): ImageDimensions {
   const result = {
     width: integer(width, 'Image width', 1, MAX_EVIDENCE_IMAGE_DIMENSION),

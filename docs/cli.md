@@ -425,12 +425,15 @@ An ordinary Case JSON file alone provides structural validity, not a checksum.
 They use generated entry names, not original paths. Ordinary ZIPs and folders
 are private and unencrypted; packaging does not redact selected files. The report distinguishes
 file identity, supported source formats, opaque content, exact capsule/source
-links and capture-manifest attachment matches. Include the capture manifest and
+links, declared image derivation and capture-manifest attachment matches.
+Image derivation reports an immediate-parent digest and byte length, editing
+method and operation kinds, not proof of transformation. Parent pixels are
+optional; absent declarations leave editing history unknown. Include the capture manifest and
 its screenshot/DOM-digest files together to check their declared bytes; original
 filenames are not needed to establish a match. It does not import files or establish source truth, signature trust or a
 trusted timestamp. Unsupported or rejected entries produce a partial report;
 `--strict-exit` returns 4. Without `--package` or `--folder`, `manifest` produces a
-standalone JSON manifest; exact public version-2 manifests remain readable.
+standalone JSON manifest; exact version-2 and version-3 manifests remain readable.
 
 For [BagIt 1.0](https://www.rfc-editor.org/rfc/rfc8493.html) interchange, use
 `--bagit` with `--package` or `--folder` on both commands:

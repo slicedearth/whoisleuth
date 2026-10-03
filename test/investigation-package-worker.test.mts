@@ -30,6 +30,23 @@ const request: InvestigationPackageRequest = { kind: 'build', input: { workflow:
   { file: new Blob([new Uint8Array([0, 255, 128])]), mediaType: 'image/png', source: { identity: null, observedAt: null } },
 ] } };
 
+test('all worker package writers preserve selected image declarations before asynchronous file reads', async () => {
+  for (const kind of ['build', 'folder', 'bagitBuild', 'bagitFolder'] as const) {
+    const declaration = { method: 'png-regions-v1' as const, source: { digestSha256: `sha256:${'a'.repeat(64)}`, byteLength: 100 }, operations: ['outline' as const] };
+    const expected = structuredClone(declaration);
+    const file = new Blob([new Uint8Array([1, 2, 3])]);
+    const read = file.arrayBuffer.bind(file);
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => { declaration.source.byteLength = 50; declaration.operations.length = 0; return read(); } });
+    const built = await runInvestigationPackageOperation({ kind, input: { ...request.input, files: [{ file, mediaType: 'image/png', source: { identity: null, observedAt: null }, imageDerivation: declaration }] } });
+    if (built.kind !== kind) assert.fail('Expected the selected package format.');
+    assert.deepEqual(built.result.manifest.artifacts[0]!.imageDerivation, expected);
+    assert.equal(built.result.manifest.artifacts.length, 1);
+  }
+  const invalid = await runInvestigationPackageOperation({ ...request, input: { ...request.input,
+    files: [{ ...request.input.files[1]!, imageDerivation: { method: 'png-regions-v1', source: { digestSha256: 'invalid', byteLength: 1 }, operations: ['redact'] } }] } });
+  assert.equal(invalid.kind, 'error');
+});
+
 class ControlledWorker {
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
   onerror: ((event: ErrorEvent) => void) | null = null;

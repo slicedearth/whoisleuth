@@ -1,9 +1,10 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { readBrowserLocalCollection, expectNoHorizontalOverflow, useTheme } from './helpers';
-import { IMAGE_NAME, openImageReview } from './case-image-fixtures';
+import { readBrowserLocalCollection, expectNoHorizontalOverflow, useTheme, openDashboardSecondaryWorkspaces } from './helpers';
+import { IMAGE_NAME, openImageReview, addImageRegion, expectEditedPixels } from './case-image-fixtures';
 import { inspectInvestigationPackage } from '../packages/investigation/investigation-package.mts';
+import { verifyOfflineInvestigationPackage } from '../cli/investigation-package-review.mts';
 
 test('selected retained files export exact bytes and source declarations without becoming a whole-workspace backup', async ({ page }, testInfo) => {
   const { files, bytes } = await openImageReview(page, 2);
@@ -20,7 +21,7 @@ test('selected retained files export exact bytes and source declarations without
   const inspection = await inspectInvestigationPackage(await readFile((await result.path())!));
   expect(inspection.identityVerified).toBe(true); expect(inspection.entries).toHaveLength(1);
   expect(Buffer.from(inspection.contents.get('artifact-1')!)).toEqual(bytes);
-  expect(inspection.manifest.artifacts[0]).toMatchObject({ contentDigestSha256: source.digestSha256, source: { identity: source.source, observedAt: source.observedAt } });
+  expect(inspection.manifest.artifacts[0]).toMatchObject({ contentDigestSha256: source.digestSha256, source: { identity: source.source, observedAt: source.observedAt }, imageDerivation: null });
   expect(JSON.stringify(inspection.manifest)).not.toContain(IMAGE_NAME);
   await expect(page.getByRole('status').filter({ hasText: 'not a complete workspace backup' })).toBeVisible();
   await expect(selected.getByRole('button', { name: 'Download private package', exact: true })).toBeFocused();
@@ -39,6 +40,54 @@ test('selected retained files export exact bytes and source declarations without
       if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`selected-file-export-${theme}-${width}.png`) }); }
     }
   }
+});
+
+test('selected redacted images carry minimal parent declarations through browser and offline CLI review', async ({ page }, testInfo) => {
+  const { files, review, bytes: originalBytes } = await openImageReview(page);
+  await review.getByRole('button', { name: 'Create edited PNG', exact: true }).click();
+  await addImageRegion(review, 'redact');
+  await addImageRegion(review, 'outline', { x: 60, y: 40, width: 180, height: 80 });
+  await review.getByRole('button', { name: 'Prepare edited PNG', exact: true }).click();
+  await expectEditedPixels(review);
+  await review.getByRole('checkbox', { name: 'I reviewed the edited image', exact: true }).check();
+  await review.getByRole('button', { name: 'Retain edited PNG', exact: true }).click();
+  await expect(review.getByRole('button', { name: 'Retain edited PNG', exact: true })).toHaveCount(0);
+  await files.getByRole('button', { name: 'Close file preview', exact: true }).click();
+  const before = await readBrowserLocalCollection(page, 'cases');
+  const record = before.records[0]!.value, attachments = record.attachments!;
+  const parent = attachments.find(item => !item.derivation)!, derivative = attachments.find(item => item.derivation)!;
+  await files.locator('.file-export-selection > summary').click();
+  const selection = files.locator('.file-export-selection');
+  await selection.getByRole('checkbox', { name: derivative.fileName }).check();
+  await expect(selection).toContainText('1 selected · 1 not selected');
+  const downloading = page.waitForEvent('download');
+  await selection.getByRole('button', { name: 'Download private package', exact: true }).click();
+  const download = await downloading, archive = await readFile((await download.path())!);
+  const inspected = await inspectInvestigationPackage(archive);
+  expect(inspected.identityVerified).toBe(true); expect(inspected.entries).toHaveLength(1);
+  const declaration = { method: 'png-regions-v1', source: { digestSha256: parent.digestSha256, byteLength: parent.byteLength }, operations: ['redact', 'outline'] };
+  expect(inspected.manifest.version).toBe(4);
+  expect(inspected.manifest.artifacts[0]).toMatchObject({ contentDigestSha256: derivative.digestSha256, byteLength: derivative.byteLength, imageDerivation: declaration });
+  expect(Buffer.from(inspected.contents.get('artifact-1')!)).not.toEqual(originalBytes);
+  const metadata = JSON.stringify(inspected.manifest);
+  for (const privateValue of [record.id, parent.id, derivative.id, parent.fileName, derivative.fileName, 'Private fixture metadata', 'sourceAttachmentId', '"plan"', '"regions"']) expect(metadata).not.toContain(privateValue);
+  const offline = await verifyOfflineInvestigationPackage(archive);
+  expect(offline.state).toBe('verified'); expect(offline.package!.entries[0]!.imageDerivation).toEqual(declaration);
+  expect(offline.package!.caseFiles).toEqual([]);
+  await page.goto('/dashboard'); await openDashboardSecondaryWorkspaces(page);
+  const panel = page.getByRole('region', { name: 'Package and review evidence files' });
+  await panel.getByLabel('Review evidence package', { exact: true }).setInputFiles({ name: 'selected.zip', mimeType: 'application/zip', buffer: archive });
+  const edits = panel.locator('.image-derivation');
+  await edits.getByText('Declared image edits: redaction, outline', { exact: true }).click();
+  await expect(edits).toContainText(parent.digestSha256);
+  await expect(edits).toContainText('does not prove the edits');
+  await expect(panel).toContainText('Bytes verified');
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 390, 1280]) {
+    await useTheme(page, theme); await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
+    await edits.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`image-declaration-${theme}-${width}.png`) });
+  }
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
 });
 
 test('missing retained bytes stop a selected export without clearing selection or changing Case metadata', async ({ page }) => {
