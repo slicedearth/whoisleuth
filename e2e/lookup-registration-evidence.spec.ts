@@ -1106,10 +1106,12 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(page.getByText(/Nothing is submitted for scanning or reporting/i)).toBeVisible();
   await expect(page.getByText(/no URL or sample is provided/i)).toBeVisible();
   await expect(page.getByText(/no IOC or sample is provided/i)).toBeVisible();
+  await expect(option).toBeDisabled();
+  await page.locator('#query').fill('archive-review.example');
+  await expect(option).toBeEnabled();
   await option.check();
   await malwareOption.check();
   await iocOption.check();
-  await page.locator('#query').fill('archive-review.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expandLookupFamilies(page);
 

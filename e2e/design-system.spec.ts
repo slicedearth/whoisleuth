@@ -46,13 +46,16 @@ test('optional intelligence choices remain labelled and operable on desktop and 
   const group = page.getByRole('group', { name: 'Optional third-party intelligence' });
   await openLookupOptionalSources(page);
   await expect(group).toBeVisible();
+  const first = group.getByRole('checkbox', { name: /Search archived URLscan verdicts/ });
+  await expect(first).toBeDisabled();
+  await page.getByLabel('Domain, IP address, ASN, or domain list').fill('example.test');
+  await expect(first).toBeEnabled();
 
   for (const size of [
     { width: 1280, height: 800 },
     { width: 360, height: 640 },
   ]) {
     await page.setViewportSize(size);
-    const first = group.getByRole('checkbox', { name: /Search archived URLscan verdicts/ });
     await expect(first).toBeVisible();
     await group.getByText('Search archived URLscan verdicts').click();
     await expect(first).toBeChecked();

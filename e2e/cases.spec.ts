@@ -158,7 +158,8 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
   await expect(report.getByText('Ready for review', { exact: true })).toBeVisible();
   await expect(report).toContainText('Readiness is distinct from review or authorisation');
   await report.getByLabel('Audience').selectOption('executive');
-  await expect(report.getByText('Cases with actions', { exact: true })).toBeVisible();
+  await expect(report.getByRole('group', { name: 'Executive recorded outcome counts', exact: true })
+    .getByText('Cases with actions', { exact: true })).toBeVisible();
   await expect(report).toContainText('Denominator: 3 inspected Cases');
   await report.getByLabel('Time window').selectOption('all');
   await report.getByText('Exact current-state and action-type counts', { exact: true }).click();
