@@ -12,7 +12,7 @@ export type InvestigationSearchSession = Readonly<{
   preview: (query: string, page?: number) => Promise<InvestigationContextPreview>;
   history: (entityId: string, page?: number) => Promise<InvestigationHistory>;
   infrastructure: (options?: InvestigationInfrastructureOptions) => Promise<InvestigationInfrastructure>;
-  infrastructureSnapshots: (selectedIds?: string[], page?: number) => Promise<RetainedInfrastructureSnapshotReview>;
+  infrastructureSnapshots: (selectedIds?: readonly string[], page?: number) => Promise<RetainedInfrastructureSnapshotReview>;
   infrastructureRelationships: (entityId: string, page?: number, topologyQuery?: string) => Promise<InvestigationInfrastructureRelationships>;
   dispose: () => void;
 }>;
@@ -120,8 +120,9 @@ export async function createInvestigationSearchSession(
         if (reply.kind !== 'infrastructure_relationships') throw new Error('Retained relationships could not return results.');
         return reply.result;
       },
-      async infrastructureSnapshots(selectedIds: string[] = [], page = 1) {
-        const reply = await request({ kind: 'infrastructure_snapshots', selectedIds, page });
+      async infrastructureSnapshots(selectedIds: readonly string[] = [], page = 1) {
+        // Reactive arrays are not structured-cloneable. Capture plain values before queueing.
+        const reply = await request({ kind: 'infrastructure_snapshots', selectedIds: [...selectedIds], page });
         if (reply.kind !== 'infrastructure_snapshots') throw new Error('Retained infrastructure snapshots could not return results.');
         return reply.result;
       },

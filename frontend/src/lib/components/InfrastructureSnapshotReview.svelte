@@ -30,11 +30,11 @@
 </script>
 <section class="snapshots" aria-label="Source-qualified infrastructure snapshots" aria-busy={pending}>
   <h4>Multi-host snapshots and historical comparison</h4>
-  <p>Select one snapshot to review its exact scoped evidence or two in chronological order to compare. Wildcard patterns are not selectable hosts. No selection starts collection or monitoring.</p>
+  <p>Select one snapshot to review, or two in chronological order to compare. Selection starts no collection or monitoring; wildcard patterns are not selectable hosts.</p>
   {#if error}<p role="alert">{error}</p>{/if}
   {#if response}
     <p role="status">{response.total} admitted source-qualified snapshots. Legacy evidence without this format remains available in the inventory; its complete scope is unknown.</p>
-    {#if response.partial}<p>Snapshot coverage is incomplete or unavailable. Withheld, unsupported or unreadable evidence cannot establish absence; only admitted exact snapshots can be selected.</p>{/if}
+    {#if response.partial}<p>Coverage is partial: withheld, unsupported or unreadable snapshots cannot establish absence.</p>{/if}
     <ol aria-label="Retained infrastructure snapshots">
       {#each response.summaries as row (row.identity)}
         <li><label><input type="checkbox" checked={selectedIds.includes(row.identity)} onchange={event => toggle(row.identity, event.currentTarget.checked)} />{row.id} · {row.target} · {formatEvidenceDate(row.observedAt)} · {row.mode.replaceAll('_', ' ')} · {row.coverage.state} · {row.hostCount} selected hosts</label><a href={`/monitor?case=${encodeURIComponent(row.caseId)}`}>Inspect supporting Case for {row.id}</a></li>
@@ -56,7 +56,7 @@
         <details><summary>Sources and limitations for {snapshot.id}</summary><ul>{#each snapshot.sources as source}<li>{source.id}: {source.name} · {source.family.replaceAll('_', ' ')} · {source.evidenceClass.replaceAll('_', ' ')} · {source.reference ?? 'No reference retained'}</li>{/each}{#each snapshot.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>
       </section>
     {/each}
-    {#if hosts.length}<p>{hosts.length} explicitly selected hostnames. Bulk opens with these targets for review; it does not run a scan, change a watchlist or schedule.</p><button class="btn small" type="button" onclick={() => void prepareBulk()}>Prepare selected hosts in Bulk</button>{/if}
+    {#if hosts.length}<p>Bulk opens these {hosts.length} selected hostnames for review, without scanning, changing a watchlist or scheduling.</p><button class="btn small" type="button" onclick={() => void prepareBulk()}>Prepare selected hosts in Bulk</button>{/if}
     {#if message}<p role="status">{message}</p>{/if}
     {#if response.comparison}<section aria-label="Infrastructure snapshot comparison"><h5>Comparison · {response.comparison.state}</h5><ol>{#each response.comparison.rows as row}<li>{row.hostname} · {row.family.replaceAll('_', ' ')} · {row.source.name} ({row.source.evidenceClass.replaceAll('_', ' ')}) · {row.state.replaceAll('_', ' ')}<p>{row.before.join(', ') || 'No earlier values retained'} → {row.after.join(', ') || 'No later values retained'}</p><p>{row.detail}</p></li>{/each}</ol><ul>{#each response.comparison.limitations as limitation}<li>{limitation}</li>{/each}</ul></section>{/if}
   {/if}

@@ -142,6 +142,40 @@ test('session routes infrastructure and one-hop sources through its cancellable 
   await assert.rejects(session.infrastructureRelationships('selected'), { name: 'AbortError' });
 });
 
+test('snapshot requests copy empty and populated reactive array proxies before worker transfer', async () => {
+  const { worker, session } = await prepared();
+  const result = { summaries: [], selected: [], comparison: null, total: 0, page: 1, pageCount: 1, partial: false };
+  try {
+    for (const [position, values] of [[], ['one', 'two']].entries()) {
+      const selection = new Proxy(values, {});
+      assert.throws(() => structuredClone(selection), { name: 'DataCloneError' });
+      const pending = session.infrastructureSnapshots(selection, 2);
+      const id = position + 2;
+      worker.reply({ id, kind: 'infrastructure_snapshots', result });
+      assert.deepEqual(await pending, result);
+      assert.deepEqual(worker.messages.at(-1), { id, kind: 'infrastructure_snapshots', selectedIds: values, page: 2 });
+    }
+    assert.equal(worker.terminated, 0);
+  } finally { session.dispose(); }
+});
+
+test('queued snapshot selections retain the caller state captured at request time', async () => {
+  const { worker, session } = await prepared();
+  const result = { summaries: [], selected: [], comparison: null, total: 0, page: 1, pageCount: 1, partial: false };
+  try {
+    const active = session.search('hold');
+    const values = ['one', 'two'];
+    const pending = session.infrastructureSnapshots(new Proxy(values, {}), 3);
+    values.splice(0, values.length, 'replacement');
+    worker.reply({ id: 2, kind: 'search', result: { ...idle, query: 'hold' } });
+    await active;
+    worker.reply({ id: 3, kind: 'infrastructure_snapshots', result });
+    assert.deepEqual(await pending, result);
+    assert.deepEqual(worker.messages.at(-1), { id: 3, kind: 'infrastructure_snapshots', selectedIds: ['one', 'two'], page: 3 });
+    assert.deepEqual(values, ['replacement']);
+  } finally { session.dispose(); }
+});
+
 test('worker preserves explicit unavailable-source coverage rather than treating it as empty', () => {
   const replies: SearchWorkerResponse[] = [];
   const handle = createInvestigationSearchWorkerHandler((response) => replies.push(response));
