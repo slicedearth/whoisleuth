@@ -64,6 +64,27 @@ function output() {
 }
 
 describe('read-only retained source drift', () => {
+  test('reports the failed source stage without exposing payloads or hiding independent results', async () => {
+    const scenarios = [
+      { id: 'sslbl', url: SSLBL_SOURCE_URL, body: '', expected: /empty body/u },
+      { id: 'sslbl', url: SSLBL_SOURCE_URL, body: 'private invalid feed', expected: /feed format could not be parsed/u },
+      { id: 'kev', url: KEV_URL, body: 'private invalid JSON', expected: /not a valid JSON object/u },
+      { id: 'kev', url: KEV_URL, body: '{"catalogVersion":"2026.09.21","dateReleased":"2026-09-21T00:00:00Z"}', expected: /older than the retained release/u },
+      { id: 'kev', url: KEV_URL, body: '{"catalogVersion":"2026.09.23","dateReleased":"2026-09-23T00:00:00Z","count":1,"vulnerabilities":[{"cveID":"private invalid identifier"}]}', expected: /entries failed projection validation/u },
+    ];
+    for (const scenario of scenarios) {
+      const setup = await fixture();
+      const before = structuredClone(setup.baseline);
+      setup.bodies.set(scenario.url, scenario.body);
+      const report = await auditSourceDrift(setup);
+      const row = report.checks.find(item => item.id === scenario.id)!;
+      assert.equal(row.status, 'inconclusive');
+      assert.match(row.detail, scenario.expected);
+      assert.doesNotMatch(JSON.stringify(report), /private invalid/u);
+      assert.equal(report.checks.find(item => item.id === 'unicode')?.status, 'current');
+      assert.deepEqual(setup.baseline, before);
+    }
+  });
   test('compares every retained source against bounded fixed endpoints without rewriting the baseline', async () => {
     const setup = await fixture();
     const before = structuredClone(setup.baseline);

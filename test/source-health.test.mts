@@ -6,6 +6,7 @@ import { TECHNOLOGY_REVIEWED_FIXTURES } from '../fixtures/technology-reviewed-fi
 import { sslblSnapshotHealth } from '../lib/sslbl-intelligence.mts';
 import { SOURCE_RELEASED_AT } from '../tools/cisa-kev-catalog.mts';
 import { buildCatalogStatus } from '../tools/cisa-kev-catalog-status.mts';
+import { browserCatalogueHealth } from '../tools/retire-browser-catalog.mts';
 import {
   buildSourceHealthReport,
   formatSourceHealthAnnotations,
@@ -28,6 +29,24 @@ function writer() {
 }
 
 describe('offline source-health composition', () => {
+  test('catalogue diagnostics identify integrity, clock and upstream freshness independently', async () => {
+    const baseline = await browserCatalogueHealth(daysAfterKevRelease(1));
+    const expected = {
+      malformed: /digest or pinned source identity does not match/u,
+      unavailable: /date is invalid or later than the evaluation clock/u,
+      limited: /digest and pinned source identity match.*newest upstream revision is not checked/u,
+    };
+    for (const state of ['malformed', 'unavailable', 'limited'] as const) {
+      const report = await buildSourceHealthReport({ now: daysAfterKevRelease(1), builders: {
+        browserCatalogue: async () => ({ ...baseline, state, ageDays: state === 'unavailable' ? null : 1, itemCount: 1 }),
+      } });
+      const entry = report.entries.find(item => item.id === 'browser_library_catalogue')!;
+      assert.match(entry.detail, expected[state]);
+      assert.ok(formatSourceHealthReport(report).includes(`Scope: ${entry.limitation}`));
+      if (state !== 'malformed') assert.ok(formatSourceHealthAnnotations(report).includes(entry.detail));
+      assert.equal(report.networkRequests, 0);
+    }
+  });
   test('composes retained datasets and reviewed evaluations without network work', async () => {
     const report = await buildSourceHealthReport({
       now: new Date('2026-09-03T12:00:00.000Z'),

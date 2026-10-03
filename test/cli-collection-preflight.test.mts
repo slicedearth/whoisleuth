@@ -4,8 +4,22 @@ import { describe, test } from 'node:test';
 import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
+import { buildCollectionPreflight, formatCollectionPreflight } from '../cli/collection-preflight.mts';
 
 describe('multi-target collection preflights', () => {
+  test('human plans disclose output, local persistence and allowlist scope without reading or writing them', () => {
+    const document = buildCollectionPreflight({ command: 'bulk', targetCount: 2, deep: false, concurrency: 1,
+      output: 'json', checkpoint: false, allowlist: true });
+    const text = formatCollectionPreflight(document);
+    assert.match(text, /Output format: json/u);
+    assert.match(text, /No checkpoint is written/u);
+    assert.match(text, /does not exclude targets from collection/u);
+    assert.match(text, /Enforcement: none/u);
+    assert.match(text, /Network requests  none/u);
+    assert.equal(document.networkRequestsMade, false);
+    assert.match(formatCollectionPreflight(buildCollectionPreflight({ command: 'bulk', targetCount: 2,
+      deep: true, concurrency: 1, output: 'csv', checkpoint: true })), /private resumable checkpoint/u);
+  });
   for (const command of ['bulk', 'discover-scan'] as const) {
     for (const mode of ['fast', 'deep'] as const) {
       test(`${command} ${mode} plans report the admitted ceilings without collecting`, async () => {

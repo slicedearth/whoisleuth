@@ -190,7 +190,9 @@ export async function buildSourceHealthReport(options: BuildOptions = {}) {
       const health = await builders.browserCatalogue(now);
       return entry({ id: 'browser_library_catalogue', label: 'Browser-library advisory catalogue', kind: 'retained_dataset',
         state: health.state, sourceObservedAt: health.sourceUpdatedAt, ageDays: health.ageDays, itemCount: health.itemCount,
-        detail: 'The generated-module digest and source identity are checked locally; current upstream revision requires the explicit live check.',
+        detail: health.state === 'malformed' ? 'The generated-module digest or pinned source identity does not match. Do not treat this catalogue as verified.'
+          : health.state === 'unavailable' ? 'The source date is invalid or later than the evaluation clock; its review age is unavailable.'
+          : 'The generated-module digest and pinned source identity match. The newest upstream revision is not checked in offline mode.',
         limitation: 'Updating the scanner dependency does not update this separately pinned catalogue. Offline freshness does not establish the newest upstream revision.',
         action: 'Compare the live source and review a pinned catalogue refresh when it differs.', strictCommand: 'npm run sources:drift -- --live' });
     }),
@@ -198,7 +200,8 @@ export async function buildSourceHealthReport(options: BuildOptions = {}) {
       const health = await builders.infrastructure(now);
       return entry({ id: 'common_infrastructure', label: 'Shared-infrastructure ranges', kind: 'retained_dataset',
         state: health.state, sourceObservedAt: health.observedAt, ageDays: health.ageDays, itemCount: health.itemCount,
-        detail: `${health.excludedCount} excluded sources; ${FRESHNESS_DAYS}-day source/verification review window.`,
+        detail: health.state === 'unavailable' ? 'The retained source or verification dates cannot be evaluated against this clock.'
+          : `${health.excludedCount} excluded sources; ${FRESHNESS_DAYS}-day source/verification review window.`,
         limitation: 'A verified unchanged provider range retains its publisher date. The separate digest-bound verification date controls its review age.',
         action: 'Check current warning lists and official edge ranges before refreshing the retained snapshot.', strictCommand: 'npm run common-infrastructure:check' });
     }),
@@ -236,7 +239,8 @@ export async function buildSourceHealthReport(options: BuildOptions = {}) {
         sourceObservedAt: report.releasedAt,
         ageDays: report.ageDays,
         itemCount: report.identifierCount,
-        detail: `Pinned catalogue ${report.catalogVersion} is ${report.ageDays ?? 'an unknown number of'} days old against the ${report.maxAgeDays}-day review threshold.`,
+        detail: state === 'malformed' ? 'The catalogue release date is invalid or later than the evaluation clock; its review age is unavailable.'
+          : `Pinned catalogue ${report.catalogVersion} is ${report.ageDays} days old against the ${report.maxAgeDays}-day review threshold.`,
         limitation: report.limitation,
         action: state === 'current' ? 'No local maintenance action is currently indicated.' : 'Review the separately authorised catalogue update procedure.',
         strictCommand: 'npm run catalog:kev:status',
@@ -388,6 +392,7 @@ export function formatSourceHealthReport(
     lines.push(`${item.state.toUpperCase().padEnd(12)} ${item.label}`);
     lines.push(`  Items: ${item.itemCount === null ? 'unavailable' : item.itemCount}; age: ${item.ageDays === null ? 'unavailable' : `${item.ageDays} days`}`);
     lines.push(`  Detail: ${item.detail}`);
+    lines.push(`  Scope: ${item.limitation}`);
     if (item.state !== 'current' && item.state !== 'measured') lines.push(`  Action: ${item.action}`);
     lines.push(`  Strict drill-down: ${item.strictCommand}`);
   }
@@ -414,7 +419,7 @@ export function formatSourceHealthAnnotations(
   return `${warnings.map((item) => {
     const title = githubAnnotationValue(`Retained source ${item.state}: ${item.label}`, true);
     const message = githubAnnotationValue(
-      `${item.label} is ${item.state}. ${item.action} Drill-down: ${item.strictCommand}.`,
+      `${item.label} is ${item.state}. ${item.detail} ${item.action} Drill-down: ${item.strictCommand}.`,
     );
     return `::warning title=${title}::${message}`;
   }).join('\n')}\n`;

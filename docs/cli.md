@@ -154,6 +154,9 @@ with text on standard input. These commands never open a destination or execute
 supplied content. Output compares displayed and actual hosts, retains reported
 header authentication and interprets supplied authorisation parameters without
 retaining URL tokens. The source hash identifies the original bytes.
+Defanged schemes and hosts are accepted, including `hxxps[:]//host[.]example`.
+Path, query and fragment characters keep their supplied meaning; text scanning
+removes unmatched surrounding prose brackets, while explicit links remain exact.
 
 Add a repeatable `--reported-action`, such as `entered_device_code` or
 `granted_consent`, to include account-recovery guidance based on an explicitly

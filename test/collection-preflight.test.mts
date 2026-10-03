@@ -19,6 +19,7 @@ test('describes fast and deep Lookup collection without promising an exact reque
   });
   assert.equal(fast.version, COLLECTION_PREFLIGHT_VERSION);
   assert.deepEqual(fast.sources.map((source) => source.id), ['availability', 'rdap']);
+  assert.match(fast.sources[0]!.disclosure, /DNS authority fallback.*registrable domain/u);
   assert.equal(deep.sources.find((source) => source.id === 'security_txt')?.state, 'included');
   assert.equal(deep.sources.find((source) => source.id === 'external_intelligence')?.state, 'included');
   assert.equal(deep.sources.find((source) => source.id === 'website_probe')?.state, 'disabled');
@@ -28,6 +29,7 @@ test('describes fast and deep Lookup collection without promising an exact reque
 test('keeps optional Lookup sources optional and explains multi-target handoff', () => {
   const preflight = buildLookupCollectionPreflight({ mode: 'deep', targetCount: 4 });
   assert.match(preflight.summary, /handed to Bulk/i);
+  assert.match(preflight.summary, /without collecting.*separate plan/u);
   assert.equal(preflight.sources.find((source) => source.id === 'security_txt')?.state, 'optional');
   assert.equal(preflight.sources.find((source) => source.id === 'external_intelligence')?.state, 'optional');
 });
@@ -43,7 +45,17 @@ test('distinguishes compact Bulk collection and bounds operator-facing values', 
   assert.equal(preflight.targetCount, 2_000);
   assert.match(preflight.controls[0] ?? '', /at most 12 lookups run in parallel/i);
   assert.match(preflight.cautions.join(' '), /compact triage contract/i);
+  assert.match(preflight.cautions.join(' '), /limits are not request quotas/u);
   assert.equal(preflight.sources.find((source) => source.id === 'tls_intelligence')?.state, 'disabled');
+});
+
+test('Fast DNS fallback follows authority admission, not the optional deep DNS collector', () => {
+  const input = { mode: 'fast' as const, targetCount: 1, disabledSourceIds: ['dns_intelligence'] };
+  for (const plan of [buildLookupCollectionPreflight(input), buildBulkCollectionPreflight({ ...input, concurrency: 1, pacingLabel: 'Default' })]) {
+    const authority = plan.sources.find(item => item.id === 'availability')!;
+    assert.equal(authority.state, 'included');
+    assert.match(authority.disclosure, /resolver receives questions/u);
+  }
 });
 
 test('guided request review preserves approval and prerequisite boundaries', () => {

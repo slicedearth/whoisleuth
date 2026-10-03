@@ -78,7 +78,7 @@ export function buildLookupCollectionPreflight(input: LookupPreflightInput): Col
   const disabledIds = normalizedIds(input.disabledSourceIds);
   const sources = input.mode === 'fast'
     ? [
-        source('availability', 'Authority routing', 'Uses registry authority and bootstrap evidence to select an authoritative registration route.', disabledIds),
+        source('availability', 'Authority routing', 'Uses registry authority and bootstrap evidence. If registration evidence needs a DNS authority fallback, the resolver receives questions for the registrable domain; this is not a full DNS review.', disabledIds),
         source('rdap', 'RDAP', 'Collects registration evidence from the selected RDAP authority when supported.', disabledIds),
       ]
     : [
@@ -98,7 +98,7 @@ export function buildLookupCollectionPreflight(input: LookupPreflightInput): Col
     kind: 'lookup',
     heading: 'Collection preflight',
     summary: targetCount > 1
-      ? `${targetCount} unique targets will be handed to Bulk instead of starting a single Lookup request.`
+      ? `${targetCount} unique targets will be handed to Bulk without collecting. Review its separate plan before starting the queue.`
       : `${input.mode === 'deep' ? 'Deep' : 'Fast'} Lookup will collect the eligible source families shown below for one target.`,
     targetCount,
     sources: sources.slice(0, MAX_COLLECTION_PREFLIGHT_SOURCES),
@@ -119,7 +119,7 @@ export function buildBulkCollectionPreflight(input: BulkPreflightInput): Collect
   const disabledIds = normalizedIds(input.disabledSourceIds);
   const sources = input.mode === 'fast'
     ? [
-        source('availability', 'Authority routing', 'Selects authoritative registration routes for each queued domain.', disabledIds),
+        source('availability', 'Authority routing', 'Selects authoritative registration routes. If registration evidence needs a DNS authority fallback, the resolver receives questions for the registrable domain; this is not a full DNS review.', disabledIds),
         source('rdap', 'RDAP', 'Collects registration-first evidence without deep web or TLS enrichment.', disabledIds),
       ]
     : [
@@ -143,6 +143,7 @@ export function buildBulkCollectionPreflight(input: BulkPreflightInput): Collect
       'Pause stops admitting new work. Cancel stops the queue after requests already in flight settle.',
     ]),
     cautions: boundedNotes([
+      'Referrals, redirects, eligibility, caching and retries can change the number of requests; target and concurrency limits are not request quotas.',
       'Bulk Deep is a compact triage contract, not the complete single-domain Deep Lookup contract.',
       'Incomplete sources remain explicit and do not become negative findings.',
     ]),

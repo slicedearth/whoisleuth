@@ -52,13 +52,38 @@ export function reviewAuthorisationLink(url: URL): AuthorisationLinkReview | nul
 }
 
 export function refangIntakeUrl(raw: string): string {
-  return raw.replace(/^hxxps:/iu, 'https:').replace(/^hxxp:/iu, 'http:').replace(/\[\.\]|\(\.\)/gu, '.');
+  // Only the scheme and authority are defanged. Path/query/fragment bytes may be
+  // significant to an exact supplied target, even when they resemble defanging.
+  return raw.replace(/^(https?|hxxps?)(?::|\[:\])\/\/([^/?#]*)/iu, (_match, scheme: string, authority: string) =>
+    `${scheme.toLowerCase().replace('hxxp', 'http')}://${authority.replace(/\[\.\]|\(\.\)/gu, '.')}`);
+}
+
+const HTTP_PREFIX = /^(?:https?|hxxps?)(?::|\[:\])\/\//iu;
+
+function proseUrl(value: string): string {
+  // Prose delimiters are not part of a URL; balanced path brackets are. Direct
+  // supplied links bypass this text-scanning cleanup entirely.
+  let result = value.replace(/[.,;!?]+$/u, '');
+  let round = 0, square = 0;
+  for (const char of result) {
+    if (char === '(') round++;
+    else if (char === ')') round--;
+    else if (char === '[') square++;
+    else if (char === ']') square--;
+  }
+  for (;;) {
+    const end = result.at(-1);
+    if (end === ')' && round < 0) round++;
+    else if (end === ']' && square < 0) square++;
+    else return result;
+    result = result.slice(0, -1).replace(/[.,;!?]+$/u, '');
+  }
 }
 
 function displayedHost(value: string): string | null {
   const bounded = value.trim();
   if (bounded.length > MAX_INTAKE_URL_LENGTH || /\s/u.test(bounded)) return null;
-  const parsed = parseCredentialFreeHttpUrl(refangIntakeUrl(/^(?:https?|hxxps?):/iu.test(bounded) ? bounded : `https://${bounded}`), MAX_INTAKE_URL_LENGTH);
+  const parsed = parseCredentialFreeHttpUrl(refangIntakeUrl(HTTP_PREFIX.test(bounded) ? bounded : `https://${bounded}`), MAX_INTAKE_URL_LENGTH);
   return parsed && canonicalRegistrableDomain(parsed.hostname) ? parsed.hostname : null;
 }
 
@@ -99,15 +124,15 @@ export function createLinkIntake() {
       hasPrivateLocation: url.pathname !== '/' || Boolean(url.search || url.hash), authorisation: reviewAuthorisationLink(url) });
     targets.push({ id, exactUrl: url.href });
     for (const [name, value] of url.searchParams) {
-      if (!EMBEDDED_KEYS.has(name.toLowerCase()) || !/^(?:https?|hxxps?):\/\//iu.test(value)) continue;
+      if (!EMBEDDED_KEYS.has(name.toLowerCase()) || !HTTP_PREFIX.test(value)) continue;
       if (depth >= MAX_EMBEDDED_LINK_DEPTH) { bounded = true; continue; }
       add(value, 'embedded_parameter', '', id, depth + 1, location);
     }
   }
   function addText(text: string, source: IntakeLink['source'] = 'text', location?: IntakeLink['location']): void {
     // The caller admits bytes before this scan; iteration stops at the work bound.
-    for (const match of text.matchAll(/(?:https?|hxxps?):\/\/[^\s<>"'`]+/giu)) {
-      add(match[0].replace(/[.,;!?]+$/u, ''), source, '', null, 0, location);
+    for (const match of text.matchAll(/(?:https?|hxxps?)(?::|\[:\])\/\/[^\s<>"'`]+/giu)) {
+      add(match[0].length > MAX_INTAKE_URL_LENGTH ? match[0] : proseUrl(match[0]), source, '', null, 0, location);
       if (links.length >= MAX_INTAKE_LINKS) { bounded = true; break; }
     }
   }

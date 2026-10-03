@@ -1,12 +1,38 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createLinkIntake } from '../packages/investigation/link-intake.mts';
+import { createLinkIntake, refangIntakeUrl } from '../packages/investigation/link-intake.mts';
 import { reviewMessageInput } from '../packages/investigation/message-intake.mts';
 import { MAX_INTAKE_LINKS, MAX_MESSAGE_INTAKE_BYTES, MAX_MESSAGE_DEPTH } from '../packages/contracts/message-intake.mts';
 import { reviewIdentityIncident } from '../packages/investigation/identity-incident-review.mts';
 
 const now = '2026-09-22T00:00:00Z';
 const bytes = (value: string) => new TextEncoder().encode(value);
+
+test('defanging repairs only scheme and authority, preserving exact path and query meaning', () => {
+  const cases = [
+    ['hxxps[:]//portal[.]example/a_(b)?note=(.)#part[.]', 'https://portal.example/a_(b)?note=(.)#part[.]'],
+    ['https://portal.example/?note=(.)', 'https://portal.example/?note=(.)'],
+    ['HXXP://portal(.)example/a[.]b', 'http://portal.example/a[.]b'],
+  ];
+  for (const [input, expected] of cases) assert.equal(refangIntakeUrl(input!), expected);
+  const intake = createLinkIntake();
+  intake.add('https://outer.example/?next=hxxps%5B%3A%5D%2F%2Finner%5B.%5Dexample%2Fp%3Fnote%3D(.)', 'text');
+  assert.equal(intake.result().targets[1]?.exactUrl, 'https://inner.example/p?note=(.)');
+  assert.equal(intake.result().links[1]?.source, 'embedded_parameter');
+  assert.doesNotMatch(JSON.stringify(intake.result().links), /note|next=|%5B/u);
+});
+
+test('text intake removes unmatched prose closers but preserves balanced and explicitly selected paths', () => {
+  const intake = createLinkIntake();
+  intake.addText('(https://first.example/path). [hxxps[:]//second[.]example/a_(b)]. https://third.example/a[b]');
+  intake.add('https://explicit.example/path).', 'html_link');
+  intake.addQr('hxxps[:]//qr[.]example/a_(b)?note=(.)');
+  assert.deepEqual(intake.result().targets.map(item => item.exactUrl), [
+    'https://first.example/path', 'https://second.example/a_(b)', 'https://third.example/a[b]',
+    'https://explicit.example/path).', 'https://qr.example/a_(b)?note=(.)',
+  ]);
+  assert.equal(intake.result().rejected, 0);
+});
 
 test('links expose independent displayed and embedded destinations without following them', () => {
   const intake = createLinkIntake();

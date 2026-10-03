@@ -65,6 +65,11 @@ type Options = Readonly<{
 }>;
 class SourceUnavailable extends Error {}
 
+function verifiedStage<T>(message: string, operation: () => T): T {
+  try { return operation(); }
+  catch { throw new SourceUnavailable(`${message} No data was changed.`); }
+}
+
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid source object.');
   return value as Record<string, unknown>;
@@ -102,7 +107,8 @@ export async function auditSourceDrift(options: Options = {}) {
       throw new SourceUnavailable(`Source returned HTTP ${response.status}.`);
     }
     const body = await readTextCapped(response, maximum, { fatalUtf8: true });
-    if (body.truncated || !body.text) throw new SourceUnavailable('Source was empty or exceeded its byte bound.');
+    if (body.truncated) throw new SourceUnavailable('Source exceeded its byte bound.');
+    if (!body.text) throw new SourceUnavailable('Source returned an empty body.');
     return body.text;
   }
   async function revision(url: string): Promise<string> {
@@ -131,8 +137,10 @@ export async function auditSourceDrift(options: Options = {}) {
   // run concurrently, with the shared deadline limiting the complete command.
   await Promise.all([
     check('sslbl', 'Certificate intelligence', async () => {
-      const source = parseSslblCertificateCsv(await text(SSLBL_SOURCE_URL, MAX_SSLBL_SOURCE_BYTES));
-      const update = assessSslblSnapshotUpdate(source, now.toISOString(), { currentSnapshot: baseline.sslbl, allowLargeShrink: true });
+      const raw = await text(SSLBL_SOURCE_URL, MAX_SSLBL_SOURCE_BYTES);
+      const source = verifiedStage('Certificate feed format could not be parsed.', () => parseSslblCertificateCsv(raw));
+      const update = verifiedStage('Certificate feed failed timestamp, rollback or retained-snapshot integrity checks.', () =>
+        assessSslblSnapshotUpdate(source, now.toISOString(), { currentSnapshot: baseline.sslbl, allowLargeShrink: true }));
       const previous = record(baseline.sslbl);
       const overdue = now.getTime() - Date.parse(source.sourceUpdatedAt) > SSLBL_SNAPSHOT_MAX_AGE_MS;
       return { ...comparison(String(previous.sourceDigestSha256), source.sourceDigestSha256, update.currentEntries, update.nextEntries,
@@ -142,13 +150,16 @@ export async function auditSourceDrift(options: Options = {}) {
     }),
     check('kev', 'Exploited-vulnerability catalogue', async () => {
       const raw = await text(KEV_URL, KEV_BYTES);
-      const source = record(JSON.parse(raw));
-      if (typeof source.catalogVersion !== 'string' || !/^\d{4}\.\d{2}\.\d{2}$/u.test(source.catalogVersion)
-        || typeof source.dateReleased !== 'string' || date(source.dateReleased, now) < Date.parse(baseline.kev.releasedAt)) {
-        throw new TypeError('Catalogue metadata rolled back or is invalid.');
-      }
-      const ids = projectCatalogue(source, source.catalogVersion, source.dateReleased);
-      const overdue = Math.floor((now.getTime() - Date.parse(source.dateReleased)) / 86_400_000) > KEV_REVIEW_DAYS;
+      const source = verifiedStage('Vulnerability catalogue is not a valid JSON object.', () => record(JSON.parse(raw)));
+      const metadata = verifiedStage('Vulnerability catalogue metadata is invalid, future-dated or older than the retained release.', () => {
+        if (typeof source.catalogVersion !== 'string' || !/^\d{4}\.\d{2}\.\d{2}$/u.test(source.catalogVersion)
+          || typeof source.dateReleased !== 'string' || date(source.dateReleased, now) < Date.parse(baseline.kev.releasedAt)) {
+          throw new TypeError();
+        }
+        return { version: source.catalogVersion, releasedAt: source.dateReleased };
+      });
+      const ids = verifiedStage('Vulnerability catalogue entries failed projection validation.', () => projectCatalogue(source, metadata.version, metadata.releasedAt));
+      const overdue = Math.floor((now.getTime() - Date.parse(metadata.releasedAt)) / 86_400_000) > KEV_REVIEW_DAYS;
       return { ...comparison(baseline.kev.sourceSha256, sha256(raw), baseline.kev.identifiers.length, ids.length,
         `Observed catalogue ${source.catalogVersion}. ${overdue ? 'Upstream release is beyond its review window.' : 'Review additions/removals before updating its pin.'}`),
         ...(overdue ? { status: 'drift' as const } : {}) };
