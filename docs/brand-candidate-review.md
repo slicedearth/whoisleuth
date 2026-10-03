@@ -19,7 +19,9 @@ belong to one exact domain/Brand context. A shared domain can have different
 reasons for different Brands. Existing manual priority is preserved unless
 explicit replacement is selected. In Monitor, open the list's History view to
 review contexts and preview field-scoped bulk edits. Changed contexts invalidate
-stale edits; unrelated contexts and evidence remain intact.
+stale edits; unrelated contexts and evidence remain intact. Search or page through
+all retained contexts without raising the 200-row render bound; selections remain
+exact across pages and filters. Shared-domain controls identify their Brand context.
 
 Source-qualified registration, DNS, mail and page transitions can produce a
 focused review item against the retained concern. Incomplete checks do not erase
@@ -36,6 +38,11 @@ changes. Expired exceptions, changed source revisions/material observations and
 new independent rules restore eligibility. Inspect excluded candidates and
 use **Re-evaluate retained candidates without collection** in Discover.
 Disable an exception to reverse it; up to eight previous revisions are retained.
+Conflicting copies of the same exception revision reject an import. Renewing or
+re-enabling an exception cannot move its retained review clock backwards; disabling
+under a rolled-back clock preserves the existing clock guard. A committed exception
+remains saved if the visible Brand refresh fails, with drafts retained and further
+mutations disabled until saved context can be reread.
 
 ## Offline CLI
 

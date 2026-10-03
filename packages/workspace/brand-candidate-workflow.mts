@@ -386,6 +386,8 @@ function exceptionSnapshot(value: unknown): BrandCandidateExceptionSnapshot | nu
 
 export function normalizeCandidateExceptions(value: unknown): BrandCandidateException[] {
   const output = new Map<string, BrandCandidateException>();
+  const seenRevisions = new Map<string, string>();
+  const seenScopes = new Map<string, string>();
   for (const item of (Array.isArray(value) ? value : []).slice(0, MAX_CANDIDATE_EXCEPTIONS * 4)) {
     const raw = record(item),
       snapshot = exceptionSnapshot(raw),
@@ -420,17 +422,22 @@ export function normalizeCandidateExceptions(value: unknown): BrandCandidateExce
           : 0,
     };
     const old = output.get(id);
+    const scope = JSON.stringify([domain, ruleKey, exception.purpose]);
+    const previousScope = seenScopes.get(id);
     if (
-      old &&
-      (old.domain !== exception.domain ||
-        old.ruleKey !== exception.ruleKey ||
-        old.purpose !== exception.purpose)
+      previousScope !== undefined && previousScope !== scope
     )
       throw new TypeError(
         'An exception identifier cannot change its exact domain, rule or purpose.',
       );
-    if (!old || exception.revision > old.revision) output.set(id, exception);
-    if (output.size >= MAX_CANDIDATE_EXCEPTIONS) break;
+    seenScopes.set(id, scope);
+    const revisionKey = JSON.stringify([id, exception.revision]);
+    const revisionValue = JSON.stringify(exception);
+    const previousRevision = seenRevisions.get(revisionKey);
+    if (previousRevision !== undefined && previousRevision !== revisionValue)
+      throw new TypeError('The same exception identifier and revision contain conflicting decisions. No exception was imported.');
+    seenRevisions.set(revisionKey, revisionValue);
+    if ((old && exception.revision > old.revision) || (!old && output.size < MAX_CANDIDATE_EXCEPTIONS)) output.set(id, exception);
   }
   return [...output.values()];
 }
@@ -477,10 +484,20 @@ export function reviseCandidateException(
   )
     throw new TypeError('Exception reasons must contain 1–300 plain-text characters.');
   const revision = (existing?.revision ?? 0) + 1;
+  const retainedReviewClock = existing
+    ? [existing.reviewedAt, ...existing.history.map(snapshot => snapshot.reviewedAt)].sort().at(-1)!
+    : null;
+  const submittedReviewClock = time(input.reviewedAt);
+  if (input.enabled && retainedReviewClock && submittedReviewClock && submittedReviewClock < retainedReviewClock)
+    throw new TypeError('The review clock precedes a retained exception review. Correct the clock before renewing or re-enabling it.');
+  const reviewedAt = !input.enabled && retainedReviewClock && submittedReviewClock && submittedReviewClock < retainedReviewClock
+    ? retainedReviewClock
+    : input.reviewedAt;
   const prior = existing ? [exceptionSnapshot(existing)!, ...existing.history] : [];
   const normalized = normalizeCandidateExceptions([
     {
       ...input,
+      reviewedAt,
       revision,
       history: prior.slice(0, MAX_CANDIDATE_EXCEPTION_HISTORY),
       historyOmitted:

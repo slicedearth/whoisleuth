@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tick } from 'svelte';
+  import Pagination from '$lib/components/Pagination.svelte';
   import type { WatchlistEntry } from '$lib/watchlists';
   import { updateWatchContexts } from '$lib/watchlists';
   import {
@@ -17,6 +19,8 @@
     onrefresh,
   }: { name: string; entry: WatchlistEntry; onrefresh: () => Promise<unknown> } = $props();
   let filter = $state('all'),
+    search = $state(''),
+    page = $state(1),
     sort = $state<'priority' | 'domain'>('priority'),
     selected = $state<Set<string>>(new Set()),
     priority = $state<WatchPriority>('unassigned');
@@ -36,18 +40,23 @@
       })),
     ),
   );
-  const rows = $derived(
+  const PAGE_SIZE = 200;
+  let contextsHeading = $state<HTMLHeadingElement>();
+  const filteredRows = $derived(
     all
-      .filter((row) => filter === 'all' || row.context.priority === filter)
+      .filter((row) => (filter === 'all' || row.context.priority === filter) && (!search.trim() || `${row.domain} ${row.context.brandProfileId ?? 'Watchlist-only context'} ${row.context.reason}`.toLowerCase().includes(search.trim().toLowerCase())))
       .sort((a, b) =>
         sort === 'priority'
           ? (a.context.priority === 'unassigned' ? 5 : Number(a.context.priority.slice(1))) -
               (b.context.priority === 'unassigned' ? 5 : Number(b.context.priority.slice(1))) ||
             a.domain.localeCompare(b.domain)
           : a.domain.localeCompare(b.domain),
-      )
-      .slice(0, 200),
+      ),
   );
+  const pageCount = $derived(Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE)));
+  const currentPage = $derived(Math.min(page, pageCount));
+  const rows = $derived(filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
+  $effect(() => { filter; search; sort; page = 1; });
   const chosen = $derived(all.filter((row) => selected.has(row.key)));
   const previewIdentity = $derived(
     JSON.stringify({
@@ -68,6 +77,7 @@
       preview = '';
       reason = '';
       message = '';
+      page = 1;
     }
   });
   function toggle(key: string, checked: boolean) {
@@ -75,6 +85,11 @@
     checked ? next.add(key) : next.delete(key);
     selected = next;
     preview = '';
+  }
+  async function setPage(value: number) {
+    page = Math.max(1, Math.min(value, pageCount));
+    await tick();
+    contextsHeading?.focus();
   }
   async function save() {
     if (!preview || busy || !chosen.length) return;
@@ -124,7 +139,7 @@
 </script>
 
 <section class="domain-metadata card" aria-labelledby="watch-context-title">
-  <h3 id="watch-context-title">Domain watch reasons and priorities</h3>
+  <h3 id="watch-context-title" bind:this={contextsHeading} tabindex="-1">Domain watch reasons and priorities</h3>
   <p
     >{entry.domainMetadata.length} retained domains · {entry.results.length} latest observed results ·
     {entry.history.length} retained checks. Metadata-only domains have no invented successful scan or
@@ -136,7 +151,7 @@
   >
   {#if message}<p role="status" aria-live="polite">{message}</p>{/if}
   <div class="toolbar"
-    ><label
+    ><label>Search domain contexts<input type="search" bind:value={search} maxlength="300" /></label><label
       >Filter review priority<select bind:value={filter}
         ><option value="all">All priorities</option>{#each WATCH_PRIORITIES as option}<option
             value={option.value}>{option.label}</option
@@ -150,7 +165,7 @@
     ></div
   >
   <p
-    >{rows.length} contexts shown (up to 200); {chosen.length} selected across filters. Every bulk edit
+    >{rows.length} contexts shown on this page · {filteredRows.length} matching · {all.length} retained; {chosen.length} selected across pages and filters. Every bulk edit
     lists its exact selected contexts before saving.</p
   >
   <div class="metadata-grid"
@@ -158,6 +173,7 @@
         <label
           ><input
             type="checkbox"
+            aria-label={`${row.domain} — ${row.context.brandProfileId ? `Brand ${row.context.brandProfileId}` : 'Watchlist-only context'}`}
             checked={selected.has(row.key)}
             onchange={(event) => toggle(row.key, event.currentTarget.checked)}
             disabled={busy}
@@ -205,6 +221,7 @@
           >{/each}
       </article>{/each}</div
   >
+  <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Domain context pages" pageInputLabel="Domain context page" />
   {#if reviews.truncated}<p
       >Additional contextual change reviews were omitted by the 500-item bound; no absence is
       inferred.</p

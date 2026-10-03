@@ -8,6 +8,7 @@ import {
   candidateExceptionState,
   reviseCandidateException,
   mergeWatchDomainMetadata,
+  normalizeCandidateExceptions,
 } from '../packages/workspace/brand-candidate-workflow.mts';
 import {
   applyCandidateWatchHandoff,
@@ -422,6 +423,55 @@ test('exception revisions are reversible, bounded and optimistic', () => {
     () => reviseCandidateException(saved, { ...saved, domain: 'other.example' }, saved.revision),
     /widen/,
   );
+});
+test('conflicting duplicate exception revisions reject both import orders without changing local state', () => {
+  const saved = exception();
+  const local = [{ ...brand, candidateExceptions: [saved] }];
+  const retained = structuredClone(local);
+  const conflicting = { ...saved, reason: 'A conflicting exact review decision.' };
+  for (const entries of [[saved, conflicting], [conflicting, saved]]) {
+    assert.throws(() => normalizeCandidateExceptions(entries), /conflicting decisions/);
+    assert.throws(() => mergeBrandProfiles(local, { schema: 'whoisleuth.brand-profiles', version: 10, profiles: [{ ...brand, updatedAt: LATER, candidateExceptions: entries }] }), /conflicting decisions/);
+    assert.deepEqual(local, retained);
+  }
+  assert.deepEqual(normalizeCandidateExceptions([saved, structuredClone(saved)]), [saved]);
+  const importedTie = { ...saved, reason: 'A separately imported equal revision.' };
+  const merged = mergeBrandProfiles(local, buildBrandProfileExport([{ ...brand, updatedAt: LATER, candidateExceptions: [importedTie] }], LATER));
+  assert.deepEqual(merged.profiles[0]!.candidateExceptions, [saved]);
+});
+test('duplicate exception revisions are checked even behind a newer revision', () => {
+  const saved = exception();
+  const newer = reviseCandidateException(saved, { ...saved, reviewedAt: LATER }, saved.revision);
+  const conflicting = { ...saved, enabled: false };
+  assert.throws(() => normalizeCandidateExceptions([newer, saved, conflicting]), /conflicting decisions/);
+  assert.throws(() => normalizeCandidateExceptions([conflicting, newer, saved]), /conflicting decisions/);
+});
+test('renewal and re-enable reject review-clock rollback while disabling preserves its guard', () => {
+  const initial = exception();
+  const saved = reviseCandidateException(initial, { ...initial, reviewedAt: LATER }, initial.revision);
+  assert.throws(() => reviseCandidateException(saved, { ...saved, reviewedAt: NOW, expiresAt: '2000-03-01T00:00:00.000Z' }, saved.revision), /review clock precedes/);
+  const disabled = reviseCandidateException(saved, { ...saved, reviewedAt: NOW, enabled: false }, saved.revision);
+  assert.equal(disabled.reviewedAt, LATER);
+  assert.equal(candidateExceptionState(disabled, candidate, brand.id, NOW), 'disabled');
+  assert.throws(() => reviseCandidateException(disabled, { ...disabled, reviewedAt: NOW, enabled: true }, disabled.revision), /review clock precedes/);
+  const enabled = reviseCandidateException(disabled, { ...disabled, reviewedAt: LATER, enabled: true }, disabled.revision);
+  assert.equal(candidateExceptionState(enabled, candidate, brand.id, NOW), 'clock_unavailable');
+  assert.equal(candidateExceptionState(enabled, candidate, brand.id, LATER), 'active');
+});
+test('context edits beyond the first render page preserve exact Brand identities and other contexts', () => {
+  const context = { brandProfileId: null, priority: 'unassigned' as const, reason: '', changedAt: null, reviewDueAt: null };
+  const domains = Array.from({ length: 201 }, (_, index) => ({ domain: `domain-${String(index).padStart(3, '0')}.example`, contexts: [context], candidate: null }));
+  const shared = { domain: 'shared.example', contexts: [{ ...context, brandProfileId: 'first-brand' }, { ...context, brandProfileId: 'second-brand' }], candidate: null };
+  const entry = { updatedAt: null, results: [], baseline: [], history: [], domainMetadata: [...domains, shared] };
+  const edits = [
+    { domain: domains[200]!.domain, expected: context, input: { ...context, priority: 'p2' as const, reason: 'Reviewed beyond the first page.', changedAt: NOW } },
+    ...shared.contexts.map(expected => ({ domain: shared.domain, expected, input: { ...expected, priority: 'p1' as const, reason: 'Reviewed this exact Brand context.', changedAt: NOW } })),
+  ];
+  const updated = setWatchDomainContexts({ Paged: entry }, 'Paged', edits).Paged!;
+  assert.equal(updated.domainMetadata[200]!.contexts[0]!.priority, 'p2');
+  assert.equal(updated.domainMetadata[0]!.contexts[0]!.priority, 'unassigned');
+  assert.deepEqual(updated.domainMetadata.at(-1)!.contexts.map(value => [value.brandProfileId, value.priority]), [['first-brand', 'p1'], ['second-brand', 'p1']]);
+  assert.equal(updated.updatedAt, null);
 });
 test('candidate dismissals are Brand-specific and resurface on expiry or material provenance', () => {
   const item = candidateReviewItem(candidate, brand, NOW);

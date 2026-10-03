@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { loadWatchlists, addCandidateWatchlist, type Watchlists } from '$lib/watchlists';
   import { loadAnalystReviewState } from '$lib/analyst-review-state';
   import {
@@ -48,6 +48,7 @@
     );
   let replaceExistingContext = $state(false);
   let now = $state(new Date().toISOString());
+  let actionStatus = $state<HTMLParagraphElement>();
   const rows = $derived(projectBrandCandidateReview(active, watchlists, reviewState, now));
   const visible = $derived(rows.filter((row) => filter === 'all' || row.status === filter));
   const chosen = $derived(rows.filter((row) => selected.has(row.candidate.domain)));
@@ -58,7 +59,7 @@
     brandProfileId: active.id,
     priority,
     reason,
-    reviewDueAt: reviewDate ? new Date(`${reviewDate}T00:00:00Z`).toISOString() : null,
+    reviewDueAt: reviewDate ? `${reviewDate}T00:00:00Z` : null,
     replaceExistingContext,
   });
   const groups = $derived(
@@ -108,6 +109,7 @@
     preview = null;
   }
   function showPreview() {
+    preview = null;
     try {
       preview = planCandidateWatchHandoff(watchlists, input);
       message = '';
@@ -115,26 +117,37 @@
       message = cause instanceof Error ? cause.message : 'Could not preview the selected domains.';
     }
   }
+  $effect(() => {
+    if (!preview) return;
+    try {
+      if (JSON.stringify(planCandidateWatchHandoff(watchlists, input)) !== JSON.stringify(preview)) {
+        preview = null;
+        message = 'The selection, reason, review date or destination changed. Preview it again before adding.';
+      }
+    } catch (cause) {
+      preview = null;
+      message = cause instanceof Error ? cause.message : 'The handoff draft is invalid. Correct it and preview again; nothing was written.';
+    }
+  });
   async function addToWatch() {
     if (!preview || busy) return;
-    const submitted = input,
-      reviewed = preview,
-      profileId = active.id;
-    if (
-      JSON.stringify(planCandidateWatchHandoff(watchlists, submitted)) !== JSON.stringify(reviewed)
-    ) {
-      preview = null;
-      message = 'The selection or destination changed. Preview it again before adding.';
-      return;
-    }
-    busy = true;
     try {
+      const submitted = input,
+        reviewed = preview,
+        profileId = active.id;
+      if (JSON.stringify(planCandidateWatchHandoff(watchlists, submitted)) !== JSON.stringify(reviewed)) {
+        preview = null;
+        message = 'The selection or destination changed. Preview it again before adding; nothing was written.';
+        return;
+      }
+      busy = true;
       const result = await addCandidateWatchlist(submitted, reviewed);
       if (active.id !== profileId) return;
       message = `${result.rows.filter((row) => row.state !== 'rejected').length} domains retained in ${result.destination}; ${result.rows.filter((row) => row.state === 'rejected').length} rejected. No collection or schedule was enabled.`;
-      preview = result;
+      preview = null;
       await refresh();
     } catch (cause) {
+      preview = null;
       message =
         cause instanceof Error
           ? cause.message
@@ -195,11 +208,12 @@
       ? active.candidateExceptions.find((value) => value.id === existingId)
       : null;
     const reviewedAt = new Date().toISOString(),
-      expiresAt = reviewDate ? new Date(`${reviewDate}T00:00:00Z`).toISOString() : '';
+      expiresAt = reviewDate ? `${reviewDate}T00:00:00Z` : '',
+      profileId = active.id;
     busy = true;
     try {
       await saveBrandCandidateException(
-        active.id,
+        profileId,
         {
           id: existing?.id ?? crypto.randomUUID(),
           domain: exceptionRow.candidate.domain,
@@ -210,13 +224,14 @@
           expiresAt: expiresAt || existing?.expiresAt || '',
           reviewedFingerprint: candidateMaterialFingerprint(
             exceptionRow.candidate,
-            active.id,
+            profileId,
             exceptionRule,
           ),
           enabled,
         },
         existing?.revision ?? null,
       );
+      if (active.id !== profileId) return;
       message = enabled
         ? 'The exact Brand/domain/rule exception was recorded; observations and monitored changes remain visible.'
         : 'Exception disabled. Its prior rationale and revision remain retained.';
@@ -230,6 +245,10 @@
       message = cause instanceof Error ? cause.message : 'Could not save the scoped exception.';
     } finally {
       busy = false;
+      if (active.id === profileId) {
+        await tick();
+        actionStatus?.focus();
+      }
     }
   }
 </script>
@@ -245,7 +264,8 @@
     any infringement assessment are separate. Opening or filtering this view makes no target
     request.</p
   >
-  {#if message}<p role="status" aria-live="polite">{message}</p>{/if}
+  {#if message}<p bind:this={actionStatus} tabindex="-1" role="status" aria-label="Candidate review action status" aria-live="polite">{message}</p>{/if}
+  {#if disabled}<p>The saved Brand context is being reconciled or is unavailable. This last-readable review and its drafts remain visible; mutations are disabled.</p>{/if}
   {#if !ready}<p
       >Saved watch and review context is unavailable or loading. Mutations remain disabled.</p
     >{/if}

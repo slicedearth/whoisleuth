@@ -176,6 +176,13 @@
       ? profiles.find((p) => p.id === activeId) || null
       : null,
   );
+  // Keep candidate drafts mounted while a committed write is reconciled.
+  // A retained snapshot is readable context, never authority for another write.
+  let candidateReviewProfile = $state.raw<BrandProfile | null>(null);
+  $effect.pre(() => {
+    if (active) candidateReviewProfile = active;
+    else if (profileSourceState === 'ready' && activePreferenceSourceState === 'ready' && !refreshingProfiles) candidateReviewProfile = null;
+  });
   const profileWriteDisabled = $derived(
     profileMutationPending || profileRefreshRequired || profileSourceState !== 'ready',
   );
@@ -264,6 +271,7 @@
       relationships.length ||
       activeId ||
       draftProfile ||
+      candidateReviewProfile ||
       localContextStatus ||
       brandsView !== 'overview' ||
       [
@@ -1157,7 +1165,7 @@
     {/if}
     <div hidden={brandsView!=='overview'}>
     <BrandReviewInbox inbox={brandReviewInbox} />
-    {#if active}<DeferredSurface load={()=>import('$lib/components/BrandCandidateReviewWorkspace.svelte')} props={{active,onrefresh:refreshProfiles,disabled:profileWriteDisabled}} loadingLabel="Loading retained candidate review…" unavailableLabel="Retained candidate review could not be loaded. No candidate state was changed." placeholder="workspace" />{/if}
+    {#if candidateReviewProfile}<DeferredSurface load={()=>import('$lib/components/BrandCandidateReviewWorkspace.svelte')} props={{active:candidateReviewProfile,onrefresh:refreshProfiles,disabled:profileWriteDisabled||active?.id!==candidateReviewProfile.id||activePreferenceSourceState!=='ready'}} loadingLabel="Loading retained candidate review…" unavailableLabel="Retained candidate review could not be loaded. No candidate state was changed." placeholder="workspace" />{/if}
     <BrandAssetRegisterSummary projection={brandAssetRegister} />
     </div>
   </div>
