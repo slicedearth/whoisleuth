@@ -27,6 +27,7 @@
   const PAGE_SIZE = 10;
   let page = $state(1);
   let diagnosticPage = $state(1);
+  let relationshipPage = $state(1);
   let excluded = $state<number[]>([]);
   let targetCaseId = $state('');
   const findings = $derived(preview.kind === 'findings' ? preview.document : null);
@@ -41,6 +42,7 @@
     ? [...intelligence.conflicts, ...intelligence.exclusions].map((item) => ({ label: item.type, reference: item.externalId, reason: item.reason }))
     : (conversionReport?.exclusions ?? []).map((item) => ({ label: `Row ${item.row}`, reference: null, reason: item.reason })));
   const diagnosticPageCount = $derived(Math.max(1, Math.ceil(diagnostics.length / PAGE_SIZE)));
+  const inspection = $derived(intelligence?.sourceInspection);
 
   function select(index: number, included: boolean) {
     if (applying) return;
@@ -69,6 +71,29 @@
     <p class="metrics" role="group" aria-label="External intelligence normalisation summary">{total} accepted · {intelligence.duplicatesSkipped} duplicate · {intelligence.conflicts.length} conflict · {intelligence.exclusions.length} excluded</p>
     {#if intelligence.truncated}<p class="warning">Partial source preview: an object, exclusion or claim bound was reached.</p>{/if}
     {#if intelligence.limitations.length}<ul class="limitations">{#each intelligence.limitations as limitation}<li>{limitation}</li>{/each}</ul>{/if}
+  {/if}
+  {#if inspection}
+    <details aria-label="Interchange source structure">
+      <summary>Source objects, relationships and transformations</summary>
+      <p>{inspection.objectCount} source objects or attributes; {inspection.objectTypes.map(row => `${row.count} ${row.type}`).join(' · ')}.</p>
+      <p>Source SHA-256: <code>{intelligence?.sourceDigestSha256}</code></p>
+      <ul class="limitations">{#each inspection.transformations as detail}<li>{detail}</li>{/each}</ul>
+      {#if inspection.relationships.length}
+        <h4>Relationships — preview only, not imported</h4>
+        <ol class="diagnostic-list" start={(relationshipPage - 1) * PAGE_SIZE + 1}>
+          {#each inspection.relationships.slice((relationshipPage - 1) * PAGE_SIZE, relationshipPage * PAGE_SIZE) as relationship}
+            <li><strong>{relationship.type ?? 'Relationship type unavailable'}</strong>
+              <p>From <code>{relationship.source ?? 'unknown'}</code> · {relationship.sourceState}</p>
+              <p>To <code>{relationship.target ?? 'unknown'}</code> · {relationship.targetState}</p>
+              <p>{relationship.createdAt ? `Created ${relationship.createdAt}` : 'Creation time unavailable'}{relationship.modifiedAt ? ` · modified ${relationship.modifiedAt}` : ''}</p>
+              {#if relationship.markings.length}<p>Marking references: {relationship.markings.join(', ')}</p>{/if}
+            </li>
+          {/each}
+        </ol>
+        <Pagination currentPage={relationshipPage} pageCount={Math.ceil(inspection.relationships.length / PAGE_SIZE)} setPage={(next) => { relationshipPage = next; }} ariaLabel="Source relationship pages" />
+      {:else}<p>No supported relationship structure is present in this preview.</p>{/if}
+      {#if inspection.omittedRelationships}<p class="warning">{inspection.omittedRelationships} additional source relationships exceed the preview bound.</p>{/if}
+    </details>
   {/if}
   <div class="selection">
     <p role="status" aria-live="polite">{selectedCount} of {total} {noun}{total === 1 ? '' : 's'} selected</p>

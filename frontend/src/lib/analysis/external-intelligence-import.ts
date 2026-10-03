@@ -43,6 +43,15 @@ export type ExternalIntelligenceExclusion = Readonly<{
   reason: string;
 }>;
 
+export type ExternalIntelligenceSourceInspection = Readonly<{
+  objectCount: number;
+  objectTypes: readonly Readonly<{ type: string; count: number }>[];
+  relationships: readonly Readonly<{ id: string | null; type: string | null; source: string | null; target: string | null;
+    sourceState: string; targetState: string; createdAt: string | null; modifiedAt: string | null; markings: readonly string[] }>[];
+  omittedRelationships: number;
+  transformations: readonly string[];
+}>;
+
 export type ExternalIntelligencePreview = Readonly<{
   format: ExternalIntelligenceFormat;
   sourceName: string;
@@ -54,6 +63,7 @@ export type ExternalIntelligencePreview = Readonly<{
   exclusions: readonly ExternalIntelligenceExclusion[];
   truncated: boolean;
   limitations: readonly string[];
+  sourceInspection?: ExternalIntelligenceSourceInspection;
 }>;
 
 export type ExternalIntelligenceMergeResult = Readonly<{
@@ -525,6 +535,56 @@ function finalizePreview(
   };
 }
 
+/** Source structure is a transient inspection, never an imported relationship. */
+function inspectSourceStructure(root: Record<string, unknown>, preview: ExternalIntelligencePreview): ExternalIntelligenceSourceInspection {
+  const event = record(root.Event);
+  const objects = preview.format === 'stix' ? (root.objects as unknown[]).map(record)
+    : [...(event!.Attribute as unknown[]).map(record), ...(Array.isArray(event!.Object) ? event!.Object.map(record) : [])];
+  const counts = new Map<string, number>();
+  const ids = new Map<string, number>();
+  const accepted = new Set(preview.items.flatMap(item => item.externalId ? [item.externalId] : []));
+  for (const item of objects) {
+    const type = text(item?.type, 80) ?? (preview.format === 'misp' && item?.name ? 'object' : 'unsupported');
+    counts.set(type, (counts.get(type) ?? 0) + 1);
+    const id = preview.format === 'stix' ? text(item?.id, 200) : text(item?.uuid, 200)?.toLowerCase();
+    if (id) ids.set(id, (ids.get(id) ?? 0) + 1);
+  }
+  const reference = (value: unknown): string | null => {
+    const id = text(value, 200);
+    return id && (preview.format === 'stix' ? STIX_ID_RE : UUID_RE).test(id)
+      ? preview.format === 'stix' ? id : id.toLowerCase() : null;
+  };
+  const state = (id: string | null) => !id ? 'Invalid or absent reference' : (ids.get(id) ?? 0) > 1
+    ? 'Ambiguous repeated source identifier' : accepted.has(id) ? 'Accepted claim'
+      : ids.has(id) ? 'Source object not imported as a claim' : 'Referenced object not present';
+  const relationships: Array<ExternalIntelligenceSourceInspection['relationships'][number]> = [];
+  let total = 0;
+  for (const item of objects) {
+    const links = preview.format === 'stix' ? item?.type === 'relationship' ? [item] : []
+      : Array.isArray(item?.ObjectReference) ? item.ObjectReference.map(record) : [];
+    for (const link of links) {
+      total++;
+      if (relationships.length >= MAX_EXTERNAL_INTELLIGENCE_OBJECTS) continue;
+      const source = reference(preview.format === 'stix' ? link?.source_ref : item?.uuid);
+      const target = reference(preview.format === 'stix' ? link?.target_ref : link?.referenced_uuid);
+      relationships.push({ id: reference(preview.format === 'stix' ? link?.id : link?.uuid),
+        type: text(link?.relationship_type, 80), source, target, sourceState: state(source), targetState: state(target),
+        createdAt: iso(link?.created), modifiedAt: preview.format === 'stix' ? iso(link?.modified) : epochIso(link?.timestamp),
+        markings: preview.format === 'stix' ? stringList(link?.object_marking_refs, 12) : [],
+      });
+    }
+  }
+  return { objectCount: objects.length, objectTypes: [...counts].map(([type, count]) => ({ type, count })),
+    relationships, omittedRelationships: total - relationships.length,
+    transformations: [
+      'Only the selected normalised claims become open Case assertions. Relationship objects, descriptions and comments are not imported.',
+      'Domains, addresses and identifiers are normalised; URL fragments are omitted. Review retained fields before sharing query-bearing URLs.',
+      preview.format === 'stix' ? 'Observation time and publisher use the latest referenced observed-data record; the original file remains the source for earlier records.'
+        : 'Event tags and sharing restrictions accompany supported attributes. MISP objects and their references are inspected here but are not imported.',
+    ],
+  };
+}
+
 export function parseExternalIntelligenceDocument(
   value: unknown,
   sourceDigestSha256Raw: unknown,
@@ -534,8 +594,10 @@ export function parseExternalIntelligenceDocument(
   assertExternalIntelligenceTreeBounds(value);
   const root = record(value);
   if (!root) throw new Error('External intelligence must be a JSON object.');
-  if (root.type === 'bundle') return finalizePreview(parseStix(root), sourceDigestSha256);
-  if (record(root.Event)) return finalizePreview(parseMisp(root), sourceDigestSha256);
+  if (root.type === 'bundle' || record(root.Event)) {
+    const preview = finalizePreview(root.type === 'bundle' ? parseStix(root) : parseMisp(root), sourceDigestSha256);
+    return { ...preview, sourceInspection: inspectSourceStructure(root, preview) };
+  }
   throw new Error('The selected file is neither a supported STIX 2.1 bundle nor a MISP event.');
 }
 

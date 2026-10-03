@@ -894,6 +894,10 @@ or explicit removal; a changed collection requires a fresh review.
 STIX, MISP and external-finding inputs remain analyst-supplied evidence; import
 does not refresh them or establish their truth. Unsupported future schemas fail
 before partial interpretation.
+The import preview separates accepted claims from source objects and relationships,
+shows reference gaps and transformation losses, and keeps the source-file digest.
+Relationship structures are preview-only; importing claims does not create those
+relationships. Review each claim's retained fields and markings before saving.
 
 The CLI can verify supported envelopes, compare saved observations, inspect
 workspace archives and prepare sharing reviews offline. See

@@ -46,6 +46,47 @@ test('intelligence retention preview preserves source time and excludes generate
   assert.deepEqual(saved, content);
 });
 
+test('source relationship inspection preserves references without importing unsupported semantics or descriptions', () => {
+  const domain = { type: 'domain-name', spec_version: '2.1', id: 'domain-name--00000000-0000-4000-8000-000000000004', value: 'candidate.invalid' };
+  const relation = { type: 'relationship', spec_version: '2.1', id: 'relationship--00000000-0000-4000-8000-000000000090',
+    relationship_type: 'related-to', source_ref: domain.id, target_ref: 'infrastructure--00000000-0000-4000-8000-000000000091',
+    created: NOW, modified: NOW, description: 'private-unimported-description', object_marking_refs: ['marking-definition--00000000-0000-4000-8000-000000000003'] };
+  const input = stixBundle([domain, relation]);
+  const before = structuredClone(input);
+  const preview = parseExternalIntelligenceDocument(input, DIGEST);
+  assert.equal(preview.items.length, 1);
+  const row = preview.sourceInspection!.relationships[0]!;
+  assert.equal(row.sourceState, 'Accepted claim');
+  assert.equal(row.targetState, 'Referenced object not present');
+  assert.equal(row.source, domain.id); assert.equal(row.target, relation.target_ref);
+  assert.equal(row.createdAt, NOW); assert.deepEqual(row.markings, relation.object_marking_refs);
+  const target = createCase({ domain: 'candidate.invalid' }, NOW);
+  const merged = mergeExternalIntelligenceIntoCase([target], target.id, preview, NOW);
+  assert.equal(merged.assertionsAdded, 1);
+  assert.doesNotMatch(JSON.stringify(merged.record), /private-unimported-description|sourceInspection|related-to|infrastructure--/u);
+  assert.deepEqual(input, before);
+  const duplicate = parseExternalIntelligenceDocument(stixBundle([domain, { ...domain, value: 'other.invalid' }, relation]), DIGEST);
+  assert.equal(duplicate.sourceInspection!.relationships[0]!.sourceState, 'Ambiguous repeated source identifier');
+  assert.equal(duplicate.items.length, 0);
+});
+
+test('MISP object references remain inspection-only and report missing objects rather than constructing associations', () => {
+  const input = mispEvent();
+  const objectId = 'AAAAAAAA-0000-4000-8000-000000000091';
+  const enriched = { Event: { ...input.Event, Object: [{ uuid: objectId, name: 'domain-ip', ObjectReference: [{
+    uuid: 'aaaaaaaa-0000-4000-8000-000000000092', relationship_type: 'resolves-to',
+    referenced_uuid: 'aaaaaaaa-0000-4000-8000-000000000093', timestamp: '1785376800', comment: 'private-reference-comment',
+  }] }] } };
+  const preview = parseExternalIntelligenceDocument(enriched, DIGEST);
+  const row = preview.sourceInspection!.relationships[0]!;
+  assert.equal(row.source, objectId.toLowerCase());
+  assert.equal(row.sourceState, 'Source object not imported as a claim');
+  assert.equal(row.targetState, 'Referenced object not present');
+  assert.ok(preview.sourceInspection!.transformations.some(value => value.includes('not imported')));
+  assert.doesNotMatch(JSON.stringify(preview), /private-reference-comment/u);
+  assert.equal(preview.items.length, parseExternalIntelligenceDocument(input, DIGEST).items.length);
+});
+
 test('current interchange fixtures retain unknown observation times through the browser importer', () => {
   for (const format of ['stix', 'misp']) {
     const content = readFileSync(new URL(`./fixtures/extracted-domain-lifecycle/${format}-indicators-v2.json`, import.meta.url), 'utf8');
