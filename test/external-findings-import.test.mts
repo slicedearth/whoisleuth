@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, test } from 'node:test';
+import { canonicalArtifactJsonV2 } from '../packages/evidence/artifact-integrity.mts';
 import {
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
@@ -267,10 +269,50 @@ describe('strict external findings import', () => {
     assert.equal(first.record.id, current.id);
     assert.equal(first.record.domain, 'review.example');
     assert.equal(first.findingsAdded, 1);
-    assert.match(first.record.evidencePins[0]?.value ?? '', /^Captured hostname login\.review\.example\./u);
+    assert.equal(first.record.evidencePins[0]?.observationHostname, 'login.review.example');
+    assert.ok(first.record.evidencePins[0]?.value.startsWith(parsed.findings[0]!.summary));
     assert.equal(second.findingsAdded, 0);
     assert.equal(second.duplicatesSkipped, 1);
     assert.equal(second.record.evidencePins.length, 1);
+  });
+
+  for (const category of ['dns', 'certificate'] as const) test(`retains exact ${category} hostname and complete finding identity through selected Case export`, () => {
+    const current = createCase({ domain: 'review.example', source: 'lookup' }, NOW);
+    const parsed = parseExternalFindingsDocument(document({
+      findings: ['A', 'B'].map(suffix => ({
+        ...document().findings[0], category, domain: 'login.review.example',
+        summary: `${'x'.repeat(899)}${suffix}`,
+        structuredObservation: {
+          sourceSchema: category === 'dns' ? 'whoisleuth.dns-observation-rows' : 'whoisleuth.certificate-observation-rows',
+          sourceVersion: 1, field: category === 'dns' ? 'a' : 'issuer',
+          value: category === 'dns' ? '192.0.2.1' : 'Fixture issuer',
+        },
+      })),
+    }));
+    const original = structuredClone(parsed);
+    const expectedDigests = parsed.findings.map(finding => createHash('sha256').update(canonicalArtifactJsonV2({
+      sourceName: parsed.source.name, sourceReference: parsed.source.reference, finding,
+    })).digest('hex'));
+    assert.notEqual(expectedDigests[0], expectedDigests[1]);
+    const merged = mergeExternalFindingsIntoCase([current], current.id, parsed, NOW);
+    assert.equal(merged.findingsAdded, 2);
+    assert.equal(merged.duplicatesSkipped, 0);
+    assert.deepEqual(parsed, original);
+    const exported = buildCaseExport(merged.cases, NOW);
+    const restored = mergeCases([], JSON.parse(JSON.stringify(exported))).cases;
+    for (const record of [merged.record, exported.cases[0]!, restored[0]!]) {
+      assert.equal(record.domain, 'review.example');
+      assert.equal(record.evidencePins.length, 2);
+      assert.deepEqual(new Set(record.evidencePins.map(pin => pin.importContentSha256)), new Set(expectedDigests));
+      for (const pin of record.evidencePins) {
+        assert.equal(pin.observationHostname, 'login.review.example');
+        assert.equal(pin.value, parsed.findings[0]!.structuredObservation!.value);
+        assert.equal(pin.sourceSchema?.schema, parsed.findings[0]!.structuredObservation!.sourceSchema);
+      }
+    }
+    const repeated = mergeExternalFindingsIntoCase(restored, current.id, parsed, NOW);
+    assert.equal(repeated.findingsAdded, 0);
+    assert.equal(repeated.duplicatesSkipped, 2);
   });
 
   test('updates only the selected Case identity when recovered local data contains a duplicate domain', () => {

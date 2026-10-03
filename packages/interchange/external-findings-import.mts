@@ -467,6 +467,7 @@ export function externalFindingCaseProjection(
   const omittedLimitations = finding.limitations.filter((item) => !sourceLimitations.includes(item)).length;
   const pin = normalizeCaseEvidencePins([{
       ...structuredPinFields(finding),
+      observationHostname: finding.domain,
       importContentSha256: identitySha256,
       label: `External ${finding.category} finding`,
       value,
@@ -556,17 +557,6 @@ export function mergeExternalFindingsIntoCases(
   };
 }
 
-function targetedFinding(finding: ExternalFinding, caseDomain: string): ExternalFinding {
-  if (finding.domain === caseDomain) return finding;
-  const prefix = `Captured hostname ${finding.domain}. `;
-  const maximumSummaryLength = MAX_EXTERNAL_FINDING_SUMMARY_LENGTH;
-  const remaining = maximumSummaryLength - prefix.length;
-  const summary = remaining > 1 && finding.summary.length > remaining
-    ? `${prefix}${finding.summary.slice(0, remaining - 1).trimEnd()}…`
-    : `${prefix}${finding.summary}`;
-  return { ...finding, domain: caseDomain, summary };
-}
-
 export function externalFindingsCaseTargets(
   document: ExternalFindingsDocument,
   caseDomain: string,
@@ -605,8 +595,7 @@ export function mergeExternalFindingsIntoCase(
   let record = selected;
   let findingsAdded = 0;
   let duplicatesSkipped = 0;
-  for (const original of document.findings) {
-    const finding = targetedFinding(original, selected.domain);
+  for (const finding of document.findings) {
     const merged = mergeExternalFindingIntoCase(cases, selected.id, finding, document.source, now);
     cases = merged.cases;
     record = merged.record;
