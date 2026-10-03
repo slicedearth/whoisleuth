@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { createLinkIntake, refangIntakeUrl } from '../packages/investigation/link-intake.mts';
 import { reviewMessageInput } from '../packages/investigation/message-intake.mts';
 import { MAX_INTAKE_LINKS, MAX_MESSAGE_INTAKE_BYTES, MAX_MESSAGE_DEPTH } from '../packages/contracts/message-intake.mts';
-import { reviewIdentityIncident } from '../packages/investigation/identity-incident-review.mts';
+import { identityRecoveryFollowUp, reviewIdentityIncident } from '../packages/investigation/identity-incident-review.mts';
+import { compareCaseIncomingNotice, appendCaseAction, appendCaseActionTransition } from '../packages/cases/case-response-actions.mts';
+import { createCase, updateCase } from '../packages/cases/case-model.mts';
 
 const now = '2026-09-22T00:00:00Z';
 const bytes = (value: string) => new TextEncoder().encode(value);
@@ -32,6 +34,57 @@ test('text intake removes unmatched prose closers but preserves balanced and exp
     'https://explicit.example/path).', 'https://qr.example/a_(b)?note=(.)',
   ]);
   assert.equal(intake.result().rejected, 0);
+});
+
+test('unexpected notices compare every supplied sender domain without authenticating or retaining manual claims', async () => {
+  const result = await reviewMessageInput(bytes('From: private@route.example\r\nFrom: private@other.example\r\nReply-To: private@reply.example\r\nSubject: private subject\r\nContent-Type: text/plain\r\n\r\nhttps://route.example/private?token=secret'), 'email', now);
+  let actions = appendCaseAction([], { type: 'registrar_report', recipient: 'review@route.example', contactSource: 'Official route reviewed separately', routeObservedAt: now, routeReviewAfter: '2026-10-01T00:00:00Z' }, now);
+  const actionId = actions[0]!.id;
+  for (const nextState of ['ready_for_review', 'reviewed', 'authorised', 'submitted'] as const) actions = appendCaseActionTransition(actions, actionId, { nextState, sourceClass: 'analyst', reference: 'REF-1' }, now);
+  const action = actions[0]!;
+  const before = JSON.stringify([action, result.report]);
+  const review = compareCaseIncomingNotice(action, result.report, { reference: 'REF-1', claimedOrganisation: 'TRANSIENT-ORGANISATION', confirmedOutOfBand: true, now });
+  assert.deepEqual(review.comparisons.filter(row => /Part /u.test(row.label)).map(row => row.state), ['mismatch', 'match', 'mismatch']);
+  assert.equal(review.comparisons.find(row => row.label === 'Delivery reference')!.state, 'match');
+  assert.equal(review.comparisons.find(row => row.label === 'Claimed organisation')!.state, 'unknown');
+  assert.equal(review.routeFreshness, 'current');
+  assert.equal(review.confirmation, 'analyst_reported_out_of_band');
+  assert.match(review.comparisons[0]!.explanation, /does not authenticate/u);
+  assert.equal(JSON.stringify([action, result.report]), before);
+  for (const sentinel of ['private@', 'private subject', 'token=secret', 'TRANSIENT-ORGANISATION']) assert.equal(JSON.stringify(result.report).includes(sentinel), false);
+  const stale = compareCaseIncomingNotice(action, result.report, { reference: 'OTHER-REF', now: '2026-10-02T00:00:00Z' });
+  assert.equal(stale.routeFreshness, 'stale');
+  assert.equal(stale.confirmation, 'not_reported');
+  assert.equal(stale.comparisons.find(row => row.label === 'Delivery reference')!.state, 'mismatch');
+  const unknown = compareCaseIncomingNotice(null, result.report, { now });
+  assert.ok(unknown.comparisons.every(row => row.state === 'unknown'));
+  assert.equal(unknown.routeFreshness, 'unknown');
+  assert.throws(() => compareCaseIncomingNotice(action, result.report, { reference: 'x'.repeat(501), now }), /bounded/u);
+});
+
+test('missing notice context and free-text route claims remain unknown', async () => {
+  const { report } = await reviewMessageInput(bytes('Selected note without sender or links'), 'text', now);
+  const action = appendCaseAction([], { type: 'internal_review', recipient: 'Responsible team', contactSource: 'https://claimed.example/' }, now)[0]!;
+  const review = compareCaseIncomingNotice(action, { ...report, coverage: { ...report.coverage, state: 'partial' } }, { now });
+  assert.ok(review.comparisons.every(row => row.state === 'unknown'));
+  assert.equal(review.routeFreshness, 'unknown');
+  const bounded = compareCaseIncomingNotice(action, { ...report, identities: Array.from({ length: 1_281 }, (_, index) => ({ part: index + 1, role: 'from' as const, domain: 'route.example' })) }, { now });
+  assert.equal(bounded.comparisons.filter(row => row.label.startsWith('Part ')).length, 1_280);
+  assert.equal(bounded.comparisons.find(row => row.label === 'Additional sender context')!.state, 'unknown');
+  assert.match(bounded.comparisons.find(row => row.label === 'Additional sender context')!.explanation, /1 additional/u);
+});
+
+test('a requested recovery follow-up remains open after an external resolution', () => {
+  assert.throws(() => identityRecoveryFollowUp(['opened_link'], 'password'), /supported/u);
+  const request = identityRecoveryFollowUp(['entered_password'], 'sessions');
+  assert.match(request.rationale, /No recovery action or independent result/u);
+  const base = createCase({ domain: 'recovery.example' }, now);
+  const record = updateCase([base], base.id, { assertion: { ...request, kind: 'next_step', state: 'open', evidenceRelations: [] }, observedEffectReview: { state: 'changed', observedAt: now, sourceClass: 'analyst', source: 'Independent fixture review', completeness: 'partial', limitations: ['Exact account effects were not reviewed.'] } }, now).record;
+  assert.equal(record.assertions[0]!.kind, 'next_step');
+  assert.equal(record.assertions[0]!.state, 'open');
+  assert.equal(record.actions.length, 0);
+  assert.equal(record.closures.records.length, 0);
+  assert.equal(record.observedEffects.reviews[0]!.state, 'changed');
 });
 
 test('links expose independent displayed and embedded destinations without following them', () => {

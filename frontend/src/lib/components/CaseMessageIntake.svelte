@@ -6,6 +6,7 @@
   import { messageCaseEvidence } from '../../../../packages/investigation/message-case-evidence.mts';
   import { prepareCaseAttachmentFiles, retainCaseAttachments } from '$lib/case-attachments.ts';
   import MessageIntake from './MessageIntake.svelte';
+  import CaseIncomingNotice from './CaseIncomingNotice.svelte';
 
   let { record, mutationBusy, persistOperation }: { record: CaseRecord; mutationBusy: boolean; persistOperation: PersistCaseOperation } = $props();
   async function save(result: MessageIntakeResult, original: File, retainOriginal: boolean): Promise<boolean> {
@@ -18,4 +19,10 @@
   }
 </script>
 
-<MessageIntake disabled={mutationBusy} onsave={save} onselect={target => goto(`/lookup?${new URLSearchParams({ q: target, case: record.id })}`)} />
+{#key record.id}
+  <MessageIntake disabled={mutationBusy} onsave={save} onselect={target => goto(`/lookup?${new URLSearchParams({ q: target, case: record.id })}`)}>
+    {#snippet reviewContent(result)}
+      {#key JSON.stringify([record.id, record.actions, result.report.source.digestSha256])}<CaseIncomingNotice {record} {result} />{/key}
+    {/snippet}
+  </MessageIntake>
+{/key}

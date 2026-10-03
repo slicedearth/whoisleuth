@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 import { createCase, updateCase, normalizeCaseStore, mergeCases, CASE_SCHEMA_VERSION, projectCaseForAudience } from '../packages/cases/case-model.mts';
 import { buildCliCasePack, verifyCliCasePack } from '../cli/case-pack.mts';
 import { caseIncidentTargets, caseNumber, caseResponseIncidentUrls, caseTypeIds, caseTypeSummary,
+  buildCaseIncidentCoverage,
   formattedCaseNumber, normalizeCaseIncidentTargetUrl, readCaseWorkflowMetadata,
   MAX_CASE_INCIDENT_TARGETS, MAX_CASE_INCIDENT_TARGET_HISTORY } from '../packages/cases/case-workflow-metadata.mts';
 
@@ -11,6 +12,24 @@ const LATER = '2026-09-05T00:00:00.000Z';
 const domain = 'example.test';
 
 describe('Case workflow metadata', () => {
+  test('reviews distinct exact objects without inferring action bindings or observation clocks', () => {
+    let record = createCase({ domain, incidentTarget: 'https://shared.example/landing?id=one#section' }, NOW);
+    record = updateCase([record], record.id, { incidentTarget: 'https://shared.example/other?id=two' }, LATER).record;
+    const first = record.workflowMetadata!.incidentTargets[0]!;
+    record = updateCase([record], record.id, { incidentTargetResolution: first.id }, LATER).record;
+    const before = JSON.stringify(record);
+    const rows = buildCaseIncidentCoverage(record);
+    assert.deepEqual(rows.map(row => [row.target.url, row.target.state, row.hostname, row.actionCoverage, row.observationCoverage]), [
+      ['https://shared.example/landing?id=one#section', 'resolved', 'shared.example', 'unknown', 'unknown'],
+      ['https://shared.example/other?id=two', 'open', 'shared.example', 'unknown', 'unknown'],
+    ]);
+    assert.equal(rows[0]!.target.createdAt, NOW);
+    assert.equal(rows[0]!.target.updatedAt, LATER);
+    assert.equal(Object.hasOwn(rows[0]!, 'firstObservedAt'), false);
+    assert.equal(Object.hasOwn(rows[0]!, 'lastObservedAt'), false);
+    assert.equal(JSON.stringify(record), before);
+    assert.deepEqual(buildCaseIncidentCoverage(createCase({ domain }, NOW)), []);
+  });
   test('keeps controlled types separate from literal tags and assertions', () => {
     const record = createCase({ domain, tags: ['case-type:phishing', 'priority'], caseTypes: ['impersonation'],
       assertion: { kind: 'unknown', statement: 'Incident target URL: https://literal.example/', state: 'open' } }, NOW);

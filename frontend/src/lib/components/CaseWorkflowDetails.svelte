@@ -16,6 +16,7 @@
   } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { buildCaseTypeEvidenceReadiness } from '../../../../packages/cases/case-type-evidence-readiness.mts';
   import { editCase, type CaseRecord } from '../cases.ts';
+  import CaseIncidentCoverage from './CaseIncidentCoverage.svelte';
   import {
     resolvePlatformReportingRoutes,
     platformReportingCatalogueHealth,
@@ -274,6 +275,8 @@
       <p class="empty">No exact incident link is active. The Case domain remains available for domain-level investigation.</p>
     {/if}
   </section>
+
+  {#key record.id}<CaseIncidentCoverage {record} />{/key}
 
   {#if routeGroups.length}
     <section class="reporting-routes" aria-labelledby={`reporting-routes-title-${record.id}`}>

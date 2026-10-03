@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { createHash } from 'node:crypto';
 import { createCase } from '../frontend/src/lib/analysis/case-model.ts';
 import {
   appendCaseAction,
@@ -9,6 +10,8 @@ import {
 import {
   BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA,
   buildBrandProtectionOperationsReport,
+  buildBrandProtectionOperationsReview,
+  MAX_OPERATIONS_REPORT_CONTRIBUTORS,
   MAX_OPERATIONS_REPORT_CASES,
   serializeBrandProtectionOperationsReport,
 } from '../frontend/src/lib/analysis/brand-protection-operations-report.ts';
@@ -49,6 +52,61 @@ function caseWithActions(domain: string, actions: unknown[]) {
 }
 
 describe('brand-protection operations report', () => {
+  test('preserves independently recorded baseline aggregate export bytes', () => {
+    const report = buildBrandProtectionOperationsReview([], { now: NOW, window: 'all' }).report;
+    assert.equal(createHash('sha256').update(serializeBrandProtectionOperationsReport(report)).digest('hex'), '26af6f1302c7007a556e860bb0b6a727da5e538ee330c5c5cf33a7bbd5d80a41');
+  });
+  test('collects local exact-ID contributors in the same eligibility branches without changing aggregate bytes', () => {
+    const prepared = caseWithActions('shared.example', [{ type: 'internal_review', recipient: 'Private team', state: 'drafting', dueAt: '2026-08-09T00:00:00.000Z', updatedAt: NOW }]);
+    const resolvedBase = caseWithActions('shared.example', [{ type: 'registrar_report', recipient: 'Private recipient', state: 'terminal', reference: 'PRIVATE-REF', providerOutcome: 'provider_reports_resolved', updatedAt: '2026-08-09T05:00:00.000Z' }]);
+    const resolved = { ...resolvedBase, observedEffects: appendCaseObservedEffectReview(resolvedBase.observedEffects, { state: 'changed', observedAt: NOW, sourceClass: 'analyst', source: 'Private review', completeness: 'partial', limitations: ['Limited fixture'] }, NOW) };
+    const records = [prepared, resolved];
+    const review = buildBrandProtectionOperationsReview(records, { now: NOW, window: 'all' });
+    const selected = (metric: string) => review.contributors.filter(row => row.metric === metric);
+    assert.deepEqual(selected('counts.actions').map(row => [row.caseId, row.actionId, row.reason]), [
+      [prepared.id, prepared.actions[0]!.id, 'included'], [resolved.id, resolved.actions[0]!.id, 'included'],
+    ]);
+    assert.deepEqual(selected('counts.overdue').map(row => row.actionId), [prepared.actions[0]!.id]);
+    assert.deepEqual(selected('counts.independentChangedReviews').map(row => [row.caseId, row.reviewId]), [[resolved.id, resolved.observedEffects.reviews[0]!.id]]);
+    assert.deepEqual(selected('durations.submissionToProviderOutcome').map(row => [row.caseId, row.reason, row.seconds]), [[prepared.id, 'missing_start', undefined], [resolved.id, 'included', 120]]);
+    assert.deepEqual(selected('durations.providerReportedResolutionToIndependentChange').map(row => [row.caseId, row.reason, row.seconds]), [[prepared.id, 'missing_start', undefined], [resolved.id, 'included', 86_400]]);
+    assert.equal(review.contributorsOmitted, 0);
+    assert.deepEqual(review.report.counts, {
+      casesInspected: 2, casesWithActions: 2, actions: 2, drafting: 1, readyForReview: 0, reviewed: 0, authorised: 0, submitted: 0, acknowledged: 0, terminal: 1,
+      overdue: 1, followUpDue: 0, withProviderOutcome: 1, providerOutcomeEvents: 1, independentEffectReviews: 1, independentChangedReviews: 1, withReference: 1, reviewedRecipientRoute: 0, unqualifiedRecipientRoute: 1,
+    });
+    assert.equal(serializeBrandProtectionOperationsReport(review.report), serializeBrandProtectionOperationsReport(buildBrandProtectionOperationsReport(records, { now: NOW, window: 'all' })));
+    const serialized = serializeBrandProtectionOperationsReport(review.report);
+    for (const id of [prepared.id, resolved.id, ...records.flatMap(record => record.actions.flatMap(action => [action.id, ...action.history.map(event => event.id)])), resolved.observedEffects.reviews[0]!.id]) assert.equal(serialized.includes(id), false);
+    for (const value of ['Private team', 'Private recipient', 'PRIVATE-REF', 'Private review', 'Limited fixture', 'shared.example']) assert.equal(serialized.includes(value), false);
+    assert.deepEqual(Object.keys(review.report).sort(), ['actionTypes', 'counts', 'durations', 'generatedAt', 'limitations', 'omissions', 'schema', 'sourceState', 'states', 'version', 'window']);
+  });
+
+  test('local contributors expose omissions and remain bounded without replacing unavailable metrics with zero', () => {
+    const draft = caseWithActions('bounded.example', [{ type: 'internal_review', recipient: 'Private team', state: 'drafting', updatedAt: NOW }]);
+    const record = { ...draft, actions: Array.from({ length: 51 }, (_, index) => ({ ...draft.actions[0]!, id: `action-${index}` })) };
+    const records = Array.from({ length: 501 }, (_, index) => ({ ...record, id: `case-${index}` }));
+    const review = buildBrandProtectionOperationsReview(records, { now: NOW, window: 'all' });
+    assert.equal(review.report.counts?.actions, 25_000);
+    assert.equal(review.report.omissions.casesBeyondLimit, 1);
+    assert.equal(review.report.omissions.actionsBeyondLimit, 500);
+    assert.equal(review.contributors.length, MAX_OPERATIONS_REPORT_CONTRIBUTORS);
+    assert.ok(review.contributorsOmitted > 0);
+    assert.ok(review.contributors.every(row => row.caseId !== 'case-500' && row.actionId !== 'action-50'));
+    const unavailable = buildBrandProtectionOperationsReview(records, { sourceState: 'unavailable', now: NOW });
+    assert.equal(unavailable.report.counts, null);
+    assert.deepEqual(unavailable.contributors, []);
+    assert.equal(unavailable.contributorsOmitted, 0);
+  });
+
+  test('duration contributors expose missing endpoints, ambiguity and outside-window starts', () => {
+    const base = caseWithActions('duration.example', [{ type: 'registrar_report', recipient: 'Private route', state: 'submitted', updatedAt: NOW }]);
+    const outside = caseWithActions('outside.example', [{ type: 'internal_review', recipient: 'Private team', state: 'drafting', updatedAt: '2026-01-01T00:00:00.000Z' }]);
+    const conflicted = { ...base, id: 'ambiguous-case', actions: base.actions.map(action => ({ ...action, historyOmitted: 1 })) };
+    const review = buildBrandProtectionOperationsReview([base, outside, conflicted], { now: NOW, window: '30d' });
+    assert.deepEqual(review.contributors.filter(row => row.metric === 'durations.submissionToProviderOutcome').map(row => [row.caseId, row.reason]), [[base.id, 'missing_end'], ['ambiguous-case', 'ambiguous']]);
+    assert.deepEqual(review.contributors.filter(row => row.metric === 'omissions.actionsOutsideWindow').map(row => [row.caseId, row.reason]), [[outside.id, 'outside_window']]);
+  });
   test('reports only explicit current action states with denominators and due controls', () => {
     const report = buildBrandProtectionOperationsReport([
       caseWithActions('prepared.example', [{
@@ -181,6 +239,8 @@ describe('brand-protection operations report', () => {
       }, '2026-01-02T00:00:00.000Z'),
     };
     const report = buildBrandProtectionOperationsReport([withReview], { now: NOW, window: '30d' });
+    const review = buildBrandProtectionOperationsReview([withReview], { now: NOW, window: '30d' });
+    assert.deepEqual(review.contributors.filter(row => row.metric === 'durations.providerReportedResolutionToIndependentChange').map(row => [row.caseId, row.reason]), [[withReview.id, 'outside_window']]);
     assert.deepEqual(report.durations?.providerReportedResolutionToIndependentChange, {
       denominator: 1, eligible: 0, included: 0, ineligible: 1,
       omittedMissingStart: 0, omittedMissingEnd: 0, omittedAmbiguous: 0,
@@ -198,6 +258,8 @@ describe('brand-protection operations report', () => {
       nextState: 'acknowledged', sourceClass: 'provider', providerOutcome: 'accepted_for_review',
     }, '2026-08-09T00:00:00.000Z');
     const submissionReport = buildBrandProtectionOperationsReport([{ ...base, actions, updatedAt: NOW }], { now: NOW, window: '30d' });
+    const submissionReview = buildBrandProtectionOperationsReview([{ ...base, actions, updatedAt: NOW }], { now: NOW, window: '30d' });
+    assert.deepEqual(submissionReview.contributors.filter(row => row.metric === 'durations.submissionToProviderOutcome').map(row => [row.caseId, row.reason]), [[base.id, 'outside_window']]);
     assert.deepEqual(submissionReport.durations?.submissionToProviderOutcome, {
       denominator: 1, eligible: 0, included: 0, ineligible: 1,
       omittedMissingStart: 0, omittedMissingEnd: 0, omittedAmbiguous: 0,

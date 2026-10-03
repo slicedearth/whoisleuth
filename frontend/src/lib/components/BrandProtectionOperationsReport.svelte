@@ -4,10 +4,12 @@
   import {
     brandProtectionOperationsReportFilename,
     buildBrandProtectionOperationsReport,
+    buildBrandProtectionOperationsReview,
     serializeBrandProtectionOperationsReport,
     type OperationsReportSourceState,
     type OperationsReportWindow,
   } from '$lib/analysis/brand-protection-operations-report.ts';
+  import OperationsContributors from './OperationsContributors.svelte';
 
   let {
     records,
@@ -21,7 +23,8 @@
   let window = $state<OperationsReportWindow>('30d');
   let reviewNow = $state(new Date().toISOString());
   let message = $state('');
-  const report = $derived(buildBrandProtectionOperationsReport(records, { sourceState, window, now: reviewNow }));
+  const review = $derived(buildBrandProtectionOperationsReview(records, { sourceState, window, now: reviewNow }));
+  const report = $derived(review.report);
   const counts = $derived(report.counts);
 
   function downloadReport() {
@@ -101,11 +104,13 @@
     {:else}
       <div class="metric-grid" role="group" aria-label="Executive recorded outcome counts">
         <article><strong>{counts.casesWithActions}</strong><span>Cases with actions</span><small>Denominator: {counts.casesInspected} inspected Cases</small></article>
-        <article><strong>{counts.terminal}</strong><span>Completed actions</span><small>Recorded provider state; check independent change separately</small></article>
+        <article><strong>{counts.terminal}</strong><span>Terminal actions</span><small>Recorded terminal state; check independent change separately</small></article>
         <article><strong>{counts.withProviderOutcome}</strong><span>Typed provider outcomes</span><small>Actions with a separately typed provider outcome</small></article>
         <article><strong>{counts.independentChangedReviews}</strong><span>Independent changed reviews</span><small>Point-in-time reviews recording changed, not a success rate</small></article>
       </div>
     {/if}
+
+    {#key window}<OperationsContributors contributors={review.contributors} omitted={review.contributorsOmitted} />{/key}
 
     <details>
       <summary>Exact current-state and action-type counts</summary>

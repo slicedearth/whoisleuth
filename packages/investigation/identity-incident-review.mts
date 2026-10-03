@@ -21,3 +21,14 @@ export function reviewIdentityIncident(value: unknown): Readonly<{ reportedActio
   if (reportedActions.length) add('followup', 'Record recovery actions and a follow-up', 'Track account recovery separately from provider reports and domain availability. A removed page does not show that an account session or application grant was revoked.');
   return { reportedActions, nextSteps };
 }
+
+/** A deliberate follow-up request, never a completed recovery or compromise claim. */
+export function identityRecoveryFollowUp(reportedActions: readonly IdentityAction[], stepId: string): Readonly<{ statement: string; rationale: string }> {
+  const review = reviewIdentityIncident({ reportedActions });
+  const step = review.nextSteps.find(item => item.id === stepId);
+  if (!step) throw new TypeError('Select a recommendation supported by the reported actions.');
+  return {
+    statement: `Requested follow-up: ${step.title}`,
+    rationale: `Conditional analyst request based on reported actions, not independently verified account telemetry. ${step.detail} No recovery action or independent result is established by this request.`,
+  };
+}

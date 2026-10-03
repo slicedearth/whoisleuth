@@ -1,5 +1,8 @@
 // Append-only response actions: transitions, reconciliation and bounded history.
 import { readCaseEvidenceRequest, readCasePacketAmendment, assertEvidenceRequestEvent, assertEvidenceRequestHistory, assertEvidenceRequestTransition, assertPacketAmendment } from './case-requested-evidence.mts';
+import { MAX_INTAKE_LINKS, MAX_MESSAGE_PARTS, type MessageIntakeReport } from '../contracts/message-intake.mts';
+import { emailRecipient } from '../evidence/email-recipient.mts';
+import { responseRouteFreshness } from './response-route-freshness.mts';
 
 import {
   CASE_SCHEMA_VERSION,
@@ -46,6 +49,67 @@ import {
 } from './case-response-values.mts';
 
 const ACTION_TYPES = new Set<string>(CASE_ACTION_TYPES);
+
+export type CaseNoticeComparison = Readonly<{
+  label: string;
+  state: 'match' | 'mismatch' | 'unknown';
+  explanation: string;
+}>;
+
+/** Advisory page-memory comparison; neither authenticated identity nor a mutation. */
+export function compareCaseIncomingNotice(action: CaseActionRecord | null, report: MessageIntakeReport, input: Readonly<{
+  reference?: string;
+  claimedOrganisation?: string;
+  confirmedOutOfBand?: boolean;
+  now: string;
+}>): Readonly<{
+  comparisons: readonly CaseNoticeComparison[];
+  routeFreshness: 'current' | 'stale' | 'unknown';
+  confirmation: 'analyst_reported_out_of_band' | 'not_reported';
+}> {
+  const bounded = (value: string | undefined, maximum: number): string => {
+    if (value === undefined) return '';
+    if (value.length > maximum || /[\u0000-\u001f\u007f]/u.test(value)) throw new TypeError('Notice comparison fields must be bounded single-line values.');
+    return value.trim();
+  };
+  const reference = bounded(input.reference, MAX_RESPONSE_REFERENCE_LENGTH);
+  const organisation = bounded(input.claimedOrganisation, MAX_RESPONSE_LABEL_LENGTH);
+  const recipient = emailRecipient(action?.recipient);
+  let recipientHostname: string | null = recipient ? recipient.slice(recipient.lastIndexOf('@') + 1).toLowerCase() : null;
+  if (!recipientHostname && action) {
+    try {
+      const url = new URL(action.recipient);
+      if (['https:', 'http:'].includes(url.protocol) && !url.username && !url.password) recipientHostname = url.hostname;
+    } catch { /* A free-text recipient does not establish a route hostname. */ }
+  }
+  const comparisons: CaseNoticeComparison[] = [];
+  let senderDomains = 0, omittedSenderDomains = 0;
+  for (const identity of report.identities) {
+    if (identity.role !== 'from' && identity.role !== 'reply_to') continue;
+    if (senderDomains >= MAX_MESSAGE_PARTS * 5) { omittedSenderDomains += 1; continue; }
+    senderDomains += 1;
+    comparisons.push({
+      label: `Part ${identity.part} ${identity.role.replaceAll('_', ' ')} domain: ${identity.domain}`,
+      state: recipientHostname ? identity.domain.toLowerCase() === recipientHostname ? 'match' : 'mismatch' : 'unknown',
+      explanation: 'Compared only with the selected action recipient hostname. Domain agreement does not authenticate the sender; different domains may require independent clarification.',
+    });
+  }
+  if (!senderDomains) comparisons.push({ label: 'Sender domains', state: 'unknown', explanation: 'No From or Reply-To domain was retained. Exact sender addresses are not retained.' });
+  if (omittedSenderDomains) comparisons.push({ label: 'Additional sender context', state: 'unknown', explanation: `${omittedSenderDomains} additional From or Reply-To claims exceed the local comparison cap. No overall sender conclusion is available.` });
+  if (!report.links.length) comparisons.push({ label: 'Supplied destinations', state: 'unknown', explanation: 'No supported destination was retained. Missing or partial extraction is not proof that no destination exists.' });
+  for (const link of report.links.slice(0, MAX_INTAKE_LINKS)) comparisons.push({
+    label: `Destination hostname: ${link.hostname}`,
+    state: recipientHostname ? link.hostname.toLowerCase() === recipientHostname ? 'match' : 'mismatch' : 'unknown',
+    explanation: 'Hostname context only, not an exact route match or authority check. Supplied destinations have not been opened.',
+  });
+  comparisons.push({ label: 'Delivery reference', state: reference && action?.reference ? reference === action.reference ? 'match' : 'mismatch' : 'unknown', explanation: 'Only an explicitly entered reference is compared with the recorded delivery reference. Intake does not retain message references; matching text does not authenticate a notice.' });
+  comparisons.push({ label: 'Claimed organisation', state: 'unknown', explanation: organisation ? 'The entered organisation is an analyst-supplied claim. Retained contact-source text is not a structured authenticated organisation identity.' : 'No organisation claim was supplied; no authenticated organisation identity is inferred.' });
+  return {
+    comparisons,
+    routeFreshness: action ? responseRouteFreshness(action.routeObservedAt, action.routeReviewAfter, input.now) : 'unknown',
+    confirmation: input.confirmedOutOfBand ? 'analyst_reported_out_of_band' : 'not_reported',
+  };
+}
 
 const ACTION_STATES = new Set<string>(CASE_ACTION_STATES);
 

@@ -19,6 +19,23 @@ export {
 
 export const MAX_OPERATIONS_REPORT_CASES = 500;
 export const MAX_OPERATIONS_REPORT_ACTIONS_PER_CASE = 50;
+export const MAX_OPERATIONS_REPORT_CONTRIBUTORS = 5_000;
+
+/** Page-memory references only; never part of the aggregate export contract. */
+export type OperationsReportContributor = Readonly<{
+  metric: string;
+  caseId: string;
+  actionId?: string;
+  eventId?: string;
+  reviewId?: string;
+  reason: 'included' | 'missing_start' | 'missing_end' | 'ambiguous' | 'outside_window' | 'invalid_time';
+  seconds?: number;
+}>;
+type OperationsReportOptions = Readonly<{
+  sourceState?: OperationsReportSourceState;
+  window?: OperationsReportWindow;
+  now?: string;
+}>;
 
 export const OPERATIONS_REPORT_WINDOWS = ['7d', '30d', '90d', 'all'] as const;
 export type OperationsReportWindow = typeof OPERATIONS_REPORT_WINDOWS[number];
@@ -135,13 +152,10 @@ function durationMetric(denominator: number, values: readonly number[], omission
   };
 }
 
-export function buildBrandProtectionOperationsReport(
+function calculateBrandProtectionOperationsReport(
   records: readonly CaseRecord[],
-  options: Readonly<{
-    sourceState?: OperationsReportSourceState;
-    window?: OperationsReportWindow;
-    now?: string;
-  }> = {},
+  options: OperationsReportOptions,
+  contribute: (row: OperationsReportContributor) => void,
 ): BrandProtectionOperationsReport {
   const generatedAt = validTimestamp(options.now) ?? new Date().toISOString();
   const endTime = Date.parse(generatedAt);
@@ -226,6 +240,8 @@ export function buildBrandProtectionOperationsReport(
   ]);
 
   for (const record of cases) {
+    const caseContribution = (metric: string, reason: OperationsReportContributor['reason'] = 'included') => contribute({ metric, caseId: record.id, reason });
+    caseContribution('counts.casesInspected');
     actionsBeyondLimit += Math.max(0, record.actions.length - MAX_OPERATIONS_REPORT_ACTIONS_PER_CASE);
     transitionEventsOmitted += record.actions.reduce((total, action) => total + action.historyOmitted, 0);
     observedEffectReviewsOmitted += record.observedEffects.omitted;
@@ -237,76 +253,111 @@ export function buildBrandProtectionOperationsReport(
       return occurredAt <= endTime && (startTime === null || occurredAt >= startTime);
     });
     const changedReviews = record.observedEffects.reviews.filter((review) => review.state === 'changed');
-    if (providerResolvedEvents.length === 0) independentDurationOmissions.missingStart += 1;
+    const independentMetric = 'durations.providerReportedResolutionToIndependentChange';
+    if (providerResolvedEvents.length === 0) {
+      independentDurationOmissions.missingStart += 1;
+      caseContribution(independentMetric, 'missing_start');
+    }
     else if (providerResolvedEventsInWindow.length === 0) {
+      caseContribution(independentMetric, 'outside_window');
       // The Case remains in the denominator, but its typed start event is
       // outside this report window and is therefore explicitly ineligible.
     } else if (providerResolvedEventsInWindow.length !== 1
       || providerResolvedEventsInWindow[0]!.action.historyOmitted > 0
       || providerResolvedEventsInWindow[0]!.action.history.some((event) => !event.applied)
-      || record.observedEffects.omitted > 0) independentDurationOmissions.ambiguous += 1;
+      || record.observedEffects.omitted > 0) {
+      independentDurationOmissions.ambiguous += 1;
+      caseContribution(independentMetric, 'ambiguous');
+    }
     else {
       const start = providerResolvedEventsInWindow[0]!.event;
       const laterChanges = changedReviews.filter((review) => {
         const observedAt = Date.parse(review.observedAt);
         return observedAt >= Date.parse(start.occurredAt) && observedAt <= endTime;
       });
-      if (!laterChanges.length) independentDurationOmissions.missingEnd += 1;
-      else independentDurationValues.push(Math.floor((Date.parse(laterChanges[0]!.observedAt) - Date.parse(start.occurredAt)) / 1_000));
+      const reference = { metric: independentMetric, caseId: record.id, actionId: providerResolvedEventsInWindow[0]!.action.id, eventId: start.id };
+      if (!laterChanges.length) {
+        independentDurationOmissions.missingEnd += 1;
+        contribute({ ...reference, reason: 'missing_end' });
+      } else {
+        const seconds = Math.floor((Date.parse(laterChanges[0]!.observedAt) - Date.parse(start.occurredAt)) / 1_000);
+        independentDurationValues.push(seconds);
+        contribute({ ...reference, reviewId: laterChanges[0]!.id, reason: 'included', seconds });
+      }
     }
     for (const review of record.observedEffects.reviews) {
       const reviewTime = Date.parse(review.observedAt);
       if (reviewTime > endTime || (startTime !== null && reviewTime < startTime)) continue;
       independentEffectReviews += 1;
-      if (review.state === 'changed') independentChangedReviews += 1;
+      contribute({ metric: 'counts.independentEffectReviews', caseId: record.id, reviewId: review.id, reason: 'included' });
+      if (review.state === 'changed') {
+        independentChangedReviews += 1;
+        contribute({ metric: 'counts.independentChangedReviews', caseId: record.id, reviewId: review.id, reason: 'included' });
+      }
     }
     for (const action of record.actions.slice(0, MAX_OPERATIONS_REPORT_ACTIONS_PER_CASE)) {
+      const actionContribution = (metric: string, reason: OperationsReportContributor['reason'] = 'included') => contribute({ metric, caseId: record.id, actionId: action.id, reason });
       const appliedEvents = action.history.filter((event) => event.applied);
       const latestEventAt = validTimestamp(appliedEvents.at(-1)?.occurredAt);
       if (!latestEventAt) {
         actionsWithInvalidTime += 1;
+        actionContribution('omissions.actionsWithInvalidTime', 'invalid_time');
         continue;
       }
       const updatedTime = Date.parse(latestEventAt);
       if (updatedTime > endTime || (startTime !== null && updatedTime < startTime)) {
         actionsOutsideWindow += 1;
+        actionContribution('omissions.actionsOutsideWindow', 'outside_window');
         continue;
       }
       actions += 1;
+      actionContribution('counts.actions');
+      if (!caseIds.has(record.id)) caseContribution('counts.casesWithActions');
       caseIds.add(record.id);
       states[action.state] += 1;
       actionTypes[action.type] += 1;
-      if (action.providerOutcome) withProviderOutcome += 1;
+      actionContribution(`states.${action.state}`);
+      actionContribution(`actionTypes.${action.type}`);
+      if (action.providerOutcome) { withProviderOutcome += 1; actionContribution('counts.withProviderOutcome'); }
       providerOutcomeEvents += appliedEvents.filter((event) => {
         if (!event.providerOutcome) return false;
         const occurredAt = Date.parse(event.occurredAt);
-        return occurredAt <= endTime && (startTime === null || occurredAt >= startTime);
+        const included = occurredAt <= endTime && (startTime === null || occurredAt >= startTime);
+        if (included) contribute({ metric: 'counts.providerOutcomeEvents', caseId: record.id, actionId: action.id, eventId: event.id, reason: 'included' });
+        return included;
       }).length;
-      if (action.reference) withReference += 1;
+      if (action.reference) { withReference += 1; actionContribution('counts.withReference'); }
       if (externalRoutes.has(action.type)) {
-        if (action.contactSource && action.contactLimitations.length) reviewedRecipientRoute += 1;
-        else unqualifiedRecipientRoute += 1;
+        if (action.contactSource && action.contactLimitations.length) { reviewedRecipientRoute += 1; actionContribution('counts.reviewedRecipientRoute'); }
+        else { unqualifiedRecipientRoute += 1; actionContribution('counts.unqualifiedRecipientRoute'); }
       }
       if (!terminal.has(action.state)) {
-        if (action.dueAt && Date.parse(action.dueAt) < endTime) overdue += 1;
-        if (action.followUpAt && Date.parse(action.followUpAt) <= endTime) followUpDue += 1;
+        if (action.dueAt && Date.parse(action.dueAt) < endTime) { overdue += 1; actionContribution('counts.overdue'); }
+        if (action.followUpAt && Date.parse(action.followUpAt) <= endTime) { followUpDue += 1; actionContribution('counts.followUpDue'); }
       }
       const submissionEvents = appliedEvents.filter((event) => event.nextState === 'submitted' && event.previousState === 'authorised');
       const submissionEventsInWindow = submissionEvents.filter((event) => {
         const occurredAt = Date.parse(event.occurredAt);
         return occurredAt <= endTime && (startTime === null || occurredAt >= startTime);
       });
-      if (!submissionEvents.length) providerDurationOmissions.missingStart += 1;
+      const providerMetric = 'durations.submissionToProviderOutcome';
+      if (!submissionEvents.length) { providerDurationOmissions.missingStart += 1; actionContribution(providerMetric, 'missing_start'); }
       else if (!submissionEventsInWindow.length) {
+        actionContribution(providerMetric, 'outside_window');
         // The action remains in the denominator because its latest event is in
         // the report window, but its typed duration start is not.
       } else if (submissionEventsInWindow.length !== 1 || action.historyOmitted > 0 || action.history.some((event) => !event.applied)) {
         providerDurationOmissions.ambiguous += 1;
+        actionContribution(providerMetric, 'ambiguous');
       } else {
         const start = submissionEventsInWindow[0]!;
         const outcome = appliedEvents.find((event) => event.providerOutcome && Date.parse(event.occurredAt) >= Date.parse(start.occurredAt));
-        if (!outcome) providerDurationOmissions.missingEnd += 1;
-        else providerDurationValues.push(Math.floor((Date.parse(outcome.occurredAt) - Date.parse(start.occurredAt)) / 1_000));
+        if (!outcome) { providerDurationOmissions.missingEnd += 1; actionContribution(providerMetric, 'missing_end'); }
+        else {
+          const seconds = Math.floor((Date.parse(outcome.occurredAt) - Date.parse(start.occurredAt)) / 1_000);
+          providerDurationValues.push(seconds);
+          contribute({ metric: providerMetric, caseId: record.id, actionId: action.id, eventId: outcome.id, reason: 'included', seconds });
+        }
       }
     }
   }
@@ -350,6 +401,24 @@ export function buildBrandProtectionOperationsReport(
     },
     limitations: sharedLimitations,
   };
+}
+
+export function buildBrandProtectionOperationsReport(records: readonly CaseRecord[], options: OperationsReportOptions = {}): BrandProtectionOperationsReport {
+  return calculateBrandProtectionOperationsReport(records, options, () => {});
+}
+
+export function buildBrandProtectionOperationsReview(records: readonly CaseRecord[], options: OperationsReportOptions = {}): Readonly<{
+  report: BrandProtectionOperationsReport;
+  contributors: readonly OperationsReportContributor[];
+  contributorsOmitted: number;
+}> {
+  const contributors: OperationsReportContributor[] = [];
+  let contributorsOmitted = 0;
+  const report = calculateBrandProtectionOperationsReport(records, options, row => {
+    if (contributors.length < MAX_OPERATIONS_REPORT_CONTRIBUTORS) contributors.push(row);
+    else contributorsOmitted += 1;
+  });
+  return { report, contributors, contributorsOmitted };
 }
 
 export function serializeBrandProtectionOperationsReport(report: BrandProtectionOperationsReport): string {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
+  import type { Snippet } from 'svelte';
   import { MAX_MESSAGE_INTAKE_BYTES, MESSAGE_INTAKE_KINDS, MESSAGE_INTAKE_INPUTS, type MessageIntakeKind, type MessageIntakeResult } from '../../../../packages/contracts/message-intake.mts';
   import { runMessageIntakeWorker } from '$lib/message-intake-worker.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
@@ -12,9 +13,10 @@
   import SelectedInputEvidence from './SelectedInputEvidence.svelte';
   import IdentityEventEvidence from './IdentityEventEvidence.svelte';
 
-  let { onselect, onsave, disabled = false, headingLevel = 3 }: {
+  let { onselect, onsave, reviewContent, disabled = false, headingLevel = 3 }: {
     onselect: (target: string) => void | Promise<void>;
     onsave?: (result: MessageIntakeResult, original: File, retainOriginal: boolean) => Promise<boolean>;
+    reviewContent?: Snippet<[MessageIntakeResult]>;
     disabled?: boolean;
     headingLevel?: 2 | 3;
   } = $props();
@@ -70,6 +72,7 @@
     {#if error}<p role="alert">{error}</p>{/if}
     {#if result}
       {@const report = result.report}
+      {@render reviewContent?.(result)}
       <svelte:element this={headingLevel === 2 ? 'h2' : 'h3'} class="heading" bind:this={heading} tabindex="-1">{report.identityEventReview ? 'Identity event review' : 'Extracted destinations'}</svelte:element>
       <p>Links: {report.links.length} · Reviewed {kind === 'qr' ? 'QR symbols' : 'parts'}: {report.coverage.reviewedParts}{report.coverage.state === 'partial' ? ' · Partial analysis' : ''}</p>
       {#if !report.links.length && !report.identityEventReview}<p>{kind === 'qr' ? 'No HTTP(S) destination was decoded. This does not establish that the image has no QR code.' : 'No supported HTTP(S) destination was extracted.'}</p>{/if}
