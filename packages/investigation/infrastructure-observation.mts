@@ -48,7 +48,7 @@ function unique<T>(values: T[], label: string, key: (value: T) => string = value
   if (new Set(values.map(key)).size !== values.length) throw new TypeError(`${label} contains duplicate or ambiguous identities.`);
   return values;
 }
-function at(raw: unknown): string { iso(raw, 'Infrastructure observation time'); return raw as string; }
+function at(raw: unknown): string { iso(raw, 'Infrastructure observation time'); return new Date(raw as string).toISOString(); }
 function flag(raw: unknown): boolean { boolean(raw, 'Infrastructure completeness'); return raw as boolean; }
 
 /** Exact current reader. Old Case pins lacking this field remain unknown, never reconstructed. */
@@ -106,6 +106,7 @@ export function readInfrastructureObservation(raw: unknown): InfrastructureObser
     if (!/^[a-f0-9]{64}$/u.test(fingerprintSha256)) throw new TypeError('Certificate identity requires an exact SHA-256 digest.');
     return { sourceId: sourceId(row.sourceId, ['tls', 'certificate_log']), fingerprintSha256, observedAt: at(row.observedAt), names: unique(array(row.names, 'Certificate names', MAX_INFRASTRUCTURE_HOSTS, 1).map(name), 'Certificate names'), namesComplete: flag(row.namesComplete) };
   });
+  unique(certificates, 'Certificate observation identities', row => JSON.stringify([row.sourceId, row.fingerprintSha256, row.observedAt]));
   const roleFamilies: Record<InfrastructureProviderRole, InfrastructureSource['family'][]> = {
     dns_operator: ['dns'], observed_edge: ['technology'], application_platform: ['technology'], framework_runtime: ['technology'], embedded_dependency: ['technology'], address_registration: ['ip_registration'], routing_origin: ['routing'], observed_origin: ['origin_observation'],
   };
@@ -123,12 +124,13 @@ export function readInfrastructureObservation(raw: unknown): InfrastructureObser
     if (role === 'observed_origin' && normalizeDomain(value) !== value && canonicalIpAddress(value) !== value) throw new TypeError('Independently observed origin must retain an exact hostname or address.');
     return { sourceId: sourceId(row.sourceId, roleFamilies[role]), subject, subjectType, role, providerId: identifier(row.providerId, 'Provider ID'), providerLabel: text(row.providerLabel, 'Provider label', 100), value, observedAt: at(row.observedAt), complete: flag(row.complete) };
   });
+  unique(roles, 'Provider-role observation identities', row => JSON.stringify([row.sourceId, row.subjectType, row.subject, row.role, row.providerId, row.observedAt]));
   if (roles.some(row => row.subjectType === 'address' && !dns.some(answer => answer.values.includes(row.subject)))) throw new TypeError('Provider-role addresses must have explicit supporting DNS address observations within the snapshot.');
   const result: InfrastructureObservation = { schema: INFRASTRUCTURE_OBSERVATION_SCHEMA, version: INFRASTRUCTURE_OBSERVATION_VERSION, id: identifier(root.id, 'Snapshot ID'), target: hostname(root.target), observedAt: at(root.observedAt), mode: enumeration(root.mode, ['supplied', 'selected_lookup', 'certificate_log'] as const, 'Collection mode'), scope: { hostnames, dnsTypes, selection: enumeration(scope.selection, ['explicit_hosts', 'certificate_names'] as const, 'Selection scope') }, coverage: { state: enumeration(coverage.state, ['complete', 'partial', 'failed'] as const, 'Coverage state'), truncated: flag(coverage.truncated), detail: text(coverage.detail, 'Coverage detail', 500) }, sources, dns, certificates, roles, limitations: unique(strings(root.limitations, 'Infrastructure limitations', 12, 300), 'Infrastructure limitations') };
   if ([...dns, ...certificates, ...roles].some(row => row.observedAt > result.observedAt)) throw new TypeError('Snapshot time cannot precede one of its retained observations.');
   if (result.coverage.state === 'complete' && (result.coverage.truncated || dns.some(row => !row.complete || row.truncated || ['failed', 'not_checked'].includes(row.outcome)) || certificates.some(row => !row.namesComplete) || roles.some(row => !row.complete))) throw new TypeError('Complete snapshot coverage cannot contain incomplete observations.');
   if (result.coverage.state === 'complete' && hostnames.some(host => dnsTypes.some(type => !dns.some(row => row.queriedName === host && row.type === type)))) throw new TypeError('Complete DNS coverage requires every explicitly selected host/type pair.');
-  if (new TextEncoder().encode(JSON.stringify(result)).byteLength > MAX_INFRASTRUCTURE_OBSERVATION_BYTES) throw new TypeError('Infrastructure snapshot exceeds its retained byte bound.');
+  if (new TextEncoder().encode(`${JSON.stringify(result)}\n`).byteLength > MAX_INFRASTRUCTURE_OBSERVATION_BYTES) throw new TypeError('Infrastructure snapshot exceeds its retained byte bound.');
   return result;
 }
 export function normalizeInfrastructureObservation(raw: unknown): InfrastructureObservation | null {
@@ -138,13 +140,14 @@ export function normalizeInfrastructureObservation(raw: unknown): Infrastructure
 export function parseInfrastructureObservation(raw: string): InfrastructureObservation {
   return readInfrastructureObservation(parseBoundedJson(raw, { label: 'Infrastructure snapshot', maximumBytes: MAX_INFRASTRUCTURE_OBSERVATION_BYTES }));
 }
-export function serialiseInfrastructureObservation(raw: unknown): string { return `${JSON.stringify(readInfrastructureObservation(raw), null, 2)}\n`; }
+export function serialiseInfrastructureObservation(raw: unknown): string { return `${JSON.stringify(readInfrastructureObservation(raw))}\n`; }
 
 export function infrastructureObservationFacts(raw: unknown) {
   const snapshot = readInfrastructureObservation(raw);
   const sources = new Map(snapshot.sources.map(source => [source.id, source]));
   const facts: { key: string; hostname: string; family: string; value: string; observedAt: string; source: InfrastructureSource; complete: boolean }[] = [];
   for (const row of snapshot.dns) for (const value of row.values) facts.push({ key: JSON.stringify([row.sourceId, row.ownerName, row.type]), hostname: row.ownerName, family: row.type, value, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.complete && !row.truncated });
+  for (const row of snapshot.dns) facts.push({ key: JSON.stringify([row.sourceId, row.queriedName, row.ownerName, row.type, 'outcome']), hostname: row.ownerName, family: `${row.type}_outcome`, value: row.outcome, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.complete && !row.truncated && !['failed', 'not_checked'].includes(row.outcome) });
   for (const row of snapshot.certificates) for (const value of row.names) facts.push({ key: JSON.stringify([row.sourceId, row.fingerprintSha256, 'certificate_names']), hostname: value, family: 'certificate_names', value, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.namesComplete });
   for (const row of snapshot.roles) facts.push({ key: JSON.stringify([row.sourceId, row.subject, row.role]), hostname: row.subject, family: row.role, value: `${row.providerId}: ${row.value}`, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.complete });
   return { snapshot, facts };
@@ -162,7 +165,7 @@ export function compareInfrastructureObservations(earlierRaw: unknown, laterRaw:
   const rows = [...groups.values()].map(row => {
     row.before = [...new Set(row.before)].sort(); row.after = [...new Set(row.after)].sort();
     const same = JSON.stringify(row.before) === JSON.stringify(row.after);
-    const state = !comparable ? 'incomparable' : same ? 'unchanged' : !row.before.length ? 'newly_observed' : !row.after.length ? complete && row.complete ? 'not_returned' : 'unknown' : row.complete ? 'changed' : 'unknown';
+    const state = !comparable ? 'incomparable' : same ? complete && row.complete ? 'unchanged' : 'unknown' : !row.before.length ? row.complete ? 'newly_observed' : 'unknown' : !row.after.length ? complete && row.complete ? 'not_returned' : 'unknown' : complete && row.complete ? 'changed' : 'unknown';
     return { ...row, state, detail: state === 'not_returned' ? 'Not returned by this comparable bounded collection; this does not establish disappearance.' : state === 'newly_observed' ? 'Newly present in retained evidence; not necessarily newly created.' : state === 'unknown' ? 'Incomplete evidence cannot establish a removal or change.' : state === 'incomparable' ? 'Source, scope, mode or observation ordering differs; no temporal change is inferred.' : 'Source-qualified retained observation comparison.' };
   });
   return { state: comparable ? complete ? 'compared' : 'partial' : 'incomparable', earlier: earlier.snapshot.id, later: later.snapshot.id, rows, limitations: ['No new collection was made. Retained changes do not establish ownership, safety, control or maliciousness.', 'Provider-reported history remains labelled separately from local observations. Empty, failed, limited and changed-source snapshots cannot replace a stronger baseline.'] };

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
-import { readInfrastructureObservation, parseInfrastructureObservation, serialiseInfrastructureObservation, compareInfrastructureObservations, MAX_INFRASTRUCTURE_HOSTS, infrastructureTechnologyRoles } from '../packages/investigation/infrastructure-observation.mts';
+import { readInfrastructureObservation, parseInfrastructureObservation, serialiseInfrastructureObservation, compareInfrastructureObservations, MAX_INFRASTRUCTURE_HOSTS, MAX_INFRASTRUCTURE_OBSERVATION_BYTES, infrastructureTechnologyRoles } from '../packages/investigation/infrastructure-observation.mts';
 
 const raw = await readFile(new URL('./fixtures/infrastructure-observations/infrastructure-observation-v1.json', import.meta.url), 'utf8');
 const fixture = () => parseInfrastructureObservation(raw);
@@ -93,4 +93,32 @@ test('representative 128-host inventory retains every supplied response and refu
   assert.equal(parseInfrastructureObservation(serialiseInfrastructureObservation(value)).dns.length, 128);
   value.certificates = Array.from({ length: 32 }, (_, index) => ({ ...fixture().certificates[0]!, fingerprintSha256: index.toString(16).padStart(64, '0'), names: Array.from({ length: 128 }, (_, nameIndex) => `${'a'.repeat(63)}.${'b'.repeat(63)}.${'c'.repeat(63)}.n${nameIndex}.example.test`) }));
   assert.throws(() => readInfrastructureObservation(value), /byte bound/u);
+});
+test('every admitted dense representation serialises within its own parser ceiling', () => {
+  const value = fixture(); value.coverage.state = 'partial'; value.scope.dnsTypes = ['A']; value.roles = []; value.certificates = [];
+  value.scope.hostnames = Array.from({ length: 128 }, (_, index) => `host-${index}.example.test`);
+  value.dns = value.scope.hostnames.flatMap(queriedName => Array.from({ length: 3 }, (_, index) => ({ ...fixture().dns[1]!, queriedName, ownerName: queriedName, observedAt: `2026-10-01T11:0${index}:00.000Z`, values: ['192.0.2.20'] })));
+  const retained = readInfrastructureObservation(value), serialized = serialiseInfrastructureObservation(retained);
+  assert.ok(Buffer.byteLength(serialized) <= MAX_INFRASTRUCTURE_OBSERVATION_BYTES);
+  assert.deepEqual(parseInfrastructureObservation(serialized), retained);
+});
+test('incomplete identical rows are unknown and negative DNS outcomes stay distinct', () => {
+  const before = fixture(), after = later(); after.coverage.state = 'partial'; after.dns[2]!.complete = false;
+  assert.equal(compareInfrastructureObservations(before, after).rows.find(row => row.family === 'A' && row.hostname === 'mail.example.test')?.state, 'unknown');
+  before.dns[2] = { ...before.dns[2]!, values: [], outcome: 'no_data' };
+  after.coverage.state = 'complete'; after.dns[2] = { ...after.dns[2]!, values: [], outcome: 'nxdomain', complete: true };
+  const row = compareInfrastructureObservations(before, after).rows.find(row => row.family === 'A_outcome' && row.hostname === 'mail.example.test');
+  assert.deepEqual(row?.before, ['no_data']); assert.deepEqual(row?.after, ['nxdomain']); assert.equal(row?.state, 'changed');
+  after.coverage.state = 'partial'; after.dns[2]!.outcome = 'failed'; after.dns[2]!.complete = false;
+  assert.equal(compareInfrastructureObservations(before, after).rows.find(row => row.family === 'A_outcome' && row.hostname === 'mail.example.test')?.state, 'unknown');
+});
+test('observation ordering requires canonical UTC instants and duplicate certificate or role identities reject', () => {
+  const before = fixture(), after = later();
+  assert.equal(compareInfrastructureObservations(before, after).state, 'compared');
+  after.observedAt = '2026-10-02T13:00:00+01:00';
+  assert.throws(() => readInfrastructureObservation(after), /observation time/u);
+  const certificate = fixture(); certificate.certificates.push(certificate.certificates[0]!);
+  assert.throws(() => readInfrastructureObservation(certificate), /duplicate/u);
+  const role = fixture(); role.roles.push(role.roles[0]!);
+  assert.throws(() => readInfrastructureObservation(role), /duplicate/u);
 });
