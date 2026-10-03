@@ -9,6 +9,7 @@ import { caseNumber } from '../packages/cases/case-workflow-metadata.mts';
 import { buildWorkspaceArchive, previewWorkspaceArchive, readWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
 import { decryptWorkspaceArchive, encryptWorkspaceArchive } from '../packages/workspace/workspace-archive-crypto.mts';
 import { CASE_VIEWS_COLLECTION } from '../frontend/src/lib/browser-local-data-definitions.ts';
+import { WORKSPACE_ARCHIVE_VERSION } from '../packages/contracts/case-portability.mts';
 
 const now = '2026-04-04T00:00:00.000Z';
 const later = '2026-04-05T00:00:00.000Z';
@@ -92,15 +93,15 @@ test('temporary and saved filters retain existing title, domain, ID, type, tag a
   assert.deepEqual(filterCaseList(input, { ...filters, disposition: 'confirmed_abuse' }), []);
 });
 
-test('archive v9 includes saved views while every frozen public archive gains only an empty view section', async () => {
+test('the current archive includes saved views while frozen public archives preserve empty view sections', async () => {
   const archive = await buildWorkspaceArchive({ caseViews: fixture }, { generatedAt: now });
-  assert.equal(archive.version, 9);
+  assert.equal(archive.version, WORKSPACE_ARCHIVE_VERSION);
   assert.equal(archive.manifest.sectionCount, 14);
   assert.deepEqual(archive.sections.caseViews, fixture);
   const preview = await previewWorkspaceArchive(archive, { caseViews: store(view) }, { selectedSectionIds: ['caseViews'] });
   assert.deepEqual(preview.sections.find(section => section.id === 'caseViews')?.data, fixture);
   assert.equal(preview.sections.find(section => section.id === 'caseViews')?.added, 1);
-  for (const version of [5, 6, 7, 8]) {
+  for (const version of [5, 6, 7, 8, 9]) {
     const name = version === 5 ? 'workspace-archive-v5-public.json' : `workspace-archive-v${version}-empty-current.json`;
     const raw = JSON.parse(readFileSync(new URL(`./fixtures/case-lifecycle/${name}`, import.meta.url), 'utf8'));
     const before = JSON.stringify(raw);
@@ -112,10 +113,10 @@ test('archive v9 includes saved views while every frozen public archive gains on
     assert.equal(JSON.stringify(raw), before);
   }
   await assert.rejects(readWorkspaceArchive({ ...archive, version: 8 }), /exact required section/u);
-  await assert.rejects(readWorkspaceArchive({ ...archive, version: 10 }), /newer/u);
+  await assert.rejects(readWorkspaceArchive({ ...archive, version: WORKSPACE_ARCHIVE_VERSION + 1 }), /newer/u);
 });
 
-test('encrypted archive v9 restores the view definition without exposing its search in the envelope', async () => {
+test('the encrypted current archive restores the view definition without exposing its search in the envelope', async () => {
   const archive = await buildWorkspaceArchive({ caseViews: fixture }, { generatedAt: now });
   const passphrase = 'Reserved recovery fixture only';
   const encrypted = await encryptWorkspaceArchive(archive, passphrase);
