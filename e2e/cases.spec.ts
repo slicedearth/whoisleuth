@@ -6,6 +6,7 @@ import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHo
 import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, snapshot } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { DETECTION_RULE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
+import { RISK_CALIBRATION_DATASET_VERSION } from '../packages/contracts/risk-calibration.mts';
 import { caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep, operationsReportActionStatus, reviewInboxActionStatus } from './case-response-fixtures';
 import { caseNumber, formattedCaseNumber } from '../packages/cases/case-workflow-metadata.mts';
 import type { WebsiteProfileSnapshot } from '../packages/workspace/website-snapshot-model.mts';
@@ -590,7 +591,7 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
 
   expect(exported).toMatchObject({
     schema: 'whoisleuth.risk-calibration-dataset',
-    version: 2,
+    version: RISK_CALIBRATION_DATASET_VERSION,
     records: [{
       id: 'reviewed-calibration',
       domain: 'reviewed-calibration.invalid',
