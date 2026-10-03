@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { Byte, Encoder } from '@nuintun/qrcode';
 import { encode } from 'fast-png';
@@ -55,6 +56,80 @@ export async function checkInstalledCliWorkflows(repositoryRoot: string, tempora
     throw new TypeError('Installed handoff did not finish offline after the selected review confirmation.');
   }
   await checkInstalledIntakeAndContext(repositoryRoot, temporaryRoot, run);
+  await checkInstalledLocalMmdb(repositoryRoot, temporaryRoot, run);
+}
+
+/** Exercise the compiled reader's self-module worker without a database download. */
+export async function checkInstalledLocalMmdb(repositoryRoot: string, temporaryRoot: string, run: RunInstalledCli): Promise<void> {
+  const fixturePath = 'fixtures/mmdb/maxmind-db-test-data/GeoIP2-City-Test.mmdb';
+  const fixture = await readBoundedRegularFileWithin(repositoryRoot, fixturePath, {
+    maximumBytes: MAX_INVESTIGATION_RUN_BYTES, minimumBytes: 1, label: 'Pinned synthetic local database fixture',
+  });
+  const digest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+  const expectedDigest = 'ed972738e4e03a3e56e12041a6af4d91592249d110f7e4a647e5f2fa0e639c09';
+  if (fixture.length !== 22569 || digest(fixture) !== expectedDigest) throw new TypeError('Installed local database check requires the exact pinned fixture.');
+  // This exact fixture encodes build_epoch as four unsigned payload bytes.
+  // Zeroing only that payload preserves tree offsets and makes stale admission
+  // independent of the fixture's original date or a narrow current-age window.
+  const buildField = Buffer.from('4b6275696c645f65706f636804026983ccf9', 'hex');
+  const offset = fixture.indexOf(buildField);
+  if (offset < 0 || offset !== fixture.lastIndexOf(buildField)) throw new TypeError('Pinned local database build field is not unique.');
+  const staleFixture = Buffer.from(fixture);
+  staleFixture.fill(0, offset + buildField.length - 4, offset + buildField.length);
+  const staleDigest = '51bc8f456f02d3b9a19e5276a0f2ccbb2a844f0e477e8a2715d3e50f49a23844';
+  if (digest(staleFixture) !== staleDigest) throw new TypeError('Synthetic stale database changed beyond its build epoch.');
+  const selected = path.join(temporaryRoot, 'selected-local-database.mmdb');
+  const staleSelected = path.join(temporaryRoot, 'stale-local-database.mmdb');
+  await writeFile(selected, fixture, { flag: 'wx', mode: 0o600 });
+  await writeFile(staleSelected, staleFixture, { flag: 'wx', mode: 0o600 });
+  const declared = { schema: 'whoisleuth.local-mmdb-query', address: '81.2.69.142',
+    sourceLabel: 'Pinned synthetic test database', databaseVersion: 'Declared fixture edition', license: 'MIT' };
+  const input = { ...declared, version: 2,
+    freshnessPolicy: { maxAgeDays: 3_000_000, rationale: 'Accept this pinned synthetic fixture for installed-code verification only; not a policy for operational attribution' } };
+  for (const kind of ['current', 'stale', 'historical'] as const) {
+    const queryPath = path.join(temporaryRoot, `local-database-${kind}.json`);
+    const freshnessPolicy = kind === 'stale' ? { maxAgeDays: 1, rationale: 'Deliberately stale synthetic fixture for refusal verification' } : input.freshnessPolicy;
+    const query = kind === 'historical' ? { ...declared, version: 1 } : { ...input, freshnessPolicy };
+    await writeFile(queryPath, JSON.stringify(query), { flag: 'wx', mode: 0o600 });
+    const output = await run(['review-evidence', queryPath, '--mmdb', kind === 'stale' ? staleSelected : selected, '--json', '--strict-exit'],
+      `offline ${kind} local database review`, kind === 'stale' ? 4 : 0);
+    if ([repositoryRoot, temporaryRoot, fixturePath].some(value => output.includes(value) || output.includes(JSON.stringify(value).slice(1, -1)))) {
+      throw new TypeError('Installed local database review leaked a source path.');
+    }
+    const document = record(JSON.parse(output), 'Installed local database review');
+    const result = record(document.result, 'Installed local database result');
+    if (document.schema !== 'whoisleuth.cli.offline-evidence-review' || document.version !== 1 || document.kind !== 'geoip'
+      || result.address !== input.address || record(result.source, 'Database source').version !== input.databaseVersion) {
+      throw new TypeError('Installed local database review changed its envelope or declared source.');
+    }
+    if (kind === 'historical') {
+      if (Object.keys(result).sort().join(',') !== 'address,limitations,match,source,state' || result.state !== 'matched'
+        || record(result.match, 'Historical database match').network !== '81.2.69.142/31') {
+        throw new TypeError('Installed historical local database shape changed.');
+      }
+      continue;
+    }
+    const database = record(result.database, 'Database identity'), metadata = record(database.metadata, 'Intrinsic metadata');
+    const binary = record(metadata.binaryFormat, 'Database binary format'), freshness = record(result.freshness, 'Database freshness');
+    if (result.schema !== 'whoisleuth.local-mmdb-review' || result.version !== 1 || database.byteLength !== 22569
+      || database.sha256 !== (kind === 'stale' ? staleDigest : expectedDigest) || metadata.databaseType !== 'GeoIP2-City'
+      || metadata.builtAt !== (kind === 'stale' ? '1970-01-01T00:00:00.000Z' : '2026-02-04T22:49:29.000Z')
+      || binary.major !== 2 || binary.minor !== 0 || metadata.ipVersion !== 6 || freshness.checkedAt !== document.generatedAt
+      || record(freshness.policy, 'Freshness policy').maxAgeDays !== freshnessPolicy.maxAgeDays
+      || record(freshness.policy, 'Freshness policy').rationale !== freshnessPolicy.rationale) {
+      throw new TypeError('Installed current local database identity or metadata changed.');
+    }
+    if (kind === 'stale') {
+      if (result.state !== 'unavailable' || result.reason !== 'stale_database' || result.completeness !== 'unavailable'
+        || result.match !== null || freshness.state !== 'stale') throw new TypeError('Installed stale local database review supplied attribution.');
+    } else {
+      const match = record(result.match, 'Current database match');
+      if (result.state !== 'matched' || result.reason !== 'matched' || result.completeness !== 'complete' || freshness.state !== 'current'
+        || match.network !== '81.2.69.142/31' || match.countryCode !== 'GB' || match.city !== 'London') {
+        throw new TypeError('Installed current local database review lost its known synthetic match.');
+      }
+    }
+  }
 }
 
 async function checkInstalledIntakeAndContext(repositoryRoot: string, temporaryRoot: string, run: RunInstalledCli): Promise<void> {

@@ -9,7 +9,7 @@ import { runCli } from '../cli/runner.mts';
 import { createInstalledCliRunner, type RunInstalledCli } from '../tools/installed-cli-check.mts';
 import { checkInstalledCliDiscovery } from '../tools/cli-discovery-package-check.mts';
 import { checkInstalledCliEvidence } from '../tools/cli-evidence-package-check.mts';
-import { checkInstalledCliWorkflows } from '../tools/cli-workflow-package-check.mts';
+import { checkInstalledCliWorkflows, checkInstalledLocalMmdb } from '../tools/cli-workflow-package-check.mts';
 import { checkInstalledCliIncidents } from '../tools/cli-incident-package-check.mts';
 import { boundedSafeRelativePath, boundedUnpaddedText } from '../tools/maintainer-tool-helpers.mts';
 
@@ -55,6 +55,37 @@ const packets = [
   { name: 'incidents', run: (directory: string, run: RunInstalledCli) => checkInstalledCliIncidents(root, directory, version, run),
     label: 'incident pack internal', corrupt: (value: any) => { value.cases[1].id = value.cases[0].id; }, expected: /Installed incident pack lost Case identity/u },
 ];
+
+test('installed local database checks reject changed identity, metadata, stale attribution, legacy shape and paths', async context => {
+  for (const fault of ['none', 'digest', 'metadata', 'stale', 'historical', 'path']) await context.test(fault, async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'installed-local-database-'));
+    const invocations: string[] = [];
+    let changed = false;
+    try {
+      const task = checkInstalledLocalMmdb(root, directory, async (args, label, expected = 0) => {
+        let stdout = '', stderr = '';
+        const deny = () => { throw new Error('Local database check attempted collection.'); };
+        const code = await runCli(args, { stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } },
+          now: () => '2026-10-03T00:00:00.000Z', runUnifiedLookup: deny, safeFetch: deny, resolvePublicAddresses: deny,
+          whoisQuery: deny, fetchHomepage: deny, collectTlsIntelligence: deny });
+        assert.equal(code, expected, stderr); assert.equal(stderr, ''); invocations.push(label);
+        const document = JSON.parse(stdout);
+        if (label === 'offline current local database review') {
+          if (fault === 'digest') { document.result.database.sha256 = '0'.repeat(64); changed = true; }
+          if (fault === 'metadata') { document.result.database.metadata.builtAt = '2025-01-01T00:00:00.000Z'; changed = true; }
+          if (fault === 'path') { document.privatePath = directory; changed = true; }
+        }
+        if (fault === 'stale' && label === 'offline stale local database review') { document.result.state = 'matched'; changed = true; }
+        if (fault === 'historical' && label === 'offline historical local database review') { document.result.database = {}; changed = true; }
+        return JSON.stringify(document);
+      });
+      if (fault === 'none') {
+        await task;
+        assert.deepEqual(invocations, ['offline current local database review', 'offline stale local database review', 'offline historical local database review']);
+      } else { await assert.rejects(task, /Installed (?:current|stale|historical)? ?local database/u); assert.equal(changed, true); }
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+});
 
 for (const packet of packets) test(`installed ${packet.name} checks preserve independent expectations`, async context => {
   for (const corrupt of [false, true]) await context.test(corrupt ? 'rejects changed behaviour' : 'accepts the offline workflow', async () => {
