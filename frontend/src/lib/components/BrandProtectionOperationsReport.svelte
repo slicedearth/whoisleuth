@@ -10,6 +10,7 @@
     type OperationsReportWindow,
   } from '$lib/analysis/brand-protection-operations-report.ts';
   import OperationsContributors from './OperationsContributors.svelte';
+  import OperationsCaseScope from './OperationsCaseScope.svelte';
 
   let {
     records,
@@ -111,6 +112,7 @@
     {/if}
 
     {#key window}<OperationsContributors contributors={review.contributors} omitted={review.contributorsOmitted} />{/key}
+    <OperationsCaseScope {records} {sourceState} />
 
     <details>
       <summary>Exact current-state and action-type counts</summary>

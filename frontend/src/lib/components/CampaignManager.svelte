@@ -14,6 +14,7 @@
   import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
   import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { buildCampaignReviewSummary } from '$lib/analysis/campaign-review-summary.ts';
+  import OperationsCaseScope from './OperationsCaseScope.svelte';
   import { buildCampaignTemporalReview } from '$lib/analysis/campaign-temporal-review.ts';
   import { buildParentDomainCampaignReview, type ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
   import {
@@ -323,6 +324,7 @@
             </section>{:else}<p class="source-state" role="alert">Campaign review and temporal counts are unavailable until the saved Case collection can be read. No zero or unreviewed state is inferred.</p>{/if}
 
             <CampaignCohortReview campaign={campaign} {records} {profiles} {relationshipSummary} sourceStates={cohortSourceStates} {onselect} />
+            {#key campaign.id}<OperationsCaseScope {records} sourceState={cohortSourceStates.cases} campaignDomains={campaign.domains} />{/key}
 
             {#if parentDomainReview}<ParentDomainCampaignScope campaign={campaign} review={parentDomainReview} {records} {onselect} onmessage={(value)=>message=value} />{/if}
 
