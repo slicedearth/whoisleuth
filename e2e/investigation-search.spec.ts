@@ -72,7 +72,7 @@ async function seedInvestigationStores(page: import('@playwright/test').Page) {
 test('multi-host snapshot review exposes exact outcomes, wildcards and history without automatic collection', async ({ page }) => {
   const requests: string[] = [];
   page.on('request', request => { const path = new URL(request.url()).pathname; if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) requests.push(path); });
-  const early = parseInfrastructureObservation(await readFile(new URL('../test/fixtures/infrastructure-observations/infrastructure-observation-v1.json', import.meta.url), 'utf8'));
+  const early = parseInfrastructureObservation(await readFile('test/fixtures/infrastructure-observations/infrastructure-observation-v1.json', 'utf8'));
   const later = structuredClone(early); later.id = 'selected-example-later'; later.observedAt = '2026-10-02T12:00:00.000Z'; later.coverage.state = 'partial'; later.dns[2] = { ...later.dns[2]!, values: [], outcome: 'failed', complete: false };
   const pins = [early, later].map((snapshot, index) => { const document = convertInfrastructureObservation(snapshot); return { ...externalFindingCaseProjection(document.findings[0]!, document.source).evidencePin, id: `snapshot-pin-${index}` }; });
   await page.goto('/dashboard');

@@ -792,6 +792,19 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await scope.locator(':scope > summary').press('Enter');
   await expect(scope).toContainText('not a phishing verdict');
   await expect(credentialCard).not.toContainText('secret');
+  if (captureVisualEvidenceEnabled()) {
+    const viewport = page.viewportSize();
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 390, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await credentialCard.scrollIntoViewIfNeeded();
+        await expectNoHorizontalOverflow(page);
+        await page.screenshot({ path: test.info().outputPath(`credential-forms-${theme}-${width}.png`) });
+      }
+    }
+    if (viewport) await page.setViewportSize(viewport);
+  }
 
   const technologyCard = page.locator('.technology-card');
   await expect(technologyCard).not.toHaveAttribute('open', '');

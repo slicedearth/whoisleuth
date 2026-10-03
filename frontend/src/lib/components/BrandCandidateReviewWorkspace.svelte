@@ -246,6 +246,7 @@
     } finally {
       busy = false;
       if (active.id === profileId) {
+        now = new Date().toISOString();
         await tick();
         actionStatus?.focus();
       }
