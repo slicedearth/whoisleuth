@@ -74,15 +74,23 @@ test('the capability endpoint reports honest in-memory concurrency scope', async
 });
 
 test('a disabled Lookup capability prevents single and Bulk submissions', async ({ page }) => {
+  const lookupRequests: string[] = [];
+  page.on('request', request => {
+    if (new URL(request.url()).pathname === '/api/lookup') lookupRequests.push(request.url());
+  });
   await mockCapabilities(page, ['lookup']);
   await page.goto('/lookup');
-  await page.getByLabel('Domain, IP address, ASN, or domain list').fill('example.invalid');
-  await expect(page.getByText('lookup is disabled by deployment policy.', { exact: true })).toBeVisible();
+  const query = page.getByLabel('Domain, IP address, ASN, or domain list');
+  await query.fill('example.invalid');
+  await expect(page.getByRole('note').filter({ hasText: /^lookup is disabled by deployment policy\.$/u })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Run lookup' })).toBeDisabled();
+  await query.press('Control+Enter');
+  await query.press('Meta+Enter');
 
   await page.goto('/bulk');
   await page.getByLabel('Domains').fill('example.invalid');
   await expect(page.getByRole('button', { name: 'Scan 1 domain' })).toBeDisabled();
+  expect(lookupRequests).toEqual([]);
 });
 
 test('disabled certificate and website capabilities degrade their own controls only', async ({ page }) => {
