@@ -11,11 +11,10 @@
 
 <details class="coverage">
   <summary>Exact incident-object coverage · {rows.length} retained links</summary>
-  <p>Each exact link is a separate analyst-associated object. Sharing a hostname or Case does not establish common ownership or bind a response action to every link.</p>
   {#if rows.length}
     <div class="table-wrap"><table>
       <caption>Retained incident links, including analyst-resolved links</caption>
-      <thead><tr><th scope="col">Exact object</th><th scope="col">Analyst scope</th><th scope="col">Recorded time</th><th scope="col">Response coverage</th></tr></thead>
+      <thead><tr><th scope="col">Exact object</th><th scope="col">Analyst scope</th><th scope="col">Analyst metadata time</th><th scope="col">Response coverage</th></tr></thead>
       <tbody>{#each visible as row (row.target.id)}<tr>
         <td><code>{row.target.url}</code><small>Hostname: {row.hostname}</small></td>
         <td>{row.target.state === 'resolved' ? 'Analyst-resolved link' : 'Open link'}</td>
@@ -24,8 +23,8 @@
       </tr>{/each}</tbody>
     </table></div>
     {#if pages > 1}<nav aria-label="Incident coverage pages"><button class="btn" type="button" disabled={currentPage <= 1} onclick={() => page = currentPage - 1}>Previous links</button><span>Page {currentPage} of {pages}</span><button class="btn" type="button" disabled={currentPage >= pages} onclick={() => page = currentPage + 1}>Next links</button></nav>{/if}
-  {:else}<p>No exact incident objects are retained. Domain-level evidence does not supply missing object coverage.</p>{/if}
-  <p>Added and updated times describe analyst metadata, not first or last observation. Provider outcomes and independent rechecks remain separate Case records; hostname-scoped rechecks do not establish exact-page removal, restoration or recurrence. Resolving a link does not resolve other objects or internal follow-ups.</p>
+  {:else}<p>No exact incident objects retained.</p>{/if}
+  <details><summary>About this review</summary><p>Each link is a separate analyst-associated object; a shared hostname or Case establishes neither ownership nor action binding. Added and updated times are metadata, not observation clocks. Provider outcomes and hostname-scoped rechecks remain separate and do not establish exact-page removal, restoration or recurrence. Resolving one link leaves other objects and internal follow-ups independent.</p></details>
 </details>
 
 <style>

@@ -22,7 +22,7 @@
     const relations = pinIds.filter(id => record.evidencePins.some(pin => pin.id === id)).map(evidencePinId => ({ evidencePinId, stance: 'unresolved' as const }));
     saving = true;
     try {
-      if (await persist({ assertion: { kind: 'next_step', ...request, state: 'open', evidenceRelations: relations } }, 'Recorded an open internal recovery follow-up.') && unchanged()) saved = 'Open follow-up recorded. No recovery action was marked complete.';
+      if (await persist({ assertion: { kind: 'next_step', ...request, state: 'open', evidenceRelations: relations } }, 'Recorded an open internal recovery follow-up.') && unchanged()) saved = 'Open follow-up recorded.';
     } finally { saving = false; }
   }
   async function recordActions() {
@@ -38,17 +38,16 @@
 </script>
 
 <details class="identity"><summary>Account and device recovery</summary><div class="body">
-  <p>Select what the affected person reports doing. Recovery is tracked separately from removing the page or domain.</p>
-  <p>Recommendations are conditional. Recording an open follow-up does not assign a team, revoke a session, reset a credential or establish an independent result. Do not enter credentials or personal account identifiers.</p>
+  <p>Select the reported actions to review relevant recovery follow-ups.</p>
   <fieldset disabled={mutationBusy || saving}><legend>Reported actions</legend>{#each IDENTITY_ACTIONS as action}<label><input type="checkbox" checked={selected.includes(action.id)} onchange={event => { draft.changed(); selected = event.currentTarget.checked ? [...selected, action.id] : selected.filter(id => id !== action.id); saved = ''; }}>{action.label}</label>{/each}</fieldset>
   {#if review.nextSteps.length}
     <button type="button" class="btn" disabled={mutationBusy || saving} onclick={() => { draft.changed(); selected = []; pinIds = []; saved = ''; }}>Clear local recovery selections</button>
-    {#if record.evidencePins.length}<fieldset disabled={mutationBusy || saving}><legend>Selected supporting context (relationship remains unresolved)</legend>{#each record.evidencePins as pin, index}<label><input type="checkbox" checked={pinIds.includes(pin.id)} onchange={event => { draft.changed(); pinIds = event.currentTarget.checked ? [...pinIds, pin.id] : pinIds.filter(id => id !== pin.id); saved = ''; }}>{caseEvidenceChoiceName(pin, index)}</label>{/each}</fieldset>{:else}<p>No evidence pins selected or retained; the follow-up remains an unsupported analyst request.</p>{/if}
+    {#if record.evidencePins.length}<fieldset disabled={mutationBusy || saving}><legend>Evidence context (optional)</legend>{#each record.evidencePins as pin, index}<label><input type="checkbox" checked={pinIds.includes(pin.id)} onchange={event => { draft.changed(); pinIds = event.currentTarget.checked ? [...pinIds, pin.id] : pinIds.filter(id => id !== pin.id); saved = ''; }}>{caseEvidenceChoiceName(pin, index)}</label>{/each}</fieldset>{:else}<p>No evidence pins retained.</p>{/if}
     <ol>{#each review.nextSteps as step}<li><strong>{step.title}</strong><p>{step.detail}</p><button type="button" class="btn" disabled={mutationBusy || saving} onclick={() => void recordFollowUp(step.id)}>Record as open follow-up: {step.title}</button></li>{/each}</ol><button type="button" class="btn" disabled={mutationBusy || saving} onclick={() => void recordActions()}>Record reported actions in Case</button>
   {/if}
-  {#if followUps.length}<details><summary>Retained open follow-ups · {followUps.length}</summary><ul>{#each followUps as item (item.id)}<li>{item.statement}<small>Recorded {item.createdAt}; {item.evidencePinIds.length} linked context pins. Not an assigned or completed action.</small></li>{/each}</ul></details>{/if}
-  {#if internalActions.length}<details><summary>Recorded internal and defensive actions · {internalActions.length}</summary><ul>{#each internalActions as item (item.id)}<li>{item.type.replaceAll('_', ' ')} · {item.state}<small>Use the existing action editor for assignment and tracking. State is analyst/provider-recorded, not independent account telemetry.</small></li>{/each}</ul></details>{/if}
-  <p>For handoff, use the existing report disclosure preview or full private Case review copy. Response packets do not include these follow-up statements; original files require explicit selection. Independent effects remain in outcome tracking.</p>
+  {#if followUps.length}<details><summary>Retained open follow-ups · {followUps.length}</summary><ul>{#each followUps as item (item.id)}<li>{item.statement}<small>Recorded {item.createdAt} · {item.evidencePinIds.length} linked context pins</small></li>{/each}</ul></details>{/if}
+  {#if internalActions.length}<details><summary>Recorded internal and defensive actions · {internalActions.length}</summary><ul>{#each internalActions as item (item.id)}<li>{item.type.replaceAll('_', ' ')} · {item.state.replaceAll('_', ' ')}</li>{/each}</ul></details>{/if}
+  <details><summary>About this review</summary><p>Recommendations and open requests are not assignments, completed recovery or independent account results. Selections stay in page memory; deliberate recording adds an analyst assertion with unresolved evidence relationships. Keep credentials and personal account identifiers out of this tool.</p><p>Use the existing action editor for assignment and tracking, and outcome tracking for independent effects. For handoff, review the existing report disclosure preview or full private Case copy. Response packets omit follow-up statements; original files require explicit selection.</p></details>
   <p role="status">{saved}</p>
 </div></details>
 

@@ -25,6 +25,7 @@ test('exact incident coverage preserves resolved and open URLs without object-le
   await expect(coverage).toContainText('Analyst-resolved link');
   await expect(coverage).toContainText('Open link');
   await expect(coverage.getByRole('cell', { name: /Unknown action binding/ })).toHaveCount(2);
+  await expect(coverage.getByText('About this review', { exact: true })).toHaveCount(1);
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const width of [320, 390, 1280]) { await page.setViewportSize({ width, height: 844 }); await expect(coverage.getByRole('table')).toBeVisible(); await expectNoHorizontalOverflow(page); }
@@ -70,6 +71,7 @@ test('conditional recovery follow-up preserves local selection after failed save
   await openCaseSection(page, 'Response');
   const recovery = page.locator('details.identity');
   await recovery.locator(':scope > summary').click();
+  await expect(recovery.getByText('About this review', { exact: true })).toHaveCount(1);
   await recovery.getByRole('checkbox', { name: 'Entered a password', exact: true }).check();
   const button = recovery.getByRole('button', { name: 'Record as open follow-up: Review and revoke suspicious account sessions', exact: true });
   await failNextBrowserLocalManifestWrite(page, 'cases');
@@ -95,6 +97,11 @@ test('operations contributor links keep distinct Case IDs local and aggregate do
   await report.getByLabel('Time window').selectOption('all');
   const contributors = report.locator('details.contributors');
   await contributors.locator(':scope > summary').click();
+  await expect(contributors.getByRole('combobox', { name: 'Metric or exclusion' })).toHaveValue('counts.actions');
+  await expect(contributors.locator('caption')).toHaveText('Current actions · contributing records');
+  expect(await contributors.locator('option').allTextContents()).toContain('Submission to provider outcome interval');
+  expect((await contributors.locator('option').allTextContents()).join(' ')).not.toMatch(/counts\.|durations\.|states\.|actionTypes\.|omissions\./u);
+  await expect(contributors.getByText('About this review', { exact: true })).toHaveCount(1);
   await expect(contributors.getByRole('link', { name: 'Case contributor-first', exact: true })).toHaveAttribute('href', '/cases?case=contributor-first&section=response');
   await expect(contributors.getByRole('link', { name: 'Case contributor-second', exact: true })).toHaveAttribute('href', '/cases?case=contributor-second&section=response');
   for (const width of [320, 390, 1280]) { await page.setViewportSize({ width, height: 844 }); await expect(contributors.getByRole('table')).toBeVisible(); await expectNoHorizontalOverflow(page); }

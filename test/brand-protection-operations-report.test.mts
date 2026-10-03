@@ -13,6 +13,7 @@ import {
   buildBrandProtectionOperationsReview,
   MAX_OPERATIONS_REPORT_CONTRIBUTORS,
   MAX_OPERATIONS_REPORT_CASES,
+  operationsContributorMetricLabel,
   serializeBrandProtectionOperationsReport,
 } from '../frontend/src/lib/analysis/brand-protection-operations-report.ts';
 
@@ -52,6 +53,17 @@ function caseWithActions(domain: string, actions: unknown[]) {
 }
 
 describe('brand-protection operations report', () => {
+  test('contributor presentation uses readable metric meanings without exposing internal keys', () => {
+    assert.equal(operationsContributorMetricLabel('counts.actions'), 'Current actions');
+    assert.equal(operationsContributorMetricLabel('counts.casesWithActions'), 'Cases with actions');
+    assert.equal(operationsContributorMetricLabel('counts.independentChangedReviews'), 'Independent changed reviews');
+    assert.equal(operationsContributorMetricLabel('durations.submissionToProviderOutcome'), 'Submission to provider outcome interval');
+    assert.equal(operationsContributorMetricLabel('durations.providerReportedResolutionToIndependentChange'), 'Provider-reported resolution to independent change interval');
+    assert.equal(operationsContributorMetricLabel('states.ready_for_review'), 'Ready for review actions');
+    assert.equal(operationsContributorMetricLabel('actionTypes.network_hosting_report'), 'Network hosting report actions');
+    assert.equal(operationsContributorMetricLabel('omissions.actionsWithInvalidTime'), 'Actions with an invalid event time');
+    assert.equal(operationsContributorMetricLabel('unknown.private-context'), 'Other retained contributions');
+  });
   test('preserves independently recorded baseline aggregate export bytes', () => {
     const report = buildBrandProtectionOperationsReview([], { now: NOW, window: 'all' }).report;
     assert.equal(createHash('sha256').update(serializeBrandProtectionOperationsReport(report)).digest('hex'), '26af6f1302c7007a556e860bb0b6a727da5e538ee330c5c5cf33a7bbd5d80a41');

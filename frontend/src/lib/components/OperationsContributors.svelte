@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { OperationsReportContributor } from '$lib/analysis/brand-protection-operations-report.ts';
+  import { operationsContributorMetricLabel } from '$lib/analysis/brand-protection-operations-report.ts';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   let { contributors, omitted }: { contributors: readonly OperationsReportContributor[]; omitted: number } = $props();
   let metric = $state('counts.actions'), page = $state(1);
@@ -12,11 +13,10 @@
 
 <details class="contributors">
   <summary>Contributing records and duration exclusions · local view only</summary>
-  <p>References below come from the same calculation as the aggregate counts. They stay in page memory and are never added to the aggregate export. Distinct Case IDs are not joined by domain.</p>
-  <label>Metric or exclusion<select bind:value={metric} onchange={() => page = 1}><option value="counts.actions">counts.actions</option>{#each metrics.filter(value => value !== 'counts.actions') as value}<option value={value}>{value}</option>{/each}</select></label>
+  <label>Metric or exclusion<select bind:value={metric} onchange={() => page = 1}><option value="counts.actions">{operationsContributorMetricLabel('counts.actions')}</option>{#each metrics.filter(value => value !== 'counts.actions') as value}<option value={value}>{operationsContributorMetricLabel(value)}</option>{/each}</select></label>
   <p>{rows.length} retained contributor reference{rows.length === 1 ? '' : 's'} for this selection.{omitted ? ` ${omitted} additional references omitted by the local view cap; aggregate metrics are unchanged, so this list is not complete.` : ''}</p>
   <div class="table-wrap"><table>
-    <caption>{metric} contributing records</caption>
+    <caption>{operationsContributorMetricLabel(metric)} · contributing records</caption>
     <thead><tr><th scope="col">Case</th><th scope="col">Record references</th><th scope="col">Basis</th></tr></thead>
     <tbody>{#each visible as row, index (`${currentPage}:${index}`)}<tr>
       <td><a href={caseWorkspaceHref(row.caseId, 'response')}>Case {row.caseId}</a></td>
@@ -26,7 +26,7 @@
   </table></div>
   {#if !rows.length}<p>No contributor references retained for this selection; check source/window and view-cap exclusions.</p>{/if}
   {#if pages > 1}<nav aria-label="Operations contributor pages"><button class="btn" type="button" disabled={currentPage <= 1} onclick={() => page = currentPage - 1}>Previous contributors</button><span>Page {currentPage} of {pages}</span><button class="btn" type="button" disabled={currentPage >= pages} onclick={() => page = currentPage + 1}>Next contributors</button></nav>{/if}
-  <p>Provider assertions and independent changed reviews are distinct. A changed review does not establish removal, causation or campaign elimination. Recurrence, dispute and restoration remain questions for the retained Case evidence, not inferred metrics.</p>
+  <details><summary>About this review</summary><p>References use the same calculation as the aggregate metrics but stay in page memory, outside exports. Cases remain distinct by ID. Provider assertions and independent changed reviews are separate; neither establishes removal, causation or campaign elimination. Review recurrence, dispute and restoration in the retained Case evidence.</p></details>
 </details>
 
 <style>
