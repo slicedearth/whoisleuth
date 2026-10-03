@@ -152,7 +152,7 @@ TLS and selected intelligence do not apply to address or ASN targets.
 Plans do not probe source health or measure remaining quota, cost, result fan-out
 or exact request counts. CLI configuration profiles repeat supported settings;
 optional selections made on the website do not transfer to a CLI command.
-For completed website results, see [Source quality](application-guide.md#lookup).
+For completed website results, see [Source quality](https://github.com/slicedearth/whoisleuth/blob/main/docs/application-guide.md#lookup).
 
 ### Message and link intake
 
