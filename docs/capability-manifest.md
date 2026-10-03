@@ -58,7 +58,7 @@ This catalogue describes existing execution, disclosure, retention and assurance
 
 ## CLI operation catalogue
 
-The public command catalogue keeps its version 1 offline/network label for all 51 installed CLI operations. These operation records retain the more precise plane, activation, credential, export and scoring contract.
+The public command catalogue keeps its version 1 offline/network label for all 52 installed CLI operations. These operation records retain the more precise plane, activation, credential, export and scoring contract.
 
 | Operation | Capability family | Legacy collection | Trigger | Planes | Network | Disclosure | Recipients | Credentials | Retention | Export | Scoring | Authorisation |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -108,6 +108,7 @@ The public command catalogue keeps its version 1 offline/network label for all 5
 | `command.cli.change-packet` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.sharing-review` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.workflow-plan` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
+| `command.cli.watchlist-review` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.workflow-run` | `workflow_execution` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>public ip address<br>homepage request<br>tls handshake<br>mta sts policy request<br>certificate search term | registry service<br>dns resolver<br>target public service<br>certificate transparency service | none | local output deliberate | local output | none | explicit network approval |
 | `command.cli.diff` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.reconcile` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
@@ -259,6 +260,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.change-packet` | none | bounded portable document | none | bounded atomic | explicit document | complete<br>partial<br>blocked | None |
 | `command.cli.sharing-review` | none | bounded portable document | none | bounded atomic | explicit document | complete<br>partial<br>blocked | None |
 | `command.cli.workflow-plan` | none | bounded local input | none | not applicable | all or nothing | complete | None |
+| `command.cli.watchlist-review` | none | bounded local input | none | bounded atomic | explicit per item | complete<br>partial | None |
 | `command.cli.workflow-run` | variant specific | collector specific | command bounded | step stops admission | explicit step | complete<br>partial<br>blocked | complete<br>partial<br>awaiting network approval<br>awaiting analyst selection<br>awaiting review confirmation<br>step failed |
 | `command.cli.diff` | none | bounded local input | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.reconcile` | none | bounded local input | none | bounded atomic | explicit per source | complete<br>partial | None |
@@ -473,6 +475,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.change-packet` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.sharing-review` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.workflow-plan` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
+| `command.cli.watchlist-review` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.workflow-run` | Only fixed installed recipe steps can run, and every network invocation requires explicit approval. |
 | `command.cli.diff` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.reconcile` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |

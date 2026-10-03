@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import {
   currentBrandProfileBrowserStore,
   migrateLegacyBrowserData,
@@ -127,8 +128,11 @@ test('retained candidate review hands off exact local context without collection
   await expect(page.locator('.domain-metadata')).toContainText('P3 routine review');
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
-    await page.setViewportSize({ width: 320, height: 700 });
-    await expectNoHorizontalOverflow(page);
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: test.info().outputPath(`watch-context-${theme}-${width}.png`), fullPage: true });
+    }
   }
   expect(requests).toEqual([]);
 });
@@ -145,6 +149,16 @@ test('scoped candidate exceptions expose exact scope and retained reversible rev
   await workspace.getByLabel('Exact candidate domain').selectOption(candidate.domain);
   await workspace.getByLabel('Exact matching rule').selectOption('keyword:example');
   await expect(workspace).toContainText('only candidate.example, only Example Brand');
+  if (captureVisualEvidenceEnabled()) {
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 390, 1280]) {
+        await page.setViewportSize({ width, height: 800 });
+        await expectNoHorizontalOverflow(page);
+        await page.screenshot({ path: test.info().outputPath(`candidate-review-${theme}-${width}.png`), fullPage: true });
+      }
+    }
+  }
   await workspace.getByRole('button', { name: 'Record reviewed exact exception' }).click();
   await expect(workspace.getByRole('status')).toContainText(
     'exact Brand/domain/rule exception was recorded',

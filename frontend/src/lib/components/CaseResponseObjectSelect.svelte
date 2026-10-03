@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CaseRecord } from '$lib/cases';
-  import { caseResponseObjectChoices, type CaseResponseObject } from '../../../../packages/cases/case-response-object.mts';
+  import { caseResponseObjectChoices, MAX_CASE_RESPONSE_OBJECTS, type CaseResponseObject } from '../../../../packages/cases/case-response-object.mts';
   let { record, label = 'Exact response object', emptyLabel = 'Unknown / not bound', value = $bindable(''), values = $bindable<string[]>([]), multiple = false, disabled = false, objects }: {
     record: CaseRecord; label?: string; emptyLabel?: string; value?: string; values?: string[]; multiple?: boolean; disabled?: boolean; objects?: readonly CaseResponseObject[];
   } = $props();
@@ -11,7 +11,7 @@
 <label class="field">{label}
   {#if multiple}<select multiple size="5" bind:value={values} {disabled}>{#each choices as choice (choice.value)}<option value={choice.value}>{choice.label}</option>{/each}</select>
   {:else}<select bind:value {disabled}><option value="">{emptyLabel}</option>{#each choices as choice (choice.value)}<option value={choice.value}>{choice.label}</option>{/each}</select>{/if}
-  <small>{multiple ? 'Choose up to 20 explicitly associated objects. Multiple selection uses your keyboard modifier key.' : 'Select the object type deliberately. A shared hostname does not bind other pages or accounts.'} Exact links remain private retained context; no collection is started.</small>
+  <small>{multiple ? `Choose up to ${MAX_CASE_RESPONSE_OBJECTS} objects. Use your keyboard modifier key to select more than one on desktop.` : 'Choose the exact object and its type.'}</small>
 </label>
 
 <style>select{width:100%;min-width:0}small{overflow-wrap:anywhere}</style>

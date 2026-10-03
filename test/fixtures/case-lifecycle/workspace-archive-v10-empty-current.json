@@ -9,10 +9,10 @@
       {
         "id": "cases",
         "schema": null,
-        "version": 15,
+        "version": 18,
         "recordCount": 0,
         "bytes": 65,
-        "checksum": "sha256:f4362b28391ea93064127355b0b08a173af9be794912e488e6e537361c031c3a"
+        "checksum": "sha256:ef90ab90c8c53d5bf7ace1137c44a67adbc2fbcd15b6b16a42fb340f55f336cc"
       },
       {
         "id": "campaigns",
@@ -25,18 +25,18 @@
       {
         "id": "brandProfiles",
         "schema": "whoisleuth.brand-profiles",
-        "version": 8,
+        "version": 10,
         "recordCount": 0,
-        "bytes": 104,
-        "checksum": "sha256:99243e277cdbf74f19693fc9ba8ae1e9c392a708b461bb25bc88dc4afb7c659b"
+        "bytes": 105,
+        "checksum": "sha256:09cad595a0f4f58e8536dd7d7ab02c22dc0a3c9c2dd7208210f55c545985f1ee"
       },
       {
         "id": "watchlists",
         "schema": "whoisleuth.watchlists",
-        "version": 2,
+        "version": 5,
         "recordCount": 0,
         "bytes": 102,
-        "checksum": "sha256:e734646b066d9a922865313a2a9cdd27ccc60ac4bb39e9b9f6c8153689632fdd"
+        "checksum": "sha256:b8beaff4498349fa92636e7b00f991a75fb8db667c1766c2cde1d7a38f62f3e8"
       },
       {
         "id": "shortlist",
@@ -49,50 +49,50 @@
       {
         "id": "detectionRules",
         "schema": "whoisleuth.detection-rules",
-        "version": 1,
+        "version": 2,
         "recordCount": 0,
         "bytes": 271,
-        "checksum": "sha256:f2825109106edf2f9ae172fdc28d253e66d368bf5c59380b0936c96b69098946"
+        "checksum": "sha256:c4e37e65daa41482cfd87e5e0e8e2d4527cfdc30f9b9636b35a32af340bb864d"
       },
       {
         "id": "relationshipObservations",
         "schema": "whoisleuth.relationship-observations",
-        "version": 1,
+        "version": 2,
         "recordCount": 0,
         "bytes": 328,
-        "checksum": "sha256:165feb9f59f231ae7aedb80e8fe6491da59d4dcb0fa2702e2fb48d6785d16d44"
+        "checksum": "sha256:c0a08e95b25d9876664ec2a60585c8313e72430e3ec6cf01b4911fc0b0d95287"
       },
       {
         "id": "bulkSessions",
         "schema": "whoisleuth.bulk-sessions",
-        "version": 4,
+        "version": 7,
         "recordCount": 0,
         "bytes": 303,
-        "checksum": "sha256:1880436599a6388f05d72465e1171a1d84f6c8c005daaa237c4a1f531e2a8752"
+        "checksum": "sha256:754b2e7a475825603f2e830d6ce54bc6c2ce16908839817112233ebedf7110e5"
       },
       {
         "id": "websiteSnapshots",
         "schema": "whoisleuth.website-profile-snapshots",
-        "version": 5,
+        "version": 6,
         "recordCount": 0,
         "bytes": 117,
-        "checksum": "sha256:1ef11b326d84ae243c263876dccb59fde8311e109818993e77c95eb8b370d477"
+        "checksum": "sha256:762e1d14357d62f1ea874ab40c16fafcfa1920f83436d58af44f3f5931de18bd"
       },
       {
         "id": "investigationTemplates",
         "schema": "whoisleuth.investigation-templates",
-        "version": 2,
+        "version": 3,
         "recordCount": 0,
         "bytes": 431,
-        "checksum": "sha256:5bc87cb00f1b7c905c705d205261196f25dc0ca143fa5ca462626503cadc91ea"
+        "checksum": "sha256:e04745dbacaff4fd177da754769027bbc3920c4a84ff49f16ec7d5e0951d0b3f"
       },
       {
         "id": "bulkReview",
         "schema": "whoisleuth.bulk-review",
-        "version": 1,
+        "version": 2,
         "recordCount": 0,
         "bytes": 70,
-        "checksum": "sha256:43497735ab26251b1b80c46612c0cd65599ea648659bcfc156d6dd0f436220df"
+        "checksum": "sha256:809f75ef455da980d99c849a63df4427aaac223bc39cb9c6bb877be3c1fbece3"
       },
       {
         "id": "analystReviewState",
@@ -122,7 +122,7 @@
   },
   "sections": {
     "cases": {
-      "version": 15,
+      "version": 18,
       "exportedAt": "2026-08-23T00:00:00.000Z",
       "cases": []
     },
@@ -135,13 +135,13 @@
     },
     "brandProfiles": {
       "schema": "whoisleuth.brand-profiles",
-      "version": 8,
+      "version": 10,
       "exportedAt": "2026-08-23T00:00:00.000Z",
       "profiles": []
     },
     "watchlists": {
       "schema": "whoisleuth.watchlists",
-      "version": 2,
+      "version": 5,
       "exportedAt": "2026-08-23T00:00:00.000Z",
       "watchlists": {}
     },
@@ -153,14 +153,14 @@
     },
     "detectionRules": {
       "schema": "whoisleuth.detection-rules",
-      "version": 1,
+      "version": 2,
       "exportedAt": "2026-08-23T00:00:00.000Z",
       "rules": [],
       "limitations": "Custom rules are browser-local analyst heuristics. Matches and score contributions are not proof of maliciousness and do not alter built-in risk scores."
     },
     "relationshipObservations": {
       "schema": "whoisleuth.relationship-observations",
-      "version": 1,
+      "version": 2,
       "generatedAt": "2026-08-23T00:00:00.000Z",
       "observations": [],
       "limitations": [
@@ -170,7 +170,7 @@
     },
     "bulkSessions": {
       "schema": "whoisleuth.bulk-sessions",
-      "version": 4,
+      "version": 7,
       "generatedAt": "2026-08-23T00:00:00.000Z",
       "sessions": [],
       "limitations": [
@@ -180,13 +180,13 @@
     },
     "websiteSnapshots": {
       "schema": "whoisleuth.website-profile-snapshots",
-      "version": 5,
+      "version": 6,
       "snapshots": [],
       "generatedAt": "2026-08-23T00:00:00.000Z"
     },
     "investigationTemplates": {
       "schema": "whoisleuth.investigation-templates",
-      "version": 2,
+      "version": 3,
       "templates": [],
       "generatedAt": "2026-08-23T00:00:00.000Z",
       "limitations": [
@@ -197,7 +197,7 @@
     },
     "bulkReview": {
       "schema": "whoisleuth.bulk-review",
-      "version": 1,
+      "version": 2,
       "presets": [],
       "rows": []
     },

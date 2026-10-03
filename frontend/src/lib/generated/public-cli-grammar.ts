@@ -3477,7 +3477,12 @@ export const PUBLIC_CLI_GRAMMAR = {
         "link",
         "withdraw-link",
         "assess",
-        "recheck"
+        "recheck",
+        "incident-link",
+        "action",
+        "action-event",
+        "recheck-question",
+        "close-object"
       ],
       "inputSource": "argv",
       "requiredWhenOptions": []
@@ -3905,6 +3910,60 @@ export const PUBLIC_CLI_GRAMMAR = {
       "options": [
         "--list",
         "--explain"
+      ]
+    }
+  ],
+  "metaActions": [
+    "help"
+  ]
+},
+"watchlist-review": {
+  "parserKey": "watchlist-review",
+  "bootstrapProfile": "allowed",
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[7], SHARED_OPTIONS[8], SHARED_OPTIONS[9]],
+  "positionals": [
+    {
+      "name": "operation",
+      "valueKind": "enum",
+      "minimum": 1,
+      "maximum": 1,
+      "values": [
+        "plan",
+        "export"
+      ],
+      "inputSource": "argv",
+      "requiredWhenOptions": []
+    },
+    {
+      "name": "source",
+      "valueKind": "file",
+      "minimum": 0,
+      "maximum": 1,
+      "values": [],
+      "inputSource": "argv_or_stdin",
+      "requiredWhenOptions": []
+    }
+  ],
+  "constraints": [
+    {
+      "kind": "requires_all",
+      "option": "--force",
+      "requiredOptions": [
+        "--output"
+      ]
+    },
+    {
+      "kind": "mutually_exclusive",
+      "options": [
+        "--quiet",
+        "--output"
+      ]
+    },
+    {
+      "kind": "excludes_all",
+      "option": "--quiet",
+      "excludedOptions": [
+        "--json"
       ]
     }
   ],

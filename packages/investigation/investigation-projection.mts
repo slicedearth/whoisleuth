@@ -31,6 +31,8 @@ import {
   type ObservationEnvelopeDerivation,
 } from './observation-envelope.mts';
 import { projectInvestigationCollections } from './investigation-projection-collections.mts';
+import { INVESTIGATION_ENTITY_TYPES, type InvestigationEntityType } from './investigation-entity.mts';
+export type { InvestigationEntityType } from './investigation-entity.mts';
 import {
   INVESTIGATION_PROJECTION_SCHEMA,
   INVESTIGATION_PROJECTION_VERSION,
@@ -46,24 +48,6 @@ export const MAX_PROJECTION_OBSERVATIONS = 4000;
 export const MAX_PROJECTION_RELATIONSHIPS = 10000;
 export const MAX_PROJECTION_REFERENCES = 100;
 export const MAX_PROJECTION_LIMITATIONS = 20;
-
-export type InvestigationEntityType =
-  | 'domain'
-  | 'nameserver_set'
-  | 'http_origin'
-  | 'favicon'
-  | 'certificate'
-  | 'certificate_pattern'
-  | 'provider'
-  | 'routing_asn'
-  | 'ip_address'
-  | 'tracking_identifier'
-  | 'favicon_cluster'
-  | 'official_asset_host'
-  | 'brand'
-  | 'case'
-  | 'campaign';
-// Patterns, providers and routing assertions are distinct from enumerated hosts.
 
 export type InvestigationScanDepth = 'fast' | 'deep' | 'unknown';
 export type InvestigationSourceState = 'absent' | 'invalid' | 'unsupported' | 'supported';
@@ -265,21 +249,7 @@ export interface RelationshipCandidate {
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 const HASH_RE = /^[a-f0-9]{64}$/i;
 const SCAN_DEPTHS = new Set<InvestigationScanDepth>(['fast', 'deep', 'unknown']);
-const ENTITY_TYPES = new Set<InvestigationEntityType>([
-  'domain',
-  'nameserver_set',
-  'http_origin',
-  'favicon',
-  'certificate',
-  'certificate_pattern', 'provider', 'routing_asn',
-  'ip_address',
-  'tracking_identifier',
-  'favicon_cluster',
-  'official_asset_host',
-  'brand',
-  'case',
-  'campaign',
-]);
+const ENTITY_TYPES = new Set<InvestigationEntityType>(INVESTIGATION_ENTITY_TYPES);
 const RELATIONSHIP_TYPES = new Set<InvestigationRelationshipType>([
   'domain_uses_nameserver_set',
   'domain_reached_http_origin',

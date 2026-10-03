@@ -1128,8 +1128,8 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
   Object.freeze({
     id: 'workspace-archive-v10-empty-current',
     path: 'test/fixtures/case-lifecycle/workspace-archive-v10-empty-current.json',
-    bytes: 7614,
-    sha256: '1850311074dad8504e99b7d74b824b99c75d051ec9a32b0d36c785800bd10eef',
+    bytes: 7616,
+    sha256: 'd40c0e6f28cac0cac5b38d45642e9cd86a7d77c689a852e85b2747b376c93a15',
     contentDigestSha256: null,
     schema: WORKSPACE_ARCHIVE_SCHEMA,
     version: WORKSPACE_ARCHIVE_VERSION,

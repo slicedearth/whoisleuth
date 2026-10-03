@@ -9,6 +9,7 @@ export type CaseResponseObjectKind = typeof CASE_RESPONSE_OBJECT_KINDS[number];
 export const CASE_RESPONSE_OBJECT_OUTCOMES = ['removed', 'restricted', 'suspended', 'delisted', 'warning', 'transferred', 'restored', 'disputed'] as const;
 export type CaseResponseObjectOutcome = typeof CASE_RESPONSE_OBJECT_OUTCOMES[number];
 export const MAX_CASE_RESPONSE_OBJECT_IDENTIFIER = 1_979;
+export const MAX_CASE_RESPONSE_OBJECTS = 20;
 export type CaseResponseObject = Readonly<{
   kind: CaseResponseObjectKind;
   identifier: string;
@@ -18,7 +19,7 @@ export type CaseResponseObject = Readonly<{
 export function readCaseResponseObjects(value: unknown, sourceVersion?: number | null): readonly CaseResponseObject[] | undefined {
   if (value === undefined) return undefined;
   if (sourceVersion != null && sourceVersion < OBJECT_RESPONSE_CASE_SCHEMA_VERSION) throw new TypeError('Object-specific response scope requires Case schema 18 or later.');
-  const objects = array(value, 'Response objects', 20).map(item => readCaseResponseObject(item, sourceVersion)!);
+  const objects = array(value, 'Response objects', MAX_CASE_RESPONSE_OBJECTS).map(item => readCaseResponseObject(item, sourceVersion)!);
   const keyed = objects.map(object => [JSON.stringify(object), object] as const);
   if (new Set(keyed.map(([key]) => key)).size !== keyed.length) throw new TypeError('Response objects must be unique.');
   return Object.freeze(keyed.sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([, object]) => object));

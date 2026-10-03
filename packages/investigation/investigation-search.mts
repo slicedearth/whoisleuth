@@ -11,6 +11,7 @@ import {
   type InvestigationStoreName,
 } from './investigation-projection.mts';
 import { readBoundedInvestigationProjection } from './investigation-projection-reader.mts';
+import { INVESTIGATION_ENTITY_TYPES } from './investigation-entity.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { MAX_CASE_OBJECTIVE_LENGTH } from '../contracts/case-portability.mts';
 import {
@@ -155,21 +156,7 @@ export interface IndexedEntity {
 }
 
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
-const ENTITY_TYPES = new Set<InvestigationEntityType>([
-  'domain',
-  'nameserver_set',
-  'http_origin',
-  'favicon',
-  'certificate',
-  'certificate_pattern', 'provider', 'routing_asn',
-  'ip_address',
-  'tracking_identifier',
-  'favicon_cluster',
-  'official_asset_host',
-  'brand',
-  'case',
-  'campaign',
-]);
+const ENTITY_TYPES = new Set<InvestigationEntityType>(INVESTIGATION_ENTITY_TYPES);
 const OBSERVATION_KINDS = new Set<InvestigationObservationKind>(INVESTIGATION_OBSERVATION_KINDS);
 const STORES = new Set<InvestigationStoreName>(['cases', 'campaigns', 'brandProfiles', 'relationshipRows', 'relationshipObservations']);
 const SOURCE_STATES = new Set<InvestigationSearchSourceState>(['absent', 'invalid', 'unavailable', 'unsupported', 'supported']);

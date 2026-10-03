@@ -185,6 +185,7 @@ const HISTORY_CATEGORY_FIELDS: Record<string, Set<string>> = {
     'faviconMatch',
     'faviconNearMatch',
     'hasPasswordField',
+    'hasExternalPasswordForm',
     'phishingLanguageMatch',
     'reusesOfficialAssets',
   ]),
@@ -395,7 +396,7 @@ function classifyChange(
     }
     return { kind: 'availability_changed', tone: 'warn' };
   }
-  if (['faviconMatch', 'faviconNearMatch', 'hasPasswordField', 'reusesOfficialAssets'].includes(field) && before === false && after === true) {
+  if (['faviconMatch', 'faviconNearMatch', 'hasPasswordField', 'hasExternalPasswordForm', 'reusesOfficialAssets'].includes(field) && before === false && after === true) {
     return { kind: 'risk_signal_added', tone: 'danger' };
   }
   if (field === 'phishingLanguageMatch' && !before && after) return { kind: 'risk_signal_added', tone: 'danger' };

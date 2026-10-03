@@ -91,7 +91,16 @@ test('multi-host snapshot review exposes exact outcomes, wildcards and history w
   await snapshots.getByRole('checkbox', { name: /^selected-example-later/u }).check();
   const comparison = snapshots.getByRole('region', { name: 'Infrastructure snapshot comparison', exact: true });
   await expect(comparison).toContainText('Comparison · partial'); await expect(comparison).toContainText('unknown'); await expect(comparison).toContainText('failed');
-  for (const width of [1280, 390, 320]) { await page.setViewportSize({ width, height: 844 }); for (const theme of ['light', 'dark'] as const) { await useTheme(page, theme); await expectNoHorizontalOverflow(page); } }
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme); await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) {
+        await snapshots.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: test.info().outputPath(`snapshot-review-${theme}-${width}.png`) });
+      }
+    }
+  }
   expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(before);
   expect(requests).toEqual([]);
 });

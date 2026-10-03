@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { createCase, updateCase } from '../packages/cases/case-record-operations.mts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { openSeededTimelineCase, openCaseResponseWorkspace } from './case-test-fixtures';
@@ -68,8 +69,10 @@ test('object authoring and qualified coverage remain available with native keybo
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 900 }); await openCaseSection(page, 'Response'); await binding.scrollIntoViewIfNeeded();
       await expect(binding).toBeVisible(); await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: test.info().outputPath(`object-authoring-${theme}-${width}.png`) });
       await openCaseClassification(page); await coverage.scrollIntoViewIfNeeded();
       await expect(coverage.getByRole('table')).toBeVisible(); await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: test.info().outputPath(`object-coverage-${theme}-${width}.png`) });
     }
   }
 });

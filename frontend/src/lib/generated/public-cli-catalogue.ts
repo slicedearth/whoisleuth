@@ -1442,7 +1442,7 @@ const SHARED_COMMAND_OPTIONS = [
   }
 ] as const;
 export const PUBLIC_CLI_CATALOGUE = {
-  "commandCount": 51,
+  "commandCount": 52,
   "groups": [
     "investigate",
     "respond",
@@ -4337,7 +4337,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "review-evidence",
       "summary": "Review supplied evidence offline",
-      "description": "Review versioned protocol evidence, incident sequences, domain history, platform objects, storefronts or connector configuration offline.",
+      "description": "Review versioned protocol evidence, source-qualified infrastructure snapshots/comparisons, incident sequences, domain history, platform objects, storefronts or connector configuration offline.",
       "group": "investigate",
       "common": true,
       "usage": "whoisleuth review-evidence [\u003csource>] [--mmdb \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
@@ -4386,7 +4386,9 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002elocal-geoip-query",
         "whoisleuth\u002elocal-mmdb-query",
         "whoisleuth\u002elocal-mmdb-review",
-        "whoisleuth\u002eencrypted-dns-plan-input"
+        "whoisleuth\u002eencrypted-dns-plan-input",
+        "whoisleuth\u002einfrastructure-observation",
+        "whoisleuth\u002einfrastructure-comparison.input"
       ],
       "inputLimits": [
         "Reads one bounded versioned evidence or request-planning document and, only with --mmdb, one selected bounded local database. Performs no collection.",
@@ -4508,10 +4510,10 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "case",
       "summary": "Review and update ordinary local Case files",
-      "description": "Show or open a local Case, append a note or evidence pin, link evidence, withdraw a link, record an assessment, or retain an offline recheck. Use --input for pin, link, withdraw-link, assessment and recheck JSON; --text or --note-file for a note. Link input contains fromPinId, toPinId, kind (derived_from or shared_source), and basis. Withdrawal input contains id and reason. Mutations require --output and always write the complete current Case export.",
+      "description": "Show or open a local Case, append a note or evidence pin, link evidence, record an assessment or offline recheck, retain an incident-link, create an action, append an action-event, save a recheck-question, or close-object. JSON mutations use --input; notes use --text or --note-file. Link input contains fromPinId, toPinId, kind and basis. Action-event input contains id and transition. Explicit responseObjects bind an action; a typed objectOutcome requires an explicit affected subset on its event. Object closure never closes other objects or the Case. Mutations require --output and write the complete current Case export.",
       "group": "respond",
       "common": true,
-      "usage": "whoisleuth case \u003cshow|open|note|pin|link|withdraw-link|assess|recheck> [\u003csource>] [--text \u003cvalue>|--note-file \u003cfile>] [--case-id \u003cvalue>] [--domain \u003cvalue>] [--title \u003cvalue>] [--new-incident] [--input \u003cfile>] [--expect-file-digest \u003cvalue>] [--json] [--no-color]",
+      "usage": "whoisleuth case \u003cshow|open|note|pin|link|withdraw-link|assess|recheck|incident-link|action|action-event|recheck-question|close-object> [\u003csource>] [--text \u003cvalue>|--note-file \u003cfile>] [--case-id \u003cvalue>] [--domain \u003cvalue>] [--title \u003cvalue>] [--new-incident] [--input \u003cfile>] [--expect-file-digest \u003cvalue>] [--json] [--no-color]",
       "example": "whoisleuth case open --domain example.test --output cases.json\n  whoisleuth case show cases.json\n  whoisleuth case note cases.json --text \"Review the retained observation\" --output cases.json --force",
       "boundary": "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:\u003cdigest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
       "collection": {
@@ -4532,7 +4534,12 @@ export const PUBLIC_CLI_CATALOGUE = {
             "link",
             "withdraw-link",
             "assess",
-            "recheck"
+            "recheck",
+            "incident-link",
+            "action",
+            "action-event",
+            "recheck-question",
+            "close-object"
           ],
           "inputSource": "argv",
           "requiredWhenOptions": []
@@ -5291,6 +5298,100 @@ export const PUBLIC_CLI_CATALOGUE = {
         "export": "local_output",
         "outcomes": [
           "complete"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The command reads only selected bounded local input and makes no network request.",
+          "Output remains under the operator's local retention and deletion control."
+        ]
+      }
+    },
+    {
+      "id": "watchlist-review",
+      "summary": "Review a local candidate watchlist handoff",
+      "description": "Preview or export an explicit candidate selection to a local watchlist.",
+      "group": "assure",
+      "common": false,
+      "usage": "whoisleuth watchlist-review \u003cplan|export> [\u003csource>] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth watchlist-review plan selection.json --json",
+      "boundary": "Reads bounded local JSON only. Plan shows exact domains, duplicates, per-domain outcomes, destination and review priority with zero additional requests. Export emits Watchlist schema 5 without creating a scan or baseline. Neither mode enables collection or scheduling.",
+      "collection": {
+        "mode": "offline",
+        "scope": "At most 2,000 selected candidate domains; no target requests."
+      },
+      "inputs": [
+        {
+          "name": "operation",
+          "valueKind": "enum",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [
+            "plan",
+            "export"
+          ],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        },
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 0,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv_or_stdin",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--json",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
+      "networkEffect": "offline",
+      "disclosureClass": "none",
+      "explicitAuthorisationRequired": false,
+      "planSupport": true,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002ecandidate-watch-input",
+        "whoisleuth\u002ewatchlists"
+      ],
+      "inputLimits": [
+        "At most 2,000 selected candidate domains; no target requests.",
+        "operation: 1-1 enum value",
+        "source: 0-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [
+        "Exact candidate handoff plan",
+        "Local watchlist export"
+      ],
+      "capability": {
+        "familyId": "offline_review",
+        "networkMode": "none",
+        "dataSent": [
+          "none"
+        ],
+        "recipients": [
+          "none"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete",
+          "partial"
         ],
         "documentStates": [],
         "privacyLimitations": [
