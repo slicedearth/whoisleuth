@@ -727,6 +727,19 @@ describe('verification architecture contracts', () => {
     assert.ok(assignment.mandatorySpecialisedChecks.includes('cli-package'));
   });
 
+  test('shared domain changes reach actual browser journeys through frontend adapters', async () => {
+    const paths = ['lib/lookup-progress.mts', 'packages/evidence/decision-fact.mts', 'cli/command-definition.mts'];
+    const plan = await createVerificationOwnershipPlan(paths);
+    assert.equal(plan.interpretation.some(note => note.startsWith('Dependency analysis failed')), false);
+    for (const file of paths.slice(0, 2)) {
+      const assignment = plan.assignments.find(item => item.changedPath === file)!;
+      assert.ok(assignment.focusedBrowserChecks.includes('e2e/lookup-evidence-design.spec.ts'), file);
+      assert.equal(assignment.userFacingBrowserRequired, true);
+    }
+    const cli = plan.assignments.find(item => item.changedPath === paths[2])!;
+    assert.equal(cli.focusedBrowserChecks.includes('e2e/lookup-evidence-design.spec.ts'), false);
+  });
+
 
   test('selects one owner while aggregating every matching verification impact', () => {
     const plan = buildVerificationOwnershipPlan([
@@ -1135,6 +1148,10 @@ describe('verification architecture contracts', () => {
       rmSync(path.join(directory, 'deleted.ts'));
       assert.deepEqual(discoverFocusedVerificationPaths(base, directory), ['committed.ts', 'deleted.ts', 'new.ts', 'staged.ts', 'working.ts']);
       assert.deepEqual(discoverFocusedVerificationPaths('HEAD', directory), ['deleted.ts', 'new.ts', 'staged.ts', 'working.ts']);
+      // Git normally collapses this into one rename destination. Both owners
+      // must be checked even when moving unchanged bytes to another subsystem.
+      git('mv', 'committed.ts', 'renamed.ts');
+      assert.deepEqual(discoverFocusedVerificationPaths('HEAD', directory), ['committed.ts', 'deleted.ts', 'new.ts', 'renamed.ts', 'staged.ts', 'working.ts']);
       assert.throws(() => discoverFocusedVerificationPaths('absent-revision', directory), /Git changed-path discovery failed/u);
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });

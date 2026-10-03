@@ -1,6 +1,6 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page, Request } from '@playwright/test';
-import { CLI_COMMANDS } from '../cli/command-reference.mts';
+import { CLI_COMMANDS, RUNNABLE_INVESTIGATION_PLAN_RECIPES } from '../cli/command-reference.mts';
 import { PUBLIC_COVERAGE_SUMMARY } from '../frontend/src/lib/generated/public-coverage-summary.ts';
 import { PUBLIC_METHODOLOGY } from '../frontend/src/lib/generated/public-methodology.ts';
 import { PUBLIC_EXAMPLES_INDEX } from '../frontend/src/lib/generated/public-examples-index.ts';
@@ -22,7 +22,7 @@ function collectInvestigationRequests(page: Page): string[] {
 test('CLI workflow recipes and review confirmation remain reachable without empty planning groups', async ({ page }, testInfo) => {
   await page.goto('/cli');
   const workflows = page.locator('[aria-labelledby="runnable-recipes-title"]');
-  await expect(workflows.locator('li')).toHaveCount(10);
+  await expect(workflows.locator('li > code')).toHaveText([...RUNNABLE_INVESTIGATION_PLAN_RECIPES]);
   await expect(workflows).toContainText('certificate-anomaly');
   await expect(workflows).toContainText('evidence-handoff');
   await expect(page.getByRole('heading', { name: 'Planning templates', exact: true })).toHaveCount(0);
@@ -117,15 +117,14 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   await expect(page.locator('.page-sections').getByRole('link', { name: 'Command reference' })).toHaveAttribute('href', '#commands');
   await expect(page.locator('.public-section-navigation')).toHaveCount(0);
   expect((await page.locator('.reference-document').boundingBox())?.width ?? 0).toBeGreaterThan(800);
-  const startNotes = page.locator('.start-notes');
-  const installedHelpNote = startNotes.locator(':scope > p');
-  const helpNoteHeight = (await installedHelpNote.boundingBox())?.height ?? 0;
-  await startNotes.locator('.update-instructions > summary').click();
-  expect((await installedHelpNote.boundingBox())?.height ?? 0).toBeCloseTo(helpNoteHeight, 0);
-  const behaviourDetails = page.locator('.additional-behaviour > details');
-  const closedBehaviourHeight = (await behaviourDetails.nth(1).boundingBox())?.height ?? 0;
-  await behaviourDetails.nth(0).locator(':scope > summary').click();
-  expect((await behaviourDetails.nth(1).boundingBox())?.height ?? 0).toBeCloseTo(closedBehaviourHeight, 0);
+  const configuration = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: /^Configuration profiles$/u }) });
+  const handoffs = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: /^Browser and evidence handoffs$/u }) });
+  await expect(configuration).not.toHaveAttribute('open');
+  await expect(handoffs).not.toHaveAttribute('open');
+  await configuration.locator('summary').click();
+  await expect(configuration).toHaveAttribute('open');
+  await expect(configuration.getByRole('list')).toBeVisible();
+  await expect(handoffs).not.toHaveAttribute('open');
 
   await page.setViewportSize({ width: 1024, height: 768 });
   await expect(page.locator('.reference-tree')).toBeHidden();
@@ -525,8 +524,16 @@ test('renders methodology and deferred coverage from fixed metadata without requ
   const catalogue = page.getByTestId('public-coverage-catalogue');
   await expect(catalogue).toBeVisible();
   await expect(catalogue.getByRole('status')).toContainText('implemented capability families');
-  await catalogue.getByRole('checkbox', { name: 'Optional or configuration-dependent only' }).check();
-  await expect(catalogue.getByRole('status')).not.toContainText('Showing 32 of 32');
+  const optional = catalogue.getByRole('heading', { name: 'Optional scheduled monitoring worker', exact: true });
+  const standard = catalogue.getByRole('heading', { name: 'DNS intelligence', exact: true });
+  await expect(optional).toBeVisible();
+  await expect(standard).toBeVisible();
+  const optionalOnly = catalogue.getByRole('checkbox', { name: 'Optional or configuration-dependent only' });
+  await optionalOnly.check();
+  await expect(optional).toBeVisible();
+  await expect(standard).toHaveCount(0);
+  await optionalOnly.uncheck();
+  await expect(standard).toBeVisible();
   expect(investigationRequests).toEqual([]);
 });
 

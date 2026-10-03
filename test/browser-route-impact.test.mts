@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { browserRouteReferences, browserRouteMatches, browserTestsForRoutes } from '../tools/browser-route-impact.mts';
+import { indexRuntimeConsumers } from '../tools/runtime-test-consumers.mts';
 
 test('finds browser destinations without treating comments, remote URLs or imports as routes', () => {
   const source = [
@@ -37,6 +38,29 @@ test('discovers differently named journeys visiting a changed page without anoth
     ['e2e/unrelated.spec.ts', browserRouteReferences("page.goto('/monitor');")],
   ]);
   assert.deepEqual(browserTestsForRoutes(['frontend/src/routes/(public)/resources/+page.svelte'], references), ['e2e/new-session.spec.ts']);
+});
+
+test('shared runtime consumers join route destinations without selecting a CLI-only sibling', () => {
+  const shared = 'packages/example/rule.mts';
+  const adapter = 'frontend/src/lib/example.ts';
+  const route = 'frontend/src/routes/(console)/lookup/+page.svelte';
+  const cli = 'cli/example.mts';
+  const graph = { modules: [
+    { source: shared, dependencies: [] },
+    { source: adapter, dependencies: [{ module: '../../../packages/example/rule.mts', resolved: shared }] },
+    { source: route, dependencies: [{ module: adapter, resolved: adapter }] },
+    { source: cli, dependencies: [{ module: shared, resolved: shared }] },
+  ] } as Parameters<typeof indexRuntimeConsumers>[0];
+  const references = new Map([
+    ['e2e/analyst-session.spec.ts', ['/lookup']],
+    ['e2e/unrelated.spec.ts', ['/monitor']],
+  ]);
+  const consumers = indexRuntimeConsumers(graph, 10).select([shared, cli], [route], false).consumers;
+  assert.deepEqual(browserTestsForRoutes(consumers.get(shared)!, references), ['e2e/analyst-session.spec.ts']);
+  assert.deepEqual(browserTestsForRoutes(consumers.get(cli)!, references), []);
+  graph.modules[1]!.dependencies[0]!.couldNotResolve = true;
+  const uncertain = indexRuntimeConsumers(graph, 10).select([shared], [route], false);
+  assert.deepEqual(browserTestsForRoutes(uncertain.consumers.get(shared)!, references), ['e2e/analyst-session.spec.ts']);
 });
 
 test('the Resources page reaches authentication and practice consumers independently of their names', () => {

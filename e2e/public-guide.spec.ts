@@ -104,10 +104,10 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.locator('.hero .mark')).toHaveCount(0);
   await expect(page.locator('.goal-paths article')).toHaveCount(publicGuideGoals.length);
   await expect(page.getByRole('heading', { name: 'Inspect one domain' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Inspect one domain guide' })).toHaveCSS('cursor', 'pointer');
+  await expect(page.getByRole('link', { name: 'Inspect one domain guide' })).toHaveAttribute('href', '/resources#inspect-one-domain');
   await expect(page.getByRole('link', { name: 'Find brand lookalikes guide' })).toHaveAttribute('href', '/resources#find-brand-lookalikes');
   await expect(page.getByRole('link', { name: 'Track important findings guide' })).toHaveAttribute('href', '/resources#track-important-findings');
-  await expect(page.getByRole('link', { name: /Browse the topic library/u })).toHaveCSS('cursor', 'pointer');
+  await expect(page.getByRole('link', { name: /Browse the topic library/u })).toHaveAttribute('href', '/resources');
   await expect(page.getByRole('heading', { name: 'Find brand lookalikes' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Track important findings' })).toBeVisible();
   await expect(page.locator('.product-preview .preview-panel')).toHaveCount(3);

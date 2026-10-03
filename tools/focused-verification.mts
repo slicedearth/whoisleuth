@@ -152,7 +152,7 @@ function nulPaths(value: string): readonly string[] {
 export function discoverFocusedVerificationPaths(since = 'HEAD', repositoryRoot = REPOSITORY_ROOT): readonly string[] {
   const base = gitOutput(['rev-parse', '--verify', '--end-of-options', `${since}^{commit}`], repositoryRoot).trim();
   const tracked = nulPaths(gitOutput([
-    '-c', 'core.quotePath=false', 'diff', '--name-only', '-z', '--diff-filter=ACMRTD', base, '--',
+    '-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z', '--diff-filter=ACMRTD', base, '--',
   ], repositoryRoot));
   const untracked = nulPaths(gitOutput([
     '-c', 'core.quotePath=false', 'ls-files', '--others', '--exclude-standard', '-z', '--',

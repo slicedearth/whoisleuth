@@ -215,7 +215,7 @@ test('Brand refresh preserves separate profile, allowlist and account-control dr
   await page.getByLabel('Brand name', { exact: true }).fill('Unsaved profile name');
   const allowlist = page.getByRole('region', { name: 'Allowlist', exact: true });
   await allowlist.getByLabel('Add domains').fill('submitted.example');
-  await allowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
+  await allowlist.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
   await openBrandWorkbench(page, 'attestations');
   const control = page.getByRole('group', { name: 'Registrar MFA', exact: true });
   await control.getByLabel('Review state').selectOption('observed');
@@ -235,7 +235,7 @@ test('Brand refresh preserves separate profile, allowlist and account-control dr
   await expect(control.getByLabel('Review note')).toHaveValue('A separate unsaved review');
   await expect(control.getByLabel('Review note')).toBeFocused();
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
-  await allowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
+  await allowlist.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
   await allowlist.getByRole('button', { name: 'Save allowlist', exact: true }).click();
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved the allowlist');
   await page.getByRole('tab', { name: 'Tools', exact: true }).click();
@@ -377,7 +377,7 @@ test('a refreshed peer selection does not replace the open Brand tool owner', as
     await page.getByRole('tab', { name: 'Overview', exact: true }).click();
     await expect(allowlist.getByLabel('Add domains')).toHaveValue('retained.example');
     await expect(page.getByText('Open drafts belong to “Stored Brand”.', { exact: false })).toBeVisible();
-    await allowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
+    await allowlist.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
     await expect(allowlist.getByText('retained.example', { exact: true })).toBeVisible();
     await expect(allowlist.getByRole('button', { name: 'Save allowlist', exact: true })).toBeDisabled();
     await openBrandWorkbench(page, 'control');
@@ -403,7 +403,7 @@ test('Brand editors reject same-clock peer changes without replacing unsaved dra
   await page.getByLabel('Brand name', { exact: true }).fill('Local name draft');
   const allowlist = page.getByRole('region', { name: 'Allowlist', exact: true });
   await allowlist.getByLabel('Add domains').fill('local.example');
-  await allowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
+  await allowlist.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
   await openBrandWorkbench(page, 'attestations');
   const mfa = page.getByRole('group', { name: 'Registrar MFA', exact: true });
   await mfa.getByLabel('Review note').fill('Local review draft');
@@ -417,7 +417,7 @@ test('Brand editors reject same-clock peer changes without replacing unsaved dra
     await expect(peer.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved "Peer profile"');
     const peerList = peer.getByRole('region', { name: 'Allowlist', exact: true });
     await peerList.getByLabel('Add domains').fill('peer.example');
-    await peerList.getByRole('button', { name: 'Add', exact: true }).first().click();
+    await peerList.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
     await peerList.getByRole('button', { name: 'Save allowlist', exact: true }).click();
     await expect(peer.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved the allowlist');
     await openBrandWorkbench(peer, 'attestations');
@@ -652,11 +652,11 @@ test('the active Brand Profile has a separate maintainable allowlist', async ({ 
   const allowlist = page.getByRole('region', { name: 'Allowlist' });
   await expect(allowlist).toBeVisible();
   await allowlist.getByLabel('Add domains').fill('reviewed.example\nstored.example');
-  await allowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
+  await allowlist.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
   await expect(allowlist.getByText('reviewed.example', { exact: true })).toBeVisible();
   await expect(allowlist.locator('li', { hasText: 'stored.example' })).toHaveCount(0);
   await allowlist.getByLabel('Add registrar names').fill('Example Registrar');
-  await allowlist.getByRole('button', { name: 'Add', exact: true }).nth(1).click();
+  await allowlist.getByRole('region', { name: 'Registrars', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
   await expect(allowlist.getByText('Example Registrar', { exact: true })).toBeVisible();
   await expect(allowlist).toContainText('Unsaved allowlist changes');
   await allowlist.getByRole('button', { name: 'Save allowlist' }).click();
@@ -675,7 +675,7 @@ test('the active Brand Profile has a separate maintainable allowlist', async ({ 
 
   const openEditorAllowlist = page.getByRole('region', { name: 'Allowlist' });
   await openEditorAllowlist.getByLabel('Add domains').fill('later-review.example');
-  await openEditorAllowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
+  await openEditorAllowlist.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
   await openEditorAllowlist.getByRole('button', { name: 'Save allowlist' }).click();
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved the allowlist');
   await page.getByLabel('Brand name').fill('Renamed Example Brand');

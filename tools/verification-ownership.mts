@@ -323,14 +323,16 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
     stage = 'reading dependency configuration';
     const config = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, '.dependency-cruiser.json'), 'utf8')) as { options: IOptions };
     const components = importedPaths.filter(file => file.endsWith('.svelte'));
-    const frontendPaths = importedPaths.filter(file => file.startsWith('frontend/src/'));
+    // Shared domain code reaches pages through frontend adapters. Follow those
+    // imports too; browser journeys need not import the changed module directly.
+    const browserSourcePaths = importedPaths.filter(file => /^(?:frontend\/src|lib|packages)\//u.test(file));
     const routeEntriesOnly = importedPaths.every(file => /^frontend\/src\/routes\/.*\+(?:page|layout)\.svelte$/u.test(file));
     // Node unit tests cannot import Svelte components directly. Their explicit
     // source-contract checks remain selected by owner/name; do not load every
     // server and CLI test merely to resolve a presentation component's routes.
     const unitEntries = importedPaths.some(file => !file.endsWith('.svelte')) ? inventory : [];
     const entries = routeEntriesOnly ? [...browserInventory]
-      : [...unitEntries, ...browserInventory, ...(frontendPaths.length ? ['frontend/src/routes'] : [])];
+      : [...unitEntries, ...browserInventory, ...(browserSourcePaths.length ? ['frontend/src/routes'] : [])];
     stage = 'resolving the source import graph';
     const { output } = await cruise(entries, {
       ...config.options, baseDir: REPOSITORY_ROOT, outputType: 'json', tsPreCompilationDeps: 'specify', validate: false,
@@ -349,14 +351,14 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
     ]);
     const routes = graph.modules.map(module => module.source).filter(file => file.startsWith('frontend/src/routes/')
       || file.startsWith('frontend/src/') && RULES.some(rule => rule.impactOnly && rule.matches(file)));
-    routeConsumers = index.select(frontendPaths, routes, false).consumers;
+    routeConsumers = index.select(browserSourcePaths, routes, false).consumers;
     componentContracts = leafComponentContracts(components, graph, browserInventory);
     // Known owners retain their conservative browser coverage. Positive import
     // evidence additionally follows shared support into its browser consumers;
     // a complete graph with no browser consumer does not turn CLI-only helpers
     // into application changes. Unknown edges retain all reachable consumers.
     browserSelection = index.select(importedPaths, browserInventory, false).consumers;
-    if (frontendPaths.length) {
+    if (browserSourcePaths.length) {
       stage = 'reading browser route references';
       // A browser journey can visit a page without importing it or sharing its
       // filename. Include those consumers before iteration reaches a full run.

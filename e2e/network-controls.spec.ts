@@ -99,7 +99,7 @@ test('disabled certificate and website capabilities degrade their own controls o
   await page.goto('/discover');
   await page.getByRole('tab', { name: 'Certificates' }).click();
   await expect(page.getByRole('button', { name: 'Search certificates' })).toBeDisabled();
-  await expect(page.getByText('certificate transparency is disabled by deployment policy.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('note').filter({ hasText: /^certificate transparency is disabled by deployment policy\.$/u })).toBeVisible();
 
   await page.goto('/brands');
   const newProfileButton = page.getByRole('button', { name: 'New profile' });
@@ -108,7 +108,7 @@ test('disabled certificate and website capabilities degrade their own controls o
   await page.getByRole('textbox', { name: 'Official domains', exact: true }).fill('example.test');
   await page.getByText('Official-site identity', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'Capture official-site baseline' })).toBeDisabled();
-  await expect(page.getByText('website probe is disabled by deployment policy.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('form', { name: 'Brand Profile', exact: true }).getByRole('note').filter({ hasText: /^website probe is disabled by deployment policy\.$/u })).toBeVisible();
   const saveProfileButton = page.getByRole('button', { name: 'Save profile' });
   await expect(saveProfileButton).toBeEnabled();
 });
@@ -118,7 +118,7 @@ test('a disabled registry nameserver-search capability leaves local discovery av
   await page.goto('/discover');
   await page.getByRole('tab', { name: 'Nameservers' }).click();
   await expect(page.getByRole('button', { name: 'Search registry' })).toBeDisabled();
-  await expect(page.getByText('rdap nameserver search is disabled by deployment policy.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('note').filter({ hasText: /^rdap nameserver search is disabled by deployment policy\.$/u })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Lookalikes' }).click();
   await expect(page.getByRole('button', { name: 'Generate candidates' })).toBeEnabled();
@@ -154,7 +154,7 @@ test('an incomplete deep scan is stored conservatively so skipped probes cannot 
   await page.getByLabel('Domains').fill('example.invalid');
   await page.getByLabel('Scan mode').selectOption('deep');
   await page.getByRole('button', { name: 'Scan 1 domain' }).click();
-  await expect(page.getByRole('status').first()).toHaveText('Completed 1 of 1 lookups.');
+  await expect(page.getByRole('status').filter({ hasText: /^Completed 1 of 1 lookups\.$/u })).toBeVisible();
   await openBulkFilters(page);
   await page.getByLabel('Watchlist name').fill('Policy-safe baseline');
   await page.getByRole('button', { name: 'Save to Monitor' }).click();

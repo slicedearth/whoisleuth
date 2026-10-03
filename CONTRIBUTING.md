@@ -184,6 +184,10 @@ sentences when their wording is not the contract. Keep independent assertions
 for meaningful names, privacy disclosures and evidence limitations. Run the
 affected tests before broad verification.
 
+Scope repeated controls to their named region or group rather than their position.
+Prove filter membership and disclosure state directly; catalogue totals and
+incidental dimensions should not need updating after unrelated content changes.
+
 Lookup and Bulk collection start in `controllers/*-collection-workflow.ts`:
 admission, submitted context and completion live there. Routes supply view effects;
 request controllers own cancellation and workspace controllers own saved mutations.
