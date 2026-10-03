@@ -752,7 +752,9 @@ test('propagates unavailable active-profile context across Lookup, Bulk and Disc
   await expect(page.locator('.local-context-status')).toContainText('(profile)');
   await page.getByLabel('Brand or domain').fill('example.invalid');
   await page.getByRole('button',{name:'Generate candidates'}).click();
-  await expect(page.getByRole('status').filter({hasText:'Profile-derived trust and allowlist exclusions remain unavailable'})).toContainText('no candidate was classified as outside those lists');
+  const generationStatus = page.getByRole('status').filter({ hasText: /^Generated \d+/u });
+  await expect(generationStatus).toContainText('Brand Profile context is unavailable');
+  await expect(generationStatus).toContainText('domain exclusions were not evaluated');
   expectNoFeatureApiRequests(apiRequests);
 });
 
