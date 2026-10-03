@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 import { createCase } from '../packages/cases/case-record-operations.mts';
 import { parseContextInput, reviewContextInput } from '../packages/investigation/context-review.mts';
 import { reviewDomainHistory, readDomainHistoryDeclarations } from '../packages/investigation/domain-history-review.mts';
+import { domainTransitionReview } from '../packages/investigation/domain-transition-review.mts';
 import { reviewPlatformContinuity, readPlatformObjects } from '../packages/investigation/platform-continuity-review.mts';
 import { reviewStorefront, readStorefrontObservation } from '../packages/investigation/storefront-review.mts';
 import { reviewConnectorProvenance, readConnectorConfiguration, reviewConnectorConfigurationText, connectorConfigurationPresentation } from '../packages/investigation/connector-provenance-review.mts';
@@ -57,6 +58,37 @@ describe('contextual evidence review', () => {
     assert.throws(() => reviewDomainHistory(historyCase(), { expectedChanges: [], retiredDependencies: [{ asset: 'unrelated.test', dependency: 'other.test', family: 'web', retiredAt: BEFORE, source: 'Fixture' }] }, NOW), /involve/u);
     const input = contextInputs()[0]!;
     assert.throws(() => reviewContextInput({ ...input, evidence: { ...(input.evidence as object), caseId: 'absent' } }, NOW), /not present/u);
+  });
+  test('domain transitions prompt scoped reassessment without changing earlier decisions or inferring control', () => {
+    assert.match(domainTransitionReview('createdDate', BEFORE, NOW)!, /earlier relevance.*Keep the prior history.*does not establish/u);
+    assert.match(domainTransitionReview('expiryDate', BEFORE, NOW)!, /Expiry, deletion and re-registration are different/u);
+    assert.match(domainTransitionReview('hasPasswordField', false, true)!, /newly observed password form.*alone is not credential theft/u);
+    assert.match(domainTransitionReview('hasMx', false, true)!, /does not show whether messages were sent/u);
+    assert.match(domainTransitionReview('activityStatus', 'active', 'unreachable')!, /inconclusive.*do not treat it as disappearance/u);
+    assert.match(domainTransitionReview('pageTitle', 'Parked', 'New shop')!, /expected site changes/u);
+    for (const field of ['riskScore', 'riskModelVersion', 'opportunityScore', 'mutationTypes', 'feedMembership']) {
+      assert.equal(domainTransitionReview(field, 0, 1), null);
+    }
+    assert.equal(domainTransitionReview('hasPasswordField', null, true), null);
+    const record = historyCase();
+    record.evidenceHistory[0]!.hasPasswordField = false;
+    record.evidenceHistory[1]!.hasPasswordField = true;
+    const original = structuredClone(record);
+    const report = reviewDomainHistory(record, { expectedChanges: [], retiredDependencies: [] }, NOW);
+    assert.ok(report.observations.some(row => row.label.includes('Password form') && row.state === 'changed'));
+    assert.ok(report.nextSteps.some(value => value.includes('newly observed password form')));
+    assert.deepEqual(record, original);
+  });
+  test('partial collections expose the comparison gap without creating an activation prompt', () => {
+    const record = historyCase();
+    record.evidenceHistory[0]!.hasPasswordField = false;
+    record.evidenceHistory[1]!.hasPasswordField = true;
+    record.evidenceHistory[1]!.webCollectionQuality = { version: 1, page: 'unavailable', favicon: 'not_collected', combined: 'partial' };
+    const report = reviewDomainHistory(record, { expectedChanges: [], retiredDependencies: [] }, NOW);
+    assert.equal(report.state, 'partial');
+    assert.ok(report.observations.some(row => row.label === 'Comparison coverage' && row.state === 'partial'));
+    assert.ok(!report.observations.some(row => row.label.includes('Password form')));
+    assert.ok(!report.nextSteps.some(value => value.includes('newly observed password form')));
   });
   test('platform continuity scopes identity to origin and object type, preserving version and per-object outcomes', () => {
     const first = platformObject();

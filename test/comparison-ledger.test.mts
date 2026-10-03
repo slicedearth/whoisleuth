@@ -391,6 +391,8 @@ describe('retained comparison adapters', () => {
     assert.equal(index.items[0]?.later.retainedAt, null);
     assert.equal(registrar?.earlier.retainedAt, null);
     assert.equal(registrar?.later.retainedAt, null);
+    assert.match(registrar!.limitations.join(' '), /registrar change is not evidence of new ownership/u);
+    assert.doesNotMatch(details.rows.find(row => row.field === 'Availability')!.limitations.join(' '), /carrying earlier decisions/u);
     assert.equal(details.rows.some((row) => row.state === 'removed'), false);
   });
 

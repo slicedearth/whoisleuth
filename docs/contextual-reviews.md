@@ -61,6 +61,10 @@ shown alongside source-qualified certificate pins. Equal-time observations are
 not ordered into a change sequence. Retired dependencies must involve the Case
 domain or one of its hostnames. An expected window qualifies the review; it does
 not approve a change automatically or establish transfer or takeover.
+Review prompts connect comparable page, mail, delegation and registration changes
+to the retained concern. Incomplete comparisons remain visible. A changed creation
+date asks for reassessment of earlier decisions without asserting a new owner,
+resetting a baseline or discarding history; expiry alone never establishes deletion.
 
 Schema: `whoisleuth.domain-history.input`. Its `evidence` contains:
 

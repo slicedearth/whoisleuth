@@ -4,6 +4,7 @@ import {
   normalizeWatchlistName,
 } from './watchlist-store.ts';
 import { sha256IdentityHex } from '../../../../packages/evidence/record-identity.mts';
+import { domainTransitionReview } from '../../../../packages/investigation/domain-transition-review.mts';
 import {
   normalizeWatchlistEntry,
   watchlistFieldLabel,
@@ -59,6 +60,7 @@ function buildWatchlistRows(
   const sourceOmittedRows = watchlistSourceOmittedRows(event);
   for (const change of event.changes) {
     const state = watchlistChangeState(change);
+    const prompt = state === 'different' ? domainTransitionReview(change.field, change.before, change.after) : null;
     output.add({
       comparisonId: ownerId,
       ownerId,
@@ -89,6 +91,7 @@ function buildWatchlistRows(
         ...(sourceOmittedRows > 0
           ? [`This retained event does not include ${sourceOmittedRows} declared bounded change row${sourceOmittedRows === 1 ? '' : 's'}.`]
           : []),
+        ...(prompt ? [prompt] : []),
       ],
     });
   }

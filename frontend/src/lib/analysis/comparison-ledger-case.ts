@@ -1,4 +1,5 @@
 import { caseWorkspaceHref } from './case-response-stage.ts';
+import { domainTransitionReview } from '../../../../packages/investigation/domain-transition-review.mts';
 import { MAX_CASES, MAX_EVIDENCE_SNAPSHOTS_PER_CASE } from '../../../../packages/contracts/case-portability.mts';
 import {
   caseEvidenceIncomparableReasons,
@@ -88,7 +89,7 @@ function buildCaseRows(
       completeness: state === 'incomplete' ? 'partial' : 'not_reported',
       limitations: state === 'incomplete'
         ? ['The later case snapshot does not retain a comparable value, so this is not treated as removal or resolution.']
-        : [],
+        : [domainTransitionReview(change.field, change.before, change.after)].filter((value): value is string => value !== null),
     });
   }
   if (!changedFields.has('availability')
