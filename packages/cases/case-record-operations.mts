@@ -44,7 +44,7 @@ import { MAX_CASE_OBJECTIVE_LENGTH, MAX_RESPONSE_VALUE_LENGTH } from '../contrac
 import { caseRecordVersionInput } from './case-record-version-input.mts';
 import { readCaseAttachments } from './case-attachment-model.mts';
 import { readCaseEvidenceLinks, appendCaseEvidenceLink, withdrawCaseEvidenceLink } from './case-evidence-links.mts';
-import { assertCurrentRecheckQuestion, assertRecheckNonReproduction, readCaseRecheckAnswerContext } from './case-recheck-model.mts';
+import { assertCurrentRecheckQuestion, assertRecheckNonReproduction, assertCaseObjectObservationOutcome, readCaseRecheckAnswerContext } from './case-recheck-model.mts';
 import {
   caseDispositionSupportsDefensiveResponse,
   caseStatusIsClosed,
@@ -255,6 +255,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
     const pin = evidencePins.find(item => item.id === review.evidencePinId);
     if (review.responseObject && pin && !sameCaseResponseObject(review.responseObject, pin.responseObject)) throw new TypeError('The selected observation evidence does not explicitly concern this exact object.');
     if (review.responseObject && review.state === 'not_reproduced' && !review.recheck) throw new TypeError('Object-specific non-reproduction requires a saved baseline question and comparable evidence.');
+    assertCaseObjectObservationOutcome(review.objectOutcome, review.recheck, review.completeness, evidencePins, pin, review.observedAt);
     if (!review.recheck) continue;
     assertCurrentRecheckQuestion(review.recheck, assertions);
     assertRecheckNonReproduction(review.state, review.recheck, review.completeness, evidencePins,
@@ -474,6 +475,7 @@ export function updateCase(
     }
     const responseObject = readCaseResponseObject(review.responseObject);
     const pin = evidencePins.find(item => item.id === review.evidencePinId);
+    assertCaseObjectObservationOutcome(review.objectOutcome as import('./case-response-object.mts').CaseResponseObjectOutcome | undefined, context, String(review.completeness), evidencePins, pin, typeof review.observedAt === 'string' ? review.observedAt : null);
     if (responseObject && pin && !sameCaseResponseObject(responseObject, pin.responseObject)) throw new TypeError('The selected observation evidence does not explicitly concern this exact object.');
     if (responseObject && review.state === 'not_reproduced' && !context) throw new TypeError('Object-specific non-reproduction requires a saved baseline question and comparable evidence.');
     observedEffects = appendCaseObservedEffectReview(

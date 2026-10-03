@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { createCase, updateCase, buildCaseExport, projectCaseForAudience, normalizeCaseStore, serializeCaseStore } from '../packages/cases/case-model.mts';
 import { buildCaseIncidentCoverage } from '../packages/cases/case-workflow-metadata.mts';
 import { readCaseResponseObject, readCaseResponseObjects } from '../packages/cases/case-response-object.mts';
-import { caseRecheckComparisonBlockers, caseRecheckAnswerContext } from '../packages/cases/case-recheck-model.mts';
+import { caseRecheckComparisonBlockers, caseRecheckAnswerContext, assertCaseObjectObservationOutcome } from '../packages/cases/case-recheck-model.mts';
 import { buildCaseReport } from '../packages/cases/case-report.mts';
 import { buildCaseResponseReviewInputs, validateCaseResponseReviewInputs } from '../packages/cases/case-response-packet.mts';
 import { normalizeSnapshot, compareCaseEvidence } from '../packages/cases/case-evidence-model.mts';
@@ -70,13 +70,14 @@ test('scope validation is strict, bounded, detached and rejects stale or foreign
   assert.throws(() => updateCase([record], record.id, { evidencePin: { label: 'Foreign', value: 'Observed', responseObject: { ...objects[0], identifier: 'https://incident.example/unknown' } } }, AFTER), /changed|not retained/);
   assert.throws(() => updateCase([record], record.id, { evidencePin: { label: 'Foreign', value: 'Observed', responseObject: { kind: 'domain', identifier: 'other.example', incidentTargetId: null } } }, AFTER), /match this Case/);
 });
-test('unavailable is not removal; typed restoration and dispute retain independent point-in-time history', () => {
+test('unavailable is not removal; procedural dispute retains independent history without a technical state change', () => {
   let { record, objects } = scoped();
-  assert.throws(() => updateCase([record], record.id, { observedEffectReview: { state: 'unavailable', source: 'Failed manual review', responseObject: objects[0], objectOutcome: 'removed' } }, AFTER), /unavailable|observed/i);
-  for (const outcome of ['restored', 'disputed']) record = updateCase([record], record.id, { observedEffectReview: { state: 'changed', observedAt: AFTER, sourceClass: 'analyst', source: 'Independent manual review', completeness: 'complete', responseObject: objects[0], objectOutcome: outcome } }, AFTER).record;
-  assert.deepEqual(record.observedEffects.reviews.map(review => review.objectOutcome).sort(), ['disputed', 'restored']);
+  assert.throws(() => updateCase([record], record.id, { observedEffectReview: { state: 'unavailable', source: 'Failed manual review', responseObject: objects[0], objectOutcome: 'removed' } }, AFTER), /unavailable|observed|baseline/i);
+  assert.throws(() => updateCase([record], record.id, { observedEffectReview: { state: 'changed', observedAt: AFTER, sourceClass: 'analyst', source: 'Limited manual review', completeness: 'partial', responseObject: objects[0], objectOutcome: 'restored' } }, AFTER), /exact-object baseline|complete evidence/);
+  record = updateCase([record], record.id, { observedEffectReview: { state: 'still_observed', observedAt: AFTER, sourceClass: 'analyst', source: 'Dispute correspondence reviewed', completeness: 'partial', responseObject: objects[0], objectOutcome: 'disputed' } }, AFTER).record;
+  assert.deepEqual(record.observedEffects.reviews.map(review => review.objectOutcome), ['disputed']);
   const rows = buildCaseIncidentCoverage(record);
-  assert.equal(rows[0]!.observationCoverage, 'ambiguous');
+  assert.equal(rows[0]!.observationCoverage, 'available');
   assert.equal(rows[1]!.observationCoverage, 'unknown');
 });
 test('hostname similarity does not establish comparable exact-object non-reproduction', () => {
@@ -88,8 +89,28 @@ test('hostname similarity does not establish comparable exact-object non-reprodu
   const current = { ...baseline, id: 'current-example', observedAt: AFTER, responseObject: objects[1]! };
   assert.ok(caseRecheckComparisonBlockers(answer, [baseline], current).includes('current_object_mismatch'));
   assert.deepEqual(caseRecheckComparisonBlockers(answer, [baseline], { ...current, responseObject: objects[0]! }), []);
+  for (const outcome of ['removed', 'restricted', 'suspended', 'delisted', 'transferred', 'restored'] as const) {
+    assert.doesNotThrow(() => assertCaseObjectObservationOutcome(outcome, answer, 'complete', [baseline], { ...current, responseObject: objects[0]! }, AFTER));
+    assert.throws(() => assertCaseObjectObservationOutcome(outcome, answer, 'partial', [baseline], { ...current, responseObject: objects[0]! }, AFTER), /complete|comparison/);
+    assert.throws(() => assertCaseObjectObservationOutcome(outcome, { ...answer, conditionsMatch: 'different' }, 'complete', [baseline], { ...current, responseObject: objects[0]! }, AFTER), /comparable|comparison/);
+    assert.throws(() => assertCaseObjectObservationOutcome(outcome, answer, 'complete', [{ ...baseline, completeness: 'partial' }], { ...current, responseObject: objects[0]! }, AFTER), /complete|comparison/);
+  }
   const { responseObject: _object, ...unboundBaseline } = baseline;
   assert.ok(caseRecheckComparisonBlockers(answer, [unboundBaseline], { ...current, responseObject: objects[0]! }).includes('baseline_object_mismatch'));
+});
+test('retained historical URL snapshots stay visible without binding to changed or missing metadata', () => {
+  const { record: sent, objects } = submitted();
+  const record = transition(sent, 'acknowledged', { sourceClass: 'provider', providerOutcome: 'provider_reports_resolved', responseObjects: [objects[0]], objectOutcome: 'removed' });
+  const changed = { ...record, workflowMetadata: { ...record.workflowMetadata!, incidentTargets: [{ ...record.workflowMetadata!.incidentTargets[0]!, url: 'https://incident.example/replacement' }] } };
+  const rows = buildCaseIncidentCoverage(changed);
+  const historical = rows.find(row => row.responseObject.identifier === objects[0]!.identifier)!;
+  assert.equal(historical.targetRetained, false);
+  assert.equal(historical.providerEvents.at(-1)?.outcome, 'removed');
+  const replacement = rows.find(row => row.responseObject.identifier === 'https://incident.example/replacement')!;
+  assert.equal(replacement.targetRetained, true);
+  assert.equal(replacement.providerEvents.length, 0);
+  assert.equal(replacement.actionCoverage, 'unknown');
+  assert.equal(buildCaseIncidentCoverage({ ...record, workflowMetadata: { ...record.workflowMetadata!, incidentTargets: [] } }).length, 2);
 });
 test('scoped closures preserve the Case and other objects, and partial provider claims cannot close another object', () => {
   const { record: sent, objects } = submitted();

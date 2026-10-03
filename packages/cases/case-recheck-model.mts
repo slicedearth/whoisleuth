@@ -4,7 +4,7 @@ import {
   MAX_RESPONSE_RATIONALE_LENGTH,
 } from '../contracts/case-portability.mts';
 import { enumeration, exactOptional, text } from '../evidence/artifact-structure.mts';
-import { readCaseResponseObject, sameCaseResponseObject, type CaseResponseObject } from './case-response-object.mts';
+import { readCaseResponseObject, sameCaseResponseObject, type CaseResponseObject, type CaseResponseObjectOutcome } from './case-response-object.mts';
 import { casePinHasCompleteObservation } from './case-evidence-quality.mts';
 import type {
   CaseAssertionRecord,
@@ -175,6 +175,7 @@ const RECHECK_COMPARISON_MESSAGES = {
   missing_object_baseline: 'An object-specific baseline is required for this exact-object comparison.',
   baseline_object_mismatch: 'The baseline does not explicitly concern this same object.',
   current_object_mismatch: 'The current observation does not explicitly concern this same object.',
+  incomplete_object_baseline: 'The exact-object baseline must be a complete source observation.',
 } as const;
 export type CaseRecheckComparisonBlocker = keyof typeof RECHECK_COMPARISON_MESSAGES;
 
@@ -196,6 +197,7 @@ export function caseRecheckComparisonBlockers(
   if (context.responseObject) {
     if (!baseline) blockers.push('missing_object_baseline');
     else if (!sameCaseResponseObject(baseline.responseObject, context.responseObject)) blockers.push('baseline_object_mismatch');
+    if (baseline && !casePinHasCompleteObservation(baseline)) blockers.push('incomplete_object_baseline');
     if (!current || !sameCaseResponseObject(current.responseObject, context.responseObject)) blockers.push('current_object_mismatch');
   }
   if (context.baselinePinId && !baseline)
@@ -258,4 +260,20 @@ export function assertRecheckNonReproduction(
       'Not reproduced requires a complete observation under comparable conditions. Record unavailable or describe the limited observation instead.',
     );
   }
+}
+
+export const COMPARATIVE_CASE_OBJECT_OUTCOMES: readonly CaseResponseObjectOutcome[] = Object.freeze(['removed', 'restricted', 'suspended', 'delisted', 'transferred', 'restored']);
+
+/** Technical state changes need an exact-object baseline; procedural dispute is distinct. */
+export function assertCaseObjectObservationOutcome(
+  outcome: CaseResponseObjectOutcome | undefined,
+  context: CaseRecheckAnswerContext | undefined,
+  completeness: string,
+  pins: readonly CaseEvidencePin[],
+  current?: CaseEvidencePin,
+  observedAt?: string | null,
+): void {
+  if (!outcome || !COMPARATIVE_CASE_OBJECT_OUTCOMES.includes(outcome)) return;
+  if (!context?.responseObject) throw new TypeError('An independent object state change requires a saved exact-object baseline question and comparable evidence.');
+  assertRecheckNonReproduction('not_reproduced', context, completeness, pins, current, observedAt);
 }

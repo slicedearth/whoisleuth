@@ -9,7 +9,7 @@ import {
 import {
   latestObservationCohort,
 } from '../evidence/latest-observations.mts';
-import { readCaseRecheckAnswerContext } from './case-recheck-model.mts';
+import { readCaseRecheckAnswerContext, COMPARATIVE_CASE_OBJECT_OUTCOMES } from './case-recheck-model.mts';
 import { readCaseResponseObject, readCaseResponseObjectOutcome, assertCaseObjectOutcome, sameCaseResponseObject } from './case-response-object.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
@@ -69,6 +69,8 @@ function normalizeObservedEffectReview(
   const objectOutcome = readCaseResponseObjectOutcome(item.objectOutcome, options.sourceVersion);
   assertCaseObjectOutcome(objectOutcome, responseObject);
   if (objectOutcome && (item.state === 'unavailable' || item.state === 'not_checked')) throw new TypeError('Unavailable or unchecked collection cannot establish an object outcome.');
+  if (objectOutcome && COMPARATIVE_CASE_OBJECT_OUTCOMES.includes(objectOutcome)
+    && (item.completeness !== 'complete' || !recheck?.responseObject || recheck.conditionsMatch !== 'comparable')) throw new TypeError('An independently observed object state change requires complete evidence and comparable exact-object conditions.');
   if (recheck?.responseObject && !sameCaseResponseObject(recheck.responseObject, responseObject)) throw new TypeError('The recheck answer and observation must concern the same exact object.');
   if (recheck && item.state === 'not_reproduced' && (item.completeness !== 'complete' || recheck.conditionsMatch !== 'comparable')) {
     throw new TypeError('A question cannot be marked not reproduced from incomplete evidence or unconfirmed comparison conditions.');
