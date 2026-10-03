@@ -1,5 +1,6 @@
 // Bounded website and network enrichment, independent of registration authority.
 import { capturedWebCollectionQuality } from '../packages/evidence/collection-quality.mts';
+import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
 import { recordOrEmpty as errorRecord } from './json-record.mts';
 import type { RegistrationAssessment } from './domain-registration.mts';
 import { safeFetchDetailed, readTextCapped } from './safe-fetch.mts';
@@ -92,26 +93,34 @@ type HtmlSignals = Omit<Awaited<ReturnType<typeof extractHtmlSignals>>, 'cspMeta
 // what's checkable without credentials is the parking/landing-page
 // nameservers and homepage copy these services actually use, which is
 // broader coverage of the same signal, not a live cross-marketplace lookup.
-const PARKING_NS_PATTERNS = [
-  /sedoparking\.com$/i,
-  /sedo\.com$/i,
-  /above\.com$/i,
-  /bodis\.com$/i,
-  /parkingcrew\.net$/i,
-  /dan\.com$/i,
-  /hugedomains\.com$/i,
-  /uniregistry/i,
-  /squadhelp/i,
-  /afternic/i,
-  /voodoo\.com$/i,
-  /fabulous\.com$/i,
-  /namedrive/i,
-  /smartname\.com$/i,
-  /domainsponsor\.com$/i,
-  /undeveloped\.com$/i,
-  /trafficz\.com$/i,
-  /dsredirection\.com$/i,
+const PARKING_NS_DOMAINS = [
+  'sedoparking.com',
+  'sedo.com',
+  'above.com',
+  'bodis.com',
+  'parkingcrew.net',
+  'dan.com',
+  'hugedomains.com',
+  // https://www.atom.com/help/article/how-to-verify-your-standard-premium-domains
+  'squadhelp.com',
+  // https://blog.afternic.com/lander-selection-redefining-your-use-of-afternic-landing-pages/
+  'afternic.com',
+  'voodoo.com',
+  'fabulous.com',
+  'smartname.com',
+  'domainsponsor.com',
+  'undeveloped.com',
+  'trafficz.com',
+  'dsredirection.com',
 ];
+
+function isParkingNameserver(value: string): boolean {
+  const hostname = value.trim().replace(/\.$/u, '');
+  // Validate before case folding: non-ASCII letters can lowercase to ASCII.
+  if (!isValidAsciiHostname(hostname)) return false;
+  const normalised = hostname.toLowerCase();
+  return PARKING_NS_DOMAINS.some(domain => normalised === domain || normalised.endsWith(`.${domain}`));
+}
 
 const FOR_SALE_PATH_RE = /\/(?:premium-)?domains?-for-sale(?:\/|$)/i;
 
@@ -267,7 +276,7 @@ async function enrichWebsite(context: WebsiteContext, options: WebsiteEnrichment
   // deep mode only), and check for a configured mail exchanger as a
   // phishing-risk signal (a lookalike domain that can receive/send mail is
   // capable of running credential-harvesting or BEC campaigns).
-  const nsSignal = registration.state === 'registered' ? nameservers.find((ns) => PARKING_NS_PATTERNS.some((re) => re.test(ns))) : undefined;
+  const nsSignal = registration.state === 'registered' ? nameservers.find(isParkingNameserver) : undefined;
   let forSaleSignal = nsSignal ? `parking nameserver (${nsSignal})` : null;
   let activityStatus = nsSignal && observationHostname === domain ? 'parked' : 'unknown';
 
