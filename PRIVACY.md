@@ -116,6 +116,11 @@ views of the current workspace's bounded retained records. Filters, selections
 and relationship inspection remain in memory; viewing them makes no collection
 request, creates no parallel evidence store and does not enrol monitoring.
 
+Brand domain-exclusion previews use entered examples and optionally selected
+Case domains already retained in the current workspace. Inputs and preview
+results stay in page memory. Discover's excluded-candidate disclosure reuses its
+existing transient candidate set; neither view collects or saves new evidence.
+
 Image comparison and region editing run in page memory. Explicitly retained
 edits are separate PNG files with their own digests, source-file fingerprints
 and region instructions. They keep the source observation time; originals are

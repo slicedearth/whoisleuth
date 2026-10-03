@@ -1120,7 +1120,7 @@
         <p id="brand-tool-draft-owner" class="local-context-status" role="status">Open drafts belong to “{draftProfile.name}”. {#if active}The selected profile is “{active.name}”.{:else}Its saved profile is unavailable; saving and export are disabled.{/if}</p>
         {#if active}<button class="btn" type="button" aria-describedby="brand-tool-draft-owner" onclick={()=>active&&activate(active.id)} disabled={profileWriteDisabled}>Discard tool drafts and switch</button>{/if}
       {/if}
-      <div hidden={brandsView!=='overview'}>{#key draftProfile.id}<BrandAllowlistManager profile={draftProfile} writeDisabled={draftWriteDisabled} onsave={saveAllowlist} onmessage={(value)=>message=value} />{/key}</div>
+      <div hidden={brandsView!=='overview'}>{#key draftProfile.id}<BrandAllowlistManager profile={draftProfile} writeDisabled={draftWriteDisabled} profileAvailable={profileSourceState==='ready'&&activePreferenceSourceState==='ready'&&active?.id===draftProfile.id} retainedDomains={caseSourceState==='ready'?cases.map(record=>record.domain):[]} {caseSourceState} onsave={saveAllowlist} onmessage={(value)=>message=value} />{/key}</div>
       <div hidden={brandsView!=='tools'}>
       <section class="workbench-launcher" aria-labelledby="brand-workbench-title">
         <div><h2 id="brand-workbench-title">Profile tools</h2><p>{draftProfile.name}</p></div>

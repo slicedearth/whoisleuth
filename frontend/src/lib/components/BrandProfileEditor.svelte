@@ -42,7 +42,7 @@
     <summary>Matching and mail settings</summary>
     <div class="form-grid">
       <label class="field">Preferred TLDs<input value={values.tlds} oninput={(event) => setValue('tlds', event.currentTarget.value)}></label>
-      <label class="field">Product names<input value={values.products} oninput={(event) => setValue('products', event.currentTarget.value)}></label>
+      <label class="field">Product names<input value={values.products} oninput={(event) => setValue('products', event.currentTarget.value)}><small>Discovery defaults, not automatic matching rules or time-bounded campaigns.</small></label>
       <label class="field wide">Approved partner domains<textarea value={values.partners} oninput={(event) => setValue('partners', event.currentTarget.value)}></textarea></label>
       <label class="field">Mail posture profile
         <select value={values.mailProtectionProfile} onchange={(event) => setValue('mailProtectionProfile', event.currentTarget.value)}>

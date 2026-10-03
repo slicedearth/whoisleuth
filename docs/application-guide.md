@@ -309,6 +309,13 @@ stays in the current tab and is not uploaded; only deliberately selected
 candidate domains and bounded provenance continue to Bulk through a one-use
 handoff.
 
+Open **Excluded by exact profile match** to inspect candidates omitted by the
+active profile's official, approved-partner or domain allowlist entry. Each row
+identifies the exact declaration. The disclosure also remains available when
+every admitted candidate was excluded; it does not select those rows for Bulk.
+An exclusion is not a safety verdict, and a domain entry does not cover suffixes
+or subdomains.
+
 Certificate publication is evidence that a log recorded a certificate, not
 proof of current deployment, ownership, control or maliciousness. Co-issuance,
 shared names and visual similarity are review leads. Registry nameserver search
@@ -359,6 +366,18 @@ profile, or leaving Brands, clears the previous profile's tool drafts. A failed
 save preserves the draft; a successful save with a failed refresh offers a
 read-only refresh, not another write. Conflicting edits require reviewing the
 current saved values.
+
+Open **Preview domain exclusions** in the allowlist to compare saved and draft
+domain lists against up to 200 entered example domains. You can select domains
+from Cases already retained in the current workspace; this is not an inferred
+Brand association. The preview identifies exact declarations before and after
+the draft and stays in page memory. Invalid or oversized input is rejected as a
+whole. Unavailable profile or Case sources remain explicit.
+
+Registrar entries do not affect this domain-only preview or Discover's domain
+filtering. Product names are discovery defaults, not automatic matching rules or
+time-bounded campaigns. Existing custom-rule previews separately evaluate
+retained Case evidence; neither preview rewrites earlier analyst decisions.
 
 Account controls keep individual review dates. Saving changed controls or
 explicitly reconfirming one updates only those statements.
