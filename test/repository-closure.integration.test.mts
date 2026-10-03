@@ -36,8 +36,10 @@ describe('repository integration closure', () => {
     // repository for each changed path adds no integration coverage.
     const paths = ['frontend/src/lib/components/PublicGoalPaths.svelte', 'packages/comparison/favicon-similarity.mts',
       'package.json', 'test/support/current-case.mts', 'frontend/src/lib/components/CopyButton.svelte',
-      'frontend/src/routes/(public)/demo/+page.svelte', '.prettierrc.json'];
+      'frontend/src/routes/(public)/demo/+page.svelte', '.prettierrc.json',
+      'lib/lookup-progress.mts', 'packages/evidence/decision-fact.mts', 'cli/command-definition.mts'];
     const plan = await createVerificationOwnershipPlan(paths);
+    assert.equal(plan.interpretation.some(note => note.startsWith('Dependency analysis failed')), false);
     const assignments = new Map(plan.assignments.map(assignment => [assignment.changedPath, assignment]));
     assert.equal(assignments.size, paths.length);
     const component = assignments.get(paths[0]!)!;
@@ -77,6 +79,11 @@ describe('repository integration closure', () => {
         unit: assignments.get(paths[6]!)!.focusedUnitChecks,
         browser: assignments.get(paths[6]!)!.focusedBrowserChecks,
       },
+      shared: paths.slice(7, 9).map(file => ({
+        lookup: assignments.get(file)!.focusedBrowserChecks.includes('e2e/lookup-evidence-design.spec.ts'),
+        browser: assignments.get(file)!.userFacingBrowserRequired,
+      })),
+      cliLookup: assignments.get(paths[9]!)!.focusedBrowserChecks.includes('e2e/lookup-evidence-design.spec.ts'),
     }, {
       component: { guide: true, accessibility: true, bulk: false, caseImport: false, guideUnit: true, cliUnit: false },
       helper: { consumer: true, bounded: true },
@@ -84,6 +91,7 @@ describe('repository integration closure', () => {
       fixture: { unit: true, review: true, bulk: false, browser: true },
       compile: true, first: 'browser-discovery', leaf: ['e2e/copy-button.component.spec.ts'], demo: true,
       editor: { unit: [], browser: [] },
+      shared: [{ lookup: true, browser: true }, { lookup: true, browser: true }], cliLookup: false,
     });
   });
 

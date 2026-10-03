@@ -727,20 +727,6 @@ describe('verification architecture contracts', () => {
     assert.ok(assignment.mandatorySpecialisedChecks.includes('cli-package'));
   });
 
-  test('shared domain changes reach actual browser journeys through frontend adapters', async () => {
-    const paths = ['lib/lookup-progress.mts', 'packages/evidence/decision-fact.mts', 'cli/command-definition.mts'];
-    const plan = await createVerificationOwnershipPlan(paths);
-    assert.equal(plan.interpretation.some(note => note.startsWith('Dependency analysis failed')), false);
-    for (const file of paths.slice(0, 2)) {
-      const assignment = plan.assignments.find(item => item.changedPath === file)!;
-      assert.ok(assignment.focusedBrowserChecks.includes('e2e/lookup-evidence-design.spec.ts'), file);
-      assert.equal(assignment.userFacingBrowserRequired, true);
-    }
-    const cli = plan.assignments.find(item => item.changedPath === paths[2])!;
-    assert.equal(cli.focusedBrowserChecks.includes('e2e/lookup-evidence-design.spec.ts'), false);
-  });
-
-
   test('selects one owner while aggregating every matching verification impact', () => {
     const plan = buildVerificationOwnershipPlan([
       'packages/contracts/privacy-data-flow-catalogue.mts',
