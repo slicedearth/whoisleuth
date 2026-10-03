@@ -20,13 +20,16 @@ import {
 import type { BrandProfile } from './analysis/brand-profile-model.ts';
 export type { BrandProfile } from './analysis/brand-profile-model.ts';
 import { normalizePageBaseline } from './analysis/page-baseline.ts';
-import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { readBrowserLocalData, updateBrowserLocalData, updateBrowserLocalDataCollections } from './browser-local-data-service.ts';
 import { BrowserLocalDataError } from './browser-local-data-content.ts';
 import { loadBrowserLocalDataPreparation } from './browser-local-data-worker.ts';
 import { assertLocalRecordCurrent, LocalRecordConflictError } from './local-mutation-outcome.ts';
 import { LEGACY_PROFILES_KEY } from './browser-local-data-contract.ts';
 import { workspacePreferenceStorage } from './browser-workspace-context.ts';
 import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
+import { candidateMaterialFingerprint, mergeCandidateObservations, normalizeCandidateObservation, normalizeCandidateObservations, reviseCandidateException, type BrandCandidateObservation, type BrandCandidateException } from '../../../packages/workspace/brand-candidate-workflow.mts';
+import { candidateReviewItem } from '../../../packages/monitoring/brand-candidate-review.mts';
+import { setAnalystReviewDecision, type AnalystReviewItem, type AnalystReviewStateStore } from '../../../packages/monitoring/analyst-review-state.mts';
 export { MAX_PROFILE_IMPORT_BYTES } from '../../../packages/contracts/workspace-portability.mts';
 
 export const PROFILES_KEY = LEGACY_PROFILES_KEY;
@@ -70,6 +73,52 @@ export function normalizeProfile(raw: unknown, existing?: BrandProfile, touch = 
 
 export async function loadProfiles(): Promise<BrandProfile[]> {
   return readBrowserLocalData('brand_profiles');
+}
+
+/** Explicit retained review selection; no collection runs and concurrent additions merge. */
+export async function retainBrandCandidates(profileId: string, candidates: readonly BrandCandidateObservation[]) {
+  if (candidates.length > 200) throw new RangeError('Retain at most 200 selected candidate domains per Brand.');
+  return updateBrowserLocalData('brand_profiles', current => {
+    const profiles = [...current], index = profiles.findIndex(profile => profile.id === profileId), profile = profiles[index];
+    if (!profile) throw new LocalRecordConflictError('Brand Profile');
+    const byDomain = new Map(profile.candidateObservations.map(candidate => [candidate.domain, candidate]));
+    const outcomes: Array<{ domain: string; state: 'retained' | 'rejected'; reason: string }> = [];
+    for (const input of candidates) {
+      const candidate = normalizeCandidateObservation(input);
+      if (!candidate || !candidate.matches.some(match => match.brandProfileId === profileId)) { outcomes.push({ domain: input.domain, state: 'rejected', reason: 'No exact selected Brand match context.' }); continue; }
+      if (!byDomain.has(candidate.domain) && byDomain.size >= 200) { outcomes.push({ domain: candidate.domain, state: 'rejected', reason: 'This Brand candidate capacity is exhausted.' }); continue; }
+      byDomain.set(candidate.domain, mergeCandidateObservations(byDomain.get(candidate.domain), candidate)!);
+      outcomes.push({ domain: candidate.domain, state: 'retained', reason: 'Candidate provenance retained without a Lookup or scan.' });
+    }
+    profiles[index] = normalizeProfile({ ...profile, candidateObservations: normalizeCandidateObservations([...byDomain.values()]) }, profile, true);
+    return { document: boundedProfiles(profiles), result: outcomes };
+  });
+}
+
+export async function saveBrandCandidateException(profileId: string, input: Omit<BrandCandidateException, 'revision' | 'history' | 'historyOmitted'>, expectedRevision: number | null) {
+  return updateBrowserLocalData('brand_profiles', current => {
+    const profiles = [...current], index = profiles.findIndex(profile => profile.id === profileId), profile = profiles[index];
+    if (!profile) throw new LocalRecordConflictError('Brand Profile');
+    const existing = profile.candidateExceptions.find(exception => exception.id === input.id) ?? null;
+    const candidate = profile.candidateObservations.find(candidate => candidate.domain === input.domain);
+    if (!candidate || !candidate.matches.some(match => match.brandProfileId === profileId && match.ruleKey === input.ruleKey)) throw new LocalRecordConflictError('candidate match');
+    if (candidateMaterialFingerprint(candidate, profileId, input.ruleKey) !== input.reviewedFingerprint) throw new LocalRecordConflictError('candidate evidence');
+    const exception = reviseCandidateException(existing, input, expectedRevision);
+    if (!existing && profile.candidateExceptions.length >= 200) throw new Error('Scoped exception capacity is exhausted; retain the current exceptions.');
+    profiles[index] = normalizeProfile({ ...profile, candidateExceptions: [...profile.candidateExceptions.filter(value => value.id !== exception.id), exception] }, profile, true);
+    return { document: boundedProfiles(profiles), result: exception };
+  });
+}
+
+export async function saveBrandCandidateDecision(profileId: string, item: AnalystReviewItem, input: Parameters<typeof setAnalystReviewDecision>[2]) {
+  const now = new Date().toISOString();
+  return updateBrowserLocalDataCollections(['brand_profiles', 'analyst_review_state'], documents => {
+    const profile = (documents.brand_profiles as BrandProfile[]).find(profile => profile.id === profileId);
+    const candidate = profile?.candidateObservations.find(candidate => candidate.domain === item.caseDomain);
+    if (!profile || !candidate || candidateReviewItem(candidate, profile, now).materialFingerprint !== item.materialFingerprint) throw new LocalRecordConflictError('candidate evidence');
+    const document = setAnalystReviewDecision(documents.analyst_review_state, item, { ...input, reviewedAt: input.reviewedAt ?? now });
+    return { documents: { ...documents, analyst_review_state: document }, result: document as AnalystReviewStateStore };
+  });
 }
 
 function boundedProfiles(profiles: BrandProfile[]): BrandProfile[] {

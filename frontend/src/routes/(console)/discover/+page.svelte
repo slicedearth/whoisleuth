@@ -31,7 +31,8 @@
     normalizeGenerationTlds,
   } from '$lib/analysis/typosquat-generator.ts';
   import { publicSuffixForAsciiHostname } from '../../../../../packages/analysis/registrable-domain.mts';
-  import { activeProfile, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
+  import { activeProfile, retainBrandCandidates, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
+  import { discoveryCandidateObservation, scopedCandidateExclusion } from '../../../../../packages/monitoring/brand-candidate-review.mts';
   import { partitionBrandCandidates } from '$lib/analysis/brand-profile-signals.ts';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
   import {
@@ -97,7 +98,7 @@
   let profileSourceState = $state<ActiveBrandProfileSourceState>('loading');
   const exclusionReview = $derived.by(() => {
     const admitted = new Set(candidates.map(candidate => candidate.domain));
-    const review = partitionBrandCandidates(generatedContext, profile, profileSourceState);
+    const review = partitionBrandCandidates(generatedContext, profile, profileSourceState, scopedDiscoveryMatch);
     // A later profile read must not relabel candidates admitted while that
     // context was unavailable. Only the actual omission is explained here.
     return { ...review, excluded: review.excluded.filter(row => !admitted.has(row.candidate.domain)) };
@@ -201,6 +202,22 @@
     unicodeDomain: candidateMetadata.get(candidate.domain)?.unicodeDomain || '',
   })));
   const selectedCandidates = $derived(candidates.filter((c) => selected.has(c.domain)));
+  let retainingCandidates = $state(false);
+  async function retainSelectedCandidates() {
+    if (!profile || profileSourceState !== 'ready' || retainingCandidates) return;
+    const selectedProfile = profile;
+    const submitted = [...selectedCandidates];
+    const observedAt = new Date().toISOString();
+    retainingCandidates = true;
+    try {
+      const observations = submitted.map(candidate => discoveryCandidateObservation(candidate, selectedProfile, observedAt)).filter(value => value !== null);
+      const unretained = submitted.filter(candidate => !observations.some(observation => observation.domain === candidate.domain));
+      const outcomes = await retainBrandCandidates(selectedProfile.id, observations);
+      status = `${outcomes.filter(row => row.state === 'retained').length} candidate domains retained for Brand review; ${outcomes.filter(row => row.state === 'rejected').length + unretained.length} rejected. No collection was authorised.${unretained.length ? ` Matching/provenance bound rejected: ${unretained.map(candidate => candidate.domain).join(', ')}.` : ''}${outcomes.some(row => row.state === 'rejected') ? ` Rejected: ${outcomes.filter(row => row.state === 'rejected').map(row => `${row.domain}: ${row.reason}`).join('; ')}.` : ''}`;
+      if (!unretained.length && outcomes.every(row => row.state === 'retained')) await goto('/brands#brand-candidate-review');
+    } catch (cause) { error = cause instanceof Error ? cause.message : 'The selected candidate provenance could not be retained.'; }
+    finally { retainingCandidates = false; }
+  }
   const selectedVisibleCount = $derived(visible.reduce((count, candidate) => count + Number(selected.has(candidate.domain)), 0));
   const reviewControlsActive = $derived(
     Boolean(filter)
@@ -401,10 +418,20 @@
   }
 
   function withoutAllowlisted(next: Candidate[]) {
-    const result = partitionBrandCandidates(next, profile, profileSourceState);
+    const result = partitionBrandCandidates(next, profile, profileSourceState, scopedDiscoveryMatch);
     return { filtered: result.filtered, excluded: result.excluded.length,
       limitation: [result.limitation, result.truncated ? 'Candidate admission was capped; omitted candidates remain unevaluated.' : '']
         .filter(Boolean).map(value => ` ${value}`).join('') };
+  }
+  function scopedDiscoveryMatch(candidate: Candidate) {
+    if (!profile) return null;
+    const now = new Date().toISOString(), observation = discoveryCandidateObservation(candidate, profile, now);
+    return observation ? scopedCandidateExclusion(observation, profile, now) : null;
+  }
+  function reapplyCandidateExclusions() {
+    if (profileSourceState !== 'ready') return;
+    const reviewed = withoutAllowlisted(generatedContext);
+    setResults(reviewed.filtered, `Re-evaluated ${generatedContext.length} retained discovery candidates; ${reviewed.excluded} currently excluded. No collection was performed.${reviewed.limitation}`, generatedContext);
   }
   async function setExcludedPage(value: number) {
     excludedPage = value;
@@ -821,6 +848,8 @@
     {#if excludedOpen}
       <h3 tabindex="-1" bind:this={excludedHeading}>Exact profile exclusions</h3>
       <p>These candidates remain visible here without collection or selection for Bulk. A profile declaration or exclusion is not a safety verdict.</p>
+      <button class="btn" onclick={reapplyCandidateExclusions} disabled={profileSourceState !== 'ready'}>Re-evaluate retained candidates without collection</button>
+      <p>Expired exceptions, materially changed provenance or a new independent rule return candidates to eligibility. Re-evaluation uses only the retained page-memory candidates.</p>
       {#if exclusionReview.limitation}<p role="status">{exclusionReview.limitation}</p>
       {:else if !exclusionReview.excluded.length}<p>No candidates were excluded from this admitted set.</p>{/if}
       {#if exclusionReview.truncated}<p>Candidate admission was capped. Omitted candidates were not evaluated.</p>{/if}
@@ -835,6 +864,7 @@
 {/if}
 
 {#if candidates.length}
+  <section class="card candidate-retention"><h2>Review before monitoring</h2><p>Retain the exact selected domains for the active Brand without running Lookup, adding a scan or scheduling requests. {selectedCandidates.length} selected across filters; review at most 200 at a time.</p><button class="btn" disabled={!profile || profileSourceState !== 'ready' || !selectedCandidates.length || selectedCandidates.length > 200 || retainingCandidates} onclick={() => void retainSelectedCandidates()}>Retain selected for Brand review</button>{#if profile}<p>Selected Brand: {profile.name}. Other Brand decisions remain separate.</p>{:else}<p>Select a Brand Profile before retaining candidate review context.</p>{/if}</section>
   {#if mode === 'typosquat' || mode === 'keyword'}
     <DiscoverIdnPolicyReview candidates={idnPolicyCandidates} />
   {/if}

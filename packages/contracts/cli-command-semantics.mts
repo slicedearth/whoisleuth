@@ -100,6 +100,7 @@ export const CLI_COMMAND_SEMANTICS = Object.freeze({
   'change-packet': semantic('respond', CAPABILITY_IDS.PORTABLE_EVIDENCE),
   'sharing-review': semantic('respond', CAPABILITY_IDS.PORTABLE_EVIDENCE),
   'workflow-plan': semantic('assure', CAPABILITY_IDS.OFFLINE_REVIEW),
+  'watchlist-review': semantic('assure', CAPABILITY_IDS.OFFLINE_REVIEW),
   'workflow-run': semantic('assure', CAPABILITY_IDS.WORKFLOW_EXECUTION),
   diff: semantic('assure', CAPABILITY_IDS.OFFLINE_REVIEW),
   reconcile: semantic('assure', CAPABILITY_IDS.OFFLINE_REVIEW),

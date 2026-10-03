@@ -1,0 +1,298 @@
+<script lang="ts">
+  import type { WatchlistEntry } from '$lib/watchlists';
+  import { updateWatchContexts } from '$lib/watchlists';
+  import {
+    WATCH_PRIORITIES,
+    type WatchPriority,
+  } from '../../../../packages/workspace/brand-candidate-workflow.mts';
+  import { projectWatchlistContextReviews } from '../../../../packages/monitoring/watchlist-context-review.mts';
+  import { analystReviewSubjectKey } from '../../../../packages/monitoring/analyst-review-state.mts';
+  import {
+    formatWatchlistValue,
+    watchlistFieldLabel,
+  } from '../../../../packages/workspace/watchlist-history.mts';
+  let {
+    name,
+    entry,
+    onrefresh,
+  }: { name: string; entry: WatchlistEntry; onrefresh: () => Promise<unknown> } = $props();
+  let filter = $state('all'),
+    sort = $state<'priority' | 'domain'>('priority'),
+    selected = $state<Set<string>>(new Set()),
+    priority = $state<WatchPriority>('unassigned');
+  let reason = $state(''),
+    reviewDate = $state(''),
+    busy = $state(false),
+    message = $state(''),
+    preview = $state(''),
+    identity = $state('');
+  const all = $derived(
+    entry.domainMetadata.flatMap((metadata) =>
+      metadata.contexts.map((context) => ({
+        domain: metadata.domain,
+        context,
+        candidate: metadata.candidate,
+        key: `${metadata.domain}:${context.brandProfileId ?? ''}`,
+      })),
+    ),
+  );
+  const rows = $derived(
+    all
+      .filter((row) => filter === 'all' || row.context.priority === filter)
+      .sort((a, b) =>
+        sort === 'priority'
+          ? (a.context.priority === 'unassigned' ? 5 : Number(a.context.priority.slice(1))) -
+              (b.context.priority === 'unassigned' ? 5 : Number(b.context.priority.slice(1))) ||
+            a.domain.localeCompare(b.domain)
+          : a.domain.localeCompare(b.domain),
+      )
+      .slice(0, 200),
+  );
+  const chosen = $derived(all.filter((row) => selected.has(row.key)));
+  const previewIdentity = $derived(
+    JSON.stringify({
+      name,
+      selected: chosen.map((row) => ({ domain: row.domain, context: row.context })),
+      priority,
+      reason,
+      reviewDate,
+    }),
+  );
+  const reviews = $derived(
+    projectWatchlistContextReviews({ [name]: entry }, new Date().toISOString()),
+  );
+  $effect(() => {
+    if (identity !== name) {
+      identity = name;
+      selected = new Set();
+      preview = '';
+      reason = '';
+      message = '';
+    }
+  });
+  function toggle(key: string, checked: boolean) {
+    const next = new Set(selected);
+    checked ? next.add(key) : next.delete(key);
+    selected = next;
+    preview = '';
+  }
+  async function save() {
+    if (!preview || busy || !chosen.length) return;
+    if (preview !== previewIdentity) {
+      preview = '';
+      message =
+        'The selection, context or proposed reason changed. Preview the exact changes again.';
+      return;
+    }
+    const submitted = [...chosen],
+      selectedName = name,
+      changedAt = new Date().toISOString();
+    const input = {
+      priority,
+      reason,
+      reviewDueAt: reviewDate ? new Date(`${reviewDate}T00:00:00Z`).toISOString() : null,
+      changedAt,
+    };
+    busy = true;
+    try {
+      await updateWatchContexts(
+        selectedName,
+        submitted.map((row) => ({
+          domain: row.domain,
+          expected: row.context,
+          input: { ...input, brandProfileId: row.context.brandProfileId },
+        })),
+      );
+      if (name !== selectedName) return;
+      message = `${submitted.length} exact domain contexts changed. Collection mode, cadence, evidence and other Brand contexts were not changed.`;
+      preview = '';
+      try {
+        await onrefresh();
+      } catch {
+        message +=
+          ' The write committed, but refreshing the visible watchlist failed. Reload before another edit.';
+      }
+    } catch (cause) {
+      message =
+        cause instanceof Error
+          ? cause.message
+          : 'The context edit failed; the draft remains available.';
+    } finally {
+      busy = false;
+    }
+  }
+</script>
+
+<section class="domain-metadata card" aria-labelledby="watch-context-title">
+  <h3 id="watch-context-title">Domain watch reasons and priorities</h3>
+  <p
+    >{entry.domainMetadata.length} retained domains · {entry.results.length} latest observed results ·
+    {entry.history.length} retained checks. Metadata-only domains have no invented successful scan or
+    evidence baseline.</p
+  >
+  <p
+    >Urgency, Risk, confidence, Case severity and collection cadence are separate. A due review date
+    does not schedule a scan.</p
+  >
+  {#if message}<p role="status" aria-live="polite">{message}</p>{/if}
+  <div class="toolbar"
+    ><label
+      >Filter review priority<select bind:value={filter}
+        ><option value="all">All priorities</option>{#each WATCH_PRIORITIES as option}<option
+            value={option.value}>{option.label}</option
+          >{/each}</select
+      ></label
+    ><label
+      >Sort domain contexts<select bind:value={sort}
+        ><option value="priority">Review priority</option><option value="domain">Domain</option
+        ></select
+      ></label
+    ></div
+  >
+  <p
+    >{rows.length} contexts shown (up to 200); {chosen.length} selected across filters. Every bulk edit
+    lists its exact selected contexts before saving.</p
+  >
+  <div class="metadata-grid"
+    >{#each rows as row (row.key)}<article>
+        <label
+          ><input
+            type="checkbox"
+            checked={selected.has(row.key)}
+            onchange={(event) => toggle(row.key, event.currentTarget.checked)}
+            disabled={busy}
+          /><strong>{row.domain}</strong></label
+        >
+        <p>{WATCH_PRIORITIES.find((option) => option.value === row.context.priority)?.label}</p>
+        <p
+          >{row.context.brandProfileId
+            ? `Exact Brand identifier: ${row.context.brandProfileId}`
+            : 'Watchlist-only context'}</p
+        >
+        <p>Reason: {row.context.reason || 'Unassigned; historical evidence was not rewritten.'}</p>
+        <p
+          >Analyst changed: {row.context.changedAt || 'Unknown'} · next review: {row.context
+            .reviewDueAt || 'Not set'}</p
+        >
+        {#if row.candidate}<details
+            ><summary>Retained candidate source context</summary
+            >{#each row.candidate.sources as source}<p
+                >{source.observedHostname} · {source.source} · revision {source.revision ||
+                  'unknown'} · interval {source.sourceFirstObservedAt || 'unknown'} to {source.sourceLastObservedAt ||
+                  'unknown'} · first retained locally {source.firstLocalObservedAt || 'unknown'}</p
+              ><p>{source.completeness}: {source.gap || 'Continuous coverage unknown'}</p
+              >{/each}</details
+          >{/if}
+        {#each reviews.items.filter((item) => item.subjectKey === analystReviewSubjectKey( 'comparison', ['watch_domain_context', name, row.domain, row.context.brandProfileId] )) as item}<details
+            ><summary>Observed change review</summary><p>{item.detail}</p>
+            <ul
+              >{#each reviews.details.find((detail) => detail.subjectKey === item.subjectKey)?.changes ?? [] as change}<li
+                  >{watchlistFieldLabel(change.field)}: {formatWatchlistValue(
+                    change.field,
+                    change.before,
+                  )} → {formatWatchlistValue(change.field, change.after)}</li
+                >{/each}</ul
+            >
+            <p
+              >Before: last comparable retained baseline; exact earlier field observation time
+              unknown.</p
+            ><p
+              >Later retained check: {item.observedAt || 'Time unknown'} · completeness {item.completeness}.
+              {item.rankingReason}</p
+            ><a href={`/cases?domain=${encodeURIComponent(row.domain)}`}
+              >Review a deliberate Case handoff</a
+            ></details
+          >{/each}
+      </article>{/each}</div
+  >
+  {#if reviews.truncated}<p
+      >Additional contextual change reviews were omitted by the 500-item bound; no absence is
+      inferred.</p
+    >{/if}
+  <fieldset disabled={busy}
+    ><legend>Reviewed selected-context change</legend>
+    <label
+      >New analyst priority<select bind:value={priority}
+        >{#each WATCH_PRIORITIES as option}<option value={option.value}>{option.label}</option
+          >{/each}</select
+      ></label
+    >
+    <label>New watch reason<textarea bind:value={reason} maxlength="300" rows="2"></textarea></label
+    >
+    <label>Optional next review date (UTC)<input type="date" bind:value={reviewDate} /></label>
+    <button
+      class="btn"
+      disabled={!chosen.length || !reason.trim()}
+      onclick={() => (preview = previewIdentity)}>Preview selected priority changes</button
+    >
+    {#if preview === previewIdentity}<section aria-label="Domain priority change preview"
+        ><p
+          >Set {WATCH_PRIORITIES.find((option) => option.value === priority)?.label} with reason “{reason}”.
+          Additional requests: 0.</p
+        ><ul
+          >{#each chosen as row}<li
+              >{row.domain} · {row.context.brandProfileId || 'Watchlist-only'} · {row.context
+                .priority} → {priority}</li
+            >{/each}</ul
+        ><button class="btn" onclick={() => void save()} disabled={!chosen.length}
+          >Apply reviewed context changes</button
+        ></section
+      >{/if}
+  </fieldset>
+</section>
+
+<style>
+  .domain-metadata {
+    min-width: 0;
+    padding: var(--card-pad);
+    display: grid;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .domain-metadata p,
+  .domain-metadata li,
+  .domain-metadata summary {
+    overflow-wrap: anywhere;
+  }
+  .domain-metadata label {
+    display: grid;
+    gap: 6px;
+  }
+  .domain-metadata label:has(input[type='checkbox']) {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .metadata-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+    gap: 12px;
+  }
+  .metadata-grid article {
+    min-width: 0;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+  }
+  .domain-metadata fieldset {
+    min-width: 0;
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+  }
+  .domain-metadata select,
+  .domain-metadata textarea,
+  .domain-metadata input:not([type='checkbox']) {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .toolbar {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .domain-metadata summary {
+    cursor: pointer;
+  }
+</style>

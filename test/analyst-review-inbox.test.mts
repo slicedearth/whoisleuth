@@ -101,6 +101,7 @@ function bulkSession(): BulkSession {
 function watchlists(domain = 'changed.invalid'): WatchlistCollection {
   return {
     Priority: {
+      domainMetadata: [],
       updatedAt: '2026-07-27T10:00:00.000Z',
       results: [],
       baseline: [],

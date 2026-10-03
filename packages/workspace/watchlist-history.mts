@@ -8,6 +8,7 @@ import { HTTP_SECURITY_HEADER_TOKENS, normalizeHttpSummary } from '../cases/http
 import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { registryDateIso } from '../evidence/registry-dates.mts';
+import { normalizeWatchDomainMetadata, type WatchDomainMetadata } from './brand-candidate-workflow.mts';
 import { mergeWebCollectionQuality, normalizeWebCollectionQuality, webCollectionAllowsComparison, type WebCollectionQuality } from '../evidence/collection-quality.mts';
 import {
   MAX_WATCHLIST_CHANGES_PER_EVENT,
@@ -80,6 +81,7 @@ export interface WatchlistEntry {
   results: CompactWatchlistRecord[];
   baseline: WatchlistComparableRecord[];
   history: WatchlistHistoryEvent[];
+  domainMetadata: WatchDomainMetadata[];
 }
 
 export interface AppendWatchlistScanOptions {
@@ -122,6 +124,7 @@ const DEEP_FIELDS = new Set([
   'faviconMatch',
   'faviconNearMatch',
   'hasPasswordField',
+  'hasExternalPasswordForm',
   'phishingLanguageMatch',
   'reusesOfficialAssets',
   'riskModelVersion',
@@ -154,6 +157,7 @@ const FIELD_LABELS: Record<string, string> = {
   faviconMatch: 'Official favicon match',
   faviconNearMatch: 'Official favicon near-match',
   hasPasswordField: 'Password form',
+  hasExternalPasswordForm: 'External password-form destination',
   phishingLanguageMatch: 'Phishing language',
   reusesOfficialAssets: 'Official asset reuse',
   riskScore: 'Risk score',
@@ -334,6 +338,7 @@ function compactRecord(value: unknown): CompactWatchlistRecord | null {
     faviconMatch: typeof record.faviconMatch === 'boolean' ? record.faviconMatch : null,
     faviconNearMatch: typeof record.faviconNearMatch === 'boolean' ? record.faviconNearMatch : null,
     hasPasswordField: typeof record.hasPasswordField === 'boolean' ? record.hasPasswordField : null,
+    hasExternalPasswordForm: typeof record.hasExternalPasswordForm === 'boolean' ? record.hasExternalPasswordForm : null,
     phishingLanguageMatch: boundedText(record.phishingLanguageMatch, MAX_TITLE_LENGTH),
     reusesOfficialAssets: typeof record.reusesOfficialAssets === 'boolean' ? record.reusesOfficialAssets : null,
     riskModelVersion,
@@ -586,8 +591,9 @@ export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
     results,
     baseline,
     history,
+    domainMetadata: normalizeWatchDomainMetadata(input.domainMetadata, results.map(record => record.domain)),
   };
-  if (normalized.history.length === 0) normalized.history.push(initialHistoryEvent(normalized, baseline));
+  if (normalized.history.length === 0 && (results.length || baseline.length)) normalized.history.push(initialHistoryEvent(normalized, baseline));
   return normalized;
 }
 
@@ -636,6 +642,7 @@ export function appendWatchlistScan(
       results: current,
       baseline: mergeWatchlistBaseline(previous?.baseline || [], current),
       history,
+      domainMetadata: normalizeWatchDomainMetadata(previous?.domainMetadata, current.map(record => record.domain)),
     },
     changes,
   };
@@ -676,6 +683,7 @@ export function watchlistHistoryDomains(entry: unknown) {
   for (const record of [...normalized.results, ...normalized.baseline]) {
     if (record?.domain) current.add(record.domain);
   }
+  for (const metadata of normalized.domainMetadata) current.add(metadata.domain);
   for (const event of normalized.history) {
     for (const change of event.changes) {
       if (change.domain && !current.has(change.domain)) historical.add(change.domain);

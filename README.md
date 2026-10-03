@@ -48,6 +48,10 @@ WHOISleuth uses three analyst jobs: **Investigate**, **Respond** and **Assure**.
 | **Cases** | Retain evidence, assess findings and prepare response packets. |
 | **Monitor** | Review changes, watchlists, follow-ups and local rules. |
 
+[Candidate review](docs/brand-candidate-review.md) connects explicit Discover
+selections to local Brand review and per-domain Watchlist reasons/priorities,
+without enabling collection or inventing a Lookup baseline.
+
 The public [Resources hub](https://www.whoisleuth.com/resources) is the shortest
 user guide. [Application documentation](docs/application-guide.md) covers the
 browser tools and saved work.

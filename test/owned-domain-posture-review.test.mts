@@ -47,7 +47,7 @@ const profile = {
   tlds: [],
   approvedPartnerDomains: [],
   allowlistedDomains: [],
-  allowlistedRegistrars: [],
+  allowlistedRegistrars: [], candidateObservations: [], candidateExceptions: [],
   officialChannels: [],
   rightsReferences: [],
   dkimSelectors: [],

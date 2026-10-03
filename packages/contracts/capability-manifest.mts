@@ -398,6 +398,7 @@ const CLI_OPERATION_POLICY = Object.freeze({
   'change-packet': offlinePolicy('explicit_document', ['complete', 'partial', 'blocked']),
   'sharing-review': offlinePolicy('explicit_document', ['complete', 'partial', 'blocked']),
   'workflow-plan': offlinePolicy('all_or_nothing', STATIC_OUTCOMES, 'none', 'not_applicable'),
+  'watchlist-review': OFFLINE_PER_ITEM,
   'workflow-run': Object.freeze({ kind: 'workflow_run' }),
   diff: OFFLINE_PER_SOURCE,
   reconcile: OFFLINE_PER_SOURCE,

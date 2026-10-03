@@ -2,6 +2,7 @@ import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalCollectionReadAfterWrite, readBrowserLocalCollection } from './helpers';
 import { appendWatchlistScan } from '../packages/workspace/watchlist-history.mts';
+import { WATCHLIST_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 
 const WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
 const NOW = '2026-07-14T08:00:00.000Z';
@@ -65,7 +66,7 @@ test('unknown Watchlist times remain visible and portable without invented dates
   const chunks: Buffer[] = [];
   for await (const chunk of stream) chunks.push(Buffer.from(chunk));
   const exported = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-  expect(exported.version).toBe(4);
+  expect(exported.version).toBe(WATCHLIST_SCHEMA_VERSION);
   expect(exported.watchlists.Undated.history[0].checkedAt).toBeNull();
   for (const theme of ['dark', 'light']) for (const width of [320, 390, 1280]) {
     await page.setViewportSize({ width, height: 800 });

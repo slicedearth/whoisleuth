@@ -20,6 +20,7 @@ export type BrandDomainMatch = Readonly<{
   reason: string;
 }>;
 type DomainLists = Pick<BrandProfileSignalProfile, 'officialDomains' | 'approvedPartnerDomains' | 'allowlistedDomains'>;
+export type BrandCandidateExclusion = BrandDomainMatch | Readonly<{ kind: 'scoped_exception'; matchedDomain: string; reason: string }>;
 export type BrandMatchSourceState = 'loading' | 'ready' | 'unavailable';
 
 /** Explains the same exact comparison and role precedence used by collection consumers. */
@@ -48,11 +49,12 @@ export function profileDomainKind(
 /** Partition a bounded candidate set without changing its records or retaining another collection. */
 export function partitionBrandCandidates<T extends Readonly<{ domain: string }>>(
   candidates: readonly T[], profile: DomainLists | null, state: BrandMatchSourceState = 'ready',
+  scopedMatch?: (candidate: T) => BrandCandidateExclusion | null,
 ) {
   const admitted = candidates.slice(0, MAX_GENERATED_CONTEXT);
-  const filtered: T[] = [], excluded: Array<{ candidate: T; match: BrandDomainMatch }> = [];
+  const filtered: T[] = [], excluded: Array<{ candidate: T; match: BrandCandidateExclusion }> = [];
   for (const candidate of admitted) {
-    const match = state === 'ready' ? profileDomainMatch(candidate.domain, profile) : null;
+    const match = state === 'ready' ? profileDomainMatch(candidate.domain, profile) ?? scopedMatch?.(candidate) ?? null : null;
     if (match) excluded.push({ candidate, match });
     else filtered.push(candidate);
   }

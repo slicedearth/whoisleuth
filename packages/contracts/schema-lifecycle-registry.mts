@@ -19,9 +19,11 @@ import { ANALYST_REVIEW_STATE_LIFECYCLE_FAMILY } from './analyst-review-state.mt
 import { CASE_DRAFT_LIFECYCLE_FAMILY } from './case-drafts.mts';
 import { CASE_VIEWS_LIFECYCLE_FAMILY } from './case-views.mts';
 import { REVIEW_SESSION_LIFECYCLE_FAMILY } from './review-session.mts';
+import { CANDIDATE_WATCH_REVIEW_LIFECYCLE_FAMILY } from './candidate-watch-review.mts';
 import { defineSchemaLifecycleRegistry } from './schema-lifecycle.mts';
 
 export const SCHEMA_LIFECYCLE_REGISTRY = defineSchemaLifecycleRegistry([
+  CANDIDATE_WATCH_REVIEW_LIFECYCLE_FAMILY,
   CASE_DRAFT_LIFECYCLE_FAMILY,
   CASE_VIEWS_LIFECYCLE_FAMILY,
   REVIEW_SESSION_LIFECYCLE_FAMILY,

@@ -1157,6 +1157,7 @@
     {/if}
     <div hidden={brandsView!=='overview'}>
     <BrandReviewInbox inbox={brandReviewInbox} />
+    {#if active}<DeferredSurface load={()=>import('$lib/components/BrandCandidateReviewWorkspace.svelte')} props={{active,onrefresh:refreshProfiles,disabled:profileWriteDisabled}} loadingLabel="Loading retained candidate review…" unavailableLabel="Retained candidate review could not be loaded. No candidate state was changed." placeholder="workspace" />{/if}
     <BrandAssetRegisterSummary projection={brandAssetRegister} />
     </div>
   </div>

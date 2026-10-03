@@ -147,7 +147,7 @@ test('unknown history times survive current serialisation and export while genui
     assert.equal(normalized.watchlists.Epoch?.history[0]?.checkedAt, '1970-01-01T00:00:00.000Z');
     assert.deepEqual(JSON.parse(serializeWatchlistStore(normalized)), normalized);
     const exported = buildWatchlistExport(normalized, NOW);
-    assert.equal(exported.version, 4);
+    assert.equal(exported.version, WATCHLIST_SCHEMA_VERSION);
     assert.deepEqual(mergeWatchlistStores({}, exported).watchlists, normalized.watchlists);
   }
 });

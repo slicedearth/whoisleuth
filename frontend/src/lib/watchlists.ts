@@ -14,6 +14,10 @@ import {
   serializeWatchlistStore,
 } from './analysis/watchlist-store.ts';
 import { normalizeDomain } from '../../../packages/evidence/domain-name.mts';
+import { applyCandidateWatchHandoff, planCandidateWatchHandoff, setWatchDomainContext, setWatchDomainContexts, type CandidateWatchInput, type CandidateWatchPlan, type WatchDomainContextEdit } from '../../../packages/workspace/candidate-watch-handoff.mts';
+import type { WatchDomainContext } from '../../../packages/workspace/brand-candidate-workflow.mts';
+import { mergeWatchDomainMetadata } from '../../../packages/workspace/brand-candidate-workflow.mts';
+import { normalizeWatchlistEntry } from '../../../packages/workspace/watchlist-history.mts';
 import type {
   WatchlistCollection,
   WatchlistEntry,
@@ -44,6 +48,32 @@ export async function loadWatchlists(): Promise<Watchlists> {
   return readBrowserLocalData('watchlists');
 }
 
+export async function addCandidateWatchlist(input: CandidateWatchInput, expectedPlan: CandidateWatchPlan) {
+  const now = new Date().toISOString();
+  return updateBrowserLocalData('watchlists', current => {
+    if (JSON.stringify(planCandidateWatchHandoff(current, input)) !== JSON.stringify(expectedPlan)) throw new Error('The watchlist destination changed after the preview. Preview it again; nothing was overwritten.');
+    const result = applyCandidateWatchHandoff(current, input, now);
+    return { document: result.watchlists, result: result.plan };
+  });
+}
+
+export async function updateWatchContext(name: string, domain: string, input: WatchDomainContext, expected: WatchDomainContext | null) {
+  const changedAt = new Date().toISOString();
+  return updateBrowserLocalData('watchlists', current => {
+    const document = setWatchDomainContext(current, name, domain, { ...input, changedAt }, expected);
+    return { document, result: document };
+  });
+}
+
+export async function updateWatchContexts(name: string, edits: readonly WatchDomainContextEdit[]) {
+  const changedAt = new Date().toISOString();
+  const captured = structuredClone(edits);
+  return updateBrowserLocalData('watchlists', current => {
+    const document = setWatchDomainContexts(current, name, captured.map(edit => ({ ...edit, input: { ...edit.input, changedAt } })));
+    return { document, result: document };
+  });
+}
+
 function boundedWatchlists(all: Watchlists): Watchlists {
   return JSON.parse(serializeWatchlistStore(all)).watchlists as Watchlists;
 }
@@ -69,18 +99,19 @@ export async function writeWatchlists(all: Watchlists): Promise<void> {
 export function mergeHostedWatchlist(
   current: Watchlists,
   name: string,
-  hostedEntry: WatchlistEntry,
+  hostedEntry: Omit<WatchlistEntry, 'domainMetadata'>,
 ): Watchlists {
   const normalizedName = normalizeWatchlistName(name);
   if (!normalizedName) throw new Error('Hosted watchlist name is invalid.');
   const all = { ...current } as Watchlists;
   const existing = Object.keys(all).find((candidate) => candidate.toLowerCase() === normalizedName.toLowerCase());
+  const localMetadata = existing ? all[existing]?.domainMetadata : [];
   if (!existing && Object.keys(all).length >= MAX_WATCHLISTS) {
     throw new Error('Watchlist storage is full. Export and remove a watchlist before saving more.');
   }
   if (existing && existing !== normalizedName) delete all[existing];
   Object.defineProperty(all, normalizedName, {
-    value: hostedEntry,
+    value: { ...normalizeWatchlistEntry(hostedEntry), domainMetadata: mergeWatchDomainMetadata(localMetadata, normalizeWatchlistEntry(hostedEntry).domainMetadata) },
     writable: true,
     enumerable: true,
     configurable: true,
@@ -88,7 +119,7 @@ export function mergeHostedWatchlist(
   return boundedWatchlists(all);
 }
 
-export async function restoreHostedWatchlist(name: string, hostedEntry: WatchlistEntry): Promise<void> {
+export async function restoreHostedWatchlist(name: string, hostedEntry: Omit<WatchlistEntry, 'domainMetadata'>): Promise<void> {
   await updateBrowserLocalData('watchlists', (current) => ({
     document: mergeHostedWatchlist(current as Watchlists, name, hostedEntry),
     result: undefined,

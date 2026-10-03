@@ -22,7 +22,7 @@
     localWatchlists: Watchlists;
     localNames: string[];
     localSourceState: 'loading' | 'ready' | 'unavailable';
-    restoreHosted: (name: string, entry: WatchlistEntry) => Promise<void>;
+    restoreHosted: (name: string, entry: Omit<WatchlistEntry, 'domainMetadata'>) => Promise<void>;
     formatDate: (value: string) => string;
   } = $props();
 

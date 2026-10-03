@@ -19,11 +19,12 @@ export const BRAND_PROFILE_SCHEMA = 'whoisleuth.brand-profiles';
 export const PUBLIC_BRAND_PROFILE_SCHEMA_VERSION = 6;
 // Historical readers retain a fixed published identity when the writer moves.
 export const PUBLISHED_V2_2_BRAND_PROFILE_SCHEMA_VERSION = 7;
-export const BRAND_PROFILE_SCHEMA_VERSION = 9;
+export const BRAND_PROFILE_SCHEMA_VERSION = 10;
 export const BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS = Object.freeze([
   PUBLIC_BRAND_PROFILE_SCHEMA_VERSION,
   PUBLISHED_V2_2_BRAND_PROFILE_SCHEMA_VERSION,
   8,
+  9,
   BRAND_PROFILE_SCHEMA_VERSION,
 ]);
 export const SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS = BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS;
@@ -33,6 +34,13 @@ export const MAX_PROFILE_VALUE_INPUTS = MAX_PROFILE_VALUES * 4;
 export const MAX_PROFILE_STORE_BYTES = 4 * 1024 * 1024;
 export const MAX_PROFILE_IMPORT_BYTES = MAX_PROFILE_STORE_BYTES * 8;
 export const MAX_PROFILE_NAME_LENGTH = 100;
+export const MAX_CANDIDATE_OBSERVATIONS = 200;
+export const MAX_CANDIDATE_MATCHES = 20;
+export const MAX_CANDIDATE_SOURCES = 12;
+export const MAX_CANDIDATE_TEXT = 300;
+export const MAX_CANDIDATE_EXCEPTIONS = 200;
+export const MAX_CANDIDATE_EXCEPTION_HISTORY = 8;
+export const MAX_WATCH_CONTEXTS = 20;
 export const MAX_PROFILE_TEXT_LENGTH = 200;
 export const MAX_PROFILE_DOMAIN_LENGTH = 253;
 export const MAX_PROFILE_URL_LENGTH = 2_048;
@@ -61,8 +69,8 @@ export const MAX_CAMPAIGN_INPUT_RECORDS = 500;
 export const MAX_CAMPAIGN_STORE_BYTES = 512 * 1024;
 
 export const WATCHLIST_SCHEMA = 'whoisleuth.watchlists';
-export const WATCHLIST_SCHEMA_VERSION = 4;
-export const WATCHLIST_BROWSER_SUPPORTED_VERSIONS = Object.freeze([2, 3, WATCHLIST_SCHEMA_VERSION]);
+export const WATCHLIST_SCHEMA_VERSION = 5;
+export const WATCHLIST_BROWSER_SUPPORTED_VERSIONS = Object.freeze([2, 3, 4, WATCHLIST_SCHEMA_VERSION]);
 export const WATCHLIST_EXPORT_SUPPORTED_VERSIONS = WATCHLIST_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_WATCHLISTS = 100;
 export const MAX_WATCHLIST_INPUTS = MAX_WATCHLISTS * 4;
@@ -262,7 +270,7 @@ export const BRAND_PROFILE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   supportedVersions: BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_PROFILE_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Published versions 6, 7 and 8 migrate directly to the current profile envelope. Version 9 preserves earlier page baselines while admitting independently versioned native-tree fingerprints; incompatible fingerprint algorithms are not compared.',
+  note: 'Versions 6–9 remain readable without invented candidate provenance. Version 10 retains bounded candidate observations and exact expiring rule exceptions while preserving independent page-fingerprint algorithms.',
 });
 export const CAMPAIGN_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.campaigns', kind: 'browser_store', schema: null, currentVersion: CAMPAIGN_SCHEMA_VERSION,
@@ -340,7 +348,7 @@ export const BRAND_PROFILE_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   supportedVersions: SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_PROFILE_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Supported exports merge non-destructively by bounded normalised profile identity.',
+  note: 'Supported exports merge non-destructively by bounded profile identity. Candidate decisions cannot be reassigned to a different Brand identifier with the same name.',
 });
 export const CAMPAIGN_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.campaigns', kind: 'export', schema: CAMPAIGN_SCHEMA, currentVersion: CAMPAIGN_SCHEMA_VERSION,
@@ -354,7 +362,7 @@ export const WATCHLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   supportedVersions: WATCHLIST_EXPORT_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_WATCHLIST_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Public version 2 and current version 3 merge non-destructively. Historical records have unknown collection quality; incomplete current checks cannot erase a usable baseline.',
+  note: 'Versions 2–4 remain readable. Version 5 retains per-domain Brand contexts, candidate-only watches and nullable local password-form attribution without inventing scans, review clocks or historical scalar meaning. Incomplete checks cannot erase a usable baseline.',
 });
 export const SHORTLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.shortlist', kind: 'export', schema: SHORTLIST_SCHEMA, currentVersion: SHORTLIST_SCHEMA_VERSION,
@@ -491,6 +499,11 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
     itemBounds: [
       { id: 'profiles', path: 'profiles', maximum: MAX_PROFILES, handling: 'truncate' },
       { id: 'profile-values', path: 'profiles[].values', maximum: MAX_PROFILE_VALUES, handling: 'truncate' },
+      { id: 'candidate-observations', path: 'profiles[].candidateObservations', maximum: MAX_CANDIDATE_OBSERVATIONS, handling: 'truncate' },
+      { id: 'candidate-matches', path: 'profiles[].candidateObservations[].matches', maximum: MAX_CANDIDATE_MATCHES, handling: 'reject' },
+      { id: 'candidate-sources', path: 'profiles[].candidateObservations[].sources', maximum: MAX_CANDIDATE_SOURCES, handling: 'reject' },
+      { id: 'candidate-exceptions', path: 'profiles[].candidateExceptions', maximum: MAX_CANDIDATE_EXCEPTIONS, handling: 'truncate' },
+      { id: 'exception-history', path: 'profiles[].candidateExceptions[].history', maximum: MAX_CANDIDATE_EXCEPTION_HISTORY, handling: 'truncate' },
     ],
     portable: {
       descriptor: BRAND_PROFILE_EXPORT_COMPATIBILITY,
@@ -536,6 +549,8 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
       { id: 'watchlists', path: 'watchlists', maximum: MAX_WATCHLISTS, handling: 'truncate' },
       { id: 'domains', path: 'watchlists[].results', maximum: MAX_WATCHLIST_DOMAINS, handling: 'drop_value' },
       { id: 'history', path: 'watchlists[].history', maximum: MAX_WATCHLIST_HISTORY_EVENTS, handling: 'truncate' },
+      { id: 'domain-contexts', path: 'watchlists[].domainMetadata', maximum: MAX_WATCHLIST_DOMAINS, handling: 'truncate' },
+      { id: 'brand-contexts', path: 'watchlists[].domainMetadata[].contexts', maximum: MAX_WATCH_CONTEXTS, handling: 'truncate' },
     ],
     portable: {
       descriptor: WATCHLIST_EXPORT_COMPATIBILITY,
@@ -720,6 +735,10 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
 ]);
 
 const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly Pick<SchemaLifecycleFixture, 'id' | 'path' | 'bytes' | 'sha256' | 'schema' | 'version'>[] = Object.freeze([
+  { id: 'workspace.browser.brand.v10', path: 'test/fixtures/workspace-lifecycle/browser-brand-v10.json', bytes: 38, sha256: 'bebf3a72ba57c06246e6169ebd9a597eb5b867508db85e1db0e3d763bc0839bc', schema: 'whoisleuth.browser.brand-profile-store', version: 10 },
+  { id: 'workspace.portable.brand.v10', path: 'test/fixtures/workspace-lifecycle/portable-brand-v10.json', bytes: 123, sha256: '85cd7c58696f8219484ac88210ad7ab4a0ad1c9798e8cb02ff6ebb3fd2c82d8a', schema: 'whoisleuth.brand-profiles', version: 10 },
+  { id: 'workspace.browser.watchlist.v5', path: 'test/fixtures/workspace-lifecycle/browser-watchlist-v5.json', bytes: 76, sha256: '11eabd20f952611307a5c84291c7892c15d3748f7ada5549813e1d705967c2c0', schema: 'whoisleuth.browser.watchlist-store', version: 5 },
+  { id: 'workspace.portable.watchlist.v5', path: 'test/fixtures/workspace-lifecycle/portable-watchlist-v5.json', bytes: 120, sha256: '732d4bda46e907bdd4d343ce36999a2787a0057029ee4dba0c4ef462f2822fed', schema: 'whoisleuth.watchlists', version: 5 },
   {
     id: 'workspace.browser.detection.v2', path: 'test/fixtures/workspace-lifecycle/browser-detection-v2.json',
     bytes: 34, sha256: '2db6ae8eb9d24cb86924a7020c6f3eebfa41b5fc5848a53e239465db622c2312',

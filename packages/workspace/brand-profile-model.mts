@@ -11,6 +11,7 @@ import { MAX_IDENTITY_DIGEST_BYTES, sha256IdentityHex } from '../evidence/record
 import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECKS, MAX_POSTURE_CHECK_RECORDS, MAX_POSTURE_RECORD_LENGTH, normalizeDomainPostureSourceContext, normalizeDomainPostureProfileContext, type DomainPostureProfileContext, type DomainPostureSourceContext } from '../evidence/domain-posture-context.mts';
 import { normalizeOpaqueReferenceId } from '../cases/opaque-reference-id.mts';
 import { normalizePageBaseline } from './page-baseline.mts';
+import { normalizeCandidateObservations, normalizeCandidateExceptions, type BrandCandidateObservation, type BrandCandidateException } from './brand-candidate-workflow.mts';
 import type { PageBaseline } from './page-baseline.mts';
 import { isInformativePerceptualHash as isInformativeFaviconHash } from '../analysis/perceptual-hash-comparison.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
@@ -200,6 +201,8 @@ export type BrandProfile = {
   approvedPartnerDomains: string[];
   allowlistedDomains: string[];
   allowlistedRegistrars: string[];
+  candidateObservations: BrandCandidateObservation[];
+  candidateExceptions: BrandCandidateException[];
   dkimSelectors: string[];
   retiredDkimSelectors: string[];
   mailProtectionProfile: MailProtectionProfile;
@@ -218,6 +221,8 @@ export type BrandProfile = {
 export type BrandProfileFieldPatch = Partial<Pick<BrandProfile,
   | 'allowlistedDomains'
   | 'allowlistedRegistrars'
+  | 'candidateObservations'
+  | 'candidateExceptions'
   | 'desiredPostureBaselines'
   | 'protectionAttestations'
 >>;
@@ -765,6 +770,8 @@ export function normalizeBrandProfile(
     approvedPartnerDomains: normalizeProfileDomains(value.approvedPartnerDomains),
     allowlistedDomains: normalizeProfileDomains(value.allowlistedDomains),
     allowlistedRegistrars: normalizeProfileTextValues(value.allowlistedRegistrars),
+    candidateObservations: normalizeCandidateObservations(value.candidateObservations),
+    candidateExceptions: normalizeCandidateExceptions(value.candidateExceptions),
     dkimSelectors,
     retiredDkimSelectors: normalizeDkimSelectors(value.retiredDkimSelectors)
       .filter((selector) => !dkimSelectors.includes(selector)),
@@ -790,6 +797,8 @@ export function normalizeBrandProfile(
 const BRAND_PROFILE_FIELD_PATCH_KEYS = Object.freeze([
   'allowlistedDomains',
   'allowlistedRegistrars',
+  'candidateObservations',
+  'candidateExceptions',
   'desiredPostureBaselines',
   'protectionAttestations',
 ] as const satisfies readonly (keyof BrandProfileFieldPatch)[]);
@@ -830,11 +839,22 @@ export function brandProfileStoreVersion(raw: unknown): number | null {
   return typeof value.version === 'number' && Number.isFinite(value.version) && value.version > 0 ? value.version : null;
 }
 
+function assertHistoricalCandidateFields(raw: unknown, version: number | null): void {
+  if (Array.isArray(raw) || version === null || version >= 10) return;
+  for (const input of profileList(raw).slice(0, MAX_PROFILES * 4)) {
+    const profile = record(input);
+    if (Object.hasOwn(profile, 'candidateObservations') || Object.hasOwn(profile, 'candidateExceptions')) {
+      throw new TypeError('Candidate observations and scoped exceptions require Brand Profile schema 10; historical records were not reinterpreted.');
+    }
+  }
+}
+
 /** Normalize an internal profile collection or current stored envelope. */
 export function normalizeBrandProfileStore(raw: unknown): BrandProfileStore {
   assertWorkspaceInputGraph(raw, 'Brand Profile store', { maximumBytes: MAX_PROFILE_STORE_BYTES });
   assertWorkspaceDeclaredVersion(raw, 'Brand Profile store');
   const sourceVersion = brandProfileStoreVersion(raw);
+  assertHistoricalCandidateFields(raw, sourceVersion);
   if (!Array.isArray(raw) && sourceVersion !== null
     && !SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS.includes(sourceVersion)) {
     throw new Error(`Brand Profile schema ${sourceVersion} is unsupported; no data was changed.`);
@@ -889,6 +909,7 @@ export function mergeBrandProfiles(
     throw new Error('Expected a current WHOISleuth Brand Profile export.');
   }
   const importedVersion = brandProfileStoreVersion(importedRaw);
+  assertHistoricalCandidateFields(importedRaw, importedVersion);
   if (importedVersion !== null && importedVersion > BRAND_PROFILE_SCHEMA_VERSION) {
     throw new Error(`This Brand Profile file uses newer schema ${importedVersion}. Update the app before importing it.`);
   }
@@ -922,6 +943,9 @@ export function mergeBrandProfiles(
     const rawId = normalizeBrandProfileId(value.id);
     if (rawId && rawName) retainIdName(rawId, rawName);
     const existing = rawName ? byName.get(rawName.toLowerCase()) : null;
+    if (existing && rawId !== existing.id && ((Array.isArray(value.candidateObservations) && value.candidateObservations.length) || (Array.isArray(value.candidateExceptions) && value.candidateExceptions.length))) {
+      throw new TypeError('Candidate metadata belongs to another Brand identifier with this name. Rename or review its exact Brand identity before importing; no decisions were reassigned.');
+    }
     const incomingUpdatedAt = timestamp(value.updatedAt, null);
     if (existing && (!incomingUpdatedAt || incomingUpdatedAt <= existing.updatedAt)) {
       skipped++;
@@ -934,6 +958,16 @@ export function mergeBrandProfiles(
       makeId: options.makeId,
     });
     if (!profile) { skipped++; continue; }
+    if (existing) {
+      profile.candidateObservations = normalizeCandidateObservations([...existing.candidateObservations, ...profile.candidateObservations]);
+      const exceptions = new Map(existing.candidateExceptions.map(exception => [exception.id, exception]));
+      for (const incoming of profile.candidateExceptions) {
+        const old = exceptions.get(incoming.id);
+        if (old && (old.domain !== incoming.domain || old.ruleKey !== incoming.ruleKey || old.purpose !== incoming.purpose)) throw new Error('An imported exception identifier changes its exact scope or purpose; no profiles were imported.');
+        if (!old || incoming.revision > old.revision) exceptions.set(incoming.id, incoming);
+      }
+      profile.candidateExceptions = normalizeCandidateExceptions([...exceptions.values()]);
+    }
     retainIdName(profile.id, profile.name);
     if (existing) { byName.set(profile.name.toLowerCase(), profile); updated++; }
     else if (byName.size < MAX_PROFILES) { byName.set(profile.name.toLowerCase(), profile); added++; }

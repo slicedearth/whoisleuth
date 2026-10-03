@@ -2,6 +2,16 @@ import { INVESTIGATION_PLAN_RECIPES, RUNNABLE_INVESTIGATION_PLAN_RECIPES } from 
 import { positional, OPTIONAL_FILE_POSITIONAL, constraint, commandSeed, integer, BASE_INTEGER_RANGE, file } from './command-definition.mts';
 
 export const WORKFLOW_COMMAND_DEFINITIONS = Object.freeze({
+  'watchlist-review': commandSeed({
+    reference: { description: 'Preview or export an explicit candidate selection to a local watchlist.', example: 'whoisleuth watchlist-review plan selection.json --json',
+      boundary: 'Reads bounded local JSON only. Plan shows exact domains, duplicates, per-domain outcomes, destination and review priority with zero additional requests. Export emits Watchlist schema 5 without creating a scan or baseline. Neither mode enables collection or scheduling.' },
+    collection: { scope: 'At most 2,000 selected candidate domains; no target requests.' },
+    summary: 'Review a local candidate watchlist handoff', options: ['--json', '--quiet', '--no-color'],
+    positionals: Object.freeze([positional('operation', 'enum', 1, 1, ['plan', 'export']), positional('source', 'file', 0, 1, [], 'argv_or_stdin')]),
+    constraints: Object.freeze([]), handlerOwner: 'workflow', networkEffect: 'offline', common: false,
+    schemaIdentifiers: Object.freeze(['whoisleuth.candidate-watch-input', 'whoisleuth.watchlists']), primaryArtefacts: Object.freeze(['Exact candidate handoff plan', 'Local watchlist export']),
+    planSupport: true, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
+  }),
   "monitor-once": commandSeed({
     reference: {
       description: 'Collect one bounded owned-domain review and compare it with an optional prior checkpoint.',

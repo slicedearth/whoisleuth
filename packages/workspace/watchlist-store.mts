@@ -3,6 +3,7 @@
 // migration, import merging, and exact serialized-byte accounting.
 
 import { MAX_WATCHLIST_DOMAINS, normalizeWatchlistEntry } from './watchlist-history.mts';
+import { mergeWatchDomainMetadata } from './brand-candidate-workflow.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
@@ -73,6 +74,16 @@ function defineEntry(
 }
 
 function assertHistoricalQuality(entry: Record<string, unknown>, version: number | null): void {
+  if (version !== null && version < 5 && Object.hasOwn(entry, 'domainMetadata')) {
+    throw new TypeError('Domain watch metadata requires Watchlist schema 5; historical evidence was not reinterpreted.');
+  }
+  if (version !== null && version < 5) {
+    const values = [entry.results, entry.baseline, ...((Array.isArray(entry.history) ? entry.history : []).map(event => plainRecord(event)?.changes))];
+    if (values.some(rows => Array.isArray(rows) && rows.some(value => {
+      const row = plainRecord(value);
+      return row && (Object.hasOwn(row, 'hasExternalPasswordForm') || row.field === 'hasExternalPasswordForm');
+    }))) throw new TypeError('Password-form attribution requires Watchlist schema 5; historical evidence was not reinterpreted.');
+  }
   if (version !== 2) return;
   for (const values of [entry.results, entry.baseline]) {
     if (Array.isArray(values) && values.some(value => plainRecord(value)?.webCollectionQuality !== undefined)) {
@@ -157,7 +168,14 @@ export function mergeWatchlistStores(localRaw: unknown, importedRaw: unknown) {
     const normalized = normalizeWatchlistEntry(entry);
     if (Object.prototype.hasOwnProperty.call(local, name)) {
       const localTime = local[name]!.updatedAt;
-      if (!normalized.updatedAt || !localTime || normalized.updatedAt <= localTime) { skipped++; continue; }
+      const previous = local[name]!;
+      const domainMetadata = mergeWatchDomainMetadata(previous.domainMetadata, Object.hasOwn(entry, 'domainMetadata') ? normalized.domainMetadata : []);
+      if (!normalized.updatedAt || !localTime || normalized.updatedAt <= localTime) {
+        if (JSON.stringify(domainMetadata) !== JSON.stringify(previous.domainMetadata)) { defineEntry(local, name, { ...previous, domainMetadata }); updated++; }
+        else skipped++;
+        continue;
+      }
+      normalized.domainMetadata = domainMetadata;
       updated++;
     }
     else if (Object.keys(local).length >= MAX_WATCHLISTS) { skipped++; continue; }

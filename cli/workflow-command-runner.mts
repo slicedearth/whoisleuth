@@ -34,6 +34,8 @@ import type { BoundedTextStream } from './bulk.mts';
 import type { TerminalEnvironment } from './terminal-presentation.mts';
 import { boundedInteractiveAnswer, canReadInteractiveLine, readBoundedInteractiveLine } from './terminal-input.mts';
 import { WORKFLOW_INLINE_COMMANDS } from './inline-command-families.mts';
+import { reviewCandidateWatchInput } from './watchlist-review.mts';
+import { MAX_WATCHLIST_IMPORT_BYTES } from '../packages/contracts/workspace-portability.mts';
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
 
 export type WorkflowCommandDependencies = {
@@ -52,6 +54,13 @@ export type WorkflowCommandDependencies = {
 
 type WorkflowInlineCommand = typeof WORKFLOW_INLINE_COMMANDS[number];
 type WorkflowCommandArguments = Extract<CliArguments, { action: WorkflowInlineCommand }>;
+
+async function runWatchlistReviewCommand(args: Extract<WorkflowCommandArguments, { action: 'watchlist-review' }>, dependencies: WorkflowCommandDependencies, context: CliWorkflowContext): Promise<number> {
+  const raw = dependencies.readArtifactInput ? await dependencies.readArtifactInput(args.source) : await context.readInput(args.source, MAX_WATCHLIST_IMPORT_BYTES, 'Candidate watch selection');
+  const document = reviewCandidateWatchInput(raw, args.operation, context.now());
+  if (!args.quiet) context.writeStdout(formatJsonDocument(document));
+  return EXIT_CODES.SUCCESS;
+}
 
 function boundWorkflowInputs(command: CliCommand, inputs: WorkflowStepInputs, dependencies: WorkflowCommandDependencies, context: CliWorkflowContext): Partial<CliDependencies> {
   if (!inputs.size) return {};
@@ -234,6 +243,7 @@ async function runWorkflowRecipeCommand(
 }
 
 const WORKFLOW_COMMAND_HANDLERS = Object.freeze({
+  'watchlist-review': runWatchlistReviewCommand,
   'monitor-once': runMonitorOnceCommand,
   'workflow-plan': runWorkflowPlanCommand,
   'workflow-run': runWorkflowRecipeCommand,

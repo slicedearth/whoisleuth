@@ -26,6 +26,11 @@ type MonitorOnceArguments = {
   failOn?: readonly CliFailPolicy[];
 } & TerminalOptions;
 
+type WatchlistReviewArguments = { action: 'watchlist-review'; operation: 'plan' | 'export'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions;
+function parseWatchlistReviewArguments(parsed: ParsedCommandArguments<WatchlistReviewArguments['action']>): WatchlistReviewArguments {
+  return { action: 'watchlist-review', operation: parsed.positionalValue('operation') as 'plan' | 'export', source: parsed.positionalValue('source'), output: jsonOutput(parsed), ...terminalOptions(parsed) };
+}
+
 type WorkflowPlanArguments =
   | ({
       action: 'workflow-plan';
@@ -143,6 +148,7 @@ function parseWorkflowRunArguments(parsed: ParsedCommandArguments<WorkflowRunArg
 }
 
 export const WORKFLOW_ARGUMENT_PARSERS = Object.freeze({
+  'watchlist-review': parseWatchlistReviewArguments,
   'monitor-once': parseMonitorOnceArguments,
   'workflow-plan': parseWorkflowPlanArguments,
   'workflow-run': parseWorkflowRunArguments,

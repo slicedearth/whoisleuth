@@ -117,9 +117,11 @@ export function normalizeShortlistRecord(
   if (!value) return null;
   const compact = compactWatchlistResults([value])[0];
   if (!compact) return null;
+  // Shortlist's published schema does not retain the newer local watch evidence.
+  const { hasExternalPasswordForm: _localWatchEvidence, ...shortlistCompact } = compact;
   const riskScore = score(value.riskScore);
   return {
-    ...compact,
+    ...shortlistCompact,
     availability: typeof compact.availability === 'string' ? compact.availability : 'unknown',
     riskModelVersion: riskScore === null ? null : normalizeRiskModelVersion(value.riskModelVersion),
     riskScore,

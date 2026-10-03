@@ -3,6 +3,7 @@
   import Pagination from '$lib/components/Pagination.svelte';
   import EvidenceTimestamp from '$lib/components/EvidenceTimestamp.svelte';
   import MonitorDomainTimeline from '$lib/components/MonitorDomainTimeline.svelte';
+  import WatchlistDomainMetadata from '$lib/components/WatchlistDomainMetadata.svelte';
   import {
     fieldLabels,
     formatValue,
@@ -30,6 +31,7 @@
     remove,
     openCase,
     formatDate,
+    refresh,
   }: {
     watchlists: Watchlists;
     names: string[];
@@ -47,6 +49,7 @@
     remove: (name: string) => void | Promise<void>;
     openCase: (domain: string) => void;
     formatDate: (value: string | null) => string;
+    refresh: () => Promise<unknown>;
   } = $props();
 
   const PAGE_SIZE=25;
@@ -106,7 +109,7 @@
         <thead><tr><th scope="col">Name</th><th scope="col">Domains</th><th scope="col">Checks</th><th scope="col">Latest changes</th><th scope="col">Updated</th><th scope="col">Actions</th></tr></thead>
         <tbody>{#each pagedNames as name}{@const item=watchlists[name]}{#if item}{@const latest=item.history.at(-1)}
           <tr>
-            <th scope="row">{name}</th><td>{item.results.length}</td><td>{item.history.length}</td>
+            <th scope="row">{name}</th><td>{item.domainMetadata.length}</td><td>{item.history.length}</td>
             <td><span class:changed={(latest?.changeCount || 0) > 0}>{latest?.changeCount || 0}</span></td>
             <td>{formatDate(item.updatedAt)}</td>
             <td><div class="actions toolbar">
@@ -121,10 +124,11 @@
     <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Watchlist pages" />
   </section>
 {:else}
-  <section class="empty-state card"><h2>No watchlists saved</h2><p>Run a Bulk scan, then save its results to begin a saved monitoring timeline.</p><a id="empty-watchlist-open-bulk" href="/bulk">Open Bulk →</a></section>
+  <section class="empty-state card"><h2>No watchlists saved</h2><p>Add reviewed Brand candidates without collection, or save observed Bulk results to begin an evidence timeline.</p><a id="empty-watchlist-open-bulk" href="/bulk">Open Bulk →</a></section>
 {/if}
 
 {#if entry}
+  <WatchlistDomainMetadata name={selected} {entry} onrefresh={refresh} />
   <section id="watchlist-history" class="history card" aria-labelledby="watchlist-history-title" tabindex="-1">
     <header class="section-head">
       <div>

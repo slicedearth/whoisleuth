@@ -162,6 +162,8 @@ function deepFreeze<T>(value: T): T {
 }
 
 const syntheticProfile: BrandProfile = {
+  candidateObservations: [],
+  candidateExceptions: [],
   id: 'synthetic-northstar',
   name: 'Northstar Outfitters',
   officialDomains: ['northstar.example'],

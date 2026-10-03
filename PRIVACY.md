@@ -96,6 +96,18 @@ outcomes, not response bodies. Incomplete checks do not replace usable watchlist
 baselines or establish signal removal. Historical records without these
 outcomes remain readable with unknown collection quality.
 
+Brand candidate review retains bounded source names/revisions, full observed
+hostnames, source-reported intervals, local first-retention times, matching
+Brand/rule reasons and coverage gaps. Watchlists can retain candidate-only
+domains without a Lookup result, scan history or evidence baseline. Per-domain,
+per-Brand priorities, reasons and optional review dates remain local; they do
+not schedule collection. Scoped exceptions retain exact domain/rule scope,
+purpose, reason, expiry, reviewed-material digest and up to eight prior
+revisions. Expiry or materially changed evidence returns candidates to review.
+These sensitive fields are included in deliberate Brand, Watchlist and workspace
+exports. Hosted monitoring requests omit candidate/context metadata and local
+password-form attribution. Restoring a hosted list preserves local contexts.
+
 Lesson-based template revisions retain authored guidance, applicability, reason,
 source-template identity and content hashes of the source template and selected
 lesson. They do not copy the Case identity or note text automatically. These

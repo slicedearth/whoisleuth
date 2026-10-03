@@ -29,6 +29,7 @@ function entry(domain = 'alpha.invalid') {
     }],
     baseline: [],
     history: [],
+    domainMetadata: [],
     privateField: 'drop me',
   };
 }
@@ -211,9 +212,25 @@ test('GET and POST use the canonical same-origin no-store endpoint contract', as
   assert.equal(new Headers(post.options.headers).get('Content-Type'), 'application/json');
   const postBody = post.options.body;
   assert.equal(typeof postBody, 'string');
-  assert.deepEqual(JSON.parse(typeof postBody === 'string' ? postBody : ''), {
-    action: 'create', name: 'Priority domains', entry: entry(), intervalHours: 24,
+  const sent = JSON.parse(typeof postBody === 'string' ? postBody : '');
+  assert.equal(sent.action, 'create'); assert.equal(sent.name, 'Priority domains'); assert.equal(sent.intervalHours, 24);
+  assert.deepEqual(Object.keys(sent.entry).sort(), ['baseline', 'history', 'results', 'updatedAt']);
+  assert.equal(sent.entry.results[0].domain, 'alpha.invalid');
+  assert.equal(Object.hasOwn(sent.entry.results[0], 'rawWhois'), false);
+  assert.equal(Object.hasOwn(sent.entry.results[0], 'hasExternalPasswordForm'), false);
+  assert.equal(Object.hasOwn(sent.entry, 'domainMetadata'), false);
+});
+
+test('outbound hosted projection strips local review metadata and future unknown fields', async () => {
+  const local = entry();
+  Object.assign(local, { domainMetadata: [{ domain: 'alpha.invalid', contexts: [{ brandProfileId: 'example-brand', priority: 'p1', reason: 'Sensitive local rationale', changedAt: NOW, reviewDueAt: null }], candidate: null }], futureLocalField: 'private' });
+  Object.assign(local.results[0]!, { hasExternalPasswordForm: true, futureLocalField: 'private' });
+  let body = '';
+  await mutateScheduledMonitoring({ action: 'create', name: 'Priority domains', entry: local, intervalHours: 24 }, async (_input, options) => {
+    body = String(options?.body);
+    return new Response(JSON.stringify(responseFixture({ action: 'created', id: 'watchlist-00000001' })), { headers: { 'Content-Type': 'application/json' } });
   });
+  for (const field of ['domainMetadata', 'hasExternalPasswordForm', 'futureLocalField', 'Sensitive local rationale']) assert.equal(body.includes(field), false);
 });
 
 test('bounds server error text and rejects malformed successful responses', async () => {
