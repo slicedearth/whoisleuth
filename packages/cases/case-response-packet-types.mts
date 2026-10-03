@@ -2,6 +2,7 @@ import type { CASE_RESPONSE_PACKET_SCHEMA, CASE_RESPONSE_PACKET_VERSION } from '
 import type { SORTED_JSON_V2 } from '../evidence/artifact-integrity.mts';
 import type { CaseRecord } from './case-model.mts';
 import type { CaseEvidenceRequest, CasePacketAmendment } from './case-requested-evidence.mts';
+import type { CaseResponseObject, CaseResponseObjectOutcome } from './case-response-object.mts';
 import type { buildCaseActionOutcomeSummary, CaseObservedEffectState } from './case-response-model.mts';
 import type {
   RESPONSE_CONTACT_KINDS, RESPONSE_PACKET_PROFILE_IDS, RESPONSE_READINESS_ROW_IDS,
@@ -177,6 +178,7 @@ export type CaseResponsePacket = {
     label: string;
     source: string;
     observationHostname?: string;
+    responseObject?: CaseResponseObject;
     webObservationMode?: 'selected_url';
     observedAt: string | null;
     completeness: string;
@@ -207,6 +209,7 @@ export type CaseResponsePacket = {
   authorisation: CaseResponseAuthorisation;
   preflight: CaseResponsePreflight;
   escalationHistory: Array<{
+    responseObjects?: readonly CaseResponseObject[];
     amendment?: CasePacketAmendment;
     actionId: string;
     type: string;
@@ -222,6 +225,8 @@ export type CaseResponsePacket = {
     historyOmitted: number;
     historyLimitations: string[];
     transitions: Array<{
+      responseObjects?: readonly CaseResponseObject[];
+      objectOutcome?: CaseResponseObjectOutcome;
       evidenceRequest?: CaseEvidenceRequest;
       id: string;
       previousState: string | null;
@@ -253,6 +258,8 @@ export type CaseResponsePacket = {
     } | null;
     observedChangeState: 'available' | 'missing' | 'ambiguous';
     latestObservedEffect: {
+      responseObject?: CaseResponseObject;
+      objectOutcome?: CaseResponseObjectOutcome;
       reviewId: string;
       state: CaseObservedEffectState;
       observedAt: string;

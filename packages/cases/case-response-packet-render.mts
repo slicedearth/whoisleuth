@@ -96,6 +96,10 @@ export function renderCaseResponsePacket(packet: CaseResponsePacket): { markdown
     '',
     '## Provider outcome and independent effect',
     '',
+    ...escalationHistory.flatMap(action => [
+      `- Action ${escapeMarkdown(action.actionId)} object scope: ${action.responseObjects?.length ? action.responseObjects.map(object => `${escapeMarkdown(object.kind)} · ${escapeMarkdown(object.identifier)}`).join('; ') : 'unknown; no exact-object coverage inferred'}`,
+      ...action.transitions.filter(event => event.objectOutcome).map(event => `  - ${escapeMarkdown(event.objectOutcome!)} · ${escapeMarkdown(event.sourceClass)} · ${event.occurredAt} · affected objects: ${event.responseObjects?.map(object => `${escapeMarkdown(object.kind)} · ${escapeMarkdown(object.identifier)}`).join('; ')}${event.applied ? '' : ' · retained conflict'}`),
+    ]),
     responseLifecycle.latestProviderOutcome
       ? `- Provider outcome time: ${responseLifecycle.latestProviderOutcome.occurredAt} (${escapeMarkdown(responseLifecycle.latestProviderOutcome.outcome.replaceAll('_', ' '))})`
       : `- Provider outcome time: Withheld because the typed event state is ${responseLifecycle.providerOutcomeState}.`,
@@ -103,6 +107,7 @@ export function renderCaseResponsePacket(packet: CaseResponsePacket): { markdown
       ? `- Independently observed change time: ${responseLifecycle.latestObservedChangeAt}`
       : `- Independently observed change time: Withheld because the independent change state is ${responseLifecycle.observedChangeState}.`,
     ...(responseLifecycle.latestObservedEffect ? [`- Latest independent review: ${escapeMarkdown(responseLifecycle.latestObservedEffect.state.replaceAll('_', ' '))} · ${responseLifecycle.latestObservedEffect.observedAt} · ${escapeMarkdown(responseLifecycle.latestObservedEffect.source)}`] : []),
+    ...(responseLifecycle.latestObservedEffect?.responseObject ? [`- Reviewed object: ${escapeMarkdown(responseLifecycle.latestObservedEffect.responseObject.kind)} · ${escapeMarkdown(responseLifecycle.latestObservedEffect.responseObject.identifier)}${responseLifecycle.latestObservedEffect.objectOutcome ? ` · ${escapeMarkdown(responseLifecycle.latestObservedEffect.objectOutcome)}` : ''}`] : []),
     ...responseLifecycle.limitations.map((limitation) => `- ${escapeMarkdown(limitation)}`),
     '',
     '## Review and provenance',
@@ -143,6 +148,7 @@ export function renderCaseResponsePacket(packet: CaseResponsePacket): { markdown
     ...abusiveUrls.map((url) => `- ${url}`),
     '',
     'Selected evidence:',
+    ...escalationHistory.flatMap(action => action.responseObjects?.length ? [`Action ${action.actionId} scope: ${action.responseObjects.map(object => `${object.kind} · ${object.identifier}`).join('; ')}`] : []),
     ...(selectedEvidence.length
       ? selectedEvidence.map((item) => `- ${item.label} — ${item.source}${item.observationHostname ? ` for ${item.observationHostname}` : ''}${item.webObservationMode ? ' · selected URL' : ''}, observed ${item.observedAt ?? 'time unavailable'} (${item.completeness})`)
       : ['- No Case evidence pin was selected.']),

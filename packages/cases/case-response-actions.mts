@@ -3,6 +3,7 @@ import { readCaseEvidenceRequest, readCasePacketAmendment, assertEvidenceRequest
 import { MAX_INTAKE_LINKS, MAX_MESSAGE_PARTS, type MessageIntakeReport } from '../contracts/message-intake.mts';
 import { emailRecipient } from '../evidence/email-recipient.mts';
 import { responseRouteFreshness } from './response-route-freshness.mts';
+import { readCaseResponseObjects, readCaseResponseObjectOutcome, assertCaseObjectOutcome, sameCaseResponseObject } from './case-response-object.mts';
 
 import {
   CASE_SCHEMA_VERSION,
@@ -249,6 +250,8 @@ function normalizeActionEvent(
     : null;
   const eventMaterial = {
     previousState,
+    ...(item.responseObjects === undefined ? {} : { responseObjects: readCaseResponseObjects(item.responseObjects, options.sourceVersion)! }),
+    ...(item.objectOutcome === undefined ? {} : { objectOutcome: readCaseResponseObjectOutcome(item.objectOutcome, options.sourceVersion)! }),
     ...(evidenceRequest ? { evidenceRequest } : {}),
     nextState,
     occurredAt,
@@ -266,6 +269,12 @@ function normalizeActionEvent(
       ? item.originActionId
       : null,
   };
+  if (eventMaterial.objectOutcome) {
+    if (!['submitted', 'acknowledged', 'terminal'].includes(nextState) || previousState === 'authorised') throw new TypeError('Object outcomes require a separate attributed event after submission.');
+    if (sourceClass !== 'provider' && sourceClass !== 'analyst') throw new TypeError('Object outcomes require an attributed provider or analyst event.');
+    if (!eventMaterial.responseObjects?.length) throw new TypeError('Select the objects concerned by this provider outcome; no complete-action resolution is inferred.');
+    for (const object of eventMaterial.responseObjects) assertCaseObjectOutcome(eventMaterial.objectOutcome, object);
+  }
   return {
     id: safeId(item.id, 'action-event', { actionId, ...eventMaterial }),
     ...eventMaterial,
@@ -469,6 +478,7 @@ function normalizeAction(
     : null;
   return {
     id: actionId,
+    ...(item.responseObjects === undefined ? {} : { responseObjects: readCaseResponseObjects(item.responseObjects, options.sourceVersion)! }),
     ...(amendment ? { amendment } : {}),
     type: legacyPlatformReview
       ? 'platform_report'
@@ -665,6 +675,7 @@ export function appendCaseAction(
   const history = [{
     id: freshId('action-event'),
     previousState: null,
+    ...(item.responseObjects === undefined ? {} : { responseObjects: readCaseResponseObjects(item.responseObjects)! }),
     nextState: 'drafting',
     occurredAt: now,
     sourceClass: 'analyst',
@@ -699,6 +710,11 @@ export function appendCaseActionTransition(
   const action = current.find((item) => item.id === actionId);
   if (!action) throw new Error('That case action no longer exists.');
   const item = record(raw);
+  const selectedObjects = readCaseResponseObjects(item.responseObjects);
+  const outcome = readCaseResponseObjectOutcome(item.objectOutcome);
+  if (selectedObjects?.some(object => !action.responseObjects?.some(bound => sameCaseResponseObject(bound, object)))) throw new TypeError('A transition may concern only objects explicitly bound to its action.');
+  if (outcome && !selectedObjects?.length) throw new TypeError('Explicitly select the affected objects for this outcome; it is not applied to every action object.');
+  if (action.responseObjects?.length && item.providerOutcome === 'provider_reports_resolved' && !selectedObjects?.length) throw new TypeError('Explicitly select the objects covered by this provider-reported resolution; other action objects remain unchecked.');
   const nextState = typeof item.nextState === 'string' && ACTION_STATES.has(item.nextState)
     ? item.nextState as CaseActionState
     : null;
@@ -731,6 +747,7 @@ export function appendCaseActionTransition(
   const occurredAt = optionalIso(item.occurredAt) ?? now;
   const event = normalizeActionEvent({
     ...item,
+    ...(selectedObjects !== undefined ? { responseObjects: selectedObjects } : action.responseObjects === undefined ? {} : { responseObjects: action.responseObjects }),
     id: freshId('action-event'),
     previousState: action.state,
     nextState,
@@ -753,7 +770,7 @@ export function appendCaseActionTransition(
 }
 
 const ACTION_REVIEW_MATERIAL_FIELDS = [
-  'type', 'recipient', 'contactSource', 'routeObservedAt', 'routeReviewAfter', 'contactLimitations', 'originActionId', 'amendment',
+  'type', 'recipient', 'contactSource', 'routeObservedAt', 'routeReviewAfter', 'contactLimitations', 'originActionId', 'amendment', 'responseObjects',
 ] as const satisfies readonly (keyof CaseActionRecord)[];
 
 export function updateCaseAction(
@@ -800,6 +817,7 @@ export function updateCaseAction(
         occurredAt: now,
         sourceClass: 'browser_local',
         provenance: 'material_action_change',
+        ...(updated.responseObjects === undefined ? {} : { responseObjects: updated.responseObjects }),
         reference: null,
         evidencePinId: null,
         limitations: ['Material action inputs changed after review; prior readiness, review, or authorisation no longer applies.'],

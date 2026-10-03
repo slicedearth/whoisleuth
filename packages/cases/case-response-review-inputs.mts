@@ -43,6 +43,7 @@ import {
   type ResponseReadinessState,
 } from './case-response-packet-vocabulary.mts';
 import { isValidAsciiHostname } from '../contracts/domain-name.mts';
+import { readCaseResponseObject, readCaseResponseObjects, readCaseResponseObjectOutcome, assertCaseObjectOutcome } from './case-response-object.mts';
 
 const CONTACT_KINDS = new Set<string>(RESPONSE_CONTACT_KINDS);
 const PRE_PLATFORM_CONTACT_KINDS = new Set<string>(RESPONSE_CONTACT_KINDS.filter((kind) => kind !== 'application_platform'));
@@ -146,7 +147,7 @@ function reviewNullableEnum(value: unknown, values: readonly string[], label: st
   return value === null ? null : reviewEnum(value, values, label);
 }
 
-function validateReviewLifecycle(value: unknown): void {
+function validateReviewLifecycle(value: unknown, version: number): void {
   const lifecycle = exactReviewRecord(value, [
     'providerOutcomeState', 'latestProviderOutcome', 'observedChangeState',
     'latestObservedEffect', 'latestObservedChangeAt', 'closure', 'limitations',
@@ -168,7 +169,10 @@ function validateReviewLifecycle(value: unknown): void {
   if (lifecycle.latestObservedEffect !== null) {
     const effect = exactReviewRecord(lifecycle.latestObservedEffect, [
       'reviewId', 'state', 'observedAt', 'sourceClass', 'source',
-    ], 'Case-response latest observed effect');
+    ], 'Case-response latest observed effect', version >= 6 ? ['responseObject', 'objectOutcome'] : []);
+    const responseObject = readCaseResponseObject(effect.responseObject);
+    const objectOutcome = readCaseResponseObjectOutcome(effect.objectOutcome);
+    assertCaseObjectOutcome(objectOutcome, responseObject);
     reviewText(effect.reviewId, 64, 'Case-response observed-effect review id');
     reviewEnum(effect.state, CASE_OBSERVED_EFFECT_STATES, 'Case-response observed-effect state');
     reviewText(effect.observedAt, 64, 'Case-response observed-effect time');
@@ -303,7 +307,11 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
   for (const candidate of boundedReviewArray(source.selectedEvidence, MAX_RESPONSE_SELECTED_EVIDENCE, 'Case-response selected evidence')) {
     const evidence = exactReviewRecord(candidate, [
       'id', 'label', 'source', 'observedAt', 'completeness', 'limitations',
-    ], 'Case-response selected evidence item', version > PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION ? ['observationHostname', 'webObservationMode'] : []);
+    ], 'Case-response selected evidence item', [
+      ...(version > PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION ? ['observationHostname', 'webObservationMode'] : []),
+      ...(version >= 6 ? ['responseObject'] : []),
+    ]);
+    readCaseResponseObject(evidence.responseObject);
     reviewText(evidence.id, 64, 'Case-response evidence id');
     reviewText(evidence.label, 80, 'Case-response evidence label');
     reviewText(evidence.source, 120, 'Case-response evidence source');
@@ -389,7 +397,8 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
       ...(hasPlatformRoutes ? ['routeReviewAfter'] : []),
       'providerOutcome', 'outcomeDetail', 'originActionId', 'historyOmitted',
       'historyLimitations', 'transitions', 'createdAt', 'updatedAt',
-    ], 'Case-response escalation action', version >= 5 ? ['amendment'] : []);
+    ], 'Case-response escalation action', [...(version >= 5 ? ['amendment'] : []), ...(version >= 6 ? ['responseObjects'] : [])]);
+    readCaseResponseObjects(action.responseObjects);
     readCasePacketAmendment(action.amendment);
     for (const key of ['actionId', 'recipient', 'contactSource', 'createdAt', 'updatedAt'] as const) {
       reviewText(action[key], MAX_RESPONSE_VALUE_LENGTH, `Case-response action ${key}`);
@@ -414,7 +423,15 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
         'id', 'previousState', 'nextState', 'occurredAt', 'sourceClass', 'provenance',
         'reference', 'evidencePinId', 'limitations', 'providerOutcome', 'outcomeDetail',
         'originActionId', 'applied',
-      ], 'Case-response transition', version >= 5 ? ['evidenceRequest'] : []);
+      ], 'Case-response transition', [...(version >= 5 ? ['evidenceRequest'] : []), ...(version >= 6 ? ['responseObjects', 'objectOutcome'] : [])]);
+      const responseObjects = readCaseResponseObjects(transition.responseObjects);
+      const objectOutcome = readCaseResponseObjectOutcome(transition.objectOutcome);
+      if (objectOutcome) {
+        if (!responseObjects?.length || !['submitted', 'acknowledged', 'terminal'].includes(String(transition.nextState))
+          || !['analyst', 'provider'].includes(String(transition.sourceClass))
+          || transition.previousState === 'authorised') throw new TypeError('Case-response object outcome requires an explicit affected subset after submission.');
+        responseObjects.forEach(object => assertCaseObjectOutcome(objectOutcome, object));
+      }
       const evidenceRequest = readCaseEvidenceRequest(transition.evidenceRequest);
       assertEvidenceRequestEvent(evidenceRequest, transition);
       requestEvents.push({ id: transition.id as string, ...(evidenceRequest ? { evidenceRequest } : {}) });
@@ -444,7 +461,7 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
   } as CaseAmendmentAction)), currentLineageActionIds?.[0] ?? null,
   new Set((source.selectedEvidence as { id: string }[]).map(pin => pin.id)));
   reviewStrings(source.escalationHistoryLimitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response escalation limitations');
-  validateReviewLifecycle(source.responseLifecycle);
+  validateReviewLifecycle(source.responseLifecycle, version);
 
   return recursivelyFreezeReviewValue(structuredClone(source));
 }

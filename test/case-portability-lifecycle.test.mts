@@ -91,12 +91,12 @@ describe('canonical Case portability lifecycle', () => {
     assert.equal(workspace.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS, contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS);
     assert.equal(encryptedWorkspace.ENCRYPTED_WORKSPACE_ARCHIVE_VERSION, contracts.ENCRYPTED_WORKSPACE_ARCHIVE_VERSION);
 
-    assert.deepEqual([...contracts.CASE_BROWSER_SUPPORTED_VERSIONS], [12, 13, 14, 15, 16, contracts.CASE_SCHEMA_VERSION]);
-    assert.deepEqual([...contracts.CASE_IMPORT_VERSIONS], [12, 13, 14, 15, 16, contracts.CASE_SCHEMA_VERSION]);
-    assert.deepEqual([...contracts.CASE_REPORT_OUTPUT_VERSIONS], [9, 10, 11, 12, contracts.CASE_REPORT_SCHEMA_VERSION]);
-    assert.deepEqual([...contracts.SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS], [6, 7, 8, 9, 10, contracts.CASE_RESPONSE_PACKET_VERSION]);
+    assert.deepEqual([...contracts.CASE_BROWSER_SUPPORTED_VERSIONS], [12, 13, 14, 15, 16, 17, contracts.CASE_SCHEMA_VERSION]);
+    assert.deepEqual([...contracts.CASE_IMPORT_VERSIONS], [12, 13, 14, 15, 16, 17, contracts.CASE_SCHEMA_VERSION]);
+    assert.deepEqual([...contracts.CASE_REPORT_OUTPUT_VERSIONS], [9, 10, 11, 12, 13, contracts.CASE_REPORT_SCHEMA_VERSION]);
+    assert.deepEqual([...contracts.SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS], [6, 7, 8, 9, 10, 11, contracts.CASE_RESPONSE_PACKET_VERSION]);
     assert.deepEqual([...contracts.SUPPORTED_CLI_CASE_PACK_VERSIONS], [2]);
-    assert.deepEqual([...contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS], [5, 6, 7, 8, 9]);
+    assert.deepEqual([...contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS], [5, 6, 7, 8, 9, contracts.WORKSPACE_ARCHIVE_VERSION]);
 
     const family = contracts.CASE_PORTABILITY_LIFECYCLE_FAMILY;
     assert.ok(family.compatibility.length > 0);

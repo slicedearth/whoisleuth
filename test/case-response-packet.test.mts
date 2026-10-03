@@ -25,6 +25,7 @@ import { validateCaseResponseReviewInputs } from '../packages/cases/case-respons
 import { renderCaseResponsePacket } from '../packages/cases/case-response-packet-render.mts';
 
 const NOW = '2026-07-28T02:00:00.000Z';
+const responseObject = { kind: 'domain' as const, identifier: 'report.example', incidentTargetId: null };
 
 function reviewedCase() {
   const created = createCase({
@@ -52,6 +53,7 @@ function reviewedCase() {
   let record = updateCase([reasoned], reasoned.id, {
     action: {
       type: 'registrar_report',
+      responseObjects: [responseObject],
       recipient: 'Registrar abuse desk',
       contactSource: 'RDAP entity role',
       routeObservedAt: NOW,
@@ -84,6 +86,7 @@ function reviewedCase() {
   return updateCase([record], record.id, {
     observedEffectReview: {
       state: 'still_observed',
+      responseObject,
       observedAt: '2026-07-28T02:20:00.000Z',
       sourceClass: 'analyst',
       source: 'Independent fixture review',

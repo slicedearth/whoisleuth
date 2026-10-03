@@ -23,6 +23,7 @@ import {
 } from '../analysis/portable-generator.mts';
 import { buildCaseResponseLifecycleSummary, CASE_EVIDENCE_RELATION_STANCES } from './case-response-model.mts';
 import { normalizeCaseBrandProfileIds } from './case-brand-profile-references.mts';
+import { EVIDENCE_FOLLOW_UP_CASE_REPORT_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import { CASE_RECHECK_CONDITIONS } from './case-recheck-model.mts';
 import { escapeCaseMarkdownInline as escapeMarkdownInline } from './case-markdown.mts';
 import {
@@ -229,6 +230,7 @@ function pickKnownSnapshotFields(snapshot: CaseEvidenceSnapshot): ReportSnapshot
     reusesOfficialAssets: snapshot.reusesOfficialAssets,
     hasPasswordField: snapshot.hasPasswordField,
     hasExternalFormAction: snapshot.hasExternalFormAction,
+    ...(snapshot.hasExternalPasswordForm === undefined ? {} : { hasExternalPasswordForm: snapshot.hasExternalPasswordForm }),
     phishingLanguageMatch: snapshot.phishingLanguageMatch,
     privacyProtected: snapshot.privacyProtected ?? null,
     idnReferenceMatch: snapshot.idnReferenceMatch ?? null,
@@ -379,6 +381,7 @@ export function buildCaseReportVerificationProjection(
 ) {
   const generated = buildCaseReport(caseRecord, options).json;
   if (schemaVersion === CASE_REPORT_SCHEMA_VERSION) return generated;
+  if (schemaVersion === EVIDENCE_FOLLOW_UP_CASE_REPORT_SCHEMA_VERSION) return { ...generated, schemaVersion };
   if (caseRecord.evidenceHistory.some(snapshot => snapshot.webCollectionQuality !== undefined)) {
     throw new TypeError('Published report formats cannot declare newer collection-quality fields.');
   }
@@ -587,6 +590,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     for (const pin of response.evidencePins) {
       lines.push(`- **${escapeMarkdownInline(pin.label)}:** ${escapeMarkdownInline(pin.value)}`);
       lines.push(`  Source: ${escapeMarkdownInline(pin.source)}; observed ${escapeMarkdownInline(pin.observedAt ?? 'Time unavailable')}; completeness ${escapeMarkdownInline(pin.completeness)}.`);
+      if (pin.responseObject) lines.push(`  Exact object: ${escapeMarkdownInline(pin.responseObject.kind)} · ${escapeMarkdownInline(pin.responseObject.identifier)}`);
       if (pin.limitations.length) lines.push(`  Limitations: ${escapeMarkdownInline(pin.limitations.join('; '))}`);
     }
     lines.push('');
@@ -663,6 +667,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     for (const action of response.actions) {
       lines.push(`- **${escapeMarkdownInline(action.type.replaceAll('_', ' '))}:** ${escapeMarkdownInline(action.recipient)} (${escapeMarkdownInline(action.state)})`);
       lines.push(`  Contact source: ${escapeMarkdownInline(action.contactSource)}; updated ${escapeMarkdownInline(action.updatedAt)}.`);
+      lines.push(`  Object binding: ${action.responseObjects?.length ? action.responseObjects.map(object => `${escapeMarkdownInline(object.kind)} · ${escapeMarkdownInline(object.identifier)}`).join('; ') : 'Unknown; historical or unbound actions do not establish exact-object coverage.'}`);
       if (action.routeObservedAt) lines.push(`  Route reviewed: ${escapeMarkdownInline(action.routeObservedAt)}`);
       if (action.routeReviewAfter) lines.push(`  Route review due: ${escapeMarkdownInline(action.routeReviewAfter)}`);
       if (action.originActionId) lines.push(`  Originating action: ${escapeMarkdownInline(action.originActionId)}`);
@@ -681,6 +686,8 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
       for (const event of action.history) {
         lines.push(`  - ${escapeMarkdownInline(event.occurredAt)} · ${escapeMarkdownInline(event.previousState ?? 'none')} → ${escapeMarkdownInline(event.nextState)} · ${escapeMarkdownInline(event.sourceClass)} · ${event.applied ? 'applied' : 'retained conflict'}`);
         if (event.providerOutcome) lines.push(`    Provider outcome at this time: ${escapeMarkdownInline(event.providerOutcome.replaceAll('_', ' '))}`);
+        if (event.responseObjects?.length) lines.push(`    Objects at this event: ${event.responseObjects.map(object => `${escapeMarkdownInline(object.kind)} · ${escapeMarkdownInline(object.identifier)}`).join('; ')}`);
+        if (event.objectOutcome) lines.push(`    Source-reported object outcome: ${escapeMarkdownInline(event.objectOutcome)}; not independent verification or causation.`);
         if (event.reference) lines.push(`    Event reference: ${escapeMarkdownInline(event.reference)}`);
         if (event.evidencePinId) lines.push(`    Evidence pin: ${escapeMarkdownInline(event.evidencePinId)}`);
         if (event.limitations.length) lines.push(`    Limitations: ${escapeMarkdownInline(event.limitations.join('; '))}`);
@@ -722,6 +729,8 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   if (!response.observedEffects.reviews.length) lines.push('- No independent observed-effect review recorded.');
   for (const review of response.observedEffects.reviews) {
     lines.push(`- **${escapeMarkdownInline(review.state.replaceAll('_', ' '))}** (${escapeMarkdownInline(review.observedAt)}): ${escapeMarkdownInline(review.source)}; class ${escapeMarkdownInline(review.sourceClass)}; completeness ${escapeMarkdownInline(review.completeness)}.`);
+    if (review.responseObject) lines.push(`  Exact object: ${escapeMarkdownInline(review.responseObject.kind)} · ${escapeMarkdownInline(review.responseObject.identifier)}`);
+    if (review.objectOutcome) lines.push(`  Independently recorded object outcome: ${escapeMarkdownInline(review.objectOutcome)}; point-in-time observation, not report causation or recurrence.`);
     if (review.recheck) {
       lines.push(`  Question ${escapeMarkdownInline(review.recheck.questionId)}: ${escapeMarkdownInline(review.recheck.question)}`);
       lines.push(`  Recheck target: ${escapeMarkdownInline(review.recheck.targetHostname)}; retained comparison conditions: ${escapeMarkdownInline(review.recheck.conditions)}`);
@@ -737,6 +746,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   if (!response.closures.records.length) lines.push('- No deliberate analyst closure recorded.');
   for (const closure of response.closures.records) {
     lines.push(`- **Closure · ${escapeMarkdownInline(closure.reason.replaceAll('_', ' '))}** (${escapeMarkdownInline(closure.createdAt)}): ${escapeMarkdownInline(closure.summary)}`);
+    lines.push(`  Scope: ${closure.responseObject ? `${escapeMarkdownInline(closure.responseObject.kind)} · ${escapeMarkdownInline(closure.responseObject.identifier)}; other objects and the Case remain independent.` : 'Whole Case analyst decision.'}`);
     if (closure.observedEffectReviewId) lines.push(`  Independent review: ${escapeMarkdownInline(closure.observedEffectReviewId)}`);
     if (closure.actionId) lines.push(`  Provider action: ${escapeMarkdownInline(closure.actionId)}`);
     if (closure.limitations.length) lines.push(`  Limitations: ${escapeMarkdownInline(closure.limitations.join('; '))}`);

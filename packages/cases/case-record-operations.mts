@@ -7,6 +7,7 @@ import {
 } from './case-incident-context.mts';
 import { selectExistingCase, type CaseOpenSelection } from './case-selection.mts';
 import { emptyCaseWorkflowMetadata, updateCaseWorkflowMetadata } from './case-workflow-metadata.mts';
+import { assertCaseResponseObject, readCaseResponseObject, readCaseResponseObjects, sameCaseResponseObject } from './case-response-object.mts';
 import { readCaseWorkflowFields } from './case-workflow-migration.mts';
 import {
   appendCaseAction,
@@ -183,7 +184,7 @@ export function normalizeCase(
     domain,
     title: normalizeCaseObjective(record.title),
     status: caseStatusRequiresClosure(normalizedStatus)
-      && closures.records.length === 0 && !closures.preV13HistoryUnavailable
+      && !closures.records.some(closure => closure.responseObject === undefined) && !closures.preV13HistoryUnavailable
       ? 'reviewing'
       : normalizedStatus,
     disposition: normalizeDisposition(record.disposition),
@@ -220,6 +221,11 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
   if (!domain) throw new Error('A valid domain is required to open a case.');
   const noteBody = normalizeNoteBody(input.note);
   const source = normalizeSource(input.source);
+  const workflowMetadata = updateCaseWorkflowMetadata(emptyCaseWorkflowMetadata(), input, domain, now);
+  const scopedCase = { domain, workflowMetadata };
+  for (const raw of [input.evidencePin, ...(Array.isArray(input.evidencePins) ? input.evidencePins : []), input.observedEffectReview, input.closure]) assertCaseResponseObject(readCaseResponseObject(objectRecord(raw).responseObject), scopedCase);
+  for (const object of readCaseResponseObjects(objectRecord(input.action).responseObjects) ?? []) assertCaseResponseObject(object, scopedCase);
+  assertCaseResponseObject(readCaseResponseObject(objectRecord(objectRecord(input.assertion).recheck).responseObject), scopedCase);
   const evidencePins = input.evidencePins !== undefined
     ? appendCaseEvidencePins([], input.evidencePins, now)
     : input.evidencePin !== undefined
@@ -246,6 +252,9 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
       )
     : normalizeCaseObservedEffectHistory(undefined, now);
   for (const review of observedEffects.reviews) {
+    const pin = evidencePins.find(item => item.id === review.evidencePinId);
+    if (review.responseObject && pin && !sameCaseResponseObject(review.responseObject, pin.responseObject)) throw new TypeError('The selected observation evidence does not explicitly concern this exact object.');
+    if (review.responseObject && review.state === 'not_reproduced' && !review.recheck) throw new TypeError('Object-specific non-reproduction requires a saved baseline question and comparable evidence.');
     if (!review.recheck) continue;
     assertCurrentRecheckQuestion(review.recheck, assertions);
     assertRecheckNonReproduction(review.state, review.recheck, review.completeness, evidencePins,
@@ -261,12 +270,12 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
     id: makeId(),
     domain,
     title: normalizeCaseObjective(input.title),
-    status: input.closure !== undefined ? 'resolved' : normalizeStatus(input.status),
+    status: input.closure !== undefined && objectRecord(input.closure).responseObject === undefined ? 'resolved' : normalizeStatus(input.status),
     disposition: normalizeDisposition(input.disposition),
     reviewReasonCode: normalizeReviewReasonCode(input.reviewReasonCode),
     brandProfileIds: input.brandProfileIds === undefined ? [] : assertCaseBrandProfileIds(input.brandProfileIds),
     tags: normalizeTags(input.tags),
-    workflowMetadata: updateCaseWorkflowMetadata(emptyCaseWorkflowMetadata(), input, domain, now),
+    workflowMetadata,
     notes: noteBody ? [{ id: makeId(), body: noteBody, createdAt: now }] : [],
     source,
     evidenceHistory: normalizeEvidenceHistory(input.evidence ? [input.evidence] : [], {
@@ -364,6 +373,18 @@ export function updateCase(
   if (index < 0) throw new Error('That case no longer exists.');
   const current = cases[index];
   if (!current) throw new Error('That case no longer exists.');
+  const workflowMetadata = updateCaseWorkflowMetadata(current.workflowMetadata
+    ?? readCaseWorkflowFields(current, current.domain, current.assertions).workflowMetadata, patch, current.domain, now);
+  const scopedCase = { domain: current.domain, workflowMetadata };
+  for (const raw of [patch.evidencePin, ...(Array.isArray(patch.evidencePins) ? patch.evidencePins : []), patch.observedEffectReview, patch.closure]) {
+    assertCaseResponseObject(readCaseResponseObject(objectRecord(raw).responseObject), scopedCase);
+  }
+  for (const raw of [patch.action, patch.actionUpdate, objectRecord(patch.actionUpdate).transition]) {
+    for (const object of readCaseResponseObjects(objectRecord(raw).responseObjects) ?? []) assertCaseResponseObject(object, scopedCase);
+  }
+  for (const raw of [patch.assertion, patch.assertionUpdate, patch.observedEffectReview]) {
+    assertCaseResponseObject(readCaseResponseObject(objectRecord(objectRecord(raw).recheck).responseObject), scopedCase);
+  }
   if (patch.evidenceLink !== undefined && patch.evidenceLinkWithdrawal !== undefined) throw new TypeError('Record or withdraw one evidence relationship at a time.');
   if (patch.title !== undefined && patch.expectedTitle !== undefined && patch.expectedTitle !== (current.title ?? '')) {
     throw new Error('The incident title changed after this draft was started. Reload and review the current title before saving; your draft has not been applied.');
@@ -451,6 +472,10 @@ export function updateCase(
       assertRecheckNonReproduction(review.state as import('./case-response-records.mts').CaseObservedEffectState, context,
         String(review.completeness), evidencePins, evidencePins.find(pin => pin.id === review.evidencePinId), typeof review.observedAt === 'string' ? review.observedAt : null);
     }
+    const responseObject = readCaseResponseObject(review.responseObject);
+    const pin = evidencePins.find(item => item.id === review.evidencePinId);
+    if (responseObject && pin && !sameCaseResponseObject(responseObject, pin.responseObject)) throw new TypeError('The selected observation evidence does not explicitly concern this exact object.');
+    if (responseObject && review.state === 'not_reproduced' && !context) throw new TypeError('Object-specific non-reproduction requires a saved baseline question and comparable evidence.');
     observedEffects = appendCaseObservedEffectReview(
       observedEffects,
       patch.observedEffectReview,
@@ -475,11 +500,10 @@ export function updateCase(
   }
   const record: CaseRecord = {
     ...current,
-    workflowMetadata: updateCaseWorkflowMetadata(current.workflowMetadata
-      ?? readCaseWorkflowFields(current, current.domain, current.assertions).workflowMetadata, patch, current.domain, now),
+    workflowMetadata,
     title: patch.title === undefined ? current.title ?? '' : normalizeCaseObjective(patch.title),
     status: patch.closure !== undefined
-      ? 'resolved'
+      ? objectRecord(patch.closure).responseObject !== undefined ? current.status : 'resolved'
       : patch.status !== undefined ? normalizeStatus(patch.status) : current.status,
     disposition: patch.disposition !== undefined ? normalizeDisposition(patch.disposition) : current.disposition,
     reviewReasonCode: patch.reviewReasonCode !== undefined
@@ -667,6 +691,8 @@ export function recordCaseRecheckOutcome(
     collectionDepth?: unknown;
     recheck?: import('./case-recheck-model.mts').CaseRecheckAnswerContext;
     observationHostname?: unknown;
+    responseObject?: import('./case-response-object.mts').CaseResponseObject;
+    objectOutcome?: import('./case-response-object.mts').CaseResponseObjectOutcome;
   }>,
   nowIso?: string,
 ): { cases: CaseRecord[]; record: CaseRecord } {
@@ -686,6 +712,7 @@ export function recordCaseRecheckOutcome(
       observedAt: input.observedAt,
       collectionDepth: input.collectionDepth,
       observationHostname: input.observationHostname,
+      ...(input.responseObject ? { responseObject: input.responseObject } : {}),
       completeness: input.completeness,
       truncated: input.comparisonTruncated === true
         || (typeof input.comparisonSummary === 'string' && input.comparisonSummary.length > MAX_RESPONSE_VALUE_LENGTH),
@@ -705,6 +732,8 @@ export function recordCaseRecheckOutcome(
       followUpAt: input.followUpAt,
       limitations: input.limitations,
       ...(input.recheck ? { recheck: input.recheck } : {}),
+      ...(input.responseObject ? { responseObject: input.responseObject } : {}),
+      ...(input.objectOutcome ? { objectOutcome: input.objectOutcome } : {}),
     },
   }, now);
 }

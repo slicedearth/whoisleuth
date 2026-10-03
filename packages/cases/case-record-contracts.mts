@@ -148,6 +148,7 @@ export type CaseEvidenceSnapshot = {
   reusesOfficialAssets: boolean | null;
   hasPasswordField: boolean | null;
   hasExternalFormAction: boolean | null;
+  hasExternalPasswordForm?: boolean | null;
   phishingLanguageMatch: string | null;
   privacyProtected?: boolean | null;
   idnReferenceMatch?: boolean | null;

@@ -3,7 +3,8 @@ import {
   INCIDENT_CASE_SCHEMA_VERSION,
   MAX_RESPONSE_RATIONALE_LENGTH,
 } from '../contracts/case-portability.mts';
-import { enumeration, exact, text } from '../evidence/artifact-structure.mts';
+import { enumeration, exactOptional, text } from '../evidence/artifact-structure.mts';
+import { readCaseResponseObject, sameCaseResponseObject, type CaseResponseObject } from './case-response-object.mts';
 import { casePinHasCompleteObservation } from './case-evidence-quality.mts';
 import type {
   CaseAssertionRecord,
@@ -22,6 +23,7 @@ export type CaseRecheckContext = Readonly<{
   targetHostname: string;
   baselinePinId: string | null;
   conditions: string;
+  responseObject?: CaseResponseObject;
 }>;
 export type CaseRecheckAnswerContext = CaseRecheckContext &
   Readonly<{
@@ -36,7 +38,7 @@ function reference(value: unknown, label: string): string {
   return id;
 }
 
-function contextFields(item: Record<string, unknown>): CaseRecheckContext {
+function contextFields(item: Record<string, unknown>, sourceVersion?: number | null): CaseRecheckContext {
   const targetHostname = text(item.targetHostname, 'Recheck target hostname', 253);
   if (targetHostname !== targetHostname.toLowerCase() || !isValidAsciiHostname(targetHostname)) {
     throw new TypeError(
@@ -50,11 +52,17 @@ function contextFields(item: Record<string, unknown>): CaseRecheckContext {
   );
   if (!conditions.trim())
     throw new TypeError('Describe the conditions needed to compare the observations.');
+  const responseObject = readCaseResponseObject(item.responseObject, sourceVersion);
+  if (responseObject && (responseObject.kind === 'domain' || responseObject.kind === 'hostname'
+    ? responseObject.identifier : new URL(responseObject.identifier).hostname) !== targetHostname) {
+    throw new TypeError('The recheck target hostname must match the exact object snapshot.');
+  }
   return Object.freeze({
     targetHostname,
     conditions,
     baselinePinId:
       item.baselinePinId === null ? null : reference(item.baselinePinId, 'Recheck baseline pin'),
+    ...(responseObject ? { responseObject } : {}),
   });
 }
 
@@ -67,7 +75,7 @@ export function readCaseRecheckContext(
   if (sourceVersion != null && sourceVersion < INCIDENT_CASE_SCHEMA_VERSION)
     throw new TypeError('This Case format cannot contain structured recheck questions.');
   return contextFields(
-    exact(value, ['targetHostname', 'baselinePinId', 'conditions'], 'Recheck question context'),
+    exactOptional(value, ['targetHostname', 'baselinePinId', 'conditions'], ['responseObject'], 'Recheck question context'), sourceVersion,
   );
 }
 
@@ -78,15 +86,16 @@ export function readCaseRecheckAnswerContext(
   if (value === undefined) return undefined;
   if (sourceVersion != null && sourceVersion < INCIDENT_CASE_SCHEMA_VERSION)
     throw new TypeError('This Case format cannot contain structured recheck answers.');
-  const item = exact(
+  const item = exactOptional(
     value,
     ['targetHostname', 'baselinePinId', 'conditions', 'questionId', 'question', 'conditionsMatch'],
+    ['responseObject'],
     'Recheck answer context',
   );
   const question = text(item.question, 'Recheck question', MAX_RESPONSE_RATIONALE_LENGTH);
   if (!question.trim()) throw new TypeError('A recheck answer requires its original question.');
   return Object.freeze({
-    ...contextFields(item),
+    ...contextFields(item, sourceVersion),
     questionId: reference(item.questionId, 'Recheck question ID'),
     question,
     conditionsMatch: enumeration(
@@ -163,6 +172,9 @@ const RECHECK_COMPARISON_MESSAGES = {
   later_observation_needed: 'A later source observation is needed; reviewing the baseline again is not a recheck.',
   baseline_target_mismatch: 'The baseline concerns a different hostname.',
   different_field_or_source: 'The observations use different fields or sources.',
+  missing_object_baseline: 'An object-specific baseline is required for this exact-object comparison.',
+  baseline_object_mismatch: 'The baseline does not explicitly concern this same object.',
+  current_object_mismatch: 'The current observation does not explicitly concern this same object.',
 } as const;
 export type CaseRecheckComparisonBlocker = keyof typeof RECHECK_COMPARISON_MESSAGES;
 
@@ -181,6 +193,11 @@ export function caseRecheckComparisonBlockers(
     );
   }
   const baseline = pins.find((pin) => pin.id === context.baselinePinId);
+  if (context.responseObject) {
+    if (!baseline) blockers.push('missing_object_baseline');
+    else if (!sameCaseResponseObject(baseline.responseObject, context.responseObject)) blockers.push('baseline_object_mismatch');
+    if (!current || !sameCaseResponseObject(current.responseObject, context.responseObject)) blockers.push('current_object_mismatch');
+  }
   if (context.baselinePinId && !baseline)
     blockers.push('missing_baseline');
   if (current) {

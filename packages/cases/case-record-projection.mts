@@ -150,7 +150,11 @@ const CASE_FIELD_RULES = Object.freeze({
   }),
   source: preservedField('source'),
   evidenceHistory: fieldRule('evidenceHistory', PRESERVE, (record) => structuredClone(record.evidenceHistory)),
-  evidencePins: fieldRule('evidencePins', PRESERVE, (record) => structuredClone(record.evidencePins)),
+  evidencePins: fieldRule('evidencePins', PUBLIC_REDACT, (record, profile) => structuredClone(record.evidencePins).map(pin => {
+    if (profile !== 'public') return pin;
+    const { responseObject: _scope, infrastructureObservation: _infrastructure, ...publicPin } = pin;
+    return publicPin;
+  }), { nestedSensitiveFields: ['responseObject', 'infrastructureObservation'], audienceExclusions: { public: { label: 'Exact-object evidence scope and infrastructure observations', order: 4, sinceVersion: 18 } } }),
   evidenceLinks: fieldRule('evidenceLinks', PUBLIC_EXCLUDE, (record, profile) => (
     profile === 'public' ? undefined : structuredClone(record.evidenceLinks)
   ), { audienceExclusions: { public: { label: 'Analyst evidence relationships', order: 4, sinceVersion: EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION } } }),
@@ -162,7 +166,7 @@ const CASE_FIELD_RULES = Object.freeze({
         ? structuredClone(record.actions).map((item) => ({ ...item, recipient: '[redacted]' }))
         : structuredClone(record.actions)
   ), {
-    nestedSensitiveFields: ['recipient'],
+    nestedSensitiveFields: ['recipient', 'responseObjects'],
     audienceExclusions: {
       trusted: { label: 'Recipient values', order: 2 },
       public: { label: 'Actions and recipient values', order: 3 },

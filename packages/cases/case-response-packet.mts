@@ -19,6 +19,7 @@ export type * from './case-response-packet-types.mts';
 // no network requests, mailto links, submissions, or provider side effects.
 
 import { assertPacketAmendmentSelection } from './case-requested-evidence.mts';
+import { sameCaseResponseObject } from './case-response-object.mts';
 import {
   assertBoundedJsonStructure,
 } from '../analysis/bounded-json.mts';
@@ -418,6 +419,7 @@ function normalizeSelectedEvidence(caseRecord: CaseRecord, value: unknown): Case
       label: text(pin.label, 80),
       source: text(pin.source, 120),
       ...(pin.observationHostname ? { observationHostname: pin.observationHostname } : {}),
+      ...(pin.responseObject ? { responseObject: structuredClone(pin.responseObject) } : {}),
       ...(pin.webObservationMode ? { webObservationMode: pin.webObservationMode } : {}),
       observedAt: timestamp(pin.observedAt),
       completeness: text(pin.completeness, 40),
@@ -822,6 +824,7 @@ function normalizeActionHistory(caseRecord: CaseRecord, input: CaseResponsePacke
       actionId: action.id,
       type: text(action.type, 80),
       ...(action.amendment ? { amendment: structuredClone(action.amendment) } : {}),
+      ...(action.responseObjects !== undefined ? { responseObjects: structuredClone(action.responseObjects) } : {}),
       recipient: text(action.recipient, 320),
       contactSource: text(action.contactSource, 120),
       routeObservedAt: timestamp(action.routeObservedAt),
@@ -836,6 +839,8 @@ function normalizeActionHistory(caseRecord: CaseRecord, input: CaseResponsePacke
       transitions: action.history.map((event) => ({
         id: event.id,
         ...(event.evidenceRequest ? { evidenceRequest: structuredClone(event.evidenceRequest) } : {}),
+        ...(event.responseObjects !== undefined ? { responseObjects: structuredClone(event.responseObjects) } : {}),
+        ...(event.objectOutcome ? { objectOutcome: event.objectOutcome } : {}),
         previousState: event.previousState,
         nextState: event.nextState,
         occurredAt: event.occurredAt,
@@ -876,21 +881,31 @@ function normalizeResponseLifecycle(
   lineageComplete: boolean,
 ): CaseResponsePacket['responseLifecycle'] {
   const scopedIds = new Set(actionIds);
+  const objects = caseRecord.actions.filter(action => scopedIds.has(action.id)).flatMap(action => action.responseObjects ?? []);
   const scopedRecord = {
     ...caseRecord,
     actions: caseRecord.actions.filter((action) => scopedIds.has(action.id)),
+    observedEffects: {
+      ...caseRecord.observedEffects,
+      reviews: caseRecord.observedEffects.reviews.filter(review => review.responseObject
+        && objects.some(object => sameCaseResponseObject(object, review.responseObject))),
+    },
     closures: {
       ...caseRecord.closures,
       records: caseRecord.closures.records.filter((closure) => closure.actionId !== null && scopedIds.has(closure.actionId)),
     },
   };
   const summary = buildCaseResponseLifecycleSummary(scopedRecord);
+  const latestReview = scopedRecord.observedEffects.reviews.find(review => review.id === summary.latestObservedEffect?.reviewId);
   const providerOutcomeState = lineageComplete ? summary.providerOutcomeState : 'ambiguous';
   return {
     providerOutcomeState,
     latestProviderOutcome: lineageComplete && summary.latestProviderOutcome ? { ...summary.latestProviderOutcome } : null,
     observedChangeState: summary.observedChangeState,
-    latestObservedEffect: summary.latestObservedEffect ? { ...summary.latestObservedEffect } : null,
+    latestObservedEffect: summary.latestObservedEffect ? { ...summary.latestObservedEffect,
+      ...(latestReview?.responseObject ? { responseObject: latestReview.responseObject } : {}),
+      ...(latestReview?.objectOutcome ? { objectOutcome: latestReview.objectOutcome } : {}),
+    } : null,
     latestObservedChangeAt: summary.latestObservedChangeAt,
     closure: summary.latestClosure ? {
       id: summary.latestClosure.id,
@@ -902,6 +917,8 @@ function normalizeResponseLifecycle(
       'Provider workflow outcomes and independently observed technical effects are separate point-in-time records.',
       'A provider acknowledgement, terminal state, or reported resolution never becomes independently observed remediation, absence, or safety.',
       'Times are withheld when the corresponding typed event is missing or ambiguous.',
+      ...(objects.length ? ['Each explicit object remains independent; a latest review does not adjudicate every object bound to the action.'] : []),
+      ...(caseRecord.observedEffects.reviews.length > scopedRecord.observedEffects.reviews.length ? ['Independent reviews without matching explicit action-object scope were excluded from this packet; their retained Case history is unchanged.'] : []),
       ...(!summary.latestObservedEffect && scopedRecord.observedEffects.reviews.length ? ['A single latest independent review cannot be selected from the retained observation times; all retained reviews remain separately attributed.'] : []),
       ...(!lineageComplete ? ['Provider-outcome time is withheld because the selected action origin lineage is incomplete.'] : []),
     ],

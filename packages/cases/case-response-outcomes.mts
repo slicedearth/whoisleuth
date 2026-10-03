@@ -10,6 +10,7 @@ import {
   latestObservationCohort,
 } from '../evidence/latest-observations.mts';
 import { readCaseRecheckAnswerContext } from './case-recheck-model.mts';
+import { readCaseResponseObject, readCaseResponseObjectOutcome, assertCaseObjectOutcome, sameCaseResponseObject } from './case-response-object.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   CASE_CLOSURE_REASONS,
@@ -64,6 +65,11 @@ function normalizeObservedEffectReview(
   if (!source || !observedAt) return null;
   const createdAt = iso(item.createdAt, observedAt || fallback, options);
   const recheck = readCaseRecheckAnswerContext(item.recheck, options.sourceVersion);
+  const responseObject = readCaseResponseObject(item.responseObject, options.sourceVersion);
+  const objectOutcome = readCaseResponseObjectOutcome(item.objectOutcome, options.sourceVersion);
+  assertCaseObjectOutcome(objectOutcome, responseObject);
+  if (objectOutcome && (item.state === 'unavailable' || item.state === 'not_checked')) throw new TypeError('Unavailable or unchecked collection cannot establish an object outcome.');
+  if (recheck?.responseObject && !sameCaseResponseObject(recheck.responseObject, responseObject)) throw new TypeError('The recheck answer and observation must concern the same exact object.');
   if (recheck && item.state === 'not_reproduced' && (item.completeness !== 'complete' || recheck.conditionsMatch !== 'comparable')) {
     throw new TypeError('A question cannot be marked not reproduced from incomplete evidence or unconfirmed comparison conditions.');
   }
@@ -95,6 +101,8 @@ function normalizeObservedEffectReview(
     sightingId,
     followUpAt: optionalIso(item.followUpAt, options),
     ...(recheck ? { recheck } : {}),
+    ...(responseObject ? { responseObject } : {}),
+    ...(objectOutcome ? { objectOutcome } : {}),
     createdAt,
   };
 }
@@ -225,6 +233,7 @@ function normalizeClosure(
   ];
   return {
     id: safeId(item.id, 'case-closure', { reason: item.reason, summary, createdAt }),
+    ...(item.responseObject === undefined ? {} : { responseObject: readCaseResponseObject(item.responseObject, options.sourceVersion)! }),
     reason,
     summary,
     observedEffectReviewId,
@@ -346,11 +355,15 @@ export function appendCaseClosure(
     ? actions.find((candidate) => candidate.id === item.actionId) ?? null
     : null;
   const reviewBlocker = caseClosureReviewBlocker(reason, review, now);
+  const responseObject = readCaseResponseObject(item.responseObject);
+  if (review?.responseObject && !sameCaseResponseObject(responseObject, review.responseObject)) throw new TypeError('This independent review concerns one object. Select that object for closure; it cannot close the whole Case.');
+  if (action?.responseObjects?.length && (!responseObject || !action.responseObjects.some(object => sameCaseResponseObject(object, responseObject)))) throw new TypeError('This action concerns explicitly bound objects. Select one of them for this closure; other objects remain independent.');
   if (reviewBlocker) throw new Error(reviewBlocker);
   if (reason === 'provider_reported_resolution_not_independently_checked'
     && (action?.providerOutcome !== 'provider_reports_resolved'
       || !action.history.some((event) => event.applied
         && event.providerOutcome === 'provider_reports_resolved'
+        && (!responseObject || event.responseObjects?.some(object => sameCaseResponseObject(object, responseObject)))
         && Date.parse(event.occurredAt) <= Date.parse(now)))) {
     throw new Error('This closure reason requires a linked typed provider-reported-resolution outcome.');
   }
@@ -415,6 +428,7 @@ export function buildCaseResponseLifecycleSummary(input: Readonly<{
     ? 'missing' as const
     : latestObservedChangeAt ? 'available' as const : 'ambiguous' as const;
   const latestClosure = [...(input.closures?.records ?? [])]
+    .filter(closure => closure.responseObject === undefined)
     .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt) || compareCodeUnits(right.id, left.id))[0] ?? null;
   return {
     providerOutcomeState,
