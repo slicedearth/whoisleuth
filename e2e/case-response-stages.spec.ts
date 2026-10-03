@@ -147,6 +147,8 @@ test('a recheck uses selected evidence without advancing its clock or discarding
   await expect(form.getByRole('combobox', { name: 'Completeness', exact: true })).toHaveCount(0);
   await expect(form).toContainText(observedAt);
   await expect(form).toContainText('The response body was incomplete.');
+  const object = form.getByRole('combobox', { name: 'Object independently observed', exact: true });
+  const outcome = form.getByRole('combobox', { name: /^Independent object outcome\b/ });
   const useSource = form.getByRole('checkbox', { name: 'Use selected source details', exact: true });
   await useSource.uncheck();
   await expect(source).toHaveValue('pin-retained');
@@ -159,6 +161,10 @@ test('a recheck uses selected evidence without advancing its clock or discarding
       await expect(source).toBeVisible();
       await expect(useSource).toBeChecked();
       await source.focus();
+      await page.keyboard.press('Tab');
+      await expect(object).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(outcome).toBeFocused();
       await page.keyboard.press('Tab');
       await expect(useSource).toBeFocused();
       const box = await useSource.boundingBox();
