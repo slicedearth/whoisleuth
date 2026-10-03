@@ -135,7 +135,7 @@ test('brand profile pagination opens on the active profile page', async ({ page 
 
   const pagination = page.getByRole('navigation', { name: 'Brand profile pages' });
   await expect(pagination).toContainText('Page 2 of 2');
-  await expect(page.getByRole('heading', { name: 'Profile 13' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Profile 13', exact: true })).toBeVisible();
   await expect(page.getByRole('radio', { name: 'Set Profile 13 active' })).toBeChecked();
 });
 
