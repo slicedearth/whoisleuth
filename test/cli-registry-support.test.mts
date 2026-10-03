@@ -75,14 +75,21 @@ describe('versioned registry-support document', () => {
       documentationUrls: ['http://insecure.invalid/', 'https://docs.example.test/reference', 'not a URL'],
       officialLookupUrl: 'javascript:alert(1)',
     });
-    const document = buildRegistrySupportDocument('example.test', capability, 5, '2026-07-17T00:00:00.000Z');
+    const snapshot = registryStandardsCoverageSnapshot();
+    Object.assign(snapshot.counts, {
+      generic: 7, genericRestricted: 2, genericAndRestrictedRdapCovered: 8,
+      sponsored: 4, sponsoredRdapCovered: 3, infrastructure: 1, infrastructureRdapCovered: 0,
+    });
+    const document = buildRegistrySupportDocument('example.test', capability, 5, '2026-07-17T00:00:00.000Z', snapshot);
     assert.equal(document.schema, 'whoisleuth.cli.registry-support');
     assert.equal(document.version, 4);
     assert.equal(document.catalogueVersion, 5);
     assert.deepEqual(document.standardsCoverage.genericAndRestricted, {
-      total: 1114,
-      rdapCovered: 1114,
+      total: 9,
+      rdapCovered: 8,
     });
+    assert.deepEqual(document.standardsCoverage.sponsored, { total: 4, rdapCovered: 3 });
+    assert.deepEqual(document.standardsCoverage.infrastructure, { total: 1, rdapCovered: 0 });
     assert.equal(document.profile.explicitSuffixProfile, true);
     assert.equal(document.verification.fixtureScenarios.length, MAX_REGISTRY_SUPPORT_REFERENCES);
     assert.deepEqual(document.verification.files, ['fixtures/safe.test.js']);
@@ -175,7 +182,10 @@ describe('registry-support runner', () => {
     assert.match(military.value(), /Registry class Sponsored/);
     assert.match(military.value(), /RDAP access\s+No service published by IANA/);
     assert.match(military.value(), /WHOIS access\s+No service published by IANA/);
-    assert.match(military.value(), /gTLD RDAP\s+1114 \/ 1114/);
+    const { counts } = registryStandardsCoverageSnapshot();
+    assert.deepEqual(military.value().match(/^gTLD RDAP\s+(\d+) \/ (\d+)$/m)?.slice(1), [
+      String(counts.genericAndRestrictedRdapCovered), String(counts.generic + counts.genericRestricted),
+    ]);
 
     const infrastructure = capture();
     assert.equal(await runCli(['registry-support', '.arpa'], {

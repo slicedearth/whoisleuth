@@ -86,7 +86,7 @@
 
 <style>
   .relationships{min-width:0;margin-top:20px;font-size:var(--text-xs);line-height:1.55}
-  h4{margin:0;font:700 var(--text-sm) var(--mono)}h5{margin:0;font:650 var(--text-sm) var(--sans)}
+  h4{margin:0;font:700 var(--text-sm) var(--mono)}h5{margin:0;font:650 var(--text-sm) var(--font-sans)}
   p{margin:8px 0;overflow-wrap:anywhere}ol{list-style:none;margin:12px 0;padding:0;display:grid;gap:14px}
   li{min-width:0;border-top:1px solid var(--border);padding-top:12px}dl{display:grid;gap:5px;margin:10px 0}
   dl>div{display:grid;grid-template-columns:8rem minmax(0,1fr);gap:8px}dt,small{color:var(--muted)}dd{margin:0;min-width:0;overflow-wrap:anywhere}

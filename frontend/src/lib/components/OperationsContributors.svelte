@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { OperationsReportContributor } from '$lib/analysis/brand-protection-operations-report.ts';
-  import { operationsContributorMetricLabel } from '$lib/analysis/brand-protection-operations-report.ts';
+  import { operationsContributorMetricLabel } from '$lib/analysis/operations-contributors.ts';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   let { contributors, omitted }: { contributors: readonly OperationsReportContributor[]; omitted: number } = $props();
   let metric = $state('counts.actions'), page = $state(1);

@@ -40,14 +40,13 @@ describe('registry standards coverage snapshot', () => {
 
   test('returns a defensive copy of nested source and exception data', () => {
     const first = registryStandardsCoverageSnapshot();
+    const before = structuredClone(first);
     first.sources.urls[0] = 'https://changed.invalid/';
     first.counts.generic = 0;
     requiredValue(first.exceptions[0]).suffix = 'changed';
 
     const second = registryStandardsCoverageSnapshot();
-    assert.equal(second.sources.urls[0], 'https://data.iana.org/TLD/tlds-alpha-by-domain.txt');
-    assert.equal(second.counts.generic, 1111);
-    assert.equal(requiredValue(second.exceptions[0]).suffix, 'edu');
+    assert.deepEqual(second, before);
   });
 
   test('matches explicit exceptional suffix profiles without inferring availability', () => {

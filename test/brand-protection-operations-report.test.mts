@@ -13,9 +13,9 @@ import {
   buildBrandProtectionOperationsReview,
   MAX_OPERATIONS_REPORT_CONTRIBUTORS,
   MAX_OPERATIONS_REPORT_CASES,
-  operationsContributorMetricLabel,
   serializeBrandProtectionOperationsReport,
 } from '../frontend/src/lib/analysis/brand-protection-operations-report.ts';
+import { operationsContributorMetricLabel } from '../frontend/src/lib/analysis/operations-contributors.ts';
 
 const NOW = '2026-08-10T05:00:00.000Z';
 

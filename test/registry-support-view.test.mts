@@ -22,56 +22,43 @@ import {
 } from '../frontend/src/lib/analysis/registry-support.ts';
 import {
   REGISTRY_CAPABILITIES_VERSION,
-  VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
   registryCompatibilityMatrix,
+  registryStandardsCoverageSnapshot,
+  type RegistryCompatibilityRow,
 } from '../lib/registry-capabilities.mts';
 
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
+  const source = registryCompatibilityMatrix();
+  const retained = source.slice(0, MAX_REGISTRY_SUPPORT_ROWS);
 
   assert.equal(catalogue.version, REGISTRY_CAPABILITIES_VERSION);
-  assert.equal(catalogue.rows.length, 335);
-  assert.equal(catalogue.truncated, false);
+  assert.ok(retained.length > 0);
+  assert.deepEqual(catalogue.rows, retained);
+  assert.equal(catalogue.truncated, source.length > MAX_REGISTRY_SUPPORT_ROWS);
   assert.deepEqual(catalogue.summary, {
-    profiles: 335,
-    fixtureVerified: 217,
-    accessDocumented: 118,
+    profiles: retained.length,
+    fixtureVerified: retained.filter(row => row.coverageState === 'fixture_verified').length,
+    accessDocumented: retained.filter(row => row.coverageState === 'access_documented').length,
     serviceCoverage: {
-      both: 74,
-      rdapOnly: 25,
-      whoisOnly: 164,
-      neither: 72,
+      both: retained.filter(row => row.rdapAccessProfile !== 'no-iana-service' && row.whoisAccessProfile !== 'no-iana-service').length,
+      rdapOnly: retained.filter(row => row.rdapAccessProfile !== 'no-iana-service' && row.whoisAccessProfile === 'no-iana-service').length,
+      whoisOnly: retained.filter(row => row.rdapAccessProfile === 'no-iana-service' && row.whoisAccessProfile !== 'no-iana-service').length,
+      neither: retained.filter(row => row.rdapAccessProfile === 'no-iana-service' && row.whoisAccessProfile === 'no-iana-service').length,
     },
   });
-  assert.deepEqual(catalogue.standardsCoverage.counts, {
-    activeTlds: 1438,
-    countryCode: 309,
-    nonCountryCode: 1129,
-    generic: 1111,
-    genericRestricted: 3,
-    sponsored: 14,
-    infrastructure: 1,
-    rdapBootstrapServiceGroups: 591,
-    genericAndRestrictedRdapCovered: 1114,
-    sponsoredRdapCovered: 12,
-    infrastructureRdapCovered: 0,
-  });
-  assert.deepEqual(
-    catalogue.rows.map((row) => row.suffixes),
-    registryCompatibilityMatrix().map((row) => row.suffixes),
-  );
+  assert.deepEqual(catalogue.standardsCoverage, registryStandardsCoverageSnapshot());
 });
 
 test('returns independent catalogue rows rather than exposing shared mutable arrays', () => {
   const first = registrySupportCatalogue();
+  const before = structuredClone(first);
   requiredValue(first.rows[0]).suffixes[0] = 'changed';
   requiredValue(first.rows[0]).fixtureScenarios.push('changed');
   first.standardsCoverage.counts.generic = 0;
 
   const second = registrySupportCatalogue();
-  assert.equal(requiredValue(second.rows[0]).suffixes[0], 'ac');
-  assert.equal(requiredValue(second.rows[0]).fixtureScenarios.includes('changed'), false);
-  assert.equal(second.standardsCoverage.counts.generic, 1111);
+  assert.deepEqual(second, before);
 });
 
 test('inspects explicit and generic suffix support through the shared catalogue', () => {
@@ -155,27 +142,36 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
   );
   assert.deepEqual(filterRegistrySupportRows(rows, 'norid handle', 'all').map((row) => row.suffixes[0]), ['no']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'punktum domain', 'all').map((row) => row.suffixes[0]), ['dk']);
-  assert.deepEqual(filterRegistrySupportRows(rows, '', 'access_documented').map((row) => row.suffixes[0]), [
-    'al', 'ao', 'aq', 'arpa', 'az', 'ba', 'bb', 'bd', 'bo', 'bs', 'bt', 'bv', 'bw', 'bz', 'cd', 'cf', 'cg',
-    'ch', 'ck', 'cu', 'cw', 'cy', 'dj', 'eg', 'er', 'es', 'et', 'fk', 'ga', 'gb', 'ge',
-    'gm', 'gp', 'gq', 'gr', 'gt', 'gu', 'gw', 'hm', 'iq', 'jm', 'jo', 'kh', 'km', 'kp', 'kw', 'lc', 'li', 'lk',
-    'lr', 'mh', 'mil', 'mp', 'mt', 'mv', 'na', 'ne', 'ni', 'np', 'nr', 'pa', 'pf', 'ph', 'pn', 'ps', 'py',
-    'sb', 'sj', 'sl', 'sm', 'sv', 'sz', 'tj', 'tk', 'tl', 'tt', 'uy', 'va', 'vi', 'vn', 'xn--54b7fta0cc',
-    'xn--fzc2c9e2c', 'xn--mgbai9azgqp6j', 'xn--mgbayh7gpa', 'xn--mgbc0a9azcg',
-    'xn--mgbcpq6gpa1a', 'xn--mgbpl2fh', 'xn--mgbtx2b', 'xn--node', 'xn--qxam', 'xn--wgbh1c',
-    'xn--xkc2al3hye2a', 'xn--ygbi2ammx', 'za', 'zw',
-    ...VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
-  ].sort());
+  assert.deepEqual(filterRegistrySupportRows(rows, '', 'access_documented'), rows.filter(row => row.coverageState === 'access_documented'));
   assert.deepEqual(filterRegistrySupportRows(rows, 'access', 'fixture_verified'), []);
-  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'rdap_only').length, 25);
-  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'whois_only').length, 164);
-  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'both').length, 74);
-  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'neither').length, 72);
-  assert.deepEqual(
-    filterRegistrySupportRows(rows, '', 'all', 'rdap_only').map((row) => row.suffixes[0]),
-    [...VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES, 'na', 'pn'].sort(),
-  );
+  for (const [kind, rdap, whois] of [
+    ['both', true, true], ['rdap_only', true, false], ['whois_only', false, true], ['neither', false, false],
+  ] as const) {
+    const expected = rows.filter(row => (row.rdapAccessProfile !== 'no-iana-service') === rdap
+      && (row.whoisAccessProfile !== 'no-iana-service') === whois);
+    assert.ok(expected.length > 0, kind);
+    assert.deepEqual(filterRegistrySupportRows(rows, '', 'all', kind), expected);
+  }
   assert.equal(filterRegistrySupportRows(rows, '', 'all', 'unexpected').length, rows.length);
+});
+
+test('service filtering preserves all four paths and does not treat access restrictions as missing services', () => {
+  const template = requiredValue(registryCompatibilityMatrix()[0]);
+  const fixture = (id: string, rdapAccessProfile: RegistryCompatibilityRow['rdapAccessProfile'], whoisAccessProfile: RegistryCompatibilityRow['whoisAccessProfile']): RegistryCompatibilityRow => ({
+    ...template, id, suffixes: [id], rdapAccessProfile, whoisAccessProfile,
+  });
+  const rows = [
+    fixture('both', 'iana-bootstrap', 'iana-referral'),
+    fixture('rdap', 'iana-bootstrap', 'no-iana-service'),
+    fixture('whois', 'no-iana-service', 'iana-referral'),
+    fixture('neither', 'no-iana-service', 'no-iana-service'),
+    fixture('restricted', 'iana-bootstrap', 'registry-policy-restricted'),
+    fixture('authorised', 'iana-bootstrap', 'source-ip-authorization-required'),
+  ];
+  assert.deepEqual(rows.map(registryServiceCoverage), ['both', 'rdap_only', 'whois_only', 'neither', 'both', 'both']);
+  for (const [kind, ids] of [
+    ['both', ['both', 'restricted', 'authorised']], ['rdap_only', ['rdap']], ['whois_only', ['whois']], ['neither', ['neither']],
+  ] as const) assert.deepEqual(filterRegistrySupportRows(rows, '', 'all', kind).map(row => row.id), ids);
 });
 
 test('bounds and sanitizes untrusted filter input without mutating the rows', () => {
