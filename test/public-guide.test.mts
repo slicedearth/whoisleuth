@@ -231,7 +231,10 @@ test('glossary, FAQ, state, and mistake content is bounded and deterministic', (
   assert.match(glossaryTerms.find((item) => item.term === 'EPP status')?.definition || '', /does not guarantee/i);
   assert.match(glossaryTerms.find((item) => item.term === 'Registration disclosure')?.definition || '', /unavailable/i);
   assert.match(glossaryTerms.find((item) => item.term === 'Structured identity metadata')?.definition || '', /not verified/i);
-  assert.match(glossaryTerms.find((item) => item.term === 'Credential collection surface')?.definition || '', /not a vulnerability or phishing finding/i);
+  const credentialSurfaceDefinition = glossaryTerms.find((item) => item.term === 'Credential collection surface')?.definition || '';
+  assert.match(credentialSurfaceDefinition, /destinations associated with individual forms/iu);
+  assert.match(credentialSurfaceDefinition, /Unknown associations remain explicit/iu);
+  assert.match(credentialSurfaceDefinition, /forms are not submitted/iu);
   assert.match(glossaryTerms.find((item) => item.term === 'Website profile snapshot')?.definition || '', /not proof of compromise/i);
   assert.doesNotMatch(guideFaqs.find((item) => item.question === 'How do I export or delete saved work?')?.answer || '', /local-storage controls/iu);
 

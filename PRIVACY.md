@@ -620,7 +620,7 @@ Saved Case views retain names, search text, status, disposition and sort choices
 within the current workspace. Workspace backups include them; response packets
 do not. Applying a view filters retained Cases without making network requests.
 
-The current writer emits workspace archive version 9. Exact versions 5, 6, 7 and 8
+The current writer emits workspace archive version 10. Exact versions 5, 6, 7, 8 and 9
 remain readable. Versions 5–8 gain an empty saved-views section without removing
 existing views. Version 5 also gains an empty Analyst Review Item section without
 inventing decisions. Versions 1 through 4 are unsupported. Future versions fail without

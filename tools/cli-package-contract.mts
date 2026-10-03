@@ -9,6 +9,7 @@ export const CLI_PACKAGE_SUPPORT_FILES = Object.freeze([
   ['docs/cli.md', 'docs/cli.md'],
   ['docs/cli-reference.md', 'docs/cli-reference.md'],
   ['docs/contextual-reviews.md', 'docs/contextual-reviews.md'],
+  ['docs/infrastructure-observations.md', 'docs/infrastructure-observations.md'],
   ['DISCLOSURE', 'DISCLOSURE'],
   ['LICENSE', 'LICENSE'],
   ['NOTICE', 'NOTICE'],
