@@ -5,6 +5,7 @@ import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, snapshot } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import { DETECTION_RULE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep, operationsReportActionStatus, reviewInboxActionStatus } from './case-response-fixtures';
 import { caseNumber, formattedCaseNumber } from '../packages/cases/case-workflow-metadata.mts';
 import type { WebsiteProfileSnapshot } from '../packages/workspace/website-snapshot-model.mts';
@@ -1013,7 +1014,7 @@ test('custom rules persist, can be disabled, and export a versioned safe schema'
   const body = await (await download.createReadStream()).toArray();
   const payload = JSON.parse(Buffer.concat(body).toString('utf8'));
   expect(payload.schema).toBe('whoisleuth.detection-rules');
-  expect(payload.version).toBe(1);
+  expect(payload.version).toBe(DETECTION_RULE_SCHEMA_VERSION);
   expect(payload.rules[0].enabled).toBe(false);
   expect(JSON.stringify(payload)).not.toContain('function');
 });

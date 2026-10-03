@@ -9,6 +9,7 @@ import {
   THREAT_INTELLIGENCE_SCHEMA,
 } from '../lib/threat-intelligence-types.mts';
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
+import { RISK_MODEL_VERSION } from '../packages/analysis/risk-scoring.mts';
 import { INVESTIGATION_CAPSULE_VERSION, LOOKUP_INVESTIGATION_BRIEF_VERSION } from '../packages/contracts/investigation-portability.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { CONFUSABLE_MAPPING_VERSION } from '../lib/idn-confusables.mts';
@@ -1124,7 +1125,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(section.locator('article').filter({ hasText: 'URLhaus malware-host records' }).locator('.chip')).toHaveClass(/\bwarn\b/);
   await expect(section.locator('article').filter({ hasText: 'ThreatFox malware IOCs' }).locator('.chip')).toHaveClass(/\bunavailable\b/);
   await expect(section.getByText(/do not decide availability/i)).toBeVisible();
-  await expect(section.getByText(/2 independent publisher families contributed \+18 under model v8/i)).toBeVisible();
+  await expect(section.getByText(new RegExp(`2 independent publisher families contributed \\+18 under model v${RISK_MODEL_VERSION}`, 'i'))).toBeVisible();
   const riskExplanation = page.locator('.risk-band details.score-detail > summary');
   await riskExplanation.focus();
   await expect(riskExplanation).toBeFocused();

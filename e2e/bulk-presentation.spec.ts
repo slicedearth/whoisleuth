@@ -259,7 +259,7 @@ test('IDN official-domain skeleton evidence renders, filters, and contributes on
   await expectNoHorizontalOverflow(page);
 });
 
-test('risk model v8 exposes capped cross-family corroboration in Bulk triage', async ({ page }) => {
+test('the current Risk model exposes capped cross-family corroboration in Bulk triage', async ({ page }) => {
   const profile = {
     id: 'risk-profile', name: 'Example profile', officialDomains: ['official.example'], productNames: [], tlds: ['example'],
     approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
