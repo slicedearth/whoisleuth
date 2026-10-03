@@ -28,15 +28,15 @@ describe('saved Lookup compatibility', () => {
       pageIdentity: { status: 'success', publicationMetadata: pagePublicationMetadataFixture() },
       http: { status: 'success', response: { deliveryMetadata: httpDeliveryMetadataFixture() } },
     };
-    (current.rdap as { parsed: Record<string, unknown> }).parsed.registrarIanaId = '4318';
-    (current.whois as { parsed: Record<string, unknown> }).parsed.registrarIanaId = '04318';
+    (current.rdap as { parsed: Record<string, unknown> }).parsed.registrarIanaId = '900003';
+    (current.whois as { parsed: Record<string, unknown> }).parsed.registrarIanaId = '0900003';
     current.registrarStanding = buildRegistrarStanding({
-      registrarIanaId: '4318',
+      registrarIanaId: '900003',
       now: new Date('2026-09-03T12:00:00.000Z'),
     });
     const parsed = parseSavedLookupDocument(JSON.stringify(current));
     assert.equal(parsed.version, SAVED_LOOKUP_SCHEMA_VERSION);
-    assert.equal((parsed.registrarStanding as { ianaId: string }).ianaId, '4318');
+    assert.equal((parsed.registrarStanding as { ianaId: string }).ianaId, '900003');
     assert.deepEqual(SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS, [1, 2]);
 
     current.generatedAt = '2026-09-03T08:00:00.000Z';
@@ -113,7 +113,7 @@ describe('saved Lookup compatibility', () => {
     mismatchedStanding.generatedAt = '2026-09-03T12:00:00.000Z';
     (mismatchedStanding.rdap as { parsed: Record<string, unknown> }).parsed.registrarIanaId = '2';
     mismatchedStanding.registrarStanding = buildRegistrarStanding({
-      registrarIanaId: '4318',
+      registrarIanaId: '900003',
       now: new Date('2026-09-03T12:00:00.000Z'),
     });
     assert.throws(

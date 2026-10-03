@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { publicFooterNavigation } from '$lib/workspaces';
-  import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../lib/project-metadata.mts';
+  import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../packages/analysis/project-metadata.mts';
 
   let { console = false }: { console?: boolean } = $props();
   const revision = __WHOISLEUTH_BUILD_REVISION__;

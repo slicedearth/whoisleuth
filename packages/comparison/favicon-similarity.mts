@@ -2,7 +2,7 @@ import {
   hammingDistanceHex,
   isInformativePerceptualHash,
   isPerceptualHash,
-} from '../../lib/perceptual-hash-comparison.mts';
+} from '../analysis/perceptual-hash-comparison.mts';
 
 type FaviconRecord = Readonly<{
   domain: string;

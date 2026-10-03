@@ -11,7 +11,7 @@ import {
   useTheme,
 } from './helpers';
 import { caseRecord, snapshot } from './case-test-fixtures';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
 const RETAINED_AT = '2026-08-20T10:00:00.000Z';
 

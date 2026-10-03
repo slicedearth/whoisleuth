@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import type { BrandProfile } from '$lib/brand-profiles';
   import {
     buildDomainPostureMatrix,
@@ -6,13 +7,21 @@
     type DomainPostureMatrixState,
   } from '$lib/analysis/domain-posture-matrix.ts';
   import PostureObservationHistory from './PostureObservationHistory.svelte';
+  import Pagination from './Pagination.svelte';
 
   let { active }: { active: BrandProfile } = $props();
   const matrix = $derived(buildDomainPostureMatrix(active));
+  const PAGE_SIZE = 20;
+  let page = $state(1);
+  const pageCount = $derived(Math.max(1, Math.ceil(matrix.rows.length / PAGE_SIZE)));
+  const currentPage = $derived(Math.min(page, pageCount));
+  const visibleRows = $derived(matrix.rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
 
   function stateLabel(state: DomainPostureMatrixState): string {
-    if (state === 'approved_window') return 'Approved window';
+    if (state === 'approved_window') return 'Window · all settings';
     if (state === 'not_configured') return 'Not configured';
+    if (state === 'not_due') return 'Not due';
+    if (state === 'due') return 'Review due';
     return state[0]?.toUpperCase() + state.slice(1);
   }
 
@@ -25,8 +34,8 @@
     return `${cell.label}: ${stateLabel(cell.state)}. ${cell.explanation}${context}`;
   }
 
-  function date(value: string): string {
-    return new Date(value).toLocaleString('en-AU');
+  function date(value: string | null): string {
+    return formatEvidenceDate(value, 'Unknown time');
   }
 </script>
 
@@ -52,12 +61,13 @@
         <caption class="visually-hidden">Official domains by expected setting and saved comparison state</caption>
         <thead><tr><th scope="col">Official domain</th>{#each matrix.columns as column}<th scope="col">{column.label}</th>{/each}</tr></thead>
         <tbody>
-          {#each matrix.rows as row (row.domain)}
+          {#each visibleRows as row (row.domain)}
             <tr>
               <th scope="row"><strong>{row.domain}</strong><small>{row.lifecycle.replaceAll('_', ' ')} · {row.zoneIntent.replaceAll('_', ' ')}</small></th>
               {#each row.cells as cell (cell.field)}
                 <td class={`state-${cell.state}`} title={cellTitle(cell)}>
                   <strong>{stateLabel(cell.state)}</strong>
+                  {#if cell.state === 'approved_window'}<small class="window-context">{cell.approvedWindowSummary}</small>{/if}
                   <span><a href={cell.baselineHref}>Expected</a>{#if cell.observationHref}<a href={cell.observationHref}>Observed</a>{:else}<em>No observation</em>{/if}</span>
                 </td>
               {/each}
@@ -68,13 +78,15 @@
     </div>
 
     <div class="mobile-rows">
-      {#each matrix.rows as row (row.domain)}
+      {#each visibleRows as row (row.domain)}
         <article>
           <header><div><h3>{row.domain}</h3><p>{row.lifecycle.replaceAll('_', ' ')} · {row.zoneIntent.replaceAll('_', ' ')}</p></div><span>{row.observationAt ? date(row.observationAt) : row.observationId ? 'No unique latest observation' : 'No retained observation'}</span></header>
-          <dl>{#each row.cells as cell (cell.field)}<div class={`state-${cell.state}`}><dt>{cell.label}</dt><dd><strong>{stateLabel(cell.state)}</strong><span><a href={cell.baselineHref}>Expected</a>{#if cell.observationHref}<a href={cell.observationHref}>Observed</a>{:else}<em>No observation</em>{/if}</span></dd></div>{/each}</dl>
+          <dl>{#each row.cells as cell (cell.field)}<div class={`state-${cell.state}`}><dt>{cell.label}</dt><dd><strong>{stateLabel(cell.state)}</strong>{#if cell.state === 'approved_window'}<small class="window-context">{cell.approvedWindowSummary}</small>{/if}<span><a href={cell.baselineHref}>Expected</a>{#if cell.observationHref}<a href={cell.observationHref}>Observed</a>{:else}<em>No observation</em>{/if}</span></dd></div>{/each}</dl>
         </article>
       {/each}
     </div>
+
+    <Pagination {currentPage} {pageCount} setPage={value => { page = value; }} ariaLabel="Official-domain comparison pages" pageInputLabel="Official-domain comparison page" />
 
     <div class="retained-observations">
       <h3>Retained observation sources</h3>
@@ -112,11 +124,13 @@
   tbody th strong,tbody th small{display:block;overflow-wrap:anywhere}
   tbody th small{margin-top:4px;color:var(--muted);font-weight:400;text-transform:capitalize}
   td>strong{display:block}
+  .window-context{display:block;max-width:28ch;margin-top:4px;color:var(--muted);overflow-wrap:anywhere;font-size:var(--text-2xs)}
   td>span{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
   td a,.mobile-rows a{font-size:var(--text-2xs)}
   td em,.mobile-rows em{color:var(--muted);font-size:var(--text-2xs);font-style:normal}
   .state-aligned>strong,.state-aligned dt+dd>strong{color:var(--success)}
   .state-drift>strong,.state-drift dt+dd>strong{color:var(--danger)}
+  .state-due>strong,.state-due dt+dd>strong{color:var(--amber)}
   .state-approved_window>strong,.state-approved_window dt+dd>strong,.state-review>strong,.state-review dt+dd>strong,.state-suppressed>strong,.state-suppressed dt+dd>strong{color:var(--amber)}
   .state-unavailable>strong,.state-unavailable dt+dd>strong,.state-unknown>strong,.state-unknown dt+dd>strong,.state-unsupported>strong,.state-unsupported dt+dd>strong{color:var(--muted)}
   .mobile-rows{display:none}

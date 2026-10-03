@@ -5,7 +5,7 @@ import { describe, test } from 'node:test';
 
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import { parseSerializedHandoff } from '../packages/investigation/candidate-handoff.mts';
-import { parseCacaoInvestigationPlaybook } from '../packages/interchange/investigation-playbook-interchange.mts';
+import { parseCacaoInvestigationPlaybook, INVESTIGATION_CACAO_PROFILE_VERSION } from '../packages/interchange/investigation-playbook-interchange.mts';
 import { validateStaticPagePatternPack } from '../packages/interchange/static-page-pattern-packs.mts';
 import {
   parseWebCaptureManifest,
@@ -72,14 +72,14 @@ describe('extracted domain lifecycle contracts', () => {
     const extensions = cacao.playbook_extensions as Record<string, Record<string, unknown>>;
     const profile = Object.values(extensions)[0];
     assert.ok(profile);
-    profile.profile_version = 3;
+    profile.profile_version = INVESTIGATION_CACAO_PROFILE_VERSION + 1;
     assert.throws(() => parseCacaoInvestigationPlaybook(cacao), /profile metadata is missing or invalid/u);
 
     const summary = await fixture(`${FIXTURE_ROOT}web-capture-summary-v1.json`) as Record<string, unknown>;
     assert.throws(() => parseWebCaptureSummary({ ...summary, schemaVersion: 2 }), /schema version 1/u);
     const manifest = await fixture(`${FIXTURE_ROOT}web-capture-manifest-v2.json`) as Record<string, unknown>;
-    assert.throws(() => parseWebCaptureManifest({ ...manifest, schemaVersion: 1 }), /schema version 2/u);
-    assert.throws(() => parseWebCaptureManifest({ ...manifest, schemaVersion: 3 }), /schema version 2/u);
+    assert.throws(() => parseWebCaptureManifest({ ...manifest, schemaVersion: 1 }), /schema version 3/u);
+    assert.throws(() => parseWebCaptureManifest({ ...manifest, schemaVersion: 4 }), /schema version 3/u);
     const pattern = await fixture(`${FIXTURE_ROOT}static-page-pattern-pack-v2.json`) as Record<string, unknown>;
     assert.throws(() => validateStaticPagePatternPack({ ...pattern, version: 3 }), /requires schema 2/u);
   });

@@ -19,6 +19,7 @@ import { runCli } from '../cli/runner.mts';
 import { MAX_BOUNDED_JSON_DEPTH } from '../lib/bounded-json.mts';
 import { arrayValue, recordValue } from './value-assertions.mts';
 import { httpDeliveryMetadataFixture, pagePublicationMetadataFixture } from './homepage-metadata-fixtures.mts';
+import { validateLookupEvidenceArtifactStructure } from '../cli/artifact-validation/lookup-evidence.mts';
 
 function capture() {
   let value = '';
@@ -120,9 +121,9 @@ function savedLookup(overrides = {}) {
       limitations: ['The selected address may represent shared edge infrastructure.'],
       diagnostics: { requestCount: 1, addressSource: 'tls_connection', httpStatus: 200, cidrCount: 1 },
       detail: 'The selected address was mapped to its network registration.',
-      endpoint: { address: '93.184.216.34', family: 4, selectedFrom: 'tls_connection' },
-      rdap: { endpoint: 'https://network.example.test/ip/93.184.216.34', transportSecurity: 'https', httpStatus: 200, fetchedAt: '2026-07-14T07:59:53.000Z', attempts: [] },
-      network: { handle: 'NET-EXAMPLE', name: 'Example edge network', holder: 'Example network holder', cidrs: ['93.184.216.0/24'], startAddress: '93.184.216.0', endAddress: '93.184.216.255', country: 'AU', networkType: 'ALLOCATED', databaseUpdatedAt: '2026-07-13T00:00:00.000Z' },
+      endpoint: { address: '192.0.2.34', family: 4, selectedFrom: 'tls_connection' },
+      rdap: { endpoint: 'https://network.example.test/ip/192.0.2.34', transportSecurity: 'https', httpStatus: 200, fetchedAt: '2026-07-14T07:59:53.000Z', attempts: [] },
+      network: { handle: 'NET-EXAMPLE', name: 'Example edge network', holder: 'Example network holder', cidrs: ['192.0.2.0/24'], startAddress: '192.0.2.0', endAddress: '192.0.2.255', country: 'AU', networkType: 'ALLOCATED', databaseUpdatedAt: '2026-07-13T00:00:00.000Z' },
     },
     diagnostics: {
       version: 4,
@@ -194,6 +195,20 @@ describe('evidence export CLI arguments', () => {
 });
 
 describe('lookup evidence export conversion', () => {
+  test('removes query and fragment material from every allowed URI scheme in saved-file exports', async () => {
+    const shared = await evidenceModule();
+    for (const base of ['https://example.test/path', 'mailto:role@example.test', 'tel:+61255500100', 'dns:example.test', 'openpgp4fpr:0123456789abcdef']) {
+      const source = savedLookup({ availability: { pageIdentity: { canonical: { url: `${base}?body=private-query#private-fragment` } } } });
+      const result = buildCliEvidenceExport(JSON.stringify(source), shared, '2026-07-14T09:00:00.000Z');
+      const text = formatCliEvidenceExport(result);
+      assert.doesNotMatch(text, /private-query|private-fragment/u);
+      const canonical = recordValue(recordValue(recordValue(recordValue(result.analysis).availability).pageIdentity).canonical);
+      assert.equal(canonical.url, base);
+      canonical.url = `${base}?body=private-query#private-fragment`;
+      assert.throws(() => validateLookupEvidenceArtifactStructure(result), /availability analysis|privacy boundary/u);
+    }
+  });
+
   test('shares the exact evidence builder with the frontend compatibility module', async () => {
     const shared = await evidenceModule();
     const frontend = await import('../frontend/src/lib/analysis/evidence-export.ts');

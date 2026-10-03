@@ -3,6 +3,9 @@
   publish = "frontend/build"
   functions = "netlify/functions"
 
+# The prerendered 404.html is the native missing-page response. There is no
+# catch-all rewrite: missing addresses retain HTTP 404 and API routes stay explicit.
+
 [functions."scheduled-monitor"]
   schedule = "*/5 * * * *"
 

@@ -17,6 +17,26 @@ const DEFINITION: LocalDataCollectionDefinition<string[]> = {
 };
 const SECOND = { ...DEFINITION, id: 'second', legacyKey: 'second-legacy' };
 
+test('the established storage entry point preserves codec, error and preparation identity', async () => {
+  const entry = await import('../frontend/src/lib/browser-local-data.ts');
+  const content = await import('../frontend/src/lib/browser-local-data-content.ts');
+  assert.equal(entry.BrowserLocalDataError, content.BrowserLocalDataError);
+  assert.equal(entry.plaintextJsonCodec, content.plaintextJsonCodec);
+  assert.equal(entry.prepareLocalDataContent, content.prepareLocalDataContent);
+  assert.equal(entry.decodeLocalDataSnapshots, content.decodeLocalDataSnapshots);
+});
+
+test('adapter commits construct the same valid manifest when the supplied clock is invalid', async () => {
+  const store = memoryStorage();
+  const provider = new BrowserLocalDataProvider({ storageAdapter: store.adapter, now: () => new Date(NaN) });
+  await provider.initialize([DEFINITION]);
+  await provider.update(DEFINITION, () => ({ document: ['saved'], result: null }));
+  const manifest = store.collections.get(DEFINITION.id)!.manifest;
+  assert.equal(manifest.revision, 2);
+  assert.ok(Number.isFinite(Date.parse(manifest.updatedAt)));
+  assert.deepEqual(await provider.read(DEFINITION), ['saved']);
+});
+
 function memoryStorage() {
   const collections = new Map<string, LocalDataCapture>();
   const binaries = new Map<string, LocalDataStoredBinary>();

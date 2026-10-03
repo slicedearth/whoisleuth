@@ -8,10 +8,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FRONTEND_BROWSER_ARTIFACT_PATHS } from './frontend-build-integrity.mts';
 import { npmExecutableName } from './maintainer-tool-helpers.mts';
-import {
-  resolveUnitTestExecutables,
-  unitTestExecutableEnvironment,
-} from './toolchain-compatibility.mts';
+import { codeqlRamMegabytes } from './local-codeql.mts';
+import { resolveUnitTestExecutables, unitTestExecutableEnvironment } from './toolchain-compatibility.mts';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FULL_SHA = /^[a-f0-9]{40}$/u;
@@ -20,6 +18,7 @@ export const CI_FRONTEND_BUILD_ARTIFACT_NAME = 'frontend-build-${{ github.sha }}
 export const CI_QUALITY_SCRIPTS = Object.freeze([
   'workflow:check',
   'toolchain:check',
+  'dependencies:review',
   'verification:timing:check',
   'verification:ownership:check',
   'verification:journeys:check',
@@ -30,19 +29,18 @@ export const CI_QUALITY_SCRIPTS = Object.freeze([
   'licenses:check',
   'providers:policy-check',
   'technology:coverage-check',
-  'cli:package:check',
-  'capture:package:check',
   'architecture:check',
   'typecheck',
   'check',
 ] as const);
 
 export const CI_PREFLIGHT_SCRIPTS = Object.freeze([
-  'release:check',
+  'version:check',
 ] as const);
 
 export const CI_UNIT_SCRIPTS = Object.freeze([
   'test:coverage',
+  'test:integration',
 ] as const);
 
 export const CI_BROWSER_BUILD_SCRIPTS = Object.freeze([
@@ -50,7 +48,6 @@ export const CI_BROWSER_BUILD_SCRIPTS = Object.freeze([
   'frontend:loading-report',
   'security:retire',
   'frontend:build:integrity',
-  'local:package:check',
 ] as const);
 
 export const CI_HOSTED_ONLY_BROWSER_SCRIPTS = Object.freeze([
@@ -63,8 +60,8 @@ export const CI_HOSTED_ONLY_BROWSER_SCRIPTS = Object.freeze([
 ] as const);
 
 export const CI_BROWSER_HEALTH_SCRIPTS = Object.freeze([
-  'test:e2e:aggregate',
-  'test:e2e:aggregate',
+  'test:e2e:aggregate', // Machine inventory consumed by timing evidence.
+  'test:e2e:aggregate', // Human summary, selected with --summary.
   'verification:timing:update-candidate',
 ] as const);
 
@@ -148,9 +145,9 @@ export function assertPlaywrightBrowserCacheWritable(cacheDirectory = playwright
   }
 }
 
-function gitOutput(args: readonly string[]): string {
+function gitOutput(args: readonly string[], repositoryRoot = REPOSITORY_ROOT): string {
   const child = spawnSync('git', args, {
-    cwd: REPOSITORY_ROOT,
+    cwd: repositoryRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -161,10 +158,19 @@ function gitOutput(args: readonly string[]): string {
   return child.stdout.trim();
 }
 
-export function localCiRevisionRange(): string {
-  const head = gitOutput(['rev-parse', '--verify', 'HEAD']);
-  const base = gitOutput(['merge-base', 'HEAD', 'refs/remotes/origin/main']);
+export function localCiRevisionRange(explicitBase?: string, repositoryRoot = REPOSITORY_ROOT): string {
+  if (explicitBase !== undefined && !FULL_SHA.test(explicitBase)) {
+    throw new TypeError('The explicit CI base must be a full lowercase commit SHA.');
+  }
+  const head = gitOutput(['rev-parse', '--verify', 'HEAD'], repositoryRoot);
+  const base = explicitBase === undefined
+    ? gitOutput(['merge-base', 'HEAD', 'refs/remotes/origin/main'], repositoryRoot)
+    : gitOutput(['rev-parse', '--verify', '--end-of-options', `${explicitBase}^{commit}`], repositoryRoot);
   if (!FULL_SHA.test(base) || !FULL_SHA.test(head)) throw new TypeError('Local CI requires full Git revision identities.');
+  if (explicitBase !== undefined && (base !== explicitBase || base === head
+    || gitOutput(['merge-base', head, base], repositoryRoot) !== base)) {
+    throw new TypeError('The explicit CI base must identify a commit strictly before HEAD in its ancestry.');
+  }
   return `${base}..${head}`;
 }
 
@@ -246,18 +252,17 @@ function cliRuntimeExecutable(): string {
 }
 
 function runCliRuntimeCheck(executable: string): void {
-  const runtimePath = [path.dirname(executable), process.env.PATH].filter(Boolean).join(path.delimiter);
-  run(executable, [path.join(REPOSITORY_ROOT, 'tools', 'ci-verification.mts'), '--group=cli-runtime'], {
+  run(process.execPath, [path.join(REPOSITORY_ROOT, 'tools', 'ci-verification.mts'), '--group=cli-runtime'], {
     ...process.env,
-    PATH: runtimePath,
+    WHOISLEUTH_CLI_RUNTIME_NODE: executable,
   });
 }
 
-function assertCliRuntime(actual = process.versions.node): void {
-  const match = /^(\d+)\.\d+\.\d+$/u.exec(actual);
-  if (match?.[1] !== String(CI_CLI_RUNTIME_NODE_MAJOR)) {
-    throw new Error(`CLI compatibility CI group requires Node.js ${CI_CLI_RUNTIME_NODE_MAJOR}; running ${actual}.`);
+export function criticalBrowserInstallArguments(systemDependencies = process.env.WHOISLEUTH_BROWSER_SYSTEM_DEPS): readonly string[] {
+  if (systemDependencies !== undefined && systemDependencies !== '' && systemDependencies !== 'preinstalled') {
+    throw new TypeError('Browser system dependencies must use the default installer or the prepared container image.');
   }
+  return Object.freeze(['install', ...(systemDependencies === 'preinstalled' ? [] : ['--with-deps']), 'chromium', 'firefox', 'webkit']);
 }
 
 type WorkflowStep = {
@@ -266,6 +271,7 @@ type WorkflowStep = {
   if?: string | boolean;
   'continue-on-error'?: boolean | string;
   with?: Record<string, unknown>;
+  env?: Record<string, unknown>;
 };
 type WorkflowJob = {
   steps: WorkflowStep[];
@@ -273,6 +279,7 @@ type WorkflowJob = {
   if?: string | boolean;
   'continue-on-error'?: boolean | string;
   permissions?: unknown;
+  env?: Record<string, unknown>;
 };
 type Workflow = { jobs: Record<string, WorkflowJob>; permissions?: unknown };
 
@@ -380,6 +387,28 @@ function assertReadOnlyPermissions(value: unknown): void {
   }
 }
 
+function assertBrowserInvocationBindings(workflow: Workflow): void {
+  const browser = workflowJob(workflow, 'browser');
+  const shard = browser.steps.find(step => stepScripts(step).includes('test:e2e:shard'));
+  const command = shard?.run ?? '';
+  if ((command.match(/(?:^|\s)--run(?:=|\s)/gu) ?? []).length !== 1
+    || !/--run(?:=|\s+)["']?\$\{\{\s*matrix\.shard\s*\}\}["']?(?:\s|$)/u.test(command)
+    || condition(browser.env?.WHOISLEUTH_PLAYWRIGHT_RUN_KIND) !== 'matrix.kind') {
+    throw new Error('Functional browser execution must select its matrix shard and run kind.');
+  }
+  const summary = browser.steps.find(step => stepScripts(step).includes('test:e2e:summary'));
+  if (condition(summary?.env?.WHOISLEUTH_PLAYWRIGHT_SHARD) !== 'matrix.shard'
+    || condition(summary?.env?.WHOISLEUTH_PLAYWRIGHT_RUN_LABEL) !== 'matrix.label') {
+    throw new Error('Browser result summaries must identify their executed matrix shard and label.');
+  }
+  const reports = workflowJob(workflow, 'browser-health').steps
+    .filter(step => stepScripts(step).includes('test:e2e:aggregate'));
+  const human = reports.filter(step => /(?:^|\s)--summary(?:\s|$)/u.test(step.run ?? ''));
+  if (reports.length !== 2 || human.length !== 1) {
+    throw new Error('Browser health requires one machine inventory and one human summary.');
+  }
+}
+
 export function expectedHostedCiScriptPlan(): HostedCiScriptPlan {
   return Object.freeze({
     quality: Object.freeze(['security:staged', ...CI_PREFLIGHT_SCRIPTS, ...CI_QUALITY_SCRIPTS]),
@@ -433,21 +462,24 @@ export function assertHostedCiParity(
     throw new Error('The required verify job must always account for every verification lane.');
   }
   assertFrontendBuildArtifactFlow(parsed);
+  assertBrowserInvocationBindings(parsed);
 }
 
 export function formatLocalCiPlan(): string {
   return [
     'Playwright browser-cache writability',
+    'security analyser memory allocation',
     'changed-line secret scan',
     ...CI_PREFLIGHT_SCRIPTS,
     'locked install (install-time audit disabled; scheduled and release audits are separate)',
     ...CI_QUALITY_SCRIPTS,
+    'security:codeql (application and workflow analyses; no upload)',
     ...CI_UNIT_SCRIPTS,
     ...CI_BROWSER_BUILD_SCRIPTS,
     'test:e2e:critical:install',
     'test:e2e:built (performance, functional shards, browser-health aggregation and timing candidate)',
     'critical cross-browser checks (same isolated built suite)',
-    ...CI_CLI_RUNTIME_SCRIPTS.map(script => `${script} (Node ${CI_CLI_RUNTIME_NODE_MAJOR} compatibility runtime)`),
+    ...CI_CLI_RUNTIME_SCRIPTS.map(script => `${script} (one assembly; primary and Node ${CI_CLI_RUNTIME_NODE_MAJOR} installations)`),
     'verification:artifacts cleanup=all',
   ].join('\n');
 }
@@ -455,9 +487,13 @@ export function formatLocalCiPlan(): string {
 export function parseCiVerificationArguments(args: readonly string[]): Readonly<{
   mode: 'full' | 'list' | 'group';
   group?: CiCommandGroup;
+  base?: string;
 }> {
   if (args.length === 0) return Object.freeze({ mode: 'full' });
   if (args.length === 1 && args[0] === '--list') return Object.freeze({ mode: 'list' });
+  if (args.length === 1 && args[0]?.startsWith('--base=') && FULL_SHA.test(args[0].slice('--base='.length))) {
+    return Object.freeze({ mode: 'full', base: args[0].slice('--base='.length) });
+  }
   const group = args.length === 1 && args[0]?.startsWith('--group=')
     ? args[0].slice('--group='.length)
     : args.length === 2 && args[0] === '--group'
@@ -466,7 +502,7 @@ export function parseCiVerificationArguments(args: readonly string[]): Readonly<
   if (group && CI_COMMAND_GROUPS.includes(group as CiCommandGroup)) {
     return Object.freeze({ mode: 'group', group: group as CiCommandGroup });
   }
-  throw new TypeError(`Usage: node tools/ci-verification.mts [--list | --group=<${CI_COMMAND_GROUPS.join('|')}>]`);
+  throw new TypeError(`Usage: node tools/ci-verification.mts [--base=<full-commit-sha> | --list | --group=<${CI_COMMAND_GROUPS.join('|')}>]`);
 }
 
 export function main(args = process.argv.slice(2)): number {
@@ -480,32 +516,32 @@ export function main(args = process.argv.slice(2)): number {
     }
     if (parsed.mode === 'group') {
       const group = parsed.group!;
-      if (group === 'cli-runtime') assertCliRuntime();
-      else assertLocalCiRuntime();
+      assertLocalCiRuntime();
+      if (group === 'cli-runtime') process.env.WHOISLEUTH_CLI_RUNTIME_NODE = cliRuntimeExecutable();
       if (group === 'quality') assertHostedCiParity();
-      const environment = group === 'unit'
-        ? unitTestExecutableEnvironment(resolveUnitTestExecutables())
-        : process.env;
-      runCiCommandGroup(group, (script, extra) => npmRun(script, extra, environment));
+      runCiCommandGroup(group);
       return 0;
     }
     assertLocalCiRuntime();
     if (gitOutput(['status', '--porcelain=v1', '--untracked-files=all'])) {
       throw new Error('Local CI requires a clean worktree so it verifies the exact commit that would be pushed.');
     }
+    Object.assign(process.env, unitTestExecutableEnvironment(resolveUnitTestExecutables(undefined, { cwd: REPOSITORY_ROOT })));
     cleanup = true;
     assertPlaywrightBrowserCacheWritable();
-    const unitEnvironment = unitTestExecutableEnvironment(resolveUnitTestExecutables());
+    process.stdout.write(`Security analyser memory budget: ${codeqlRamMegabytes()} MiB.\n`);
     const cliRuntime = cliRuntimeExecutable();
-    const range = localCiRevisionRange();
+    const range = localCiRevisionRange(parsed.base);
+    process.stdout.write(`Changed-line secret scan: ${range}\n`);
     npmRun('security:staged', ['--', '--range', range]);
     runCiCommandGroup('preflight');
     run(npmExecutableName(), ['ci', '--include=optional', '--ignore-scripts', '--audit=false']);
     assertHostedCiParity();
     runCiCommandGroup('quality');
-    runCiCommandGroup('unit', (script, extra) => npmRun(script, extra, unitEnvironment));
+    npmRun('security:codeql');
+    runCiCommandGroup('unit');
     runCiCommandGroup('browser-build');
-    npmRun('test:e2e:critical:install');
+    run(process.execPath, [path.join(REPOSITORY_ROOT, 'node_modules/playwright/cli.js'), ...criticalBrowserInstallArguments()]);
     npmRun('test:e2e:built');
     runCliRuntimeCheck(cliRuntime);
   } catch (error) {
@@ -522,7 +558,7 @@ export function main(args = process.argv.slice(2)): number {
     process.stderr.write(`${failure instanceof Error ? failure.message : 'Local CI verification failed.'}\n`);
     return 2;
   }
-  process.stdout.write('\nLocal CI matched every maintained quality, unit and browser gate.\n');
+  process.stdout.write('\nLocal CI passed the maintained quality, security, unit, browser and package gates. Hosted service checks remain separate.\n');
   return 0;
 }
 

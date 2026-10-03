@@ -355,6 +355,22 @@ describe('comparison ledger row contract', () => {
 });
 
 describe('retained comparison adapters', () => {
+  test('keeps separate incident histories for the same domain and deduplicates only the same incident', () => {
+    const first = caseWithSnapshots('same.reservation.invalid', caseEvidence({ registrar: 'First A' }), caseEvidence({ registrar: 'First B' }));
+    const second = caseWithSnapshots('same.reservation.invalid', caseEvidence({ registrar: 'Second A' }), caseEvidence({ registrar: 'Second B' }));
+    assert.notEqual(first.id, second.id);
+    const input = { cases: [first, second, first] };
+    const index = buildComparisonLedgerIndex(input);
+    assert.equal(index.items.length, 2);
+    const reverse = buildComparisonLedgerIndex({ cases: [...input.cases].reverse() });
+    assert.deepEqual(index.items, reverse.items);
+    const details = buildComparisonLedgerDetails(input, { itemIds: index.items.map(item => item.id) });
+    const registrars = details.rows.filter(row => row.field === 'Registrar');
+    assert.equal(registrars.length, 2);
+    assert.equal(new Set(registrars.map(row => row.id)).size, 2);
+    assert.match(JSON.stringify(registrars), /First B/u);
+    assert.match(JSON.stringify(registrars), /Second B/u);
+  });
   test('derives adjacent case rows without treating an inconclusive later observation as removal', () => {
     const record = caseWithSnapshots(
       'case-change.reservation.invalid',
@@ -375,6 +391,8 @@ describe('retained comparison adapters', () => {
     assert.equal(index.items[0]?.later.retainedAt, null);
     assert.equal(registrar?.earlier.retainedAt, null);
     assert.equal(registrar?.later.retainedAt, null);
+    assert.match(registrar!.limitations.join(' '), /registrar change is not evidence of new ownership/u);
+    assert.doesNotMatch(details.rows.find(row => row.field === 'Availability')!.limitations.join(' '), /carrying earlier decisions/u);
     assert.equal(details.rows.some((row) => row.state === 'removed'), false);
   });
 
@@ -807,6 +825,19 @@ describe('retained comparison adapters', () => {
     assert.equal(omissionOnly.truncated, true);
   });
 
+  test('distinct undated watchlist events retain material identities without an invented latest date', () => {
+    const first = watchlistEvent({ checkedAt: null });
+    const second = watchlistEvent({ checkedAt: null, changes: [{ ...first.changes[0], after: 'Different later title' }] });
+    const entry = { updatedAt: null, results: [], baseline: [], history: [first, second] };
+    const input = { watchlists: { Undated: entry } };
+    const index = buildComparisonLedgerIndex(input);
+    assert.equal(index.items.length, 2);
+    assert.equal(new Set(index.items.map(item => item.ownerId)).size, 2);
+    assert.ok(index.items.every(item => !item.later.observedAt));
+    const reordered = buildComparisonLedgerIndex({ watchlists: { Undated: { ...entry, history: [second, first] } } });
+    assert.deepEqual(index.items.map(item => item.id).sort(), reordered.items.map(item => item.id).sort());
+  });
+
   test('suppresses duplicate exact rows without counting them as detail-bound omissions', () => {
     const change = {
       domain: 'duplicate-row.reservation.invalid',
@@ -1122,6 +1153,7 @@ describe('retained comparison adapters', () => {
 
   test('allows an identical fully source-complete non-empty Bulk pair to be equivalent', () => {
     const retained = bulkResult('complete-equivalence.reservation.invalid', {
+      webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
       sourceCoverage: [
         { source: 'rdap', state: 'complete' },
         { source: 'whois', state: 'unsupported' },

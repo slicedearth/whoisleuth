@@ -134,38 +134,21 @@ function address(value: string): string {
   return canonicalPublicIpAddress(candidate) ?? '';
 }
 
-function glueRows(value: string): Array<{ nameserver: string; addresses: string[] }> {
-  const byHost = new Map<string, Set<string>>();
-  for (const line of value.split(/\r?\n/u).slice(0, MAX_REHEARSAL_GLUE * 2)) {
-    const [rawHost, ...rawAddresses] = line.trim().split(/[\s,]+/u);
-    const host = hostname(rawHost ?? '');
-    if (!host) continue;
-    const current = byHost.get(host) ?? new Set<string>();
-    for (const rawAddress of rawAddresses.slice(0, 4)) {
-      const normalized = address(rawAddress);
-      if (normalized) current.add(normalized);
-      if (current.size >= 2) break;
-    }
-    byHost.set(host, current);
-    if (byHost.size >= MAX_REHEARSAL_GLUE) break;
-  }
-  return [...byHost.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([nameserver, values]) => ({ nameserver, addresses: [...values] }));
-}
-
-function intendedAddressRows(
-  value: string | undefined,
+function addressRows(
+  value: string | readonly unknown[] | undefined,
   maximumRows: number,
 ): IntendedValues<{ hostname: string; addresses: string[] }> {
-  const source = (value ?? '').split(/\r?\n/u).filter((line) => line.trim());
+  const source = typeof value === 'string' ? value.split(/\r?\n/u).filter(line => line.trim())
+    : Array.isArray(value) ? value : [];
   const candidates = source.slice(0, maximumRows * 2);
   const byHost = new Map<string, Set<string>>();
-  let invalid = 0;
+  let invalid = value !== undefined && typeof value !== 'string' && !Array.isArray(value) ? 1 : 0;
   let omitted = Math.max(0, source.length - candidates.length);
-  for (const line of candidates) {
-    const [rawHost, ...rawAddresses] = line.trim().split(/[\s,]+/u);
-    const host = hostname(rawHost ?? '');
+  for (const item of candidates) {
+    const tokens = typeof item === 'string' ? item.trim().split(/[\s,]+/u) : null;
+    const row = record(item);
+    const host = hostname(String(tokens?.[0] ?? row.hostname ?? row.nameserver ?? row.name ?? ''));
+    const rawAddresses = tokens?.slice(1) ?? (Array.isArray(row.addresses) ? row.addresses : []);
     if (!host) {
       invalid += 1;
       continue;
@@ -176,16 +159,18 @@ function intendedAddressRows(
     }
     const current = byHost.get(host) ?? new Set<string>();
     if (rawAddresses.length === 0) invalid += 1;
-    for (const rawAddress of rawAddresses.slice(0, 4)) {
-      const normalized = address(rawAddress);
+    // One host can retain the complete bounded A and AAAA set, not merely
+    // one address from each family. Every rejected or omitted value qualifies it.
+    for (const rawAddress of rawAddresses.slice(0, MAX_REHEARSAL_RECORDS * 2)) {
+      const normalized = typeof rawAddress === 'string' ? address(rawAddress) : '';
       if (!normalized) {
         invalid += 1;
         continue;
       }
-      if (!current.has(normalized) && current.size >= 2) omitted += 1;
+      if (!current.has(normalized) && current.size >= MAX_REHEARSAL_RECORDS) omitted += 1;
       else current.add(normalized);
     }
-    omitted += Math.max(0, rawAddresses.length - 4);
+    omitted += Math.max(0, rawAddresses.length - MAX_REHEARSAL_RECORDS * 2);
     byHost.set(host, current);
   }
   return {
@@ -236,34 +221,6 @@ function recordInput(
     invalid,
     omitted: values.length - candidates.length + Math.max(0, sorted.length - MAX_REHEARSAL_RECORDS),
   };
-}
-
-function addressRows(value: string | readonly unknown[] | undefined): Array<{ hostname: string; addresses: string[] }> {
-  if (typeof value === 'string') {
-    return glueRows(value).map((row) => ({ hostname: row.nameserver, addresses: row.addresses }));
-  }
-  const byHost = new Map<string, Set<string>>();
-  for (const item of (Array.isArray(value) ? value : []).slice(0, MAX_REHEARSAL_RECORDS * 3)) {
-    const candidate = record(item);
-    const host = hostname(String(candidate.hostname ?? candidate.name ?? ''));
-    if (!host) continue;
-    const values = Array.isArray(candidate.addresses) ? candidate.addresses : [];
-    const current = byHost.get(host) ?? new Set<string>();
-    for (const itemAddress of values.slice(0, 4)) {
-      const normalized = address(String(itemAddress));
-      if (normalized) current.add(normalized);
-      if (current.size >= 2) break;
-    }
-    byHost.set(host, current);
-    if (byHost.size >= MAX_REHEARSAL_RECORDS) break;
-  }
-  return [...byHost.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([rowHostname, addresses]) => ({ hostname: rowHostname, addresses: [...addresses].sort() }));
-}
-
-function glueInputRows(value: string | readonly unknown[] | undefined): Array<{ nameserver: string; addresses: string[] }> {
-  return addressRows(value).map((row) => ({ nameserver: row.hostname, addresses: row.addresses }));
 }
 
 function sameSet(left: readonly string[], right: readonly string[]): boolean {
@@ -324,8 +281,9 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
   const registry = nameservers(input.registryNameservers);
   const proposedNameserverInput = intendedNameservers(input.proposedNameservers);
   const proposed = proposedNameserverInput.values;
-  const currentGlue = glueInputRows(input.currentGlue);
-  const proposedGlueInput = intendedAddressRows(input.proposedGlue, MAX_REHEARSAL_GLUE);
+  const currentGlueInput = addressRows(input.currentGlue, MAX_REHEARSAL_GLUE);
+  const currentGlue = currentGlueInput.values.map(row => ({ nameserver: row.hostname, addresses: row.addresses }));
+  const proposedGlueInput = addressRows(input.proposedGlue, MAX_REHEARSAL_GLUE);
   const glue = proposedGlueInput.values.map((row) => ({ nameserver: row.hostname, addresses: row.addresses }));
   const currentDsInput = recordInput(input.currentDs, canonicalDsRecord);
   const proposedDsInput = recordInput(input.proposedDs, canonicalDsRecord);
@@ -339,10 +297,11 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
   const proposedMx = proposedMxInput.values;
   const currentCaa = currentCaaInput.values;
   const proposedCaa = proposedCaaInput.values;
-  const currentComplete = input.currentEvidenceComplete && [currentDsInput, currentMxInput, currentCaaInput]
+  const currentCriticalAddressInput = addressRows(input.currentCriticalAddresses, MAX_REHEARSAL_RECORDS);
+  const currentComplete = input.currentEvidenceComplete && [currentDsInput, currentMxInput, currentCaaInput, currentGlueInput, currentCriticalAddressInput]
     .every((item) => !item.invalid && !item.omitted);
-  const currentCriticalAddresses = addressRows(input.currentCriticalAddresses);
-  const proposedCriticalAddressInput = intendedAddressRows(input.proposedCriticalAddresses, MAX_REHEARSAL_RECORDS);
+  const currentCriticalAddresses = currentCriticalAddressInput.values;
+  const proposedCriticalAddressInput = addressRows(input.proposedCriticalAddresses, MAX_REHEARSAL_RECORDS);
   const proposedCriticalAddresses = proposedCriticalAddressInput.values;
   const currentRegistrarLock = registrarLockState(input.currentRegistrationStatuses);
   const currentTlsSpkiSha256 = tlsSpkiSha256(input.currentTlsSpkiSha256);
@@ -405,7 +364,10 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
   findings.push(recordSetFinding('caa', 'CAA policy', currentCaa, proposedCaa, { intended: proposedCaaInput, current: currentCaaInput }));
   const observedAddressSet = currentCriticalAddresses.flatMap((row) => row.addresses.map((itemAddress) => `${row.hostname} ${itemAddress}`)).sort();
   const proposedAddressSet = proposedCriticalAddresses.flatMap((row) => row.addresses.map((itemAddress) => `${row.hostname} ${itemAddress}`)).sort();
-  findings.push(recordSetFinding('critical_addresses', 'Critical address', observedAddressSet, proposedAddressSet));
+  findings.push(recordSetFinding('critical_addresses', 'Critical address', observedAddressSet, proposedAddressSet, {
+    current: { ...currentCriticalAddressInput, values: observedAddressSet },
+    intended: { ...proposedCriticalAddressInput, values: proposedAddressSet },
+  }));
 
   if (input.registrarLockChange === 'enable') {
     findings.push(currentRegistrarLock === 'observed'

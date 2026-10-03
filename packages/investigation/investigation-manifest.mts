@@ -1,5 +1,5 @@
-import { boundedJsonLimitsForBytes, parseBoundedJson, parseBoundedJsonObject } from '../../lib/bounded-json.mts';
-import { normalizeBoundedSemanticVersion } from '../../lib/semantic-version.mts';
+import { boundedJsonLimitsForBytes, parseBoundedJson, parseBoundedJsonObject } from '../analysis/bounded-json.mts';
+import { normalizeBoundedSemanticVersion } from '../analysis/semantic-version.mts';
 import { canonicalArtifactJsonV2, sha256ArtifactBytes, sha256ArtifactDigestV2, SORTED_JSON_V2 } from '../evidence/artifact-integrity.mts';
 import { array, digest, enumeration, exact, fail, integer, iso, strings, text, validateIntegrity, type UnknownRecord } from '../evidence/artifact-structure.mts';
 import { SELECTED_FILE_MEDIA_TYPES as INVESTIGATION_FILE_MEDIA_TYPES } from '../contracts/selected-file-limits.mts';

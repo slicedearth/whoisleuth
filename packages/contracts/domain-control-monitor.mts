@@ -3,8 +3,13 @@ import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 
 export const CLI_DOMAIN_CONTROL_MONITOR_SCHEMA = 'whoisleuth.cli.domain-control-monitor';
 export const PUBLIC_CLI_DOMAIN_CONTROL_MONITOR_VERSION = 1;
-export const CLI_DOMAIN_CONTROL_MONITOR_VERSION = 2;
-export const SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS = [PUBLIC_CLI_DOMAIN_CONTROL_MONITOR_VERSION, CLI_DOMAIN_CONTROL_MONITOR_VERSION] as const;
+export const CLI_DOMAIN_CONTROL_MONITOR_VERSION = 3;
+export const SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS = [PUBLIC_CLI_DOMAIN_CONTROL_MONITOR_VERSION, 2, CLI_DOMAIN_CONTROL_MONITOR_VERSION] as const;
+export const DOMAIN_CONTROL_MONITOR_EMBEDDED_VERSIONS: Readonly<Record<number, Readonly<{ review: number; flightRecorder: number }>>> = Object.freeze({
+  1: Object.freeze({ review: 1, flightRecorder: 1 }),
+  2: Object.freeze({ review: 2, flightRecorder: 2 }),
+  3: Object.freeze({ review: 3, flightRecorder: 3 }),
+});
 
 export const MAX_DOMAIN_CONTROL_MONITOR_INPUT_BYTES = 16 * 1024 * 1024;
 export const MAX_DOMAIN_CONTROL_MONITOR_JSON_DEPTH = 48;
@@ -105,6 +110,12 @@ export const DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE = defineSchemaLifecycleFami
     {
       id: 'domain-control-monitor-v2', path: 'test/fixtures/domain-control-monitor-v2.json',
       bytes: 18_023, sha256: 'f4017f3dc84b3adb6b6114ea49c37ff05939779daabbbb56c868010145cac55c',
+      contentDigestSha256: null, schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, version: 2,
+      role: 'historical', expectation: 'accepted_exact', expectedOutputFixtureId: null, scope: 'repository',
+    },
+    {
+      id: 'domain-control-monitor-v3', path: 'test/fixtures/domain-control-monitor-v3.json',
+      bytes: 19_215, sha256: 'a7233a0b52b282e3ad8097b9bd71bf15125b743e60a421cfec765cb8b9456563',
       contentDigestSha256: null, schema: CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, version: CLI_DOMAIN_CONTROL_MONITOR_VERSION,
       role: 'current', expectation: 'accepted_exact', expectedOutputFixtureId: null, scope: 'repository',
     },

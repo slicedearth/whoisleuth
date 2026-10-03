@@ -1,8 +1,11 @@
 import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
+import type { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { access, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { PassThrough } from 'node:stream';
 import { describe, test } from 'node:test';
 
 import {
@@ -11,7 +14,6 @@ import {
   CODEQL_STALE_DIRECTORY_AGE_MS,
   CODEQL_THREADS,
   KNOWN_CODEQL_FINDINGS,
-  MAX_CODEQL_RAM_MB,
   MAX_CODEQL_FINDINGS,
   MAX_CODEQL_SARIF_BYTES,
   classifyCodeqlFindings,
@@ -95,9 +97,26 @@ describe('local CodeQL input handling', () => {
     assert.equal(parseCodeqlVersion('{bad json'), '{bad json');
   });
 
-  test('uses at most half of system memory and preserves both ends of diagnostics', () => {
-    assert.equal(codeqlRamMegabytes(8 * 1024 * 1024 * 1024), MAX_CODEQL_RAM_MB);
-    assert.equal(codeqlRamMegabytes(2 * 1024 * 1024 * 1024), 1024);
+  test('respects environment memory limits and reserves operating-system capacity', () => {
+    const GiB = 1024 * 1024 * 1024;
+    assert.equal(codeqlRamMegabytes(4 * GiB, 0, 'linux'), 3072);
+    assert.equal(codeqlRamMegabytes(8 * GiB, 0, 'darwin'), 7168);
+    assert.equal(codeqlRamMegabytes(16 * GiB, 0, 'linux'), 14950);
+    assert.equal(codeqlRamMegabytes(16 * GiB, 4 * GiB, 'linux'), 3072);
+    assert.equal(codeqlRamMegabytes(4 * GiB, 16 * GiB, 'linux'), 3072);
+    assert.equal(codeqlRamMegabytes(4 * GiB, 2 ** 64, 'linux'), 3072);
+    assert.equal(codeqlRamMegabytes(4 * GiB, 0, 'win32'), 2560);
+    assert.throws(() => codeqlRamMegabytes(2 * GiB, 0, 'linux'), /operating-system reserve/u);
+    assert.throws(() => codeqlRamMegabytes(16 * GiB, GiB, 'linux'), /environment permits 0 MiB/u);
+    for (const invalid of [0, -1, NaN, Infinity]) {
+      assert.throws(() => codeqlRamMegabytes(invalid, 0), /environment memory limit/u);
+    }
+    for (const invalid of [-1, 0.5, NaN, Infinity]) {
+      assert.throws(() => codeqlRamMegabytes(4 * GiB, invalid), /environment memory limit/u);
+    }
+  });
+
+  test('preserves both ends of bounded diagnostics', () => {
     const diagnostic = boundedDiagnostic(`start ${'x'.repeat(2000)} terminal failure`, 100);
     assert.ok(diagnostic.startsWith('start '));
     assert.ok(diagnostic.endsWith('terminal failure'));
@@ -296,28 +315,56 @@ describe('bounded CodeQL process execution', () => {
     );
   });
 
-  test('waits for the terminated child to close before rejecting its deadline', async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-codeql-close-'));
-    const marker = path.join(directory, 'closed.txt');
+  test('waits for the terminated child to close before rejecting its deadline', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const child = Object.assign(new EventEmitter(), {
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: context.mock.fn(() => true),
+    });
+    const stopTree = context.mock.fn(() => [] as readonly number[]);
+    let settled = false;
+    const execution = runProcessBounded('example-analyser', [], {
+      cwd: process.cwd(), timeoutMs: 100, maxOutputBytes: 1024,
+    }, (() => child) as unknown as typeof spawn, stopTree);
+    void execution.then(() => { settled = true; }, () => { settled = true; });
+    const rejection = assert.rejects(execution, /process deadline/iu);
+    context.mock.timers.tick(100);
+    assert.deepEqual(stopTree.mock.calls.map(call => call.arguments), [[child]]);
+    await Promise.resolve();
+    assert.equal(settled, false, 'requesting termination does not mean the child has closed');
+    child.emit('close', 0);
+    await rejection;
+    assert.equal(settled, true);
+    context.mock.timers.tick(2000);
+    assert.equal(stopTree.mock.callCount(), 1, 'termination is requested once');
+    child.stdout.destroy();
+    child.stderr.destroy();
+  });
+
+  test('terminates descendants that retain the wrapper output pipes', { timeout: 30_000 }, async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-analyser-tree-'));
+    const identities = path.join(directory, 'processes.json');
+    const naturalExit = path.join(directory, 'natural-exit.txt');
     try {
-      const startedAt = performance.now();
-      await assert.rejects(
-        runProcessBounded(process.execPath, ['-e', [
-          "const { writeFileSync } = require('node:fs');",
-          'const marker = process.argv[1];',
-          "process.on('SIGTERM', () => setTimeout(() => { writeFileSync(marker, 'closed'); process.exit(0); }, 80));",
-          'setInterval(() => {}, 1000);',
-        ].join(' ') , marker], {
-          cwd: process.cwd(),
-          // Leave enough startup margin for this child to install its signal
-          // handler even when the full test suite is running in parallel.
-          timeoutMs: 500,
-          maxOutputBytes: 1024,
-        }),
-        /process deadline/iu,
-      );
-      assert.ok(performance.now() - startedAt >= 550);
-      assert.equal(await readFile(marker, 'utf8'), 'closed');
+      await assert.rejects(runProcessBounded(process.execPath, ['-e', [
+        "const { spawn } = require('node:child_process');",
+        "const { writeFileSync } = require('node:fs');",
+        'const [identities, naturalExit] = process.argv.slice(1);',
+        'const child = spawn(process.execPath, ["-e",',
+        '"setTimeout(() => { require(\'node:fs\').writeFileSync(process.argv[1], \'natural\'); }, 10000);", naturalExit],',
+        '{ stdio: ["ignore", "inherit", "inherit"] });',
+        'child.once("spawn", () => {',
+        'writeFileSync(identities, JSON.stringify([process.pid, child.pid]));',
+        'process.stdout.write("x".repeat(2048));',
+        '});',
+      ].join(' '), identities, naturalExit], {
+        cwd: directory, timeoutMs: 20_000, maxOutputBytes: 1024,
+      }), /output exceeded/u);
+      const owned: number[] = JSON.parse(await readFile(identities, 'utf8'));
+      assert.equal(owned.length, 2);
+      for (const pid of owned) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+      await assert.rejects(access(naturalExit), { code: 'ENOENT' });
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -325,7 +372,7 @@ describe('bounded CodeQL process execution', () => {
 });
 
 describe('local CodeQL orchestration', () => {
-  async function runFixture(results: readonly SarifFixtureFinding[]) {
+  async function runFixture(results: readonly SarifFixtureFinding[], language: LocalCodeqlOptions['language'] = 'javascript-typescript') {
     const temporaryDirectory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-codeql-test-'));
     const calls: ProcessCall[] = [];
     let removed = false;
@@ -341,6 +388,7 @@ describe('local CodeQL orchestration', () => {
       return { exitCode: 0, stdout: '', stderr: '' };
     };
     const report = await runLocalCodeql({
+      language,
       repositoryRoot: process.cwd(),
       codeqlCommand: '/opt/codeql/codeql',
       runProcess,
@@ -377,6 +425,7 @@ describe('local CodeQL orchestration', () => {
     assert.ok(analyzeCall.args.includes('--format=sarif-latest'));
     assert.ok(analyzeCall.args.includes(`--threads=${CODEQL_THREADS}`));
     assert.ok(analyzeCall.args.some((arg) => arg.startsWith('--ram=')));
+    assert.equal(createCall.args.find((arg) => arg.startsWith('--ram=')), analyzeCall.args.find((arg) => arg.startsWith('--ram=')));
     assert.equal(calls.flatMap((call) => call.args).includes('upload-results'), false);
     assert.equal(calls.flatMap((call) => call.args).includes('--command'), false);
   });
@@ -389,6 +438,18 @@ describe('local CodeQL orchestration', () => {
     assert.match(output, /js\/example-rule at lib\/example\.mts:42/);
     assert.match(output, /Review this path/);
     assert.match(output, /Fingerprint: fixture-line-hash:1 \/ 4/);
+  });
+
+  test('analyses workflows with the standard Actions suite and rejects new findings', async () => {
+    const clean = await runFixture([], 'actions');
+    assert.equal(clean.report.status, 'pass');
+    assert.equal(clean.report.language, 'actions');
+    assert.ok(clean.calls[1]!.args.includes('--language=actions'));
+    assert.ok(clean.calls[2]!.args.includes('actions-code-scanning.qls'));
+    const dirty = await runFixture([finding({ ruleId: 'actions/example-rule' })], 'actions');
+    assert.equal(dirty.report.status, 'findings');
+    assert.equal(dirty.removed, true);
+    assert.match(formatLocalCodeqlReport(dirty.report), /actions\/example-rule/);
   });
 
   test('cleans temporary data after a CodeQL failure and bounds the diagnostic', async () => {

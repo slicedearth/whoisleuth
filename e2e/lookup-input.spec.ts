@@ -3,6 +3,7 @@ import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrow
 import { TEST_SITE_PASSWORD } from './constants.ts';
 import { readFile } from 'node:fs/promises';
 import { buildLookupEvidence } from '../frontend/src/lib/analysis/evidence-export';
+import { holdFixtureResponse } from './held-response';
 
 const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
 
@@ -281,7 +282,7 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
   const pending = page.locator('.loading-note');
-  await expect(pending).toContainText('Collecting registry, WHOIS, domain, web, TLS');
+  await expect(pending).toBeVisible();
   await expect(pending.locator('.loading-meta')).toContainText(/elapsed/u);
   await expect(pending).toContainText('Only the final validated response can be retained.');
   await expect(page.getByRole('region', { name: 'Lookup source progress' })).toContainText('Waiting for source updates');
@@ -289,7 +290,7 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   releaseLookup?.();
 
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
-  await page.getByRole('button', { name: 'Expand Source quality evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Source quality evidence' }).click();
   const coverage = page.getByRole('region', { name: 'Evidence coverage' });
   await expect(coverage).toBeVisible();
   await expect(coverage.getByRole('group', { name: 'Evidence coverage summary' })).toContainText('2.4 s total');
@@ -463,13 +464,7 @@ test('an over-structured response fails visibly beside the mobile lookup action'
 });
 
 test('an analyst can cancel a pending lookup without retaining a partial result', async ({ page }) => {
-  let releaseLookup: (() => void) | undefined;
-  const lookupGate = new Promise<void>((resolve) => {
-    releaseLookup = resolve;
-  });
-  await page.route('**/api/lookup?*', async (route) => {
-    await lookupGate;
-    await route.fulfill({
+  const held = await holdFixtureResponse(page, url => url.pathname === '/api/lookup', {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
@@ -481,27 +476,24 @@ test('an analyst can cancel a pending lookup without retaining a partial result'
         availability: { applicable: true, state: 'unknown' },
         diagnostics: { version: 8 },
       }),
-    }).catch(() => {});
   });
 
   await page.locator('#query').fill('cancel.example.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  const request = await held.received;
+  const failed = page.waitForEvent('requestfailed', candidate => candidate === request);
   await page.getByRole('button', { name: 'Cancel lookup' }).click();
+  await held.release();
+  await failed;
+  expect(request.failure()).not.toBeNull();
 
   await expect(page.getByRole('alert')).toHaveText('Lookup cancelled. No partial response was retained.');
   await expect(page.locator('#result')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Run lookup' })).toBeEnabled();
-  releaseLookup?.();
 });
 
 test('navigation away aborts the browser wait without restoring a late result', async ({ page }) => {
-  let releaseLookup: (() => void) | undefined;
-  const lookupGate = new Promise<void>((resolve) => {
-    releaseLookup = resolve;
-  });
-  await page.route('**/api/lookup?*', async (route) => {
-    await lookupGate;
-    await route.fulfill({
+  const held = await holdFixtureResponse(page, url => url.pathname === '/api/lookup', {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
@@ -513,14 +505,17 @@ test('navigation away aborts the browser wait without restoring a late result', 
         availability: { applicable: true, state: 'registered' },
         diagnostics: { version: 8 },
       }),
-    }).catch(() => {});
   });
 
   await page.locator('#query').fill('navigation.example.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  const request = await held.received;
+  const failed = page.waitForEvent('requestfailed', candidate => candidate === request);
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/ }).click();
   await expect(page).toHaveURL('/dashboard');
-  releaseLookup?.();
+  await held.release();
+  await failed;
+  expect(request.failure()).not.toBeNull();
   await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/ }).click();
 
   await expect(page.locator('#query')).toHaveValue('navigation.example.test');
@@ -529,30 +524,20 @@ test('navigation away aborts the browser wait without restoring a late result', 
 });
 
 test('effective same-route URL changes invalidate held work while task and hash changes do not', async ({ page }) => {
-  const releases = new Map<string, () => void>();
-  const gates = new Map<string, Promise<void>>();
-  const gateFor = (target: string) => {
-    const gate = new Promise<void>((resolve) => releases.set(target, resolve));
-    gates.set(target, gate);
-  };
-  gateFor('task-only.example.test');
-  gateFor('stale-route.example.test');
-  await page.route('**/api/lookup?*', async (route) => {
-    const target = new URL(route.request().url()).searchParams.get('q') || '';
+  const holdLookup = (target: string) => {
     const identity = lookupDomainIdentity(target);
-    await gates.get(target);
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
+    return holdFixtureResponse(page, url => url.pathname === '/api/lookup' && url.searchParams.get('q') === target, {
+      json: {
         ...identity,
         availability: { applicable: true, state: 'registered', confidence: 'high', domain: identity.registrableDomain },
         rdap: { parsed: {} },
         whois: { parsed: {}, chain: [] },
         diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete' }, availability: { status: 'complete' } },
-      }),
-    }).catch(() => {});
-  });
+      },
+    });
+  };
+  const current = await holdLookup('task-only.example.test');
+  const stale = await holdLookup('stale-route.example.test');
   const navigate = async (href: string) => {
     await page.evaluate((destination) => {
       const link = document.createElement('a');
@@ -566,20 +551,25 @@ test('effective same-route URL changes invalidate held work while task and hash 
 
   await page.locator('#query').fill('task-only.example.test');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await current.received;
   await navigate('/lookup?task=brand');
   await page.evaluate(() => { window.location.hash = 'query'; });
   await expect(page.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
-  releases.get('task-only.example.test')?.();
+  await current.release();
   await expect(page.locator('#result')).toBeVisible();
 
   await navigate('/lookup?q=stale-route.example.test&depth=deep');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  const request = await stale.received;
+  const failed = page.waitForEvent('requestfailed', candidate => candidate === request);
   await expect(page.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
   await navigate('/lookup?q=replacement.example.test&depth=fast');
   await expect(page.locator('#query')).toHaveValue('replacement.example.test');
   await page.goBack();
   await expect(page.locator('#query')).toHaveValue('stale-route.example.test');
-  releases.get('stale-route.example.test')?.();
+  await stale.release();
+  await failed;
+  expect(request.failure()).not.toBeNull();
   await expect(page.locator('#result')).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Run lookup' })).toBeEnabled();
@@ -839,7 +829,7 @@ test('a malformed public session response does not clear the current Lookup form
     });
   };
   await context.route('**/api/session', unavailableSession);
-  await page.getByRole('button', { name: 'Open console navigation' }).click();
+  await page.getByRole('button', { name: 'Search console navigation' }).click();
   await page.getByLabel('Search pages and tools').fill('Overview');
   const publicPagePromise = page.waitForEvent('popup');
   await page.getByRole('option', { name: /Overview/u }).click();
@@ -870,7 +860,7 @@ test('clears transient Lookup state when signing out through the Console', async
 test.describe('failed Console logout', () => {
   test.use({ allowExpectedLogout500Noise: true });
 
-test('clears transient Lookup state without an unhandled error when Console logout is unavailable', async ({ page }) => {
+test('preserves transient Lookup state after failed sign-out and clears it after confirmed sign-out', async ({ page }) => {
   const pageErrors: string[] = [];
   let logoutRequests = 0;
   page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -890,7 +880,8 @@ test('clears transient Lookup state without an unhandled error when Console logo
   await page.getByRole('button', { name: 'Sign out' }).click();
 
   await expect(page).toHaveURL('/lookup');
-  await expect(page.getByRole('alert')).toHaveText('Sign out failed. Your session remains active; try again.');
+  await expect(page.getByRole('alert')).toHaveText('Sign out could not be confirmed. Check the session before continuing.');
+  await expect(page.locator('#query')).toHaveValue('failed-signout-state.example.test');
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeEnabled();
   await expect.poll(() => logoutRequests).toBe(1);
   expect(pageErrors).toEqual([]);
@@ -1008,6 +999,10 @@ test(`security.txt ${publication.state} collection retains its route deadline an
   await expect(option).toBeDisabled();
   await page.locator('#query').fill('one.example.test, two.example.test');
   await expect(option).toBeDisabled();
+  await page.locator('#query').fill('ftp://portal.example.test/path');
+  await expect(option).toBeDisabled();
+  await page.locator('#query').fill('https://synthetic:private@portal.example.test/path');
+  await expect(option).toBeDisabled();
   await page.locator('#query').fill('portal.example.test');
   await expect(option).toBeEnabled();
   await option.check();
@@ -1018,7 +1013,7 @@ test(`security.txt ${publication.state} collection retains its route deadline an
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await requestPromise;
 
-  await page.getByRole('button', { name: 'Expand Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Web and DNS evidence' }).click();
   const disclosure = page.locator('details.security-txt');
   await expect(disclosure).not.toHaveAttribute('open', '');
   await disclosure.locator('summary').click();

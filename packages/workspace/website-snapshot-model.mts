@@ -1,4 +1,4 @@
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { validWebObservationMode } from '../evidence/lookup-target.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
@@ -402,15 +402,39 @@ export function mergeWebsiteSnapshots(localRaw: unknown, incomingRaw: unknown) {
   const local = normalizeWebsiteSnapshotStore(localRaw).snapshots;
   const incoming = normalizeWebsiteSnapshotStore(incomingRaw).snapshots;
   const byId = new Map(local.map((item) => [item.id, item]));
+  const perDomain = new Map<string, number>();
+  for (const item of local) perDomain.set(item.domain, (perDomain.get(item.domain) ?? 0) + 1);
+  const byteLength = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  let bytes = byteLength({ schema: WEBSITE_SNAPSHOT_SCHEMA, version: WEBSITE_SNAPSHOT_SCHEMA_VERSION, snapshots: local });
+  if (bytes > MAX_WEBSITE_SNAPSHOT_STORE_BYTES) throw new Error('Existing website snapshots exceed the storage limit; no imported changes were applied.');
   let added = 0;
   let updated = 0;
+  const supplied = record(incomingRaw)?.snapshots;
+  let skipped = Array.isArray(supplied) ? supplied.length - incoming.length : 0;
+  let capacitySkipped = 0;
   for (const item of incoming) {
-    if (byId.has(item.id)) updated += 1;
+    const existing = byId.get(item.id);
+    const targetCount = (perDomain.get(item.domain) ?? 0) - Number(existing?.domain === item.domain);
+    const delta = byteLength(item) - (existing ? byteLength(existing) : 0) + (!existing && byId.size ? 1 : 0);
+    if ((!existing && byId.size >= MAX_WEBSITE_SNAPSHOTS)
+      || targetCount >= MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN
+      || bytes + delta > MAX_WEBSITE_SNAPSHOT_STORE_BYTES) {
+      skipped += 1;
+      capacitySkipped += 1;
+      continue;
+    }
+    if (existing) {
+      updated += 1;
+      perDomain.set(existing.domain, (perDomain.get(existing.domain) ?? 1) - 1);
+    }
     else added += 1;
     byId.set(item.id, item);
+    perDomain.set(item.domain, (perDomain.get(item.domain) ?? 0) + 1);
+    bytes += delta;
   }
   const snapshots = normalizeWebsiteSnapshotStore([...byId.values()]).snapshots;
-  return { snapshots, added, updated, skipped: Math.max(0, incoming.length - added - updated) };
+  return { snapshots, added, updated, skipped,
+    reason: capacitySkipped ? `${capacitySkipped} imported website snapshots did not fit the remaining per-domain or total storage capacity. Existing local snapshots are preserved.` : '' };
 }
 
 const MAX_RECONCILED_WEBSITE_SOURCES = 16;

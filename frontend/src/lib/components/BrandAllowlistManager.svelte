@@ -3,17 +3,26 @@
   import type { BrandProfile, BrandProfileSaveResult } from '$lib/brand-profiles';
   import { addBrandAllowlistValues, MAX_ALLOWLIST_DRAFT_CHARACTERS, MAX_PROFILE_VALUES } from '$lib/analysis/brand-profile-model.ts';
   import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
+  import { MAX_BRAND_PREVIEW_DOMAINS, previewBrandDomainExclusions, type BrandMatchSourceState } from '$lib/analysis/brand-profile-signals.ts';
+  import Pagination from './Pagination.svelte';
+  import { MAX_CASES } from '../../../../packages/contracts/case-portability.mts';
 
   let {
     profile,
     onsave,
     onmessage,
     writeDisabled = false,
+    profileAvailable = true,
+    retainedDomains = [],
+    caseSourceState = 'ready',
   }: {
     profile: BrandProfile;
     onsave: (expected: BrandProfile, allowlistedDomains: string[], allowlistedRegistrars: string[]) => Promise<BrandProfileSaveResult>;
     onmessage: (message: string) => void;
     writeDisabled?: boolean;
+    profileAvailable?: boolean;
+    retainedDomains?: readonly string[];
+    caseSourceState?: BrandMatchSourceState;
   } = $props();
 
   let domains = $state<string[]>([]);
@@ -25,6 +34,14 @@
   let syncedFingerprint = $state('');
   let base = $state.raw<BrandProfile | null>(null);
   let componentRoot = $state<HTMLElement>();
+  let previewInput = $state(''), submittedPreviewInput = $state<string | null>(null), previewPage = $state(1);
+  let previewHeading = $state<HTMLHeadingElement>();
+  const preview = $derived(submittedPreviewInput === null ? null : previewBrandDomainExclusions(
+    submittedPreviewInput, profile, { ...profile, allowlistedDomains: domains }, profileAvailable ? 'ready' : 'unavailable',
+  ));
+  const previewPageCount = $derived(Math.max(1, Math.ceil((preview?.rows.length ?? 0) / 50)));
+  const currentPreviewPage = $derived(Math.min(previewPage, previewPageCount));
+  const retainedOptions = $derived(caseSourceState === 'ready' ? [...new Set(retainedDomains.slice(0, MAX_CASES))] : []);
 
   const profileFingerprint = $derived(JSON.stringify([
     profile.id,
@@ -108,6 +125,23 @@
       restoreSubmittedFocus(origin, componentRoot?.querySelector<HTMLTextAreaElement>('textarea'), componentRoot);
     }
   }
+
+  function addPreviewDomain(domain: string) {
+    if (!domain) return;
+    const next = [previewInput.trim(), domain].filter(Boolean).join('\n');
+    if (next.length <= MAX_ALLOWLIST_DRAFT_CHARACTERS) { previewInput = next; submittedPreviewInput = null; }
+  }
+  async function showPreview() {
+    submittedPreviewInput = previewInput;
+    previewPage = 1;
+    await tick();
+    previewHeading?.focus({ preventScroll: true });
+  }
+  async function setPreviewPage(value: number) {
+    previewPage = value;
+    await tick();
+    previewHeading?.focus({ preventScroll: true });
+  }
 </script>
 
 <section class="allowlist card" bind:this={componentRoot} aria-labelledby={`brand-allowlist-title-${profile.id}`} aria-busy={busy}>
@@ -115,7 +149,7 @@
     <div>
       <p class="eyebrow">Brand Profile</p>
       <h2 id={`brand-allowlist-title-${profile.id}`}>Allowlist</h2>
-      <p>Exclude reviewed domains and registrars from Brand candidate escalation. Official and trusted domains remain separate profile facts.</p>
+      <p>Manage reviewed domain and registrar entries. Exact domain entries affect Discover filtering; official and partner declarations remain separate.</p>
     </div>
     <span>{domains.length} domain{domains.length === 1 ? '' : 's'} · {registrars.length} registrar{registrars.length === 1 ? '' : 's'}</span>
   </header>
@@ -138,6 +172,7 @@
 
     <section aria-labelledby={`allowlisted-registrars-title-${profile.id}`}>
       <div class="section-heading"><h3 id={`allowlisted-registrars-title-${profile.id}`}>Registrars</h3><span>{registrars.length}/{MAX_PROFILE_VALUES}</span></div>
+      <p class="empty">Recorded profile entries, not applied by Discover's domain filtering.</p>
       <form onsubmit={(event) => { event.preventDefault(); addRegistrars(); }}>
         <label class="field">Add registrar names <small>one per line or comma separated</small><textarea bind:value={registrarInput} rows="2" maxlength={MAX_ALLOWLIST_DRAFT_CHARACTERS} placeholder="Reviewed Registrar"></textarea></label>
         <button class="btn" type="submit" disabled={busy || !registrarInput.trim()}>Add</button>
@@ -148,6 +183,42 @@
     </section>
   </div>
 
+  <details class="impact-preview">
+    <summary>Preview domain exclusions</summary>
+    <p>Compare saved and draft domain lists before saving. This changes no candidate, Case or monitoring decision.</p>
+    <label class="field">Domains to preview <small>synthetic examples or domains from this workspace; one per line or comma separated, up to {MAX_BRAND_PREVIEW_DOMAINS}</small>
+      <textarea bind:value={previewInput} oninput={() => { submittedPreviewInput = null; }} maxlength={MAX_ALLOWLIST_DRAFT_CHARACTERS} rows="3" placeholder="reviewed.example"></textarea>
+    </label>
+    {#if caseSourceState === 'ready'}
+      <label class="field">Add a retained Case domain
+        <select value="" onchange={event => { addPreviewDomain(event.currentTarget.value); event.currentTarget.value = ''; }}>
+          <option value="">Choose a domain from this workspace</option>
+          {#each retainedOptions as domain}<option value={domain}>{domain}</option>{/each}
+        </select>
+      </label>
+      {#if !retainedOptions.length}<p>No retained Case domains are available in this workspace. You can enter examples above.</p>{/if}
+      {#if retainedDomains.length > MAX_CASES}<p>Retained domain choices are capped. Other domains can be entered explicitly.</p>{/if}
+    {:else}<p role="status">{caseSourceState === 'loading' ? 'Retained Case domains are loading.' : 'Retained Case domains are unavailable.'} Entered examples can still be previewed when the selected profile is available.</p>{/if}
+    <button class="btn" type="button" onclick={() => void showPreview()} disabled={!previewInput.trim() || !profileAvailable}>Preview draft effect</button>
+    {#if !profileAvailable}<p role="status">The selected saved profile is unavailable. No preview is evaluated.</p>{/if}
+    {#if preview}
+      <section aria-label="Domain exclusion impact">
+        <h3 tabindex="-1" bind:this={previewHeading}>Domain exclusion impact</h3>
+        <p role="status">{preview.detail}</p>
+        {#if preview.state === 'ready'}
+          <p>{preview.newlyExcluded} would be newly excluded · {preview.returned} would return to candidates</p>
+          <ol aria-label="Previewed domain effects">
+            {#each preview.rows.slice((currentPreviewPage - 1) * 50, currentPreviewPage * 50) as row (row.domain)}
+              <li><strong>{row.domain}</strong><span>Saved: {row.before ? `${row.before.reason}: ${row.before.matchedDomain}` : 'Not excluded by an exact domain entry'}</span><span>Draft: {row.after ? `${row.after.reason}: ${row.after.matchedDomain}` : 'Not excluded by an exact domain entry'}</span></li>
+            {/each}
+          </ol>
+          <Pagination currentPage={currentPreviewPage} pageCount={previewPageCount} setPage={value => void setPreviewPage(value)} ariaLabel="Domain exclusion preview pages" />
+        {/if}
+      </section>
+    {/if}
+    <details><summary>Preview scope</summary><p>Saved values refer to the loaded profile snapshot; concurrent edits must be resolved before saving. Only domain-list edits are evaluated, not unadded text. Exact names do not cover suffixes or subdomains. Official, partner and allowlist declarations remain distinct, not safety verdicts. Registrar entries do not affect this preview or Discover's domain filtering. Case domains are examples, not inferred Brand associations. The preview stays in page memory.</p></details>
+  </details>
+
   <footer>
     <span>{dirty ? 'Unsaved allowlist changes' : domainInput || registrarInput ? 'Entered text has not been added to the list' : writeDisabled ? 'Saved profile is not ready' : 'Saved in this workspace'}</span>
     <div><button class="btn" type="button" disabled={busy || writeDisabled || (!dirty && !domainInput && !registrarInput)} onclick={discard}>Discard</button><button class="primary" type="button" disabled={busy || writeDisabled || !dirty} onclick={() => void save()}>{busy ? 'Saving…' : 'Save allowlist'}</button></div>
@@ -155,6 +226,7 @@
 </section>
 
 <style>
+  .impact-preview{min-width:0;border-top:1px solid var(--border);padding-top:12px}.impact-preview summary{cursor:pointer;overflow-wrap:anywhere}.impact-preview p{font-size:var(--text-xs);line-height:1.55;color:var(--muted);overflow-wrap:anywhere}.impact-preview label{display:block;margin:12px 0}.impact-preview select{min-width:0;width:100%;min-height:44px}.impact-preview ol{list-style:none;display:grid;gap:8px;padding:0}.impact-preview ol>li{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}.impact-preview ol>li>span{font-size:var(--text-xs);color:var(--muted)}.impact-preview h3{font:700 var(--text-sm) var(--mono)}.impact-preview>details{margin-top:12px}
   .allowlist{display:grid;gap:15px;margin-top:20px;padding:var(--card-pad)}
   .allowlist>header,.section-heading,.allowlist>footer{display:flex;min-width:0;align-items:flex-start;justify-content:space-between;gap:12px}
   .allowlist h2{margin:3px 0 0;font:700 var(--text-lg) var(--mono)}

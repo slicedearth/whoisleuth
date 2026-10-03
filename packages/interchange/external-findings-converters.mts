@@ -2,6 +2,8 @@ import {
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
   MAX_EXTERNAL_FINDINGS,
+  MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
+  MAX_EXTERNAL_FINDING_DOMAINS,
   parseExternalFindingsDocument,
   type ExternalFindingCategory,
   type ExternalFindingsDocument,
@@ -239,6 +241,8 @@ export function convertSupportedExternalFindings(
   const accepted: Array<ExternalFindingsDocument['findings'][number]> = [];
   const exclusions: Array<{ row: number; reason: string }> = [];
   const seen = new Set<string>();
+  const domainCounts = new Map<string, number>();
+  let overLimit = false;
   let duplicates = 0;
   let rejected = 0;
   for (let index = 0; index < root.rows.length; index += 1) {
@@ -257,8 +261,16 @@ export function convertSupportedExternalFindings(
         continue;
       }
       seen.add(key);
-      if (accepted.length >= MAX_EXTERNAL_FINDINGS) continue;
+      const count = domainCounts.get(finding.domain) ?? 0;
+      if (accepted.length >= MAX_EXTERNAL_FINDINGS || count >= MAX_EXTERNAL_FINDINGS_PER_DOMAIN
+        || (count === 0 && domainCounts.size >= MAX_EXTERNAL_FINDING_DOMAINS)) {
+        rejected += 1;
+        overLimit = true;
+        if (exclusions.length < 20) exclusions.push({ row: index + 1, reason: 'Row exceeds the retained findings or domain limit.' });
+        continue;
+      }
       accepted.push(finding);
+      domainCounts.set(finding.domain, count + 1);
     } catch {
       rejected += 1;
       if (exclusions.length < 20) exclusions.push({ row: index + 1, reason: 'Row failed the strict findings contract.' });
@@ -283,7 +295,7 @@ export function convertSupportedExternalFindings(
     accepted: document.findings.length,
     rejected,
     duplicates,
-    truncated: originalRows > inspectedRows || accepted.length >= MAX_EXTERNAL_FINDINGS,
+    truncated: originalRows > inspectedRows || overLimit,
     exclusions,
   };
 }

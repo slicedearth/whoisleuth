@@ -5,18 +5,21 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { PLAYWRIGHT_FUNCTIONAL_PROJECT } from './playwright-execution-contract.mts';
+import { PLAYWRIGHT_FUNCTIONAL_PROJECT, PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT,
+  isPlaywrightFunctionalSpec, isPlaywrightPerformanceAuthoritySpec } from './playwright-execution-contract.mts';
 import { runPlaywrightProcess } from './playwright-process.mts';
-import { retainFocusedBrowserDiagnostics } from './hosted-browser-workspace.mts';
-import { assertFrontendBuildIntegrity } from './frontend-build-integrity.mts';
+import { createHostedBrowserWorkspace, runHostedBrowserWorkspace } from './hosted-browser-workspace.mts';
 import { playwrightRunArtifacts } from './playwright-run-artifacts.mts';
 import {
   readPlaywrightResultData,
+  MAX_PLAYWRIGHT_RESULTS_BYTES,
+  playwrightReportedSpecFiles,
   renderPlaywrightResultSummary,
   summarizePlaywrightResults,
 } from './playwright-results-summary.mts';
 import { inspectVerificationArtifacts } from './verification-artifact-status.mts';
 import { localPortIsFree, npmExecutableName } from './maintainer-tool-helpers.mts';
+import { isNodeIntegrationTest } from './toolchain-compatibility.mts';
 import {
   createVerificationOwnershipPlan,
   type SpecialisedCheck,
@@ -29,10 +32,9 @@ const DEFAULT_PLAYWRIGHT_PORT = 4180;
 const MAX_PORT_SEARCH = 100;
 const MAX_GIT_OUTPUT_BYTES = 2 * 1024 * 1024;
 
-class BrowserDiagnosticRetentionError extends Error {}
-
 type FocusedCommand = Readonly<{
   id: string;
+  selectedBy: readonly string[];
   executable: string;
   args: readonly string[];
   environment?: Readonly<Record<string, string>>;
@@ -41,68 +43,99 @@ type FocusedCommand = Readonly<{
 export type FocusedVerificationOptions = Readonly<{
   list: boolean;
   changed: boolean;
+  iteration?: true;
   paths: readonly string[];
+  since?: string;
 }>;
 
 export type FocusedVerificationExecution = Readonly<{
+  scope: 'iteration' | 'integration';
   commands: readonly FocusedCommand[];
   browserSpecs: readonly string[];
   cleanupBrowserArtifacts: boolean;
   deferredSpecialisedChecks: readonly SpecialisedCheck[];
+  deferredBrowserSpecs: readonly string[];
+  deferredIntegrationChecks: readonly string[];
 }>;
 
-const SPECIALISED_SCRIPTS: Readonly<Partial<Record<SpecialisedCheck, string>>> = Object.freeze({
-  architecture: 'architecture:check',
-  'capability-catalogue': 'capabilities:check',
-  'privacy-catalogue': 'privacy:check',
-  'schema-inventory': 'schema:inventory',
-  'cli-package': 'cli:package:check',
-  'capture-package': 'capture:package:check',
-  'local-package': 'local:package:check',
-  'release-contract': 'release:check',
-  licences: 'licenses:check',
-  'production-dependency-audit': 'dependencies:audit',
-  'browser-build': 'build',
-  'browser-loading-report': 'frontend:loading-report',
-  'browser-timing-plan': 'verification:timing:check',
-  'analyst-journey-assurance': 'verification:journeys:check',
-  'critical-mutation': 'test:mutation',
-  'critical-io-coverage': 'test:coverage',
-  'workflow-closure': 'workflow:check',
-});
-
-const SPECIALISED_COVERED_BY_FOCUSED_TESTS = new Set<SpecialisedCheck>([
-  'documentation',
-]);
-
-const SPECIALISED_DELIVERY_ONLY = new Set<SpecialisedCheck>([
+type SpecialisedExecution = Readonly<{ script: string }> | 'focused-tests' | 'delivery-only';
+const SPECIALISED_EXECUTION: Readonly<Record<SpecialisedCheck, SpecialisedExecution>> = Object.freeze({
+  architecture: { script: 'architecture:check' },
+  'capability-catalogue': { script: 'capabilities:check' },
+  'privacy-catalogue': { script: 'privacy:check' },
+  'schema-inventory': { script: 'schema:inventory' },
+  'cli-package': { script: 'cli:package:check' },
+  'capture-package': { script: 'capture:package:check' },
+  'local-package': { script: 'local:package:check' },
+  'release-contract': { script: 'version:check' },
+  licences: { script: 'licenses:check' },
+  'production-dependency-audit': { script: 'dependencies:audit' },
+  'browser-build': { script: 'build' },
+  'browser-loading-report': { script: 'frontend:loading-report' },
+  'browser-timing-plan': { script: 'verification:timing:check' },
+  'analyst-journey-assurance': { script: 'verification:journeys:check' },
+  'critical-mutation': { script: 'test:mutation' },
+  'critical-io-coverage': { script: 'test:coverage' },
+  'workflow-closure': { script: 'workflow:check' },
+  documentation: 'focused-tests',
   // The staged scanner deliberately reads only staged or committed additions.
   // A dirty-tree iteration cannot honestly claim this delivery gate.
-  'staged-security',
-]);
+  'staged-security': 'delivery-only',
+});
 
-function npmCommand(script: string): FocusedCommand {
-  return Object.freeze({ id: script, executable: npmExecutableName(), args: Object.freeze(['run', script]) });
+function npmCommand(script: string, selectedBy: readonly string[]): FocusedCommand {
+  return Object.freeze({ id: script, selectedBy: Object.freeze([...selectedBy]), executable: npmExecutableName(), args: Object.freeze(['run', script]) });
+}
+
+export function focusedBrowserLanes(specs: readonly string[]) {
+  if (new Set(specs).size !== specs.length || specs.some(spec => !isPlaywrightFunctionalSpec(spec) && !isPlaywrightPerformanceAuthoritySpec(spec))) {
+    throw new TypeError('Focused browser selection must contain unique maintained specifications.');
+  }
+  return [
+    { kind: 'performance', project: PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT, specs: specs.filter(isPlaywrightPerformanceAuthoritySpec) },
+    { kind: 'functional', project: PLAYWRIGHT_FUNCTIONAL_PROJECT, specs: specs.filter(isPlaywrightFunctionalSpec) },
+  ].filter(lane => lane.specs.length > 0);
+}
+
+export function assertFocusedBrowserCoverage(specs: readonly string[], report: unknown): void {
+  const actual = playwrightReportedSpecFiles(report);
+  const missing = specs.filter(spec => !actual.includes(spec));
+  const unexpected = actual.filter(spec => !specs.includes(spec));
+  if (!specs.length || missing.length || unexpected.length) {
+    throw new Error(`Focused browser inventory differs from its plan. Missing: ${missing.join(', ') || 'none'}; unexpected: ${unexpected.join(', ') || 'none'}.`);
+  }
 }
 
 export function parseFocusedVerificationOptions(args: readonly string[]): FocusedVerificationOptions {
-  const listCount = args.filter((value) => value === '--list').length;
-  const changedCount = args.filter((value) => value === '--changed').length;
-  const paths = args.filter((value) => value !== '--list' && value !== '--changed');
-  if (listCount > 1 || changedCount > 1 || paths.some((value) => value.startsWith('-'))
-    || (changedCount > 0 && paths.length > 0)) {
-    throw new TypeError('Usage: node tools/focused-verification.mts [--list] [--changed | <changed-path> ...]');
+  const separator = args.indexOf('--');
+  const options = separator < 0 ? args : args.slice(0, separator);
+  const explicitPaths = separator < 0 ? [] : args.slice(separator + 1);
+  const listCount = options.filter((value) => value === '--list').length;
+  const changedCount = options.filter((value) => value === '--changed').length;
+  const iterationCount = options.filter(value => value === '--iteration').length;
+  const sinceOptions = options.filter(value => value.startsWith('--since='));
+  const since = sinceOptions[0]?.slice('--since='.length);
+  const paths = [
+    ...options.filter((value) => value !== '--list' && value !== '--changed' && value !== '--iteration' && !value.startsWith('--since=')),
+    ...explicitPaths,
+  ];
+  if (listCount > 1 || changedCount > 1 || iterationCount > 1 || paths.some((value) => value.startsWith('-'))
+    || (changedCount > 0 && paths.length > 0) || sinceOptions.length > 1
+    || (since !== undefined && (!since || since.length > 320 || /^[\s-]|[\s\0]/u.test(since) || changedCount || paths.length))) {
+    throw new TypeError('Usage: node tools/focused-verification.mts [--list] [--iteration] [--changed | --since=<commit> | [--] <changed-path> ...]');
   }
   return Object.freeze({
     list: listCount === 1,
     changed: changedCount === 1 || paths.length === 0,
     paths: Object.freeze(paths),
+    ...(iterationCount ? { iteration: true as const } : {}),
+    ...(since === undefined ? {} : { since }),
   });
 }
 
-function gitOutput(args: readonly string[]): string {
+function gitOutput(args: readonly string[], repositoryRoot = REPOSITORY_ROOT): string {
   const child = spawnSync('git', args, {
-    cwd: REPOSITORY_ROOT,
+    cwd: repositoryRoot,
     encoding: 'utf8',
     maxBuffer: MAX_GIT_OUTPUT_BYTES,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -116,13 +149,14 @@ function nulPaths(value: string): readonly string[] {
   return Object.freeze(value.split('\0').filter(Boolean));
 }
 
-export function discoverFocusedVerificationPaths(): readonly string[] {
+export function discoverFocusedVerificationPaths(since = 'HEAD', repositoryRoot = REPOSITORY_ROOT): readonly string[] {
+  const base = gitOutput(['rev-parse', '--verify', '--end-of-options', `${since}^{commit}`], repositoryRoot).trim();
   const tracked = nulPaths(gitOutput([
-    '-c', 'core.quotePath=false', 'diff', '--name-only', '-z', '--diff-filter=ACMRTD', 'HEAD', '--',
-  ]));
+    '-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z', '--diff-filter=ACMRTD', base, '--',
+  ], repositoryRoot));
   const untracked = nulPaths(gitOutput([
     '-c', 'core.quotePath=false', 'ls-files', '--others', '--exclude-standard', '-z', '--',
-  ]));
+  ], repositoryRoot));
   const paths = [...new Set([...tracked, ...untracked])].sort();
   if (!paths.length) throw new Error('Focused verification found no changed paths.');
   return Object.freeze(paths);
@@ -130,27 +164,46 @@ export function discoverFocusedVerificationPaths(): readonly string[] {
 
 export function buildFocusedVerificationExecution(
   plan: VerificationOwnershipPlan,
+  options: Pick<FocusedVerificationOptions, 'iteration'> = {},
 ): FocusedVerificationExecution {
   const commands: FocusedCommand[] = [];
+  const unitChecks = plan.focusedUnitChecks.filter(file => !isNodeIntegrationTest(file));
+  const integrationChecks = plan.focusedUnitChecks.filter(isNodeIntegrationTest);
+  const browserPaths = plan.assignments.filter(assignment => assignment.focusedBrowserChecks.length).map(assignment => assignment.changedPath);
   if (plan.focusedBrowserChecks.length) {
     // Discovery loads the real configuration and selected specifications but
     // does not start the server, setup, or a browser. A broken import should
     // fail before unit coverage, package assembly, or a production build.
     commands.push(Object.freeze({
       id: 'browser-discovery', executable: process.execPath,
+      selectedBy: browserPaths,
       args: Object.freeze([PLAYWRIGHT_CLI, 'test', ...plan.focusedBrowserChecks,
-        `--project=${PLAYWRIGHT_FUNCTIONAL_PROJECT}`, '--list', '--reporter=list']),
-      environment: Object.freeze({ CI: '', WHOISLEUTH_E2E_USE_BUILD: '0' }),
+        ...focusedBrowserLanes(plan.focusedBrowserChecks).map(lane => `--project=${lane.project}`), '--list', '--reporter=json']),
+      environment: Object.freeze({ CI: '', WHOISLEUTH_E2E_USE_BUILD: '0', WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1', PLAYWRIGHT_JSON_OUTPUT_FILE: '' }),
     }));
   }
-  if (plan.focusedUnitChecks.length) {
+  if (unitChecks.length) {
     commands.push(Object.freeze({
       id: 'focused-unit',
+      selectedBy: plan.assignments.filter(assignment => assignment.focusedUnitChecks.some(file => !isNodeIntegrationTest(file))).map(assignment => assignment.changedPath),
       executable: process.execPath,
       args: Object.freeze([
         '--test',
         '--test-concurrency=4',
-        ...plan.focusedUnitChecks,
+        ...unitChecks,
+      ]),
+    }));
+  }
+  if (integrationChecks.length && !options.iteration) {
+    commands.push(Object.freeze({
+      id: 'focused-integration',
+      selectedBy: plan.assignments.filter(assignment => assignment.focusedUnitChecks.some(isNodeIntegrationTest)).map(assignment => assignment.changedPath),
+      executable: process.execPath,
+      // The existing entry point probes native shells before starting workers
+      // and forwards their resolved paths, including paths containing spaces.
+      args: Object.freeze([
+        path.join(REPOSITORY_ROOT, 'tools/toolchain-compatibility.mts'),
+        '--unit-tests', '--test', '--test-concurrency=1', ...integrationChecks,
       ]),
     }));
   }
@@ -159,87 +212,121 @@ export function buildFocusedVerificationExecution(
   // Runtime import selection deliberately excludes erased type edges. Shared
   // source changes therefore retain compiler coverage of every consuming
   // project, even when those consumers need no behavioural test rerun.
-  const sharedSourceChanged = typedPaths.some(value => !value.startsWith('frontend/src/')
+  const sharedPaths = typedPaths.filter(value => !value.startsWith('frontend/src/')
     && !value.startsWith('test/') && !value.startsWith('e2e/') && value !== 'playwright.config.ts');
-  const frontendChanged = typedPaths.some((value) => value.startsWith('frontend/src/'));
+  const fullCompilerPaths = [...sharedPaths, ...plan.conservativeFallbackPaths];
+  const sharedSourceChanged = fullCompilerPaths.length > 0;
+  const frontendPaths = typedPaths.filter((value) => value.startsWith('frontend/src/'));
+  const frontendChanged = frontendPaths.length > 0 || plan.conservativeFallbackPaths.length > 0;
   // Svelte check already checks the frontend TypeScript project. Do not also
   // typecheck the server, CLI, test and browser-test projects for a UI edit.
-  if (frontendChanged) commands.push(npmCommand('check'));
-  const compilerProjects = new Set<string>();
-  if (sharedSourceChanged) commands.push(npmCommand('typecheck'));
+  if (frontendChanged) commands.push(npmCommand('check', [...frontendPaths, ...plan.conservativeFallbackPaths]));
+  const compilerProjects = new Map<string, string[]>();
+  if (sharedSourceChanged) commands.push(npmCommand('typecheck', fullCompilerPaths));
   for (const file of typedPaths) {
     if (sharedSourceChanged) break;
     if (file.startsWith('frontend/src/')) continue;
-    if (file.startsWith('e2e/') || file === 'playwright.config.ts') compilerProjects.add('e2e/tsconfig.json');
-    else if (file.startsWith('test/')) compilerProjects.add('test/tsconfig.json');
-    else compilerProjects.add('tsconfig.json');
+    const project = file.startsWith('e2e/') || file === 'playwright.config.ts' ? 'e2e/tsconfig.json'
+      : file.startsWith('test/') ? 'test/tsconfig.json' : 'tsconfig.json';
+    compilerProjects.set(project, [...(compilerProjects.get(project) ?? []), file]);
   }
-  for (const project of compilerProjects) {
+  for (const [project, selectedBy] of compilerProjects) {
     commands.push(Object.freeze({
       id: `typecheck (${project})`, executable: process.execPath,
+      selectedBy,
       args: Object.freeze([path.join(REPOSITORY_ROOT, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', project]),
     }));
   }
 
   const deferred = new Set<SpecialisedCheck>();
   for (const check of plan.mandatorySpecialisedChecks) {
-    if (SPECIALISED_COVERED_BY_FOCUSED_TESTS.has(check)) continue;
-    if (SPECIALISED_DELIVERY_ONLY.has(check)) {
+    const execution = SPECIALISED_EXECUTION[check];
+    if (!execution) throw new TypeError(`Focused verification has no execution owner for ${check}.`);
+    if (execution === 'focused-tests') continue;
+    if (execution === 'delivery-only' || options.iteration) {
       deferred.add(check);
       continue;
     }
-    const script = SPECIALISED_SCRIPTS[check];
-    if (!script) throw new TypeError(`Focused verification has no execution owner for ${check}.`);
-    if (check === 'local-package' && !commands.some(command => command.id === 'build')) commands.push(npmCommand('build'));
-    if (!commands.some((command) => command.id === script)) commands.push(npmCommand(script));
+    const { script } = execution;
+    const selectedBy = plan.assignments.filter(assignment => assignment.mandatorySpecialisedChecks.includes(check)).map(assignment => assignment.changedPath);
+    if (check === 'local-package' && !commands.some(command => command.id === 'build')) commands.push(npmCommand('build', selectedBy));
+    if (!commands.some((command) => command.id === script)) commands.push(npmCommand(script, selectedBy));
   }
 
-  const browserSpecs = Object.freeze([...plan.focusedBrowserChecks]);
+  const browserSpecs = Object.freeze(options.iteration ? [] : [...plan.focusedBrowserChecks]);
   if (browserSpecs.length && !commands.some((command) => command.id === 'build')) {
-    commands.push(npmCommand('build'));
+    commands.push(npmCommand('build', browserPaths));
   }
-  commands.push(Object.freeze({ id: 'diff-whitespace', executable: 'git', args: Object.freeze(['diff', '--check']) }));
+  commands.push(Object.freeze({ id: 'diff-whitespace', selectedBy: plan.changedPaths, executable: 'git', args: Object.freeze(['diff', '--check']) }));
 
   const producesBrowserArtifacts = frontendChanged
     || browserSpecs.length > 0
     || commands.some((command) => command.id === 'build' || command.id === 'frontend:loading-report');
 
   return Object.freeze({
+    scope: options.iteration ? 'iteration' : 'integration',
     commands: Object.freeze(commands),
     browserSpecs,
     cleanupBrowserArtifacts: producesBrowserArtifacts,
     deferredSpecialisedChecks: Object.freeze([...deferred].sort()),
+    deferredBrowserSpecs: Object.freeze(options.iteration ? [...plan.focusedBrowserChecks] : []),
+    deferredIntegrationChecks: Object.freeze(options.iteration ? integrationChecks : []),
   });
 }
 
-function renderExecutionPlan(
+export function renderExecutionPlan(
   plan: VerificationOwnershipPlan,
   execution: FocusedVerificationExecution,
 ): string {
   const lines = [
-    `Focused verification map v${plan.mapVersion}: ${plan.changedPaths.length} changed path(s) across ${plan.ownershipAreas.length} owner and ${plan.impactAreas.length} impact area(s).`,
-    `Focused unit files: ${plan.focusedUnitChecks.length}.`,
-    ...plan.assignments.map((assignment) => `Selected for ${assignment.changedPath}: ${assignment.impactAreas.join('; ')}.`),
+    `Focused ${execution.scope} verification: ${plan.changedPaths.length} changed path(s) across ${plan.ownershipAreas.length} owner and ${plan.impactAreas.length} impact area(s).`,
+    `Focused unit files: ${plan.focusedUnitChecks.filter(file => !isNodeIntegrationTest(file)).length}.`,
+    `Focused integration files: ${plan.focusedUnitChecks.filter(isNodeIntegrationTest).length}.`,
+    ...plan.assignments.flatMap((assignment) => [
+      `Selected for ${assignment.changedPath}: ${assignment.impactAreas.join('; ')}.`,
+      ...assignment.selectionNotes.map(note => `  ${assignment.changedPath}: ${note}`),
+    ]),
+    ...plan.focusedUnitChecks.map(check => {
+      const selectedBy = plan.assignments.filter(assignment => assignment.focusedUnitChecks.includes(check));
+      return `Selected ${isNodeIntegrationTest(check) ? 'integration' : 'unit'} test: ${check} — selected by ${selectedBy.map(assignment => assignment.changedPath).join(', ')}.`;
+    }),
     ...plan.interpretation.slice(-1),
-    ...execution.commands.map((command) => `Run: ${command.id}`),
+    ...execution.commands.map((command) => `Run: ${command.id} — selected by ${command.selectedBy.join(', ')}.`),
     `Focused browser specs: ${execution.browserSpecs.length}${execution.browserSpecs.length ? ` (${execution.browserSpecs.join(', ')})` : ''}.`,
     ...(execution.deferredSpecialisedChecks.length
-      ? [`Delivery-only checks deferred: ${execution.deferredSpecialisedChecks.join(', ')}.`]
+      ? [`Checks deferred: ${execution.deferredSpecialisedChecks.join(', ')}.`]
       : []),
+    ...(execution.deferredBrowserSpecs.length ? [`Browser execution deferred: ${execution.deferredBrowserSpecs.join(', ')}.`] : []),
+    ...(execution.deferredIntegrationChecks.length ? [`Integration execution deferred: ${execution.deferredIntegrationChecks.join(', ')}.`] : []),
+    ...(execution.scope === 'iteration'
+      ? ['Iteration is not integration acceptance. Run the same selection without --iteration before completing the batch.'] : []),
     'This focused result covers the listed paths and checks only. Complete hosted checks are required before merge; release checks remain separate.',
+    `Full local scope: npm run ${plan.fullVerificationScript} -- --list. Omit -- --list to execute it.`,
+    'Timing-sensitive changes also require npm run test:e2e:stress. Release-only checks, including the production dependency audit, follow docs/releasing.md.',
   ];
   return `${lines.join('\n')}\n`;
 }
 
 function runCommand(command: FocusedCommand): void {
   process.stdout.write(`\n> ${command.id}\n`);
+  const discovery = command.id === 'browser-discovery';
   const child = spawnSync(command.executable, command.args, {
     cwd: REPOSITORY_ROOT,
     env: { ...process.env, ...command.environment },
-    stdio: 'inherit',
+    stdio: discovery ? ['ignore', 'pipe', 'pipe'] : 'inherit',
+    encoding: 'utf8',
+    maxBuffer: MAX_PLAYWRIGHT_RESULTS_BYTES,
   });
   if (child.error) throw child.error;
-  if (child.status !== 0) throw new Error(`${command.id} failed with exit code ${child.status ?? 2}.`);
+  if (child.status !== 0) {
+    if (discovery) process.stderr.write(child.stderr || child.stdout || '');
+    throw new Error(`${command.id} failed with exit code ${child.status ?? 2}.`);
+  }
+  if (discovery) {
+    const specs = command.args.filter(arg => arg.endsWith('.spec.ts'));
+    assertFocusedBrowserCoverage(specs, JSON.parse(child.stdout));
+    process.stdout.write(`Discovered every selected browser specification (${specs.length}).\n`);
+  }
 }
 
 async function selectPlaywrightPort(): Promise<number> {
@@ -255,16 +342,19 @@ async function selectPlaywrightPort(): Promise<number> {
 }
 
 export async function runFocusedBrowserSpecs(specs: readonly string[]): Promise<void> {
+  const lanes = focusedBrowserLanes(specs);
+  if (!lanes.length) throw new Error('Focused browser verification requires selected specifications.');
   const port = await selectPlaywrightPort();
+  const workspace = createHostedBrowserWorkspace(REPOSITORY_ROOT);
   const environment = {
     ...process.env,
     CI: '1',
     WHOISLEUTH_E2E_USE_BUILD: '1',
     WHOISLEUTH_E2E_PORT: String(port),
     WHOISLEUTH_PLAYWRIGHT_RUN_LABEL: 'focused iteration',
+    WHOISLEUTH_BUILD_REVISION: workspace.revision,
   };
-  const revision = assertFrontendBuildIntegrity(REPOSITORY_ROOT, environment).runtime.revision;
-  process.stdout.write(`\n> focused-browser (${specs.length} spec file(s), port ${port})\n`);
+  process.stdout.write(`\n> focused-browser (${specs.length} spec file(s), frozen checkout, port ${port})\n`);
   const interruption = new AbortController();
   let requestedSignal: NodeJS.Signals | null = null;
   const stop = (signal: NodeJS.Signals) => {
@@ -276,64 +366,58 @@ export async function runFocusedBrowserSpecs(specs: readonly string[]): Promise<
   process.on('SIGINT', onInterrupt);
   process.on('SIGTERM', onTerminate);
 
-  let exitCode: number | null = null;
-  let failure: unknown;
   try {
-    exitCode = await runPlaywrightProcess([
-      PLAYWRIGHT_CLI,
-      'test',
-      ...specs,
-      `--project=${PLAYWRIGHT_FUNCTIONAL_PROJECT}`,
-      '--workers=1',
-      '--retries=0',
-    ], {
-      cwd: REPOSITORY_ROOT,
-      env: environment,
-      signal: interruption.signal,
-    });
-    if (requestedSignal) throw new Error(`Focused browser verification was interrupted by ${requestedSignal}.`);
+    await runHostedBrowserWorkspace(workspace, async () => {
+      for (const lane of lanes) {
+        const laneEnvironment = { ...environment, WHOISLEUTH_PLAYWRIGHT_RUN_KIND: lane.kind,
+          WHOISLEUTH_PLAYWRIGHT_SHARD: '', WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1' };
+        const exitCode = await runPlaywrightProcess([
+          path.join(workspace.root, 'node_modules/@playwright/test/cli.js'),
+          'test',
+          ...lane.specs,
+          `--project=${lane.project}`,
+          '--workers=1',
+          '--retries=0',
+        ], {
+          cwd: workspace.root,
+          env: laneEnvironment,
+          signal: interruption.signal,
+        });
+        if (requestedSignal) throw new Error(`Focused browser verification was interrupted by ${requestedSignal}.`);
 
-    const resultPath = path.join(REPOSITORY_ROOT, playwrightRunArtifacts(environment).jsonResults);
-    if (!existsSync(resultPath)) throw new Error('Focused Playwright results were not written.');
-    const summary = summarizePlaywrightResults(readPlaywrightResultData(resultPath), 'focused iteration');
-    process.stdout.write(renderPlaywrightResultSummary(summary));
-    if (exitCode !== 0 || summary.failed || summary.flaky || summary.retried) {
-      throw new Error(
-        `Focused browser verification was not clean: ${summary.failed} failed, ${summary.flaky} flaky, ${summary.retried} retried.`,
-      );
-    }
-  } catch (error) {
-    failure = error;
+        const resultPath = path.join(workspace.root, playwrightRunArtifacts(laneEnvironment).jsonResults);
+        if (!existsSync(resultPath)) throw new Error('Focused Playwright results were not written.');
+        const report = readPlaywrightResultData(resultPath);
+        assertFocusedBrowserCoverage(lane.specs, report);
+        const summary = summarizePlaywrightResults(report, `focused ${lane.kind}`);
+        process.stdout.write(renderPlaywrightResultSummary(summary));
+        if (exitCode !== 0 || summary.failed || summary.flaky || summary.retried || summary.skipped || summary.truncated) {
+          throw new Error(
+            `Focused browser verification was not clean: ${summary.failed} failed, ${summary.flaky} flaky, ${summary.retried} retried, ${summary.skipped} skipped; truncated: ${summary.truncated}.`,
+          );
+        }
+        if (!(await localPortIsFree(port))) throw new Error(`Focused Playwright left port ${port} occupied.`);
+      }
+      return 0;
+    }, () => requestedSignal !== null);
   } finally {
     process.removeListener('SIGINT', onInterrupt);
     process.removeListener('SIGTERM', onTerminate);
-  }
-  if (!(await localPortIsFree(port))) {
-    failure ??= new Error(`Focused Playwright left port ${port} occupied.`);
-  }
-  if (failure) {
-    try {
-      const retained = retainFocusedBrowserDiagnostics(REPOSITORY_ROOT, revision,
-        requestedSignal ? 'interrupted' : 'failed');
-      process.stderr.write(`Focused browser diagnostics retained at ${retained.directory}: ${retained.retainedFiles} files, `
-        + `${retained.retainedBytes} bytes, ${retained.omittedEntries} omitted files/subtrees. Remove after review.\n`);
-    } catch (cause) {
-      throw new BrowserDiagnosticRetentionError('Focused browser diagnostic retention failed; local artefacts were preserved for review.', { cause });
-    }
-    throw failure;
   }
 }
 
 export async function main(args = process.argv.slice(2)): Promise<number> {
   let cleanupBrowserArtifacts = false;
+  let existingArtifacts: readonly string[] = [];
   let failure: unknown;
   try {
     const options = parseFocusedVerificationOptions(args);
-    const paths = options.changed ? discoverFocusedVerificationPaths() : options.paths;
+    const paths = options.changed ? discoverFocusedVerificationPaths(options.since) : options.paths;
     const plan = await createVerificationOwnershipPlan(paths);
-    const execution = buildFocusedVerificationExecution(plan);
+    const execution = buildFocusedVerificationExecution(plan, options);
     process.stdout.write(renderExecutionPlan(plan, execution));
     if (options.list) return 0;
+    existingArtifacts = (await inspectVerificationArtifacts('none', false)).remaining;
     for (const command of execution.commands) {
       if (execution.cleanupBrowserArtifacts
         && (command.id === 'typecheck' || command.id === 'check' || command.id === 'build')) {
@@ -346,10 +430,10 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     failure = error;
   }
 
-  if (cleanupBrowserArtifacts && !(failure instanceof BrowserDiagnosticRetentionError)) {
+  if (cleanupBrowserArtifacts) {
     try {
-      const cleanup = await inspectVerificationArtifacts('browser', false);
-      process.stdout.write(`Focused verification cleanup removed ${cleanup.removed.length} generated path(s).\n`);
+      const cleanup = await inspectVerificationArtifacts('browser', false, { preserve: existingArtifacts });
+      process.stdout.write(`Focused verification cleanup removed ${cleanup.removed.length} new generated path(s); pre-existing paths were preserved.\n`);
     } catch (error) {
       failure ??= error;
     }

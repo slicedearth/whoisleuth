@@ -6,10 +6,13 @@ import {
   requireRecord,
 } from './bounded-contract-normalizers.mts';
 import { normaliseRdata } from './zone-intent-review.mts';
+import { dnsQueryState, normaliseDnsQueryCoverage } from './dns-query-coverage.mts';
 
 export const DNS_CONVERGENCE_INPUT_SCHEMA = 'whoisleuth.dns-convergence.input';
 export const DNS_CONVERGENCE_REVIEW_SCHEMA = 'whoisleuth.dns-convergence.review';
-export const DNS_CONVERGENCE_REVIEW_VERSION = 1;
+export const DNS_CONVERGENCE_INPUT_VERSION = 2;
+export const SUPPORTED_DNS_CONVERGENCE_INPUT_VERSIONS = Object.freeze([1, DNS_CONVERGENCE_INPUT_VERSION]);
+export const DNS_CONVERGENCE_REVIEW_VERSION = 2;
 export const MAX_DNS_CONVERGENCE_SNAPSHOTS = 100;
 export const MAX_DNS_CONVERGENCE_RECORDS = 2_000;
 
@@ -19,6 +22,7 @@ const RECORD_TYPES = new Set<RecordType>(['A', 'AAAA', 'CAA', 'CNAME', 'MX', 'NS
 const ROOT_KEYS = new Set(['schema', 'version', 'domain', 'expected', 'snapshots']);
 const EXPECTED_KEYS = new Set(['owner', 'type', 'values']);
 const SNAPSHOT_KEYS = new Set(['observer', 'source', 'observedAt', 'state', 'records']);
+const COVERED_SNAPSHOT_KEYS = new Set([...SNAPSHOT_KEYS, 'queries']);
 const RECORD_KEYS = new Set(['owner', 'type', 'value', 'ttl']);
 
 function type(value: unknown, label: string): RecordType {
@@ -94,8 +98,8 @@ function expectedRows(value: unknown, apex: string) {
 
 export function reviewDnsConvergence(inputRaw: unknown, generatedAtValue = new Date().toISOString()) {
   const input = requireRecord(inputRaw, 'DNS convergence input');
-  if (input.schema !== DNS_CONVERGENCE_INPUT_SCHEMA || input.version !== 1) {
-    throw new TypeError(`DNS convergence input must use ${DNS_CONVERGENCE_INPUT_SCHEMA} version 1.`);
+  if (input.schema !== DNS_CONVERGENCE_INPUT_SCHEMA || !SUPPORTED_DNS_CONVERGENCE_INPUT_VERSIONS.includes(input.version as number)) {
+    throw new TypeError(`DNS convergence input must use ${DNS_CONVERGENCE_INPUT_SCHEMA} version 1 or ${DNS_CONVERGENCE_INPUT_VERSION}.`);
   }
   exactKeys(input, ROOT_KEYS, 'DNS convergence input');
   const apex = requireDomainName(input.domain, 'domain');
@@ -104,20 +108,29 @@ export function reviewDnsConvergence(inputRaw: unknown, generatedAtValue = new D
     throw new TypeError(`snapshots must contain between 2 and ${MAX_DNS_CONVERGENCE_SNAPSHOTS} entries.`);
   }
   let recordCount = 0;
+  let queryCount = 0;
   const snapshots = input.snapshots.map((raw, index) => {
     const item = requireRecord(raw, `snapshots[${index}]`);
-    exactKeys(item, SNAPSHOT_KEYS, `snapshots[${index}]`);
+    exactKeys(item, input.version === 1 ? SNAPSHOT_KEYS : COVERED_SNAPSHOT_KEYS, `snapshots[${index}]`);
     if (!Array.isArray(item.records)) throw new TypeError(`snapshots[${index}].records must be an array.`);
     recordCount += item.records.length;
     if (recordCount > MAX_DNS_CONVERGENCE_RECORDS) throw new TypeError(`DNS convergence input is limited to ${MAX_DNS_CONVERGENCE_RECORDS} records.`);
     const observationState = state(item.state, `snapshots[${index}].state`);
     if (observationState === 'unavailable' && item.records.length) throw new TypeError(`snapshots[${index}] cannot contain records when unavailable.`);
+    const records = Object.freeze(item.records.map((entry, recordIndex) => record(entry, apex, `snapshots[${index}].records[${recordIndex}]`)));
+    const queries = normaliseDnsQueryCoverage(item.queries, {
+      legacy: input.version === 1, label: `snapshots[${index}].queries`,
+      maximum: MAX_DNS_CONVERGENCE_RECORDS - queryCount, state: observationState, records,
+      owner: (value, label) => owner(value, apex, label), type,
+    });
+    queryCount += queries.length;
     return Object.freeze({
       observer: requireBoundedString(item.observer, `snapshots[${index}].observer`, 120),
       source: requireBoundedString(item.source, `snapshots[${index}].source`, 240),
       observedAt: requireIsoTimestamp(item.observedAt, `snapshots[${index}].observedAt`),
       state: observationState,
-      records: Object.freeze(item.records.map((entry, recordIndex) => record(entry, apex, `snapshots[${index}].records[${recordIndex}]`))),
+      records,
+      queries,
     });
   }).sort((left, right) => left.observedAt.localeCompare(right.observedAt) || left.observer.localeCompare(right.observer));
   const observers = [...new Set(snapshots.map((item) => item.observer))];
@@ -125,7 +138,7 @@ export function reviewDnsConvergence(inputRaw: unknown, generatedAtValue = new D
   const latestByObserver = observers.map((observer) => snapshots.filter((item) => item.observer === observer).at(-1)!);
   const keys = [...new Set([
     ...expected.map((item) => `${item.owner}\u0000${item.type}`),
-    ...snapshots.flatMap((item) => item.records.map((entry) => `${entry.owner}\u0000${entry.type}`)),
+    ...snapshots.flatMap((item) => item.queries.map((entry) => `${entry.owner}\u0000${entry.type}`)),
   ])].sort();
   const rows = keys.map((key) => {
     const [recordOwner = '', recordType = ''] = key.split('\u0000');
@@ -141,7 +154,7 @@ export function reviewDnsConvergence(inputRaw: unknown, generatedAtValue = new D
         observer: snapshot.observer,
         source: snapshot.source,
         observedAt: snapshot.observedAt,
-        state: snapshot.state,
+        state: dnsQueryState(snapshot.queries, recordOwner, recordType),
         values: Object.freeze(values),
         cacheUntil,
       });
@@ -185,7 +198,7 @@ export function reviewDnsConvergence(inputRaw: unknown, generatedAtValue = new D
       'This local workbench compares only supplied observations and makes no DNS request.',
       'Resolver differences can reflect caches, split-horizon policy, interception, collection timing, or propagation; they do not establish which value is authoritative.',
       'Cache-until times are simple observation-time plus supplied TTL projections and do not reveal actual cache age, refresh behaviour, or resolver policy.',
-      'Partial and unavailable snapshots remain incomplete and are never interpreted as record absence.',
+      'Only an explicitly observed query can establish an empty answer. Unqueried, partial and unavailable record types are never interpreted as absence; legacy inputs establish scope only for their supplied records.',
     ]),
   });
 }

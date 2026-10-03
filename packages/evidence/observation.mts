@@ -153,6 +153,8 @@ const REGISTERED_DIAGNOSTIC_KEYS = [
   'queriedAuthorityCount',
   'redirectCount',
   'referencesExamined',
+  'referenceSignatureTimedOut',
+  'referenceSignatureUnavailable',
   'rejectedRows',
   'relationshipTagsExamined',
   'relationshipUrlsDiscarded',

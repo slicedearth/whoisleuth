@@ -2,14 +2,17 @@ import { request as httpRequest, type Server } from 'node:http';
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
+import { fileURLToPath } from 'node:url';
+import { stat } from 'node:fs/promises';
 import { recordValue, requiredValue, stringValue } from './value-assertions.mts';
 import { deferred } from './deferred.mts';
 import type { NetworkRouteServices } from '../server.mts';
+import { CtCollectionError } from '../lib/ct-search.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
 
-const { app, apiErrorHandler, registerNetworkApiRoutes } = await import('../server.mts');
+const { app, apiErrorHandler, pageErrorHandler, registerNetworkApiRoutes } = await import('../server.mts');
 const { buildSessionCookie, createSessionToken } = await import('../lib/auth.mts');
 const { defaultOperationBudget, operationClassFor } = await import('../lib/operation-budget.mts');
 
@@ -55,6 +58,8 @@ const fixtureServices = {
   },
   searchCertificateTransparency: async (query: unknown) => {
     serviceFailure(query);
+    if (query === 'timeout.test') throw new CtCollectionError('CT_TIMEOUT');
+    if (query === 'broad.test') throw new CtCollectionError('CT_QUERY_TOO_BROAD');
     serviceCalls.push(['ct-search', query]);
     return { fixtureCt: true };
   },
@@ -76,7 +81,10 @@ before(async () => {
 
   const fixtureApp = express();
   registerNetworkApiRoutes(fixtureApp, fixtureServices);
+  fixtureApp.use('/static-fixture', express.static(fileURLToPath(new URL('./fixtures', import.meta.url))));
+  fixtureApp.get('/page-error', (_req, _res, next) => next(new Error('/private/path unexpected fixture detail')));
   fixtureApp.use('/api', apiErrorHandler);
+  fixtureApp.use(pageErrorHandler);
   fixtureServer = await new Promise<Server>((resolve, reject) => {
     const listener = fixtureApp.listen(0, '127.0.0.1', () => resolve(listener));
     listener.once('error', reject);
@@ -104,6 +112,42 @@ async function postLogin(body: string, requestOrigin = origin): Promise<Response
     body,
   });
 }
+
+test('non-API errors remain bounded without production mode and preserve range semantics', async () => {
+  const fileSize = (await stat(new URL('./fixtures/cli-lookup-v2.json', import.meta.url))).size;
+  const valid = await fetch(`${fixtureOrigin}/static-fixture/cli-lookup-v2.json`, { headers: { Range: 'bytes=0-3' } });
+  assert.equal(valid.status, 206);
+  assert.equal((await valid.arrayBuffer()).byteLength, 4);
+  for (const method of ['GET', 'HEAD']) {
+    const rejected = await fetch(`${fixtureOrigin}/static-fixture/cli-lookup-v2.json`, { method, headers: { Range: `bytes=${fileSize + 1}-` } });
+    assert.equal(rejected.status, 416);
+    assert.equal(rejected.headers.get('content-range'), `bytes */${fileSize}`);
+    assert.equal(rejected.headers.get('cache-control'), 'no-store');
+    assert.match(rejected.headers.get('content-type')!, /^text\/plain/u);
+    assert.equal(await rejected.text(), method === 'HEAD' ? '' : 'Range Not Satisfiable\n');
+  }
+  const unexpected = await fetch(`${fixtureOrigin}/page-error`);
+  assert.equal(unexpected.status, 500);
+  assert.equal(await unexpected.text(), 'Internal Server Error\n');
+  const error = new Error('already sent');
+  let forwarded = false;
+  pageErrorHandler(error, {} as Parameters<typeof pageErrorHandler>[1], { headersSent: true } as Parameters<typeof pageErrorHandler>[2], cause => {
+    assert.equal(cause, error); forwarded = true;
+  });
+  assert.equal(forwarded, true);
+});
+
+test('expected certificate-search failures retain actionable bounded HTTP responses', async () => {
+  const cookie = buildSessionCookie(createSessionToken(), { secure: false }).split(';')[0]!;
+  for (const [query, status, code] of [['timeout.test', 504, 'CT_TIMEOUT'], ['broad.test', 422, 'CT_QUERY_TOO_BROAD']] as const) {
+    const response = await fetch(`${fixtureOrigin}/api/ct-search?q=${query}`, { headers: { cookie, 'sec-fetch-site': 'same-origin' } });
+    assert.equal(response.status, status);
+    const result = await response.json();
+    assert.equal(result.errorCode, code);
+    assert.match(result.error, /narrower keyword/u);
+    assert.doesNotMatch(result.error, /\.test|private/u);
+  }
+});
 
 async function expectSanitizedJson(response: Response, statusCode: number, expectedBody: unknown) {
   assert.equal(response.status, statusCode);

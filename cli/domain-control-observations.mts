@@ -7,7 +7,7 @@ import { MAX_DOMAIN_CONTROL_INPUT_RECORDS, PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSIO
 
 import {
   scanBoundedJson,
-} from '../lib/bounded-json.mts';
+} from '../packages/analysis/bounded-json.mts';
 import {
   CLI_DOMAIN_CONTROL_REVIEW_INPUT_KEYS,
   CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
@@ -355,6 +355,7 @@ export function formatCliDomainControlReview(document: ReturnType<typeof buildCl
     `Domains     ${review.domains.length}`,
     `Lookups     ${document.input.lookupsReceived}`,
     `Drift       ${review.counts.drift ?? 0}`,
+    `Due         ${review.counts.due ?? 0}`,
     `Incomplete  ${(review.counts.partial ?? 0) + (review.counts.unavailable ?? 0) + (review.counts.unsupported ?? 0)}`,
     '',
     ...review.domains.map((item) => `${item.domain}  ${item.state}`),

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import Pagination from './Pagination.svelte';
   import type { BrandReviewInbox } from '../analysis/brand-review-inbox.ts';
 
@@ -32,9 +33,8 @@
   const firstVisible = $derived(inbox.items.length ? ((currentPage - 1) * PAGE_SIZE) + 1 : 0);
   const lastVisible = $derived(Math.min(currentPage * PAGE_SIZE, inbox.items.length));
 
-  function formatDate(value: string): string {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString('en-AU');
+  function formatDate(value: string | null): string {
+    return formatEvidenceDate(value, 'Unknown time');
   }
 
   $effect(() => {
@@ -58,11 +58,11 @@
         <p>Set a Brand Profile active to view its explicitly associated case-review work.</p>
       {/if}
     </div>
-    <strong class:numeric={numericMetric}>{metricText}{#if numericMetric}{' '}<span class="sr-only">review items</span>{/if}</strong>
+    <strong class:numeric={numericMetric}>{metricText}{#if numericMetric}{' '}<span class="sr-only">{inbox.items.length === 1 ? 'review item' : 'review items'}</span>{/if}</strong>
   </div>
 
   {#if unavailable}
-    <p class="source-state unavailable" role="alert">This inbox is unavailable because {unavailableText}. No empty-state conclusion has been drawn.{#if anyLoading} {loadingLabels.join(' and ')} {loadingLabels.length === 1 ? 'is' : 'are'} still loading.{/if}</p>
+    <p class="source-state unavailable" role="alert">This inbox is unavailable because {unavailableText}. Try refreshing the saved data.{#if anyLoading} {loadingLabels.join(' and ')} {loadingLabels.length === 1 ? 'is' : 'are'} still loading.{/if}</p>
   {:else if loading}
     <p class="source-state" role="status">Loading {loadingLabels.join(' and ')}…</p>
   {/if}

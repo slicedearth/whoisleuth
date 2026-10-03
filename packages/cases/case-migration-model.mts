@@ -1,32 +1,33 @@
 import {
   CASE_IMPORT_VERSIONS,
   CASE_SCHEMA_VERSION,
-  DEFAULT_DISPOSITION,
-  DEFAULT_SOURCE,
-  DEFAULT_STATUS,
   MAX_CASES,
   MAX_NOTES_PER_CASE,
+} from '../contracts/case-portability.mts';
+import { DEFAULT_DISPOSITION, DEFAULT_STATUS, isValidDisposition, isValidStatus } from './case-record-decisions.mts';
+import { DEFAULT_SOURCE } from './case-record-contracts.mts';
+import {
   deterministicId,
   caseTimestampOrNull,
-  normalizeCase,
-  normalizeDomain,
-  normalizeCaseObjective,
-  normalizeEvidenceHistory,
   normalizeNotes,
   normalizeReviewReasonCode,
   normalizeTags,
   objectRecord,
   safeId,
-  isValidDisposition,
   isValidSource,
-  isValidStatus,
-  type CaseDisposition,
-  type CaseEvidenceSnapshot,
-  type CaseNote,
-  type CaseRecord,
-  type CaseSource,
-  type CaseStatus,
-  type CaseStore,
+} from './case-record-core.mts';
+import { normalizeCase } from './case-record-operations.mts';
+import { normalizeCaseObjective } from './case-incident-context.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
+import { mergeImportedEvidenceHistory, normalizeEvidenceHistory } from './case-evidence-model.mts';
+import type {
+  CaseDisposition,
+  CaseEvidenceSnapshot,
+  CaseNote,
+  CaseRecord,
+  CaseSource,
+  CaseStatus,
+  CaseStore,
 } from './case-record-model.mts';
 import {
   CASE_REPORT_SCHEMA,
@@ -46,7 +47,9 @@ import {
 } from '../contracts/case-portability.mts';
 import { canonicalArtifactJsonV2 } from '../evidence/artifact-integrity.mts';
 import { readCaseAttachments, mergeCaseAttachments, type CaseAttachment } from './case-attachment-model.mts';
-import { assertBoundedJsonStructure } from '../../lib/bounded-json.mts';
+import { readCaseEvidenceLinks, mergeCaseEvidenceLinks, type CaseEvidenceLink } from './case-evidence-links.mts';
+import { EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { assertBoundedJsonStructure } from '../analysis/bounded-json.mts';
 import {
   inspectCaseBrandProfileIds,
   unionCaseBrandProfileIds,
@@ -85,6 +88,9 @@ import {
   type CaseSightingRecord,
 } from './case-response-model.mts';
 
+import { readCaseWorkflowFields } from './case-workflow-migration.mts';
+import { emptyCaseWorkflowMetadata, mergeCaseWorkflowMetadata, type CaseWorkflowMetadata } from './case-workflow-metadata.mts';
+
 export const MAX_CASE_INPUT_RECORDS = 2_000;
 
 function compareCodeUnits(left: string, right: string): number {
@@ -113,7 +119,9 @@ type ImportPatch = {
   closures: CaseClosureHistory;
   branches: CaseInvestigationBranch[];
   attachments: CaseAttachment[] | undefined;
+  evidenceLinks: CaseEvidenceLink[] | undefined;
   tags: string[];
+  workflowMetadata: CaseWorkflowMetadata | undefined;
   notes: CaseNote[];
   createdAt: string | null;
   updatedAt: string | null;
@@ -196,6 +204,7 @@ export function normalizeCaseStore(raw: unknown): CaseStore {
 function assertModernCaseShape(raw: unknown, sourceVersion: number): void {
   for (const item of boundedCaseList(raw).items) {
     const itemRecord = objectRecord(item);
+    if (sourceVersion < EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION && Object.hasOwn(itemRecord, 'evidenceLinks')) throw new TypeError('Evidence relationships require the current Case schema.');
     if (sourceVersion < INCIDENT_CASE_SCHEMA_VERSION && Object.hasOwn(itemRecord, 'attachments')) {
       throw new TypeError('Retained file references require the current Case schema; no data was changed.');
     }
@@ -280,6 +289,7 @@ function boundedCaseList(raw: unknown): { items: unknown[]; omitted: number } {
  */
 function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch | null {
   const record = objectRecord(raw);
+  if (record.evidenceLinks !== undefined && importedVersion < EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION) throw new TypeError('Evidence relationships require the current Case schema.');
   const domain = normalizeDomain(record.domain);
   if (!domain) return null;
   const importFallback = caseTimestampOrNull(record.updatedAt, importedVersion)
@@ -328,6 +338,9 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
     [record.sightings, sightings],
   ].reduce((total, [candidates, retained]) => total
     + Math.max(0, (Array.isArray(candidates) ? candidates.length : 0) - (retained as unknown[]).length), 0);
+  const workflow = readCaseWorkflowFields(record, domain, assertions, importedVersion);
+  const hasWorkflow = record.workflowMetadata !== undefined || workflow.workflowMetadata.types.length > 0
+    || workflow.workflowMetadata.incidentTargets.length > 0 || workflow.workflowMetadata.investigationContext !== null;
   return {
     domain,
     rawId: typeof record.id === 'string' ? record.id : null,
@@ -359,7 +372,9 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
       ? normalizeCaseInvestigationBranches(record.branches, normalizedFallback, branchReferences, timestampOptions)
       : [],
     attachments: importedVersion >= INCIDENT_CASE_SCHEMA_VERSION ? readCaseAttachments(record.attachments) : undefined,
-    tags: normalizeTags(record.tags),
+    evidenceLinks: readCaseEvidenceLinks(record.evidenceLinks),
+    tags: workflow.tags,
+    workflowMetadata: hasWorkflow ? workflow.workflowMetadata : undefined,
     // Imported notes fall back only to the imported record's own timestamps
     // (never "now"), so a timestamp-less note gets a stable, deterministic time
     // and id, and re-importing the same file cannot manufacture a duplicate or a
@@ -368,16 +383,6 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
     createdAt: caseTimestampOrNull(record.createdAt, importedVersion),
     updatedAt: caseTimestampOrNull(record.updatedAt, importedVersion),
   };
-}
-
-/** @param {CaseNote[]} a @param {CaseNote[]} b @returns {CaseNote[]} */
-function unionNotes(a: CaseNote[], b: CaseNote[]): CaseNote[] {
-  const byId = new Map<string, CaseNote>();
-  for (const note of [...a, ...b]) {
-    if (!byId.has(note.id)) byId.set(note.id, note);
-  }
-  const notes = [...byId.values()].sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
-  return notes.slice(Math.max(0, notes.length - MAX_NOTES_PER_CASE));
 }
 
 function retainLocalAuthoredRecords<T extends { id: string }>(
@@ -400,18 +405,6 @@ function retainLocalAuthoredRecords<T extends { id: string }>(
   return { records, omitted };
 }
 
-// Additive, deduplicated union of two evidence histories. Identical material
-// collapses (earliest firstCapturedAt, latest capturedAt), distinct snapshots
-// are retained subject to the per-case bound, and an older import can never
-// move an existing observation backwards.
-function mergeEvidenceHistories(
-  local: CaseEvidenceSnapshot[],
-  imported: CaseEvidenceSnapshot[],
-  caseDomain: string,
-): CaseEvidenceSnapshot[] {
-  return normalizeEvidenceHistory([...local, ...imported], { source: 'import', fallback: null, caseDomain });
-}
-
 /** @param {ImportPatch} patch @param {string} now @returns {CaseRecord} */
 function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
   return {
@@ -423,6 +416,7 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     reviewReasonCode: patch.reviewReasonCode ?? null,
     brandProfileIds: patch.brandProfileIds,
     tags: patch.tags,
+    workflowMetadata: patch.workflowMetadata ?? emptyCaseWorkflowMetadata(),
     notes: patch.notes,
     source: patch.source ?? DEFAULT_SOURCE,
     evidenceHistory: patch.evidenceHistory,
@@ -436,6 +430,7 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     closures: patch.closures,
     branches: patch.branches,
     ...(patch.attachments === undefined ? {} : { attachments: patch.attachments }),
+    ...(patch.evidenceLinks === undefined ? {} : { evidenceLinks: patch.evidenceLinks }),
     createdAt: patch.createdAt || patch.updatedAt || now,
     updatedAt: patch.updatedAt || patch.createdAt || now,
   };
@@ -453,9 +448,11 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
 function applyImportPatch(
   local: CaseRecord,
   patch: ImportPatch,
-): { record: CaseRecord; brandProfileReferencesOmitted: number; authoredHistoryOmitted: number } {
+): { record: CaseRecord; brandProfileReferencesOmitted: number; authoredHistoryOmitted: number; evidenceHistoryOmitted: number } {
   const importNewer = patch.updatedAt !== null && Date.parse(patch.updatedAt) > Date.parse(local.updatedAt);
   const fallback = patch.updatedAt || local.updatedAt;
+  const noteSelection = retainLocalAuthoredRecords(local.notes, patch.notes, MAX_NOTES_PER_CASE);
+  const historySelection = mergeImportedEvidenceHistory(local.evidenceHistory, patch.evidenceHistory, local.domain);
   const pinSelection = retainLocalAuthoredRecords(local.evidencePins, patch.evidencePins, MAX_CASE_EVIDENCE_PINS);
   const evidencePins = normalizeCaseEvidencePins(pinSelection.records, fallback);
   const pinIds = new Set(evidencePins.map((item) => item.id));
@@ -487,7 +484,9 @@ function applyImportPatch(
   const trailSelection = retainLocalAuthoredRecords(local.manualTrail, patch.manualTrail, MAX_CASE_MANUAL_TRAIL_EVENTS);
   const manualTrail = normalizeCaseManualTrail(trailSelection.records, fallback);
   const attachments = mergeCaseAttachments(local.attachments, patch.attachments);
+  const evidenceLinks = mergeCaseEvidenceLinks(local.evidenceLinks, patch.evidenceLinks);
   const authoredHistoryOmitted = patch.authoredHistoryOmitted
+    + noteSelection.omitted
     + pinSelection.omitted
     + decisionSelection.omitted
     + assertionSelection.omitted
@@ -501,7 +500,7 @@ function applyImportPatch(
     reviewReasonCode: patch.reviewReasonCode !== undefined && importNewer ? patch.reviewReasonCode : local.reviewReasonCode ?? null,
     brandProfileIds: brandProfileReferences.ids,
     source: patch.source !== undefined && importNewer ? patch.source : local.source,
-    evidenceHistory: mergeEvidenceHistories(local.evidenceHistory, patch.evidenceHistory, local.domain),
+    evidenceHistory: historySelection.records,
     evidencePins,
     decisions,
     actions,
@@ -512,11 +511,15 @@ function applyImportPatch(
     closures,
     branches: mergeCaseInvestigationBranches(local.branches ?? [], patch.branches, fallback, branchReferences),
     ...(attachments === undefined ? {} : { attachments }),
+    ...(evidenceLinks === undefined ? {} : { evidenceLinks }),
     tags: normalizeTags([...local.tags, ...patch.tags]),
-    notes: unionNotes(local.notes, patch.notes),
+    workflowMetadata: patch.workflowMetadata === undefined
+      ? local.workflowMetadata ?? emptyCaseWorkflowMetadata()
+      : mergeCaseWorkflowMetadata(local.workflowMetadata ?? emptyCaseWorkflowMetadata(), patch.workflowMetadata, importNewer, local.domain),
+    notes: normalizeNotes(noteSelection.records, fallback),
     createdAt: patch.createdAt && Date.parse(patch.createdAt) < Date.parse(local.createdAt) ? patch.createdAt : local.createdAt,
     updatedAt: importNewer ? (patch.updatedAt ?? local.updatedAt) : local.updatedAt,
-  }, brandProfileReferencesOmitted: brandProfileReferences.omitted, authoredHistoryOmitted };
+  }, brandProfileReferencesOmitted: brandProfileReferences.omitted, authoredHistoryOmitted, evidenceHistoryOmitted: historySelection.omitted };
 }
 
 function pickFreeId(preferred: unknown, domain: string, used: Set<string>): string {
@@ -643,12 +646,12 @@ function caseCollectionImportEnvelope(importedRaw: unknown): Record<string, unkn
  * reinterpreted.
  * @param {CaseRecord[]} localCases
  * @param {unknown} importedRaw
- * @returns {{ cases: CaseRecord[], added: number, updated: number, skipped: number, brandProfileReferencesOmitted: number, authoredHistoryOmitted: number }}
+ * @returns {{ cases: CaseRecord[], added: number, updated: number, skipped: number, brandProfileReferencesOmitted: number, authoredHistoryOmitted: number, evidenceHistoryOmitted: number }}
  */
 export function mergeCases(
   localCases: CaseRecord[],
   importedRaw: unknown,
-): { cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; authoredHistoryOmitted: number } {
+): { cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; authoredHistoryOmitted: number; evidenceHistoryOmitted: number } {
   assertBoundedJsonStructure(importedRaw, 'Case import', CASE_INPUT_JSON_LIMITS);
   const importedEnvelope = caseCollectionImportEnvelope(importedRaw);
   const importedVersion = parseStoreVersion(importedEnvelope);
@@ -674,6 +677,7 @@ export function mergeCases(
   let skipped = imported.omitted;
   let brandProfileReferencesOmitted = 0;
   let authoredHistoryOmitted = 0;
+  let evidenceHistoryOmitted = 0;
   const fallback = new Date(0).toISOString();
   const importedIds = new Set<string>();
   for (const item of imported.items) {
@@ -704,6 +708,7 @@ export function mergeCases(
       byId.set(existing.id, merged.record);
       brandProfileReferencesOmitted += patch.brandProfileReferencesOmitted + merged.brandProfileReferencesOmitted;
       authoredHistoryOmitted += merged.authoredHistoryOmitted;
+      evidenceHistoryOmitted += merged.evidenceHistoryOmitted;
       updated += 1;
     } else if (byId.size < MAX_CASES) {
       const record = caseFromPatch(patch, fallback);
@@ -724,5 +729,6 @@ export function mergeCases(
     skipped,
     brandProfileReferencesOmitted,
     authoredHistoryOmitted,
+    evidenceHistoryOmitted,
   };
 }

@@ -1,12 +1,15 @@
 <script lang="ts">
+  import { HANDOFF_SOURCE_LABELS } from '$lib/candidate-handoff-core';
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { goto } from '$app/navigation';
-  import { getContext, onMount } from 'svelte';
+  import { getContext, onMount, tick } from 'svelte';
   import DiscoverCandidateResults from '$lib/components/DiscoverCandidateResults.svelte';
   import DiscoverCtHistory from '$lib/components/DiscoverCtHistory.svelte';
   import DiscoverCertificateGroups from '$lib/components/DiscoverCertificateGroups.svelte';
   import DiscoverIdnPolicyReview from '$lib/components/DiscoverIdnPolicyReview.svelte';
   import DiscoverGenerationOptions from '$lib/components/DiscoverGenerationOptions.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
+  import Pagination from '$lib/components/Pagination.svelte';
   import {
     DEFAULT_GENERATION_PRESET,
     DEFAULT_CUSTOM_MUTATION_FAMILY_IDS,
@@ -27,8 +30,9 @@
     normalizeCustomDictionaryTerms,
     normalizeGenerationTlds,
   } from '$lib/analysis/typosquat-generator.ts';
-  import { publicSuffixForAsciiHostname } from '../../../../../lib/registrable-domain.mts';
-  import { activeProfile, isDomainAllowlisted, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
+  import { publicSuffixForAsciiHostname } from '../../../../../packages/analysis/registrable-domain.mts';
+  import { activeProfile, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
+  import { partitionBrandCandidates } from '$lib/analysis/brand-profile-signals.ts';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
   import {
     LARGE_JSON_RESPONSE_BYTES,
@@ -77,6 +81,8 @@
   let customDictionaryText = $state('');
   let candidates = $state<Candidate[]>([]);
   let generatedContext = $state<Candidate[]>([]);
+  let excludedOpen = $state(false), excludedPage = $state(1);
+  let excludedHeading = $state<HTMLHeadingElement>();
   let selected = $state<Set<string>>(new Set());
   let status = $state('');
   let localContextStatus = $state('');
@@ -89,6 +95,15 @@
   let candidateMetadata = $state<Map<string, CandidateMetadata>>(new Map());
   let profile = $state<BrandProfile|null>(null);
   let profileSourceState = $state<ActiveBrandProfileSourceState>('loading');
+  const exclusionReview = $derived.by(() => {
+    const admitted = new Set(candidates.map(candidate => candidate.domain));
+    const review = partitionBrandCandidates(generatedContext, profile, profileSourceState);
+    // A later profile read must not relabel candidates admitted while that
+    // context was unavailable. Only the actual omission is explained here.
+    return { ...review, excluded: review.excluded.filter(row => !admitted.has(row.candidate.domain)) };
+  });
+  const excludedPageCount = $derived(Math.max(1, Math.ceil(exclusionReview.excluded.length / DISCOVER_PAGE_SIZE)));
+  const currentExcludedPage = $derived(Math.min(excludedPage, excludedPageCount));
   // Whether the current candidate set came from structured CT provenance.
   let ctResultKind = $state<'structured'|null>(null);
   let ctHistory = $state<CtHistoryStore>({ version: 3, entries: [] });
@@ -256,10 +271,8 @@
     ctHistoryNotice = '';
   }
 
-  function historyDate(value:string|null) {
-    if (!value) return 'No complete baseline';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? 'Unknown date' : parsed.toLocaleString('en-AU');
+  function historyDate(value: string | null): string {
+    return formatEvidenceDate(value, 'No complete baseline');
   }
 
   function historyDisplayEntries() {
@@ -379,6 +392,7 @@
   ) {
     candidates = next;
     generatedContext = context;
+    excludedPage = 1;
     selected = new Set();
     candidateMetadata = buildCandidateMetadata(next);
     status = message;
@@ -387,15 +401,15 @@
   }
 
   function withoutAllowlisted(next: Candidate[]) {
-    if(profileSourceState!=='ready')return{
-      filtered:next,
-      excluded:0,
-      limitation:profileSourceState==='loading'
-        ?' Brand Profile context is still loading; no profile-derived trust or allowlist exclusion was applied.'
-        :' Profile-derived trust and allowlist exclusions remain unavailable; no candidate was classified as outside those lists.',
-    };
-    const filtered = next.filter((candidate) => !isDomainAllowlisted(candidate.domain, profile));
-    return { filtered, excluded: next.length - filtered.length, limitation:'' };
+    const result = partitionBrandCandidates(next, profile, profileSourceState);
+    return { filtered: result.filtered, excluded: result.excluded.length,
+      limitation: [result.limitation, result.truncated ? 'Candidate admission was capped; omitted candidates remain unevaluated.' : '']
+        .filter(Boolean).map(value => ` ${value}`).join('') };
+  }
+  async function setExcludedPage(value: number) {
+    excludedPage = value;
+    await tick();
+    excludedHeading?.focus({ preventScroll: true });
   }
 
   function useProfile() {
@@ -423,7 +437,7 @@
       }
       const { filtered, excluded, limitation } = withoutAllowlisted(generated);
       const capNote = selection.truncated ? ' Generation limits were reached; narrow the TLD list for complete coverage.' : '';
-      setResults(filtered, `Generated ${filtered.length} naming candidates${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.${limitation}${capNote}`, generated);
+      setResults(filtered, `Generated ${filtered.length} naming candidates${excluded ? `; excluded ${excluded} exact profile match${excluded===1?'':'es'}` : ''}.${limitation}${capNote}`, generated);
       return;
     }
     if (generationPreset === 'custom' && customMutationFamilies.length === 0) {
@@ -451,7 +465,7 @@
     const advancedNote = result.advancedConfusable
       ? ` Advanced two-character confusables generated ${result.advancedConfusable.generated} label variant${result.advancedConfusable.generated===1?'':'s'}; excluded ${result.advancedConfusable.omittedByPolicy} cross-script or invalid combination${result.advancedConfusable.omittedByPolicy===1?'':'s'} by policy${result.advancedConfusable.omittedByBudget ? ` and omitted ${result.advancedConfusable.omittedByBudget} lower-ranked label variant${result.advancedConfusable.omittedByBudget===1?'':'s'} at the active budgets` : ''}.`
       : '';
-    setResults(filtered, `Generated ${filtered.length} explainable lookalike variants${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}.${limitation}${dictionaryNote}${advancedNote}${capNote}`, generated);
+    setResults(filtered, `Generated ${filtered.length} explainable lookalike variants${excluded ? `; excluded ${excluded} exact profile match${excluded===1?'':'es'}` : ''}.${limitation}${dictionaryNote}${advancedNote}${capNote}`, generated);
   }
 
   async function searchCt() {
@@ -524,7 +538,7 @@
         ctHistoryNotice = cause instanceof Error ? cause.message : 'Certificate search history is unavailable.';
       }
       if (token !== searchToken) return;
-      setResults(filtered, `Found ${filtered.length} ${noun}${filtered.length===1?'':'s'} from ${certCount} certificate${certCount===1?'':'s'}${excluded ? `; excluded ${excluded} trusted profile domain${excluded===1?'':'s'}` : ''}${truncated ? ' (results partial or capped)' : ''}.${limitation}${historySummary}`, next, 'certificate-newest');
+      setResults(filtered, `Found ${filtered.length} ${noun}${filtered.length===1?'':'s'} from ${certCount} certificate${certCount===1?'':'s'}${excluded ? `; excluded ${excluded} exact profile match${excluded===1?'':'es'}` : ''}${truncated ? ' (results partial or capped)' : ''}.${limitation}${historySummary}`, next, 'certificate-newest');
     } catch (cause) {
       // A superseding search / mode switch (which aborts this fetch) owns the UI
       // state now; do nothing so we neither clear its results nor its loading flag.
@@ -586,7 +600,7 @@
         mutationTypes: ['rdap_nameserver_search'],
       }));
       const { filtered, excluded, limitation } = withoutAllowlisted(next);
-      const excludedNote = excluded ? ` Excluded ${excluded} trusted profile domain${excluded===1?'':'s'}.` : '';
+      const excludedNote = excluded ? ` Excluded ${excluded} exact profile match${excluded===1?'':'es'}.` : '';
       setResults(filtered, `${rdapSearchStatusMessage(summary)}${excludedNote}${limitation}`, next, 'generated');
     } catch (cause) {
       if (token !== searchToken) return;
@@ -742,10 +756,10 @@
   {#if mode==='nameserver'&&rdapSearchDisabled}<p class="feature-disabled" role="note">{rdapSearchDisabled.reason||'RDAP nameserver search is disabled by deployment policy.'}</p>{/if}
   {#if profile&&mode!=='nameserver'}<div class="profile-context"><span>Active profile: <strong>{profile.name}</strong></span><button class="btn small" onclick={useProfile}>Use profile defaults</button></div>{/if}
   <div class="modes" role="tablist" aria-label="Discovery method">
-    <button id="discovery-tab-typosquat" role="tab" aria-controls="discovery-method-panel" aria-selected={mode==='typosquat'} tabindex={mode==='typosquat'?0:-1} class:active={mode==='typosquat'} onclick={()=>selectMode('typosquat')} onkeydown={tabKeydown}>Lookalikes</button>
-    <button id="discovery-tab-keyword" role="tab" aria-controls="discovery-method-panel" aria-selected={mode==='keyword'} tabindex={mode==='keyword'?0:-1} class:active={mode==='keyword'} onclick={()=>selectMode('keyword')} onkeydown={tabKeydown}>Name ideas</button>
-    <button id="discovery-tab-certificate-transparency" role="tab" aria-controls="discovery-method-panel" aria-selected={mode==='certificate-transparency'} tabindex={mode==='certificate-transparency'?0:-1} class:active={mode==='certificate-transparency'} onclick={()=>selectMode('certificate-transparency')} onkeydown={tabKeydown}>Certificates</button>
-    <button id="discovery-tab-nameserver" role="tab" aria-controls="discovery-method-panel" aria-selected={mode==='nameserver'} tabindex={mode==='nameserver'?0:-1} class:active={mode==='nameserver'} onclick={()=>selectMode('nameserver')} onkeydown={tabKeydown}>Nameservers</button>
+    {#each ['typosquat', 'keyword', 'certificate-transparency', 'nameserver'] as method}
+      {@const id = method as Mode}
+      <button id={`discovery-tab-${id}`} role="tab" aria-controls="discovery-method-panel" aria-selected={mode===id} tabindex={mode===id?0:-1} class:active={mode===id} onclick={()=>selectMode(id)} onkeydown={tabKeydown}>{HANDOFF_SOURCE_LABELS[id]}</button>
+    {/each}
   </div>
   <div id="discovery-method-panel" role="tabpanel" aria-labelledby={`discovery-tab-${mode}`}>
   <div class="fields">
@@ -779,7 +793,7 @@
     />
   {/if}
   {#if mode==='certificate-transparency'}<p class="generation-limits" id="ct-query-guidance">Search public certificate names using a keyword of up to {MAX_CT_QUERY_LENGTH} characters. This does not submit the target for a live website scan.</p>{/if}
-  {#if mode==='nameserver'}<p class="generation-limits" id="rdap-search-guidance">Search one IANA-selected registry for domains it reports against this nameserver. The result is a bounded lower bound for that suffix, not a global reverse-nameserver inventory.</p>{/if}
+  {#if mode==='nameserver'}<p class="generation-limits" id="rdap-search-guidance">Search the official registry for domains using this nameserver. Results cover that domain ending only and may be incomplete.</p>{/if}
   {#if mode==='keyword'}<p class="generation-limits" id="generation-limits">Generation is bounded to {MAX_GENERATION_TLDS} TLDs, {MAX_NAME_VARIANTS.toLocaleString()} label variants, and {MAX_GENERATED_CANDIDATES.toLocaleString()} candidates per run.</p>{/if}
   {#if localContextStatus}<p class="local-context-status" role="status">{localContextStatus}</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{:else if status}<p class="status" role="status" aria-live="polite">{status}</p>{/if}
@@ -799,6 +813,25 @@
 
 {#if mode==='certificate-transparency' && ctCertificateGroups.length}
   <DiscoverCertificateGroups groups={ctCertificateGroups} truncated={ctCertificateGroupsTruncated} />
+{/if}
+
+{#if generatedContext.length}
+  <details class="excluded-candidates card" ontoggle={event => { excludedOpen = event.currentTarget.open; }}>
+    <summary>Excluded by exact profile match ({exclusionReview.excluded.length})</summary>
+    {#if excludedOpen}
+      <h3 tabindex="-1" bind:this={excludedHeading}>Exact profile exclusions</h3>
+      <p>These candidates remain visible here without collection or selection for Bulk. A profile declaration or exclusion is not a safety verdict.</p>
+      {#if exclusionReview.limitation}<p role="status">{exclusionReview.limitation}</p>
+      {:else if !exclusionReview.excluded.length}<p>No candidates were excluded from this admitted set.</p>{/if}
+      {#if exclusionReview.truncated}<p>Candidate admission was capped. Omitted candidates were not evaluated.</p>{/if}
+      <ol aria-label="Excluded discovery candidates">
+        {#each exclusionReview.excluded.slice((currentExcludedPage - 1) * DISCOVER_PAGE_SIZE, currentExcludedPage * DISCOVER_PAGE_SIZE) as row}
+          <li><strong>{row.candidate.domain}</strong><span>{row.match.reason}: {row.match.matchedDomain}</span></li>
+        {/each}
+      </ol>
+      <Pagination currentPage={currentExcludedPage} pageCount={excludedPageCount} setPage={value => void setExcludedPage(value)} ariaLabel="Excluded candidate pages" />
+    {/if}
+  </details>
 {/if}
 
 {#if candidates.length}
@@ -839,6 +872,7 @@
 {/if}
 
 <style>
+  .excluded-candidates{min-width:0;margin-top:16px;padding:var(--card-pad);font-size:var(--text-xs);line-height:1.55}.excluded-candidates summary{cursor:pointer;overflow-wrap:anywhere}.excluded-candidates p{color:var(--muted);overflow-wrap:anywhere}.excluded-candidates ol{list-style:none;margin:12px 0;padding:0;display:grid;gap:10px}.excluded-candidates li{min-width:0;display:grid;gap:4px;border-top:1px solid var(--border);padding-top:10px;overflow-wrap:anywhere}.excluded-candidates span{color:var(--muted)}
   .controls{padding:var(--card-pad)}
   .profile-context{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;padding:9px 9px 9px 12px;border:1px solid rgb(var(--accent2-rgb) / .3);border-radius:var(--radius-md);background:rgb(var(--accent2-rgb) / .04);color:var(--muted);font-size:var(--text-xs)}
   .profile-context strong{color:var(--text)}

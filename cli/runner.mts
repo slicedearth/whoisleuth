@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 
 import { abortable } from '../lib/abort.mts';
-import { parseCliArguments } from './arguments.mts';
+import { isCliCommandForOwner, parseCliArguments } from './arguments.mts';
 import type { CliArguments } from './arguments.mts';
 import type { BoundedTextStream } from './bulk.mts';
 import {
@@ -27,10 +27,10 @@ import {
 import {
   MAX_OFFLINE_PASSPHRASE_FILE_BYTES,
 } from './artifact-verify.mts';
-import { cleanupPendingOutputFiles, createBufferedOutput, writePrivateFile } from './output-file.mts';
+import { cleanupPendingOutputFiles, createBufferedOutput, writePrivateFile, MAX_CLI_OUTPUT_BYTES } from './output-file.mts';
 import { createTerminalProgress, type TerminalProgress } from './progress.mts';
 import type { CliProgressEvents } from './progress-events.mts';
-import type { CliCommandContext, CliDependencies, WritableLike } from './runner-types.mts';
+import type { CliWorkflowContext, CliDependencies, WritableLike } from './runner-types.mts';
 import {
   presentTerminalOutput,
   terminalPresentation,
@@ -77,14 +77,6 @@ function isCancellation(error: unknown, signal?: AbortSignal): boolean {
   }
   return signal?.aborted === true
     || Boolean(error && typeof error === 'object' && 'name' in error && error.name === 'AbortError');
-}
-
-function usageEventReason(error: unknown): string {
-  const message = boundedCliErrorMessage(error, 'Invalid command input').toLowerCase();
-  if (message.includes('could not read')) return 'input_unavailable';
-  if (message.includes('cannot be combined') || message.includes('mutually exclusive')) return 'conflicting_options';
-  if (message.includes('requires') || message.includes('did not contain')) return 'missing_input';
-  return 'invalid_input';
 }
 
 async function runParsedCli(args: CliArguments, dependencies: CliDependencies = {}, writeBinaryOutput?: (value: Uint8Array) => void): Promise<number> {
@@ -153,7 +145,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
           : await readInput(source, MAX_OFFLINE_PASSPHRASE_FILE_BYTES, 'Passphrase file');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
-        throw new CliUsageError(`Could not read passphrase file: ${boundedCliErrorMessage(error, 'File could not be read')}`);
+        throw new CliUsageError(`Could not read passphrase file: ${boundedCliErrorMessage(error, 'File could not be read')}`, 'input_unavailable');
       }
       const passphrase = passphraseText.replace(/\r?\n$/u, '');
       if (!passphrase || /[\r\n\u0000]/u.test(passphrase)) {
@@ -161,7 +153,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       }
       return passphrase;
     };
-    const commandContext: CliCommandContext = Object.freeze({
+    const commandContext: CliWorkflowContext = Object.freeze({
       packageVersion: VERSION,
       stdout,
       stderr,
@@ -232,25 +224,9 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       });
     }
     if (handlerOwner === 'network') {
-      if (args.action !== 'ct-search'
-        && args.action !== 'posture'
-        && args.action !== 'http'
-        && args.action !== 'tls'
-        && args.action !== 'dnssec-validate'
-        && args.action !== 'mail-transport') {
+      if (!isCliCommandForOwner(args, 'network')) {
         throw new Error('Network command registry ownership is inconsistent.');
       }
-      failureLabel = args.action === 'ct-search'
-        ? 'Certificate Transparency search'
-        : args.action === 'posture'
-          ? 'Domain posture audit'
-          : args.action === 'http'
-            ? 'HTTP probe'
-            : args.action === 'tls'
-              ? 'TLS evidence collection'
-              : args.action === 'dnssec-validate'
-                ? 'DNSSEC chain validation'
-                : 'Mail transport review';
       const { runNetworkCommand } = await import('./network-command-runner.mts');
       return await runNetworkCommand(args, dependencies, commandContext);
     }
@@ -276,7 +252,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       eventProgress.current?.emit({
         event: 'failed',
         state: 'usage',
-        reason: usageEventReason(error),
+        reason: error.reason,
         exitCode: EXIT_CODES.USAGE,
       });
       if (!eventProgress.current?.enabled) write(stderr, `Usage error: ${boundedCliErrorMessage(error, 'Invalid command')}\n`);
@@ -356,6 +332,18 @@ async function runCliCommand(argv: unknown, dependencies: CliDependencies = {}):
       });
       checkpoint = caseCheckpoint;
       capturedSource = caseCheckpoint.sourceInput;
+    } else if (args.action === 'indicator-set') {
+      const { prepareLocalDocumentWrite } = await import('./local-document-checkpoint.mts');
+      const { MAX_MANAGED_INDICATOR_PLAN_BYTES, MAX_MANAGED_INDICATOR_SET_BYTES } = await import('../packages/contracts/analyst-interchange.mts');
+      const indicatorCheckpoint = await prepareLocalDocumentWrite({
+        destination: args.destination, source: args.source,
+        force: args.force === true, label: 'Indicator revision', allowSourceReplacement: false,
+        maximumInputBytes: args.operation === 'revise' ? MAX_MANAGED_INDICATOR_PLAN_BYTES : MAX_MANAGED_INDICATOR_SET_BYTES,
+        maximumOutputBytes: MAX_CLI_OUTPUT_BYTES,
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      });
+      checkpoint = indicatorCheckpoint;
+      capturedSource = indicatorCheckpoint.sourceInput;
     }
     const code = await runParsedCli(args, {
       ...dependencies, stdout: buffered.stream,
@@ -363,6 +351,7 @@ async function runCliCommand(argv: unknown, dependencies: CliDependencies = {}):
         ? { workflowResumeInput: capturedSource }
         : {}),
       ...(args.action === 'case' && capturedSource !== null ? { caseFileInput: capturedSource } : {}),
+      ...(args.action === 'indicator-set' && capturedSource !== null ? { readArtifactInput: async () => capturedSource! } : {}),
     }, buffered.writeBinary);
     if (code !== EXIT_CODES.SUCCESS && code !== EXIT_CODES.PARTIAL_FAILURE) return code;
     const content = buffered.value();
@@ -387,7 +376,7 @@ async function runCliCommand(argv: unknown, dependencies: CliDependencies = {}):
     return EXIT_CODES.LOOKUP_FAILED;
   } finally {
     if (checkpoint && await checkpoint.release() > 0) {
-      write(stderr, `${args.action === 'case' ? 'Case' : 'Workflow'} cleanup warning: File ownership changed or a lease could not be removed. Inspect the selected directory before resuming.\n`);
+      write(stderr, `${args.action === 'case' ? 'Case' : args.action === 'indicator-set' ? 'Indicator revision' : 'Workflow'} cleanup warning: File ownership changed or a lease could not be removed. Inspect the selected directory before resuming.\n`);
     }
   }
 }

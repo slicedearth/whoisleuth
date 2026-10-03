@@ -251,7 +251,8 @@ export async function verifyEvidencePackageSignature(
   let artifactVerification: Awaited<ReturnType<typeof verifyOfflineArtifact>> | null = null;
   try { artifactVerification = await verifyOfflineArtifact(JSON.stringify(artifact)); } catch { /* Signature validity remains independently reportable. */ }
   let publicKeyMatched: boolean | null = null;
-  if (trustedPublicKeyPem) {
+  const trustedKeySupplied = trustedPublicKeyPem !== undefined && trustedPublicKeyPem !== null;
+  if (trustedKeySupplied) {
     const trustedDer = spkiDer(importPublicKey(trustedPublicKeyPem, 'Trusted public key file'));
     publicKeyMatched = trustedDer.equals(publicDer);
     if (!publicKeyMatched) throw new TypeError('Signed evidence package does not match the trusted public key.');
@@ -262,7 +263,7 @@ export async function verifyEvidencePackageSignature(
     state: 'signature_valid',
     signature: Object.freeze({
       state: 'valid',
-      signerTrust: trustedPublicKeyPem ? 'trusted_key' : 'embedded_key_only',
+      signerTrust: trustedKeySupplied ? 'trusted_key' : 'embedded_key_only',
       signedAt,
       keyIdSha256: signature.keyIdSha256,
       publicKeyMatched,

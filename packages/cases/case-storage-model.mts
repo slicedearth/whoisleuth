@@ -1,9 +1,5 @@
-import {
-  CASE_SCHEMA_VERSION,
-  MAX_CASE_STORE_BYTES,
-  type CaseEvidenceSnapshot,
-  type CaseRecord,
-} from './case-record-model.mts';
+import { CASE_SCHEMA_VERSION, MAX_CASE_STORE_BYTES } from '../contracts/case-portability.mts';
+import type { CaseEvidenceSnapshot, CaseRecord } from './case-record-model.mts';
 import { normalizeCaseStore } from './case-migration-model.mts';
 import { projectCaseForDurableWrite } from './case-record-projection.mts';
 

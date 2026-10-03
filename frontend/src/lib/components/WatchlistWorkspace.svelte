@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
+  import EvidenceTimestamp from '$lib/components/EvidenceTimestamp.svelte';
   import MonitorDomainTimeline from '$lib/components/MonitorDomainTimeline.svelte';
   import {
     fieldLabels,
@@ -45,7 +46,7 @@
     rescan: (name: string) => void | Promise<void>;
     remove: (name: string) => void | Promise<void>;
     openCase: (domain: string) => void;
-    formatDate: (value: string) => string;
+    formatDate: (value: string | null) => string;
   } = $props();
 
   const PAGE_SIZE=25;
@@ -57,6 +58,7 @@
   let focusedDomain=$state('');
   const domainOptions=$derived(watchlistHistoryDomains(entry));
   const domainHistory=$derived(focusedDomain?projectWatchlistDomainHistory(entry,focusedDomain):null);
+  const currentDomainEvidence=$derived(entry?.results.find(record=>record.domain===focusedDomain));
   function setPage(value:number){page=Math.min(pageCount,Math.max(1,Math.trunc(value)));}
   async function removeAndFocus(name:string){
     const origin=document.activeElement;
@@ -96,7 +98,28 @@
 {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 
 {#if names.length}
-  <section class="watchlists card"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Domains</th><th>Checks</th><th>Latest changes</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{#each pagedNames as name}{@const item=watchlists[name]}{#if item}{@const latest=item.history.at(-1)}<tr><td><strong>{name}</strong></td><td>{item.results.length}</td><td>{item.history.length}</td><td><span class:changed={(latest?.changeCount || 0) > 0}>{latest?.changeCount || 0}</span></td><td>{formatDate(item.updatedAt)}</td><td><div class="actions toolbar"><button class="btn small" onclick={() => rescan(name)}>Rescan in Bulk</button><button class="btn small" onclick={() => { focusedDomain=''; setSelected(name); setChangedOnly(false); }}>History</button><button id={`watchlist-delete-${name}`} class="btn small danger" onclick={() => void removeAndFocus(name)}>Delete</button></div></td></tr>{/if}{/each}</tbody></table></div><Pagination {currentPage} {pageCount} {setPage} ariaLabel="Watchlist pages" /></section>
+  <section class="watchlists card">
+    <p class="scroll-hint">Scroll across for all watchlist columns and actions.</p>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex (The overflow region must support native keyboard scrolling.) -->
+    <div class="table-wrap" role="region" aria-label="Saved watchlists" tabindex="0">
+      <table>
+        <thead><tr><th scope="col">Name</th><th scope="col">Domains</th><th scope="col">Checks</th><th scope="col">Latest changes</th><th scope="col">Updated</th><th scope="col">Actions</th></tr></thead>
+        <tbody>{#each pagedNames as name}{@const item=watchlists[name]}{#if item}{@const latest=item.history.at(-1)}
+          <tr>
+            <th scope="row">{name}</th><td>{item.results.length}</td><td>{item.history.length}</td>
+            <td><span class:changed={(latest?.changeCount || 0) > 0}>{latest?.changeCount || 0}</span></td>
+            <td>{formatDate(item.updatedAt)}</td>
+            <td><div class="actions toolbar">
+              <button class="btn small" onclick={() => rescan(name)}>Rescan in Bulk</button>
+              <button class="btn small" onclick={() => { focusedDomain=''; setSelected(name); setChangedOnly(false); }}>History</button>
+              <button id={`watchlist-delete-${name}`} class="btn small danger" onclick={() => void removeAndFocus(name)}>Delete</button>
+            </div></td>
+          </tr>
+        {/if}{/each}</tbody>
+      </table>
+    </div>
+    <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Watchlist pages" />
+  </section>
 {:else}
   <section class="empty-state card"><h2>No watchlists saved</h2><p>Run a Bulk scan, then save its results to begin a saved monitoring timeline.</p><a id="empty-watchlist-open-bulk" href="/bulk">Open Bulk →</a></section>
 {/if}
@@ -136,10 +159,11 @@
         </header>
 
         <dl class="history-summary">
-          <div><dt>Retained watchlist window</dt><dd>{formatDate(domainHistory.watchlistFirstCheckedAt || '')} to {formatDate(domainHistory.watchlistLastCheckedAt || '')}</dd></div>
+          <div><dt>Retained watchlist window</dt><dd>{#if domainHistory.watchlistFirstCheckedAt && domainHistory.watchlistLastCheckedAt}{formatDate(domainHistory.watchlistFirstCheckedAt)} to {formatDate(domainHistory.watchlistLastCheckedAt)}{:else if domainHistory.watchlistFirstCheckedAt}From {formatDate(domainHistory.watchlistFirstCheckedAt)}; end time unknown{:else if domainHistory.watchlistLastCheckedAt}Start time unknown; to {formatDate(domainHistory.watchlistLastCheckedAt)}{:else}Times unknown{/if}</dd></div>
           <div><dt>Watchlist checks</dt><dd>{domainHistory.retainedWatchlistChecks}</dd></div>
           <div><dt>Material changes</dt><dd>{domainHistory.materialChangeCount}</dd></div>
           <div><dt>Scan modes</dt><dd>{domainHistory.scanModes.join(', ') || 'None retained'}</dd></div>
+          {#if currentDomainEvidence}<div><dt>Latest web collection</dt><dd>Page: {currentDomainEvidence.webCollectionQuality?.page.replaceAll('_',' ') ?? 'unknown'} · Favicon: {currentDomainEvidence.webCollectionQuality?.favicon.replaceAll('_',' ') ?? 'unknown'}</dd></div>{/if}
         </dl>
 
         <p class="coverage-note">The window describes retained checks for the watchlist. It does not prove this domain was included in every check, or that unrecorded fields stayed unchanged.</p>
@@ -150,7 +174,7 @@
           <div class="domain-events">
             {#each [...domainHistory.events].reverse() as event}
               <article>
-                <div class="event-head"><time datetime={event.checkedAt}>{formatDate(event.checkedAt)}</time><span>{event.mode} scan</span></div>
+                <div class="event-head"><EvidenceTimestamp value={event.checkedAt} unavailable="Time unknown" copyable={false} /><span>{event.mode} scan</span></div>
                 {#each event.groups as group}
                   <section class="change-group" aria-label={`${group.label} changes`}>
                     <h4>{group.label}</h4>
@@ -165,7 +189,7 @@
         {/if}
       </section>
     {:else}
-      <div class="events">{#each [...history].reverse() as event}<article><div class="event-head"><time datetime={event.checkedAt}>{formatDate(event.checkedAt)}</time><span>{event.mode} scan</span><strong class:changed={event.changeCount > 0}>{event.changeCount} change{event.changeCount === 1 ? '' : 's'}</strong><small>{event.conclusiveCount}/{event.resultCount} conclusive</small></div>{#if event.changes.length}<ul>{#each event.changes as change}<li class={change.tone}><strong>{change.domain}</strong><span>{fieldLabels[change.field] || change.field}</span><small>{formatValue(change.before, change.field)} → {formatValue(change.after, change.field)}</small></li>{/each}</ul>{:else}<p class="no-change">No material changes detected.</p>{/if}{#if event.omittedChanges}<p class="no-change">{event.omittedChanges} additional changes omitted to keep storage bounded.</p>{/if}</article>{/each}</div>
+      <div class="events">{#each [...history].reverse() as event}<article><div class="event-head"><EvidenceTimestamp value={event.checkedAt} unavailable="Time unknown" copyable={false} /><span>{event.mode} scan</span><strong class:changed={event.changeCount > 0}>{event.changeCount} change{event.changeCount === 1 ? '' : 's'}</strong><small>{event.conclusiveCount}/{event.resultCount} conclusive</small></div>{#if event.changes.length}<ul>{#each event.changes as change}<li class={change.tone}><strong>{change.domain}</strong><span>{fieldLabels[change.field] || change.field}</span><small>{formatValue(change.before, change.field)} → {formatValue(change.after, change.field)}</small></li>{/each}</ul>{:else if event.changeCount===0&&event.omittedChanges===0}<p class="no-change">No comparable material changes recorded.</p>{:else}<p class="no-change">Changes were reported, but no individual change details are retained.</p>{/if}{#if event.webComparisonLimitedCount}<p class="no-change">Web comparison was limited for {event.webComparisonLimitedCount} domain{event.webComparisonLimitedCount===1?'':'s'} by incomplete or unknown page or favicon collection.</p>{/if}{#if event.omittedChanges}<p class="no-change">{event.omittedChanges} change detail{event.omittedChanges===1?' was':'s were'} omitted from the retained history.</p>{/if}</article>{/each}</div>
     {/if}
   </section>
 {/if}
@@ -174,6 +198,10 @@
   .message{color:var(--accent);font-size:var(--text-sm)}
   .wl-toolbar{padding:16px}
   .watchlists,.history{padding:var(--card-pad)}
+  .watchlists table{min-width:44rem;table-layout:fixed}
+  .watchlists th,.watchlists td{overflow-wrap:anywhere}
+  .watchlists th:last-child{width:30%}
+  .scroll-hint{display:none;color:var(--muted);font-size:var(--text-xs);margin:0 0 10px}
   .changed{color:var(--danger);font-weight:700}
   .history{margin-top:16px;scroll-margin-top:76px}
   .history h2{margin:0}
@@ -189,7 +217,7 @@
   .event-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   .event-head span,.event-head strong{padding:4px 9px;border:1px solid var(--border);border-radius:99px;font:600 var(--text-2xs) var(--mono);text-transform:capitalize}
   .event-head strong.changed{border-color:rgb(var(--danger-rgb) / .4)}
-  .event-head time{font-size:var(--text-xs)}
+  .event-head :global(.evidence-timestamp){font-size:var(--text-xs)}
   .event-head small{margin-left:auto;color:var(--muted);font-size:var(--text-2xs)}
   .events ul{display:grid;gap:6px;margin:14px 0 0;padding:0;list-style:none}
   .events li{display:grid;grid-template-columns:minmax(150px,1fr) 130px minmax(180px,1fr);gap:10px;padding:8px 10px;border-left:3px solid var(--border);font-size:var(--text-xs)}
@@ -222,6 +250,7 @@
   .domain-empty{margin-top:16px;padding:16px;border:1px dashed var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .domain-empty p{margin:7px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   @media(max-width:800px){
+    .scroll-hint{display:block}
     .history .section-head{display:block}
     .history .section-head .toolbar{margin-top:12px}
     .table-wrap{margin-inline:calc(-1 * var(--card-pad));padding-inline:var(--card-pad)}

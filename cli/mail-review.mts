@@ -1,12 +1,14 @@
 import { Buffer } from 'node:buffer';
 import { getDomain } from 'tldts';
 
-import { scanBoundedJson } from '../lib/bounded-json.mts';
-import { isValidAsciiDomainName } from '../lib/hostname.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
+import { compareCodeUnits } from '../lib/bounded-contract-normalizers.mts';
+import { isValidAsciiDomainName } from '../packages/contracts/domain-name.mts';
 import { isRecord, recordOrEmpty } from '../lib/json-record.mts';
 import { classifyQuery } from '../lib/classify.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import { CliUsageError } from './errors.mts';
+import { PASSIVE_MAIL_INTERPRETATION, PASSIVE_MAIL_LABELS, type PassiveMailState } from '../packages/contracts/passive-mail.mts';
 
 export const CLI_MAIL_REVIEW_SCHEMA = 'whoisleuth.cli.mail-review';
 export const CLI_MAIL_REVIEW_VERSION = 4;
@@ -14,7 +16,7 @@ export const MAX_MAIL_REVIEW_INPUT_BYTES = 16 * 1024 * 1024;
 export const MAX_MAIL_REVIEW_ROWS = 500;
 
 type UnknownRecord = Record<string, unknown>;
-type MailState = 'authenticated_mail' | 'evidence_incomplete' | 'mail_auth_gap' | 'mail_auth_incomplete' | 'no_explicit_mx' | 'null_mx';
+type MailState = PassiveMailState;
 const UNSAFE_TEXT_RE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/u;
 const UNSAFE_TEXT_GLOBAL_RE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]+/gu;
 
@@ -342,7 +344,7 @@ function buildCliMailReview(textValue: unknown, generatedAt = new Date().toISOSt
         limitation: 'Shared mail providers are common and do not establish common ownership, control, intent, safety, or maliciousness.',
       };
     })
-    .sort((left, right) => left.providerDomain.localeCompare(right.providerDomain));
+    .sort((left, right) => compareCodeUnits(left.providerDomain, right.providerDomain));
   const providerRelationships = allProviderRelationships.slice(0, 100);
   const rowsWithIncompleteDns = rows.filter((row) => row.dnsStatus !== 'success' || row.hasMx === null || row.hasNullMx === null).length;
   const providerCoverage = {
@@ -371,7 +373,7 @@ function buildCliMailReview(textValue: unknown, generatedAt = new Date().toISOSt
     providerCoverage,
     limitations: [
       'This review is passive and uses DNS evidence already retained in a WHOISleuth Bulk result; it makes no network request.',
-      'Null MX, no explicit MX, receiving mail, authentication gaps, and incomplete evidence remain separate states.',
+      PASSIVE_MAIL_INTERPRETATION,
       'SMTP delivery, mailbox existence, catch-all behaviour, banner collection, and message acceptance were not tested.',
       ...(failedRows.length ? [`${failedRows.length} input target${failedRows.length === 1 ? '' : 's'} failed collection and cannot contribute mail evidence. Input positions and normalised targets are retained; consult the original input for failure diagnostics.`] : []),
       ...(rowsWithIncompleteDns ? [`${rowsWithIncompleteDns} reviewed domain${rowsWithIncompleteDns === 1 ? ' has' : 's have'} incomplete DNS evidence; unobserved provider relationships remain unknown.`] : []),
@@ -388,15 +390,15 @@ function formatCliMailReview(document: ReturnType<typeof buildCliMailReview>): s
     `Input targets    ${document.inputCoverage.inputRows}`,
     `Domains          ${document.rows.length}`,
     `Failed targets   ${document.inputCoverage.failedRows}`,
-    `Authenticated    ${document.counts.authenticated_mail}`,
-    `Auth gaps        ${document.counts.mail_auth_gap}`,
+    `MX + SPF + DMARC ${document.counts.authenticated_mail}`,
+    `DNS policy gaps  ${document.counts.mail_auth_gap}`,
     `Null MX          ${document.counts.null_mx}`,
     `No explicit MX   ${document.counts.no_explicit_mx}`,
     `Incomplete       ${document.counts.evidence_incomplete + document.counts.mail_auth_incomplete + document.inputCoverage.failedRows}`,
     '',
   ];
   for (const row of document.rows) {
-    lines.push(`${row.domain}  ${row.state.replaceAll('_', ' ')}`);
+    lines.push(`${row.domain}  ${PASSIVE_MAIL_LABELS[row.state]}`);
     lines.push(`  Observed      ${row.provenance.observedAt ?? 'unknown'} · ${row.provenance.collectionOrigin.replaceAll('_', ' ')}`);
     lines.push(`  DNS observed  ${row.provenance.dnsObservedAt ?? 'unknown'} · Source output ${row.provenance.sourceGeneratedAt}`);
     lines.push(`  MX providers  ${row.providerDomains.join(', ') || 'None observed'}${row.providerDomainsOmitted ? ` · +${row.providerDomainsOmitted} omitted` : ''}`);

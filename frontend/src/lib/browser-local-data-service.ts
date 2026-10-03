@@ -9,6 +9,7 @@ import {
   type LocalDataCollectionDefinition,
   type BrowserLocalDataUpdater,
   type BrowserLocalDataUpdateOptions,
+  type BrowserLocalDataBatchUpdateOptions,
 } from './browser-local-data.ts';
 import type {
   BrowserLocalCollectionDocumentMap,
@@ -33,6 +34,7 @@ export type BrowserLocalDataProviderBoundary = Readonly<{
   read: BrowserLocalDataProvider['read'];
   readMany: BrowserLocalDataProvider['readMany'];
   update: BrowserLocalDataProvider['update'];
+  updateMany: BrowserLocalDataProvider['updateMany'];
   close?: BrowserLocalDataProvider['close'];
 }>;
 
@@ -191,6 +193,22 @@ export function createBrowserLocalDataService(
     return provider.update(definition, updater, options);
   }
 
+  async function updateMany<Collection extends BrowserLocalCollectionId, Result>(
+    ids: readonly Collection[],
+    updater: (documents: Pick<BrowserLocalCollectionDocumentMap, Collection>) => Readonly<{
+      documents: Pick<BrowserLocalCollectionDocumentMap, Collection>; result: Result;
+    }>,
+    options: BrowserLocalDataBatchUpdateOptions = {},
+  ): Promise<Result> {
+    const [provider, definitions] = await Promise.all([activeProvider(), Promise.all(ids.map(collection))]);
+    // The provider owns snapshot consistency, retries, validation and commit
+    // recovery. This adapter supplies known collection types, not another write path.
+    return provider.updateMany(definitions, current => {
+      const change = updater(Object.fromEntries(current) as Pick<BrowserLocalCollectionDocumentMap, Collection>);
+      return { documents: new Map(definitions.map(definition => [definition.id, change.documents[definition.id as Collection]])), result: change.result };
+    }, options);
+  }
+
   return Object.freeze({
     state: () => serviceState,
     provider: activeProvider,
@@ -199,6 +217,7 @@ export function createBrowserLocalDataService(
     read,
     readMany,
     update,
+    updateMany,
     collection,
     subscribe,
   });
@@ -247,3 +266,5 @@ export async function browserLocalDataCollection<Collection extends BrowserLocal
 ): Promise<LocalDataCollectionDefinition<BrowserLocalCollectionDocumentMap[Collection]>> {
   return defaultService.collection(collection);
 }
+
+export const updateBrowserLocalDataCollections = defaultService.updateMany;

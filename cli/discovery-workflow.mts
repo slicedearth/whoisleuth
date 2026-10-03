@@ -6,7 +6,12 @@ import {
   normalizeDiscoveryTlds,
 } from './discover.mts';
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext, DiscoveryGeneratorDependency } from './runner-types.mts';
+
+export type DiscoveryDependencies = {
+  readDiscoveryDictionary?: (source: string) => string | Promise<string>;
+  loadTyposquatGenerator?: () => Promise<DiscoveryGeneratorDependency>;
+};
 
 type DiscoveryOptions = Pick<
   Extract<CliArguments, { action: 'discover' }>,
@@ -15,11 +20,11 @@ type DiscoveryOptions = Pick<
 
 async function generateDiscoveryCandidates(
   args: DiscoveryOptions,
-  dependencies: CliDependencies,
+  dependencies: DiscoveryDependencies,
   context: CliCommandContext,
 ) {
   const seed = args.seed || await context.readSingleInput();
-  if (!seed) throw new CliUsageError('discover requires one brand label or domain as an argument or on stdin.');
+  if (!seed) throw new CliUsageError('discover requires one brand label or domain as an argument or on stdin.', 'missing_input');
   const loadGenerator = dependencies.loadTyposquatGenerator || (() => import('../lib/typosquat-generator.mts'));
   const generator = await loadGenerator();
   const tlds = normalizeDiscoveryTlds(
@@ -42,7 +47,7 @@ async function generateDiscoveryCandidates(
     if (args.preset === 'custom'
       && !mutationFamilies.includes('dictionary')
       && !mutationFamilies.includes('dictionary_token_replacement')) {
-      throw new CliUsageError('--dictionary requires a dictionary mutation family.');
+      throw new CliUsageError('--dictionary requires a dictionary mutation family.', 'conflicting_options');
     }
     try {
       dictionaryText = dependencies.readDiscoveryDictionary
@@ -50,11 +55,11 @@ async function generateDiscoveryCandidates(
         : await context.readInput(args.dictionarySource, MAX_DISCOVERY_DICTIONARY_BYTES, 'Discovery dictionary');
     } catch (error) {
       if (error instanceof CliUsageError) throw error;
-      throw new CliUsageError(`Could not read discovery dictionary: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      throw new CliUsageError(`Could not read discovery dictionary: ${boundedCliErrorMessage(error, 'Input could not be read')}`, 'input_unavailable');
     }
     const normalizedDictionary = generator.normalizeCustomDictionaryTerms(dictionaryText);
     if (!normalizedDictionary.values.length) {
-      throw new CliUsageError('The discovery dictionary did not contain any valid terms.');
+      throw new CliUsageError('The discovery dictionary did not contain any valid terms.', 'missing_input');
     }
   }
 

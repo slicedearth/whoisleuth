@@ -1,9 +1,10 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCaseClassification, openCaseMetadata, openCaseSection, openConsoleView, openInboxReview } from './console-navigation';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, snapshot } from './case-test-fixtures';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep, operationsReportActionStatus, reviewInboxActionStatus } from './case-response-fixtures';
 import { caseNumber, formattedCaseNumber } from '../packages/cases/case-workflow-metadata.mts';
 import type { WebsiteProfileSnapshot } from '../packages/workspace/website-snapshot-model.mts';
@@ -108,7 +109,7 @@ test('Cases and monitoring report unreadable collections without false empty sta
   await expect(page.getByRole('heading', { name: 'Cases unavailable' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No cases yet' })).toHaveCount(0);
   await openConsoleView(page, 'watchlists');
-  await expect(page.getByRole('tab', { name: /^Watchlists/ }).locator('span')).toHaveAttribute('aria-label', 'count unavailable');
+  await expect(page.getByRole('tab', { name: /^Watchlists/ })).toHaveAccessibleName('Watchlists count unavailable');
   await expect(page.getByRole('heading', { name: 'Watchlists unavailable' })).toBeVisible();
   await expect(page.getByText(/No watchlists/i)).toHaveCount(0);
 });
@@ -157,7 +158,8 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
   await expect(report.getByText('Ready for review', { exact: true })).toBeVisible();
   await expect(report).toContainText('Readiness is distinct from review or authorisation');
   await report.getByLabel('Audience').selectOption('executive');
-  await expect(report.getByText('Cases with actions', { exact: true })).toBeVisible();
+  await expect(report.getByRole('group', { name: 'Executive recorded outcome counts', exact: true })
+    .getByText('Cases with actions', { exact: true })).toBeVisible();
   await expect(report).toContainText('Denominator: 3 inspected Cases');
   await report.getByLabel('Time window').selectOption('all');
   await report.getByText('Exact current-state and action-type counts', { exact: true }).click();
@@ -269,6 +271,50 @@ test('@timing-sensitive a case created from Monitor persists across a reload', a
   await expect(page.getByRole('heading', { name: 'tracked.invalid', exact: true })).toBeVisible();
 });
 
+test('a custom storefront needs an ephemeral explicit platform choice before preparing a scoped route', async ({ page }) => {
+  await page.clock.setFixedTime('2026-10-03T12:00:00.000Z');
+  const requests: string[] = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) requests.push(path);
+  });
+  await openCasesView(page);
+  await createCase(page, 'custom-store.example');
+  const workspace = await openCaseResponseWorkspace(page);
+  await openCaseClassification(page);
+  const incident = 'https://custom-store.example/products/item-seven';
+  await workspace.getByLabel('Exact HTTP(S) URL').fill(incident);
+  await workspace.getByRole('button', { name: 'Add incident link', exact: true }).click();
+  const routes = workspace.locator('.reporting-routes');
+  await expect(routes.getByRole('button', { name: 'Create drafting action', exact: true })).toHaveCount(0);
+  const platform = workspace.getByRole('combobox', { name: `Reporting platform for ${incident}`, exact: true });
+  await platform.selectOption('shopify');
+  const merchant = routes.locator('.route', { hasText: 'Choose a merchant abuse route' });
+  await expect(merchant).toContainText('evidence of Shopify involvement');
+  await expect(merchant.getByRole('link', { name: /Official guidance/u })).toHaveAttribute('href', 'https://www.shopify.com/legal/tools/report-an-issue/report-a-merchant');
+  await merchant.getByRole('button', { name: 'Create drafting action', exact: true }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Nothing was submitted');
+  const saved = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
+  expect(saved.actions).toEqual([expect.objectContaining({ type: 'platform_report', state: 'drafting',
+    recipient: 'https://www.shopify.com/legal/tools/report-an-issue/report-a-merchant', routeObservedAt: '2026-10-03T00:00:00.000Z' })]);
+  expect(saved.actions[0]!.history.some(event => event.nextState === 'submitted')).toBe(false);
+  const matchedIncident = 'https://reserved-fixture.myshopify.com/products/item-eight';
+  await workspace.getByLabel('Exact HTTP(S) URL').fill(matchedIncident);
+  await workspace.getByRole('button', { name: 'Add incident link', exact: true }).click();
+  const groups = routes.locator('.route-groups > article');
+  await expect(groups).toHaveCount(2);
+  await expect(groups.filter({ hasText: incident })).toContainText('was selected by the analyst');
+  await expect(groups.filter({ hasText: matchedIncident })).toContainText('matched the exact incident hostname');
+  await page.reload();
+  await openCaseResponseWorkspace(page);
+  await openCaseClassification(page);
+  await expect(platform).toHaveValue('');
+  await expect(groups.filter({ hasText: incident })).toContainText('No reviewed platform route matches this exact hostname');
+  await expect(groups.filter({ hasText: matchedIncident })).toContainText('matched the exact incident hostname');
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.actions).toEqual(saved.actions);
+  expect(requests).toEqual([]);
+});
+
 test('a Case keeps its stable reference, controlled types, exact incident links and reporting route together', async ({ page }, testInfo) => {
   test.slow();
   await openCasesView(page);
@@ -322,7 +368,7 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
       await trademarkRoute.getByRole('group', { name: 'Preparation checklist', exact: true }).scrollIntoViewIfNeeded();
       await expect(trademarkRoute.getByRole('checkbox').first()).toBeVisible();
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`route-checklist-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`route-checklist-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
 
@@ -338,10 +384,12 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   await expect.poll(async () => {
     const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
     return saved.records.find((item) => item.value.id === stored.id)?.value.tags;
-  }).toEqual(['case-type:phishing', 'case-type:trademark_infringement', 'case-type:copyright_infringement', 'priority-review']);
+  }).toEqual(['priority-review']);
   const updated = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const updatedCase = requiredValue(updated.records[0], 'The updated Case is missing.').value;
-  expect(updatedCase.assertions).toEqual(expect.arrayContaining([expect.objectContaining({ statement: `Incident target URL: ${incidentUrl}`, state: 'open' })]));
+  expect(updatedCase.workflowMetadata?.types).toEqual(['phishing', 'trademark_infringement', 'copyright_infringement']);
+  expect(updatedCase.workflowMetadata?.incidentTargets).toEqual([expect.objectContaining({ url: incidentUrl, state: 'open' })]);
+  expect(updatedCase.assertions).toEqual([]);
   expect(updatedCase.actions).toEqual(expect.arrayContaining([expect.objectContaining({
     type: 'platform_report',
     recipient: 'https://www.tiktok.com/legal/report/feedback',
@@ -351,7 +399,7 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   await page.reload();
   await openConsoleView(page, 'cases');
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
-  await page.getByLabel('Search').fill('copyright infringement');
+  await page.getByRole('textbox', { name: 'Search', exact: true }).fill('copyright infringement');
   const restoredHead = page.locator('.case-head', { hasText: 'reported-content.invalid' });
   await expect(page.locator('.tag', { hasText: 'Phishing' })).toBeVisible();
   await restoredHead.click();
@@ -462,20 +510,23 @@ test('the mobile review inbox reveals and focuses a saved Bulk session', async (
 test('status and disposition edits persist across a reload', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'triage.invalid');
-  await openCaseMetadata(page);
+  const metadata = await openCaseMetadata(page);
 
-  await page.locator('.metadata-fields .field-grid select').first().selectOption('escalated');
-  await page.locator('.metadata-fields .field-grid select').nth(1).selectOption('confirmed_abuse');
+  await metadata.getByRole('combobox', { name: /^Status/u }).selectOption('escalated');
+  await metadata.getByRole('combobox', { name: 'Disposition', exact: true }).selectOption('confirmed_abuse');
 
   const head = page.locator('.case-heading', { hasText: 'triage.invalid' });
-  await expect(head.locator('.badge').first()).toHaveText('Escalated');
-  await expect(head.locator('.badge').nth(1)).toHaveText('Confirmed abuse');
+  await expect(head.getByText('Escalated', { exact: true })).toBeVisible();
+  await expect(head.getByText('Confirmed abuse', { exact: true })).toBeVisible();
 
   await page.reload();
   await openConsoleView(page, 'cases');
   const reloaded = page.locator('.case-heading', { hasText: 'triage.invalid' });
-  await expect(reloaded.locator('.badge').first()).toHaveText('Escalated');
-  await expect(reloaded.locator('.badge').nth(1)).toHaveText('Confirmed abuse');
+  await expect(reloaded.getByText('Escalated', { exact: true })).toBeVisible();
+  await expect(reloaded.getByText('Confirmed abuse', { exact: true })).toBeVisible();
+  const restoredMetadata = await openCaseMetadata(page);
+  await expect(restoredMetadata.getByRole('combobox', { name: /^Status/u })).toHaveValue('escalated');
+  await expect(restoredMetadata.getByRole('combobox', { name: 'Disposition', exact: true })).toHaveValue('confirmed_abuse');
 });
 
 test('reviewed cases export an explicitly selected privacy-bounded Risk calibration dataset', async ({ page }) => {
@@ -592,6 +643,8 @@ test('Case tag undo preserves a newer change from another tab', async ({ page })
     await page.getByRole('button', { name: 'Save tags', exact: true }).click();
     const undo = page.getByRole('region', { name: 'Undo analyst change' });
     await expect(undo).toBeVisible();
+    await other.reload();
+    await openCaseMetadata(other);
     await other.getByRole('textbox', { name: /^Additional tags\b/u }).fill('later-review');
     await other.getByRole('button', { name: 'Save tags', exact: true }).click();
     await expect.poll(async () => (await readBrowserLocalCollection(other, 'cases')).records[0]?.value.tags).toEqual(['later-review']);
@@ -602,6 +655,35 @@ test('Case tag undo preserves a newer change from another tab', async ({ page })
   } finally {
     await other.close();
   }
+});
+
+test('stale Case status and tag edits preserve the peer record and the local draft', async ({ page, context }) => {
+  await openCasesView(page);
+  await createCase(page, 'stale-edit.invalid');
+  await openCaseMetadata(page);
+  const tags = page.getByRole('textbox', { name: /^Additional tags\b/u });
+  await tags.fill('local-draft');
+  const peer = await context.newPage();
+  try {
+    await peer.goto(page.url());
+    await openCaseMetadata(peer);
+    const peerStatus = peer.getByRole('combobox', { name: /^Status\b/u });
+    await expect(peerStatus).toBeVisible();
+    await peerStatus.selectOption('monitoring');
+    await expect(caseWorkspaceActionStatus(peer)).toContainText('Set stale-edit.invalid');
+    await peer.getByRole('textbox', { name: /^Additional tags\b/u }).fill('peer-tags');
+    await peer.getByRole('button', { name: 'Save tags', exact: true }).click();
+    await expect(caseWorkspaceActionStatus(peer)).toContainText('Updated tags');
+    const before = await readBrowserLocalCollection(peer, 'cases');
+    await page.getByRole('combobox', { name: /^Status\b/u }).selectOption('escalated');
+    await expect(caseWorkspaceActionStatus(page)).toContainText('Case status changed after this edit');
+    await page.getByRole('button', { name: 'Save tags', exact: true }).click();
+    await expect(caseWorkspaceActionStatus(page)).toContainText('Case tags changed after this edit');
+    await expect(tags).toHaveValue('local-draft');
+    const after = await readBrowserLocalCollection(page, 'cases');
+    expect(after.records).toEqual(before.records);
+    expect(after.manifest.revision).toBe(before.manifest.revision);
+  } finally { await peer.close(); }
 });
 
 test('projects retained evidence into a filterable source-attributed timeline', async ({ page }) => {
@@ -835,7 +917,7 @@ test('saved website profiles form searchable cross-domain pivots without another
   await workspace.getByLabel('Relationship type').selectOption('all');
   await expectNoHorizontalOverflow(page);
   await workspace.getByText('Example commerce', { exact: true }).scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath('partial-profile-pivots.png') });
+  if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath('partial-profile-pivots.png') }); }
   expect(collectorRequests).toEqual([]);
 });
 

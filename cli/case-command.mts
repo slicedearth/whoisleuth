@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { boundedJsonLimitsForBytes, parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import { boundedJsonLimitsForBytes, parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import { canonicalArtifactJsonV2 } from '../packages/evidence/artifact-integrity.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import { MAX_CASE_CHECKPOINT_FACTS, MAX_CASE_OBJECTIVE_LENGTH, MAX_CASE_STORE_BYTES, MAX_EDITABLE_CASE_INPUT_BYTES, MAX_NOTE_LENGTH, MAX_RESPONSE_RATIONALE_LENGTH, MAX_RESPONSE_VALUE_LENGTH } from '../packages/contracts/case-portability.mts';
@@ -8,14 +8,20 @@ import { createCaseIncident, openOrCreateCase, recordCaseConclusion, recordCaseR
 import { buildCaseExport, serializeCaseStore } from '../packages/cases/case-storage-model.mts';
 import { appendCaseEvidencePin, type CaseEvidencePin } from '../packages/cases/case-response-model.mts';
 import { readCaseRecheckAnswerContext } from '../packages/cases/case-recheck-model.mts';
+import { caseEvidenceLinkIssues, mergeCaseEvidenceLinks } from '../packages/cases/case-evidence-links.mts';
 import { dispositionLabel, statusLabel } from '../packages/cases/case-record-decisions.mts';
 import { normalizeDomain } from '../packages/cases/case-record-core.mts';
 import type { CaseRecord } from '../packages/cases/case-record-contracts.mts';
 import type { CliArguments } from './arguments.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext } from './runner-types.mts';
 import { safeTerminalValue } from './formatters/terminal.mts';
 import { CliUsageError } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
+
+export type CaseCommandDependencies = {
+  signal?: AbortSignal;
+  caseFileInput?: string;
+};
 
 type CaseArguments = Extract<CliArguments, { action: 'case' }>;
 type JsonObject = Record<string, unknown>;
@@ -55,6 +61,10 @@ function pin(input: unknown, now: string): JsonObject {
 }
 
 function retainExistingEntries(before: CaseRecord, after: CaseRecord): void {
+  if (canonicalArtifactJsonV2(mergeCaseEvidenceLinks(before.evidenceLinks, after.evidenceLinks) ?? [])
+    !== canonicalArtifactJsonV2(mergeCaseEvidenceLinks(undefined, after.evidenceLinks) ?? [])) {
+    throw new CliUsageError('The operation would remove retained evidence relationships. Nothing was written.');
+  }
   const pairs = [
     [before.notes, after.notes], [before.evidenceHistory, after.evidenceHistory], [before.evidencePins, after.evidencePins],
     [before.decisions, after.decisions], [before.actions, after.actions], [before.assertions, after.assertions],
@@ -70,7 +80,7 @@ function retainExistingEntries(before: CaseRecord, after: CaseRecord): void {
   }
 }
 
-function mutate(cases: CaseRecord[], args: CaseArguments, input: JsonObject | null, note: string | null, now: string): CaseRecord[] {
+export function applyCliCaseOperation(cases: CaseRecord[], args: CaseArguments, input: JsonObject | null, note: string | null, now: string): CaseRecord[] {
   if (args.operation === 'open') {
     const title = args.title === null ? undefined : prose(args.title, MAX_CASE_OBJECTIVE_LENGTH, 'Incident title');
     const result = args.newIncident
@@ -85,6 +95,8 @@ function mutate(cases: CaseRecord[], args: CaseArguments, input: JsonObject | nu
     result = updateCase(cases, current.id, { note: prose(note, MAX_NOTE_LENGTH, 'Case note') }, now);
   } else if (args.operation === 'pin') {
     result = updateCase(cases, current.id, { evidencePin: pin(input, now) }, now);
+  } else if (args.operation === 'link' || args.operation === 'withdraw-link') {
+    result = updateCase(cases, current.id, args.operation === 'link' ? { evidenceLink: input } : { evidenceLinkWithdrawal: input }, now);
   } else if (args.operation === 'assess') {
     if (!input) throw new CliUsageError('An assessment requires JSON input.');
     fields(input, ['disposition', 'reviewReasonCode', 'summary', 'rationale', 'evidence'], 'Assessment');
@@ -144,6 +156,14 @@ function formatCases(cases: readonly CaseRecord[], digest: string): string {
       `  Source ${safeTerminalValue(pin.source)} · ${safeTerminalValue(pin.observedAt, 'time unavailable')} · ${pin.completeness}`);
     for (const decision of record.decisions) lines.push(`Assessment ${decision.createdAt}`,
       safeTerminalValue(decision.summary, '—', MAX_RESPONSE_VALUE_LENGTH), safeTerminalValue(decision.rationale, '—', MAX_RESPONSE_RATIONALE_LENGTH));
+    for (const { link, missingPinIds, cyclic } of caseEvidenceLinkIssues(record.evidenceLinks ?? [], record.evidencePins)) {
+      lines.push(`Evidence relationship ${safeTerminalValue(link.id)} · analyst declaration`,
+        `  ${safeTerminalValue(link.fromPinId)} ${link.kind.replaceAll('_', ' ')} ${safeTerminalValue(link.toPinId)}`,
+        `  ${safeTerminalValue(link.basis, '—', MAX_RESPONSE_RATIONALE_LENGTH)}`);
+      if (link.withdrawal) lines.push(`  Withdrawn ${link.withdrawal.at}: ${safeTerminalValue(link.withdrawal.reason, '—', MAX_RESPONSE_RATIONALE_LENGTH)}`);
+      if (missingPinIds.length) lines.push(`  Referenced pins not retained: ${missingPinIds.map(id => safeTerminalValue(id)).join(', ')}`);
+      if (cyclic) lines.push('  Conflicting imported derivation cycle; no order is inferred.');
+    }
     for (const review of record.observedEffects.reviews) lines.push(`Recheck ${safeTerminalValue(review.observedAt, 'time unavailable')} · ${review.state} · ${review.completeness} · ${safeTerminalValue(review.source)}`);
     lines.push(`Other retained records: ${record.evidenceHistory.length} snapshots, ${record.actions.length} actions, ${record.assertions.length} assertions, ${record.attachments?.length ?? 0} file references.`, '');
   }
@@ -151,7 +171,7 @@ function formatCases(cases: readonly CaseRecord[], digest: string): string {
   return lines.join('\n');
 }
 
-export async function runCaseCommand(args: CaseArguments, dependencies: CliDependencies, context: CliCommandContext): Promise<number> {
+export async function runCaseCommand(args: CaseArguments, dependencies: CaseCommandDependencies, context: CliCommandContext): Promise<number> {
   context.setFailureLabel('Local Case operation');
   try {
     const raw = args.source ? dependencies.caseFileInput ?? await context.readInput(args.source, MAX_EDITABLE_CASE_INPUT_BYTES, 'Case file') : null;
@@ -169,7 +189,7 @@ export async function runCaseCommand(args: CaseArguments, dependencies: CliDepen
       maximumBytes: MAX_EDITABLE_CASE_INPUT_BYTES, limits: boundedJsonLimitsForBytes(MAX_CASE_STORE_BYTES), label: 'Case operation input',
     }) : null;
     const note = args.noteSource ? await context.readInput(args.noteSource, MAX_NOTE_LENGTH * 4 + 4, 'Case note') : args.text;
-    const next = mutate(cases, args, input, note, now);
+    const next = applyCliCaseOperation(cases, args, input, note, now);
     if (Buffer.byteLength(serializeCaseStore(next)) > MAX_CASE_STORE_BYTES) throw new CliUsageError('The updated Case store exceeds its byte budget. No evidence was pruned and nothing was written.');
     const output = `${JSON.stringify(buildCaseExport(next, now))}\n`;
     // Apply the same strict admission to our output before atomic publication.

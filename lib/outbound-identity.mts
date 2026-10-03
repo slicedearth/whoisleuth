@@ -2,7 +2,7 @@ import { WHOISLEUTH_APPLICATION_VERSION } from './application-version.mts';
 import {
   WHOISLEUTH_PROJECT_URL,
   WHOISLEUTH_REQUEST_POLICY_URL,
-} from './project-metadata.mts';
+} from '../packages/analysis/project-metadata.mts';
 
 export { WHOISLEUTH_PROJECT_URL, WHOISLEUTH_REQUEST_POLICY_URL };
 

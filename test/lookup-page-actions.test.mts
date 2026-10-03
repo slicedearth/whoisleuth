@@ -7,9 +7,47 @@ import {
   buildLookupSectionLinks,
   lookupEvidenceFamilyForHref,
   lookupEvidenceTargetForHref,
+  lookupSecurityTxtEligible,
+  eligibleLookupOptionalSources,
 } from '../frontend/src/lib/analysis/lookup-page-actions.ts';
+import { buildLookupCollectionPreflight } from '../frontend/src/lib/analysis/collection-preflight.ts';
 
 describe('lookup page actions', () => {
+  test('retained consent cannot disclose or request sources that are no longer supported', () => {
+    const selection = {
+      mode: 'deep' as const,
+      includeExternalIntelligence: true, externalIntelligenceSupported: false,
+      includeMalwareHostIntelligence: true, malwareHostIntelligenceSupported: false,
+      includeMalwareIocIntelligence: true, malwareIocIntelligenceSupported: false,
+      includeSecurityTxt: true, websiteObservationSupported: true, securityTxtEligible: false,
+    };
+    const eligible = eligibleLookupOptionalSources(selection);
+    assert.deepEqual(eligible, { includeExternalIntelligence: false, includeMalwareHostIntelligence: false,
+      includeMalwareIocIntelligence: false, includeSecurityTxt: false });
+    const preflight = buildLookupCollectionPreflight({ mode: 'deep', targetCount: 1, ...eligible });
+    assert.equal(preflight.sources.find(source => source.id === 'external_intelligence')?.state, 'optional');
+    assert.equal(preflight.sources.find(source => source.id === 'security_txt')?.state, 'optional');
+    assert.equal(buildLookupRequestUrl('target.example', selection), '/api/lookup?q=target.example');
+    assert.equal(selection.includeSecurityTxt, true, 'The retained draft is not silently changed.');
+  });
+
+  test('offers security.txt only for a single admitted hostname', () => {
+    for (const target of [
+      'portal.example.test',
+      'https://portal.example.test/private-path?query=value#fragment',
+      'http://portal.example.test:8080/path',
+      'https://bücher.example.test/path',
+    ]) assert.equal(lookupSecurityTxtEligible([target]), true, target);
+    for (const entries of [
+      [], [''], ['one.example.test', 'two.example.test'],
+      ['192.0.2.1'], ['2001:db8::1'], ['https://[2001:db8::1]/'], ['AS64496'],
+      ['localhost'], ['ftp://portal.example.test/path'],
+      ['https://synthetic:private@portal.example.test/path'],
+      ['portal.example.test\n'], ['https://portal.example.test\\path'],
+      ['https://0xc0000201/'],
+    ]) assert.equal(lookupSecurityTxtEligible(entries), false, JSON.stringify(entries));
+  });
+
   test('keeps fast lookup requests free of deep enrichment flags', () => {
     const url = buildLookupRequestUrl('target.example', {
       mode: 'fast',
@@ -20,7 +58,7 @@ describe('lookup page actions', () => {
       includeMalwareIocIntelligence: true,
       malwareIocIntelligenceSupported: true,
       includeSecurityTxt: true,
-      securityTxtSupported: true,
+      websiteObservationSupported: true,
       securityTxtEligible: true,
     });
 
@@ -30,7 +68,7 @@ describe('lookup page actions', () => {
       includeExternalIntelligence: false, externalIntelligenceSupported: false,
       includeMalwareHostIntelligence: false, malwareHostIntelligenceSupported: false,
       includeMalwareIocIntelligence: false, malwareIocIntelligenceSupported: false,
-      includeSecurityTxt: false, securityTxtSupported: false, securityTxtEligible: false,
+      includeSecurityTxt: false, websiteObservationSupported: false, securityTxtEligible: false,
     };
     assert.equal(buildLookupRequestUrl('https://portal.example.test/private-path?private-query=value#fragment', selection),
       '/api/lookup?q=portal.example.test&fast=1');
@@ -47,7 +85,7 @@ describe('lookup page actions', () => {
       includeMalwareIocIntelligence: false,
       malwareIocIntelligenceSupported: true,
       includeSecurityTxt: true,
-      securityTxtSupported: true,
+      websiteObservationSupported: true,
       securityTxtEligible: true,
     });
 

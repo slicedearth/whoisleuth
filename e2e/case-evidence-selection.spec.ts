@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { caseRecord, openCaseResponseWorkspace, openSeededTimelineCase } from './case-test-fixtures';
@@ -60,7 +61,7 @@ test('distinguishes retained facts and reveals the exact evidence behind decisio
       await retainedAssertion.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
       await expect(retainedAssertion.locator('.linked-evidence')).toBeVisible();
-      if (viewport.width === 320 || viewport.width === 1280) await page.screenshot({ path: testInfo.outputPath(`linked-evidence-${theme}-${viewport.width}.png`) });
+      if (viewport.width === 320 || viewport.width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`linked-evidence-${theme}-${viewport.width}.png`) }); }
       if (viewport.width === 320) {
         const accessibility = await new AxeBuilder({ page }).include('.response-workspace')
           .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();

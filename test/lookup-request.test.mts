@@ -67,12 +67,12 @@ function boundedHttpEvidence(redirectCount = MAX_HTTP_EVIDENCE_REDIRECTS) {
 
 describe('Lookup browser request boundary', () => {
   test('returns invalid-response rather than a network failure for malformed registrar action dates', async () => {
-    const standing = buildFixtureRegistrarStanding({ registrarIanaId: '4318', now: new Date('2026-09-03T12:00:00.000Z') });
+    const standing = buildFixtureRegistrarStanding({ registrarIanaId: '900003', now: new Date('2026-09-03T12:00:00.000Z') });
     assert.equal(validRegistrarStanding(standing), true);
     assert.ok(standing.compliance.actions.length > 0);
     const valid = { ...response(),
       registrarStanding: standing,
-      rdap: { parsed: { domain: 'example.test', registrarIanaId: '4318' } },
+      rdap: { parsed: { domain: 'example.test', registrarIanaId: '900003' } },
     };
     assert.equal(parseLookupHttpResponse(valid).ok, true);
     for (const issuedOn of ['2026-13-01', '2026-00-01', '2026-02-30', '2026-01-00', '2026-01-32']) {
@@ -263,7 +263,36 @@ describe('Lookup browser request boundary', () => {
     assert.equal(cancelledBodyCancelled, true);
   });
 
-  test('caps injected deadlines and sanitizes generic network failures', async () => {
+  test('caps an excessive deadline without timing out an admitted request early', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    let aborts = 0;
+    let requests = 0;
+    const pending = requestLookup('/api/lookup?q=example.test', {
+      timeoutMs: LOOKUP_CLIENT_TIMEOUT_MS * 4,
+      fetchImpl: async (_input, init) => {
+        requests += 1;
+        assert.ok(init?.signal);
+        return new Promise<Response>((_resolve, reject) => {
+          init.signal!.addEventListener('abort', () => {
+            aborts += 1;
+            reject(new DOMException('Aborted', 'AbortError'));
+          }, { once: true });
+        });
+      },
+    });
+    assert.equal(requests, 1);
+    context.mock.timers.tick(LOOKUP_CLIENT_TIMEOUT_MS - 1);
+    assert.equal(aborts, 0);
+    context.mock.timers.tick(1);
+    assert.equal(aborts, 1);
+    assert.deepEqual(await pending, {
+      ok: false,
+      kind: 'timeout',
+      message: `Lookup timed out after ${LOOKUP_CLIENT_TIMEOUT_MS / 1_000} seconds. No partial response was retained.`,
+    });
+  });
+
+  test('avoids requests after cancellation and sanitises generic network failures', async () => {
     let fetchCalled = false;
     const controller = new AbortController();
     controller.abort('already_cancelled');

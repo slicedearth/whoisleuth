@@ -6,6 +6,7 @@ import EXIT_CODES from '../cli/exit-codes.mts';
 import {
   CLI_COMPARISON_LEDGER_SCHEMA,
   buildCliRetainedArtifactDiff,
+  formatCliRetainedArtifactDiff,
 } from '../cli/retained-artifact-diff.mts';
 import { runCli } from '../cli/runner.mts';
 import {
@@ -153,6 +154,27 @@ function capture() {
 }
 
 describe('retained artifact diff', () => {
+  test('terminal ledger rendering protects every retained label and value without changing the document', () => {
+    const base = buildCliRetainedArtifactDiff(
+      portfolio('Earlier', EARLIER, [asset('terminal.example')]),
+      portfolio('Later', LATER, [asset('terminal.example', { autoRenew: false })]), {}, LATER,
+    );
+    assert.equal(base.schema, CLI_COMPARISON_LEDGER_SCHEMA);
+    if (base.schema !== CLI_COMPARISON_LEDGER_SCHEMA) throw new Error('Expected ledger.');
+    assert.ok(base.details.rows.length);
+    const hostile = 'Visible\u009b31m\u202eLabel\u202c\u200b';
+    const document = { ...base, left: { ...base.left, label: hostile }, right: { ...base.right, label: hostile },
+      details: { ...base.details, rows: base.details.rows.map(row => ({ ...row, entityId: hostile, field: hostile,
+        earlier: { ...row.earlier, value: hostile, sourceState: hostile },
+        later: { ...row.later, value: hostile, sourceState: hostile } })) }, limitations: [hostile] };
+    const before = JSON.stringify(document);
+    const output = formatCliRetainedArtifactDiff(document);
+    assert.match(output, /Visible 31mLabel/u);
+    assert.doesNotMatch(output, /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\p{Default_Ignorable_Code_Point}]/u);
+    assert.equal(JSON.stringify(document), before);
+    assert.ok(before.includes(hostile));
+  });
+
   test('compares public schema 4 context with current compact rows without inferring profile authority', () => {
     const publicExport = {
       schema: BULK_SESSION_SCHEMA,

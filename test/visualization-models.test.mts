@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
+  FORCE_GRAPH_LABEL_LINE_HEIGHT,
   MAX_LIFECYCLE_EVENTS,
   MAX_REDIRECT_NODES,
   MAX_COLLECTION_TIMING_SOURCES,
@@ -34,6 +35,18 @@ import type {
   ForceGraphNodeInput,
   LifecycleEventInput,
 } from '../frontend/src/lib/analysis/visualization-models.ts';
+
+test('the monitor timeline discloses undated checks without plotting an invented epoch', () => {
+  const result = projectMonitorTimeline([
+    { id: 'unknown', checkedAt: null, mode: 'saved', groups: [{ key: 'mail', label: 'Mail', changeCount: 1 }] },
+    { id: 'epoch', checkedAt: '1970-01-01T00:00:00.000Z', mode: 'saved', groups: [{ key: 'mail', label: 'Mail', changeCount: 1 }] },
+  ]);
+  assert.equal(result.undatedEvents, 1);
+  assert.deepEqual(result.events.map(event => event.id), ['epoch']);
+  const activity = projectWatchlistActivity([{ checkedAt: null, changeCount: 1, resultCount: 1, conclusiveCount: 1 }]);
+  assert.equal(activity.undatedChecks, 1);
+  assert.equal(activity.totalChecks, 0);
+});
 
 describe('bounded visualization models', () => {
   test('orders and caps valid lifecycle events without treating spacing as duration', () => {
@@ -311,28 +324,28 @@ describe('bounded visualization models', () => {
         ? {
             left: left.x - (left.labelWidth + 20) / 2,
             right: left.x + (left.labelWidth + 20) / 2,
-            top: left.y - (left.labelLines.length * 13 + 17) / 2,
-            bottom: left.y + (left.labelLines.length * 13 + 17) / 2,
+            top: left.y - (left.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 17) / 2,
+            bottom: left.y + (left.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 17) / 2,
           }
         : {
             left: left.x - Math.max(20, left.labelWidth / 2),
             right: left.x + Math.max(20, left.labelWidth / 2),
             top: left.y + 25,
-            bottom: left.y + 33 + left.labelLines.length * 13,
+            bottom: left.y + 33 + left.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT,
           };
       for (const right of projected.nodes.slice(leftIndex + 1)) {
         const rightBounds = right.kind === 'target'
           ? {
               left: right.x - (right.labelWidth + 20) / 2,
               right: right.x + (right.labelWidth + 20) / 2,
-              top: right.y - (right.labelLines.length * 13 + 17) / 2,
-              bottom: right.y + (right.labelLines.length * 13 + 17) / 2,
+              top: right.y - (right.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 17) / 2,
+              bottom: right.y + (right.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 17) / 2,
             }
           : {
               left: right.x - Math.max(20, right.labelWidth / 2),
               right: right.x + Math.max(20, right.labelWidth / 2),
               top: right.y + 25,
-              bottom: right.y + 33 + right.labelLines.length * 13,
+              bottom: right.y + 33 + right.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT,
             };
         assert.equal(
           leftBounds.left < rightBounds.right

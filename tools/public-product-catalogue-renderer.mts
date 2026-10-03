@@ -1,5 +1,7 @@
 import { buildCliCasePack } from '../cli/case-pack.mts';
-import { CLI_COMMAND_REGISTRY } from '../cli/command-reference.mts';
+import { applyCliCaseOperation } from '../cli/case-command.mts';
+import { parseCliArguments } from '../cli/arguments.mts';
+import { CLI_COMMAND_REGISTRY, commandOptionHelp } from '../cli/command-reference.mts';
 import {
   buildInvestigationPlan,
   buildWorkflowRecipeCatalogue,
@@ -26,11 +28,16 @@ import {
 const EXAMPLE_TIME = '2026-08-23T00:00:00.000Z';
 const SYNTHETIC_NOTICE = 'Synthetic reserved-domain example. It is not a live finding and no request was made.';
 
-function moduleSource(name: string, value: unknown): string {
-  const json = JSON.stringify(value, null, 2)
+const GENERATED_MODULE_NOTICE = '// Generated from canonical runtime-neutral metadata. Do not edit by hand.\n';
+
+function sourceJson(value: unknown): string {
+  return JSON.stringify(value, null, 2)
     .replaceAll('<', '\\u003c')
     .replaceAll('whoisleuth.', 'whoisleuth\\u002e');
-  return `// Generated from canonical runtime-neutral metadata. Do not edit by hand.\nexport const ${name} = ${json} as const;\n`;
+}
+
+function moduleSource(name: string, value: unknown): string {
+  return `${GENERATED_MODULE_NOTICE}export const ${name} = ${sourceJson(value)} as const;\n`;
 }
 
 function publicCliCatalogue() {
@@ -58,6 +65,7 @@ function publicCliCatalogue() {
         requiredWhenOptions: input.requiredWhenOptions,
       }))),
       importantOptions: definition.completion.options,
+      options: commandOptionHelp(definition.command),
       networkEffect: definition.execution.networkEffect,
       disclosureClass: definition.documentation.disclosureClass,
       explicitAuthorisationRequired: definition.documentation.explicitAuthorisationRequired,
@@ -162,6 +170,25 @@ function publicExamples() {
   const workflow = buildInvestigationPlan('evidence-handoff', 'Example Review', EXAMPLE_TIME);
   const createdCase = createCase({ domain: 'example.test', source: 'manual', tags: ['synthetic'] }, EXAMPLE_TIME);
   const syntheticCase = Object.freeze({ ...createdCase, id: 'case-synthetic-example' });
+  const observation = { label: 'Selected page observation', value: 'A form was retained in the supplied fictional capture.', source: 'Analyst supplied fictional capture',
+    observedAt: EXAMPLE_TIME, completeness: 'partial', sourceState: 'partial', observationHostname: 'example.test', limitations: ['One supplied page only.'] };
+  const inputs: ReadonlyArray<{ operation: 'pin' | 'assess' | 'recheck'; title: string; summary: string; value: Record<string, unknown> }> = [
+    { operation: 'pin', title: 'Case evidence-pin input', summary: 'An observation with its own source, time and partial coverage.', value: observation },
+    { operation: 'assess', title: 'Case assessment input', summary: 'A reviewed disposition linked to a new source-qualified pin. Replace every fictional claim before using it.',
+      value: { disposition: 'suspicious', reviewReasonCode: 'other_reviewed', summary: 'Review the apparent credential request', rationale: 'The supplied observation needs independent corroboration.', evidence: [{ pin: observation, stance: 'supports' }] } },
+    { operation: 'recheck', title: 'Case incomplete-recheck input', summary: 'An unavailable observation, not a removal or takedown conclusion.',
+      value: { state: 'unavailable', observedAt: EXAMPLE_TIME, completeness: 'partial', source: 'Fictional later capture', comparisonSummary: 'The later capture did not complete.', limitations: ['No later page content is available.'] } },
+  ];
+  const inputExamples = inputs.map(input => {
+    const filename = `synthetic-${input.operation}.json`;
+    const argv = ['case', input.operation, 'synthetic-cases.json', '--input', filename, '--output', 'reviewed-cases.json'];
+    const args = parseCliArguments(argv);
+    if (args.action !== 'case') throw new Error('Case input example selected another command.');
+    applyCliCaseOperation([syntheticCase], args, input.value, null, EXAMPLE_TIME);
+    return Object.freeze({ id: `case-${input.operation}-input`, title: input.title, format: 'JSON', direction: 'input' as const,
+      command: `whoisleuth ${argv.join(' ')}`, summary: input.summary, synthetic: true, notice: SYNTHETIC_NOTICE,
+      content: JSON.stringify(input.value, null, 2), large: false, downloadName: filename, mediaType: 'application/json' });
+  });
   const casePack = buildCliCasePack(JSON.stringify({
     version: CASE_SCHEMA_VERSION,
     exportedAt: EXAMPLE_TIME,
@@ -170,6 +197,7 @@ function publicExamples() {
   const examples = Object.freeze([
     Object.freeze({
       id: 'lookup-preflight',
+      direction: 'output' as const,
       title: 'Deep Lookup preflight',
       format: 'terminal',
       command: 'whoisleuth lookup example.test --deep --plan',
@@ -183,6 +211,7 @@ function publicExamples() {
     }),
     Object.freeze({
       id: 'offline-route-review',
+      direction: 'output' as const,
       title: 'Offline route-origin review',
       format: 'terminal',
       command: 'whoisleuth review-evidence synthetic-route.json',
@@ -196,6 +225,7 @@ function publicExamples() {
     }),
     Object.freeze({
       id: 'workflow-plan',
+      direction: 'output' as const,
       title: 'Reviewed evidence-handoff workflow',
       format: 'terminal',
       command: 'whoisleuth workflow-plan evidence-handoff "Example Review"',
@@ -209,6 +239,7 @@ function publicExamples() {
     }),
     Object.freeze({
       id: 'case-handoff',
+      direction: 'output' as const,
       title: 'Importable public Case handoff',
       format: 'JSON',
       command: 'whoisleuth case-pack synthetic-cases.json --audience public --reviewed --json',
@@ -220,6 +251,7 @@ function publicExamples() {
       downloadName: 'synthetic-reviewed-case-handoff.json',
       mediaType: 'application/json',
     }),
+    ...inputExamples,
   ]);
   return Object.freeze({
     generatedAt: EXAMPLE_TIME,
@@ -232,7 +264,45 @@ function publicExamples() {
 }
 
 function renderPublicCliCatalogueModule(): string {
-  return moduleSource('PUBLIC_CLI_CATALOGUE', publicCliCatalogue());
+  const catalogue = publicCliCatalogue();
+  const sharedOptions: ReturnType<typeof commandOptionHelp>[number][] = [];
+  const optionIndices = new Map<string, number>();
+  const commandSources = catalogue.commands.map((command) => {
+    const references = command.options.map((option) => {
+      const identity = JSON.stringify(option);
+      let index = optionIndices.get(identity);
+      if (index === undefined) {
+        index = sharedOptions.length;
+        optionIndices.set(identity, index);
+        sharedOptions.push(option);
+      }
+      return `SHARED_COMMAND_OPTIONS[${index}]`;
+    });
+    return sourceJson({ ...command, options: [] })
+      .replace('  "options": []', () => `  "options": [${references.join(', ')}]`)
+      .split('\n').map((line) => `    ${line}`).join('\n');
+  });
+  return `${GENERATED_MODULE_NOTICE}const SHARED_COMMAND_OPTIONS = ${sourceJson(sharedOptions)} as const;\n`
+    + `export const PUBLIC_CLI_CATALOGUE = ${sourceJson({ ...catalogue, commands: [] })
+      .replace('  "commands": []', () => `  "commands": [\n${commandSources.join(',\n')}\n  ]`)} as const;\n`;
+}
+
+function renderPublicCliGrammarModule(): string {
+  const shared: unknown[] = [], indices = new Map<string, number>();
+  const commands = CLI_COMMAND_REGISTRY.map(definition => {
+    const references = definition.grammar.options.map(option => {
+      const key = JSON.stringify(option);
+      let index = indices.get(key);
+      if (index === undefined) { index = shared.length; indices.set(key, index); shared.push(option); }
+      return `SHARED_OPTIONS[${index}]`;
+    });
+    const grammar = sourceJson({ ...definition.grammar, options: [] })
+      .replace('  "options": []', () => `  "options": [${references.join(', ')}]`);
+    return `${JSON.stringify(definition.command)}: ${grammar}`;
+  });
+  return `${GENERATED_MODULE_NOTICE}import type { CliCommandGrammar } from '../../../../packages/contracts/cli-grammar.mts';\n`
+    + `const SHARED_OPTIONS = ${sourceJson(shared)} as const;\n`
+    + `export const PUBLIC_CLI_GRAMMAR = {\n${commands.join(',\n')}\n} as const satisfies Readonly<Record<string, CliCommandGrammar>>;\n`;
 }
 
 function renderPublicCliIndexModule(): string {
@@ -280,7 +350,23 @@ function renderPublicMethodologyModule(): string {
 }
 
 function renderPublicExamplesModule(): string {
-  return moduleSource('PUBLIC_EXAMPLES', publicExamples());
+  const entries = renderPublicExampleOutputModules().map(({ id, name }) =>
+    `  ${sourceJson(id)}: () => import(${sourceJson(`./${name}`)}).then(module => module.PUBLIC_EXAMPLE),`);
+  return `${GENERATED_MODULE_NOTICE}export const PUBLIC_EXAMPLE_LOADERS = {\n${entries.join('\n')}\n} as const;\n`
+    + 'export type PublicExampleId = keyof typeof PUBLIC_EXAMPLE_LOADERS;\n'
+    + 'export type PublicExampleOutput = Awaited<ReturnType<typeof PUBLIC_EXAMPLE_LOADERS[PublicExampleId]>>;\n';
+}
+
+function renderPublicExampleOutputModules(examples = publicExamples().examples) {
+  const ids = new Set<string>();
+  return examples.map(example => {
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(example.id) || ids.has(example.id)) {
+      throw new TypeError('Public examples require unique filename-safe identities.');
+    }
+    ids.add(example.id);
+    return Object.freeze({ id: example.id, name: `public-example-outputs/${example.id}.ts`,
+      content: moduleSource('PUBLIC_EXAMPLE', example) });
+  });
 }
 
 function renderPublicExamplesIndexModule(): string {
@@ -289,6 +375,7 @@ function renderPublicExamplesIndexModule(): string {
     generatedAt: examples.generatedAt,
     examples: Object.freeze(examples.examples.map((example) => Object.freeze({
       id: example.id,
+      direction: example.direction,
       title: example.title,
       format: example.format,
       command: example.command,
@@ -302,16 +389,19 @@ function renderPublicExamplesIndexModule(): string {
 }
 
 export {
+  GENERATED_MODULE_NOTICE,
   publicCliCatalogue,
   publicCoverage,
   publicExamples,
   publicMethodology,
   renderPublicCliCatalogueModule,
+  renderPublicCliGrammarModule,
   renderPublicCliGuidanceModule,
   renderPublicCliIndexModule,
   renderPublicCoverageModule,
   renderPublicCoverageSummaryModule,
   renderPublicExamplesIndexModule,
   renderPublicExamplesModule,
+  renderPublicExampleOutputModules,
   renderPublicMethodologyModule,
 };

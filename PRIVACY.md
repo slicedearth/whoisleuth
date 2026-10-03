@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 14 September 2026.
+Last updated: 2 October 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -91,6 +91,17 @@ relationship observations, saved Bulk sessions, website snapshots,
 investigation templates, Bulk review state and saved List column choices, saved Case views and Analyst Review Item state. They
 are visible to anyone able to use the browser profile.
 
+Saved Case, Bulk and watchlist evidence can retain page and favicon collection
+outcomes, not response bodies. Incomplete checks do not replace usable watchlist
+baselines or establish signal removal. Historical records without these
+outcomes remain readable with unknown collection quality.
+
+Lesson-based template revisions retain authored guidance, applicability, reason,
+source-template identity and content hashes of the source template and selected
+lesson. They do not copy the Case identity or note text automatically. These
+fields are included in template, manual-playbook and workspace exports; hashes
+can correlate the same lesson across exports and are not anonymisation.
+
 Retained files require a separate explicit save. Selected originals are stored
 unchanged in the current workspace, using its encryption when enabled. Case
 references include filenames, declared sources and observation times, retention
@@ -99,6 +110,16 @@ contain sensitive content that ordinary Case metadata excludes. Public and
 trusted CLI Case packs exclude these references. JSON backups contain references
 only, not original bytes. Removing a reference deletes its bytes only when no
 other Case in the workspace references them. No file is uploaded automatically.
+
+Saved-work infrastructure inventory and source-linked history are disposable
+views of the current workspace's bounded retained records. Filters, selections
+and relationship inspection remain in memory; viewing them makes no collection
+request, creates no parallel evidence store and does not enrol monitoring.
+
+Brand domain-exclusion previews use entered examples and optionally selected
+Case domains already retained in the current workspace. Inputs and preview
+results stay in page memory. Discover's excluded-candidate disclosure reuses its
+existing transient candidate set; neither view collects or saves new evidence.
 
 Image comparison and region editing run in page memory. Explicitly retained
 edits are separate PNG files with their own digests, source-file fingerprints
@@ -172,17 +193,23 @@ Saved Bulk rows and deliberately retained relationships can include bounded
 contributing-source identities, states and observation times, not raw responses.
 Older records remain readable with missing provenance marked unknown.
 
+Public documentation search runs in memory over public text. Its search terms
+are not saved, added to URLs or sent to a search service. This is separate from
+shareable CLI catalogue filters and saved-work search.
+
 The browser can derive searches, filters, timelines, relationship views,
 posture comparisons, evidence-gap queues and response preflight from retained
 records without another request. Derived views do not create evidence, prove a
 target state or silently mark an item reviewed.
 
-Creating or refreshing a Case is deliberate. Current Case schema 16 can retain
+Creating or refreshing a Case is deliberate. Current Case schema 17 can retain
 the exact normalised submitted hostname and the DNS, TLS and web observation
 hostname on a new evidence snapshot, analyst
 decision confidence and its basis, and a response route's observation and
 review times. Pins and sightings with unknown observation times retain null;
 saving them does not create a source observation time.
+Selected DNS pins can retain separate IPv4 and IPv6 resolver outcomes and their
+source observation times, without additional queries.
 Saved recheck questions retain an analyst-entered hostname, comparison conditions
 and optional baseline reference. Answers retain the question context as reviewed.
 These remain browser-local until exported and are excluded from public Case
@@ -192,10 +219,23 @@ the original Lookup. Explicitly selected facts can be saved through the same
 Case checkpoint controls or downloaded in a readable comparison. Raw source
 payloads and contacts are not retained by the refresh review; leaving or
 reloading Lookup clears its transient history.
-Exact public v1 Case schema 12 and published-v2 schemas 13–15
+Provider evidence requests retain the original submitted-packet digest, request
+summary, optional deadline, preparation notes and selected pin identities.
+Amendments link to those request events without rewriting the original packet.
+These records stay browser-local until exported; public Case packs exclude them.
+Analyst-declared evidence relationships retain pin identities, their basis and
+any withdrawal reason. Matching source labels, checkpoints and imported-content
+identities are displayed without assuming independent corroboration. Case files
+and reports retain the declarations; public Case packs exclude them.
+Managed indicator revisions are selected files, not a browser-local collection.
+They contain domain identities, minimised original observations, review notes,
+expiry and withdrawal records. Previewing or revising them makes no requests;
+only deliberate downloads create output files. STIX and MISP exports are not
+submitted or applied automatically. Content digests do not authenticate authors.
+Exact public v1 Case schema 12 and published-v2 schemas 13–16
 remain readable and migrate directly; migrated fields can remain null, unknown
 or blank because WHOISleuth does not reconstruct them from weaker evidence.
-Case report v12 JSON and Markdown do not add the snapshot hostname.
+Case report v13 JSON and Markdown do not add the snapshot hostname.
 Explicitly selected evidence pins can include their own observation hostname
 in response packets; this remains distinct from the Case's registration domain.
 
@@ -225,10 +265,12 @@ Saved settings reviews also retain source times, completeness, the profile
 identifier and a digest of its collection settings. They do not retain raw
 DNS or registry responses.
 
-Public CLI Case packs clear identifiers, actions, observed-effect reviews and
-closure records for the public audience. Trusted and internal Case packs and
-ordinary Case or workspace exports can contain exact investigated hostnames and
-analyst context.
+Public CLI Case packs exclude Brand Profile references, actions, observed-effect
+reviews and closure records. Every audience, including public, retains domain
+evidence, Case, pin and decision identifiers, tags, decision summaries and
+rationale. These fields can contain analyst context; review them before sharing.
+Trusted and internal packs and ordinary Case or workspace exports can contain
+additional analyst records and exact investigated hostnames.
 
 Failed local reads, quota errors, partial collections and unsupported versions
 remain explicit. They do not become empty collections or evidence of absence.
@@ -238,8 +280,9 @@ hostname history.
 ## Hosted collection
 
 Inherited DMARC and direct parent delegation are off by default. A separate
-settings-review checkbox or CLI `--include-inherited-dns` sends up to seven
-ancestor TXT questions, one parent NS question and A/AAAA discovery for at most
+settings-review checkbox or CLI `--include-inherited-dns` sends up to 32 additional
+TXT questions within ten seconds for ancestor policies, reporting-destination
+boundaries and authorisation, plus one parent NS question and A/AAAA discovery for at most
 two parent servers to the resolver. Each selected parent receives one
 registration-domain NS question over pinned public-address DNS/TCP. No mail is
 sent. Results retain queried owners, source times and normalised policy or
@@ -263,6 +306,11 @@ By default, for a URL pasted into Lookup, the browser sends only its full hostna
 collection, without the port, path, query or fragment. Credential-bearing URLs
 are rejected. Deliberate retention of an exact Incident URL in a Case remains
 separate from that collection request.
+
+Case types, incident links and investigation context are structured local fields.
+Public CLI Case packs retain the types but exclude incident URLs and the private
+objective; trusted/internal packs and ordinary backups retain those details.
+Migrated historical tags and assertions remain preserved as original text.
 
 Explicit **selected URL** collection in Deep Lookup sends the path and query
 in a request body to the application server, then to the website and its
@@ -385,6 +433,16 @@ deliberately selects a local file. Existing files are refused unless replacement
 is explicit. CLI files are not uploaded to WHOISleuth and remain under the
 operator's retention and deletion control.
 
+With explicit `review-evidence --mmdb`, the CLI reads one selected local database
+of at most 512 MiB. It is not bundled, downloaded, updated or transmitted. Current
+version-2 queries retain the exact-byte SHA-256, byte length, intrinsic database
+type, build time, binary/IP versions, review time and analyst-justified age policy,
+separately from declared source/version/licence labels. Only supported coarse
+location and ASN fields survive; local paths and raw records are excluded.
+The review makes no network request. Stale, future, unsupported, missing or
+unusable records remain unavailable context, not location absence. Historical
+version-1 queries retain their previous output without freshness admission.
+
 The offline `case` command creates and updates ordinary local Case files only
 through explicit output. Working files retain private analyst content and file
 references, not attached file bytes. Source/output locks contain only a local
@@ -414,6 +472,33 @@ selected message or standard input. Its output can retain a header digest,
 domain-only identity and routing, reported authentication states, and
 observation counts. It does not retain address local parts, display names,
 subject, body, attachments, or raw header values, and makes no network request.
+Authentication review also retains the message-part and header positions,
+restricted service identifiers, domain-only evaluated properties, duplicate or
+malformed states, and any receiver trust explicitly selected by the analyst.
+Nested email parts retain separate byte digests and parent-part links; trust is
+not inherited between parts or inferred from a service name.
+
+Document review retains source and part digests, page references, supported links
+and extraction coverage. Passwords are not requested or retained. HAR review
+retains request sequence, origins, method and MIME categories, status and reported
+timings; it excludes headers, cookies, bodies, usernames and private URL
+components. It does not replay requests.
+
+Identity-event review reads selected JSON exports locally. It retains provider,
+application and resource-tenant identifiers, protocol category, reported time and
+result, source digest and file-local actor labels. Usernames, raw actor identifiers,
+IP addresses, tokens, session identifiers and provider error text are excluded.
+Optional comparisons retain the analyst-selected field and time scope; matching
+does not establish account compromise. No provider API is contacted.
+
+Message intake processes selected text, email, calendar, still PNG, PDF, DOCX and HAR files
+locally, without opening links or executing attachments. Exact URLs remain in
+the temporary review; downloaded summaries omit paths, queries, fragments,
+message bodies, subjects and address local parts. Selecting a destination fills
+Lookup without starting collection. Saving a review in a Case is explicit;
+retaining the unredacted original requires a separate choice. Reported account
+actions can be recorded as analyst claims and select recovery guidance. They
+do not establish account compromise.
 
 The isolated `dnssec-validate` and `mail-transport` commands require a selected
 literal public resolver, local trust-anchor document and explicit
@@ -534,6 +619,20 @@ Checksums and signatures can detect content change or verify a mathematical key
 relationship under their named contract. They do not prove evidence accuracy,
 authorship, signer identity, recipient authorisation or safety.
 
+## Local contextual reviews
+
+Incident-sequence, domain-history, platform-object, storefront and connector reviews use selected
+local records or files. Drafts stay in page memory. Saving retains the report
+and a source-qualified summary through existing Case controls. Incident, platform and
+storefront reviews also retain their reusable metadata input; names, stable
+object IDs, origins, source references and analyst declarations may be sensitive.
+Domain-history input downloads contain the selected Case but are not duplicated
+in its storage. Connector reports exclude raw configuration, local paths,
+arguments, environment/header values, authentication material and URL paths or
+queries; names, package identities, origins and metadata counts remain visible.
+No file is uploaded, software executed or endpoint contacted by these reviews.
+Only a deliberate Lookup pivot selects a hostname for a separate investigation.
+
 ## Optional local rendered capture
 
 The optional capture companion is an explicit authorised-capture action outside
@@ -558,6 +657,19 @@ scheme, plus optional analyst-declared observer and vantage labels. These
 declarations can enter imported metadata and shared exports; they do not verify
 identity, location or independent collection. Older missing declarations stay
 unknown.
+
+Current manifests also retain navigation, script and frame response origins,
+script hashes, CSP-header and integrity-attribute presence, default form
+destinations, password-field counts and fixed requested-action wording labels.
+Clipboard API writes are blocked and their final-page attempt count is retained.
+No script text, clipboard content, form values or command text enters these
+observations. Page elements describe the final top-level document, not every
+frame or a verified user interaction. Case summary import retains counts and
+wording labels; the full set remains in the manifest unless explicitly retained.
+The request-channel ledger retains validated origins, method categories, response
+outcomes and whether collection started. It excludes paths, queries, headers and
+body content. Disabled transports and interactions not exercised are separate
+from requests not observed; refused direct connections retain counts only.
 
 When an analyst selects a local capture manifest for one Case, the browser
 validates it before preview and imports only sanitised manifest metadata and

@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCaseMetadata, openCaseSection, openConsoleView } from './console-navigation';
 import type { Page, Request } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -16,7 +17,10 @@ import {
   useTheme,
 } from './helpers';
 import { caseRecord, snapshot } from './case-test-fixtures';
-import { CASE_SCHEMA_VERSION, MAX_CASE_STORE_BYTES, normalizeCaseStore, serializeCaseStore, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
+import { CASE_SCHEMA_VERSION, MAX_CASE_STORE_BYTES, MAX_NOTES_PER_CASE, MAX_NOTE_LENGTH } from '../packages/contracts/case-portability.mts';
+import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
+import { serializeCaseStore } from '../packages/cases/case-storage-model.mts';
+import type { CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
 import type { CaseActionRecord } from '../frontend/src/lib/analysis/case-response-model.ts';
 
 const NOW = '2026-08-09T02:00:00.000Z';
@@ -106,35 +110,38 @@ function storageEntries(
 }
 
 function nearBudgetCaseSnapshot(): CaseRecord[] {
-  const note = (caseIndex:number,noteIndex:number,length=1_987)=>({
-    createdAt:new Date(Date.parse('2026-06-01T00:00:00.000Z')+noteIndex*1_000).toISOString(),
-    body:`${caseIndex}-${noteIndex}-`.padEnd(length,'x'),
-  });
-  const fullNotes=(caseIndex:number)=>Array.from({length:50},(_,noteIndex)=>note(caseIndex,noteIndex));
-  const fixed=[
-    caseRecord({id:'post-write-case',domain:'post-write.invalid',brandProfileIds:[]}),
-    caseRecord({id:'pruned-other-case',domain:'pruned-other.invalid',evidenceHistory:[snapshot({id:'old-prunable',capturedAt:'2026-01-01T00:00:00.000Z',firstCapturedAt:'2026-01-01T00:00:00.000Z'})]}),
-    ...Array.from({length:40},(_,index)=>caseRecord({id:`budget-${index}`,domain:`budget-${index}.invalid`,notes:fullNotes(index)})),
-  ];
-  const build=(length:number)=>normalizeCaseStore({version:CASE_SCHEMA_VERSION,cases:[
-    ...fixed,
-    caseRecord({id:'budget-partial',domain:'budget-partial.invalid',notes:[
-      ...Array.from({length:23},(_,index)=>note(40,index)),
-      note(40,23,length),
-    ]}),
-  ]}).cases;
-  let lower=1,upper=2_000,best=build(1);
-  while(lower<=upper){
-    const middle=Math.floor((lower+upper)/2);
-    const candidate=build(middle);
-    const bytes=new TextEncoder().encode(serializeCaseStore(candidate)).byteLength;
-    if(bytes<MAX_CASE_STORE_BYTES){best=candidate;lower=middle+1;}
-    else upper=middle-1;
-  }
-  const remaining=MAX_CASE_STORE_BYTES-new TextEncoder().encode(serializeCaseStore(best)).byteLength;
+  const paddingCases = Math.ceil(MAX_CASE_STORE_BYTES / (MAX_NOTES_PER_CASE * MAX_NOTE_LENGTH));
+  const cases = normalizeCaseStore({ version: CASE_SCHEMA_VERSION, cases: [
+    caseRecord({ id: 'post-write-case', domain: 'post-write.invalid', brandProfileIds: [] }),
+    caseRecord({ id: 'pruned-other-case', domain: 'pruned-other.invalid', evidenceHistory: [
+      snapshot({ id: 'old-prunable', capturedAt: '2026-01-01T00:00:00.000Z', firstCapturedAt: '2026-01-01T00:00:00.000Z' }),
+    ] }),
+    ...Array.from({ length: paddingCases }, (_, index) => caseRecord({
+      id: `budget-${index}`, domain: `budget-${index}.invalid`,
+      notes: Array.from({ length: MAX_NOTES_PER_CASE }, (_, noteIndex) => ({
+        id: `budget-${index}-note-${noteIndex}`,
+        createdAt: new Date(Date.parse('2026-06-01T00:00:00.000Z') + noteIndex * 1_000).toISOString(),
+        body: `${index}-${noteIndex}-`,
+      })),
+    })),
+  ] }).cases;
+  const byteLength = (records: CaseRecord[]) => new TextEncoder().encode(serializeCaseStore(records)).byteLength;
+  let remaining = MAX_CASE_STORE_BYTES - 1 - byteLength(cases);
   expect(remaining).toBeGreaterThan(0);
-  expect(remaining).toBeLessThan(12);
-  return best;
+  // Measure the current envelope, then fill bounded ASCII notes exactly. New
+  // Case fields change the available room, not a hand-tuned fixture baseline.
+  for (const record of cases) {
+    if (!record.id.startsWith('budget-')) continue;
+    for (const note of record.notes) {
+      const extra = Math.min(MAX_NOTE_LENGTH - note.body.length, remaining);
+      note.body += 'x'.repeat(extra);
+      remaining -= extra;
+    }
+  }
+  expect(remaining).toBe(0);
+  const normalized = normalizeCaseStore({ version: CASE_SCHEMA_VERSION, cases }).cases;
+  expect(byteLength(normalized)).toBe(MAX_CASE_STORE_BYTES - 1);
+  return normalized;
 }
 
 function trackApiRequests(page: Page): string[] {
@@ -153,6 +160,40 @@ function expectNoFeatureApiRequests(requests: readonly string[]): void {
 
 async function openCasesTab(page: Page): Promise<void> {
   await openConsoleView(page, 'cases');
+}
+
+for (const timezoneId of ['Pacific/Honolulu', 'Pacific/Kiritimati']) {
+  test.describe(`evidence dates in ${timezoneId}`, () => {
+    test.use({ timezoneId });
+    test('keeps Case, inbox and dashboard timestamps in UTC without collecting', async ({ page }, testInfo) => {
+      const apiRequests = trackApiRequests(page);
+      await page.goto('/brands');
+      await migrateLegacyBrowserData(page, storageEntries([
+        caseRecord({ id: 'dated-case', domain: 'dated.invalid', brandProfileIds: [PROFILE_ID], createdAt: NOW, updatedAt: NOW }),
+      ]), { destination: '/brands' });
+      const expected = '09 Aug 2026, 02:00:00 UTC';
+      const inbox = page.getByRole('region', { name: 'Brand review inbox' });
+      await expect(inbox).toContainText(`Saved Case · observed ${expected}`);
+      await page.goto('/dashboard');
+      await expect(page.locator('.recent-cases time')).toHaveText(expected);
+      await page.goto('/cases');
+      const time = page.locator('#case-head-dated-case time');
+      await expect(time).toHaveAttribute('datetime', NOW);
+      await expect(time).toHaveText(expected);
+      for (const width of [320, 1280]) {
+        await page.setViewportSize({ width, height: 800 });
+        for (const theme of ['light', 'dark'] as const) {
+          await useTheme(page, theme);
+          await expect(time).toBeVisible();
+          await time.scrollIntoViewIfNeeded();
+          await expect(time).toBeInViewport();
+          await expectNoHorizontalOverflow(page);
+          if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`case-date-${width}-${theme}.png`) });
+        }
+      }
+      expectNoFeatureApiRequests(apiRequests);
+    });
+  });
 }
 
 test('adds and removes exact associations by keyboard, restores focus, and preserves them through profile deletion', async ({ page }) => {
@@ -223,7 +264,7 @@ test('adds and removes exact associations by keyboard, restores focus, and prese
   await expect(inbox).toContainText('inconclusive');
 
   const profileCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Fixture profile', exact: true }) });
-  await profileCard.getByRole('button', { name: `Edit Fixture profile (${PROFILE_ID})` }).click();
+  await profileCard.getByRole('button', { name: 'Edit Fixture profile' }).click();
   const editor = page.getByRole('form', { name: 'Brand Profile', exact: true });
   await expect(page.getByLabel('Brand name')).toBeFocused();
   await expect.poll(() => editor.evaluate((element) => {
@@ -231,12 +272,12 @@ test('adds and removes exact associations by keyboard, restores focus, and prese
     return Boolean(inboxElement && (element.compareDocumentPosition(inboxElement) & Node.DOCUMENT_POSITION_FOLLOWING));
   })).toBe(true);
   const dialogPromise = page.waitForEvent('dialog');
-  const clickPromise = profileCard.getByRole('button', { name: `Delete Fixture profile (${PROFILE_ID})` }).click();
+  const clickPromise = profileCard.getByRole('button', { name: 'Delete Fixture profile' }).click();
   const dialog = await dialogPromise;
   expect(dialog.message()).toContain('1 linked case will retain this identifier and appear unresolved after deletion.');
   await dialog.accept();
   await clickPromise;
-  await expect(page.getByRole('button', { name: `Edit Second fixture profile (${SECOND_PROFILE_ID})` })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Edit Second fixture profile' })).toBeFocused();
 
   await expect(inbox.getByRole('heading', { name: 'Unresolved profile references' })).toBeVisible();
   await expect(inbox).toContainText(PROFILE_ID);
@@ -342,7 +383,7 @@ test('previews association storage pressure, exports or cancels, and reconciles 
       await useTheme(page, theme);
       await expect(review.getByRole('button', { name: 'Remove listed snapshots and save' })).toBeVisible();
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`case-storage-${width}-${theme}.png`), fullPage: true });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`case-storage-${width}-${theme}.png`), fullPage: true }); }
     }
   }
   const downloadEvent = page.waitForEvent('download');
@@ -371,7 +412,7 @@ test('previews association storage pressure, exports or cancels, and reconciles 
   const committedSnapshot=await readBrowserLocalCollection(page,'cases',{minimumRecords:1,minimumRevision:2});
   expect(requiredValue(committedSnapshot.records.find((record)=>record.value.id==='pruned-other-case'),'The prunable other Case is missing.').value.evidenceHistory).toHaveLength(0);
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
-  await page.getByLabel('Search').fill('pruned-other.invalid');
+  await page.getByRole('textbox', { name: 'Search', exact: true }).fill('pruned-other.invalid');
   await page.locator('.case-head',{hasText:'pruned-other.invalid'}).click();
   await openCaseSection(page, 'Evidence');
   await expect(page.getByRole('heading',{name:'Evidence timeline 0 snapshots'})).toBeVisible();
@@ -531,18 +572,17 @@ test('closes Brand Profile source truth after a post-ready storage failure', asy
   await expect(inbox).toHaveAttribute('aria-busy', 'false');
   await expect(metric).toHaveText('No active profile');
   await page.setViewportSize({ width: 390, height: 844 });
-  expect(await metric.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize))).toBeLessThan(14);
   await page.getByRole('radio', { name: 'Set Fixture profile active' }).check();
-  await expect(metric).toHaveText('1 review items');
+  await expect(metric).toHaveText('1 review item');
 
   const profileCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Fixture profile', exact: true }) });
-  await profileCard.getByRole('button', { name: `Edit Fixture profile (${PROFILE_ID})` }).click();
+  await profileCard.getByRole('button', { name: 'Edit Fixture profile' }).click();
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'brand_profiles');
   await page.getByRole('button', { name: 'Save profile' }).click();
 
   const profileSourceAlert = page.locator('.profile-source-state[role="alert"]');
   const inboxSourceAlert = inbox.getByRole('alert');
-  await expect(profileSourceAlert).toContainText('No empty-profile conclusion has been drawn');
+  await expect(profileSourceAlert).toContainText('Saved Brand Profiles could not be loaded');
   await expect(inboxSourceAlert).toContainText('Brand Profiles could not be read');
   expect(await profileSourceAlert.evaluate((element) => getComputedStyle(element).borderStyle)).toBe('dotted');
   expect(await inboxSourceAlert.evaluate((element) => getComputedStyle(element).borderStyle)).toBe('dotted');
@@ -567,7 +607,7 @@ test('installs complete committed profile snapshots across stale tabs and prefer
   await expect(secondPage.getByRole('status').filter({hasText:'Saved "Concurrent fixture profile"'})).toBeVisible();
 
   const profileCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Fixture profile', exact: true }) });
-  await profileCard.getByRole('button', { name: `Edit Fixture profile (${PROFILE_ID})` }).click();
+  await profileCard.getByRole('button', { name: 'Edit Fixture profile' }).click();
   await page.getByLabel('Brand name').fill('Committed fixture profile');
   await page.evaluate((key) => {
     const originalSetItem = Storage.prototype.setItem;
@@ -587,7 +627,7 @@ test('installs complete committed profile snapshots across stale tabs and prefer
 
   await page.reload();
   const committedCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Committed fixture profile', exact: true }) });
-  await expect(committedCard.getByRole('button', { name: `Delete Committed fixture profile (${PROFILE_ID})` })).toBeEnabled();
+  await expect(committedCard.getByRole('button', { name: 'Delete Committed fixture profile' })).toBeEnabled();
   await page.evaluate((key) => {
     const originalGetItem = Storage.prototype.getItem;
     Storage.prototype.getItem = function getItem(name: string) {
@@ -596,7 +636,7 @@ test('installs complete committed profile snapshots across stale tabs and prefer
     };
   }, ACTIVE_PROFILE_KEY);
   const dialogPromise = page.waitForEvent('dialog');
-  const deletePromise = committedCard.getByRole('button', { name: `Delete Committed fixture profile (${PROFILE_ID})` }).click();
+  const deletePromise = committedCard.getByRole('button', { name: 'Delete Committed fixture profile' }).click();
   const dialog = await dialogPromise;
   await dialog.accept();
   await deletePromise;
@@ -614,7 +654,7 @@ test('installs complete committed profile snapshots across stale tabs and prefer
 test('profile deletion separates a committed read failure from a rejected write', async ({ page }) => {
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, storageEntries([], [profileFixture()], ''), { destination: '/brands' });
-  const deleteButton=page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`});
+  const deleteButton=page.getByRole('button',{name:'Delete Fixture profile'});
   await expect(deleteButton).toBeVisible();
   await failNextBrowserLocalCollectionReadAfterWrite(page,'brand_profiles');
   const dialogPromise=page.waitForEvent('dialog');
@@ -628,13 +668,13 @@ test('profile deletion separates a committed read failure from a rejected write'
 
   await page.reload();
   await migrateLegacyBrowserData(page, storageEntries([], [profileFixture()], ''), { destination: '/brands' });
-  await expect(page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Delete Fixture profile'})).toBeVisible();
   const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
   await failBrowserLocalManifestWrites(page,'brand_profiles');
   const retryDialogPromise=page.waitForEvent('dialog');
-  const retryPromise=page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`}).click();
+  const retryPromise=page.getByRole('button',{name:'Delete Fixture profile'}).click();
   const retryDialog=await retryDialogPromise;await retryDialog.accept();await retryPromise;
-  await expect(page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`})).toBeFocused();
+  await expect(page.getByRole('button',{name:'Delete Fixture profile'})).toBeFocused();
   await expect(page.locator('#brand-profile-source-state')).toHaveCount(0);
   await expect(page.getByRole('status').filter({hasText:'Could not delete profile'})).toContainText(/write|storage|quota/iu);
   await expect(page.getByRole('button',{name:'New profile'})).toBeEnabled();
@@ -712,7 +752,9 @@ test('propagates unavailable active-profile context across Lookup, Bulk and Disc
   await expect(page.locator('.local-context-status')).toContainText('(profile)');
   await page.getByLabel('Brand or domain').fill('example.invalid');
   await page.getByRole('button',{name:'Generate candidates'}).click();
-  await expect(page.getByRole('status').filter({hasText:'Profile-derived trust and allowlist exclusions remain unavailable'})).toContainText('no candidate was classified as outside those lists');
+  const generationStatus = page.getByRole('status').filter({ hasText: /^Generated \d+/u });
+  await expect(generationStatus).toContainText('Brand Profile context is unavailable');
+  await expect(generationStatus).toContainText('domain exclusions were not evaluated');
   expectNoFeatureApiRequests(apiRequests);
 });
 
@@ -748,7 +790,7 @@ test('rereads cases before profile deletion and discloses unknown impact on fail
   await failNextBrowserLocalCollectionRead(page, 'cases');
   const profileCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Fixture profile', exact: true }) });
   const dialogPromise = page.waitForEvent('dialog');
-  const clickPromise = profileCard.getByRole('button', { name: `Delete Fixture profile (${PROFILE_ID})` }).click();
+  const clickPromise = profileCard.getByRole('button', { name: 'Delete Fixture profile' }).click();
   const dialog = await dialogPromise;
   expect(dialog.message()).toContain('Linked-case impact cannot be checked because cases could not be read.');
   expect(dialog.message()).not.toContain('0 linked cases');
@@ -762,7 +804,7 @@ test('rereads cases before profile deletion and discloses unknown impact on fail
   await expect(profileCard).toBeVisible();
 
   const retryDialogPromise = page.waitForEvent('dialog');
-  const retryClickPromise = profileCard.getByRole('button', { name: `Delete Fixture profile (${PROFILE_ID})` }).click();
+  const retryClickPromise = profileCard.getByRole('button', { name: 'Delete Fixture profile' }).click();
   const retryDialog = await retryDialogPromise;
   expect(retryDialog.message()).toContain('1 linked case will retain this identifier and appear unresolved after deletion.');
   await retryDialog.dismiss();

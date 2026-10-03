@@ -3,8 +3,8 @@
     CASE_PIN_COMPLETENESS,
     CASE_SIGHTING_CATEGORIES,
     CASE_SIGHTING_STATES,
-    type CaseRecord,
-  } from '$lib/cases';
+  } from '../../../../packages/cases/case-response-records.mts';
+  import type { CaseRecord } from '../cases.ts';
   import { buildCaseSightingChronology } from '$lib/analysis/case-sighting-chronology.ts';
   import { isoFromUtcInput, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
@@ -13,6 +13,8 @@
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
+  import DocumentationSearch from './DocumentationSearch.svelte';
+  import CaseEvidenceRelationships from './CaseEvidenceRelationships.svelte';
 
   let { record, mode, mutationBusy, persist }: {
     record: CaseRecord;
@@ -31,15 +33,15 @@
     pinValue: '',
     pinSource: 'lookup evidence',
     pinObservedAt: '',
-    pinCompleteness: 'complete',
+    pinCompleteness: 'complete' as typeof CASE_PIN_COMPLETENESS[number],
     pinLimitations: ''
   });
   const sightingDraft = createCaseDraft(() => record.id, 'sighting', {
-    sightingState: 'observed_by_deployment',
-    sightingCategory: 'website',
+    sightingState: 'observed_by_deployment' as typeof CASE_SIGHTING_STATES[number],
+    sightingCategory: 'website' as typeof CASE_SIGHTING_CATEGORIES[number],
     sightingSource: 'WHOISleuth deep lookup',
     sightingObservedAt: '',
-    sightingCompleteness: 'complete',
+    sightingCompleteness: 'complete' as typeof CASE_PIN_COMPLETENESS[number],
     sightingEvidencePinId: '',
     sightingLimitations: ''
   });
@@ -92,6 +94,7 @@
 <section class="case-response-stage" aria-label="Case observations">
   <details id={`case-response-observation-${record.id}`} bind:open={expanded}>
     <summary>Pin an observed fact</summary>
+    <DocumentationSearch initialQuery="evidence" label="Evidence guidance" />
     <form class="response-form" data-recovery-form={pinDraft.form} oninput={pinDraft.changed} onsubmit={(event) => { event.preventDefault(); void addPin(); }}>
       <p class="notice">Date and time fields use UTC.</p>
       <div class="two-columns">
@@ -125,12 +128,14 @@
       <ol class="records">
         {#each [...record.evidencePins].reverse() as pin}
           <li>
-            <CaseEvidenceFact {pin} />
+            <CaseEvidenceFact {pin} copyable />
           </li>
         {/each}
       </ol>
     {/if}
   </details>
+
+  <CaseEvidenceRelationships {record} {persist} {mutationBusy} />
 
   <details id={`case-response-observation-sightings-${record.id}`}>
     <summary>Record a source-qualified sighting</summary>

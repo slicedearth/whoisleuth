@@ -1,9 +1,13 @@
 <script lang="ts">
   import {
-    CASE_ASSERTION_KINDS, CASE_ASSERTION_STATES, CASE_DECISION_CONFIDENCE_LEVELS,
-    CASE_DISPOSITIONS, CASE_EVIDENCE_RELATION_STANCES,
-    CASE_REVIEW_REASONS, isReviewedCaseDisposition, type CaseRecord, type CaseEvidenceRelationStance,
-  } from '$lib/cases';
+    CASE_ASSERTION_KINDS,
+    CASE_ASSERTION_STATES,
+    CASE_DECISION_CONFIDENCE_LEVELS,
+    CASE_EVIDENCE_RELATION_STANCES,
+  } from '../../../../packages/cases/case-response-records.mts';
+  import { CASE_DISPOSITIONS, isReviewedCaseDisposition } from '../../../../packages/cases/case-record-decisions.mts';
+  import { CASE_REVIEW_REASONS } from '../../../../packages/cases/case-record-contracts.mts';
+  import type { CaseRecord, CaseEvidenceRelationStance } from '../cases.ts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
@@ -27,19 +31,19 @@
   const decisionDraft = createCaseDraft(() => record.id, 'decision', {
     decisionSummary: '',
     decisionRationale: '',
-    decisionConfidence: 'unknown',
+    decisionConfidence: 'unknown' as typeof CASE_DECISION_CONFIDENCE_LEVELS[number],
     decisionConfidenceBasis: '',
     decisionPinIds: [] as string[],
-    decisionDisposition: 'unreviewed',
+    decisionDisposition: 'unreviewed' as typeof CASE_DISPOSITIONS[number]['value'],
     decisionReviewReason: '',
     decisionClassificationDirty: false
   });
   const assertionDraft = createCaseDraft(() => record.id, 'assertion', {
-    assertionKind: 'hypothesis',
+    assertionKind: 'hypothesis' as typeof CASE_ASSERTION_KINDS[number],
     assertionStatement: '',
     assertionRationale: '',
     assertionEvidenceRelations: [] as Array<{ evidencePinId: string; stance: CaseEvidenceRelationStance }>,
-    assertionState: 'open'
+    assertionState: 'open' as typeof CASE_ASSERTION_STATES[number]
   }, { assertionEvidenceRelations: { evidencePinId: '', stance: '' } });
   $effect(() => {
     record.updatedAt;
@@ -112,8 +116,10 @@
   }
 
   async function setAssertionState(id: string, state: string) {
+    const selected = CASE_ASSERTION_STATES.find(value => value === state);
+    if (!selected) return;
     await persist(
-      { assertionUpdate: { id, state } },
+      { assertionUpdate: { id, state: selected } },
       `Updated the analyst assertion for ${record.domain}.`,
       () => document.getElementById(assertionItemId(id)),
     );
@@ -128,7 +134,7 @@
       <div class="assessment-review">
       <div class="assessment-draft">
       <div class="two-columns">
-        <label class="field">Disposition<select value={decisionDraft.value.decisionDisposition} onchange={(event) => { decisionDraft.value.decisionDisposition = event.currentTarget.value; decisionDraft.value.decisionClassificationDirty = true; if (!isReviewedCaseDisposition(decisionDraft.value.decisionDisposition)) decisionDraft.value.decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{isReviewedCaseDisposition(option.value) ? option.label : 'Select a reviewed disposition'}</option>{/each}</select></label>
+        <label class="field">Disposition<select value={decisionDraft.value.decisionDisposition} onchange={(event) => { const selected = CASE_DISPOSITIONS.find(option => option.value === event.currentTarget.value); if (!selected) return; decisionDraft.value.decisionDisposition = selected.value; decisionDraft.value.decisionClassificationDirty = true; if (!isReviewedCaseDisposition(selected.value)) decisionDraft.value.decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{isReviewedCaseDisposition(option.value) ? option.label : 'Select a reviewed disposition'}</option>{/each}</select></label>
         <label class="field">Review reason<select value={decisionDraft.value.decisionReviewReason} onchange={(event) => { decisionDraft.value.decisionReviewReason = event.currentTarget.value; decisionDraft.value.decisionClassificationDirty = true; }} disabled={decisionDraft.value.decisionDisposition === 'unreviewed'}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
       </div>
       <label class="field">{mode === 'quick' ? 'Conclusion summary' : 'Decision summary'}<input bind:value={decisionDraft.value.decisionSummary} maxlength="80" required></label>

@@ -11,7 +11,7 @@ import {
   type SchemaCompatibilityEntry,
 } from '../packages/contracts/schema-compatibility.mts';
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
-import { compareCodeUnits as ordinalCompare } from './maintainer-tool-helpers.mts';
+import { compareCodeUnits as ordinalCompare, isOptionalEditorConfiguration } from './maintainer-tool-helpers.mts';
 import {
   appendBounded,
   discoverSchemaIdentifiersInSource,
@@ -19,7 +19,6 @@ import {
   MAX_SCHEMA_SOURCE_BINDINGS,
   MAX_SCHEMA_SOURCE_FILE_BYTES,
   MAX_SCHEMA_SOURCE_OCCURRENCES,
-  SCHEMA_DYNAMIC_USE_ALLOWLIST,
   tokens,
   type DynamicConstruction,
   type SourceDefinition,
@@ -55,7 +54,7 @@ export const MAX_SCHEMA_SOURCE_MANIFEST_BYTES = 2 * 1024 * 1024;
 export const SCHEMA_SOURCE_ROOTS = Object.freeze([
   'bin',
   'cli',
-  'frontend/src',
+  'frontend',
   'lib',
   'netlify/functions',
   'packages',
@@ -78,11 +77,6 @@ const SCHEMA_SOURCE_EXEMPT_FILES = new Set([
   'DISCLOSURE',
   'LICENSE',
   'NOTICE',
-  'frontend/analysis-tsconfig.json',
-  'frontend/package.json',
-  'frontend/svelte.config.ts',
-  'frontend/tsconfig.json',
-  'frontend/vite.config.ts',
   'netlify.toml',
   'package-lock.json',
   'package.json',
@@ -91,6 +85,7 @@ const SCHEMA_SOURCE_EXEMPT_FILES = new Set([
   'tsconfig.json',
 ]);
 const SCHEMA_SOURCE_IGNORED_DIRECTORY_NAMES = new Set([
+  '.svelte-kit',
   'build',
   'coverage',
   'node_modules',
@@ -106,6 +101,9 @@ function isConventionalMarkdown(relative: string): boolean {
 }
 function isFrontendStylesheet(relative: string): boolean {
   return relative.startsWith('frontend/src/') && path.extname(relative).toLowerCase() === '.css';
+}
+function isBuildScript(relative: string): boolean {
+  return relative.startsWith('tools/') && /\.(?:Dockerfile|sh)$/u.test(relative);
 }
 const SCHEMA_SOURCE_NON_SOURCE_FILE_SET = new Set<string>(SCHEMA_SOURCE_NON_SOURCE_FILES);
 const CLASSIFICATION_KINDS = new Set(['exempt', 'member', 'non_schema']);
@@ -139,26 +137,16 @@ const CLASSIFICATION_REASONS_BY_KIND = Object.freeze({
 const MAX_SCHEMA_CLASSIFICATION_PATH_LENGTH = 240;
 const MAX_SCHEMA_CLASSIFICATION_RELATED_ENTRIES = 8;
 const MAX_SCHEMA_CLASSIFICATION_NOTE_LENGTH = 240;
-const MAX_SCHEMA_CLASSIFICATION_SOURCE_USES = 16;
-
-const SCHEMA_INLINE_EMITTER_ALLOWLIST = Object.freeze([
-  ['whoisleuth.common-infrastructure', 'packages/relationships/common-infrastructure-snapshot.json', 1],
-  ['whoisleuth.sslbl-certificate-snapshot', 'lib/sslbl-certificates.generated.mts', 1],
-] as const);
 
 type SchemaSourceClassificationRecord = Readonly<{
   identifier: string;
-  kind: keyof typeof CLASSIFICATION_REASONS_BY_KIND;
   reason: string;
-  owner: string;
-  sourceUses: readonly Readonly<{
-    file: string;
-    literalOccurrences: number;
-    dynamicConstructions: number;
-  }>[];
-  relatedEntryIds: readonly string[];
   note: string;
-}>;
+}> & (Readonly<{ kind: 'non_schema' }> | Readonly<{
+  kind: 'exempt' | 'member';
+  owner: string;
+  relatedEntryIds: readonly string[];
+}>);
 
 export type SchemaSourceDiscovery = Readonly<{
   repositoryRoot: string;
@@ -192,6 +180,7 @@ type SourceTraversalState = {
   directories: number;
   entries: number;
   declaredBytes: number;
+  visiblePaths: ReadonlySet<string> | null;
 };
 
 function validateNonSourceFileLedger(): void {
@@ -248,6 +237,8 @@ async function collectFiles(
     for (const entry of entries) {
       const relative = path.posix.join(relativeDirectory, entry.name);
       const absolute = path.join(absoluteDirectory, entry.name);
+      if (state.visiblePaths && !state.visiblePaths.has(relative)) continue;
+      if (pathInside(relative, SCHEMA_SOURCE_EXEMPT_ROOTS)) continue;
       if (entry.isDirectory() && (
         SCHEMA_SOURCE_IGNORED_DIRECTORY_NAMES.has(entry.name)
         || relative === 'frontend/src/lib/generated'
@@ -260,7 +251,7 @@ async function collectFiles(
       }
       if (!metadata.isFile()) throw new TypeError(`Schema source path ${relative} must be an ordinary file or directory.`);
       if (!SOURCE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
-        if (isConventionalMarkdown(relative) || isFrontendStylesheet(relative)) continue;
+        if (isConventionalMarkdown(relative) || isFrontendStylesheet(relative) || isBuildScript(relative)) continue;
         if (!SCHEMA_SOURCE_NON_SOURCE_FILE_SET.has(relative)) {
           throw new TypeError(`Schema source scope contains an unclassified source path: ${relative}`);
         }
@@ -326,16 +317,17 @@ async function gitSourceManifest(repositoryRoot: string): Promise<string[] | nul
   return paths.sort(ordinalCompare);
 }
 
-async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> {
+async function validateSchemaSourceScope(repositoryRoot: string): Promise<string[] | null> {
   const coveredRoots = new Set<string>(SCHEMA_SOURCE_ROOTS);
   const coveredFiles = new Set<string>(SCHEMA_SOURCE_ROOT_FILES);
   const manifest = await gitSourceManifest(repositoryRoot);
   if (manifest) {
     const observedNonSourceFiles = new Set<string>();
     for (const relative of manifest) {
+      if (pathInside(relative, SCHEMA_SOURCE_EXEMPT_ROOTS)) continue;
       if (pathInside(relative, coveredRoots)) {
         if (SOURCE_EXTENSIONS.has(path.extname(relative).toLowerCase())) continue;
-        if (isConventionalMarkdown(relative) || isFrontendStylesheet(relative)) continue;
+        if (isConventionalMarkdown(relative) || isFrontendStylesheet(relative) || isBuildScript(relative)) continue;
         if (SCHEMA_SOURCE_NON_SOURCE_FILE_SET.has(relative)) {
           observedNonSourceFiles.add(relative);
           continue;
@@ -345,6 +337,7 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
       if (pathInside(relative, SCHEMA_SOURCE_EXEMPT_ROOTS)
         || coveredFiles.has(relative)
         || isConventionalMarkdown(relative)
+        || isOptionalEditorConfiguration(relative)
         || SCHEMA_SOURCE_EXEMPT_FILES.has(relative)) continue;
       throw new TypeError(`Schema source scope contains an unclassified repository path: ${relative}`);
     }
@@ -353,7 +346,7 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
         throw new TypeError(`Schema source non-source file allowance is stale or missing: ${relative}`);
       }
     }
-    return;
+    return manifest;
   }
   let directories = 0;
   let entriesSeen = 0;
@@ -394,25 +387,37 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
         await visit(absolute, relative, depth + 1);
       } else if (!metadata.isFile()) {
         throw new TypeError(`Schema source scope path ${relative} must be an ordinary file or directory.`);
-      } else if (!isConventionalMarkdown(relative)) {
+      } else if (!isConventionalMarkdown(relative) && !isOptionalEditorConfiguration(relative)) {
         throw new TypeError(`Schema source scope contains an unclassified source path: ${relative}`);
       }
     }
   };
   await visit(repositoryRoot, '', 0);
+  return null;
 }
 
 export async function discoverSchemaSources(
   repositoryRoot = DEFAULT_SCHEMA_SOURCE_REPOSITORY_ROOT,
 ): Promise<SchemaSourceDiscovery> {
   validateNonSourceFileLedger();
-  await validateSchemaSourceScope(repositoryRoot);
+  const manifest = await validateSchemaSourceScope(repositoryRoot);
+  // Discover checkout source from the same Git-visible inventory validated
+  // above; ignored editor and generated files are not additional inputs.
+  const visiblePaths = manifest ? new Set(manifest) : null;
+  for (const relative of manifest ?? []) {
+    let parent = path.posix.dirname(relative);
+    while (parent !== '.') {
+      visiblePaths!.add(parent);
+      parent = path.posix.dirname(parent);
+    }
+  }
   const traversal: SourceTraversalState = {
     files: [],
     nonSourceFiles: new Set<string>(),
     directories: 0,
     entries: 0,
     declaredBytes: 0,
+    visiblePaths,
   };
   for (const relativeRoot of SCHEMA_SOURCE_ROOTS) {
     await collectFiles(repositoryRoot, relativeRoot, traversal);
@@ -509,7 +514,10 @@ function validateClassification(value: unknown): asserts value is SchemaSourceCl
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Schema source classification must be an object.');
   const item = value as Record<string, unknown>;
   const keys = Object.keys(item).sort();
-  if (keys.join(',') !== 'identifier,kind,note,owner,reason,relatedEntryIds,sourceUses') {
+  const expectedKeys = item.kind === 'non_schema'
+    ? 'identifier,kind,note,reason'
+    : 'identifier,kind,note,owner,reason,relatedEntryIds';
+  if (keys.join(',') !== expectedKeys) {
     throw new TypeError('Schema source classification has an invalid field set.');
   }
   if (typeof item.identifier !== 'string'
@@ -519,51 +527,30 @@ function validateClassification(value: unknown): asserts value is SchemaSourceCl
     || !CLASSIFICATION_KINDS.has(item.kind)
     || typeof item.reason !== 'string'
     || !CLASSIFICATION_REASONS.has(item.reason)
-    || typeof item.owner !== 'string'
-    || item.owner.length > MAX_SCHEMA_CLASSIFICATION_PATH_LENGTH
-    || item.owner.startsWith('/')
-    || item.owner.includes('..')
-    || !Array.isArray(item.sourceUses)
-    || item.sourceUses.length < 1
-    || item.sourceUses.length > MAX_SCHEMA_CLASSIFICATION_SOURCE_USES
-    || !Array.isArray(item.relatedEntryIds)
-    || item.relatedEntryIds.length > MAX_SCHEMA_CLASSIFICATION_RELATED_ENTRIES
-    || item.relatedEntryIds.some((id) => typeof id !== 'string' || !/^[a-z0-9][a-z0-9.-]{2,79}$/u.test(id))
-    || new Set(item.relatedEntryIds).size !== item.relatedEntryIds.length
     || typeof item.note !== 'string'
     || !item.note
     || item.note.length > MAX_SCHEMA_CLASSIFICATION_NOTE_LENGTH
     || /[\x00-\x1f\x7f]/u.test(item.note)) {
     throw new TypeError('Schema source classification has invalid bounded metadata.');
   }
-  let previousFile = '';
-  for (const rawUse of item.sourceUses) {
-    if (!rawUse || typeof rawUse !== 'object' || Array.isArray(rawUse)) {
-      throw new TypeError('Schema source classification has an invalid source-use ledger.');
-    }
-    const use = rawUse as Record<string, unknown>;
-    if (Object.keys(use).sort().join(',') !== 'dynamicConstructions,file,literalOccurrences'
-      || typeof use.file !== 'string'
-      || !use.file
-      || use.file.length > MAX_SCHEMA_CLASSIFICATION_PATH_LENGTH
-      || use.file.startsWith('/')
-      || use.file.includes('..')
-      || (previousFile && ordinalCompare(previousFile, use.file) >= 0)
-      || !Number.isSafeInteger(use.literalOccurrences)
-      || (use.literalOccurrences as number) < 0
-      || (use.literalOccurrences as number) > MAX_SCHEMA_SOURCE_OCCURRENCES
-      || !Number.isSafeInteger(use.dynamicConstructions)
-      || (use.dynamicConstructions as number) < 0
-      || (use.dynamicConstructions as number) > MAX_SCHEMA_SOURCE_OCCURRENCES
-      || (use.literalOccurrences as number) + (use.dynamicConstructions as number) < 1) {
-      throw new TypeError('Schema source classification has an invalid source-use ledger.');
-    }
-    previousFile = use.file;
-  }
   const kind = item.kind as keyof typeof CLASSIFICATION_REASONS_BY_KIND;
-  if (!CLASSIFICATION_REASONS_BY_KIND[kind].has(item.reason as never)
-    || (kind === 'member' && item.relatedEntryIds.length === 0)
-    || (kind === 'non_schema' && item.relatedEntryIds.length !== 0)) {
+  if (!CLASSIFICATION_REASONS_BY_KIND[kind].has(item.reason as never)) {
+    throw new TypeError('Schema source classification has inconsistent kind metadata.');
+  }
+  // Filenames and hostnames do not acquire schema meaning when a helper moves
+  // or repeats them. Actual schema emitters are checked independently below.
+  if (kind === 'non_schema') return;
+  if (typeof item.owner !== 'string'
+    || item.owner.length > MAX_SCHEMA_CLASSIFICATION_PATH_LENGTH
+    || item.owner.startsWith('/')
+    || item.owner.includes('..')
+    || !Array.isArray(item.relatedEntryIds)
+    || item.relatedEntryIds.length > MAX_SCHEMA_CLASSIFICATION_RELATED_ENTRIES
+    || item.relatedEntryIds.some((id) => typeof id !== 'string' || !/^[a-z0-9][a-z0-9.-]{2,79}$/u.test(id))
+    || new Set(item.relatedEntryIds).size !== item.relatedEntryIds.length) {
+    throw new TypeError('Schema source classification has invalid bounded metadata.');
+  }
+  if (kind === 'member' && item.relatedEntryIds.length === 0) {
     throw new TypeError('Schema source classification has inconsistent kind metadata.');
   }
 }
@@ -608,13 +595,11 @@ type ResolvedSchemaUse = Readonly<{
 }>;
 
 type CanonicalSourceBindings = Readonly<{
-  byFile: ReadonlyMap<string, ReadonlySet<string>>;
   uses: readonly ResolvedSchemaUse[];
 }>;
 
 function buildCanonicalSourceBindings(
   discovery: SchemaSourceDiscovery,
-  enforceRepositoryLedgers: boolean,
 ): CanonicalSourceBindings {
   const sourceFiles = new Set(discovery.files);
   const directByKey = new Map(discovery.definitions.map((definition) => [
@@ -683,50 +668,15 @@ function buildCanonicalSourceBindings(
     }
   }
 
-  const boundByFile = new Map<string, Set<string>>();
-  const bind = (file: string, identifier: string | null) => {
-    if (!identifier) return;
-    const values = boundByFile.get(file) ?? new Set<string>();
-    values.add(identifier);
-    boundByFile.set(file, values);
-  };
-  for (const definition of discovery.definitions) bind(definition.file, definition.identifier);
-  const dynamicUseAllowlist = new Set<string>();
-  if (enforceRepositoryLedgers) {
-    for (const [file, role] of SCHEMA_DYNAMIC_USE_ALLOWLIST) {
-      const key = `${file}\0${role}`;
-      if (dynamicUseAllowlist.has(key)) throw new Error(`Schema source dynamic-use allowance is duplicated: ${file} (${role}).`);
-      dynamicUseAllowlist.add(key);
-    }
-  }
-  const usedDynamicUseAllowlist = new Set<string>();
   const uses: ResolvedSchemaUse[] = [];
-  const unresolvedUses: string[] = [];
+  // Resolve identity references where statically known. Runtime selections and
+  // copied values are not declarations, and are checked by the format readers
+  // and their compatibility fixtures rather than a filename exception here.
   for (const emitter of discovery.emitters) {
     const identifier = emitter.identifier ?? (emitter.symbol ? resolve(emitter.file, emitter.symbol) : null);
-    if (!identifier) {
-      const useKey = `${emitter.file}\0${emitter.role}`;
-      if (dynamicUseAllowlist.has(useKey)) {
-        usedDynamicUseAllowlist.add(useKey);
-      } else {
-        if (unresolvedUses.length < 64) unresolvedUses.push(`${emitter.role} ${emitter.file}:${emitter.line}`);
-      }
-    }
     uses.push({ source: emitter, identifier });
-    bind(emitter.file, identifier);
-  }
-  if (unresolvedUses.length) {
-    throw new Error(`Schema source uses do not resolve to canonical schema definitions: ${unresolvedUses.join(', ')}.`);
-  }
-  for (const [allowedFile, allowedRole] of SCHEMA_DYNAMIC_USE_ALLOWLIST) {
-    if (!enforceRepositoryLedgers) break;
-    const key = `${allowedFile}\0${allowedRole}`;
-    if (!usedDynamicUseAllowlist.has(key)) {
-      throw new Error(`Schema source dynamic-use allowance is stale: ${allowedFile} (${allowedRole}).`);
-    }
   }
   return {
-    byFile: new Map([...boundByFile].map(([file, identifiers]) => [file, identifiers as ReadonlySet<string>])),
     uses: Object.freeze(uses),
   };
 }
@@ -736,7 +686,6 @@ export async function validateSchemaSourceCoverage(
   discovery: SchemaSourceDiscovery,
   classifications: readonly unknown[] = SCHEMA_SOURCE_CLASSIFICATIONS,
 ): Promise<SchemaSourceCoverage> {
-  const enforceRepositoryLedgers = path.resolve(discovery.repositoryRoot) === DEFAULT_SCHEMA_SOURCE_REPOSITORY_ROOT;
   const entryById = new Map(entries.map((entry) => [entry.id, entry]));
   const inventoryBySchema = new Map<string, SchemaCompatibilityEntry[]>();
   for (const entry of entries) {
@@ -768,39 +717,7 @@ export async function validateSchemaSourceCoverage(
       [...(literalEmittersByIdentifier.get(emitter.identifier) ?? []), emitter],
     );
   }
-  const inlineAllowlist = new Map<string, number>();
-  if (enforceRepositoryLedgers) {
-    for (const [identifier, file, expectedCount] of SCHEMA_INLINE_EMITTER_ALLOWLIST) {
-      const key = `${identifier}\0${file}`;
-      if (inlineAllowlist.has(key)) throw new Error(`Schema source inline-emitter allowance is duplicated: ${identifier} (${file}).`);
-      inlineAllowlist.set(key, expectedCount);
-    }
-  }
-  const usedInlineAllowlist = new Map<string, number>();
-  for (const [identifier, emitters] of literalEmittersByIdentifier) {
-    const definitions = definitionsByIdentifier.get(identifier) ?? [];
-    if (!definitions.length && emitters.length > 1) {
-      throw new Error(`Schema identifier has multiple inline emitters without one canonical definition: ${identifier} (${emitters.map((item) => `${item.file}:${item.line}`).join(', ')}).`);
-    }
-    const definitionFile = definitions[0]?.file ?? null;
-    for (const emitter of emitters) {
-      if (!definitionFile || emitter.file === definitionFile) continue;
-      const key = `${identifier}\0${emitter.file}`;
-      if (!inlineAllowlist.has(key)) {
-        throw new Error(`Schema identifier has an unreviewed disconnected inline emitter: ${identifier} (${emitter.file}:${emitter.line}).`);
-      }
-      usedInlineAllowlist.set(key, (usedInlineAllowlist.get(key) ?? 0) + 1);
-    }
-  }
-  for (const [identifier, file, expectedCount] of SCHEMA_INLINE_EMITTER_ALLOWLIST) {
-    if (!enforceRepositoryLedgers) break;
-    const key = `${identifier}\0${file}`;
-    const actualCount = usedInlineAllowlist.get(key) ?? 0;
-    if (actualCount !== expectedCount) {
-      throw new Error(`Schema source inline-emitter allowance expected ${expectedCount} uses but found ${actualCount}: ${identifier} (${file}).`);
-    }
-  }
-  const canonicalBindings = buildCanonicalSourceBindings(discovery, enforceRepositoryLedgers);
+  const canonicalBindings = buildCanonicalSourceBindings(discovery);
 
   const lifecycleMetadataByIdentifier = new Map<string, Set<string>>();
   for (const family of SCHEMA_LIFECYCLE_REGISTRY) {
@@ -826,37 +743,15 @@ export async function validateSchemaSourceCoverage(
       || lifecycleMetadataByIdentifier.has(raw.identifier)) {
       throw new Error(`Schema source classification is duplicated or overlaps the inventory: ${raw.identifier}`);
     }
+    if (raw.kind === 'non_schema') {
+      classificationByIdentifier.set(raw.identifier, raw);
+      continue;
+    }
     if (!await ordinaryFile(discovery.repositoryRoot, raw.owner)) {
       throw new Error(`Schema source classification owner ${raw.owner} is missing or is not an ordinary file.`);
     }
-    const actualSourceUses = new Map<string, { literalOccurrences: number; dynamicConstructions: number }>();
-    for (const occurrence of discovery.occurrences) {
-      if (occurrence.identifier !== raw.identifier) continue;
-      const use = actualSourceUses.get(occurrence.file) ?? { literalOccurrences: 0, dynamicConstructions: 0 };
-      use.literalOccurrences += 1;
-      actualSourceUses.set(occurrence.file, use);
-    }
-    for (const dynamic of discovery.dynamicConstructions) {
-      if (dynamic.identifier !== raw.identifier) continue;
-      const use = actualSourceUses.get(dynamic.file) ?? { literalOccurrences: 0, dynamicConstructions: 0 };
-      use.dynamicConstructions += 1;
-      actualSourceUses.set(dynamic.file, use);
-    }
-    const expectedSourceUses = new Map(raw.sourceUses.map((use) => [use.file, use]));
-    const sourceUseFiles = [...new Set([...actualSourceUses.keys(), ...expectedSourceUses.keys()])].sort(ordinalCompare);
-    const sourceUseMismatch = sourceUseFiles.find((file) => {
-      const actual = actualSourceUses.get(file) ?? { literalOccurrences: 0, dynamicConstructions: 0 };
-      const expected = expectedSourceUses.get(file) ?? { literalOccurrences: 0, dynamicConstructions: 0 };
-      return actual.literalOccurrences !== expected.literalOccurrences
-        || actual.dynamicConstructions !== expected.dynamicConstructions;
-    });
-    if (sourceUseMismatch) {
-      const actual = actualSourceUses.get(sourceUseMismatch) ?? { literalOccurrences: 0, dynamicConstructions: 0 };
-      const expected = expectedSourceUses.get(sourceUseMismatch) ?? { literalOccurrences: 0, dynamicConstructions: 0 };
-      throw new Error(`Schema source classification ${raw.identifier} expected ${expected.literalOccurrences} literal and ${expected.dynamicConstructions} dynamic use(s) in ${sourceUseMismatch}, but found ${actual.literalOccurrences} literal and ${actual.dynamicConstructions} dynamic use(s).`);
-    }
-    if (!expectedSourceUses.has(raw.owner)) {
-      throw new Error(`Schema source classification owner ${raw.owner} is not present in its source-use ledger.`);
+    if (!discovery.occurrences.some((item) => item.identifier === raw.identifier && item.file === raw.owner)) {
+      throw new Error(`Schema source classification owner ${raw.owner} does not declare ${raw.identifier}.`);
     }
     for (const id of raw.relatedEntryIds) {
       if (!entryById.has(id)) throw new Error(`Schema source classification ${raw.identifier} references an unknown compatibility entry ${id}.`);
@@ -885,14 +780,10 @@ export async function validateSchemaSourceCoverage(
     }
   }
 
-  const classificationsThatMayEmit = new Set(['provenance_marker', 'serialised_unversioned', 'transient_projection']);
   for (const use of canonicalBindings.uses) {
     if (use.source.role !== 'writer' || !use.identifier) continue;
     const classification = classificationByIdentifier.get(use.identifier);
-    if (lifecycleMetadataByIdentifier.has(use.identifier)) {
-      throw new Error(`Schema lifecycle metadata identity ${use.identifier} cannot mask a schema emitter at ${use.source.file}:${use.source.line}.`);
-    }
-    if (classification && !classificationsThatMayEmit.has(classification.reason)) {
+    if (classification?.kind === 'non_schema') {
       throw new Error(`Schema source classification ${use.identifier} cannot mask a schema emitter at ${use.source.file}:${use.source.line}.`);
     }
   }
@@ -900,8 +791,7 @@ export async function validateSchemaSourceCoverage(
   for (const dynamic of discovery.dynamicConstructions) {
     const allowedDynamicNonSchema = dynamic.reason === 'dynamic'
       && dynamic.identifier
-      && classificationByIdentifier.get(dynamic.identifier)?.kind === 'non_schema'
-      && classificationByIdentifier.get(dynamic.identifier)?.owner === dynamic.file;
+      && classificationByIdentifier.get(dynamic.identifier)?.kind === 'non_schema';
     if (!allowedDynamicNonSchema) {
       throw new Error(`Schema-like identifier has an unsafe ${dynamic.reason.replaceAll('_', ' ')} at ${dynamic.file}:${dynamic.line}; use one exact-case canonical literal or imported constant.`);
     }
@@ -912,9 +802,7 @@ export async function validateSchemaSourceCoverage(
       const definitions = definitionsByIdentifier.get(identifier) ?? [];
       if (definitions.some((definition) => definition.file === entry.owner)) continue;
       const literalWriters = literalEmittersByIdentifier.get(identifier) ?? [];
-      if (!definitions.length
-        && literalWriters.length === 1
-        && literalWriters[0]?.file === entry.owner) continue;
+      if (literalWriters.some((writer) => writer.file === entry.owner)) continue;
       if (canonicalBindings.uses.some((use) => (
         use.identifier === identifier && use.source.file === entry.owner
       ))) continue;

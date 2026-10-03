@@ -1,3 +1,4 @@
+import '../tools/browser-server-egress-guard.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { TECHNOLOGY_REVIEWED_FIXTURES } from '../fixtures/technology-reviewed-fixtures.mts';
@@ -5,6 +6,7 @@ import { TECHNOLOGY_REVIEWED_FIXTURES } from '../fixtures/technology-reviewed-fi
 import { sslblSnapshotHealth } from '../lib/sslbl-intelligence.mts';
 import { SOURCE_RELEASED_AT } from '../tools/cisa-kev-catalog.mts';
 import { buildCatalogStatus } from '../tools/cisa-kev-catalog-status.mts';
+import { browserCatalogueHealth } from '../tools/retire-browser-catalog.mts';
 import {
   buildSourceHealthReport,
   formatSourceHealthAnnotations,
@@ -27,6 +29,33 @@ function writer() {
 }
 
 describe('offline source-health composition', () => {
+  test('catalogue diagnostics identify integrity, clock and upstream freshness independently', async () => {
+    const baseline = await browserCatalogueHealth(daysAfterKevRelease(1));
+    const expected = {
+      malformed: /digest or pinned source identity does not match/u,
+      unavailable: /date is invalid or later than the evaluation clock/u,
+      limited: /digest and pinned source identity match.*newest upstream revision is not checked/u,
+    };
+    for (const state of ['malformed', 'unavailable', 'limited'] as const) {
+      const report = await buildSourceHealthReport({ now: daysAfterKevRelease(1), builders: {
+        browserCatalogue: async () => ({ ...baseline, state, ageDays: state === 'unavailable' ? null : 1, itemCount: 1 }),
+      } });
+      const entry = report.entries.find(item => item.id === 'browser_library_catalogue')!;
+      assert.match(entry.detail, expected[state]);
+      assert.ok(formatSourceHealthReport(report).includes(`Scope: ${entry.limitation}`));
+      if (state !== 'malformed') assert.ok(formatSourceHealthAnnotations(report).includes(entry.detail));
+      assert.equal(report.networkRequests, 0);
+    }
+  });
+  test('mixed reporting-route windows name stale and current subsets honestly', async () => {
+    const report = await buildSourceHealthReport({ now: new Date('2027-03-04T00:00:00.000Z') });
+    const routes = report.entries.find(item => item.id === 'platform_reporting_routes');
+    assert.equal(routes?.state, 'stale');
+    assert.match(routes?.detail ?? '', /5 remain within their own review windows/u);
+    const earlier = await buildSourceHealthReport({ now: new Date('2026-09-04T00:00:00.000Z') });
+    assert.match(earlier.entries.find(item => item.id === 'platform_reporting_routes')?.detail ?? '', /5 have a review date later than this clock/u);
+    assert.equal(report.networkRequests, 0);
+  });
   test('composes retained datasets and reviewed evaluations without network work', async () => {
     const report = await buildSourceHealthReport({
       now: new Date('2026-09-03T12:00:00.000Z'),
@@ -36,7 +65,9 @@ describe('offline source-health composition', () => {
     assert.equal(report.version, SOURCE_HEALTH_VERSION);
     assert.equal(report.mode, 'offline_checked_in_assets');
     assert.equal(report.networkRequests, 0);
-    assert.equal(report.summary.entries, 11);
+    assert.equal(report.summary.entries, 13);
+    assert.ok(report.entries.some(item => item.id === 'browser_library_catalogue'));
+    assert.ok(report.entries.some(item => item.id === 'common_infrastructure'));
     const platformRoutes = report.entries.find((item) => item.id === 'platform_reporting_routes');
     assert.equal(platformRoutes?.state, 'unavailable');
     assert.equal(platformRoutes?.ageDays, null);

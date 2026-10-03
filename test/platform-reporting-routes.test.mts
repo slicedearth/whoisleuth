@@ -38,8 +38,10 @@ describe('platform reporting routes', () => {
     assert.equal(beforeReview.state, 'unavailable');
     assert.equal(beforeReview.ageDays, null);
     const reviewed = platformReportingCatalogueHealth(new Date('2026-09-04T00:00:00Z'));
-    assert.equal(reviewed.state, 'current');
+    assert.equal(reviewed.state, 'limited');
     assert.equal(reviewed.ageDays, 0);
+    assert.equal(reviewed.unavailableRouteCount, 5);
+    assert.equal(reviewed.latestReviewedAt, '2026-10-03T00:00:00.000Z');
     const current = platformReportingCatalogueHealth(new Date('2027-02-01T00:00:00.000Z'));
     const limited = platformReportingCatalogueHealth(new Date('2027-02-02T00:00:00.000Z'));
     const stale = platformReportingCatalogueHealth(new Date('2027-03-04T00:00:00.000Z'));
@@ -66,6 +68,7 @@ describe('platform reporting routes', () => {
   test('keeps every route on an official platform-controlled origin with reviewed dates and preparation guidance', () => {
     const roots = new Set(INCIDENT_PLATFORMS.flatMap((platform) => platform.hosts));
     roots.add('meta.com');
+    roots.add('shopify.com');
     assert.equal(new Set(PLATFORM_REPORTING_ROUTES.map((route) => route.id)).size, PLATFORM_REPORTING_ROUTES.length);
     for (const route of PLATFORM_REPORTING_ROUTES) {
       const guidance = new URL(route.guidanceUrl);
@@ -78,10 +81,40 @@ describe('platform reporting routes', () => {
       } else {
         assert.match(route.contact, /^[^@\s]+@[^@\s]+\.[^@\s]+$/u);
       }
-      assert.equal(route.reviewedAt, '2026-09-04');
-      assert.equal(route.reviewAfter, '2027-03-04');
+      const additional = ['shopify', 'google_play', 'google_drive', 'google_ads'].includes(route.platformId);
+      assert.equal(route.reviewedAt, additional ? '2026-10-03' : '2026-09-04');
+      assert.equal(route.reviewAfter, additional ? '2027-04-03' : '2027-03-04');
       assert.ok(route.preparation.length >= 3);
       assert.ok(route.privacyNote.length > 20);
     }
+  });
+
+  test('new families match product hosts, never a general provider domain or an arbitrary custom storefront', () => {
+    assert.equal(incidentPlatformForUrl('https://example.myshopify.com/products/example')?.id, 'shopify');
+    assert.equal(incidentPlatformForUrl('https://play.google.com/store/apps/details?id=example.package')?.id, 'google_play');
+    assert.equal(incidentPlatformForUrl('https://docs.google.com/forms/d/example')?.id, 'google_drive');
+    for (const value of ['https://google.com/search?q=example', 'https://shop.example/item', 'https://example.com', 'https://play.google.com.attacker.example/listing']) assert.equal(incidentPlatformForUrl(value), null);
+    const now = new Date('2026-10-03T00:00:00.000Z');
+    const manual = resolvePlatformReportingRoutes('https://shop.example/item', ['copyright_infringement'], now, 'shopify');
+    assert.deepEqual(manual.routes.map(route => route.id), ['shopify-merchant', 'shopify-rights']);
+    assert.match(manual.limitation, /selected by the analyst.*must be evidenced/u);
+    const ad = resolvePlatformReportingRoutes('https://distribution.example/ad/7', [], now, 'google_ads');
+    assert.deepEqual(ad.routes.map(route => route.id), ['google-ad-report']);
+    assert.equal(resolvePlatformReportingRoutes('https://user:password@shop.example/', [], now, 'shopify').state, 'unsupported');
+  });
+
+  test('each new family has its own review window without falsely refreshing older routes', () => {
+    const at = new Date('2026-10-03T00:00:00.000Z');
+    const before = new Date(at.getTime() - 1);
+    const deadline = new Date('2027-04-03T00:00:00.000Z');
+    for (const platform of ['shopify', 'google_play', 'google_drive', 'google_ads'] as const) {
+      assert.equal(resolvePlatformReportingRoutes('https://object.example/item', [], before, platform).state, 'unavailable');
+      assert.equal(resolvePlatformReportingRoutes('https://object.example/item', [], at, platform).state, 'found');
+      assert.equal(resolvePlatformReportingRoutes('https://object.example/item', [], deadline, platform).state, 'stale');
+    }
+    const mixed = platformReportingCatalogueHealth(new Date('2027-03-04T00:00:00Z'));
+    assert.equal(mixed.state, 'stale');
+    assert.equal(mixed.staleRouteCount, PLATFORM_REPORTING_ROUTES.length - 5);
+    assert.equal(mixed.currentRouteCount, 5);
   });
 });

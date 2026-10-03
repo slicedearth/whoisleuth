@@ -9,7 +9,7 @@ import {
   MAX_ADVANCED_CONFUSABLE_VARIANTS,
   wholeLabelConfusableVariantsForAscii,
 } from './idn-confusables.mts';
-import { canonicalRegistrableDomain, normalizeDiscoverySuffix } from './registrable-domain.mts';
+import { canonicalRegistrableDomain, normalizeDiscoverySuffix } from '../packages/analysis/registrable-domain.mts';
 import { MAX_DOMAIN_NAME_LENGTH, MAX_DOMAIN_LABEL_LENGTH } from '../packages/contracts/domain-name.mts';
 
 export { MAX_ADVANCED_CONFUSABLE_VARIANTS };
@@ -817,12 +817,21 @@ export function generateTyposquatCandidateSet(rawInput: unknown, fallbackTlds: u
     const advanced = advancedConfusableVariantsForAscii(name);
     const rejectedBefore = state.rejectedVariantCount;
     let rejectedByEncoding = 0;
+    const encodedLabels = new Set<string>();
+    let duplicatesAfterEncoding = 0;
     for (const variant of advanced.variants) {
       const ascii = toAsciiLabel(variant.unicodeLabel);
       if (!ascii) {
         rejectedByEncoding += 1;
         continue;
       }
+      // Different Unicode spellings can identify the same IDNA domain. They
+      // are duplicate candidates, not work omitted by a resource budget.
+      if (encodedLabels.has(ascii)) {
+        duplicatesAfterEncoding += 1;
+        continue;
+      }
+      encodedLabels.add(ascii);
       addVariant(state, ascii, 'unicode_homoglyph_depth_2');
     }
     const generated = [...state.variants.values()]
@@ -830,7 +839,7 @@ export function generateTyposquatCandidateSet(rawInput: unknown, fallbackTlds: u
       .length;
     const rejectedByValidation = state.rejectedVariantCount - rejectedBefore;
     const omittedByBudget = advanced.omittedByBudget
-      + Math.max(0, advanced.variants.length - rejectedByEncoding - rejectedByValidation - generated);
+      + Math.max(0, advanced.variants.length - duplicatesAfterEncoding - rejectedByEncoding - rejectedByValidation - generated);
     advancedConfusable = {
       generated,
       omittedByPolicy: advanced.omittedByPolicy + rejectedByEncoding + rejectedByValidation,

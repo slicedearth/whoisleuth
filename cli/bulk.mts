@@ -1,8 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { abortable } from '../lib/abort.mts';
 import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
-import { CliUsageError } from './arguments.mts';
-import { hasUnsafeCliText } from './errors.mts';
+import { CliUsageError, hasUnsafeCliText } from './errors.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import {
   MAX_DEEP_BULK_QUERIES,
@@ -119,7 +118,7 @@ function parseBulkQueries(text: unknown, { deep = false }: { deep?: boolean } = 
       throw new CliUsageError(`${deep ? 'Deep' : 'Fast'} bulk mode is limited to ${limit} unique queries.`);
     }
   }
-  if (!queries.length) throw new CliUsageError('Bulk input did not contain any queries.');
+  if (!queries.length) throw new CliUsageError('Bulk input did not contain any queries.', 'missing_input');
   return { queries, duplicates, limit };
 }
 

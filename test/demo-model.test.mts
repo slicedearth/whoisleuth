@@ -120,6 +120,8 @@ describe('synthetic demo state', () => {
     assert.deepEqual(lookup.technology.findings.map((finding) => finding.name), ['Example CMS', 'Example Commerce', 'Example Edge']);
     assert.equal(lookup.network.address, '203.0.113.44');
     assert.equal(lookup.tls.alternativeNames.length, 2);
+    assert.ok(Date.parse(lookup.tls.validFrom!) <= Date.parse(lookup.tls.observedAt));
+    assert.ok(Date.parse(lookup.tls.observedAt) <= Date.parse(lookup.tls.validTo!));
     const parked = requiredValue(syntheticDemoLookupView('character-edit'));
     const parkedCandidate = requiredValue(SYNTHETIC_DEMO_CANDIDATES.find((candidate) => candidate.id === 'character-edit'));
     assert.equal(parkedCandidate.observations[0]?.hasMx, false);

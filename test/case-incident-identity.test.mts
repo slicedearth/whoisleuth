@@ -72,18 +72,40 @@ test('current export and repeated import preserve both identities without mergin
   assert.equal(imported.cases.find(record => record.id === separate.id)?.notes.length, 0);
 });
 
+test('field-owned edits reject stale status, disposition, reason and tags without rejecting unrelated notes', () => {
+  const original = createCase({ domain: 'edits.example', status: 'new', tags: ['original'] }, BEFORE);
+  const newer = updateCase([original], original.id, { status: 'monitoring', disposition: 'false_positive', reviewReasonCode: 'authorized_or_owned', tags: ['peer'] }, AFTER);
+  const baseline = structuredClone(newer.cases);
+  for (const patch of [
+    { status: 'escalated', expectedStatus: original.status },
+    { disposition: 'confirmed_abuse', expectedDisposition: original.disposition },
+    { reviewReasonCode: 'other_reviewed', expectedReviewReasonCode: original.reviewReasonCode ?? null },
+    { tags: ['draft'], expectedTags: original.tags },
+  ]) {
+    assert.throws(() => updateCase(newer.cases, original.id, patch, AFTER), /changed after this edit was started/u);
+    assert.deepEqual(newer.cases, baseline);
+  }
+  const updated = updateCase(newer.cases, original.id, { tags: ['reviewed'], expectedTags: ['peer'], note: 'Independent note' }, AFTER);
+  assert.deepEqual(updated.record.tags, ['reviewed']);
+  assert.equal(updated.record.status, 'monitoring');
+  assert.equal(Object.hasOwn(updated.record, 'expectedTags'), false);
+  assert.equal(updated.record.notes.at(-1)?.body, 'Independent note');
+});
+
 test('legacy exports merge only into an unambiguous domain or matching stable identity', () => {
   const { first, second, records } = incidents();
-  const legacy = { version: 15, cases: [{ ...first, id: 'legacy-other-id' }] };
+  const { workflowMetadata: _firstWorkflow, ...firstPublished } = first;
+  const { workflowMetadata: _secondWorkflow, ...secondPublished } = second;
+  const legacy = { version: 15, cases: [{ ...firstPublished, id: 'legacy-other-id' }] };
   assert.equal(normalizeCaseStore(legacy).cases[0]?.title, '', 'An undeclared legacy title is not current evidence.');
   assert.equal(mergeCases([first], legacy).updated, 1);
   const before = structuredClone(records);
   assert.throws(() => mergeCases(records, legacy), /several incidents exist/u);
   assert.deepEqual(records, before);
   assert.throws(() => mergeCases(records, { version: CASE_SCHEMA_VERSION, cases: [{ domain: first.domain }] }), /several incidents exist/u);
-  assert.equal(mergeCases(records, { version: 15, cases: [second] }).updated, 1);
+  assert.equal(mergeCases(records, { version: 15, cases: [secondPublished] }).updated, 1);
   assert.throws(() => mergeCases(records, { version: CASE_SCHEMA_VERSION, cases: [{ ...first, domain: 'other.example' }] }), /different domain/u);
-  const legacyCollision = mergeCases([first], { version: 15, cases: [{ ...first, domain: 'other.example', evidenceHistory: [] }] });
+  const legacyCollision = mergeCases([first], { version: 15, cases: [{ ...firstPublished, domain: 'other.example', evidenceHistory: [] }] });
   assert.equal(legacyCollision.added, 1);
   assert.equal(new Set(legacyCollision.cases.map(record => record.id)).size, 2);
 });

@@ -8,18 +8,17 @@ import {
 } from '../packages/evidence/artifact-integrity.mts';
 import { buildCaseReport, buildCaseReportVerificationProjection } from '../packages/cases/case-report.mts';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
-import { assertBoundedJsonStructure, scanBoundedJson } from '../lib/bounded-json.mts';
+import { assertBoundedJsonStructure, scanBoundedJson } from '../packages/analysis/bounded-json.mts';
+import { assertCaseBrandProfileIds } from '../packages/cases/case-brand-profile-references.mts';
 import {
-  assertCaseBrandProfileIds,
   CASE_AUDIENCE_SENSITIVE_FIELD_NAMES,
   caseAudienceExclusions,
-  normalizeDomain,
-  normalizeCaseStore,
   projectCaseForAudience,
-  safeId,
-  type CaseAudience,
-  type CaseRecord,
-} from '../packages/cases/case-model.mts';
+} from '../packages/cases/case-record-projection.mts';
+import { normalizeDomain } from '../packages/evidence/domain-name.mts';
+import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
+import { safeId } from '../packages/cases/case-record-core.mts';
+import type { CaseAudience, CaseRecord } from '../packages/cases/case-model.mts';
 import {
   CASE_REPORT_SCHEMA,
   CASE_IMPORT_VERSIONS,
@@ -126,6 +125,10 @@ function listItemPath(path: readonly (number | string)[], list: 'actions' | 'man
 function allowedSensitiveFieldPath(key: string, path: readonly (number | string)[]): boolean {
   if (key === 'brandProfileIds') return topCasePath(path) || reportCasePath(path);
   if (key === 'notes') return topCasePath(path) || reportCasePath(path);
+  if (key === 'workflowMetadata') return topCasePath(path) || analystResponsePath(path);
+  if (key === 'incidentTargets' || key === 'investigationContext') {
+    return path.at(-1) === 'workflowMetadata' && (topCasePath(path.slice(0, -1)) || analystResponsePath(path.slice(0, -1)));
+  }
   if (key === 'actions' || key === 'assertions' || key === 'manualTrail' || key === 'observedEffects' || key === 'closures' || key === 'branches') {
     return topCasePath(path) || analystResponsePath(path);
   }
@@ -533,6 +536,7 @@ export function formatCliCasePack(document: ReturnType<typeof buildCliCasePack>)
     `Cases      ${document.cases.length}`,
     `Reports    ${document.packet.reports.length}`,
     `Digest     ${document.integrity.digestSha256}`,
+    'Included for every audience: domain evidence, Case, pin and decision identifiers, tags, decision summaries and rationale. Review these before sharing.',
     '',
     ...document.packet.redactionManifest.excluded.map((item) => `Excluded: ${item}`),
     '',

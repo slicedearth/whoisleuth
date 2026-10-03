@@ -901,13 +901,13 @@ describe('Lookup HTTP response contract', () => {
 
   test('accepts only the bounded official registrar-standing projection', () => {
     const standing = buildRegistrarStanding({
-      registrarIanaId: '4318',
+      registrarIanaId: '900003',
       now: new Date('2026-09-03T12:00:00.000Z'),
     });
     const represented = {
       registrarStanding: standing,
-      rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '4318' } },
-      whois: { parsed: { domainName: 'EXAMPLE.TEST', registrarIanaId: '04318' }, chain: [] },
+      rdap: { parsed: { domain: 'EXAMPLE.TEST', registrarIanaId: '900003' } },
+      whois: { parsed: { domainName: 'EXAMPLE.TEST', registrarIanaId: '0900003' }, chain: [] },
     };
     const parsed = parseLookupHttpResponse(response(represented));
     assert.equal(parsed.ok, true);
@@ -1148,7 +1148,7 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(forward.state, 'partial');
     assert.deepEqual(forward.findings, []);
     assert.equal(recordValue(forward.observation).complete, false);
-    assert.match(String(forward.detail), /Conflicting records/u);
+    assert.equal(forward.detail, 'Conflicting or unvalidated provider records prevent a conclusive provider projection.');
   });
 
   test('bounds nested provider evidence and permits only attributed HTTPS record links', () => {
@@ -1313,6 +1313,7 @@ describe('Lookup HTTP response contract', () => {
     }));
     assert.equal(invalid.ok, true);
     assert.deepEqual(createLookupViewModel(invalid.value).threatIntelligenceProviders, []);
+    assert.match(createLookupViewModel(invalid.value).threatIntelligenceWithheld[0]?.reason ?? '', /result state was not supported/u);
   });
 
   test('rejects wrong or future threat-intelligence result markers before projection', () => {
@@ -1335,6 +1336,10 @@ describe('Lookup HTTP response contract', () => {
       }));
       assert.equal(parsed.ok, true);
       assert.deepEqual(createLookupViewModel(parsed.value).threatIntelligenceProviders, []);
+      assert.deepEqual(createLookupViewModel(parsed.value).threatIntelligenceWithheld, [{
+        providerId: 'urlscan_search', label: 'URLscan archived verdicts record', count: 1,
+        reason: 'Unsupported provider format; evidence was withheld.',
+      }]);
     }
   });
 
@@ -1370,7 +1375,46 @@ describe('Lookup HTTP response contract', () => {
       const view = createLookupViewModel(parsed.value);
       assert.deepEqual(view.threatIntelligenceProviders, []);
       assert.deepEqual(view.threatIntelligence, {});
+      assert.equal(view.threatIntelligenceWithheld.length, 1);
+      assert.equal(view.threatIntelligenceWithheld[0]?.count, 1);
+      assert.match(view.threatIntelligenceWithheld[0]?.reason ?? '', /withheld/u);
     }
+  });
+
+  test('withheld records never expose arbitrary identity, detail or target text and qualify mixed duplicates', () => {
+    const good = {
+      schema: THREAT_INTELLIGENCE_SCHEMA, version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
+      provider: { id: 'urlscan_search', label: 'private-label' }, target: THREAT_TARGET,
+      state: 'success', findings: [{ category: 'phishing', severity: 'high' }],
+      observation: { observedAt: '2026-07-01T00:00:00.000Z', complete: true },
+    };
+    const project = (providers: unknown[]) => {
+      const parsed = parseLookupHttpResponse(response({ threatIntelligence: { version: 1, providers } }));
+      assert.equal(parsed.ok, true);
+      return createLookupViewModel(parsed.value);
+    };
+    for (const id of ['unknown-private-identity', '__proto__', 'constructor']) {
+      const view = project([{ ...good, provider: { id, label: 'private-label' }, detail: 'private-detail' }]);
+      assert.deepEqual(view.threatIntelligenceProviders, []);
+      assert.equal(view.threatIntelligenceWithheld[0]?.providerId, null);
+      assert.equal(view.threatIntelligenceWithheld[0]?.count, 1);
+      assert.doesNotMatch(JSON.stringify(view.threatIntelligenceWithheld), /private-|__proto__|constructor/u);
+    }
+    for (const providers of [[good, { ...good, version: 999 }], [{ ...good, version: 999 }, good]]) {
+      const view = project(providers);
+      assert.equal(view.threatIntelligenceProviders[0]?.state, 'partial');
+      assert.deepEqual(view.threatIntelligenceProviders[0]?.findings, []);
+      assert.equal(view.threatIntelligenceWithheld.length, 1);
+    }
+    const excessive = project(Array.from({ length: 25 }, () => good));
+    assert.equal(excessive.threatIntelligenceWithheld[0]?.count, 5);
+    assert.equal(excessive.threatIntelligenceProviders[0]?.state, 'partial');
+    assert.deepEqual(excessive.threatIntelligenceProviders[0]?.findings, []);
+    const parsedMalformed = parseLookupHttpResponse(response({ threatIntelligence: { version: 1, providers: 'private-data' } }));
+    assert.equal(parsedMalformed.ok, true);
+    const malformed = createLookupViewModel(parsedMalformed.value);
+    assert.equal(malformed.threatIntelligenceWithheld[0]?.count, null);
+    assert.doesNotMatch(JSON.stringify(malformed.threatIntelligenceWithheld), /private-data/u);
   });
 
   test('binds the response identity to the current domain and rejects reversed threat finding timelines', () => {

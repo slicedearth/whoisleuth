@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { networkFeaturePolicy } from '../lib/feature-policy.mts';
 import { runUnifiedLookup } from '../lib/lookup.mts';
+import { REGISTRAR_STANDING_CATALOGUE } from '../lib/generated/registrar-standing-catalogue.mts';
+import { REGISTRAR_STANDING_MAX_AGE_DAYS } from '../lib/registrar-standing-catalogue-contract.mts';
 import { createLookupHttpResponse, parseLookupHttpResponse } from '../lib/lookup-response-contract.mts';
 import type { ClassifiedQuery, IpQuery } from '../lib/classify.mts';
 import { recordValue, requiredValue } from './value-assertions.mts';
@@ -79,6 +81,22 @@ const classifiedDomain: Extract<ClassifiedQuery, { type: 'domain' }> = {
 };
 
 describe('runUnifiedLookup', () => {
+  test('incremental RDAP settlement agrees with enabled unsupported and disabled final diagnostics', async () => {
+    for (const disabled of [false, true]) {
+      let calls = 0;
+      const settlements: Array<{source: string; state: string}> = [];
+      const result = await runFullLookup(classifiedDomain, {
+        featurePolicy: networkFeaturePolicy(disabled ? { WHOISLEUTH_DISABLE_RDAP: '1' } : {}),
+        fetchRdapRecord: async () => { calls++; return null; },
+        buildWhoisChain: async () => [],
+        checkDomainAvailability: async () => ({state: 'unknown', confidence: 'low'}),
+        onSourceSettled: (value: {source: string; state: string}) => settlements.push(value),
+      });
+      assert.equal(calls, disabled ? 0 : 1);
+      assert.equal(result.diagnostics.rdap.status, disabled ? 'disabled' : 'unsupported');
+      assert.equal(settlements.find(row => row.source === 'rdap')?.state, disabled ? 'skipped' : 'unsupported');
+    }
+  });
   test('bounds availability failure detail while preserving the unknown result and failure diagnostic', async () => {
     for (const failure of [new Error(`Collector\n\u0000failed ${'x'.repeat(500)}`), null, { message: '\n\t' }]) {
       const result = await runFullLookup(classifiedDomain, {
@@ -236,7 +254,12 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.availability.state, 'registered');
   });
 
-  test('fetches RDAP and WHOIS once and reuses both for availability', async () => {
+  test('fetches RDAP and WHOIS once and reuses both for availability', async (context) => {
+    const catalogueTime = Math.max(
+      Date.parse(REGISTRAR_STANDING_CATALOGUE.iana.observedAt),
+      Date.parse(REGISTRAR_STANDING_CATALOGUE.icann.reviewedAt),
+    );
+    context.mock.timers.enable({ apis: ['Date'], now: catalogueTime });
     const rdapRecord = {
       rdapServer: 'https://rdap.example/domain/example.com',
       transportSecurity: 'https',
@@ -259,7 +282,7 @@ describe('runUnifiedLookup', () => {
     let whoisCalls = 0;
     let availabilityCalls = 0;
 
-    const result = await runFullLookup(classifiedDomain, {
+    const lookup = () => runFullLookup(classifiedDomain, {
       fetchRdapRecord: async () => { rdapCalls += 1; return rdapRecord; },
       buildWhoisChain: async () => { whoisCalls += 1; return whoisChain; },
       checkDomainAvailability: async (domain: string, options: AvailabilityFixtureOptions) => {
@@ -275,6 +298,7 @@ describe('runUnifiedLookup', () => {
         return { state: 'registered', confidence: 'high' };
       },
     });
+    const result = await lookup();
 
     assert.equal(rdapCalls, 1);
     assert.equal(whoisCalls, 1);
@@ -297,6 +321,15 @@ describe('runUnifiedLookup', () => {
     assert.equal(registrarStanding.ianaId, '2');
     assert.equal(registrarStanding.accreditation.state, 'accredited');
     assert.equal(registrarStanding.assessment.state, 'accredited');
+
+    context.mock.timers.setTime(catalogueTime + (REGISTRAR_STANDING_MAX_AGE_DAYS + 1) * 86_400_000);
+    const agedStanding = requiredValue((await lookup()).registrarStanding);
+    assert.equal(agedStanding.accreditation.state, 'accredited');
+    assert.equal(agedStanding.accreditation.sourceHealth, 'stale');
+    assert.equal(agedStanding.assessment.state, 'unknown');
+    assert.equal(rdapCalls, 2);
+    assert.equal(whoisCalls, 2);
+    assert.equal(availabilityCalls, 2);
   });
 
   test('normalises matching registrar IDs and refuses conflicting source identities', async () => {

@@ -20,6 +20,10 @@ link is a credential for that running instance; do not share it. There is no
 hosting password, external account, telemetry or automatic browser installation.
 The archive bundles its reviewed runtime dependencies. Installation can stay
 offline and does not select newer transitive versions.
+Loopback cookies are host-scoped, not port-isolated. Other servers visited on
+`127.0.0.1` in the same browser profile can receive them. Use a dedicated browser
+profile when running other local servers; per-port cookie names only prevent
+name collisions.
 
 Omit `--init` to reopen a workspace. Omit `--offline` to enable the same deliberate
 collection actions as the console; those requests then originate from this

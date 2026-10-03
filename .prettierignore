@@ -1,0 +1,8 @@
+# Retained data and generated references keep their owner's formatting.
+**/fixtures/**
+**/generated/**
+**/*.generated.*
+/docs/
+/frontend/static/
+package-lock.json
+THIRD_PARTY_NOTICES.md

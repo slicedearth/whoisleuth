@@ -3,17 +3,21 @@ import type { Locator, Page, Request, TestInfo } from '@playwright/test';
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
 import { ALLOWED_ORIGIN, expect, test } from './fixtures';
 import { caseRecord } from './case-test-fixtures';
+import { COMMAND_NAVIGATION_READINESS } from './console-navigation';
 import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import {
   PERFORMANCE_SAMPLE_COUNT,
   PERFORMANCE_TIMING_POLICY,
   abortBrowserInteractionReadiness,
   beginBrowserInteractionReadiness,
+  beginInteractionTransferProbe,
   performanceMeasurementContext,
   performanceSampleMedian,
   summarizePerformanceTimings,
   readBrowserInteractionReadiness,
+  readInteractionRuntimeProbe,
+  resetInteractionRuntimeProbe,
   resetPerformanceSampleState,
   type BrowserInteractionReadiness,
   type PerformanceMeasurementContext,
@@ -34,31 +38,20 @@ type InteractionId =
   | 'dashboard_command_palette';
 
 type InteractionBudget = Readonly<{
-  assetEncodedTransferBytes: number;
-  layoutShiftScore: number;
   residualLayoutShiftScore: number;
 }>;
-
-type RuntimeProbe = Readonly<{
-  longTaskSupported: boolean;
-  longTaskCount: number;
-  longTaskTotalMs: number;
-  layoutShiftSupported: boolean;
-  layoutShiftCount: number;
-  layoutShiftScore: number;
-  residualLayoutShiftCount: number;
-  residualLayoutShiftScore: number;
-}>;
+type TransferPolicy = 'observational' | 'prepared_no_transfer';
 
 type DeferredInteractionMeasurement = Readonly<{
   schema: 'whoisleuth.deferred-interaction-measurement';
-  version: 3;
+  version: 4;
   mode: 'authenticated_local_chromium_production_build';
   readinessClock: 'browser_event_to_animation_frame';
   interaction: InteractionId;
   path: string;
   readyPresentation: 'visible_usable' | 'attached_hidden';
   budget: InteractionBudget;
+  transferPolicy: TransferPolicy;
   timingPolicy: typeof PERFORMANCE_TIMING_POLICY;
   execution: PerformanceMeasurementContext;
   assetEncodedTransferBytes: number;
@@ -71,6 +64,8 @@ type DeferredInteractionMeasurement = Readonly<{
   layoutShiftSupported: boolean;
   layoutShiftCount: number;
   layoutShiftScore: number;
+  transitionLayoutShiftCount: number;
+  transitionLayoutShiftScore: number;
   residualLayoutShiftCount: number;
   residualLayoutShiftScore: number;
   investigationRequestCount: number;
@@ -79,12 +74,13 @@ type DeferredInteractionMeasurement = Readonly<{
 
 type DeferredInteractionSampleSet = Readonly<{
   schema: 'whoisleuth.deferred-interaction-sample-set';
-  version: 3;
+  version: 4;
   mode: 'authenticated_local_chromium_repeated_interaction';
   interaction: InteractionId;
   path: string;
   readyPresentation: 'visible_usable' | 'attached_hidden';
   budget: InteractionBudget;
+  transferPolicy: TransferPolicy;
   timingPolicy: typeof PERFORMANCE_TIMING_POLICY;
   execution: PerformanceMeasurementContext;
   sampleCount: number;
@@ -92,6 +88,8 @@ type DeferredInteractionSampleSet = Readonly<{
   usableMsMaximum: number;
   hostActionMsMedian: number;
   hostActionMsMaximum: number;
+  assetEncodedTransferBytesMedian: number;
+  assetEncodedTransferBytesMaximum: number;
   longTaskTotalMsMedian: number;
   longTaskTotalMsMaximum: number;
   samples: readonly DeferredInteractionMeasurement[];
@@ -107,38 +105,10 @@ type DeferredInteractionSampleSet = Readonly<{
 // Response navigation is separate and ends when its response controls are usable.
 // Bulk Analysis likewise owns a separate transition/preload row before the
 // cohort-outlier disclosure is measured. Each phase keeps its own observations.
-// These are transfer ceilings, not historical measurements. Prepared
-// interactions require zero new assets; the portfolio ceiling includes its
-// source-qualified retained-history view. Each run reports actual transfer,
-// timing and layout separately. Elapsed time is not an acceptance threshold.
-const INTERACTION_TRANSFER_LIMITS: Readonly<Record<InteractionId, number>> = Object.freeze({
-  cli_command_detail: 0,
-  cli_catalogue_filter: 0,
-  examples_large_output: 15 * 1024,
-  demo_later_stage: 10 * 1024,
-  monitor_relationships_view: 113 * 1024,
-  brands_portfolio_workbench: 32 * 1024,
-  bulk_analysis_transition: 71 * 1024,
-  bulk_cohort_outliers: 0,
-  lookup_dns_evidence: 83 * 1024,
-  case_workspace_open: 0,
-  case_response_section: 0,
-  dashboard_command_palette: 0,
-});
-
-function interactionBudget(interaction: InteractionId): InteractionBudget {
-  return Object.freeze({
-    assetEncodedTransferBytes: INTERACTION_TRANSFER_LIMITS[interaction],
-    layoutShiftScore: 0.01,
-    residualLayoutShiftScore: 0.01,
-  });
-}
-
-const INTERACTION_BUDGETS: Readonly<Record<InteractionId, InteractionBudget>> = Object.freeze(
-  Object.fromEntries(Object.keys(INTERACTION_TRANSFER_LIMITS).map((interaction) => (
-    [interaction, interactionBudget(interaction as InteractionId)]
-  ))) as Record<InteractionId, InteractionBudget>,
-);
+// Prepared interactions require zero new assets, declared by each scenario's
+// requireAsset option. Deferred transfer is reported, not compared with an old
+// bundle size. Movement after usable paint remains bounded independently.
+const INTERACTION_LAYOUT_BUDGET: InteractionBudget = Object.freeze({ residualLayoutShiftScore: 0.01 });
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -149,118 +119,18 @@ function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function resetRuntimeProbe(): void {
-  const scope = globalThis as typeof globalThis & {
-    __whoisleuthDeferredRuntime?: {
-      longTaskCount: number;
-      longTaskTotalMs: number;
-      longTaskSupported: boolean;
-      layoutShiftCount: number;
-      layoutShiftScore: number;
-      layoutShiftSupported: boolean;
-      residualLayoutShiftCount: number;
-      residualLayoutShiftScore: number;
-      residualLayoutShiftActive: boolean;
-      residualLayoutShiftStartedAt: number | null;
-      observers: PerformanceObserver[];
-    };
-  };
-  for (const observer of scope.__whoisleuthDeferredRuntime?.observers ?? []) observer.disconnect();
-  const probe = {
-    longTaskSupported: false,
-    longTaskCount: 0,
-    longTaskTotalMs: 0,
-    layoutShiftSupported: false,
-    layoutShiftCount: 0,
-    layoutShiftScore: 0,
-    residualLayoutShiftCount: 0,
-    residualLayoutShiftScore: 0,
-    residualLayoutShiftActive: false,
-    residualLayoutShiftStartedAt: null,
-    observers: [] as PerformanceObserver[],
-  };
-  scope.__whoisleuthDeferredRuntime = probe;
-  if (typeof PerformanceObserver === 'undefined') return;
-  if (PerformanceObserver.supportedEntryTypes.includes('longtask')) {
-    probe.longTaskSupported = true;
-    const observer = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        probe.longTaskCount += 1;
-        probe.longTaskTotalMs += entry.duration;
-      }
-    });
-    probe.observers.push(observer);
-    observer.observe({ type: 'longtask', buffered: false });
-  }
-  if (PerformanceObserver.supportedEntryTypes.includes('layout-shift')) {
-    probe.layoutShiftSupported = true;
-    const observer = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        const shift = entry as PerformanceEntry & { hadRecentInput?: boolean; value?: number };
-        if (typeof shift.value !== 'number') continue;
-        if (!shift.hadRecentInput) {
-          probe.layoutShiftCount += 1;
-          probe.layoutShiftScore += shift.value;
-        }
-        if (probe.residualLayoutShiftActive
-          && probe.residualLayoutShiftStartedAt !== null
-          && shift.startTime >= probe.residualLayoutShiftStartedAt) {
-          probe.residualLayoutShiftCount += 1;
-          probe.residualLayoutShiftScore += shift.value;
-        }
-      }
-    });
-    probe.observers.push(observer);
-    observer.observe({ type: 'layout-shift', buffered: false });
-  }
-}
-
-async function readRuntimeProbe(page: Page): Promise<RuntimeProbe> {
-  return page.evaluate(() => {
-    const scope = globalThis as typeof globalThis & {
-      __whoisleuthDeferredRuntime?: {
-        longTaskSupported: boolean;
-        longTaskCount: number;
-        longTaskTotalMs: number;
-        layoutShiftSupported: boolean;
-        layoutShiftCount: number;
-        layoutShiftScore: number;
-        residualLayoutShiftCount: number;
-        residualLayoutShiftScore: number;
-      };
-    };
-    return {
-      longTaskSupported: scope.__whoisleuthDeferredRuntime?.longTaskSupported ?? false,
-      longTaskCount: scope.__whoisleuthDeferredRuntime?.longTaskCount ?? 0,
-      longTaskTotalMs: Math.round((scope.__whoisleuthDeferredRuntime?.longTaskTotalMs ?? 0) * 100) / 100,
-      layoutShiftSupported: scope.__whoisleuthDeferredRuntime?.layoutShiftSupported ?? false,
-      layoutShiftCount: scope.__whoisleuthDeferredRuntime?.layoutShiftCount ?? 0,
-      layoutShiftScore: Math.round((scope.__whoisleuthDeferredRuntime?.layoutShiftScore ?? 0) * 10_000) / 10_000,
-      residualLayoutShiftCount: scope.__whoisleuthDeferredRuntime?.residualLayoutShiftCount ?? 0,
-      residualLayoutShiftScore: Math.round((scope.__whoisleuthDeferredRuntime?.residualLayoutShiftScore ?? 0) * 10_000) / 10_000,
-    };
-  });
-}
-
 function isInvestigationEndpoint(request: Request): boolean {
   const url = new URL(request.url());
   if (url.origin !== ALLOWED_ORIGIN || !url.pathname.startsWith('/api/')) return false;
   return url.pathname !== '/api/session' && url.pathname !== '/api/capabilities';
 }
 
-function numberField(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
-}
-
 async function beginInteractionProbe(page: Page) {
-  await page.addInitScript(resetRuntimeProbe);
-  await page.evaluate(resetRuntimeProbe);
+  await page.addInitScript(resetInteractionRuntimeProbe);
+  await page.evaluate(resetInteractionRuntimeProbe);
 
-  const session = await page.context().newCDPSession(page);
-  const pendingAssets = new Set<string>();
+  const transfer = await beginInteractionTransferProbe(page);
   const investigationRequests: string[] = [];
-  let assetEncodedTransferBytes = 0;
-  let completedAssetRequestCount = 0;
   let active = true;
 
   const onRequest = (request: Request) => {
@@ -270,60 +140,9 @@ async function beginInteractionProbe(page: Page) {
   };
   page.on('request', onRequest);
 
-  session.on('Network.responseReceived', (payload) => {
-    if (!active) return;
-    const record = payload as unknown as Record<string, unknown>;
-    const response = record.response as Record<string, unknown> | undefined;
-    const url = typeof response?.url === 'string' ? response.url : '';
-    const mimeType = typeof response?.mimeType === 'string' ? response.mimeType : '';
-    const resourceType = typeof record.type === 'string' ? record.type : '';
-    const requestId = typeof record.requestId === 'string' ? record.requestId : '';
-    if (!requestId || !url) return;
-    let sameOrigin = false;
-    try {
-      sameOrigin = new URL(url).origin === ALLOWED_ORIGIN;
-    } catch {
-      return;
-    }
-    if (sameOrigin && (resourceType === 'Script'
-      || resourceType === 'Stylesheet'
-      || /(?:javascript|css)/iu.test(mimeType))) {
-      pendingAssets.add(requestId);
-    }
-  });
-  session.on('Network.loadingFinished', (payload) => {
-    if (!active) return;
-    const record = payload as unknown as Record<string, unknown>;
-    const requestId = typeof record.requestId === 'string' ? record.requestId : '';
-    if (!pendingAssets.delete(requestId)) return;
-    const bytes = numberField(record.encodedDataLength);
-    if (bytes === null) return;
-    assetEncodedTransferBytes += bytes;
-    completedAssetRequestCount += 1;
-  });
-  await session.send('Network.enable');
-
   async function close() {
     if (!active) return null;
     await page.evaluate(async () => {
-      const scope = globalThis as typeof globalThis & {
-        __whoisleuthDeferredRuntime?: {
-          residualLayoutShiftCount: number;
-          residualLayoutShiftScore: number;
-          residualLayoutShiftActive: boolean;
-          residualLayoutShiftStartedAt: number | null;
-        };
-      };
-      const runtime = scope.__whoisleuthDeferredRuntime;
-      if (runtime) {
-        runtime.residualLayoutShiftCount = 0;
-        runtime.residualLayoutShiftScore = 0;
-        // PerformanceObserver delivery can lag behind the layout-shift entry.
-        // Classify stability by the entry timestamp so a delayed callback for
-        // the initiating action cannot be mistaken for post-readiness motion.
-        runtime.residualLayoutShiftStartedAt = globalThis.performance.now();
-        runtime.residualLayoutShiftActive = true;
-      }
       await new Promise<void>((resolve) => {
         let framesRemaining = 8;
         const observeNextFrame = () => {
@@ -333,18 +152,12 @@ async function beginInteractionProbe(page: Page) {
         };
         requestAnimationFrame(observeNextFrame);
       });
-      if (runtime) {
-        runtime.residualLayoutShiftActive = false;
-        runtime.residualLayoutShiftStartedAt = null;
-      }
     });
-    const runtime = await readRuntimeProbe(page);
+    const runtime = await readInteractionRuntimeProbe(page);
     active = false;
     page.off('request', onRequest);
-    await session.detach();
     return {
-      assetEncodedTransferBytes,
-      completedAssetRequestCount,
+      ...await transfer.close(),
       runtime,
       investigationRequests,
     };
@@ -354,7 +167,7 @@ async function beginInteractionProbe(page: Page) {
     if (!active) return;
     active = false;
     page.off('request', onRequest);
-    await session.detach().catch(() => undefined);
+    await transfer.close().catch(() => undefined);
   }
 
   return { close, abort };
@@ -371,7 +184,6 @@ type DeferredInteractionOptions = Readonly<{
   ready: Locator;
   readyControl?: Locator;
   readyPresentation?: 'visible_usable' | 'attached_hidden';
-  budget?: InteractionBudget;
   requireAsset?: boolean;
 }>;
 
@@ -379,12 +191,12 @@ async function measureDeferredInteractionSample(
   options: DeferredInteractionOptions,
   sample: number,
 ): Promise<DeferredInteractionMeasurement> {
-  const budget = options.budget ?? INTERACTION_BUDGETS[options.interaction];
+  const budget = INTERACTION_LAYOUT_BUDGET;
   const readyPresentation = options.readyPresentation ?? 'visible_usable';
   await options.page.waitForLoadState('networkidle');
+  await beginBrowserInteractionReadiness(options.page, options.browserReadiness);
   const probe = await beginInteractionProbe(options.page);
   try {
-    await beginBrowserInteractionReadiness(options.page, options.browserReadiness);
     const hostStartedAt = performance.now();
     await options.action();
     const hostActionMs = round(performance.now() - hostStartedAt);
@@ -403,13 +215,14 @@ async function measureDeferredInteractionSample(
     if (!captured) throw new Error(`The ${options.interaction} measurement probe closed before recording.`);
     const measurement: DeferredInteractionMeasurement = Object.freeze({
       schema: 'whoisleuth.deferred-interaction-measurement',
-      version: 3,
+      version: 4,
       mode: 'authenticated_local_chromium_production_build',
       readinessClock: 'browser_event_to_animation_frame',
       interaction: options.interaction,
       path: options.path,
       readyPresentation,
       budget,
+      transferPolicy: options.requireAsset === false ? 'prepared_no_transfer' : 'observational',
       timingPolicy: PERFORMANCE_TIMING_POLICY,
       execution: performanceMeasurementContext(options.page, options.testInfo),
       assetEncodedTransferBytes: captured.assetEncodedTransferBytes,
@@ -422,13 +235,15 @@ async function measureDeferredInteractionSample(
       layoutShiftSupported: captured.runtime.layoutShiftSupported,
       layoutShiftCount: captured.runtime.layoutShiftCount,
       layoutShiftScore: captured.runtime.layoutShiftScore,
+      transitionLayoutShiftCount: captured.runtime.transitionLayoutShiftCount,
+      transitionLayoutShiftScore: captured.runtime.transitionLayoutShiftScore,
       residualLayoutShiftCount: captured.runtime.residualLayoutShiftCount,
       residualLayoutShiftScore: captured.runtime.residualLayoutShiftScore,
       investigationRequestCount: captured.investigationRequests.length,
       limitations: Object.freeze([
         'This is a local production-build interaction measurement, not production latency.',
         'The desktop Chromium process does not represent all visitor hardware or network conditions.',
-        'Usable time starts at the triggering browser event and ends on the first animation frame where the phase-specific declared readiness targets are satisfied.',
+        'Usable time starts at the triggering browser event and ends when the declared targets remain ready after their first usable animation frame has painted.',
         readyPresentation === 'attached_hidden'
           ? 'This phase is ready when its target is attached inside a deliberately closed disclosure; the target is prepared but not yet visible or usable.'
           : 'This phase is ready only when its target and declared control are visible and usable.',
@@ -436,8 +251,9 @@ async function measureDeferredInteractionSample(
         'Transfer includes same-origin JavaScript and CSS completed after the explicit action.',
         'The Chromium run must expose long-task and layout-shift observers; zero means none were observed.',
         'Layout shift excludes entries associated with recent input, matching the browser CLS definition.',
-        'Residual layout shift includes every entry during a short post-readiness stability window.',
-        'Transfer and layout ceilings are reviewed resource and presentation regression limits, not elapsed-time targets.',
+        'Transition layout shift includes every entry between input and browser-owned readiness. It reports expansion and other transition movement without a recent-input exemption or acceptance ceiling.',
+        'Residual layout shift includes every entry from browser-owned usable readiness through eight observation frames, including movement before host assertions complete.',
+        'Prepared interactions must transfer no new assets. Deferred transfer is measured without historical byte ceilings; post-readiness layout and investigation-request checks remain blocking.',
         'Elapsed time and long-task duration are observations for the recorded execution context, not universal performance guarantees or CI timing thresholds.',
       ]),
     });
@@ -454,13 +270,11 @@ async function measureDeferredInteractionSample(
       expect(measurement.assetEncodedTransferBytes).toBe(0);
     } else {
       expect(measurement.completedAssetRequestCount, 'the deferred action must transfer a JavaScript or CSS asset').toBeGreaterThan(0);
-      expect(measurement.assetEncodedTransferBytes).toBeGreaterThan(100);
+      expect(measurement.assetEncodedTransferBytes).toBeGreaterThan(0);
     }
-    expect(measurement.assetEncodedTransferBytes).toBeLessThanOrEqual(budget.assetEncodedTransferBytes);
     expect(measurement.usableMs).toBeGreaterThan(0);
     expect(measurement.longTaskSupported).toBe(true);
     expect(measurement.layoutShiftSupported).toBe(true);
-    expect(measurement.layoutShiftScore).toBeLessThanOrEqual(budget.layoutShiftScore);
     expect(measurement.residualLayoutShiftScore).toBeLessThanOrEqual(budget.residualLayoutShiftScore);
     expect(captured.investigationRequests, 'module loading must not start an investigation or collection request').toEqual([]);
     return measurement;
@@ -472,7 +286,7 @@ async function measureDeferredInteractionSample(
 }
 
 async function measureDeferredInteraction(options: DeferredInteractionOptions): Promise<DeferredInteractionSampleSet> {
-  const budget = options.budget ?? INTERACTION_BUDGETS[options.interaction];
+  const budget = INTERACTION_LAYOUT_BUDGET;
   const readyPresentation = options.readyPresentation ?? 'visible_usable';
   const measurements: DeferredInteractionMeasurement[] = [];
   for (let sample = 1; sample <= PERFORMANCE_SAMPLE_COUNT; sample += 1) {
@@ -482,18 +296,21 @@ async function measureDeferredInteraction(options: DeferredInteractionOptions): 
   }
   const sampleSet: DeferredInteractionSampleSet = Object.freeze({
     schema: 'whoisleuth.deferred-interaction-sample-set',
-    version: 3,
+    version: 4,
     mode: 'authenticated_local_chromium_repeated_interaction',
     interaction: options.interaction,
     path: options.path,
     readyPresentation,
     budget,
+    transferPolicy: options.requireAsset === false ? 'prepared_no_transfer' : 'observational',
     timingPolicy: PERFORMANCE_TIMING_POLICY,
     execution: performanceMeasurementContext(options.page, options.testInfo),
     sampleCount: measurements.length,
     ...summarizePerformanceTimings(measurements),
     hostActionMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.hostActionMs)),
     hostActionMsMaximum: Math.max(...measurements.map((measurement) => measurement.hostActionMs)),
+    assetEncodedTransferBytesMedian: performanceSampleMedian(measurements.map((measurement) => measurement.assetEncodedTransferBytes)),
+    assetEncodedTransferBytesMaximum: Math.max(...measurements.map((measurement) => measurement.assetEncodedTransferBytes)),
     samples: Object.freeze([...measurements]),
     limitations: Object.freeze([
       'Three independently cache-cleared, browser-local-state-cleared samples retain their median and maximum for performance review.',
@@ -790,12 +607,14 @@ test('measures navigation to a non-default Monitor view', async ({ page }, testI
     browserReadiness: {
       start: { event: 'click', selector: '#tab-relationships' },
       targets: [
-        { selector: '.case-relationship-workspace' },
-        { selector: '#tab-relationships[aria-selected="true"]', requireEnabled: true },
+        { selector: '#monitor-view-panel[aria-labelledby="tab-relationships"] .case-relationship-workspace' },
+        { selector: '.profile-clusters' },
+        { selector: '.retained-observations' },
+        { selector: '.cluster-workspace' },
       ],
     },
     ready: relationshipWorkspace,
-    readyControl: selectedTab,
+    readyControl: relationshipWorkspace.getByRole('combobox', { name: 'Relationship', exact: true }),
   });
   await expect(selectedTab).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#monitor-view-panel')).toHaveAttribute('aria-labelledby', 'tab-relationships');
@@ -941,7 +760,7 @@ test('measures a deferred Lookup evidence family from deterministic fixture evid
       await page.locator('#query').fill(target);
       await page.getByRole('button', { name: 'Run lookup' }).click();
       await expect(familyToggle).toBeEnabled();
-      await expect(familyToggle).toHaveAttribute('aria-label', 'Expand Web and DNS evidence');
+      await expect(familyToggle).toHaveAttribute('aria-label', 'Expand details: Web and DNS evidence');
       await expect(dnsHeading).toHaveCount(0);
     },
     action: async () => {
@@ -1039,7 +858,7 @@ test('measures Case Response section activation through usable response controls
 });
 
 test('measures command navigation and preserves shortcut focus recovery', async ({ page }, testInfo) => {
-  const trigger = page.getByRole('button', { name: 'Open console navigation' });
+  const trigger = page.getByRole('button', { name: 'Search console navigation' });
   const dialog = page.getByRole('dialog', { name: 'Go to' });
   const search = page.getByRole('combobox', { name: 'Search pages and tools' });
 
@@ -1056,10 +875,7 @@ test('measures command navigation and preserves shortcut focus recovery', async 
     action: () => page.keyboard.press('Control+K'),
     browserReadiness: {
       start: { event: 'keydown', key: 'k', controlOrMeta: true },
-      targets: [
-        { selector: '[role="dialog"][aria-labelledby="command-palette-title"]' },
-        { selector: '#command-search', requireEnabled: true },
-      ],
+      targets: COMMAND_NAVIGATION_READINESS,
     },
     ready: dialog,
     readyControl: search,

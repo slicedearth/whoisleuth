@@ -1,8 +1,10 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { openCaseSection } from './console-navigation';
-import { boundingBox, expectNoHorizontalOverflow } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, useTheme } from './helpers';
+import AxeBuilder from '@axe-core/playwright';
 import { readFileSync } from 'node:fs';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { CASE_REPORT_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-report';
 
 const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
@@ -16,6 +18,29 @@ import { caseRecord, openSeededTimelineCase, snapshot } from './case-test-fixtur
 
 
 test.describe('evidence timeline', () => {
+  test('an incomplete web check stays visible without claiming removed signals or reduced Risk', async ({ page }, testInfo) => {
+    await openSeededTimelineCase(page, 'quality.invalid', [caseRecord({ id: 'quality-case', domain: 'quality.invalid', evidenceHistory: [
+      snapshot({ id: 'quality-before', capturedAt: '2026-06-01T00:00:00.000Z', riskScore: 80, hasPasswordField: true,
+        webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' } }),
+      snapshot({ id: 'quality-after', capturedAt: '2026-07-01T00:00:00.000Z', riskScore: 10, hasPasswordField: false,
+        webCollectionQuality: { version: 1, page: 'unavailable', favicon: 'unknown', combined: 'partial' } }),
+    ] })], CASE_SCHEMA_VERSION);
+    const latest = page.locator('.timeline-entry').first();
+    await expect(latest).toContainText('Collection limits comparison');
+    await expect(latest.locator('.timeline-change')).toHaveCount(0);
+    await expect(latest.locator('.timeline-incomparable-note')).toContainText('not treated as additions or removals');
+    const riskSummary = page.locator('dl.evidence dt').filter({ hasText: /^Risk$/ }).locator('..').locator('dd').nth(1);
+    await expect(riskSummary).toContainText('10');
+    await expect(riskSummary).toContainText('Incomplete or unknown web collection; score is not comparable.');
+    for (const width of [1280, 1024, 390, 320]) for (const theme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height: width < 400 ? 844 : 768 });
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      await expect(latest.locator('.timeline-incomparable-note')).toBeVisible();
+      if (width === 1280 || width === 320) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`collection-quality-${width}-${theme}.png`) }); }
+    }
+  });
+
   test('equal-time conflicting snapshots stay reviewable without a chosen summary or temporal change', async ({ page }) => {
     await openSeededTimelineCase(page, 'equal-time.invalid', [caseRecord({
       id: 'case-equal-time', domain: 'equal-time.invalid', evidenceHistory: [
@@ -77,11 +102,13 @@ test.describe('evidence timeline', () => {
         evidenceHistory: [
           snapshot({
             id: 'ev-older', fingerprint: 'older',
+            webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
             firstCapturedAt: '2026-05-01T00:00:00.000Z', capturedAt: '2026-05-01T00:00:00.000Z',
             availability: 'available', riskScore: 20, registrar: 'Old Registrar', hasMx: false,
           }),
           snapshot({
             id: 'ev-newer', fingerprint: 'newer',
+            webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
             firstCapturedAt: '2026-06-01T00:00:00.000Z', capturedAt: '2026-06-01T00:00:00.000Z',
             source: 'bulk', availability: 'registered', riskScore: 85, registrar: 'New Registrar',
             hasMx: true, activityStatus: 'active', pageTitle: 'New Site', nameservers: ['ns1.new.example'],
@@ -90,7 +117,7 @@ test.describe('evidence timeline', () => {
         createdAt: '2026-05-01T00:00:00.000Z',
         updatedAt: '2026-06-01T00:00:00.000Z',
       }),
-    ]);
+    ], CASE_SCHEMA_VERSION);
 
     await expect(page.locator('.timeline-header small')).toHaveText('2 snapshots');
     const entries = page.locator('.timeline-entry');
@@ -155,9 +182,7 @@ test.describe('evidence timeline', () => {
     await expect(summary).toContainText(/73\s*· model v1/u);
     await expect(summary).toContainText('Profile context');
     await expect(summary).toContainText('unavailable');
-    await expect(summary.locator('.profile-context-limitation')).toHaveText(
-      'Brand Profile context was unavailable; profile-derived evidence remains unevaluated.',
-    );
+    await expect(summary.getByText('Brand Profile context was unavailable; profile-derived evidence remains unevaluated.', { exact: true })).toBeVisible();
 
     await page.locator('.timeline-toggle').click();
     const provenance = page.locator('.timeline-group', { hasText: 'Profile provenance and limitations' });
@@ -201,11 +226,13 @@ test.describe('evidence timeline', () => {
         evidenceHistory: [
           snapshot({
             id: 'ev-base', fingerprint: 'base',
+            webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
             firstCapturedAt: '2026-05-01T00:00:00.000Z', capturedAt: '2026-05-01T00:00:00.000Z',
             riskScore: 40, registrar: 'StableReg',
           }),
           snapshot({
             id: 'ev-changed', fingerprint: 'changed',
+            webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
             firstCapturedAt: '2026-07-01T00:00:00.000Z', capturedAt: '2026-07-01T00:00:00.000Z',
             riskScore: 90, registrar: 'StableReg',
           }),
@@ -213,7 +240,7 @@ test.describe('evidence timeline', () => {
         createdAt: '2026-05-01T00:00:00.000Z',
         updatedAt: '2026-07-01T00:00:00.000Z',
       }),
-    ]);
+    ], CASE_SCHEMA_VERSION);
 
     // Both the baseline and the reliable material change are visible.
     await expect(page.locator('.timeline-entry')).toHaveCount(2);
@@ -445,7 +472,7 @@ test.describe('cross-case comparison', () => {
 });
 
 test.describe('case report export', () => {
-  test('export JSON for a case with correct filename and content', async ({ page }) => {
+  test('export JSON for a case with correct filename and content', async ({ page }, testInfo) => {
     await openSeededTimelineCase(page, 'export-json.invalid', [
       caseRecord({
         id: 'export-json',
@@ -454,20 +481,40 @@ test.describe('case report export', () => {
         evidenceHistory: [
           snapshot({
             id: 'ev-1', fingerprint: 'fp1', capturedAt: '2026-06-01T00:00:00.000Z',
+            webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
             riskScore: 20, availability: 'registered', registrar: 'TestReg',
           }),
           snapshot({
             id: 'ev-2', fingerprint: 'fp2', firstCapturedAt: '2026-07-01T00:00:00.000Z',
+            webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
             capturedAt: '2026-07-01T00:00:00.000Z', riskScore: 85,
             availability: 'registered', registrar: 'TestReg',
           }),
         ],
       }),
-    ]);
+    ], CASE_SCHEMA_VERSION);
 
     await openCaseSection(page, 'Response');
+    const previewTrigger = page.locator('.export-controls').getByRole('button', { name: 'Preview report', exact: true });
+    await previewTrigger.click();
+    const preview = page.getByRole('dialog', { name: 'Case report preview', exact: true });
+    await expect(preview).toContainText('export-json.invalid');
+    for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720]] as const) {
+      await page.setViewportSize({ width, height });
+      for (const theme of ['light', 'dark'] as const) {
+        await preview.getByRole('button', { name: 'Close report preview', exact: true }).click();
+        await useTheme(page, theme);
+        await previewTrigger.click();
+        await expect(preview).toBeVisible();
+        await expectNoHorizontalOverflow(page);
+        expect((await new AxeBuilder({ page }).include('dialog[open]').analyze()).violations).toEqual([]);
+        if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`report-${theme}-${width}.png`) }); }
+      }
+    }
+    await preview.getByText('Exact JSON download', { exact: true }).click();
+    const previewedJson = await preview.locator('details').filter({ has: page.getByText('Exact JSON download', { exact: true }) }).locator('pre').textContent();
     const downloadPromise = page.waitForEvent('download');
-    await page.locator('.export-controls').getByRole('button', { name: 'Export JSON' }).click();
+    await preview.getByRole('button', { name: /^Download previewed JSON/u }).click();
     const download = await downloadPromise;
 
     expect(download.suggestedFilename()).toMatch(/^whoisleuth-case-export-json\.invalid-.*\.json$/);
@@ -475,6 +522,9 @@ test.describe('case report export', () => {
 
     const body = await (await download.createReadStream()).toArray();
     const text = Buffer.concat(body).toString('utf-8');
+    expect(text).toBe(previewedJson);
+    await preview.getByRole('button', { name: 'Close report preview', exact: true }).click();
+    await expect(previewTrigger).toBeFocused();
     const parsed = JSON.parse(text);
 
     expect(parsed.schema).toBe('whoisleuth.case-report');

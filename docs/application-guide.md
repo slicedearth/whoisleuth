@@ -16,12 +16,30 @@ workspace data.
 Appearance controls offer comfortable or compact reading density. Compact uses
 the full available width for console workspaces; public prose remains constrained.
 Turn off decorative effects for plain card backgrounds without scanlines or glows.
+Reference pages use a plain reading surface in either theme. The console command
+palette includes a keyboard-shortcut reference below its results. Its
+**Documentation** scope searches the same public guides and command reference,
+without searching saved Cases. Queries stay in memory and are cleared on close.
+The command reference's **Build this command** editor checks arguments against
+the current application's command grammar and quotes them for Bash/zsh/sh or PowerShell.
+Values stay in memory. Lookup's **Continue in the CLI** starts with an offline
+plan for the current target and depth; optional browser source selections are
+not transferred to the CLI's separate configuration.
 
-Use **Practise with real Case forms** in the demo to pin a supplied observation,
+Public guides share documentation search, section navigation and print layouts.
+Search finds tasks, commands, examples and glossary terms without reading saved
+work. Direct links open the relevant tool guidance or glossary section.
+
+Use **Practise with real Case forms** in the demo to choose a supplied incident,
+conflicting-source or provider-response scenario. Pin an observation,
 record an evidence-linked conclusion and review an incomplete later capture.
 The forms and validation match the Console, but the practice Case and drafts
 remain only on that page. Restarting, reloading or leaving discards them. The
-exercise offers no collection, reporting or export controls.
+exercise makes no collection, submission or export. The credential-page exercise
+rehearses separate recipient reviews, simulated deliveries and page-only closure;
+the requested-evidence exercise prepares a drafting amendment. Changing scenario
+requires confirming that its Case and drafts should be discarded. Feedback
+checks retained relationships and states, not the quality of free-text reasoning.
 
 ## Dashboard
 
@@ -41,6 +59,39 @@ Search results are paged; every indexed match is reachable. The coverage
 disclosure identifies unavailable collections and omitted fields or records.
 Search stays in the browser and operates over bounded normalised fields; it does
 not start collection or inspect raw upstream payloads.
+Open **Retained history** on a result to see its separate observations and source
+records. Every admitted observation is pageable, including separate Cases for the
+same indicator. The first and last dates describe saved evidence, not an
+indicator's creation or disappearance.
+
+Open **Browse retained infrastructure** to filter admitted domains/hostnames,
+addresses, certificates, nameserver sets and HTTP origins by indexed text,
+source collection or retained observation date. Filters run before pagination;
+every admitted match remains reachable. Inspect an identity to see its separate
+dated sources and explicitly supported one-hop relationships. Source links open
+retained Cases, campaigns, Brand Profiles or relationship records, never an
+automatic Lookup. The inventory and its selections stay disposable in page
+memory; no second evidence store is created.
+
+Choose **Topology and list** in an identity's relationships to arrange the current
+source page by retained identity type. Arrowheads preserve each relationship's
+From → To direction; grouping and namespace similarity are not extra observed
+connections. Independent sources remain separate, even for coinciding links.
+Diagram references distinguish abbreviated labels. Use **Focus diagram identity**
+for the full name, **Show exact source rows** to focus its attributable evidence,
+or **Inspect retained evidence** to pivot to that identity's own one-hop view.
+The diagram search narrows only the current diagram, not the exact source list.
+Page controls reach the remaining source rows; diagram omissions and partial
+coverage are explicit. **List only** provides the same source links and pivots
+without a diagram. Neither view performs collection or establishes a complete
+multi-host, DNS-alias or routing-origin topology.
+
+Counts are not organisation-wide coverage, and retained address or certificate
+relationships do not establish current resolution, origin, ownership or common
+control. Imported DNS observations can be linked to a Case domain when their
+exact queried owner was not retained. Missing provider roles, routing ASN,
+wildcard patterns, precise collection scope and comparable infrastructure
+snapshots stay unknown; this view does not infer removals or enrol monitoring.
 
 Campaign and investigation-template editors keep later typing when an earlier
 save completes. If another tab changes the fields being edited, the save is rejected
@@ -92,13 +143,59 @@ Lookup accepts one domain, IP address or ASN. URL-like input is normalised only
 under the explicit supported rules; credentials, unsupported schemes and
 ambiguous targets are rejected.
 
-Before collection, Lookup shows the selected target and source families. Deep
-Lookup reports source states as they arrive; connections that buffer responses
-show them together. A finished source can still be partial, failed or unsupported.
+Before collection, Lookup shows source families for the entered domain, address
+or ASN and the current deployment configuration. Optional providers are listed
+separately. Deep Lookup reports source states as they arrive; connections that
+buffer responses show them together. A finished source can still be partial,
+failed or unsupported.
 Only the final validated result can be saved. Cancelling discards the incomplete
 response; already-admitted requests may finish within their existing bounds.
+Under **Source quality**, expand **Compare the completed plan and source outcomes**
+for the finished target and mode, separately dated source records and diagnostic
+states. Original optional selections are not retained, so missing output does
+not establish that a source was declined or had no findings.
 
 ### Fast and Deep collection
+
+Before collecting, **Review a message, link or selected file** accepts pasted text,
+MIME email, calendar invitations and still PNGs. It shows the actual destination
+beside a URL displayed in the message, expands supplied redirect parameters and
+identifies authorisation-request fields. Choosing a destination fills Lookup;
+it does not start a request. Exact URLs are available in a private disclosure
+and omitted from the minimised review download.
+Excluded destinations and unsupported QR payloads are counted by category;
+the preview remains partial and does not turn them into collection targets.
+Email authentication is grouped by message part and physical header position.
+Expand **Review reported authentication sources** to inspect the reporting
+service, evaluated domains and malformed or duplicated values. Receiver-trust
+checkboxes record your assessment of those exact headers; matching names and
+nested messages do not inherit the selection.
+
+Select PDF or DOCX to extract document links and supported embedded raster QR
+images. Each link references its source part and PDF page where available.
+Coverage distinguishes encrypted, unsupported and partially decoded content;
+no document scripts, macros or external resources run. Select HAR to inspect
+request order, origins, statuses and timings without replaying requests. The
+minimised report excludes headers, cookies, bodies and private URL components.
+
+Select **Identity events** for an Entra sign-in export (`value` array) or an Okta
+System Log array. The preview replaces actor identifiers with labels local to
+that file. **Compare an application and time window** records exact matches,
+different fields and missing context separately. An event's reported result is
+not an account-compromise verdict. Saving keeps only the previewed report unless
+you separately select the private original.
+
+The same review is available in Case Evidence. Save its minimised report and
+source hash, optionally retaining the private original separately. In Case
+Response, **Account and device recovery** provides guidance from reported
+actions such as entering a password, granting consent or running a command.
+Selected recommendations can become open follow-ups with optional evidence links;
+they are not completed recovery actions. Expand a retained follow-up to inspect
+its linked observations, dates and supporting or contrary context. Recorded
+internal actions remain separate; the current records do not bind them to a
+particular follow-up. Incoming notices can be compared locally
+with a selected action's recipient and delivery reference. This comparison stays
+in page memory and does not authenticate the sender or enter the saved intake.
 
 - **Fast** is registration-led triage. It uses RDAP and bounded authoritative
   DNS fallback where required, while explicitly skipping richer WHOIS, website
@@ -154,11 +251,21 @@ Web & DNS includes the selected endpoint's IP RDAP record, separate from domain
 registration. Its summary names sources with partial, unavailable or unknown
 evidence.
 
+IPv4 (A) and IPv6 (AAAA) results distinguish an empty answer, no data for that
+record type, a resolver-reported missing name, and a failed query. A missing
+IPv4 answer does not hide a working IPv6 answer. Selected Case checkpoints keep
+each family's result and source time; older unspecified negative answers remain
+unspecified.
+
 The evidence graph retains every supported relationship from the admitted
 Lookup evidence. Lenses, visual grouping and the searchable, paginated list
 change the view, not the retained data. Projection input coverage distinguishes
 admitted values, duplicates, invalid input and capacity omissions. Source
 observation times remain separate from the time an export was created.
+
+Bulk public-infrastructure groups exclude non-public DNS answers. Those answers
+remain in the underlying evidence. Older retained IP groups remain readable but
+are labelled as equal non-public answers, not evidence of shared public hosting.
 
 A full Deep domain result can include:
 
@@ -230,6 +337,13 @@ stays in the current tab and is not uploaded; only deliberately selected
 candidate domains and bounded provenance continue to Bulk through a one-use
 handoff.
 
+Open **Excluded by exact profile match** to inspect candidates omitted by the
+active profile's official, approved-partner or domain allowlist entry. Each row
+identifies the exact declaration. The disclosure also remains available when
+every admitted candidate was excluded; it does not select those rows for Bulk.
+An exclusion is not a safety verdict, and a domain entry does not cover suffixes
+or subdomains.
+
 Certificate publication is evidence that a log recorded a certificate, not
 proof of current deployment, ownership, control or maliciousness. Co-issuance,
 shared names and visual similarity are review leads. Registry nameserver search
@@ -281,6 +395,18 @@ save preserves the draft; a successful save with a failed refresh offers a
 read-only refresh, not another write. Conflicting edits require reviewing the
 current saved values.
 
+Open **Preview domain exclusions** in the allowlist to compare saved and draft
+domain lists against up to 200 entered example domains. You can select domains
+from Cases already retained in the current workspace; this is not an inferred
+Brand association. The preview identifies exact declarations before and after
+the draft and stays in page memory. Invalid or oversized input is rejected as a
+whole. Unavailable profile or Case sources remain explicit.
+
+Registrar entries do not affect this domain-only preview or Discover's domain
+filtering. Product names are discovery defaults, not automatic matching rules or
+time-bounded campaigns. Existing custom-rule previews separately evaluate
+retained Case evidence; neither preview rewrites earlier analyst decisions.
+
 Account controls keep individual review dates. Saving changed controls or
 explicitly reconfirming one updates only those statements.
 
@@ -303,12 +429,15 @@ only the selected fields. Missing, incomplete or stale observations cannot
 confirm an expected absence.
 
 In **Current settings**, **Include inherited DMARC and direct parent delegation**
-is off by default. Selecting it adds a bounded ancestor-policy review and a
-direct parent-server sample when you start **Review official domains**.
+is off by default. Selecting it adds ancestor-policy and reporting-destination
+boundary reviews, sharing at most 32 additional TXT queries within ten seconds,
+and a direct parent-server sample when you start **Review official domains**.
 Each result identifies its queried owner and source. Inherited policy distinguishes
 existing from nonexistent names without deciding which applies; a parent sample
 is not complete delegation or DNSSEC validation. Ordinary Lookup and monitoring
-do not enable this option.
+do not enable this option. Reporting destinations are in the same organisational
+scope only when their DNS-derived boundaries agree. Unknown boundaries do not
+make a missing optional authorisation record a configuration error.
 
 Other Brand views include:
 
@@ -379,9 +508,29 @@ pins and relationships; **Assessment** holds conclusions and branches;
 an optional **Record lessons from this investigation** form for useful or
 misleading evidence, delays, returned complaints and changes for next time.
 It saves a normal Case note; unanswered questions are omitted.
+**Use a saved lesson to revise a template** lets you select one note and one
+saved template, edit the step instructions and completion criteria, and preview
+the changes. Add an applicability statement and reason, then save a new revision.
+The original template stays unchanged. Revision provenance contains the source
+template identity and content hashes, not the Case identity or lesson text;
+anything you type into guidance is included in template exports. The active
+guide uses the selected revision's guidance. JSON and restricted manual CACAO
+exports retain its revision origin, including after later explicit edits.
 The Summary's decision overview keeps the latest analyst conclusion, supporting
 and contrary observations, incomplete evidence and next scheduled review together.
 Evidence added later prompts another review; it does not change the conclusion.
+**Evidence relationships and shared sources** records which retained pin derives
+from another, or shares its source, with an analyst-supplied basis. Shared source
+labels, collection checkpoints and imported-content identities are listed
+separately. A relationship can be withdrawn with a reason; its original record
+remains. These declarations do not add confidence or establish independence.
+
+**Copy citation** on a retained pin or Lookup checkpoint copies only that fact,
+its source, observation time and completeness, not surrounding notes or raw data.
+**Preview report** shows the selected notes and imported sharing restrictions
+before an ordinary Case report download. Previewed downloads use the same
+prepared bytes; changing the Case or options requires a fresh preview. These
+reports are separate from authorised response packets.
 Due reviews refresh while the view is open without changing observation times.
 Section links support
 browser back and forward and remember reading positions while that Case remains
@@ -404,9 +553,14 @@ package download. The full Case includes notes, incident links, filenames and
 response records; unfinished forms are excluded. A changed Case requires a new
 check. Send the passphrase separately.
 
-The reviewer unlocks the package in Dashboard’s saved-work tools, checks the original-file matches
-and downloads its Case JSON for a separate workspace. Keep needed originals
-alongside that workspace. Return a current Case export or encrypted package.
+The reviewer unlocks the package in Dashboard’s saved-work tools and checks the
+original-file matches. **Open temporary Case review** reads the Case and matched
+originals without accessing or changing saved work. Closing the package clears
+its decrypted contents from the page. To make edits, download its Case JSON for
+an explicit import into a separate workspace and retain needed originals there.
+Supported Lookup entries also open a temporary, read-only replay. Select the
+entry explicitly; its source states and observation times remain historical.
+Return a current Case export or encrypted package.
 The unencrypted Case-only copy remains available when deliberately needed.
 Select the return in the original Case and review each addition before saving.
 Linked new pins must be selected with their claims; conflicting IDs
@@ -458,8 +612,9 @@ drafts and flags changed or unavailable evidence. Changed-evidence drafts requir
 explicit review before submission. A draft with an uncertain write outcome stays
 blocked until the current decision is inspected and the draft is discarded.
 Saved positions are not included in backups or exports. Case form recovery is
-separate. Review date inputs and displayed review times use UTC. **Copy** keeps the exact stored timestamp,
-including fractional seconds.
+separate. Review date inputs and displayed evidence times use UTC. A source
+containing only a calendar date keeps that date without acquiring a time or
+timezone. **Copy** keeps the exact stored timestamp, including fractional seconds.
 
 Bulk saved views apply their filters, List columns, grouping and sort order to the currently
 loaded results. They do not retain targets, select a Brand Profile or authorise
@@ -496,6 +651,13 @@ action or saved recheck question. Completed actions remain available through a
 view filter. Equally timed independent observations remain separate; a provider
 reply never becomes an independent outcome. Route freshness updates while the
 view is open; catalogue review dates do not claim a live contact check.
+The summary opens outstanding evidence requests directly, keeping provider
+deadlines, concurrent preparations and recorded delivery separate. Before packet
+authorisation, **What this recipient will receive** shows the selected URLs,
+contacts, evidence references and response history. Its expandable fields come
+from the packet writer; pin values and file contents are not attached. The final
+preview also includes the export envelope. Editing this copy leaves private
+Case originals unchanged.
 Evidence, conclusions, assertions, branches,
 actions, outcomes, closure and manual-step forms support recovery after reload.
 Unfinished drafts are excluded from exports and backups; submit or copy any
@@ -522,6 +684,14 @@ different target or another review of the baseline cannot establish it. Lookup
 leaves the outcome and completeness for the analyst to select; unchanged fields
 do not select a verdict. Follow-up times are entered in UTC.
 
+An **Independently not reproduced** closure needs a complete linked review;
+limited reviews remain in the history and can support other closure reasons.
+For a DNS-removal assessment, repeat observations of the same hostname and
+compare both address families under comparable conditions. No address data is
+not the same as a missing name, and a timeout establishes neither. The review
+history retains the observations; it does not calculate a takedown time or
+automatically classify removal.
+
 The saved reporting-route review includes platform reports. Filter by source
 review state or search by domain, recipient or source; pagination exposes all
 routes in the admitted Case store. Source observation and review dates remain
@@ -536,13 +706,25 @@ change Cases. Intelligence claims require an existing target Case.
 Each Case has a stable `WS-` reference derived from its complete immutable local
 UUID, so it remains stable across browser exports without relying on a shared
 counter.
-Controlled Case types classify the reviewed issue separately from free-form
-tags. Exact public incident links can be retained for web or social-platform
+Controlled Case types, incident links and investigation context are typed Case
+fields, separate from free-form tags and assertions. Historical tags and
+assertions remain retained when their metadata is migrated. Exact public incident
+links can be retained for web or social-platform
 content, resolved without erasing history, and carried into a response packet.
+**Exact incident-object coverage** keeps each link's analyst status separate from
+unknown action binding and independent observation coverage. Operations reports
+offer a local contributor drill-down and a paged Case scope view, independent of
+the report's time window. Campaigns show the same view for Cases matching their
+domains; same-domain incidents remain separate. Provider outcomes remain separate
+from independent reviews and recorded closure dates. Downloaded reports remain
+aggregate-only.
 
 For supported platform hostnames, the Case workspace shows freshness-bounded
 official safety or rights-reporting routes matched to the selected Case types.
 Each route includes a preparation checklist from its reviewed guidance.
+For a custom host or advertisement, select its reporting platform explicitly when
+supported by the evidence. The selection lasts only for this visit; it does not
+classify the host or change the saved incident link.
 The analyst must verify the current route and authority before opening it.
 WHOISleuth creates only a drafting action and never submits the complaint.
 
@@ -563,6 +745,15 @@ or record delivery. The report digest identifies the packet JSON, not the PDF.
 Provider acknowledgement or reported resolution remains analyst-recorded state,
 not independently observed remediation.
 
+In **Requested evidence and amendments**, choose a recorded packet delivery and
+record the provider's request and any stated UTC deadline. Review it against
+retained pins, or record why the evidence cannot be provided. **Create drafting
+amendment** starts a linked action: review its recipient and select all prepared
+pins in its response packet before authorising it. Preparation is not delivery;
+record the new packet's delivery separately. The original digest and request
+history remain unchanged. Case exports, reports and CLI Case packs preserve this
+history; public Case packs exclude it.
+
 A retained exact Incident URL can also be handed to the [optional capture companion](../packages/web-capture/README.md).
 The browser validates the selected manifest and can
 import its sanitised metadata and declared digests into that Case. Optionally
@@ -571,6 +762,28 @@ digests, then view matched JSON or PNG files locally. Metadata import does not
 save originals by default. Select **Retain this manifest and verified matching
 files** to save them together; unmatched selections remain excluded. Existing
 capture manifests can be reviewed without a retained Incident URL.
+
+Open **Page behaviour and dependencies** to inspect navigation, script and frame
+responses, default form destinations, script hashes and requested-action wording.
+**Request-channel coverage** also shows images, styles, fonts, media, fetch, XHR
+and beacon attempts. Each request distinguishes a supplied, refused or unavailable
+response and whether collection started. Disabled transports and interactions not
+exercised are listed separately; an unseen request is not evidence of absence.
+**Compare another capture** compares those records from two manifests before any
+PNG is selected. Review the declared conditions alongside changes. Missing
+observations remain qualified, and historical manifests have no page-observation
+data. For a page you own or are authorised to review, **Record an expected
+change** adds your reason and a digest of the selected observations to the Case
+assessment. It does not approve future changes automatically.
+
+**Specialist evidence reviews** in the same Evidence section lets you arrange source-qualified
+incident stages without treating a reported action as an observed event. Compare retained domain
+changes with expected maintenance, follow a stable platform object across
+versions and per-object outcomes, compare an authorised official storefront,
+or inspect connector configuration without running it. Save the report to keep
+its observations and a source-qualified Case summary. Incident, platform and storefront
+inputs can be reloaded for a later review; connector secrets are excluded.
+See [contextual reviews](contextual-reviews.md) for fields and CLI examples.
 
 **Retained files** also accepts deliberately selected originals without a
 capture manifest. Review the filename, optional source and observation time,
@@ -642,6 +855,18 @@ Defensive domain exports require deliberate reviewed selection and contain
 expiry, provenance, exclusions and rollback guidance. They are not uploaded or
 applied automatically.
 
+For revisions, open **Bulk → Workspace tools → Indicator revisions**. Preview
+a retained manifest, then choose whether to use it as the baseline. Explicitly
+add eligible shortlisted candidates, renew selected review windows or withdraw
+specific identities. Review the change list and download the manifest plus the
+required STIX or MISP file. Nothing is saved to the browser workspace.
+
+Keep each manifest: the next one links its predecessor's digest, not its full
+history. Original observations and creation times stay unchanged by renewal.
+Expired entries remain distinct from withdrawn entries; omission is not
+withdrawal. A withdrawn domain can be reintroduced only with a new identity.
+MISP expiry is a recipient review deadline, not an automatic removal rule.
+
 Cryptographic assurance keeps DNSSEC, route-origin, DANE/TLSA, PKIX, signatures
 and timestamps independent. A valid digest or signature proves only its named
 content and key relationship; it does not establish evidence accuracy, signer
@@ -704,8 +929,9 @@ workspace is shown above Console pages and beside backup/import controls.
 Export each workspace separately. Open the intended destination before reviewing
 an import. Names and tab state are not part of a backup. To delete a named
 workspace, switch away, close its other tabs and confirm its name. Pending
-deletions can be refreshed and retried. Workspaces share browser quota and are
-not encrypted or access-controlled from one another.
+deletions can be refreshed and retried. Workspaces share browser quota. Ordinary
+workspaces are plaintext; separately encrypted workspaces require their own
+passphrase. Workspace names do not create separate user permissions.
 
 Ordinary workspace state stays in IndexedDB as bounded plaintext JSON in the
 current browser profile. Failed reads, quota errors and unsupported versions
@@ -733,20 +959,31 @@ Exports are deliberate local actions. Review them before sharing:
 - normalised Lookup evidence excludes raw registration payloads and expanded
   contacts. Current schema 29 and published v2 schemas 27 and 28 retain that boundary;
   exact v1 schema 26 can contain public contact fields;
-- Case, workspace and trusted Case-pack files can identify investigated
-  hostnames and contain analyst records;
+- Case, workspace and all Case-pack audiences can identify investigated
+  hostnames and contain analyst records. Public packs retain Case, pin and
+  decision identifiers, tags, decision summaries and rationale;
 - graph, campaign and defensive exports identify their selected scope; and
 - screenshots from authorised local capture preserve visible rendered content.
 
 Local importers bound and validate an entire file before preview or merge.
-Profile, watchlist and template merges retain local records when the incoming
-timestamp is older, equal or missing. New Bulk-session and template imports
-that exceed capacity are skipped without evicting saved work. Saving a Bulk
+Profile, watchlist, shortlist and template merges retain local records when the incoming
+timestamp is older, equal or missing. An unknown local watchlist time also
+prevents automatic replacement. Missing or invalid watchlist times stay unknown
+in history and exports; they are not plotted as dated observations. Imported Bulk sessions, saved views,
+review rows, website snapshots and templates that exceed capacity are skipped
+without evicting saved work. Case imports fill available note and evidence-history
+slots without displacing local entries; omitted imports and any workspace-wide
+storage pruning are reported. Passport imports reject a selection that cannot
+fit the destination profile before saving any of it. Saving a Bulk
 session at capacity lists the affected sessions and offers export, cancellation
 or explicit removal; a changed collection requires a fresh review.
 STIX, MISP and external-finding inputs remain analyst-supplied evidence; import
 does not refresh them or establish their truth. Unsupported future schemas fail
 before partial interpretation.
+The import preview separates accepted claims from source objects and relationships,
+shows reference gaps and transformation losses, and keeps the source-file digest.
+Relationship structures are preview-only; importing claims does not create those
+relationships. Review each claim's retained fields and markings before saving.
 
 The CLI can verify supported envelopes, compare saved observations, inspect
 workspace archives and prepare sharing reviews offline. See
@@ -782,7 +1019,9 @@ review; PNGs can be decoded locally, and all verified files remain downloadable.
 No document scripts or links run. Capture manifests are checked against every
 included attachment's exact bytes. Browser import and CLI format verification
 remain separate from those byte checks.
-Packaging keeps selected bytes unchanged and does not encrypt or redact them.
+Packaging preserves the selected content without redaction. Ordinary ZIP and
+folder exports are plaintext; the encrypted `.wlep` option protects the manifest
+and all included files until unlocked.
 
 Use the same short sequence for each handoff: export deliberately, verify the
 selected file, inspect its interchange report, then preview the destination

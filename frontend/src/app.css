@@ -7,6 +7,7 @@
   --panel-rgb: 23 26 33;
   --panel-raised: #1c2029;
   --surface: var(--panel);
+  --reading-surface: var(--bg);
   --border: #2a2e39;
   --border-strong: #3a4050;
   --text: #e6e8ee;
@@ -60,9 +61,9 @@
   --factor-negative-fill-alpha: .2;
   --selection-text: var(--bg);
   --control-hover: #232837;
-  --quiet-control-border: var(--border);
+  --quiet-control-border: var(--control-border);
   --workspace-max-width: 1920px;
-  --control-border: var(--border-strong);
+  --control-border: #737e93;
   --primary-border: #78bdff;
   --primary-text: #07101c;
   --primary-start: #75c2ff;
@@ -159,11 +160,12 @@
      reserved for interaction, evidence families, and semantic states. */
   --bg: #e7e2d8;
   --bg-rgb: 231 226 216;
-  --panel: #faf7f1;
-  --panel-rgb: 250 247 241;
-  --panel-raised: #efeae1;
-  --surface: var(--panel-raised);
-  --border: #d6cfc2;
+  --panel: #fffdf8;
+  --panel-rgb: 255 253 248;
+  --panel-raised: #f2eee6;
+  --surface: var(--panel);
+  --reading-surface: var(--panel);
+  --border: #cec5b6;
   --border-strong: #b0a798;
   --text: #1c1915;
   --muted: #585045;
@@ -339,7 +341,7 @@ a[href], summary { cursor: pointer; }
 a[href]:focus-visible, summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 button, input, select, textarea { color: var(--text); font: inherit; }
 button { cursor: pointer; }
-button, select { font-family: var(--mono); }
+button, select { font-family: var(--font-sans); }
 input, select, textarea { caret-color: var(--interface-accent); }
 
 .skip-link {
@@ -403,7 +405,7 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { box-sh
 .choice > span > strong { display: block; color: var(--text); font-size: var(--text-sm); }
 .choice > span > small { color: var(--muted); font-size: var(--text-xs); }
 
-.field { display: block; font: 600 var(--text-xs) var(--mono); color: var(--text); }
+.field { display: block; font: 600 var(--text-xs) var(--font-sans); color: var(--text); }
 .field > input, .field > select, .field > textarea { display: block; margin-top: 6px; font-family: var(--font-sans); }
 .field > small { color: var(--muted); font-weight: 400; }
 
@@ -421,7 +423,7 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { box-sh
   border-radius: var(--radius-sm);
   background: var(--panel-raised);
   color: var(--text);
-  font: 600 var(--text-xs) var(--mono);
+  font: 600 var(--text-xs) var(--font-sans);
   cursor: pointer;
   text-align: center;
 }
@@ -438,7 +440,7 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { box-sh
   border-radius: var(--radius-sm);
   color: var(--primary-text);
   background: linear-gradient(135deg,var(--primary-start),var(--primary-end));
-  font-family: var(--mono);
+  font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: 750;
 }
@@ -534,6 +536,10 @@ button.danger:hover:not(:disabled), .btn.danger:hover:not(:disabled) { border-co
 .layout-container { min-width: 0; container-type: inline-size; }
 .responsive-grid { display: grid; min-width: 0; grid-template-columns: repeat(auto-fit,minmax(min(100%,var(--grid-min,240px)),1fr)); gap: var(--grid-gap,8px); align-items: start; }
 .responsive-grid > * { min-width: 0; }
+
+/* Charts declare their model's width and height on the SVG. Fit smaller
+   containers without magnifying labels and spacing on wider workspaces. */
+.data-chart { display: block; max-width: 100%; height: auto; margin-inline: auto; }
 .split-layout { display: grid; min-width: 0; grid-template-columns: minmax(0,var(--split-leading,1fr)) minmax(0,var(--split-trailing,1fr)); gap: var(--split-gap,clamp(16px,3vw,32px)); align-items: start; }
 .split-layout > * { min-width: 0; }
 .action-row { display: flex; min-width: 0; flex-wrap: wrap; gap: var(--action-gap,8px); align-items: center; }
@@ -544,17 +550,13 @@ button.danger:hover:not(:disabled), .btn.danger:hover:not(:disabled) { border-co
 .card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(180deg,rgb(var(--panel-rgb) / .98),rgb(var(--panel-rgb) / .94)); box-shadow: 0 6px 24px rgb(var(--shadow-rgb) / var(--card-shadow-alpha)),inset 0 1px rgb(var(--overlay-rgb) / .025); }
 a.card { transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
 a.card:hover, a.card:focus-visible { border-color: rgb(var(--accent-rgb) / .65); box-shadow: 0 8px 28px rgb(var(--shadow-rgb) / var(--card-hover-shadow-alpha)), inset 0 1px rgb(var(--interface-accent-rgb) / .08); transform: translateY(-2px); }
-.card > summary { list-style: none; }
-.card > summary::-webkit-details-marker { display: none; }
-.card > summary::before { content: "❯"; display: inline-block; margin-right: 9px; color: var(--interface-accent); font: 700 .72rem var(--mono); transition: transform .15s ease; }
-.card[open] > summary::before { transform: rotate(90deg); }
+summary::marker { color: var(--interface-accent); }
+.disclosure-heading { display: inline-flex; width: calc(100% - 1.5em); min-width: 0; align-items: baseline; justify-content: space-between; gap: 12px; vertical-align: top; }
+.disclosure-heading > * { min-width: 0; overflow-wrap: anywhere; }
 details.card > summary { padding: 15px var(--card-pad); cursor: pointer; font: 700 var(--text-sm) var(--mono); }
 details.card > summary:hover { color: var(--accent); }
 .compact-disclosure { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); }
-.compact-disclosure > summary { display: grid; min-height: 44px; grid-template-columns: minmax(0,1fr) 14px; gap: 10px; align-items: center; padding: 10px 12px; list-style: none; cursor: pointer; font: 700 var(--type-supporting-size) var(--mono); }
-.compact-disclosure > summary::-webkit-details-marker { display: none; }
-.compact-disclosure > summary::after { content: "+"; width: 14px; color: var(--interface-accent); font: 750 var(--text-sm)/1 var(--mono); text-align: center; }
-.compact-disclosure[open] > summary::after { content: "−"; }
+.compact-disclosure > summary { display: list-item; min-height: 44px; padding: 10px 12px; cursor: pointer; font: 700 var(--type-supporting-size) var(--mono); }
 .compact-disclosure > summary:hover, .compact-disclosure > summary:focus-visible { color: var(--accent); }
 
 /* Evidence disclosures keep source state visible while deferring long detail. */
@@ -850,7 +852,7 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
 @media (prefers-contrast: more) {
   :root {
     --border: var(--border-strong);
-    --quiet-control-border: var(--border-strong);
+    --quiet-control-border: var(--control-border);
     --interactive-fill-alpha: .16;
     --semantic-fill-alpha: .14;
   }
@@ -861,7 +863,7 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
 
 @media (forced-colors: active) {
   .card, .compact-disclosure, .stat-grid > *, .shell > aside, .shell > header { background: Canvas; box-shadow: none; }
-  .shell > aside nav a.active, .local-nav a.active, .reference-tree a.active { outline: 2px solid Highlight; outline-offset: -2px; }
+  .shell > aside nav a.active, .local-nav a.active, nav a[aria-current]:not([aria-current='false']) { outline: 2px solid Highlight; outline-offset: -2px; }
   .evidence-status, .chip, .badge { border: 1px solid ButtonText; background: Canvas; color: CanvasText; }
   .evidence-status.success, .evidence-status.partial, .evidence-status.error { border-style: solid; }
   .card > summary::before, .compact-disclosure > summary::after { color: LinkText; }

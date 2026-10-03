@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { readFile } from 'node:fs/promises';
 import { expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
@@ -10,8 +11,9 @@ import {
 import { TLS_PROFILE_VERSION } from '../lib/lookup-network-evidence-bounds.mts';
 import { analyzeWebsiteTechnology } from '../lib/website-technology.mts';
 import { analyzeWebsiteSecurityPosture } from '../lib/website-security-posture.mts';
+import { expectLookupTargetAligned } from './lookup-design-fixtures';
 
-// Lookup fixtures use reserved targets or locally rejected inputs. The shared
+// Lookup fixtures use injected protocol responses or locally rejected inputs. The shared
 // browser and server guards prevent live collection.
 
 test.beforeEach(async ({ page }) => {
@@ -23,6 +25,53 @@ test.beforeEach(async ({ page }) => {
     }));
   });
   await page.goto('/lookup');
+});
+
+test('DNS review separates IPv4 negative answers from working IPv6 and failed queries', async ({ page }, testInfo) => {
+  let requests = 0;
+  let outcome = 'no_data';
+  await page.route('**/api/lookup?*', async route => {
+    requests += 1;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      query: 'example.test', type: 'domain', inputHostname: 'example.test', registrableDomain: 'example.test',
+      rdap: { parsed: {} }, whois: { parsed: {}, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' } },
+      availability: { state: 'registered', domain: 'example.test', dns: {
+        version: 1, source: 'dns', status: 'partial', complete: false, observedAt: '2026-09-01T00:00:00.000Z',
+        records: { a: [], aaaa: ['2001:db8::1'] }, diagnostics: {
+          a: { status: outcome === 'timeout' ? 'error' : 'not_found', detail: outcome },
+          aaaa: { status: 'success', detail: 'records' }, mx: { status: 'error' },
+        },
+      } },
+    }) });
+  });
+  for (const [detail, label] of [
+    ['no_data', 'No data for this record type (NODATA)'],
+    ['name_not_found', 'Name not found by resolver'],
+    ['timeout', 'DNS query timed out'],
+  ]) {
+    outcome = detail!;
+    await page.locator('#query').fill('example.test');
+    await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+    await expandLookupFamilies(page);
+    const card = page.locator('.dns-card');
+    if (await card.getAttribute('open') === null) await card.locator(':scope > summary').click();
+    await expect(card.getByText(label!, { exact: true })).toBeVisible();
+    await expect(card.getByText('2001:db8::1', { exact: true })).toBeVisible();
+    if (detail === 'no_data') {
+      for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 },
+        { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+        await page.setViewportSize(viewport);
+        for (const theme of ['light', 'dark'] as const) {
+          await useTheme(page, theme);
+          await expectNoHorizontalOverflow(page);
+          await card.scrollIntoViewIfNeeded();
+          if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`dns-outcome-${viewport.width}-${theme}.png`) });
+        }
+      }
+    }
+  }
+  expect(requests).toBe(3);
 });
 
 for (const viewport of [
@@ -62,10 +111,10 @@ for (const viewport of [
             observedAt: '2026-09-01T00:00:00.000Z', durationMs: 10,
             detail: 'Network registration was retained, but the source record is incomplete. Some IP RDAP contact records or fields were omitted during bounded normalisation.',
             limitations: ['Some IP RDAP contact records or fields were omitted during bounded normalisation.'],
-            endpoint: { address: '93.184.216.34', family: 4, selectedFrom: 'tls_connection' },
-            rdap: { endpoint: 'https://network.example/rdap/ip/93.184.216.34', httpStatus: 200,
+            endpoint: { address: '192.0.2.34', family: 4, selectedFrom: 'tls_connection' },
+            rdap: { endpoint: 'https://network.example/rdap/ip/192.0.2.34', httpStatus: 200,
               transportSecurity: 'https', fetchedAt: '2026-09-01T00:00:00.000Z', attempts: [] },
-            network: { name: 'Example network', holder: 'Example network holder', cidrs: ['93.184.216.0/24'] },
+            network: { name: 'Example network', holder: 'Example network holder', cidrs: ['192.0.2.0/24'] },
             diagnostics: { requestCount: 1, addressSource: 'tls_connection', httpStatus: 200, cidrCount: 1 },
             abuseRouting: [],
           },
@@ -92,8 +141,8 @@ for (const viewport of [
       const summaryOverflow = await web.locator('.family-summary .metric, .family-summary .description').evaluateAll((elements) =>
         elements.filter((element) => element.scrollWidth > element.clientWidth + 1).map((element) => element.textContent));
       expect(summaryOverflow).toEqual([]);
-      await network.screenshot({ path: testInfo.outputPath(`network-${viewport.width}-${theme}.png`) });
-      await web.locator('.family-summary').screenshot({ path: testInfo.outputPath(`source-summary-${viewport.width}-${theme}.png`) });
+      if (captureVisualEvidenceEnabled()) { await network.screenshot({ path: testInfo.outputPath(`network-${viewport.width}-${theme}.png`) }); }
+      if (captureVisualEvidenceEnabled()) { await web.locator('.family-summary').screenshot({ path: testInfo.outputPath(`source-summary-${viewport.width}-${theme}.png`) }); }
       await page.evaluate(() => { window.location.hash = '#evidence-network'; });
       await expect.poll(() => network.locator(':scope > summary').evaluate((summary) => {
         const bounds = summary.getBoundingClientRect();
@@ -101,7 +150,7 @@ for (const viewport of [
           && [bounds.top + 4, bounds.bottom - 4].every((y) =>
             summary.contains(document.elementFromPoint(bounds.left + bounds.width / 2, y)));
       })).toBe(true);
-      await page.screenshot({ path: testInfo.outputPath(`network-viewport-${viewport.width}-${theme}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`network-viewport-${viewport.width}-${theme}.png`) }); }
       const card = page.locator('.security-posture-card');
       const disclosure = card.locator(':scope > summary');
       await expect(card).not.toHaveAttribute('open', '');
@@ -131,7 +180,7 @@ for (const viewport of [
         .filter((element) => element.scrollWidth > element.clientWidth + 1)
         .map((element) => element.textContent));
       expect(clippedText).toEqual([]);
-      await card.screenshot({ path: testInfo.outputPath(`posture-${viewport.width}-${theme}.png`) });
+      if (captureVisualEvidenceEnabled()) { await card.screenshot({ path: testInfo.outputPath(`posture-${viewport.width}-${theme}.png`) }); }
       await disclosure.focus();
       await disclosure.press('Enter');
       await expect(card).not.toHaveAttribute('open', '');
@@ -228,7 +277,13 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await expect(card.getByText('192.0.2.10', { exact: true })).toBeVisible();
   await expect(card.getByText('0 issue ca.example', { exact: true })).toBeVisible();
   await expect(card.getByText(/ns1\.example.*serial 2026072701/i)).toBeVisible();
-  await expect(card.getByText(/Service priority 1 → owner · ALPN h2, h3 · port 443 · IPv4 hints 192\.0\.2\.10.*Published ech/i)).toBeVisible();
+  const serviceBinding = card.getByText(/^Service priority 1 → owner/u);
+  await expect(serviceBinding).toBeVisible();
+  await expect(serviceBinding).toContainText('owner dns-evidence.test');
+  await expect(serviceBinding).toContainText('ALPN h2, h3');
+  await expect(serviceBinding).toContainText('port 443');
+  await expect(serviceBinding).toContainText('IPv4 hints 192.0.2.10');
+  await expect(serviceBinding).toContainText('Published ech');
   await expect(card.getByText(/Service-binding targets and address hints are displayed but not followed/i)).toBeVisible();
   await expect(card.getByText(/CNAME: resolver timed out/i)).toBeVisible();
   await expect(card.getByText(/Verify shared infrastructure independently/i)).toBeVisible();
@@ -320,7 +375,7 @@ test('DNS rehearsal retains null MX and exposes incomplete intent in the view an
       await expectNoHorizontalOverflow(page);
       await card.getByText('MX routing intent is incomplete', { exact: true }).scrollIntoViewIfNeeded();
       await expect(card.getByText('MX routing intent is incomplete', { exact: true })).toBeInViewport();
-      if (viewport.width === 320) await page.screenshot({ path: testInfo.outputPath(`dns-rehearsal-${theme}.png`) });
+      if (viewport.width === 320) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`dns-rehearsal-${theme}.png`) }); }
     }
   }
 });
@@ -389,7 +444,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
           scanMode: 'deep', source: 'tls', durationMs: 42, complete: true, truncated: false,
           limitations: ['This is a point-in-time TLS handshake fixture.'],
           diagnostics: { connectionAttempts: 1, resolvedAddressCount: 1, discardedFields: 0 },
-          connectedAddress: '93.184.216.34', connectedFamily: 4, port: 443, sniHost: 'http-evidence.test',
+          connectedAddress: '192.0.2.34', connectedFamily: 4, port: 443, sniHost: 'http-evidence.test',
           protocol: 'TLSv1.3', alpnProtocol: 'h2',
           cipher: { name: 'TLS_AES_256_GCM_SHA384', standardName: 'TLS_AES_256_GCM_SHA384', version: 'TLSv1.3' },
           ephemeralKey: { type: 'ECDH', name: 'X25519', size: 253 },
@@ -585,11 +640,30 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await holdBrowserLocalReads(page, 8_000, '.family-web button.family-summary');
   const snapshots = page.locator('.snapshot-manager');
   await expect(snapshots.getByRole('button', { name: 'Save current snapshot' })).toBeDisabled();
+  await expect(snapshots).toHaveAttribute('aria-busy', 'true');
+  await expect(snapshots.getByRole('region', { name: 'Observed certificate inventory' })).toContainText('Reading saved certificate observations…');
+  await expect(snapshots).not.toContainText('No observed certificate has been retained.');
   await expect(snapshots.getByRole('button', { name: 'Save current snapshot' })).toBeEnabled({ timeout: 12_000 });
+  await expect(snapshots).toHaveAttribute('aria-busy', 'false');
   const sslblReviewLead = page.getByRole('complementary', { name: 'The observed leaf certificate matched the local SSLBL snapshot' });
   await expect(sslblReviewLead).toBeVisible();
   await expect(sslblReviewLead).toContainText('does not change Risk scoring');
   await expect(sslblReviewLead.getByRole('link', { name: 'Review certificate evidence' })).toHaveAttribute('href', '#evidence-sslbl');
+  // Derive direct-hash coverage from the actual cards, not a second anchor inventory.
+  const evidenceTargets = await page.locator('#web-evidence .evidence-component[id], #web-evidence .evidence-card[id]')
+    .evaluateAll(elements => [...new Set(elements.map(element => `#${element.id}`))]);
+  expect(evidenceTargets).toContain('#evidence-sslbl');
+  for (const target of evidenceTargets) {
+    await page.getByRole('button', { name: 'Collapse details: Web and DNS evidence' }).click();
+    await expect(page.locator(target)).toHaveCount(0);
+    await page.evaluate(hash => {
+      window.history.replaceState(window.history.state, '', window.location.pathname);
+      window.location.hash = hash;
+    }, target);
+    await expect(page.getByRole('button', { name: 'Collapse details: Web and DNS evidence' })).toBeVisible();
+    await expect(page.locator(target)).toBeVisible();
+    await expectLookupTargetAligned(page, target);
+  }
   const card = page.locator('.http-card');
   await expect(card).not.toHaveAttribute('open', '');
   await expect(card.getByRole('heading', { name: 'HTTP evidence' })).toBeVisible();
@@ -866,7 +940,7 @@ test('real library projection retains advisory aliases and discloses malformed s
       await libraries.scrollIntoViewIfNeeded();
       await expect(libraries).toBeVisible();
       await expectNoHorizontalOverflow(page);
-      if ([320, 1280].includes(viewport.width)) await page.screenshot({ path: testInfo.outputPath(`library-provenance-${viewport.width}-${theme}.png`) });
+      if ([320, 1280].includes(viewport.width)) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`library-provenance-${viewport.width}-${theme}.png`) }); }
     }
   }
 });
@@ -953,7 +1027,7 @@ test('TLS evidence presents one-connection certificate evidence without narrow-w
           scanMode: 'deep', source: 'tls', durationMs: 42, complete: true, truncated: false,
           limitations: ['This is a point-in-time TLS handshake to one validated public address.'],
           diagnostics: { connectionAttempts: 1, resolvedAddressCount: 1, discardedFields: 0 },
-          connectedAddress: '93.184.216.34', connectedFamily: 4, port: 443, sniHost: 'tls-evidence.test',
+          connectedAddress: '192.0.2.34', connectedFamily: 4, port: 443, sniHost: 'tls-evidence.test',
           protocol: 'TLSv1.3', alpnProtocol: 'h2',
           cipher: { name: 'TLS_AES_256_GCM_SHA384', standardName: 'TLS_AES_256_GCM_SHA384', version: 'TLSv1.3' },
           ephemeralKey: { type: 'ECDH', name: 'X25519', size: 253 },
@@ -996,9 +1070,9 @@ test('TLS evidence presents one-connection certificate evidence without narrow-w
   await expect(card).not.toHaveAttribute('open', '');
   await expect(card.getByRole('heading', { name: 'TLS and certificate evidence' })).toBeVisible();
   await expect(card.locator(':scope > summary .evidence-status')).toHaveText('success');
-  await expect(card.getByText('93.184.216.34', { exact: true })).toBeHidden();
+  await expect(card.getByText('192.0.2.34', { exact: true })).toBeHidden();
   await card.locator(':scope > summary').click();
-  await expect(card.getByText('93.184.216.34', { exact: true })).toBeVisible();
+  await expect(card.getByText('192.0.2.34', { exact: true })).toBeVisible();
   await expect(card.getByText('TLSv1.3', { exact: true })).toBeVisible();
   await expect(card.getByText('Not authorised', { exact: true })).toBeVisible();
   await expect(card.getByText('Certificate not authorised', { exact: true })).toBeVisible();

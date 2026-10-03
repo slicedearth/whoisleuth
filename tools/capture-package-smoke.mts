@@ -39,17 +39,19 @@ function screenshot(): Buffer {
 
 function fixtureBrowser(): CaptureBrowser {
   let route: ((value: Route) => Promise<void>) | undefined;
+  const mainFrame = {};
   const page = {
     on() {},
+    mainFrame: () => mainFrame,
     async goto(url: string) {
       assert.ok(route);
       await route({
-        request: () => ({ url: () => url, method: () => 'GET', headers: () => ({ accept: 'text/html', cookie: '<private-cookie-fixture>', authorization: '<private-authorisation-fixture>' }) }),
+        request: () => ({ url: () => url, method: () => 'GET', resourceType: () => 'document', isNavigationRequest: () => true, frame: () => mainFrame, headers: () => ({ accept: 'text/html', cookie: '<private-cookie-fixture>', authorization: '<private-authorisation-fixture>' }) }),
         fulfill: async () => {}, abort: async () => { throw new Error('Fixture route unexpectedly aborted.'); },
       } as unknown as Route);
     },
     waitForTimeout: async () => {}, url: () => 'https://example.test/', title: async () => 'Example',
-    evaluate: async (_callback: unknown, value?: unknown) => value === undefined ? true : {
+    evaluate: async (_callback: unknown, value?: unknown) => value === undefined ? true : value === '__whoisleuthPageObservationsV1' ? { elements: [], partial: false, clipboardWriteAttempts: 0 } : {
       structure: 'html body main', visibleText: '<private-body-fixture>', structureTruncated: false, textTruncated: false,
       elementCount: 3, formCount: 0, inputCount: 0, scriptCount: 0, imageCount: 0,
     },
@@ -99,6 +101,7 @@ try {
   await assert.rejects(() => compare.compareRenderedCaptures(manifestPath, manifestPath), /different manifest files/u);
   checks.push('self-comparison rejection');
   const compared = await compare.compareRenderedCaptures(manifestPath, otherManifest);
+  assert.equal(compared.pageBehaviour.state, 'unchanged');
   assert.equal(compared.screenshot.state, 'same');
   assert.equal(compared.renderedDom.structure.state, 'same');
   assert.deepEqual(compared.integrity.left, { screenshot: true, perceptualHash: true, domDigest: true });

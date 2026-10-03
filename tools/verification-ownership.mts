@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Buffer } from 'node:buffer';
+import { execFileSync } from 'node:child_process';
 import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,79 +11,25 @@ import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycl
 import { isPlaywrightFunctionalSpec } from './playwright-execution-contract.mts';
 import { PRIVACY_DATA_FLOW_CATALOGUE } from './privacy-data-flow-catalogue-renderer.mts';
 import { readVerificationTestInventory } from './verification-timing-profile.mts';
-import { OUTPUT_PATH as CAPABILITY_DOCUMENT_PATH } from './capability-manifest.mts';
-import { CLI_PACKAGE_SUPPORT_FILES } from './cli-package.mts';
+import { browserRouteReferences, browserTestsForRoutes } from './browser-route-impact.mts';
 import type { ICruiseResult, IOptions } from 'dependency-cruiser';
+import { createVerificationRules, selectBrowserSpecs, type SpecialisedCheck, type VerificationRule } from './verification-policy.mts';
+import { indexRuntimeConsumers, describeRuntimeImportGaps } from './runtime-test-consumers.mts';
+export type { SpecialisedCheck } from './verification-policy.mts';
 
-export const VERIFICATION_OWNERSHIP_MAP_VERSION = 2;
-export const MAX_VERIFICATION_CHANGED_PATHS = 128;
+export const VERIFICATION_OWNERSHIP_MAP_VERSION = 3;
 export const MAX_VERIFICATION_CHANGED_PATH_LENGTH = 320;
-export const MAX_VERIFICATION_RULES = 64;
 export const MAX_VERIFICATION_INVENTORY_FILES = 8_000;
+export const MAX_VERIFICATION_CHANGED_PATHS = MAX_VERIFICATION_INVENTORY_FILES;
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SAFE_CHANGED_PATH = /^(?:[a-zA-Z0-9._+()@-]+\/)*[a-zA-Z0-9._+()@-]+$/u;
-
-export const FULL_BATCH_RELEASE_GATES = Object.freeze([
-  'unit',
-  'production-source-coverage',
-  'typecheck',
-  'frontend-check',
-  'build',
-  'architecture',
-  'capability-catalogue',
-  'privacy-catalogue',
-  'schema-inventory',
-  'licences',
-  'production-dependency-audit',
-  'cli-package',
-  'capture-package',
-  'local-package',
-  'release-contract',
-  'browser-complete',
-  'browser-timing-stress-when-affected',
-  'diff-whitespace',
-  'staged-security',
-] as const);
-
-type FullGate = typeof FULL_BATCH_RELEASE_GATES[number];
-export type SpecialisedCheck =
-  | 'architecture'
-  | 'capability-catalogue'
-  | 'privacy-catalogue'
-  | 'schema-inventory'
-  | 'cli-package'
-  | 'capture-package'
-  | 'local-package'
-  | 'release-contract'
-  | 'licences'
-  | 'production-dependency-audit'
-  | 'staged-security'
-  | 'documentation'
-  | 'workflow-closure'
-  | 'browser-build'
-  | 'browser-loading-report'
-  | 'browser-timing-plan'
-  | 'analyst-journey-assurance'
-  | 'critical-mutation'
-  | 'critical-io-coverage';
-
-type VerificationRule = Readonly<{
-  id: string;
-  area: string;
-  priority: number;
-  impactOnly?: boolean;
-  matches: (changedPath: string) => boolean;
-  focusedUnit: readonly string[];
-  focusedBrowser: readonly string[];
-  specialised: readonly SpecialisedCheck[];
-  browserRequired: boolean;
-}>;
+const SAFE_CHANGED_PATH = /^(?:[a-zA-Z0-9._+()@\[\]-]+\/)*[a-zA-Z0-9._+()@\[\]-]+$/u;
 
 export type VerificationOwnershipAssignment = Readonly<{
   changedPath: string;
   ownershipArea: string;
   impactAreas: readonly string[];
+  selectionNotes: readonly string[];
   focusedUnitChecks: readonly string[];
   focusedBrowserChecks: readonly string[];
   mandatorySpecialisedChecks: readonly SpecialisedCheck[];
@@ -90,8 +37,9 @@ export type VerificationOwnershipAssignment = Readonly<{
 }>;
 
 export type VerificationOwnershipPlan = Readonly<{
-  mapVersion: 2;
+  mapVersion: typeof VERIFICATION_OWNERSHIP_MAP_VERSION;
   changedPaths: readonly string[];
+  conservativeFallbackPaths: readonly string[];
   assignments: readonly VerificationOwnershipAssignment[];
   ownershipAreas: readonly string[];
   impactAreas: readonly string[];
@@ -99,12 +47,10 @@ export type VerificationOwnershipPlan = Readonly<{
   focusedBrowserChecks: readonly string[];
   mandatorySpecialisedChecks: readonly SpecialisedCheck[];
   userFacingBrowserRequired: boolean;
-  fullBatchReleaseGates: readonly FullGate[];
+  fullVerificationScript: string;
   interpretation: readonly string[];
 }>;
 
-const unit = (...values: string[]) => Object.freeze(values);
-const browser = (...values: string[]) => Object.freeze(values);
 const specialised = (...values: SpecialisedCheck[]) => Object.freeze(values);
 
 function functionalBrowserInventory(): readonly string[] {
@@ -121,460 +67,18 @@ function functionalBrowserInventory(): readonly string[] {
 
 const FUNCTIONAL_BROWSER_INVENTORY = functionalBrowserInventory();
 
-/** Discover a suite family without registering each new specification. */
-export function browserSpecsForPrefixes(
-  prefixes: readonly string[],
-  inventory: readonly string[] = FUNCTIONAL_BROWSER_INVENTORY,
-): readonly string[] {
-  return Object.freeze(inventory.filter((file) => isPlaywrightFunctionalSpec(file)
-    && prefixes.some((prefix) => file === `e2e/${prefix}.spec.ts` || file.startsWith(`e2e/${prefix}-`))).sort());
+const RULES = createVerificationRules(REPOSITORY_ROOT, FUNCTIONAL_BROWSER_INVENTORY);
+const CONSERVATIVE_FALLBACK: VerificationRule = Object.freeze({
+  id: 'unclassified', area: 'unclassified surface: conservative verification', priority: -1,
+  matches: () => true,
+  focusedUnit: Object.freeze(readVerificationTestInventory().filter(file => file.startsWith('test/'))),
+  focusedBrowser: FUNCTIONAL_BROWSER_INVENTORY,
+  specialised: Object.freeze([...new Set(RULES.flatMap(rule => rule.specialised))].sort()),
+  browserRequired: true,
+});
+export function browserSpecsForPrefixes(prefixes: readonly string[], inventory = FUNCTIONAL_BROWSER_INVENTORY): readonly string[] {
+  return selectBrowserSpecs(prefixes, inventory);
 }
-
-const CASE_FORM_COMPONENT = /\/Case[A-Za-z]+Stage\.svelte$/u;
-
-const RULES: readonly VerificationRule[] = Object.freeze([
-  Object.freeze({
-    id: 'shared-contracts', area: 'shared contracts and lifecycle metadata', priority: 40,
-    matches: (value: string) => value.startsWith('packages/contracts/'),
-    focusedUnit: unit('test/schema-lifecycle-registry.test.mts', 'test/schema-lifecycle-variants.test.mts', 'test/schema-lifecycle-repository.test.mts', 'test/capability-manifest.test.mts', 'test/privacy-data-flow-catalogue.test.mts'),
-    focusedBrowser: browser(),
-    specialised: specialised('architecture', 'schema-inventory', 'capability-catalogue', 'privacy-catalogue', 'critical-mutation'),
-    browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'case-domain', area: 'Case domain and response lifecycle', priority: 40,
-    matches: (value: string) => value.startsWith('packages/cases/'),
-    focusedUnit: unit('test/case-model.test.mts', 'test/case-record-ownership.test.mts', 'test/case-report.test.mts', 'test/case-response-model.test.mts', 'test/case-portability-lifecycle.test.mts', 'test/model-contract-properties.test.mts'),
-    focusedBrowser: browserSpecsForPrefixes(['case', 'cases']),
-    specialised: specialised('architecture', 'schema-inventory', 'privacy-catalogue', 'critical-mutation', 'analyst-journey-assurance'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'case-projection-impact', area: 'Case persistence and audience projections', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => [
-      'packages/cases/case-record-contracts.mts',
-      'packages/cases/case-record-decisions.mts',
-      'packages/cases/case-record-projection.mts',
-      'packages/cases/case-storage-model.mts',
-      'packages/contracts/case-portability.mts',
-      'cli/case-pack.mts',
-    ].includes(value),
-    focusedUnit: unit(
-      'test/case-record-ownership.test.mts',
-      'test/case-portability-lifecycle.test.mts',
-      'test/cli-case-pack.test.mts',
-      'test/artifact-verify.test.mts',
-    ),
-    focusedBrowser: browser('e2e/case-import-workflows.spec.ts', 'e2e/cases.spec.ts'),
-    specialised: specialised('schema-inventory', 'privacy-catalogue', 'cli-package'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'workspace-domain', area: 'browser-local workspace domain', priority: 40,
-    matches: (value: string) => value.startsWith('packages/workspace/'),
-    focusedUnit: unit('test/shared-domain-facades.test.mts', 'test/workspace-portability-lifecycle.test.mts', 'test/workspace-rollback.test.mts', 'test/model-contract-properties.test.mts'),
-    focusedBrowser: browser('e2e/dashboard.spec.ts', 'e2e/local-data-platform.spec.ts'),
-    specialised: specialised('architecture', 'schema-inventory', 'privacy-catalogue', 'analyst-journey-assurance'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'evidence-domain', area: 'bounded evidence domain', priority: 40,
-    matches: (value: string) => value.startsWith('packages/evidence/') || value.startsWith('packages/collectors/'),
-    focusedUnit: unit('test/evidence-quality-properties.test.mts', 'test/model-contract-properties.test.mts'),
-    focusedBrowser: browser(),
-    specialised: specialised('architecture', 'privacy-catalogue', 'staged-security', 'critical-mutation'),
-    browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'anchored-artifact-writer', area: 'critical anchored artefact I/O', priority: 50,
-    matches: (value: string) => value === 'packages/web-capture/anchored-artifact-writer.mts',
-    focusedUnit: unit('test/anchored-artifact-writer.test.mts'),
-    focusedBrowser: browser(),
-    specialised: specialised('architecture', 'critical-io-coverage', 'staged-security'),
-    browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'portable-domains', area: 'portable domain packages', priority: 30,
-    matches: (value: string) => value.startsWith('packages/'),
-    focusedUnit: unit('test/model-contract-properties.test.mts', 'test/schema-lifecycle-registry.test.mts'),
-    focusedBrowser: browser(),
-    specialised: specialised('architecture', 'schema-inventory', 'privacy-catalogue'),
-    browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'capture-package-impact', area: 'optional capture package', priority: 0, impactOnly: true,
-    matches: (value: string) => value.startsWith('packages/web-capture/') || value.startsWith('tools/capture-package') || value === 'tools/optional-package.mts',
-    focusedUnit: unit('test/local-web-capture.test.mts', 'test/capture-package.test.mts'),
-    focusedBrowser: browser(), specialised: specialised('capture-package'), browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'local-application-impact', area: 'local application and filesystem workspace', priority: 0, impactOnly: true,
-    matches: (value: string) => /(?:^|\/)local-application(?:[/.\-]|$)/u.test(value)
-      || value === 'tools/optional-package.mts' || value === 'frontend/src/lib/components/LocalApplicationWorkspace.svelte',
-    focusedUnit: unit('test/local-application-store.test.mts', 'test/local-application-host.test.mts', 'test/local-application-package.test.mts'),
-    focusedBrowser: browserSpecsForPrefixes(['local-application']),
-    specialised: specialised('local-package', 'privacy-catalogue', 'schema-inventory'), browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'shared-runtime', area: 'shared runtime and evidence orchestration', priority: 30,
-    matches: (value: string) => value.startsWith('lib/'),
-    focusedUnit: unit('test/model-contract-properties.test.mts', 'test/evidence-quality-properties.test.mts'),
-    focusedBrowser: browser(),
-    specialised: specialised('architecture', 'privacy-catalogue', 'staged-security', 'critical-mutation'),
-    browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'cli', area: 'CLI command and installed-package surface', priority: 35,
-    matches: (value: string) => value.startsWith('cli/') || value.startsWith('bin/'),
-    focusedUnit: unit('test/cli-command-registry.test.mts', 'test/cli-process.test.mts', 'test/cli-investigation-run.test.mts'),
-    focusedBrowser: browser(),
-    specialised: specialised('architecture', 'schema-inventory', 'privacy-catalogue', 'cli-package', 'release-contract', 'staged-security'),
-    browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'cli-command-contract-impact', area: 'CLI command grammar and generated references', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => [
-      'packages/contracts/cli-command-semantics.mts',
-      'packages/contracts/cli-command-catalogue.mts',
-      'cli/command-reference.mts',
-      'cli/command-argument-grammar.mts',
-      'cli/arguments.mts',
-      'cli/command-catalogue.mts',
-      'cli/completion.mts',
-      'cli/manual.mts',
-    ].includes(value),
-    focusedUnit: unit('test/cli-command-registry.test.mts', 'test/cli-process.test.mts'),
-    focusedBrowser: browser(),
-    specialised: specialised('capability-catalogue', 'privacy-catalogue', 'schema-inventory', 'cli-package', 'release-contract'),
-    browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'hosted-functions', area: 'hosted bounded functions', priority: 35,
-    matches: (value: string) => value.startsWith('netlify/functions/'),
-    focusedUnit: unit(
-      'test/netlify-api-error-boundaries.test.mts',
-      'test/netlify-network-guard.test.mts',
-      'test/netlify-network-handler-contracts.test.mts',
-      'test/outbound-request-bounds.test.mts',
-    ),
-    focusedBrowser: browser(),
-    specialised: specialised('architecture', 'privacy-catalogue', 'staged-security'),
-    browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'frontend-model', area: 'frontend analysis and controller models', priority: 40,
-    matches: (value: string) => value.startsWith('frontend/src/lib/analysis/') || value.startsWith('frontend/src/lib/controllers/'),
-    focusedUnit: unit('test/model-contract-properties.test.mts', 'test/lookup-request-controller.test.mts'),
-    focusedBrowser: browser('e2e/dashboard.spec.ts', 'e2e/accessibility.spec.ts'),
-    specialised: specialised('architecture', 'privacy-catalogue', 'analyst-journey-assurance'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'case-response-form', area: 'Case response forms and submitted drafts', priority: 45,
-    matches: (value: string) => CASE_FORM_COMPONENT.test(value),
-    focusedUnit: unit('test/case-response-form-values.test.mts', 'test/submitted-draft.test.mts'),
-    focusedBrowser: browser('e2e/accessibility.spec.ts', ...browserSpecsForPrefixes(['case-response-stages', 'case-workspace', 'submitted-drafts'])),
-    specialised: specialised('architecture'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'frontend-user-interface', area: 'frontend user-facing routes and components', priority: 30,
-    matches: (value: string) => value.startsWith('frontend/src/'),
-    focusedUnit: unit(),
-    focusedBrowser: browser('e2e/accessibility.spec.ts'),
-    specialised: specialised('architecture', 'analyst-journey-assurance'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'frontend-navigation-impact', area: 'shared navigation, theme, and layout behaviour', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => value === 'frontend/src/app.css'
-      || value === 'frontend/src/lib/workspaces.ts'
-      || /\/console-(?:command-navigation|workflow-state)\.ts$/u.test(value)
-      || /\/\+layout(?:\.svelte|\.ts)$/u.test(value)
-      || /\/(?:CommandPalette|LocalSectionNav|PageHeading|PublicReferenceSidebar|SiteFooter|ThemeSelector)\.svelte$/u.test(value),
-    focusedUnit: unit('test/public-product-catalogue.test.mts'),
-    focusedBrowser: browserSpecsForPrefixes(['console-workflow', 'console-workspace', 'design-system', 'mobile-nav', 'skip-navigation', 'theme']),
-    specialised: specialised('browser-timing-plan'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'frontend-lookup-impact', area: 'Lookup analyst workflow', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => value.includes('/lookup/')
-      || /\/(?:Lookup|lookup-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
-    focusedUnit: unit('test/lookup-request-controller.test.mts', 'test/lookup-route-analysis.test.mts'),
-    focusedBrowser: browserSpecsForPrefixes(['lookup']),
-    specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'frontend-bulk-impact', area: 'Bulk analyst workflow', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => value.includes('/bulk/')
-      || /\/(?:Bulk|bulk-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
-    focusedUnit: unit('test/bulk-route-model.test.mts', 'test/bulk-session-model.test.mts'),
-    focusedBrowser: browserSpecsForPrefixes(['bulk']),
-    specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'frontend-brand-impact', area: 'Brand and campaign analyst workflow', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => value.includes('/brands/')
-      || value === 'frontend/src/lib/campaigns.ts'
-      || /\/(?:Brand|Campaign|brand-|campaign-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
-    focusedUnit: unit('test/brand-profile-model.test.mts', 'test/campaign-model.test.mts'),
-    focusedBrowser: browser(...FUNCTIONAL_BROWSER_INVENTORY.filter((file) => /(?:^|[-/])(?:brand|campaign)[-.]/u.test(file))),
-    specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'frontend-case-impact', area: 'Case analyst workflow', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => !CASE_FORM_COMPONENT.test(value) && (value === 'frontend/src/lib/cases.ts'
-      || /\/(?:Case|case-)[^/]*\.(?:svelte|ts|mts)$/u.test(value)),
-    focusedUnit: unit('test/case-model.test.mts', 'test/case-report.test.mts', 'test/case-response-model.test.mts'),
-    focusedBrowser: browserSpecsForPrefixes(['case', 'cases']),
-    specialised: specialised('privacy-catalogue'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'frontend-monitor-impact', area: 'Monitoring analyst workflow', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => value.includes('/monitor/')
-      || value === 'frontend/src/lib/scheduled-monitoring.ts'
-      || value === 'frontend/src/lib/watchlists.ts'
-      || /\/(?:HostedWatchlist|Monitor|Watchlist|monitor-|watchlist-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
-    focusedUnit: unit('test/watchlist-store.test.mts', 'test/scheduled-monitor-model.test.mts'),
-    focusedBrowser: browser('e2e/hosted-monitoring.spec.ts', 'e2e/lookup-case-monitoring.spec.ts', 'e2e/watchlist-storage.spec.ts'),
-    specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'frontend-dashboard-impact', area: 'Dashboard analyst workflow', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => value.includes('/dashboard/') || /\/Dashboard[^/]*\.svelte$/u.test(value),
-    focusedUnit: unit('test/analyst-review-inbox.test.mts'),
-    focusedBrowser: browser('e2e/analyst-context.spec.ts', 'e2e/local-data-platform.spec.ts', ...browserSpecsForPrefixes(['dashboard', 'console-workflow'])),
-    specialised: specialised('browser-timing-plan'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'browser-local-data-impact', area: 'browser-local persistence and migration behaviour', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => /^frontend\/src\/lib\/browser-local-data(?:-[^/]+)?\.ts$/u.test(value),
-    focusedUnit: unit(
-      'test/browser-local-data-definitions.test.mts',
-      'test/browser-local-data-provider.test.mts',
-      'test/browser-local-data-service.test.mts',
-      'test/workspace-import-failure.test.mts',
-      'test/workspace-rollback.test.mts',
-    ),
-    focusedBrowser: browser('e2e/local-data-platform.spec.ts', 'e2e/watchlist-storage.spec.ts'),
-    specialised: specialised('privacy-catalogue', 'schema-inventory'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'frontend-public-reference-impact', area: 'public documentation and reference experience', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => value.startsWith('frontend/src/routes/(public)/')
-      || /\/PublicReference[^/]*\.svelte$/u.test(value),
-    focusedUnit: unit('test/public-guide.test.mts', 'test/public-product-catalogue.test.mts'),
-    focusedBrowser: browser('e2e/public-guide.spec.ts', 'e2e/public-product-batch3.spec.ts', 'e2e/seo.spec.ts'),
-    specialised: specialised('documentation', 'capability-catalogue'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'frontend-deferred-loading-impact', area: 'deferred loading and recovery behaviour', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => /\/(?:DeferredSurface|deferred-|console-loading)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
-    focusedUnit: unit('test/deferred-module.test.mts'),
-    focusedBrowser: browser('e2e/console-loading.spec.ts', 'e2e/deferred-interactions.spec.ts', 'e2e/deferred-recovery.spec.ts'),
-    specialised: specialised('browser-timing-plan'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'verification-tooling', area: 'maintainer verification tooling', priority: 30,
-    matches: (value: string) => value.startsWith('tools/'),
-    focusedUnit: unit('test/ci-workflow.test.mts', 'test/verification-architecture.test.mts'),
-    focusedBrowser: browser(),
-    specialised: specialised('architecture', 'workflow-closure'),
-    browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'schema-tooling-impact', area: 'schema inventory and lifecycle verification', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => /^tools\/schema-(?:compatibility|lifecycle|source)/u.test(value),
-    focusedUnit: unit(
-      'test/schema-compatibility.test.mts',
-      'test/schema-lifecycle-repository.test.mts',
-      'test/schema-source-coverage.test.mts',
-    ),
-    focusedBrowser: browser(),
-    specialised: specialised('schema-inventory', 'critical-mutation'),
-    browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'privacy-tooling-impact', area: 'privacy catalogue verification', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => value.startsWith('tools/privacy-data-flow-'),
-    focusedUnit: unit('test/privacy-data-flow-catalogue.test.mts', 'test/privacy-contract.test.mts'),
-    focusedBrowser: browser('e2e/privacy-data-flow-catalogue.spec.ts'),
-    specialised: specialised('privacy-catalogue', 'schema-inventory'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'public-product-tooling-impact', area: 'public product and capability verification', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => /^tools\/(?:capability|public-product)/u.test(value),
-    focusedUnit: unit('test/capability-manifest.test.mts', 'test/public-product-catalogue.test.mts'),
-    focusedBrowser: browser('e2e/capabilities.spec.ts', 'e2e/public-product-batch3.spec.ts'),
-    specialised: specialised('capability-catalogue', 'documentation'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'browser-build-tooling-impact', area: 'browser build and CI parity verification', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => value === 'tools/ci-verification.mts'
-      || value === 'tools/frontend-build-integrity.mts'
-      || value === 'tools/frontend-loading-report.mts'
-      || value.startsWith('tools/playwright-')
-      || value === 'tools/verification-artifact-status.mts',
-    focusedUnit: unit(
-      'test/ci-workflow.test.mts',
-      'test/frontend-build-integrity.test.mts',
-      'test/frontend-loading-report.test.mts',
-    ),
-    focusedBrowser: browser(),
-    specialised: specialised('browser-timing-plan', 'workflow-closure'),
-    browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'browser-build-artifact-impact', area: 'production browser build artefact verification', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => value === 'tools/frontend-build-integrity.mts'
-      || value === 'tools/frontend-loading-report.mts',
-    focusedUnit: unit('test/frontend-build-integrity.test.mts', 'test/frontend-loading-report.test.mts'),
-    focusedBrowser: browser(),
-    specialised: specialised('browser-build', 'browser-loading-report'),
-    browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'browser-test-artifact-impact', area: 'browser test artefact hand-off', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => [
-      '.github/workflows/ci.yml',
-      'tools/ci-verification.mts',
-      'tools/frontend-build-integrity.mts',
-      'tools/hosted-browser-workspace.mts',
-      'tools/playwright-balanced-suite.mts',
-      'tools/playwright-balanced-shard.mts',
-      'e2e/deferred-recovery.spec.ts',
-    ].includes(value),
-    focusedUnit: unit(
-      'test/frontend-build-integrity.test.mts',
-      'test/ci-workflow.test.mts',
-      'test/verification-architecture.test.mts',
-    ),
-    focusedBrowser: browser('e2e/deferred-recovery.spec.ts'),
-    specialised: specialised('browser-build', 'browser-timing-plan', 'workflow-closure'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'unit-tests', area: 'unit and model verification', priority: 30,
-    matches: (value: string) => value.startsWith('test/'),
-    focusedUnit: unit(), focusedBrowser: browser(),
-    specialised: specialised('architecture'), browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'browser-support-impact', area: 'shared browser setup and support verification', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => value.startsWith('e2e/') && !value.endsWith('.spec.ts'),
-    focusedUnit: unit('test/verification-architecture.test.mts'),
-    focusedBrowser: FUNCTIONAL_BROWSER_INVENTORY,
-    specialised: specialised('browser-timing-plan', 'analyst-journey-assurance'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'browser-tests', area: 'browser and analyst-journey verification', priority: 30,
-    matches: (value: string) => value.startsWith('e2e/'),
-    focusedUnit: unit('test/synthetic-analyst-journeys.test.mts'), focusedBrowser: browser(),
-    specialised: specialised('browser-timing-plan', 'analyst-journey-assurance'), browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'privacy-documents', area: 'privacy and data-flow documentation', priority: 45,
-    matches: (value: string) => value === 'PRIVACY.md' || value.startsWith('docs/privacy-'),
-    focusedUnit: unit('test/documentation-links.test.mts', 'test/privacy-data-flow-catalogue.test.mts', 'test/privacy-contract.test.mts'), focusedBrowser: browser(),
-    specialised: specialised('privacy-catalogue', 'documentation'), browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'privacy-contract-impact', area: 'privacy contract and disclosure surfaces', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => (!value.endsWith('.md') && value.includes('privacy-data-flow'))
-      || value.startsWith('frontend/src/routes/(public)/privacy/'),
-    focusedUnit: unit('test/privacy-data-flow-catalogue.test.mts', 'test/privacy-contract.test.mts'),
-    focusedBrowser: browser('e2e/privacy-data-flow-catalogue.spec.ts'),
-    specialised: specialised('privacy-catalogue', 'schema-inventory', 'documentation'),
-    browserRequired: true,
-  }),
-  Object.freeze({
-    id: 'workflow-definitions', area: 'hosted verification workflows', priority: 40,
-    matches: (value: string) => value.startsWith('.github/workflows/'),
-    focusedUnit: unit('test/ci-workflow.test.mts'), focusedBrowser: browser(),
-    specialised: specialised('workflow-closure', 'staged-security'), browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'documentation', area: 'maintained public documentation', priority: 42,
-    matches: (value: string) => (/^[^/]+\.md$/u.test(value) && value !== 'THIRD_PARTY_NOTICES.md') || value.startsWith('docs/')
-      || value.startsWith('packages/') && value.endsWith('.md'),
-    focusedUnit: unit('test/documentation-links.test.mts', 'test/documentation-contract.test.mts'), focusedBrowser: browser(),
-    specialised: specialised('documentation'), browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'generated-capability-document', area: 'generated capability reference', priority: 45,
-    matches: (value: string) => path.resolve(REPOSITORY_ROOT, value) === CAPABILITY_DOCUMENT_PATH,
-    focusedUnit: unit('test/capability-manifest.test.mts', 'test/documentation-links.test.mts'),
-    focusedBrowser: browser(), specialised: specialised('capability-catalogue', 'documentation'),
-    browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'cli-documentation-impact', area: 'installed CLI documentation', priority: 0,
-    impactOnly: true,
-    matches: (value: string) => value.endsWith('.md')
-      && CLI_PACKAGE_SUPPORT_FILES.some(([source]) => source === value),
-    focusedUnit: unit('test/cli-command-registry.test.mts', 'test/cli-package-boundary.test.mts'),
-    focusedBrowser: browser(), specialised: specialised('documentation'), browserRequired: false,
-  }),
-  Object.freeze({
-    id: 'package-release', area: 'package, dependency, and release metadata', priority: 30,
-    matches: (value: string) => ['package.json', 'package-lock.json', 'THIRD_PARTY_NOTICES.md', '.nvmrc', 'playwright.config.ts', 'tsconfig.json'].includes(value),
-    focusedUnit: unit(
-      'test/release-version-check.test.mts',
-      'test/case-portability-lifecycle.test.mts',
-      'test/case-supported-contract-baseline.test.mts',
-      'test/case-contract-doc.test.mts',
-      'test/documentation-contract.test.mts',
-      'test/cli-package.test.mts',
-      'test/ci-workflow.test.mts',
-    ),
-    focusedBrowser: browser(),
-    specialised: specialised(
-      'cli-package',
-      'capture-package',
-      'local-package',
-      'release-contract',
-      'schema-inventory',
-      'documentation',
-      'licences',
-      'production-dependency-audit',
-      'workflow-closure',
-    ),
-    browserRequired: false,
-  }),
-]);
 
 function normaliseChangedPath(value: unknown): string {
   if (typeof value !== 'string' || value.length < 1 || value.length > MAX_VERIFICATION_CHANGED_PATH_LENGTH
@@ -618,8 +122,8 @@ export function assertDeclaredVerificationTest(
 }
 
 function validateRules(): void {
-  if (RULES.length < 1 || RULES.length > MAX_VERIFICATION_RULES || new Set(RULES.map((rule) => rule.id)).size !== RULES.length) {
-    throw new TypeError('Verification rules are missing, repeated, or unbounded.');
+  if (RULES.length < 1 || new Set(RULES.map((rule) => rule.id)).size !== RULES.length) {
+    throw new TypeError('Verification rules are missing or repeated.');
   }
   for (const rule of RULES) {
     for (const [lane, checks] of [
@@ -652,15 +156,18 @@ function exactBrowserChecks(changedPath: string): readonly string[] {
 
 function matchingRules(changedPath: string): readonly VerificationRule[] {
   const matches = RULES.filter((rule) => rule.matches(changedPath));
+  // A test does not change the production owner whose name it happens to share.
+  // Shared test helpers still follow their real consumers through the graph.
+  if (/^test\/[^/]+\.test\.mts$/u.test(changedPath)) return Object.freeze([ownershipRule(changedPath, matches)]);
   return Object.freeze([ownershipRule(changedPath, matches), ...matches.filter((rule) => rule.impactOnly)]);
 }
 
 function ownershipRule(changedPath: string, matches: readonly VerificationRule[] = RULES.filter((rule) => rule.matches(changedPath))): VerificationRule {
   const owners = matches.filter((rule) => !rule.impactOnly);
-  if (!owners.length) throw new TypeError(`Unknown maintained ownership area for ${changedPath}.`);
+  if (!owners.length) return CONSERVATIVE_FALLBACK;
   const priority = Math.max(...owners.map((rule) => rule.priority));
   const selected = owners.filter((rule) => rule.priority === priority);
-  if (selected.length !== 1) throw new TypeError(`Ambiguous verification ownership for ${changedPath}.`);
+  if (selected.length !== 1) return CONSERVATIVE_FALLBACK;
   return selected[0]!;
 }
 
@@ -672,7 +179,8 @@ export function buildVerificationOwnershipPlan(
   rawPaths: readonly string[],
   importedTests: ReadonlyMap<string, readonly string[]> = new Map(),
   importedBrowserTests: ReadonlyMap<string, readonly string[]> = new Map(),
-  componentRoutes: ReadonlyMap<string, readonly string[]> = new Map(),
+  routeConsumers: ReadonlyMap<string, readonly string[]> = new Map(),
+  componentContracts: ReadonlyMap<string, readonly string[]> = new Map(),
 ): VerificationOwnershipPlan {
   validateRules();
   if (!Array.isArray(rawPaths) || rawPaths.length < 1 || rawPaths.length > MAX_VERIFICATION_CHANGED_PATHS) {
@@ -683,21 +191,33 @@ export function buildVerificationOwnershipPlan(
   const assignments = changedPaths.sort().map((changedPath): VerificationOwnershipAssignment => {
     const directImpacts = matchingRules(changedPath);
     const owner = ownershipRule(changedPath, directImpacts);
-    const routes = owner.id === 'frontend-user-interface' && directImpacts.length === 1
-      ? componentRoutes.get(changedPath) ?? [] : [];
+    const componentChecks = componentContracts.get(changedPath) ?? [];
+    const discoverRouteCoverage = !componentChecks.length && ['frontend-user-interface', 'frontend-model'].includes(owner.id)
+      && directImpacts.length === 1;
+    const consumers = routeConsumers.get(changedPath) ?? [];
+    const routes = discoverRouteCoverage ? consumers.filter(file => file.startsWith('frontend/src/routes/')) : [];
     const routeImpacts = routes.flatMap(matchingRules);
-    const impacts = [...new Map([...directImpacts, ...routeImpacts].map(rule => [rule.id, rule])).values()];
+    // A helper extracted from a storage or loading owner inherits that owner's
+    // cross-cutting checks through real imports, not a new filename exception.
+    const inheritedImpacts = (componentChecks.length ? [] : consumers).filter(file => !file.startsWith('frontend/src/routes/'))
+      .flatMap(matchingRules).filter(rule => rule.impactOnly);
+    const impacts = [...new Map([...directImpacts, ...routeImpacts, ...inheritedImpacts].map(rule => [rule.id, rule])).values()];
     const focusedUnitChecks = uniqueSorted([
       ...impacts.flatMap((rule) => rule.focusedUnit),
       ...exactFocusedChecks(changedPath),
       ...(importedTests.get(changedPath) ?? []),
     ]);
-    // Existing route owners explain ordinary components without a second
-    // component register. Unknown consumers still require the full fallback.
-    const unexplainedInterface = owner.id === 'frontend-user-interface' && directImpacts.length === 1
-      && (!routes.length || routes.some(route => matchingRules(route).length === 1));
+    // Existing route owners explain components and their controller/model
+    // dependencies. A new helper does not need a separate workflow declaration.
+    const unclassifiedRoutes = routes.filter(route => matchingRules(route).length === 1);
+    const unexplainedInterface = discoverRouteCoverage
+      && (!routes.length || unclassifiedRoutes.length > 0);
     const focusedBrowserChecks = uniqueSorted([
-      ...impacts.flatMap((rule) => rule.focusedBrowser),
+      ...(componentChecks.length ? componentChecks : impacts.flatMap((rule) => rule.focusedBrowser)),
+      ...[changedPath, ...routes].flatMap(file => {
+        const route = /^frontend\/src\/routes\/\([^/]+\)\/([^/]+)\/\+page\.(?:svelte|ts)$/u.exec(file)?.[1];
+        return route ? browserSpecsForPrefixes([route]) : [];
+      }),
       ...exactBrowserChecks(changedPath),
       ...(importedBrowserTests.get(changedPath) ?? []),
       ...(unexplainedInterface ? FUNCTIONAL_BROWSER_INVENTORY : []),
@@ -711,15 +231,24 @@ export function buildVerificationOwnershipPlan(
       changedPath,
       ownershipArea: owner.area,
       impactAreas: uniqueSorted(impacts.map((rule) => rule.area)),
+      selectionNotes: Object.freeze(owner === CONSERVATIVE_FALLBACK
+        ? ['No unique classified owner: select complete unit and functional browser inventories, compiler checks and all specialised checks.']
+        : unexplainedInterface
+        ? [unclassifiedRoutes.length
+          ? `Full browser coverage: no classified route owner for ${unclassifiedRoutes.join(', ')}.`
+          : 'Full browser coverage: no consuming route could be established for this interface.']
+        : []),
       focusedUnitChecks,
       focusedBrowserChecks,
-      mandatorySpecialisedChecks: uniqueSorted(impacts.flatMap((rule) => rule.specialised)),
+      mandatorySpecialisedChecks: /^test\/[^/]+\.test\.mts$/u.test(changedPath) ? specialised()
+        : componentChecks.length ? specialised('architecture') : uniqueSorted(impacts.flatMap((rule) => rule.specialised)),
       userFacingBrowserRequired: browserRequired,
     });
   });
   return Object.freeze({
     mapVersion: VERIFICATION_OWNERSHIP_MAP_VERSION,
     changedPaths: Object.freeze(changedPaths),
+    conservativeFallbackPaths: Object.freeze(changedPaths.filter(file => ownershipRule(file) === CONSERVATIVE_FALLBACK)),
     assignments: Object.freeze(assignments),
     ownershipAreas: uniqueSorted(assignments.map((item) => item.ownershipArea)),
     impactAreas: uniqueSorted(assignments.flatMap((item) => item.impactAreas)),
@@ -727,113 +256,160 @@ export function buildVerificationOwnershipPlan(
     focusedBrowserChecks: uniqueSorted(assignments.flatMap((item) => item.focusedBrowserChecks)),
     mandatorySpecialisedChecks: uniqueSorted(assignments.flatMap((item) => item.mandatorySpecialisedChecks)),
     userFacingBrowserRequired: assignments.some((item) => item.userFacingBrowserRequired),
-    fullBatchReleaseGates: FULL_BATCH_RELEASE_GATES,
+    fullVerificationScript: 'verification:ci',
     interpretation: Object.freeze([
       'Focused checks support iteration only and do not establish batch or release readiness.',
       'Each path selects its most specific owner plus explicit cross-cutting impacts, not every ancestor owner.',
       'Every full batch and release gate remains mandatory regardless of this focused plan.',
+      'Timing-sensitive changes also require test:e2e:stress; release-only checks, including the production dependency audit, follow docs/releasing.md.',
       'The plan is request-free and contains test and check identities, never executable shell fragments.',
-      'Known browser families discover their current specifications; components inherit their resolved route owners, while unexplained interfaces select the complete functional inventory.',
+      'Known browser families discover their current specifications; components and frontend models inherit resolved route owners, while unexplained interfaces select the complete functional inventory.',
     ]),
   });
 }
 
-// Reuse the architecture resolver rather than maintain another import parser or
-// source-to-test register. The graph is rebuilt once for the current edit plan.
+/** Convenience entry point for a standalone dependency selection. Full plans
+ * share one index across unit, browser and route consumers below. */
 export function importedTestConsumers(
-  changedPaths: readonly string[],
-  graph: Pick<ICruiseResult, 'modules'>,
-  inventory: readonly string[],
-  fallbackWhenUnused = true,
+  changedPaths: readonly string[], graph: Pick<ICruiseResult, 'modules'>,
+  inventory: readonly string[], fallbackWhenUnused = true,
 ): ReadonlyMap<string, readonly string[]> {
-  if (graph.modules.length > MAX_VERIFICATION_INVENTORY_FILES) throw new TypeError('Dependency graph exceeds the inventory bound.');
-  const dependents = new Map<string, Set<string>>();
-  const runtimeDependency = (dependency: ICruiseResult['modules'][number]['dependencies'][number]) =>
-    dependency.typeOnly !== true && dependency.preCompilationOnly !== true;
-  const unresolved = graph.modules.some((module) => module.dependencies.some((dependency) =>
-    runtimeDependency(dependency) && dependency.couldNotResolve && /^(?:\.|\$lib\/)/u.test(dependency.module)));
-  for (const module of graph.modules) {
-    for (const dependency of module.dependencies) {
-      if (!runtimeDependency(dependency)) continue;
-      const incoming = dependents.get(dependency.resolved) ?? new Set<string>();
-      incoming.add(module.source);
-      dependents.set(dependency.resolved, incoming);
-    }
-  }
-  return new Map(changedPaths.map((changedPath) => {
-    const visited = new Set([changedPath]);
-    for (const source of visited) {
-      for (const dependent of dependents.get(source) ?? []) visited.add(dependent);
-    }
-    const tests = inventory.filter((file) => visited.has(file));
-    // Unit coverage includes a fallback for dynamic loading and file-reading
-    // tests. Browser selection combines positive imports with workflow owners.
-    return [changedPath, unresolved || (!tests.length && fallbackWhenUnused) ? inventory : tests];
+  return indexRuntimeConsumers(graph, MAX_VERIFICATION_INVENTORY_FILES)
+    .select(changedPaths, inventory, fallbackWhenUnused).consumers;
+}
+
+/** A leaf UI contract is co-located by name, never a second source/test registry.
+ * Local dependencies or an explicit cross-cutting owner retain workflow coverage.
+ * Complete browser coverage remains mandatory at the integration boundary. */
+export function leafComponentContracts(
+  files: readonly string[], graph: Pick<ICruiseResult, 'modules'>, inventory: readonly string[],
+): ReadonlyMap<string, readonly string[]> {
+  return new Map(files.flatMap(file => {
+    const name = /^frontend\/src\/lib\/components\/([A-Z][A-Za-z0-9]*)\.svelte$/u.exec(file)?.[1];
+    if (!name || matchingRules(file).length !== 1) return [];
+    const module = graph.modules.find(module => module.source === file);
+    if (!module || module.dependencies.some(dependency => dependency.couldNotResolve
+      || !(dependency.module === 'svelte' || dependency.module.startsWith('svelte/')))) return [];
+    const spec = `e2e/${name.replace(/([a-z0-9])([A-Z])/gu, '$1-$2').toLowerCase()}.component.spec.ts`;
+    return inventory.includes(spec) ? [[file, Object.freeze([spec])] as const] : [];
   }));
+}
+
+/** Report the failed operation and an allowlisted category, never source paths
+ * or arbitrary parser/transport text from a thrown error. */
+export function dependencyAnalysisFailure(stage: string, error: unknown): string {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+  const category = typeof code === 'string' && ['ENOENT', 'EACCES', 'ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND'].includes(code)
+    ? code : error instanceof SyntaxError ? 'invalid syntax' : error instanceof TypeError ? 'invalid analysis data' : 'analysis error';
+  return `Dependency analysis failed while ${stage} (${category}): the focused plan falls back to the complete unit and functional browser inventories.`;
 }
 
 export async function createVerificationOwnershipPlan(rawPaths: readonly string[]): Promise<VerificationOwnershipPlan> {
   const initial = buildVerificationOwnershipPlan(rawPaths);
   const importedPaths = initial.changedPaths.filter((file) => /\.(?:[cm]?[jt]s|json|svelte)$/u.test(file)
-    && !file.startsWith('e2e/'));
+    && !['editor-configuration', CONSERVATIVE_FALLBACK.id].includes(ownershipRule(file).id)
+    && !file.startsWith('e2e/') && !/^test\/[^/]+\.test\.mts$/u.test(file));
   if (!importedPaths.length) return initial;
   const inventory = readVerificationTestInventory().filter((file) => file.startsWith('test/'));
   const browserInventory = functionalBrowserInventory();
   let selection: ReadonlyMap<string, readonly string[]>;
   let browserSelection: ReadonlyMap<string, readonly string[]>;
-  let componentRoutes: ReadonlyMap<string, readonly string[]> = new Map();
+  let routeConsumers: ReadonlyMap<string, readonly string[]> = new Map();
+  let componentContracts: ReadonlyMap<string, readonly string[]> = new Map();
   let explanation: string;
+  let stage = 'loading the dependency analyser';
   try {
     const { cruise } = await import('dependency-cruiser');
+    stage = 'reading dependency configuration';
     const config = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, '.dependency-cruiser.json'), 'utf8')) as { options: IOptions };
     const components = importedPaths.filter(file => file.endsWith('.svelte'));
-    const { output } = await cruise([...inventory, ...browserInventory, ...(components.length ? ['frontend/src/routes'] : [])], {
+    // Shared domain code reaches pages through frontend adapters. Follow those
+    // imports too; browser journeys need not import the changed module directly.
+    const browserSourcePaths = importedPaths.filter(file => /^(?:frontend\/src|lib|packages)\//u.test(file));
+    const routeEntriesOnly = importedPaths.every(file => /^frontend\/src\/routes\/.*\+(?:page|layout)\.svelte$/u.test(file));
+    // Node unit tests cannot import Svelte components directly. Their explicit
+    // source-contract checks remain selected by owner/name; do not load every
+    // server and CLI test merely to resolve a presentation component's routes.
+    const unitEntries = importedPaths.some(file => !file.endsWith('.svelte')) ? inventory : [];
+    const entries = routeEntriesOnly ? [...browserInventory]
+      : [...unitEntries, ...browserInventory, ...(browserSourcePaths.length ? ['frontend/src/routes'] : [])];
+    stage = 'resolving the source import graph';
+    const { output } = await cruise(entries, {
       ...config.options, baseDir: REPOSITORY_ROOT, outputType: 'json', tsPreCompilationDeps: 'specify', validate: false,
       tsConfig: { fileName: path.join(REPOSITORY_ROOT, 'tsconfig.dependency-cruiser.json') },
+      // Framework entry pages have no reverse application import tree. Their
+      // browser consumers are destinations, including imported test helpers.
+      ...(routeEntriesOnly ? { doNotFollow: { path: '^(?!e2e/)' } } : {}),
     });
+    stage = 'mapping source dependents';
     const graph = typeof output === 'string' ? JSON.parse(output) as ICruiseResult : output;
+    const index = indexRuntimeConsumers(graph, MAX_VERIFICATION_INVENTORY_FILES);
+    const units = index.select(importedPaths.filter(file => !file.endsWith('.svelte')), inventory);
     selection = new Map([
-      ...importedTestConsumers(importedPaths.filter(file => !file.endsWith('.svelte')), graph, inventory),
-      ...importedTestConsumers(components, graph, inventory, false),
+      ...units.consumers,
+      ...(unitEntries.length ? index.select(components, inventory, false).consumers : []),
     ]);
-    const routes = graph.modules.map(module => module.source).filter(file => file.startsWith('frontend/src/routes/'));
-    componentRoutes = importedTestConsumers(components, graph, routes, false);
+    const routes = graph.modules.map(module => module.source).filter(file => file.startsWith('frontend/src/routes/')
+      || file.startsWith('frontend/src/') && RULES.some(rule => rule.impactOnly && rule.matches(file)));
+    routeConsumers = index.select(browserSourcePaths, routes, false).consumers;
+    componentContracts = leafComponentContracts(components, graph, browserInventory);
     // Known owners retain their conservative browser coverage. Positive import
     // evidence additionally follows shared support into its browser consumers;
     // a complete graph with no browser consumer does not turn CLI-only helpers
-    // into application changes. Unresolved local imports still fail broadly.
-    browserSelection = importedTestConsumers(importedPaths, graph, browserInventory, false);
-    const fallback = importedPaths.filter((file) => selection.get(file)?.length === inventory.length);
-    explanation = fallback.length
-      ? `Complete unit fallback where import evidence is missing or uncertain: ${fallback.join(', ')}.`
-      : 'Runtime dependents are discovered from current imports, including transitive helpers and newly added tests; compiler checks protect type-only contracts.';
-  } catch {
+    // into application changes. Unknown edges retain all reachable consumers.
+    browserSelection = index.select(importedPaths, browserInventory, false).consumers;
+    if (browserSourcePaths.length) {
+      stage = 'reading browser route references';
+      // A browser journey can visit a page without importing it or sharing its
+      // filename. Include those consumers before iteration reaches a full run.
+      // Test helpers inherit their route references through the same graph.
+      const sources = graph.modules.map(module => module.source)
+        .filter(file => file.startsWith('e2e/') && /\.[cm]?[jt]s$/u.test(file));
+      const consumers = index.select(sources, browserInventory, false).consumers;
+      const references = new Map<string, readonly string[]>();
+      for (const file of sources) {
+        const destinations = browserRouteReferences(readFileSync(path.join(REPOSITORY_ROOT, file), 'utf8'));
+        for (const consumer of consumers.get(file) ?? []) {
+          references.set(consumer, uniqueSorted([...(references.get(consumer) ?? []), ...destinations]));
+        }
+      }
+      browserSelection = new Map(importedPaths.map(file => {
+        const routeTests = componentContracts.has(file) ? [] : browserTestsForRoutes([file, ...(routeConsumers.get(file) ?? [])], references);
+        return [file, uniqueSorted([
+          ...(browserSelection.get(file) ?? []),
+          ...routeTests,
+          ...(routeEntriesOnly && !routeTests.length ? browserInventory : []),
+        ])];
+      }));
+    }
+    explanation = [
+      units.fallbackPaths.length
+        ? `Complete unit fallback: no resolved runtime test consumer for ${units.fallbackPaths.join(', ')}.`
+        : 'Runtime dependents and browser route references are discovered from current sources, including transitive helpers and newly added tests; compiler checks protect type-only contracts.',
+      describeRuntimeImportGaps(index.unresolved),
+    ].filter(Boolean).join(' ');
+  } catch (error) {
     selection = new Map(importedPaths.map((file) => [file, inventory]));
     browserSelection = new Map(importedPaths.map((file) => [file, browserInventory]));
-    explanation = 'Dependency analysis was unavailable: the focused plan falls back to the complete unit and functional browser inventories.';
+    explanation = dependencyAnalysisFailure(stage, error);
   }
-  const plan = buildVerificationOwnershipPlan(rawPaths, selection, browserSelection, componentRoutes);
+  const plan = buildVerificationOwnershipPlan(rawPaths, selection, browserSelection, routeConsumers, componentContracts);
   return Object.freeze({ ...plan, interpretation: Object.freeze([...plan.interpretation, explanation]) });
 }
 
-function maintainedInventory(): readonly string[] {
-  const roots = ['packages', 'lib', 'cli', 'bin', 'netlify/functions', 'frontend/src', 'tools', 'test', 'e2e', 'docs', '.github/workflows'];
-  const files: string[] = [
-    '.nvmrc', 'README.md', 'PRIVACY.md', 'SECURITY.md', 'package-lock.json',
-    'package.json', 'playwright.config.ts', 'tsconfig.json',
-  ];
-  const visit = (relative: string): void => {
-    for (const entry of readdirSync(path.join(REPOSITORY_ROOT, relative), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const child = `${relative}/${entry.name}`;
-      if (entry.isDirectory()) visit(child);
-      else if (entry.isFile()) {
-        files.push(child);
-        if (files.length > MAX_VERIFICATION_INVENTORY_FILES) throw new TypeError('Maintained ownership inventory exceeds its file bound.');
-      }
-    }
-  };
-  for (const root of roots) visit(root);
-  return Object.freeze(files.sort());
+/** Include every tracked identity, even deleted files, plus unignored additions.
+ * Ignored build output and private local files are never source inputs. */
+export function readVerificationSourceInventory(repositoryRoot = REPOSITORY_ROOT): readonly string[] {
+  const bytes = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--'], {
+    cwd: repositoryRoot, timeout: 10_000,
+    maxBuffer: MAX_VERIFICATION_INVENTORY_FILES * (MAX_VERIFICATION_CHANGED_PATH_LENGTH + 1),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  if (!text.endsWith('\0')) throw new TypeError('Verification source inventory is empty or incomplete.');
+  const files = [...new Set(text.slice(0, -1).split('\0'))];
+  if (files.length > MAX_VERIFICATION_INVENTORY_FILES) throw new TypeError('Verification source inventory exceeds its file bound.');
+  return Object.freeze(files.map(normaliseChangedPath).sort());
 }
 
 function readDependencyRuleNames(): readonly string[] {
@@ -856,8 +432,9 @@ function readDependencyRuleNames(): readonly string[] {
 
 export function checkVerificationOwnershipMap() {
   validateRules();
-  const inventory = maintainedInventory();
+  const inventory = readVerificationSourceInventory();
   const assignments = inventory.map((file) => ownershipRule(file));
+  const fallbackPaths = inventory.filter((file, index) => assignments[index] === CONSERVATIVE_FALLBACK);
   for (const rule of RULES.filter((candidate) => candidate.impactOnly)) {
     if (!inventory.some((file) => rule.matches(file))) {
       throw new TypeError(`Verification impact rule ${rule.id} does not match the maintained inventory.`);
@@ -879,7 +456,11 @@ export function checkVerificationOwnershipMap() {
     family.owner,
     ...('metadata' in family ? family.metadata.hooks.map((hook) => hook.module) : []),
   ]);
-  for (const owner of schemaOwners) ownershipRule(normaliseChangedPath(owner));
+  for (const owner of schemaOwners) {
+    if (!inventory.includes(normaliseChangedPath(owner)) || ownershipRule(owner) === CONSERVATIVE_FALLBACK) {
+      throw new TypeError(`Schema owner ${owner} must have a present, classified source path.`);
+    }
+  }
   if (CAPABILITY_MANIFEST.capabilities.length < 1 || CAPABILITY_MANIFEST.cliOperations.length < 1
     || new Set(CAPABILITY_MANIFEST.capabilities.map((item) => item.id)).size !== CAPABILITY_MANIFEST.capabilities.length
     || new Set(CAPABILITY_MANIFEST.cliOperations.map((item) => item.command)).size !== CAPABILITY_MANIFEST.cliOperations.length) {
@@ -900,7 +481,8 @@ export function checkVerificationOwnershipMap() {
   return Object.freeze({
     mapVersion: VERIFICATION_OWNERSHIP_MAP_VERSION,
     maintainedFiles: inventory.length,
-    assignedFiles: assignments.length,
+    assignedFiles: assignments.length - fallbackPaths.length,
+    conservativeFallbackPaths: Object.freeze(fallbackPaths),
     ownershipAreas: new Set(assignments.map((item) => item.area)).size,
     impactAreas: new Set(inventory.flatMap((file) => matchingRules(file).map((rule) => rule.area))).size,
     schemaFamilies: SCHEMA_LIFECYCLE_REGISTRY.length,
@@ -911,7 +493,6 @@ export function checkVerificationOwnershipMap() {
     privacyConsumerFlows: PRIVACY_DATA_FLOW_CATALOGUE.schemaConsumerFlows.length,
     blockingDependencyRules: dependencyRules.length,
     browserRequiredSupportPaths: browserRequiredSupportPaths.length,
-    fullBatchReleaseGates: FULL_BATCH_RELEASE_GATES.length,
   });
 }
 
@@ -919,7 +500,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   try {
     if (args.length === 1 && args[0] === '--check') {
       const result = checkVerificationOwnershipMap();
-      process.stdout.write(`Verification ownership map v${result.mapVersion}: ${result.assignedFiles}/${result.maintainedFiles} files assigned across ${result.ownershipAreas} owner and ${result.impactAreas} impact areas; ${result.fullBatchReleaseGates} full gates retained.\n`);
+      process.stdout.write(`Verification ownership map v${result.mapVersion}: ${result.maintainedFiles} Git-visible files; ${result.assignedFiles} classified, ${result.conservativeFallbackPaths.length} explicitly covered by conservative fallback, across ${result.ownershipAreas} owner and ${result.impactAreas} impact areas.\n`);
       process.stdout.write(`Canonical closure: ${result.schemaFamilies} schema families, ${result.schemaOwnerPaths} owner paths, ${result.capabilities} capabilities, ${result.cliOperations} CLI operations, ${result.privacyProfiles} privacy profiles, ${result.privacyConsumerFlows} privacy consumer flows, ${result.blockingDependencyRules} blocking dependency rules.\n`);
       return 0;
     }

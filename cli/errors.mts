@@ -1,15 +1,20 @@
 import { stripVTControlCharacters } from 'node:util';
 import type { WritableTerminal } from './terminal-presentation.mts';
+import { hasUnsafeCliText } from '../packages/contracts/cli-grammar.mts';
 
 const MAX_CLI_ERROR_MESSAGE_LENGTH = 300;
 const MAX_CLI_DIAGNOSTIC_BYTES = 4_096;
-const CLI_DEFAULT_IGNORABLE_RE = /\p{Default_Ignorable_Code_Point}/u;
 const CLI_DEFAULT_IGNORABLE_GLOBAL_RE = /\p{Default_Ignorable_Code_Point}/gu;
 
+export type CliUsageReason = 'input_unavailable' | 'conflicting_options' | 'missing_input' | 'invalid_input';
+
 class CliUsageError extends Error {
-  constructor(message: string) {
+  readonly reason: CliUsageReason;
+
+  constructor(message: string, reason: CliUsageReason = 'invalid_input') {
     super(message);
     this.name = 'CliUsageError';
+    this.reason = reason;
   }
 }
 
@@ -25,10 +30,6 @@ function boundedCliErrorMessage(error: unknown, fallback = 'Unexpected command f
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, MAX_CLI_ERROR_MESSAGE_LENGTH) || fallback;
-}
-
-function hasUnsafeCliText(value: string): boolean {
-  return /[\x00-\x1f\x7f-\x9f]/u.test(value) || CLI_DEFAULT_IGNORABLE_RE.test(value);
 }
 
 // A transient stderr preview, never a checkpoint field. Bound before collecting
@@ -64,7 +65,7 @@ function createCliDiagnosticOutput(): Readonly<{ stream: WritableTerminal; value
 function boundedCliInputError(error: unknown, label: string): CliUsageError {
   if (error instanceof CliUsageError) return error;
   const safeLabel = label.replace(/[^A-Za-z0-9 ()_-]+/gu, '').trim().slice(0, 80) || 'Input';
-  return new CliUsageError(`${safeLabel} could not be read as a bounded regular file.`);
+  return new CliUsageError(`${safeLabel} could not be read as a bounded regular file.`, 'input_unavailable');
 }
 
 export {

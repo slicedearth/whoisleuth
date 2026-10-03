@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import {
   currentBrowserLocalDocument, expectFocusedResultsVisible, expectNoHorizontalOverflow,
@@ -170,7 +171,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768
         return { lines: range.getClientRects().length, separate: Boolean(title && title.right <= counter.left) };
       }));
       expect(counterGeometry).toEqual(Array.from({ length: 20 }, () => ({ lines: 1, separate: true })));
-      await test.info().attach(`website-relationships-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await test.info().attach(`website-relationships-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       await pagination.getByRole('spinbutton', { name: 'Website relationship page' }).fill('5');
       await pagination.getByRole('spinbutton', { name: 'Website relationship page' }).press('Enter');
       await expect(pagination.getByRole('status')).toHaveText('Page 5 of 5');
@@ -178,7 +179,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768
       await expectFocusedResultsVisible(page, results);
       await pagination.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await test.info().attach(`website-pagination-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await test.info().attach(`website-pagination-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     });
   }
 }

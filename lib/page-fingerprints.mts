@@ -89,7 +89,21 @@ function reduceDynamicValues(value: string): string {
     .replace(/\b\d{4}-\d{1,2}-\d{1,2}(?:[t\s]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:z|[+-]\d{2}:?\d{2})?)?\b/gi, '<time>')
     .replace(/\b\d{10,13}\b/g, '<time>')
     .replace(/\b[a-f0-9]{16,}\b/gi, '<id>')
-    .replace(/\b(?=[a-z0-9_-]{20,}\b)(?=[a-z0-9_-]*[a-z])(?=[a-z0-9_-]*\d)[a-z0-9_-]+\b/gi, '<id>');
+    .replace(/[a-z0-9_-]+/gi, (token) => {
+      // Visit each maximal token once. Repeated lookaheads at word boundaries
+      // rescan hyphenated text quadratically when a required digit is absent.
+      // Only hyphens are outside the former ASCII word-boundary match;
+      // underscores remain part of the identifier, including at either end.
+      let start = 0;
+      let end = token.length;
+      while (start < end && token[start] === '-') start += 1;
+      while (end > start && token[end - 1] === '-') end -= 1;
+      if (end - start < 20) return token;
+      const identifier = token.slice(start, end);
+      return /[a-z]/i.test(identifier) && /\d/.test(identifier)
+        ? `${token.slice(0, start)}<id>${token.slice(end)}`
+        : token;
+    });
 }
 
 function normalizeText(value: unknown, maxLength = 512): string {

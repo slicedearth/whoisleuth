@@ -473,7 +473,7 @@ describe('schema lifecycle variants and projections', () => {
     ] as const) {
       const invalid = familySource();
       mutate(invalid);
-      assert.throws(() => defineSchemaLifecycleFamily(invalid), label);
+      assert.throws(() => defineSchemaLifecycleFamily(invalid), /serialisation profile.*registered portable JSON contract/u, label);
     }
   });
 
@@ -521,20 +521,21 @@ describe('schema lifecycle variants and projections', () => {
   });
 
   test('rejects contradictory retired and shape-bound fixture history', () => {
-    const cases: Array<readonly [string, (value: any) => void]> = [
-      ['retired readable', (value) => { value.contracts[1].readable = true; }],
-      ['retired emission', (value) => { value.contracts[1].emitted = true; }],
-      ['retired migration', (value) => { value.contracts[1].migrationTarget = { schema: REPORT_SCHEMA, version: 3 }; }],
-      ['retired future-version handling', (value) => { value.contracts[1].futureVersionBehaviour = 'reject'; }],
-      ['compatibility future-version mismatch', (value) => { value.contracts[0].futureVersionBehaviour = 'preserve_without_write'; }],
-      ['retired expectation', (value) => { value.fixtures[1].expectation = 'accepted_exact'; }],
-      ['fixture shape', (value) => { value.fixtures[1].shapeId = 'test.variant-report.v3-summary'; }],
-      ['ambiguous shape', (value) => { delete value.fixtures.find((fixture: { id: string }) => fixture.id === 'test-variant-report-v3-detailed').shapeId; }],
+    const cases: Array<readonly [string, RegExp, (value: any) => void]> = [
+      ['retired readable', /Retired schema lifecycle contracts must be fixture-backed output-only history/u, (value) => { value.contracts[1].readable = true; }],
+      ['retired emission', /Retired schema lifecycle contracts must be fixture-backed output-only history/u, (value) => { value.contracts[1].emitted = true; }],
+      ['retired migration', /Retired schema lifecycle contracts must be fixture-backed output-only history/u, (value) => { value.contracts[1].migrationTarget = { schema: REPORT_SCHEMA, version: 3 }; }],
+      ['retired future-version handling', /Retired schema lifecycle contracts must be fixture-backed output-only history/u, (value) => { value.contracts[1].futureVersionBehaviour = 'reject'; }],
+      ['compatibility future-version mismatch', /compatibility descriptor .* does not match its contracts/u, (value) => { value.contracts[0].futureVersionBehaviour = 'preserve_without_write'; }],
+      ['retired expectation', /Historical output fixtures must belong exactly to retired contracts/u, (value) => { value.fixtures[1].expectation = 'accepted_exact'; }],
+      ['fixture shape', /fixture .* must name a matching contract shape/u, (value) => { value.fixtures[1].shapeId = 'test.variant-report.v3-summary'; }],
+      ['ambiguous shape', /fixture .* must name a matching contract shape/u, (value) => { delete value.fixtures.find((fixture: { id: string }) => fixture.id === 'test-variant-report-v3-detailed').shapeId; }],
     ];
-    for (const [label, mutate] of cases) {
+    assert.doesNotThrow(() => defineSchemaLifecycleFamily(familySource()));
+    for (const [label, expected, mutate] of cases) {
       const value = familySource();
       mutate(value);
-      assert.throws(() => defineSchemaLifecycleFamily(value), label);
+      assert.throws(() => defineSchemaLifecycleFamily(value), expected, label);
     }
   });
 
@@ -577,21 +578,21 @@ describe('schema lifecycle variants and projections', () => {
   });
 
   test('requires disjoint exact variant selection for readers and writers', () => {
-    const cases: Array<readonly [string, (value: any) => void]> = [
-      ['duplicate variant', (value) => { value.metadata.shapes[3].discriminator.value = 'detailed'; }],
-      ['missing writer variant', (value) => { value.metadata.consumerEdges[2].emittedContract.discriminator = null; }],
-      ['unknown writer variant', (value) => { value.metadata.consumerEdges[2].emittedContract.discriminator.value = 'other'; }],
-      ['unknown reader variant', (value) => { value.metadata.consumerEdges[4].acceptedContracts[0].discriminator.values = ['other']; }],
-      ['hybrid unqualified shape', (value) => { value.metadata.shapes[3].discriminator = null; }],
-      ['mixed discriminator paths', (value) => {
+    const cases: Array<readonly [string, RegExp, (value: any) => void]> = [
+      ['duplicate variant', /shape discriminators must be unique/u, (value) => { value.metadata.shapes[3].discriminator.value = 'detailed'; }],
+      ['missing writer variant', /must emit a registered writable contract/u, (value) => { value.metadata.consumerEdges[2].emittedContract.discriminator = null; }],
+      ['unknown writer variant', /must emit a registered writable contract/u, (value) => { value.metadata.consumerEdges[2].emittedContract.discriminator.value = 'other'; }],
+      ['unknown reader variant', /references an unreadable or duplicate contract/u, (value) => { value.metadata.consumerEdges[4].acceptedContracts[0].discriminator.values = ['other']; }],
+      ['hybrid unqualified shape', /must use one unqualified shape or disjoint qualified shapes/u, (value) => { value.metadata.shapes[3].discriminator = null; }],
+      ['mixed discriminator paths', /must use one unqualified shape or disjoint qualified shapes/u, (value) => {
         value.metadata.shapes[3].objects[0].requiredKeys.push('kind');
         value.metadata.shapes[3].discriminator.path = '$.kind';
       }],
-      ['optional discriminator', (value) => {
+      ['optional discriminator', /has an unresolved required discriminator/u, (value) => {
         value.metadata.shapes[2].objects[0].requiredKeys = ['schema', 'version', 'records'];
         value.metadata.shapes[2].objects[0].optionalKeys = ['mode'];
       }],
-      ['optional discriminator ancestor', (value) => {
+      ['optional discriminator ancestor', /has an unresolved required discriminator/u, (value) => {
         for (const shape of value.metadata.shapes.slice(2, 4)) {
           shape.objects[0].requiredKeys = shape.objects[0].requiredKeys
             .filter((key: string) => key !== 'mode');
@@ -609,7 +610,7 @@ describe('schema lifecycle variants and projections', () => {
         value.metadata.consumerEdges[3].emittedContract.discriminator.path = '$.variant.mode';
         value.metadata.consumerEdges[4].acceptedContracts[0].discriminator.path = '$.variant.mode';
       }],
-      ['alternative discriminator ancestor', (value) => {
+      ['alternative discriminator ancestor', /has an unresolved required discriminator/u, (value) => {
         for (const shape of value.metadata.shapes.slice(2, 4)) {
           shape.objects[0].requiredKeys = shape.objects[0].requiredKeys
             .filter((key: string) => key !== 'mode');
@@ -630,7 +631,7 @@ describe('schema lifecycle variants and projections', () => {
         value.metadata.consumerEdges[3].emittedContract.discriminator.path = '$.variant.mode';
         value.metadata.consumerEdges[4].acceptedContracts[0].discriminator.path = '$.variant.mode';
       }],
-      ['overlapping reader variants', (value) => {
+      ['overlapping reader variants', /references an unreadable or duplicate contract/u, (value) => {
         value.metadata.consumerEdges[4].acceptedContracts.push({
           schema: REPORT_SCHEMA,
           versions: [3],
@@ -639,22 +640,23 @@ describe('schema lifecycle variants and projections', () => {
         });
       }],
     ];
-    for (const [label, mutate] of cases) {
+    assert.doesNotThrow(() => defineSchemaLifecycleFamily(familySource()));
+    for (const [label, expected, mutate] of cases) {
       const value = familySource();
       mutate(value);
-      assert.throws(() => defineSchemaLifecycleFamily(value), label);
+      assert.throws(() => defineSchemaLifecycleFamily(value), expected, label);
     }
   });
 
   test('requires bounded projection and ordered alternative-key policy', () => {
-    const cases: Array<readonly [string, (value: any) => void]> = [
-      ['exact mismatch', (value) => { value.contracts[0].exactKeys = true; }],
-      ['extension mismatch', (value) => { value.contracts[0].extensionPolicy = 'reject'; }],
-      ['normalisation mismatch', (value) => { value.metadata.shapes[0].normalisation = 'preserve_document'; }],
-      ['missing raw intake', (value) => { value.metadata.boundProfiles[0].bounds.shift(); }],
-      ['raw intake below contract budget', (value) => { value.metadata.boundProfiles[0].bounds[0].maximum = 32; }],
-      ['raw intake above contract budget', (value) => { value.metadata.boundProfiles[0].bounds[0].maximum = 2_048; }],
-      ['extra raw intake profile', (value) => {
+    const cases: Array<readonly [string, RegExp, (value: any) => void]> = [
+      ['exact mismatch', /reconcile exact keys.*bounded extension policy/u, (value) => { value.contracts[0].exactKeys = true; }],
+      ['extension mismatch', /reconcile exact keys.*bounded extension policy/u, (value) => { value.contracts[0].extensionPolicy = 'reject'; }],
+      ['normalisation mismatch', /inconsistent bounded-extension metadata/u, (value) => { value.metadata.shapes[0].normalisation = 'preserve_document'; }],
+      ['missing raw intake', /must bind bounded projection to raw intake and a normaliser/u, (value) => { value.metadata.boundProfiles[0].bounds.shift(); }],
+      ['raw intake below contract budget', /must bind bounded projection to raw intake and a normaliser/u, (value) => { value.metadata.boundProfiles[0].bounds[0].maximum = 32; }],
+      ['raw intake above contract budget', /must bind bounded projection to raw intake and a normaliser/u, (value) => { value.metadata.boundProfiles[0].bounds[0].maximum = 2_048; }],
+      ['extra raw intake profile', /must bind bounded projection to raw intake and a normaliser/u, (value) => {
         value.metadata.boundProfiles[1].bounds.push({
           id: 'extra-raw-bytes',
           path: '$',
@@ -666,16 +668,17 @@ describe('schema lifecycle variants and projections', () => {
         });
         value.metadata.consumerEdges[1].boundProfileIds.push('test.variant-report.detailed-bounds.v3');
       }],
-      ['missing normaliser', (value) => { value.metadata.hooks[1].role = 'reviewer'; }],
-      ['one alternative', (value) => { value.metadata.shapes[0].objects[1].alternativeRequiredKeys[0].keys = ['availability']; }],
-      ['overlapping alternative', (value) => { value.metadata.shapes[0].objects[1].optionalKeys.push('availability'); }],
-      ['duplicate alternative', (value) => { value.metadata.shapes[0].objects[1].alternativeRequiredKeys.push({ keys: ['state', 'legacyState'], resolution: 'first_present' }); }],
-      ['invalid resolution', (value) => { value.metadata.shapes[0].objects[1].alternativeRequiredKeys[0].resolution = 'last_present'; }],
+      ['missing normaliser', /must bind bounded projection to raw intake and a normaliser/u, (value) => { value.metadata.hooks[1].role = 'reviewer'; }],
+      ['one alternative', /groups must each contain at least two alternative fields/u, (value) => { value.metadata.shapes[0].objects[1].alternativeRequiredKeys[0].keys = ['availability']; }],
+      ['overlapping alternative', /alternative fields must not overlap required or optional keys/u, (value) => { value.metadata.shapes[0].objects[1].optionalKeys.push('availability'); }],
+      ['duplicate alternative', /fields must belong to only one alternative group/u, (value) => { value.metadata.shapes[0].objects[1].alternativeRequiredKeys.push({ keys: ['state', 'legacyState'], resolution: 'first_present' }); }],
+      ['invalid resolution', /resolution is invalid/u, (value) => { value.metadata.shapes[0].objects[1].alternativeRequiredKeys[0].resolution = 'last_present'; }],
     ];
-    for (const [label, mutate] of cases) {
+    assert.doesNotThrow(() => defineSchemaLifecycleFamily(familySource()));
+    for (const [label, expected, mutate] of cases) {
       const value = familySource();
       mutate(value);
-      assert.throws(() => defineSchemaLifecycleFamily(value), label);
+      assert.throws(() => defineSchemaLifecycleFamily(value), expected, label);
     }
   });
 

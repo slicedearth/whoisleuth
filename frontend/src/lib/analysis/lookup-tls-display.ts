@@ -4,6 +4,7 @@ import {
   rec,
   records,
   show,
+  statusLabel,
   stringList,
   type JsonRecord,
 } from './lookup-display-shared.ts';
@@ -14,6 +15,8 @@ import {
   MAX_LOOKUP_TLS_FINDINGS,
   MAX_LOOKUP_TLS_NAME_VALUES,
 } from '../../../../lib/lookup-network-evidence-bounds.mts';
+import type { LookupViewModel } from './lookup-response.ts';
+import { MAX_OBSERVATION_LIMITATIONS, MAX_OBSERVATION_LIMITATION_LENGTH } from '../../../../packages/evidence/observation.mts';
 
 function tlsName(value: JsonRecord): string {
   const common = stringList(value.commonNames, MAX_LOOKUP_TLS_NAME_VALUES, 256);
@@ -35,19 +38,9 @@ function tlsCountSummary(value: unknown, labels: Array<[string, string]>): strin
     .join(' · ');
 }
 
-export function buildLookupTlsDisplay(input: {
-  tlsEvidence: JsonRecord;
-  tlsCertificate: JsonRecord;
-  tlsSubject: JsonRecord;
-  tlsIssuer: JsonRecord;
-  tlsAltNames: JsonRecord;
-  tlsPublicKey: JsonRecord;
-  tlsCipher: JsonRecord;
-  tlsAuthorization: JsonRecord;
-  tlsHostname: JsonRecord;
-  tlsValidity: JsonRecord;
-  tlsDiagnostics: JsonRecord;
-}) {
+export function buildLookupTlsDisplay(input: Pick<LookupViewModel,
+  'tlsEvidence' | 'tlsCertificate' | 'tlsSubject' | 'tlsIssuer' | 'tlsAltNames'
+  | 'tlsPublicKey' | 'tlsCipher' | 'tlsAuthorization' | 'tlsHostname' | 'tlsValidity' | 'tlsDiagnostics'>) {
   const {
     tlsEvidence,
     tlsCertificate,
@@ -174,6 +167,15 @@ export function buildLookupTlsDisplay(input: {
 
   const dnsNames = stringList(tlsAltNames.dnsNames, MAX_LOOKUP_TLS_ALT_NAMES, 253);
   return {
+    tlsPresentation: {
+      status: statusLabel(show(tlsEvidence.status)),
+      complete: tlsEvidence.complete !== false,
+      alternativeNamesTruncated: Boolean(tlsAltNames.truncated),
+      chainTruncated: Boolean(tlsEvidence.chainTruncated),
+      limitations: stringList(tlsEvidence.limitations, MAX_OBSERVATION_LIMITATIONS, MAX_OBSERVATION_LIMITATION_LENGTH),
+      validFrom: typeof tlsCertificate.validFrom === 'string' ? tlsCertificate.validFrom : null,
+      validTo: typeof tlsCertificate.validTo === 'string' ? tlsCertificate.validTo : null,
+    },
     tlsRows: [
       { label: 'Connected address', value: show(tlsEvidence.connectedAddress) },
       { label: 'SNI hostname', value: show(tlsEvidence.sniHost) },
@@ -242,3 +244,17 @@ export function buildLookupTlsDisplay(input: {
     ],
   };
 }
+
+/** The component consumes this typed projection, never untrusted source fields. */
+export function lookupTlsProps(display: ReturnType<typeof buildLookupTlsDisplay>) {
+  return {
+    ...display.tlsPresentation,
+    rows: display.tlsRows,
+    findings: display.tlsFindings,
+    leafCertificate: display.leafCertificate,
+    alternativeNames: display.alternativeNames,
+    chain: display.tlsChain,
+    validationDetails: display.tlsValidation,
+  };
+}
+export type LookupTlsProps = ReturnType<typeof lookupTlsProps>;

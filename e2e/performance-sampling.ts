@@ -43,6 +43,168 @@ type BrowserInteractionReadinessResult = Readonly<{
   readyAtMs: number;
 }>;
 
+export type InteractionRuntimeProbe = Readonly<{
+  longTaskSupported: boolean;
+  longTaskCount: number;
+  longTaskTotalMs: number;
+  layoutShiftSupported: boolean;
+  layoutShiftCount: number;
+  layoutShiftScore: number;
+  transitionLayoutShiftCount: number;
+  transitionLayoutShiftScore: number;
+  residualLayoutShiftCount: number;
+  residualLayoutShiftScore: number;
+}>;
+
+export async function beginInteractionTransferProbe(page: Page) {
+  const session = await page.context().newCDPSession(page);
+  const startedRequests = new Set<string>();
+  const pendingAssets = new Set<string>();
+  let startedAt: number | null = null;
+  let assetEncodedTransferBytes = 0;
+  let completedAssetRequestCount = 0;
+  let active = true;
+
+  // A response delivered during the interaction can belong to earlier page
+  // loading. Own requests by their start, including across redirect hops.
+  session.on('Network.requestWillBeSent', ({ requestId, timestamp, redirectResponse }) => {
+    if (!active || startedAt === null || timestamp < startedAt) return;
+    if (redirectResponse && !startedRequests.has(requestId)) return;
+    startedRequests.add(requestId);
+  });
+  session.on('Network.responseReceived', ({ requestId, response, type }) => {
+    if (!active || !startedRequests.has(requestId)) return;
+    let sameOrigin = false;
+    try {
+      sameOrigin = new URL(response.url).origin === ALLOWED_ORIGIN;
+    } catch {
+      return;
+    }
+    if (sameOrigin && (type === 'Script' || type === 'Stylesheet'
+      || /(?:javascript|css)/iu.test(response.mimeType))) pendingAssets.add(requestId);
+  });
+  session.on('Network.loadingFinished', ({ requestId, encodedDataLength }) => {
+    startedRequests.delete(requestId);
+    if (!active || !pendingAssets.delete(requestId)) return;
+    if (!Number.isFinite(encodedDataLength) || encodedDataLength < 0) return;
+    assetEncodedTransferBytes += encodedDataLength;
+    completedAssetRequestCount += 1;
+  });
+  session.on('Network.loadingFailed', ({ requestId }) => {
+    startedRequests.delete(requestId);
+    pendingAssets.delete(requestId);
+  });
+  try {
+    await session.send('Network.enable');
+    await session.send('Performance.enable');
+    const { metrics } = await session.send('Performance.getMetrics');
+    const timestamp = metrics.find((metric) => metric.name === 'Timestamp')?.value;
+    if (timestamp === undefined || !Number.isFinite(timestamp) || timestamp < 0) {
+      throw new Error('The interaction transfer probe requires the browser monotonic clock.');
+    }
+    startedAt = timestamp;
+  } catch (error) {
+    await session.detach().catch(() => undefined);
+    throw error;
+  }
+
+  return {
+    async close() {
+      if (active) {
+        active = false;
+        startedRequests.clear();
+        pendingAssets.clear();
+        await session.detach();
+      }
+      return { assetEncodedTransferBytes, completedAssetRequestCount };
+    },
+  };
+}
+
+/** Installs browser-local observers; phase boundaries come from the actual input and readiness marks. */
+export function resetInteractionRuntimeProbe(): void {
+  const scope = globalThis as typeof globalThis & {
+    __whoisleuthInteractionReadiness?: { startedAt: number | null; readyAt: number | null };
+    __whoisleuthDeferredRuntime?: InteractionRuntimeProbe & { observers: PerformanceObserver[] };
+  };
+  for (const observer of scope.__whoisleuthDeferredRuntime?.observers ?? []) observer.disconnect();
+  const probe = {
+    longTaskSupported: false,
+    longTaskCount: 0,
+    longTaskTotalMs: 0,
+    layoutShiftSupported: false,
+    layoutShiftCount: 0,
+    layoutShiftScore: 0,
+    transitionLayoutShiftCount: 0,
+    transitionLayoutShiftScore: 0,
+    residualLayoutShiftCount: 0,
+    residualLayoutShiftScore: 0,
+    observers: [] as PerformanceObserver[],
+  };
+  scope.__whoisleuthDeferredRuntime = probe;
+  if (typeof PerformanceObserver === 'undefined') return;
+  if (PerformanceObserver.supportedEntryTypes.includes('longtask')) {
+    probe.longTaskSupported = true;
+    const observer = new PerformanceObserver((list) => {
+      const startedAt = scope.__whoisleuthInteractionReadiness?.startedAt;
+      if (startedAt === undefined || startedAt === null) return;
+      for (const entry of list.getEntries()) {
+        const duration = entry.startTime + entry.duration - Math.max(startedAt, entry.startTime);
+        if (duration <= 0) continue;
+        probe.longTaskCount += 1;
+        probe.longTaskTotalMs += duration;
+      }
+    });
+    probe.observers.push(observer);
+    observer.observe({ type: 'longtask', buffered: false });
+  }
+  if (PerformanceObserver.supportedEntryTypes.includes('layout-shift')) {
+    probe.layoutShiftSupported = true;
+    const observer = new PerformanceObserver((list) => {
+      const marks = scope.__whoisleuthInteractionReadiness;
+      if (marks?.startedAt === undefined || marks.startedAt === null) return;
+      for (const entry of list.getEntries()) {
+        const shift = entry as PerformanceEntry & { hadRecentInput?: boolean; value?: number };
+        if (typeof shift.value !== 'number' || shift.startTime < marks.startedAt) continue;
+        if (!shift.hadRecentInput) {
+          probe.layoutShiftCount += 1;
+          probe.layoutShiftScore += shift.value;
+        }
+        // Use the browser mark, not the later arrival of a driver command.
+        // Recent-input suppression must not hide movement after usable paint.
+        if (marks.readyAt !== null && shift.startTime >= marks.readyAt) {
+          probe.residualLayoutShiftCount += 1;
+          probe.residualLayoutShiftScore += shift.value;
+        } else {
+          probe.transitionLayoutShiftCount += 1;
+          probe.transitionLayoutShiftScore += shift.value;
+        }
+      }
+    });
+    probe.observers.push(observer);
+    observer.observe({ type: 'layout-shift', buffered: false });
+  }
+}
+
+export async function readInteractionRuntimeProbe(page: Page): Promise<InteractionRuntimeProbe> {
+  return page.evaluate(() => {
+    const scope = globalThis as typeof globalThis & { __whoisleuthDeferredRuntime?: InteractionRuntimeProbe };
+    const probe = scope.__whoisleuthDeferredRuntime;
+    return {
+      longTaskSupported: probe?.longTaskSupported ?? false,
+      longTaskCount: probe?.longTaskCount ?? 0,
+      longTaskTotalMs: Math.round((probe?.longTaskTotalMs ?? 0) * 100) / 100,
+      layoutShiftSupported: probe?.layoutShiftSupported ?? false,
+      layoutShiftCount: probe?.layoutShiftCount ?? 0,
+      layoutShiftScore: Math.round((probe?.layoutShiftScore ?? 0) * 10_000) / 10_000,
+      transitionLayoutShiftCount: probe?.transitionLayoutShiftCount ?? 0,
+      transitionLayoutShiftScore: Math.round((probe?.transitionLayoutShiftScore ?? 0) * 10_000) / 10_000,
+      residualLayoutShiftCount: probe?.residualLayoutShiftCount ?? 0,
+      residualLayoutShiftScore: Math.round((probe?.residualLayoutShiftScore ?? 0) * 10_000) / 10_000,
+    };
+  });
+}
+
 export async function beginBrowserInteractionReadiness(
   page: Page,
   definition: BrowserInteractionReadiness,
@@ -56,6 +218,7 @@ export async function beginBrowserInteractionReadiness(
       startedAt: number | null;
       readyAt: number | null;
       animationFrame: number | null;
+      readyFrameSeen: boolean;
       cleanup: () => void;
     };
     const scope = globalThis as typeof globalThis & { __whoisleuthInteractionReadiness?: ReadinessRuntime };
@@ -80,14 +243,22 @@ export async function beginBrowserInteractionReadiness(
       startedAt: null,
       readyAt: null,
       animationFrame: null,
+      readyFrameSeen: false,
       cleanup: () => undefined,
     };
     const poll = (): void => {
       runtime.animationFrame = null;
       if (runtime.startedAt === null || runtime.readyAt !== null) return;
       if (input.targets.every(targetReady)) {
-        runtime.readyAt = performance.now();
-        return;
+        // Confirm the target after its first usable frame has painted. The
+        // initial reveal is not residual movement after an already usable UI.
+        if (runtime.readyFrameSeen) {
+          runtime.readyAt = performance.now();
+          return;
+        }
+        runtime.readyFrameSeen = true;
+      } else {
+        runtime.readyFrameSeen = false;
       }
       runtime.animationFrame = requestAnimationFrame(poll);
     };

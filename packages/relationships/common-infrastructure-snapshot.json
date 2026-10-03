@@ -1,16 +1,16 @@
 {
   "schema": "whoisleuth.common-infrastructure",
   "version": 1,
-  "generatedAt": "2026-09-07T08:00:19.761Z",
+  "generatedAt": "2026-09-23T12:34:53.700Z",
   "source": {
     "project": "MISP warning-lists",
     "repository": "https://github.com/MISP/misp-warninglists",
-    "commit": "1a2b119f7bd492b8e0626b947fc7b69ac4456df3",
+    "commit": "cdb6cf3076786277eceffbddc03d56bbf8687c5c",
     "licence": "CC0-1.0 OR BSD-2-Clause"
   },
   "freshnessDays": 30,
   "maximumEntries": 20000,
-  "entryCount": 4358,
+  "entryCount": 4372,
   "sources": [
     {
       "id": "amazon-aws",
@@ -18,9 +18,9 @@
       "category": "cloud_platform",
       "type": "cidr",
       "sourcePath": "lists/amazon-aws/list.json",
-      "sourceVersion": 20260901,
-      "sourceDate": "2026-09-01",
-      "sourceDigestSha256": "d41bfbcac4d8ec555037a66067d266489d80126d0655094ef49cb3167a7433ce",
+      "sourceVersion": 20260908,
+      "sourceDate": "2026-09-08",
+      "sourceDigestSha256": "c63dde48fc47ee9821b0a3ce9a638fd7002377c97a40b72dab3bd8396dab557d",
       "values": [
         "1.178.1.0/24",
         "1.178.100.0/22",
@@ -115,10 +115,7 @@
         "108.128.0.0/13",
         "108.136.0.0/14",
         "108.156.0.0/14",
-        "108.166.224.0/20",
-        "108.166.240.0/22",
-        "108.166.244.0/26",
-        "108.166.248.0/21",
+        "108.166.224.0/19",
         "108.175.48.0/20",
         "110.238.2.0/23",
         "111.13.171.128/25",
@@ -445,7 +442,7 @@
         "15.248.168.0/21",
         "15.248.176.0/20",
         "15.248.193.0/31",
-        "15.248.194.0/24",
+        "15.248.194.0/23",
         "15.248.32.0/21",
         "15.248.40.0/22",
         "15.248.48.0/20",
@@ -595,9 +592,7 @@
         "16.15.160.0/19",
         "16.15.192.0/18",
         "16.15.24.0/22",
-        "16.15.32.0/20",
-        "16.15.48.0/21",
-        "16.15.56.0/22",
+        "16.15.32.0/19",
         "16.16.0.0/16",
         "16.162.0.0/15",
         "16.164.0.0/15",
@@ -1687,7 +1682,6 @@
         "2600:1f61:c000::/40",
         "2600:1f61:e000::/40",
         "2600:1f61:ec00::/40",
-        "2600:1f6a:4c00::/46",
         "2600:1f70:1000::/40",
         "2600:1f70:2000::/40",
         "2600:1f70:4000::/39",
@@ -2074,6 +2068,14 @@
         "2600:f0f0:6026::/47",
         "2600:f0f0:6100::/43",
         "2600:f0f0:6120::/45",
+        "2600:f0f0:6128::/46",
+        "2600:f0f0:612d::/48",
+        "2600:f0f0:612e::/47",
+        "2600:f0f0:6130::/45",
+        "2600:f0f0:6138::/48",
+        "2600:f0f0:613a::/47",
+        "2600:f0f0:613c::/46",
+        "2600:f0f0:6140::/47",
         "2600:f0f0:7::/48",
         "2600:f0f0:700::/47",
         "2600:f0f0:702::/48",
@@ -2108,6 +2110,7 @@
         "2600:f0f0:c01:800::/55",
         "2600:f0f0:c040::/45",
         "2600:f0f0:c048::/47",
+        "2600:f0f0:c100::/48",
         "2600:f0f0:c106::/47",
         "2600:f0f0:c109::/48",
         "2600:f0f0:c10a::/47",
@@ -2132,8 +2135,13 @@
         "2600:f0f0:c148::/46",
         "2600:f0f0:c14c::/47",
         "2600:f0f0:c14e::/48",
+        "2600:f0f0:cf8::/56",
+        "2600:f0f0:cf8:800::/55",
         "2600:f0f0:cf8:c00::/55",
         "2600:f0f0:cf8:e00::/56",
+        "2600:f0f0:cf9:8c00::/56",
+        "2600:f0f0:cf9:c00::/55",
+        "2600:f0f0:cf9:e00::/56",
         "2600:f0f0:cfb::/48",
         "2600:f0f0:cfc::/46",
         "2600:f0f0:e00::/45",
@@ -2190,7 +2198,9 @@
         "2600:f0fb:c0ff::/56",
         "2600:f0fb:c800::/48",
         "2600:f0fb:c900::/51",
+        "2600:f0fb:c900:2000::/52",
         "2600:f0fb:ca00::/51",
+        "2600:f0fb:ca00:2000::/52",
         "2600:f0fb:e000::/36",
         "2600:f0fb:f000::/44",
         "2600:f0fb:f020::/45",
@@ -2380,6 +2390,7 @@
         "2606:7b40:1b20::/43",
         "2606:7b40:1b40::/42",
         "2606:7b40:1b80::/44",
+        "2606:7b40:1c00::/40",
         "2606:7b40:1f00::/40",
         "2606:7b40:3000:8000::/52",
         "2606:7b40:3001:8000::/52",
@@ -2929,9 +2940,8 @@
         "3.2.48.0/21",
         "3.2.56.0/22",
         "3.2.60.0/23",
-        "3.2.64.0/19",
+        "3.2.64.0/18",
         "3.2.8.0/21",
-        "3.2.96.0/21",
         "3.208.0.0/12",
         "3.224.0.0/12",
         "3.248.0.0/13",
@@ -3914,7 +3924,21 @@
         "2803:f800::/32",
         "2a06:98c0::/29",
         "2c0f:f248::/32"
-      ]
+      ],
+      "verification": {
+        "observedAt": "2026-09-23T12:34:53.700Z",
+        "rangesSha256": "062fcd25d844185a05c1ef42b1f713e2277b5cd6882211698d7177bdf8d5a7c7",
+        "sources": [
+          {
+            "url": "https://www.cloudflare.com/ips-v4",
+            "sha256": "f02c6d83bc01ab0ae8577160e036d700c7455359bce054df884e5d7d9e4e9e7b"
+          },
+          {
+            "url": "https://www.cloudflare.com/ips-v6",
+            "sha256": "9e9d39e3e83bad00c4decafd53c63fa62029f3d95db68de937d2be28234ca0a9"
+          }
+        ]
+      }
     },
     {
       "id": "google-gcp",
@@ -3922,9 +3946,9 @@
       "category": "cloud_platform",
       "type": "cidr",
       "sourcePath": "lists/google-gcp/list.json",
-      "sourceVersion": 20260901,
-      "sourceDate": "2026-09-01",
-      "sourceDigestSha256": "716e9d12c78ad459dc56f18f5d60c0104a4efcc62a0ad1b610f976c31d10062d",
+      "sourceVersion": 20260908,
+      "sourceDate": "2026-09-08",
+      "sourceDigestSha256": "004e25ca4c35fc1d78148758e04fb445d6fede7e073e21e5bf389b4ab51e8b98",
       "values": [
         "104.154.113.0/24",
         "104.154.114.0/23",
@@ -4266,6 +4290,7 @@
         "34.4.128.0/18",
         "34.4.16.0/22",
         "34.4.192.0/24",
+        "34.4.208.0/20",
         "34.4.24.0/21",
         "34.4.32.0/19",
         "34.4.64.0/19",
@@ -4396,6 +4421,9 @@
         "8.234.64.0/18",
         "8.234.8.0/21",
         "8.235.0.0/16",
+        "8.236.144.0/20",
+        "8.236.192.0/18",
+        "8.237.0.0/18",
         "8.34.208.0/20",
         "8.35.192.0/21"
       ]
@@ -4424,6 +4452,6 @@
     "A match identifies an address range published as shared cloud or delivery infrastructure. It does not identify the origin host, tenant, account, operator, ownership, intent, safety, or maliciousness.",
     "Non-matches are inconclusive because the catalogue is deliberately bounded and does not cover every provider, product, address, hosting service, resolver, or historical allocation.",
     "The snapshot is used locally and never causes a provider request during Lookup, Bulk, Monitor, cases, or graph review.",
-    "A fully validated source older than the reviewed freshness window is listed as excluded and contributes no active ranges until its publisher refreshes it."
+    "An older warning list is excluded unless its complete range set is independently verified against the recorded official provider sources. Publisher change dates and verification times remain distinct."
   ]
 }

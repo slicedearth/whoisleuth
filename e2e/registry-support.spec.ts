@@ -2,6 +2,7 @@ import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
 import { buildSourceReliabilityReport } from '../cli/source-reliability.mts';
 import { lookupCapabilityRows } from '../frontend/src/lib/analysis/lookup-capability-matrix.ts';
+import { REGISTRY_CAPABILITIES_VERSION, registryCompatibilityMatrix, registryStandardsCoverageSnapshot } from '../lib/registry-capabilities.mts';
 
 const SOURCE_REPORT_TIME = '2026-08-05T10:00:00.000Z';
 
@@ -38,6 +39,10 @@ test('the canonical console reference navigation exposes registry support', asyn
 });
 
 test('the registry-support catalogue filters locally and retains explicit interpretation limits', async ({ page }) => {
+  const profiles = registryCompatibilityMatrix();
+  const totalProfiles = profiles.length;
+  const rdapOnlyProfiles = profiles.filter(row => row.rdapAccessProfile !== 'no-iana-service' && row.whoisAccessProfile === 'no-iana-service');
+  const { counts } = registryStandardsCoverageSnapshot();
   const unexpectedApiRequests: string[] = [];
   page.on('request', (request) => {
     const pathname = new URL(request.url()).pathname;
@@ -48,20 +53,21 @@ test('the registry-support catalogue filters locally and retains explicit interp
 
   await page.goto('/registry-support');
 
-  await expect(page.getByText('Catalogue v29')).toBeVisible();
-  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText('335');
+  await expect(page.getByText(`Catalogue v${REGISTRY_CAPABILITIES_VERSION}`)).toBeVisible();
+  await expect(page.locator('.summary-grid article').filter({ hasText: 'Explicit suffixes' }).locator('strong')).toHaveText(String(totalProfiles));
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
-  await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 335 matching profiles (335 total)');
+  await expect(page.locator('.result-count')).toContainText(`Showing 1–50 of ${totalProfiles} matching profiles (${totalProfiles} total)`);
   await page.locator('#service-filter').selectOption('rdap_only');
-  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(25);
-  await expect(page.locator('.result-count')).toContainText('Showing 1–25 of 25 matching profiles (335 total)');
+  expect(rdapOnlyProfiles.length).toBeGreaterThan(0);
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(Math.min(50, rdapOnlyProfiles.length));
+  await expect(page.locator('.result-count')).toContainText(`Showing 1–${Math.min(50, rdapOnlyProfiles.length)} of ${rdapOnlyProfiles.length} matching profiles (${totalProfiles} total)`);
   await page.getByText('Review DEV profile').click();
   await expect(page.locator('.catalogue-section tbody tr').filter({ hasText: '.dev' }).locator('a[target="_blank"]')).toHaveCount(1);
   await page.locator('#service-filter').selectOption('all');
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
   const standards = page.getByRole('region', { name: 'Generic TLD RDAP snapshot' });
-  await expect(standards).toContainText('1114 / 1114');
-  await expect(standards).toContainText('12 / 14');
+  await expect(standards).toContainText(`${counts.genericAndRestrictedRdapCovered} / ${counts.generic + counts.genericRestricted}`);
+  await expect(standards).toContainText(`${counts.sponsoredRdapCovered} / ${counts.sponsored}`);
   await expect(standards).toContainText('.edu');
   await expect(standards).toContainText('.mil');
   await expect(standards).toContainText('.arpa');
@@ -76,41 +82,35 @@ test('the registry-support catalogue filters locally and retains explicit interp
   await expect(page.locator('.catalogue-section tbody tr')).toContainText('.dk');
 
   await search.fill('iana cc colon');
-  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(43);
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(Math.min(50, profiles.filter(row => row.id.startsWith('iana-cc-colon-')).length));
   await expect(page.locator('.catalogue-section tbody')).toContainText('.as');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.sr');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.to');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.zm');
 
   await search.fill('iana cc negative');
-  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(31);
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(Math.min(50, profiles.filter(row => row.id.startsWith('iana-cc-negative-')).length));
   await expect(page.locator('.catalogue-section tbody')).toContainText('.ag');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.vg');
 
   await search.fill('iana referral unverified');
-  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(17);
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(Math.min(50, profiles.filter(row => row.id.startsWith('iana-referral-unverified-')).length));
   await expect(page.locator('.catalogue-section tbody')).toContainText('.bo');
   await expect(page.locator('.catalogue-section tbody')).toContainText('.vi');
 
   await search.clear();
   await page.locator('#coverage-filter').selectOption('access_documented');
-  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
-  await expect(page.locator('.result-count')).toContainText('Showing 1–50 of 118 matching profiles (335 total)');
-  await expect(page.locator('.catalogue-section tbody')).toContainText('.ao');
-  await expect(page.locator('.catalogue-section tbody')).toContainText('.ch');
-  await expect(page.locator('.catalogue-section tbody')).toContainText('.es');
-  await expect(page.locator('.catalogue-section tbody')).toContainText('.gr');
-  await expect(page.locator('.catalogue-section tbody')).toContainText('.arpa');
-  await page.getByRole('button', { name: 'Next' }).click();
-  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(50);
-  await expect(page.locator('.result-count')).toContainText('Showing 51–100 of 118 matching profiles (335 total)');
-  await expect(page.locator('.catalogue-section tbody')).toContainText('.mil');
-  await expect(page.locator('.catalogue-section tbody')).toContainText('.vn');
-  await page.getByRole('button', { name: 'Next' }).click();
-  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(18);
-  await expect(page.locator('.result-count')).toContainText('Showing 101–118 of 118 matching profiles (335 total)');
-  await expect(page.locator('.catalogue-section tbody')).toContainText('.zip');
-  await expect(page.locator('.catalogue-section tbody')).toContainText('.zw');
+  const documented = profiles.filter(row => row.coverageState === 'access_documented');
+  expect(documented.length).toBeGreaterThan(50);
+  const observedSuffixes: string[] = [];
+  for (let offset = 0; offset < documented.length; offset += 50) {
+    const end = Math.min(offset + 50, documented.length);
+    await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(end - offset);
+    await expect(page.locator('.result-count')).toContainText(`Showing ${offset + 1}–${end} of ${documented.length} matching profiles (${totalProfiles} total)`);
+    observedSuffixes.push(...await page.locator('.catalogue-section tbody td[data-label="Suffix"] > code').allTextContents());
+    if (end < documented.length) await page.getByRole('button', { name: 'Next' }).click();
+  }
+  expect(observedSuffixes.sort()).toEqual(documented.map(row => `.${row.suffixes[0]}`).sort());
 
   await search.fill('no matching capability');
   await expect(page.getByRole('heading', { name: 'No matching profiles' })).toBeVisible();

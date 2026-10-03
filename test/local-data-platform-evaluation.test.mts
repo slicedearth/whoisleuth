@@ -1,3 +1,4 @@
+import '../tools/browser-server-egress-guard.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -7,7 +8,6 @@ import {
   LOCAL_STORAGE_REFERENCE_BYTES,
   MAX_LOCAL_DATA_EVALUATION_CANDIDATES,
   MAX_LOCAL_DATA_EVALUATION_DETAIL_LENGTH,
-  MAX_LOCAL_DATA_EVALUATION_STORES,
   buildLocalDataPlatformEvaluation,
   formatLocalDataPlatformEvaluation,
   main,
@@ -45,7 +45,6 @@ describe('local data platform evaluation', () => {
     assert.equal(report.generatedAt, NOW.toISOString());
     assert.equal(report.mode, 'offline_contract_evaluation');
     assert.equal(report.current.storeCount, BROWSER_LOCAL_COLLECTIONS.length);
-    assert.ok(report.current.storeCount <= MAX_LOCAL_DATA_EVALUATION_STORES);
     assert.equal(report.current.declaredMaximumBytes, DECLARED_BROWSER_STORE_BYTES);
     assert.equal(report.current.declaredMaximumMiB, DECLARED_BROWSER_STORE_BYTES / 1024 / 1024);
     assert.equal(report.current.localStorageReferenceBytes, LOCAL_STORAGE_REFERENCE_BYTES);
@@ -71,7 +70,7 @@ describe('local data platform evaluation', () => {
     assert.equal(report.decision.state, 'native_indexeddb_in_production');
     assert.equal(report.decision.recommendedCandidate, 'native_indexeddb');
     assert.equal(report.decision.migrationApproved, true);
-    assert.deepEqual(report.decision.independentFutureWork, ['encryption', 'pwa', 'synchronization']);
+    assert.deepEqual(report.decision.independentFutureWork, ['pwa', 'synchronization']);
     assert.ok(report.candidates.length <= MAX_LOCAL_DATA_EVALUATION_CANDIDATES);
 
     const native = report.candidates.find((candidate) => candidate.id === 'native_indexeddb');
@@ -126,7 +125,7 @@ describe('local data platform evaluation', () => {
     const output = formatLocalDataPlatformEvaluation(report);
     assert.ok(output.includes(`${DECLARED_BROWSER_STORE_BYTES / 1024 / 1024} MiB across ${BROWSER_LOCAL_COLLECTIONS.length} stores`));
     assert.match(output, /native_indexeddb \(no production dependency\)/);
-    assert.match(output, /Encryption, PWA support, and synchronisation remain separately gated/);
+    assert.match(output, /Encrypted named workspaces are available/);
 
     assert.deepEqual(parseArguments([]), { json: false });
     assert.deepEqual(parseArguments(['--json']), { json: true });

@@ -217,7 +217,7 @@
       <h2 id="review-inbox-title" tabindex="-1">Retained review items</h2>
       {#if focusedCaseId}<p>Associated with the selected Case.</p>{/if}
     </div>
-    {#if inbox.items.length || inbox.truncated}<strong aria-label={`${scopedItems.length} retained review items${focusedCaseId ? ' for the selected Case' : ''}`}>{scopedItems.length}</strong>{/if}
+    {#if inbox.items.length || inbox.truncated}<strong>{scopedItems.length}<span class="sr-only"> retained review {scopedItems.length === 1 ? 'item' : 'items'}{focusedCaseId ? ' for the selected Case' : ''}</span></strong>{/if}
   </div>
   {/if}
 
@@ -225,9 +225,13 @@
     <p class="selected-review" role="status">{filteredByQueue.length ? 'Showing the selected review and its retained history.' : 'The selected review is unavailable in the admitted inbox. No other review has been substituted.'} <a href="/monitor?view=inbox&queue=all#review-inbox-title">Show all review items</a></p>
   {/if}
   {#if inbox.items.length && !selectedSubjectKey}
+  {#if focusedCaseId || attentionOnly}
+    <div class="filter-context">
+      {#if focusedCaseId}<p>Selected Case · <a href="/monitor?view=inbox&queue=all">Show all Cases</a></p>{/if}
+      {#if attentionOnly}<p role="status">Attention needed · {filteredByQueue.length} {filteredByQueue.length === 1 ? 'item' : 'items'}</p>{/if}
+    </div>
+  {/if}
   <div class="filters" role="group" aria-label="Review queue">
-    {#if focusedCaseId}<span class="active">Selected Case</span><a href="/monitor?view=inbox&queue=all">Show all Cases</a>{/if}
-    {#if attentionOnly}<span class="active" role="status">Attention needed · {filteredByQueue.length}</span>{/if}
     {#each ANALYST_REVIEW_QUEUE_OPTIONS as option}
       <button type="button" class:active={!attentionOnly && queue === option.value} aria-pressed={!attentionOnly && queue === option.value} onclick={() => setQueue(option.value)}>
         {option.label} <span>{queueCounts[option.value]}</span>
@@ -347,10 +351,12 @@
   .inbox-heading h2{margin-top:3px;font:700 var(--text-lg) var(--mono)}
   .inbox-heading>div>p:last-child{margin-top:7px;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .inbox-heading>strong{color:var(--accent2);font:750 2rem var(--mono)}
+  .filter-context{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:14px;color:var(--muted);font-size:var(--text-sm)}
+  .filter-context p{margin:0}
   .filters{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0}
   .filters button{display:flex;gap:7px;align-items:center;min-height:36px;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:650 var(--text-xs) var(--mono)}
   .filters button.active{border-color:rgb(var(--interface-accent-rgb) / .55);background:rgb(var(--interface-accent-rgb) / .08);color:var(--interface-accent)}
-  .filters span{padding:1px 6px;border-radius:99px;background:var(--border);color:var(--text);font-size:var(--text-2xs)}
+  .filters button span{padding:1px 6px;border-radius:99px;background:var(--border);color:var(--text);font-size:var(--text-2xs)}
   .advanced-filters{margin:-8px 0 18px}.advanced-filters>summary{width:max-content;cursor:pointer;color:var(--muted);font:650 var(--text-xs) var(--mono)}
   .detail-filters{--grid-min:13rem;align-items:end;margin-top:12px}
   .detail-filters select,.detail-filters input{min-width:0}

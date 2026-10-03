@@ -250,12 +250,45 @@ describe('offline TLSA evidence review', () => {
     const matched = analyzeTlsaEvidence({ ...input, dnssecState: 'validated' });
     assert.equal(matched.state, 'matched');
     assert.match(matched.limitations.join(' '), /usage-2 association cannot complete DANE-TA assurance/u);
-    assert.doesNotMatch(matched.limitations.join(' '), /overall result remains partial/u);
 
     const untrusted = analyzeTlsaEvidence({ ...input, dnssecState: 'bogus' });
     assert.equal(untrusted.state, 'untrusted');
     assert.match(untrusted.limitations.join(' '), /usage-2 association cannot complete DANE-TA assurance/u);
-    assert.doesNotMatch(untrusted.limitations.join(' '), /overall result remains partial/u);
+    assert.match(untrusted.limitations.join(' '), /DNSSEC was not validated/u);
+  });
+
+  test('requires validated PKIX for a non-SMTP PKIX-EE match without weakening independent DANE evidence', () => {
+    const leaf = Buffer.from('fixture HTTPS leaf certificate');
+    const associationData = createHash('sha256').update(leaf).digest('hex');
+    const input = {
+      serviceName: '_443._tcp.example.test',
+      dnssecState: 'validated',
+      certificateDerBase64: leaf.toString('base64'),
+      records: [{ usage: 1, selector: 0, matchingType: 1, associationData }],
+    };
+    for (const [pkixValidationState, expected] of [
+      ['validated', 'matched'], ['failed', 'untrusted'], ['unknown', 'partial'],
+    ] as const) {
+      const result = analyzeTlsaEvidence({ ...input, pkixValidationState });
+      assert.equal(result.records[0]?.state, 'matched');
+      assert.equal(result.state, expected, pkixValidationState);
+      assert.equal(result.limitations.some((item) => item.startsWith('A PKIX-dependent association matched')), pkixValidationState !== 'validated');
+    }
+    const independentlyMatched = analyzeTlsaEvidence({
+      ...input,
+      pkixValidationState: 'failed',
+      records: [...input.records, { usage: 3, selector: 0, matchingType: 1, associationData }],
+    });
+    assert.equal(independentlyMatched.state, 'matched');
+    const authorityOnly = analyzeTlsaEvidence({
+      ...input,
+      pkixValidationState: 'validated',
+      authorityMaterials: [{ certificateDerBase64: leaf.toString('base64') }],
+      records: [{ usage: 0, selector: 0, matchingType: 1, associationData }],
+    });
+    assert.equal(authorityOnly.records[0]?.state, 'matched');
+    assert.equal(authorityOnly.state, 'partial');
+    assert.match(authorityOnly.limitations.join(' '), /not proven to be part of the independently validated leaf path/u);
   });
 
   test('rejects unbound services and avoids definitive differences after truncation', () => {

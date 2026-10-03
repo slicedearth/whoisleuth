@@ -177,7 +177,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'Could a shared certificate, platform or edge explain the relationship?',
     ]),
     references: Object.freeze([
-      Object.freeze({ label: 'IETF RFC 9162: Certificate Transparency', href: 'https://www.rfc-editor.org/rfc/rfc9162', description: 'Defines the current Certificate Transparency log protocol.' }),
+      Object.freeze({ label: 'IETF RFC 9162: Certificate Transparency', href: 'https://www.rfc-editor.org/rfc/rfc9162', description: 'Defines the newer version of the Certificate Transparency log protocol.' }),
       Object.freeze({ label: 'Certificate Transparency project', href: 'https://certificate.transparency.dev/', description: 'Explains the public-log ecosystem and its operational model.' }),
     ]),
     demoHref: '/demo',
@@ -233,9 +233,9 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'Retain exact incident links, review the applicable official reporting route and prepare a local evidence packet. Submit the complaint yourself, record delivery and independently recheck the target. Provider acknowledgement does not establish removal.',
     ]),
     steps: Object.freeze([
-      Object.freeze({ title: 'Preserve the review basis', body: 'Retain exact public URLs, observation times, screenshots or capture digests, source limitations and an evidence-linked Case conclusion. Avoid collecting unrelated personal information.' }),
-      Object.freeze({ title: 'Choose the applicable official route', body: 'Select the Case type and review the current provider guidance for Facebook, Instagram, TikTok, X, Telegram, YouTube, LinkedIn or the responsible registrar, registry and hosting provider. Rights forms should be used only by a rights holder or authorised representative.' }),
-      Object.freeze({ title: 'Record delivery and independently recheck', body: 'Export and review the packet, submit it manually, then record the actual delivery event. Recheck the exact target later and record what was observed; an acknowledgement or closed ticket is not independent evidence of removal.' }),
+      Object.freeze({ title: 'Preserve the review basis', body: 'Retain exact public objects, times, screenshots or capture digests and an evidence-linked conclusion. For copied content without a logo or brand name, compare the supplied reference and candidate text or images explicitly; similarity is not authorship or legal entitlement. Record the observed form destination separately from scripts or a suspected endpoint. Manual pins remain useful when richer comparison or capture is unavailable.' }),
+      Object.freeze({ title: 'Choose the applicable official route', body: 'Use the official references below for social content, storefronts, app listings, hosted files/forms and advertisements. A custom storefront or ad context needs an evidenced, explicit platform choice. Separate fraud from copyright, trademark and trade-dress grounds; rights routes require the appropriate authority. Registrar, registry, host, proxy/edge, platform and search visibility have different roles and remedies. An edge address is not proof of the origin host.' }),
+      Object.freeze({ title: 'Review each copy, then track its scope', body: 'Review selected metadata, exact URLs, free text, contacts and attachments for each recipient before manually sharing. Record real delivery separately from acknowledgement. Preserve the original packet when preparing requested evidence. Recheck the exact object under comparable conditions; a failed capture is inconclusive. Close only the evidenced scope and retain unresolved ads, accounts or mail channels. Rehearse these decisions in the fictional practice.' }),
     ]),
     evidence: Object.freeze([
       Object.freeze({ source: 'Case evidence and incident links', usefulFor: 'Binding the complaint to exact reviewed targets, times, conclusions and limitations.', limitation: 'A retained link or analyst classification does not itself prove a policy or legal violation.' }),
@@ -251,7 +251,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     referencesTitle: 'Official reporting guidance',
     referencesIntroduction: 'Use the provider-owned pages below to verify the current reporting route, eligibility and disclosure terms before submitting anything.',
     demoHref: '/demo',
-    demoLabel: 'Review the fictional evidence flow',
+    demoLabel: 'Practise evidence and separate response scopes',
     guideHref: '/resources#reference',
     guideLabel: 'Open product references',
     repositoryDoc: 'docs/application-guide.md',

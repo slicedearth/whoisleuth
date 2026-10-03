@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
-import { accessSync, constants as fsConstants } from 'node:fs';
+import { accessSync, constants as fsConstants, readdirSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +28,7 @@ type ExecutableProbe = (
     input: string;
     maxBuffer: number;
     timeout: number;
+    killSignal: 'SIGKILL';
   }>,
 ) => Pick<SpawnSyncReturns<string>, 'error' | 'signal' | 'status' | 'stderr'>;
 
@@ -58,7 +59,9 @@ export const UNIT_TEST_EXECUTABLES = Object.freeze(
 );
 
 export const MAX_TOOLCHAIN_INPUT_BYTES = 2 * 1024 * 1024;
-const EXECUTABLE_PROBE_TIMEOUT_MS = 5_000;
+// A startup hang guard, not a shell-performance requirement. Probe once before
+// concurrent test workers start; real completion operations have their own guard.
+const EXECUTABLE_PROBE_TIMEOUT_MS = 60_000;
 const EXECUTABLE_PROBE_OUTPUT_BYTES = 4_096;
 
 function defaultExecutableProbe(
@@ -73,15 +76,28 @@ function executableCandidates(
   executable: UnitTestExecutable,
   environment: NodeJS.ProcessEnv,
   platform: NodeJS.Platform,
+  cwd = process.cwd(),
 ): readonly string[] {
+  if (!Object.hasOwn(UNIT_TEST_EXECUTABLE_REQUIREMENTS, executable)) {
+    throw new TypeError(`Unsupported unit-test executable ${String(executable)}.`);
+  }
   const requirement = UNIT_TEST_EXECUTABLE_REQUIREMENTS[executable];
   const configured = environment[requirement.environmentVariable]?.trim();
-  if (configured) return Object.freeze([path.resolve(configured)]);
+  if (configured) return Object.freeze([path.resolve(cwd, configured)]);
   const filename = platform === 'win32' ? `${executable}.exe` : executable;
   return Object.freeze((environment.PATH || '')
     .split(path.delimiter)
     .filter(Boolean)
-    .map((directory) => path.resolve(directory, filename)));
+    .map((directory) => path.resolve(cwd, directory, filename)));
+}
+
+function canExecuteFile(candidate: string): boolean {
+  try {
+    accessSync(candidate, fsConstants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function resolveUnitTestExecutables(
@@ -98,21 +114,13 @@ export function resolveUnitTestExecutables(
   const platform = options.platform ?? process.platform;
   const cwd = path.resolve(options.cwd ?? process.cwd());
   const probe = options.probe ?? defaultExecutableProbe;
-  const canExecute = options.canExecute ?? ((candidate: string) => {
-    try {
-      accessSync(candidate, fsConstants.X_OK);
-      return true;
-    } catch {
-      return false;
-    }
-  });
+  const canExecute = options.canExecute ?? canExecuteFile;
   const resolved = new Map<UnitTestExecutable, string>();
   const failures: string[] = [];
 
   for (const executable of [...new Set(requested)]) {
+    const candidates = executableCandidates(executable, environment, platform, cwd);
     const requirement = UNIT_TEST_EXECUTABLE_REQUIREMENTS[executable];
-    if (!requirement) throw new TypeError(`Unsupported unit-test executable ${String(executable)}.`);
-    const candidates = executableCandidates(executable, environment, platform);
     const candidate = candidates.find(canExecute);
     if (!candidate) {
       failures.push(`${executable}: not found as an executable on PATH`);
@@ -125,9 +133,12 @@ export function resolveUnitTestExecutables(
       input: '',
       maxBuffer: EXECUTABLE_PROBE_OUTPUT_BYTES,
       timeout: EXECUTABLE_PROBE_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
     });
     if (child.error) {
-      failures.push(`${executable}: failed to launch (${child.error.message.slice(0, 240)})`);
+      failures.push((child.error as NodeJS.ErrnoException).code === 'ETIMEDOUT'
+        ? `${executable}: startup probe exceeded its ${EXECUTABLE_PROBE_TIMEOUT_MS} ms hang guard and was terminated`
+        : `${executable}: failed to launch (${child.error.message.slice(0, 240)})`);
       continue;
     }
     if (child.signal || child.status !== 0) {
@@ -158,8 +169,45 @@ export function unitTestExecutablePath(
   executable: UnitTestExecutable,
   environment: NodeJS.ProcessEnv = process.env,
 ): string {
-  const resolved = resolveUnitTestExecutables([executable], { environment });
-  return resolved.get(executable)!;
+  // The suite entry point probes usability before starting workers. Resolving
+  // that selection must not launch another shell under concurrent test load.
+  // Directly selected tests still exercise the real shell and check its result.
+  const candidate = executableCandidates(executable, environment, process.platform).find(canExecuteFile);
+  if (!candidate) throw new Error(`${executable}: not found as an executable on PATH or at its configured path.`);
+  return candidate;
+}
+
+export function runUnitTests(
+  nodeArguments: readonly string[],
+  options: Readonly<{ cwd?: string; environment?: NodeJS.ProcessEnv; probeShells?: boolean }> = {},
+): number {
+  if (nodeArguments[0] !== '--test') throw new TypeError('Unit execution requires Node test-runner arguments beginning with --test.');
+  const cwd = path.resolve(options.cwd ?? process.cwd());
+  const environment = options.environment ?? process.env;
+  const resolved = resolveUnitTestExecutables(options.probeShells === false ? [] : undefined, { cwd, environment });
+  const result = spawnSync(process.execPath, [...nodeArguments], {
+    cwd,
+    env: unitTestExecutableEnvironment(resolved, environment),
+    stdio: 'inherit',
+  });
+  if (result.error) throw result.error;
+  if (result.signal) throw new Error(`Unit test runner was terminated by ${result.signal}.`);
+  return result.status ?? 2;
+}
+
+/** Test names declare execution cost; ordinary files need no registration. */
+export function isNodeIntegrationTest(file: string): boolean {
+  return file.endsWith('.integration.test.mts');
+}
+
+export function nodeTestFiles(lane: 'unit' | 'integration' | 'all', cwd = process.cwd()): readonly string[] {
+  const files = readdirSync(path.join(cwd, 'test'), { withFileTypes: true })
+    .filter(entry => entry.isFile() && /^[a-zA-Z0-9._-]+\.test\.mts$/u.test(entry.name))
+    .map(entry => `test/${entry.name}`)
+    .filter(file => lane === 'all' || isNodeIntegrationTest(file) === (lane === 'integration'))
+    .sort();
+  if (!files.length) throw new Error(`No ${lane} tests were discovered.`);
+  return Object.freeze(files);
 }
 
 function parseVersion(value: unknown, label: string): Version {
@@ -298,6 +346,17 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
   const stdout = options.stdout || process.stdout;
   const stderr = options.stderr || process.stderr;
   try {
+    if (args[0] === '--unit-tests') {
+      if (args[1]?.startsWith('--lane=')) {
+        const lane = args[1].slice('--lane='.length);
+        if (lane !== 'unit' && lane !== 'integration' && lane !== 'all') throw new TypeError('Test lane must be unit, integration or all.');
+        return runUnitTests([...args.slice(2), ...nodeTestFiles(lane, options.repositoryRoot)], {
+          cwd: options.repositoryRoot ?? process.cwd(),
+          probeShells: lane !== 'unit',
+        });
+      }
+      return runUnitTests(args.slice(1), { cwd: options.repositoryRoot ?? process.cwd() });
+    }
     parseArguments(args);
     const repositoryRoot = path.resolve(options.repositoryRoot || process.cwd());
     const [nvmrc, packageManifest, frontendManifest, lockfile] = await Promise.all([

@@ -179,12 +179,22 @@ describe('relationship graph interchange export', () => {
         version: CASE_SCHEMA_VERSION,
         cases: [
           caseRecord('case-a', 'a.invalid', '2026-07-01T00:00:00.000Z'),
+          caseRecord('case-a-second', 'a.invalid', '2026-07-03T00:00:00.000Z'),
           caseRecord('case-b', 'b.invalid', '2026-07-02T00:00:00.000Z'),
         ],
       },
     }, { generatedAt: NOW });
     const relationshipSummary = buildInvestigationCaseRelationships(projection);
     const document = buildRelationshipGraphDocument(relationshipSummary, { generatedAt: NOW });
+    const incidentNodes = document.graph.nodes.filter(node => node.kind === 'case');
+    assert.equal(incidentNodes.length, 3);
+    assert.equal(incidentNodes.filter(node => node.canonical === 'a.invalid').length, 2);
+    assert.equal(new Set(incidentNodes.map(node => node.id)).size, 3);
+    assert.equal(new Set(document.graph.edges.map(edge => edge.id)).size, document.graph.edges.length);
+    assert.equal(new Set(document.graph.edges.map(edge => edge.source)).size, 3);
+    const reordered = structuredClone(relationshipSummary);
+    for (const group of reordered.groups) group.cases.reverse();
+    assert.deepEqual(buildRelationshipGraphDocument(reordered, { generatedAt: NOW }), document);
     const relationship = document.graph.nodes.find((node) => node.kind === 'relationship');
     assert.ok(relationship && Array.isArray(relationship.observations));
     const observation = relationship.observations[0] as Record<string, unknown> | undefined;
@@ -197,7 +207,10 @@ describe('relationship graph interchange export', () => {
     assert.match(json, new RegExp(`"case"\\s*:\\s*${CASE_SCHEMA_VERSION}`, 'u'));
     assert.match(graphml, new RegExp(`&quot;case&quot;:${CASE_SCHEMA_VERSION}`, 'u'));
     assert.match(gexf, new RegExp(`&quot;case&quot;:${CASE_SCHEMA_VERSION}`, 'u'));
-    for (const output of [json, graphml, gexf]) assert.doesNotMatch(output, /ignored|caseVersion/u);
+    for (const output of [json, graphml, gexf]) {
+      assert.doesNotMatch(output, /ignored|caseVersion|case-a-second/u);
+      for (const node of incidentNodes) assert.ok(output.includes(node.id));
+    }
   });
 
   test('is deterministic for equivalent case order and excludes transient view state', () => {

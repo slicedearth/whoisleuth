@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import {
   currentBrandProfileBrowserStore,
@@ -9,7 +10,7 @@ import {
   migrateLegacyBrowserData,
   useTheme,
 } from './helpers';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
 const OBSERVED_AT = '2026-08-01T02:00:00.000Z';
 
@@ -177,7 +178,7 @@ test('saved context reaches matches after the first fifty and restores query and
       await expectFocusedResultsVisible(page, results);
       await expectNoHorizontalOverflow(page);
       await expect(pages.getByRole('button', { name: 'Previous', exact: true })).toBeVisible();
-      await test.info().attach(`saved-context-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await test.info().attach(`saved-context-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
   await page.locator('#query').fill('saved-context-0.invalid');

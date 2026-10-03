@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { tick } from 'svelte';
   import type { BrandProfile, BrandProfileSaveResult } from '$lib/brand-profiles';
   import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
@@ -133,7 +134,7 @@
       {@const retained = base?.protectionAttestations.find((item) => item.control === control)}
       <fieldset>
         <legend>{labels[control]}</legend>
-        <p>{retained ? `Last reviewed ${new Date(retained.assertedAt).toLocaleString('en-AU')}` : 'No recorded review'}</p>
+        <p>{retained ? `Last reviewed ${formatEvidenceDate(retained.assertedAt)}` : 'No recorded review'}</p>
         <p class:expired={drafts[control].expiresAt !== '' && Date.parse(`${drafts[control].expiresAt}T23:59:59.999Z`) < Date.now()}>{expiryLabel(drafts[control].expiresAt)}</p>
         <label>
           Review state

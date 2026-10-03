@@ -14,12 +14,22 @@ type CompletionResult = Readonly<{
 const START_MARKER = '__WHOISLEUTH_COMPLETION_START_';
 const END_MARKER = '__WHOISLEUTH_COMPLETION_END_';
 
-// A hang guard for complete fixture batches, not a completion-latency budget.
+// A hang guard for one fixture operation, not a completion-latency budget.
 export const SHELL_COMPLETION_PROCESS_OPTIONS = Object.freeze({
   encoding: 'utf8' as const,
   timeout: 60_000,
   killSignal: 'SIGKILL' as const,
 });
+
+export function shellCompletionBatchProcessOptions(caseCount: number) {
+  const timeout = SHELL_COMPLETION_PROCESS_OPTIONS.timeout * caseCount;
+  if (!Number.isSafeInteger(caseCount) || caseCount < 1 || !Number.isSafeInteger(timeout)) {
+    throw new TypeError('A shell completion batch requires a positive bounded case count.');
+  }
+  // Each case can launch the real CLI. Adding cases must not reduce the
+  // watchdog allowance of every existing case or impose a machine-speed gate.
+  return { ...SHELL_COMPLETION_PROCESS_OPTIONS, timeout };
+}
 
 export function assertSuccessfulShellProcess(child: SpawnSyncReturns<string>, label: string): void {
   const detail = typeof child.stderr === 'string' ? child.stderr.trim().slice(0, 2_048) : '';
@@ -88,13 +98,19 @@ export function prepareBashCompletionBatch(
 COMP_WORDS=(${words.map(shellLiteral).join(' ')})
 COMP_CWORD=${words.length - 1}
 printf '${START_MARKER}${index}__\\n'
-_whoisleuth_completion
+"\${completion_function}"
 printf '%s\\n' "\${COMPREPLY[@]}"
 printf '${END_MARKER}${index}__\\n'
 `).join('\n');
-  const harness = `whoisleuth() { "$WHOISLEUTH_TEST_NODE" bin/whoisleuth.mts "$@"; }\n${script}\n${invocations}`;
+  const harness = `whoisleuth() { "$WHOISLEUTH_TEST_NODE" bin/whoisleuth.mts "$@"; }
+${script}
+completion_registration=$(complete -p whoisleuth)
+completion_function="\${completion_registration#* -F }"
+completion_function="\${completion_function%% *}"
+declare -F "$completion_function" >/dev/null || exit 7
+${invocations}`;
   const child = spawnSync(unitTestExecutablePath('bash'), ['--noprofile', '--norc', '-c', harness], {
-    ...SHELL_COMPLETION_PROCESS_OPTIONS,
+    ...shellCompletionBatchProcessOptions(cases.length),
     cwd: repositoryRoot,
     env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath },
   });
@@ -112,12 +128,12 @@ export function prepareZshCompletionBatch(
 words=(${words.map(shellLiteral).join(' ')})
 CURRENT=${words.length}
 printf '${START_MARKER}${index}__\\n'
-_whoisleuth
+"\${completion_function}"
 printf '${END_MARKER}${index}__\\n'
 `).join('\n');
   const harness = `
 whoisleuth() { "$WHOISLEUTH_TEST_NODE" bin/whoisleuth.mts "$@"; }
-compdef() { :; }
+compdef() { completion_function="$1"; }
 _describe() { :; }
 _files() { print -r -- __FILES__; }
 _message() { print -r -- __MESSAGE__; }
@@ -129,9 +145,10 @@ compadd() {
   done
 }
 ${script}
+typeset -f "$completion_function" >/dev/null || exit 7
 ${invocations}`;
   const child = spawnSync(unitTestExecutablePath('zsh'), ['-f', '-c', harness], {
-    ...SHELL_COMPLETION_PROCESS_OPTIONS,
+    ...shellCompletionBatchProcessOptions(cases.length),
     cwd: repositoryRoot,
     env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath },
   });
@@ -160,7 +177,7 @@ ${invocations}`;
   const directory = mkdtempSync(join(tmpdir(), 'whoisleuth-fish-completion-'));
   try {
     const child = spawnSync(unitTestExecutablePath('fish'), ['--no-config', '--private', '-c', harness], {
-      ...SHELL_COMPLETION_PROCESS_OPTIONS,
+      ...shellCompletionBatchProcessOptions(lines.length),
       cwd: repositoryRoot,
       env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath,
         XDG_CONFIG_HOME: directory, XDG_DATA_HOME: directory, XDG_CACHE_HOME: directory },
@@ -212,7 +229,7 @@ $results = foreach ($lineValue in $lines) {
 }
 $results | ConvertTo-Json -Compress -Depth 4 -AsArray`;
   const child = spawnSync(unitTestExecutablePath('pwsh'), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', invocation], {
-    ...SHELL_COMPLETION_PROCESS_OPTIONS,
+    ...shellCompletionBatchProcessOptions(lines.length),
     cwd: repositoryRoot,
     input: JSON.stringify(lines),
     env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath },

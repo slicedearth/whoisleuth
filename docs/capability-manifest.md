@@ -58,7 +58,7 @@ This catalogue describes existing execution, disclosure, retention and assurance
 
 ## CLI operation catalogue
 
-The public command catalogue keeps its version 1 offline/network label for all 49 installed CLI operations. These operation records retain the more precise plane, activation, credential, export and scoring contract.
+The public command catalogue keeps its version 1 offline/network label for all 51 installed CLI operations. These operation records retain the more precise plane, activation, credential, export and scoring contract.
 
 | Operation | Capability family | Legacy collection | Trigger | Planes | Network | Disclosure | Recipients | Credentials | Retention | Export | Scoring | Authorisation |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -69,12 +69,12 @@ The public command catalogue keeps its version 1 offline/network label for all 4
 | `command.cli.manifest` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | optional secret passphrase file | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.map-observations` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.oam-export` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
-| `command.cli.lookup` | `lookup` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>homepage request<br>tls handshake<br>public ip address | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | bounded risk and acquisition input | explicit action |
-| `command.cli.bulk` | `lookup` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | bounded risk and acquisition input | explicit action |
+| `command.cli.lookup` | `lookup` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>dns question<br>whois query<br>homepage request<br>tls handshake<br>public ip address<br>selected url request | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | bounded risk and acquisition input | explicit action |
+| `command.cli.bulk` | `lookup` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>dns question<br>whois query<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | bounded risk and acquisition input | explicit action |
 | `command.cli.ct-search` | `certificate_transparency` | network | explicit cli command | local cli network | bounded passive | certificate search term | certificate transparency service | none | local output deliberate | local output | none | explicit action |
 | `command.cli.ct-intake` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.discover` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
-| `command.cli.discover-scan` | `lookup` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | bounded risk and acquisition input | explicit action |
+| `command.cli.discover-scan` | `lookup` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>dns question<br>whois query<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | bounded risk and acquisition input | explicit action |
 | `command.cli.posture` | `domain_posture` | network | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>dns question<br>mta sts policy request | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | none | explicit action |
 | `command.cli.http` | `website_probe` | network | explicit cli command | local cli network | bounded passive | normalised target<br>dns question<br>homepage request | dns resolver<br>target public service | none | local output deliberate | local output | none | explicit action |
 | `command.cli.tls` | `tls_intelligence` | network | explicit cli command | local cli network | bounded passive | normalised target<br>dns question<br>tls handshake | dns resolver<br>target public service | none | local output deliberate | local output | none | explicit action |
@@ -96,9 +96,11 @@ The public command catalogue keeps its version 1 offline/network label for all 4
 | `command.cli.page-compare` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.mail-review` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.mail-headers` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
+| `command.cli.intake` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.review-evidence` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.brief` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.case` | `analyst_cases` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
+| `command.cli.indicator-set` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.case-pack` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.domain-control` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.monitor-once` | `lookup` | network | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>public ip address<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | none | explicit action |
@@ -245,9 +247,11 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.page-compare` | none | bounded local input | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.mail-review` | none | bounded local input | none | bounded atomic | explicit per item | complete<br>partial | None |
 | `command.cli.mail-headers` | none | bounded local input | none | bounded atomic | explicit per item | complete<br>partial | None |
+| `command.cli.intake` | none | bounded local input | none | bounded atomic | explicit per item | complete<br>partial | None |
 | `command.cli.review-evidence` | none | bounded portable document | none | bounded atomic | explicit document | complete<br>partial<br>blocked | None |
 | `command.cli.brief` | none | bounded local input | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.case` | none | bounded local input | none | bounded atomic | all or nothing | complete | None |
+| `command.cli.indicator-set` | none | bounded portable document | none | bounded atomic | all or nothing | complete | None |
 | `command.cli.case-pack` | none | bounded portable document | none | bounded atomic | all or nothing | complete | None |
 | `command.cli.domain-control` | none | bounded portable document | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.monitor-once` | collector specific | collector specific | command bounded | queue stops admission | explicit per item | complete<br>partial | None |
@@ -350,7 +354,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 ### Owned-domain posture review
 
 - Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration.
-- Inherited DMARC and direct parent delegation require a separate opt-in: at most seven ancestor TXT questions, one parent NS discovery and A/AAAA discovery for at most two parent servers, followed by one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate.
+- Inherited DMARC and direct parent delegation require a separate opt-in: up to 32 additional TXT questions within ten seconds cover ancestor policies, reporting-destination boundaries and authorisation. One parent NS discovery and A/AAAA discovery for at most two parent servers precede one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate.
 
 ### Explicit DNSSEC validation
 
@@ -457,9 +461,11 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.page-compare` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.mail-review` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.mail-headers` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
+| `command.cli.intake` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.review-evidence` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.brief` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.case` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
+| `command.cli.indicator-set` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.case-pack` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.domain-control` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.monitor-once` | The one-shot monitor reads selected local control state and performs only the bounded scheduled review collection.<br>Its checkpoint and review evidence do not calculate Risk or Opportunity scores. |

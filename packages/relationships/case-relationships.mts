@@ -3,13 +3,11 @@
 // ownership, coordination, intent, or maliciousness conclusions. No network
 // request, aggregate score, or new persisted record is produced here.
 
-import {
-  type CaseEvidenceSnapshot,
-  MAX_CASES,
-  MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
-  normalizeDomain,
-  normalizeSnapshot,
-} from '../cases/case-model.mts';
+import type { CaseEvidenceSnapshot } from '../cases/case-model.mts';
+import { MAX_CASES, MAX_EVIDENCE_SNAPSHOTS_PER_CASE } from '../contracts/case-portability.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
+import { isNonPublicAddressRelationship, NON_PUBLIC_RELATIONSHIP_LIMITATION, FAVICON_RELATIONSHIP_DESCRIPTION } from '../comparison/relationship-provenance.mts';
+import { normalizeSnapshot } from '../cases/case-evidence-model.mts';
 import {
   INVESTIGATION_SCHEMA_VERSION_FIELDS,
   MAX_PROJECTION_LIMITATIONS,
@@ -97,8 +95,8 @@ const PROJECTION_RELATIONSHIP_TYPES = new Map([
   }],
   ['domain_related_by_favicon', {
     type: 'favicon',
-    label: 'Similar favicon',
-    description: 'An analyst-retained observation records an exact or bounded perceptual favicon comparison between these cases.',
+    label: 'Connected favicon matches',
+    description: FAVICON_RELATIONSHIP_DESCRIPTION,
   }],
   ['domain_loaded_official_asset', {
     type: 'official_asset',
@@ -707,16 +705,17 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
       || allClassifications.length > classifications.length
       || bucket.omittedLineagePaths > 0;
     if (groupTruncated) truncated = true;
+    const nonPublicAddress = isNonPublicAddressRelationship(bucket.type, bucket.value);
     return withLocalCommonality({
       type: bucket.type,
-      label: bucket.label,
+      label: nonPublicAddress ? 'Shared non-public DNS answer' : bucket.label,
       method: safeProjectionText(methods.join(' / '), 400),
       methods,
       classifications,
       value: bucket.value,
       cases: allCases.slice(0, MAX_CASES_PER_RELATIONSHIP),
       campaigns: allCampaigns.slice(0, MAX_RELATIONSHIP_SCOPE_OPTIONS),
-      description: bucket.description,
+      description: nonPublicAddress ? NON_PUBLIC_RELATIONSHIP_LIMITATION : bucket.description,
       sources: [...new Set(allObservations.map((item) => item.source))].sort(),
       scanDepths: [...new Set(allObservations.map((item) => item.scanDepth))].sort(),
       firstObservedAt: bucket.firstObservedAt,
@@ -727,7 +726,7 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
       omittedObservations: Math.max(0, allObservations.length - MAX_RELATIONSHIP_PROVENANCE_OBSERVATIONS),
       lineagePaths: allLineagePaths,
       omittedLineagePaths: bucket.omittedLineagePaths,
-      limitations: projectionLimitations(bucket.limitations),
+      limitations: projectionLimitations([...(nonPublicAddress ? [NON_PUBLIC_RELATIONSHIP_LIMITATION] : []), ...bucket.limitations]),
     }, workspaceCaseIds.size, allCases.length);
   }).sort((left, right) => (Number(order.get(left.type)) - Number(order.get(right.type)))
     || left.value.localeCompare(right.value)

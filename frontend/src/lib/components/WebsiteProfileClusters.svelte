@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { tick } from 'svelte';
   import Pagination from './Pagination.svelte';
   import CasePicker from './CasePicker.svelte';
@@ -87,14 +88,14 @@
           {#if cluster.contributingFields.length}
             <details class="contributions"><summary>{cluster.contributingFields.length} contributing field{cluster.contributingFields.length === 1 ? '' : 's'}</summary><ul>{#each cluster.contributingFields as field}<li><strong>{field.label} · +{field.weight}</strong><small>{field.detail}</small>{#if field.sharedValues.length}<code>{field.sharedValues.join(' · ')}</code>{/if}</li>{/each}</ul></details>
           {/if}
-          <small class="range">Saved relationship observed {new Date(cluster.firstObservedAt).toLocaleDateString()} to {new Date(cluster.lastObservedAt).toLocaleDateString()}</small>
+          <small class="range">Saved relationship observed {formatEvidenceDate(cluster.firstObservedAt)} to {formatEvidenceDate(cluster.lastObservedAt)}</small>
           <ul>
             {#each cluster.observations as observation}
               {@const incidents = casesForDomain(cases, observation.domain)}
               {@const selectedCase = selectedCases.get(observation.domain)}
               <li>
                 <a href={`/lookup?q=${encodeURIComponent(observation.domain)}`}>{observation.domain}</a>
-                <small>{observation.complete && !observation.truncated ? 'Complete saved evidence' : 'Partial saved evidence'} · {new Date(observation.firstObservedAt).toLocaleDateString()} to {new Date(observation.lastObservedAt).toLocaleDateString()}</small>
+                <small>{observation.complete && !observation.truncated ? 'Complete saved evidence' : 'Partial saved evidence'} · {formatEvidenceDate(observation.firstObservedAt)} to {formatEvidenceDate(observation.lastObservedAt)}</small>
                 {#if onpin}
                   {#if incidents.length > 1}<CasePicker id={`website-case-${cluster.id}-${observation.domain}`} records={incidents} selectedId={selectedCase?.id ?? ''} disabled={Boolean(pinning)} select={(id) => { caseSelections = new Map(caseSelections).set(observation.domain, id); }} />{/if}
                   <button class="btn small" type="button" disabled={Boolean(pinning) || (incidents.length > 1 && !selectedCase)} onclick={() => void pin(cluster, observation.domain)}>{pinning === `${cluster.id}:${observation.domain}` ? 'Recording…' : 'Record review lead'}</button>

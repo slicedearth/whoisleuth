@@ -1,9 +1,12 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import {
-    CASE_ACTION_EVENT_SOURCE_CLASSES, CASE_ACTION_STATES, CASE_ACTION_TYPES, CASE_PROVIDER_OUTCOMES,
-    type CaseRecord, type CaseActionRecord, type CaseActionState,
-  } from '$lib/cases';
+    CASE_ACTION_EVENT_SOURCE_CLASSES,
+    CASE_ACTION_STATES,
+    CASE_ACTION_TYPES,
+    CASE_PROVIDER_OUTCOMES,
+  } from '../../../../packages/cases/case-response-records.mts';
+  import type { CaseRecord, CaseActionRecord, CaseActionState } from '../cases.ts';
   import { isLegalCaseActionTransition, type CaseActionEventSourceClass } from '$lib/analysis/case-response-model.ts';
   import { isoFromUtcInput, utcInputFromIso, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
@@ -12,6 +15,7 @@
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   import CaseActionReceipt from './CaseActionReceipt.svelte';
+  import CaseRequestedEvidence from './CaseRequestedEvidence.svelte';
 
   let { record, mode, mutationBusy, persist, onadvanced }: {
     record: CaseRecord;
@@ -25,6 +29,7 @@
   $effect(() => { expanded = mode === 'quick'; });
 
   let receipt = $state<ReturnType<typeof CaseActionReceipt>>();
+  let requestedEvidence = $state<ReturnType<typeof CaseRequestedEvidence>>();
   let metadataExpanded = $state(false);
 
   async function reviewRecipient(actionId: string) {
@@ -41,8 +46,13 @@
   export async function selectReceipt(actionId: string): Promise<boolean> {
     return await receipt?.selectReceipt(actionId) ?? false;
   }
+  export async function selectEvidenceRequest(actionId: string, requestId: string): Promise<boolean> {
+    expanded = true;
+    await tick();
+    return await requestedEvidence?.prepareRequest(actionId, requestId) ?? false;
+  }
   const actionDraft = createCaseDraft(() => record.id, 'action-details', {
-    actionType: 'internal_review',
+    actionType: 'internal_review' as typeof CASE_ACTION_TYPES[number],
     actionRecipient: '',
     actionContactSource: 'analyst supplied',
     actionRouteObservedAt: '',
@@ -62,7 +72,7 @@
     transitionReference: '',
     transitionEvidencePinId: '',
     transitionLimitations: '',
-    transitionProviderOutcome: '',
+    transitionProviderOutcome: '' as '' | typeof CASE_PROVIDER_OUTCOMES[number],
     transitionOutcomeDetail: ''
   });
   const selectedAction = $derived(record.actions.find((action) => action.id === actionDraft.value.selectedActionId) ?? null);
@@ -255,6 +265,7 @@
           <small>Route observed {action.routeObservedAt ?? 'time unavailable'}</small>
           <small>Route review after {action.routeReviewAfter ?? 'not recorded'} · follow-up {action.followUpAt ?? 'not scheduled'}</small>
           {#if action.originActionId}<small>Originating action: {action.originActionId}</small>{/if}
+          {#if action.amendment}<small>Amends submitted packet SHA-256: {action.amendment.packetDigestSha256}</small>{/if}
           {#if action.reference}<p>Latest reference: {action.reference}</p>{/if}
           {#if action.providerOutcome}<p>Latest typed provider outcome: {action.providerOutcome.replaceAll('_', ' ')}{action.outcome ? ` · ${action.outcome}` : ''}</p>{:else if action.outcome}<p>Recorded legacy outcome detail: {action.outcome}</p>{/if}
           <ol class="transition-timeline" aria-label={`Transitions for ${action.recipient}`}>
@@ -286,6 +297,7 @@
     <summary>{mode === 'quick' ? 'Prepare and track response' : 'Track append-only response actions'}</summary>
     <div class="response-form">
       <CaseActionReceipt bind:this={receipt} {record} {mode} {mutationBusy} {persist} onreviewrecipient={reviewRecipient} metadata={receiptMetadata} />
+      <CaseRequestedEvidence bind:this={requestedEvidence} {record} {mutationBusy} {persist} onamendment={async id => { await selectReceipt(id); await reviewRecipient(id); }} />
       {#if mode === 'advanced'}
         <CaseDraftRecovery draft={transitionDraft} />
         {#if record.actions.length}<label class="field">Action for transition<select value={transitionDraft.value.transitionActionId} onchange={async (event) => { const select = event.currentTarget; await selectTransitionAction(select.value); select.value = transitionDraft.value.transitionActionId; }}><option value="">Select an action</option>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>{/if}

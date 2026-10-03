@@ -11,8 +11,8 @@ function field<T extends { label: string }>(result: { fields: T[] }, label: stri
 describe('compareRegistrySources', () => {
   test('treats harmless registrar punctuation and casing differences as equivalent', () => {
     const result = comparison.compareRegistrySources(
-      { registrar: { name: 'GoDaddy.com, LLC' } },
-      { registrar: 'GODADDY.COM LLC' }
+      { registrar: { name: 'Example Registrar, LLC' } },
+      { registrar: 'EXAMPLE REGISTRAR LLC' }
     );
     assert.equal(field(result, 'Registrar').status, 'equivalent');
   });

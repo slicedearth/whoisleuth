@@ -30,11 +30,28 @@ function readyProvider(overrides: Partial<BrowserLocalDataProviderBoundary> = {}
       _definition: unknown,
       updater: BrowserLocalDataUpdater<Document, Result>,
     ) => (await updater([] as Document)).result,
+    updateMany: async (definitions, updater) => updater(new Map(definitions.map(definition => [definition.id, definition.empty()]))).result,
     ...overrides,
   } as BrowserLocalDataProviderBoundary;
 }
 
 describe('browser-local data service', () => {
+  test('typed collection updates use one transaction and reapply changes to each fresh snapshot', async () => {
+    const service = createBrowserLocalDataService({
+      loadCollections: async () => [SHORTLIST_COLLECTION],
+      createProvider: () => readyProvider({ updateMany: async (definitions, updater) => {
+        assert.deepEqual(definitions, [SHORTLIST_COLLECTION]);
+        const first = updater(new Map([['shortlist', []]]));
+        assert.deepEqual(first.documents.get('shortlist'), []);
+        const current = SHORTLIST_COLLECTION.normalize([{ domain: 'example.test', status: 'unreviewed' }]);
+        const second = updater(new Map([['shortlist', current]]));
+        assert.deepEqual(second.documents.get('shortlist'), current);
+        return second.result;
+      } }),
+    });
+    const count = await service.updateMany(['shortlist'], documents => ({ documents, result: documents.shortlist.length }));
+    assert.equal(count, 1);
+  });
   test('awaits one asynchronous provider selection and never dispatches an early read', async () => {
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });

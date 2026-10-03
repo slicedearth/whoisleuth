@@ -2,6 +2,7 @@ import { CliUsageError } from './errors.mts';
 import { buildCliLookupDiff } from './lookup-diff.mts';
 import { parseSavedLookupDocument, type SavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 import { compareObservationContexts } from '../packages/comparison/capture-context.mts';
+import { safeTerminalValue } from './formatters/terminal-shared.mts';
 
 const CLI_LOOKUP_RECONCILIATION_SCHEMA = 'whoisleuth.cli.lookup-reconciliation';
 const CLI_LOOKUP_RECONCILIATION_VERSION = 1;
@@ -180,7 +181,7 @@ function formatCliLookupReconciliation(document: CliLookupReconciliationDocument
   const context = compareObservationContexts(document.observations.map(observation => ({ ...observation, observedAt: observation.generatedAt })));
   const output = [
     'Lookup observation reconciliation',
-    `Domain             ${document.domain}`,
+    `Domain             ${safeTerminalValue(document.domain)}`,
     `Observations       ${document.summary.observationCount}`,
     `Declared labels    ${context.labels}; collection independence not verified`,
     `Capture time span  ${context.time.spanMilliseconds === null ? 'unknown' : `${context.time.spanMilliseconds / 1000} seconds`}`,
@@ -188,17 +189,17 @@ function formatCliLookupReconciliation(document: CliLookupReconciliationDocument
     `Disagreement       ${document.summary.disagreement}`,
     `Non-comparable     ${document.summary.nonComparable}`,
     '',
-    ...document.observations.map((observation, index) => `Observation ${index + 1}: ${observation.generatedAt} · ${observation.mode} · observer ${observation.observerLabel ?? 'not declared'} · vantage ${observation.vantageLabel ?? 'not declared'}`),
+    ...document.observations.map((observation, index) => `Observation ${index + 1}: ${safeTerminalValue(observation.generatedAt)} · ${safeTerminalValue(observation.mode)} · observer ${safeTerminalValue(observation.observerLabel, 'not declared')} · vantage ${safeTerminalValue(observation.vantageLabel, 'not declared')}`),
     '',
   ];
   for (const field of document.fields.filter((candidate) => candidate.state !== 'agreement')) {
-    output.push(`${field.label} [${field.state.replaceAll('_', ' ')}]`);
+    output.push(`${safeTerminalValue(field.label)} [${safeTerminalValue(field.state).replaceAll('_', ' ')}]`);
     for (const value of field.values) {
-      output.push(`  Observation ${value.observation + 1}: ${value.value} (${value.sourceState.replaceAll('_', ' ')})`);
+      output.push(`  Observation ${value.observation + 1}: ${safeTerminalValue(value.value)} (${safeTerminalValue(value.sourceState).replaceAll('_', ' ')})`);
     }
   }
   output.push('', 'Limitations:');
-  for (const limitation of document.limitations) output.push(`  - ${limitation}`);
+  for (const limitation of document.limitations) output.push(`  - ${safeTerminalValue(limitation)}`);
   output.push('  - These selected observations do not establish worldwide availability, removal or takedown.');
   return `${output.join('\n')}\n`;
 }

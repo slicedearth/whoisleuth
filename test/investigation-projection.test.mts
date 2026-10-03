@@ -282,6 +282,19 @@ describe('typed local investigation projection', () => {
     assert.ok(observations.some((item) => item.complete === false));
   });
 
+  test('requires syntactically valid IP identities while retaining unverified raw claims', () => {
+    for (const [value, expected] of [['abc:def', null], ['2001:db8:0:0:0:0:0:1', '2001:db8::1'], ['192.0.2.44', '192.0.2.44']] as const) {
+      const evidencePins = [{ id: 'pin-ip', field: 'AAAA', category: 'dns', label: 'External DNS finding', value,
+        source: 'Imported observations', sourceSchema: { collection: 'external_observations', schema: 'whoisleuth.dns-observation-rows', version: 1 },
+        observedAt: EARLY, completeness: 'complete', limitations: ['Not independently verified.'], createdAt: LATE }];
+      const result = buildInvestigationProjection(currentInput({ cases: {
+        version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-ip', 'observed.invalid', [], { evidencePins })],
+      } }), { generatedAt: LATE });
+      assert.deepEqual(result.entities.filter(item => item.type === 'ip_address').map(item => item.canonical), expected ? [expected] : []);
+      assert.equal(result.relationships.filter(item => item.type === 'domain_resolved_to_ip').length, expected ? 1 : 0);
+    }
+  });
+
   test('projects brands, official domains, favicon identity, campaigns, and derived case membership', () => {
     const profile = {
       id: 'brand-a',
@@ -372,8 +385,8 @@ describe('typed local investigation projection', () => {
       type: 'ip_address',
       label: 'Shared IP address',
       method: 'Exact normalized address',
-      normalizedValue: '192.0.2.20',
-      value: '192.0.2.20',
+      normalizedValue: '11.12.13.20',
+      value: '11.12.13.20',
       domains: ['first.invalid', 'second.invalid'],
       description: 'Bounded retained pivot.',
       sourceEvidence: ['first.invalid', 'second.invalid'].map((domain) => ({ domain, source: 'dns', status: 'success', observedAt: EARLY, complete: true, truncated: false })),
@@ -396,7 +409,7 @@ describe('typed local investigation projection', () => {
 
     assert.ok(retainedObservation);
     assert.equal(result.sources.relationshipObservations.state, 'supported');
-    assert.equal(entity(result, 'ip_address').properties.ipAddress, '192.0.2.20');
+    assert.equal(entity(result, 'ip_address').properties.ipAddress, '11.12.13.20');
     assert.equal(entity(result, 'ip_address').properties.observationId, retained.id);
     assert.equal(retainedObservation.store, 'relationshipObservations');
     assert.equal(retainedObservation.source, 'dns');

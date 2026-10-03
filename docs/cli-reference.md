@@ -10,6 +10,11 @@ This page records the common interfaces and the boundaries that matter across
 commands. The generated [privacy/data-flow catalogue](https://github.com/slicedearth/whoisleuth/blob/main/docs/privacy-data-flow-catalogue.md)
 contains the exhaustive recipient, retention and export metadata.
 
+For an explicitly selected local IP-location database, see the
+[MMDB query and compatibility guide](cli.md#local-ip-location-database-review).
+Current reviews retain exact-byte identity and intrinsic metadata, and require
+an analyst-justified freshness policy. No database is downloaded or updated.
+
 ## Installation
 
 Use the [installation guide](cli.md#installation) for runtime requirements,
@@ -60,6 +65,26 @@ Optional browser providers are not implicit CLI actions.
 
 The [message-header review](cli.md#message-header-review) is offline and reports
 publisher claims, not independent DNS or cryptographic validation.
+
+For copied-content or credential-abuse review, keep the supplied reference,
+candidate, form destination and deliberately observed navigation separately
+attributed. A similar page without a logo or brand name can still merit manual
+evidence review; correspondence does not establish authorship, rights authority
+or maliciousness. Missing optional capture or comparison evidence does not
+prevent ordinary Case pins and conclusions. Installed command help remains the
+authority for offline file inputs and explicit collection plans.
+
+The [reporting guide](https://www.whoisleuth.com/resources/reporting-and-takedown-guidance)
+uses the same reviewed official-route catalogue as the Console for social
+content, storefronts, app listings, hosted files/forms and advertising. Verify
+the exact object, current route, reporter authority and disclosure before any
+manual submission. Fraud, order complaints and rights notices are different
+processes; search or app delisting is not source-content removal. Formal domain
+disputes and copyright procedures have their own criteria, remedies and
+jurisdiction-specific rules, not a universal waiting period. CLI preparation
+does not submit a report or make a legal declaration. Preserve original delivery
+references when preparing additional evidence, and recheck each response scope
+independently rather than treating a closed ticket as remediation.
 
 `dnssec-validate` and `mail-transport` are isolated authorised actions. Both
 require a selected literal public resolver, a local trust-anchor document and
@@ -194,6 +219,8 @@ own retention policy. No automatic key discovery, key storage or trust refresh o
   evidence. They do not tune the running model, change infrastructure or turn an
   analyst label into observed truth.
 - `workflow-plan` lists fixed installed recipes without executing them.
+  `workflow-run --preview` validates a selected checkpoint and explains remaining
+  inputs and approvals offline, without running steps or rewriting the checkpoint.
   `workflow-run` executes only installed steps, requires approval for network
   work and pauses at unresolved analyst selections. Repeat
   `--select <step-id>=<path-or-value>` for remaining placeholders in order, or bind

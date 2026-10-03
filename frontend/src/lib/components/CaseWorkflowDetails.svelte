@@ -6,19 +6,22 @@
   import {
     CASE_TYPES,
     MAX_CASE_INCIDENT_TARGETS,
-    buildCaseTypeEvidenceReadiness,
-    caseIncidentTargetAssertion,
+    MAX_CASE_INCIDENT_TARGET_URL_LENGTH,
+    normalizeCaseIncidentTargetUrl,
     caseIncidentTargets,
     caseNumber,
-    caseTagsWithTypes,
     caseTypeIds,
     formattedCaseNumber,
-    editCase,
-    type CaseRecord,
-  } from '$lib/cases';
+    type CaseTypeId,
+  } from '../../../../packages/cases/case-workflow-metadata.mts';
+  import { buildCaseTypeEvidenceReadiness } from '../../../../packages/cases/case-type-evidence-readiness.mts';
+  import { editCase, type CaseRecord } from '../cases.ts';
+  import CaseIncidentCoverage from './CaseIncidentCoverage.svelte';
   import {
     resolvePlatformReportingRoutes,
     platformReportingCatalogueHealth,
+    INCIDENT_PLATFORMS,
+    type IncidentPlatformId,
     type PlatformReportingResolution,
     type PlatformReportingRoute,
   } from '../../../../packages/cases/platform-reporting-routes.mts';
@@ -42,12 +45,15 @@
     resolution: PlatformReportingResolution;
   };
 
-  let selectedTypes = $state<string[]>([]);
+  let selectedTypes = $state<CaseTypeId[]>([]);
+  let expectedTypes = $state<CaseTypeId[]>([]);
   let typesDirty = $state(false);
   let typesOpen = $state(false);
   let typesOpenRecordId = $state('');
   let targetUrl = $state('');
   let busy = $state(false);
+  let manualPlatforms = $state<Record<string, IncidentPlatformId | ''>>({});
+  let platformCaseId = $state('');
   const typeDraft = createDraftRevision(() => record.id);
   const targetDraft = createDraftRevision(() => record.id);
   const completeCaseNumber = $derived(caseNumber(record.id));
@@ -65,10 +71,10 @@
   const routeGroups = $derived.by<RouteGroup[]>(() => {
     const groups = new Map<string, RouteGroup>();
     for (const target of incidentTargets) {
-      const resolution = resolvePlatformReportingRoutes(target.url, selectedTypes, new Date($reviewClock));
+      const resolution = resolvePlatformReportingRoutes(target.url, selectedTypes, new Date($reviewClock), manualPlatforms[target.id] || undefined);
       let hostname = 'other host';
       try { hostname = new URL(target.url).hostname; } catch { /* already validated */ }
-      const key = resolution.platform?.id ?? `unsupported:${hostname}`;
+      const key = JSON.stringify([resolution.platform?.id ?? `unsupported:${hostname}`, Boolean(manualPlatforms[target.id])]);
       const existing = groups.get(key);
       if (existing) {
         existing.targets.push(target.url);
@@ -85,15 +91,19 @@
   });
 
   $effect(() => {
+    if (platformCaseId !== record.id) { manualPlatforms = {}; platformCaseId = record.id; }
     record.updatedAt;
     if (typesOpenRecordId !== record.id) {
-      typesOpen = caseTypeIds(record.tags).length === 0;
+      typesOpen = caseTypeIds(record).length === 0;
       typesOpenRecordId = record.id;
     }
-    if (!typesDirty && !busy) selectedTypes = caseTypeIds(record.tags);
+    if (!typesDirty && !busy) {
+      selectedTypes = caseTypeIds(record);
+      expectedTypes = caseTypeIds(record);
+    }
   });
 
-  function setType(id: string, checked: boolean) {
+  function setType(id: CaseTypeId, checked: boolean) {
     typesDirty = true;
     selectedTypes = checked
       ? [...selectedTypes, id]
@@ -140,14 +150,7 @@
 
   async function saveTypes() {
     const unchanged = typeDraft.capture();
-    let tags: string[];
-    try {
-      tags = caseTagsWithTypes(record.tags, selectedTypes);
-    } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Could not prepare the selected Case types.');
-      return;
-    }
-    if (!await persist({ tags }, `Saved Case types for ${record.domain}.`) || !unchanged()) return;
+    if (!await persist({ caseTypes: selectedTypes, expectedCaseTypes: expectedTypes }, `Saved Case types for ${record.domain}.`) || !unchanged()) return;
     typesDirty = false;
     typesOpen = false;
   }
@@ -158,24 +161,22 @@
       onmessage(`A Case can retain at most ${MAX_CASE_INCIDENT_TARGETS} active incident links. Resolve one before adding another.`);
       return;
     }
-    let assertion: ReturnType<typeof caseIncidentTargetAssertion>;
-    try {
-      assertion = caseIncidentTargetAssertion(targetUrl);
-    } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Enter a valid exact incident URL.');
+    const url = normalizeCaseIncidentTargetUrl(targetUrl);
+    if (!url) {
+      onmessage('Enter an exact HTTP(S) incident URL without embedded credentials.');
       return;
     }
-    if (incidentTargets.some((target) => target.url === assertion.statement.slice('Incident target URL: '.length))) {
+    if (incidentTargets.some((target) => target.url === url)) {
       onmessage('That exact incident URL is already active in this Case.');
       return;
     }
-    if (!await persist({ assertion }, `Added an exact incident target to ${record.domain}.`) || !unchanged()) return;
+    if (!await persist({ incidentTarget: url }, `Added an exact incident target to ${record.domain}.`) || !unchanged()) return;
     targetUrl = '';
   }
 
-  async function resolveIncidentTarget(assertionId: string) {
+  async function resolveIncidentTarget(id: string) {
     await persist(
-      { assertionUpdate: { id: assertionId, state: 'resolved' } },
+      { incidentTargetResolution: id },
       `Removed the incident target from the active reporting scope for ${record.domain}; its Case history remains retained.`,
       `incident-targets-${record.id}`,
     );
@@ -266,13 +267,13 @@
   <section id={`incident-targets-${record.id}`} class="incident-targets" tabindex="-1" aria-labelledby={`incident-targets-title-${record.id}`}>
     <div class="section-heading"><div><h5 id={`incident-targets-title-${record.id}`}>Incident links</h5><p>Retain exact social, platform or web content links that belong in this Case.</p></div><span>{incidentTargets.length} active{resolvedTargetCount ? ` · ${resolvedTargetCount} resolved` : ''}</span></div>
     <form class="target-form" oninput={targetDraft.changed} onchange={targetDraft.changed} onsubmit={(event) => { event.preventDefault(); void addIncidentTarget(); }}>
-      <label class="field">Exact HTTP(S) URL <small>Do not include credentials or private access tokens</small><input type="url" bind:value={targetUrl} maxlength="1979" placeholder="https://social.example/post/123" required></label>
+      <label class="field">Exact HTTP(S) URL <small>Do not include credentials or private access tokens</small><input type="url" bind:value={targetUrl} maxlength={MAX_CASE_INCIDENT_TARGET_URL_LENGTH} placeholder="https://social.example/post/123" required></label>
       <button class="btn" type="submit" disabled={busy || !targetUrl.trim() || incidentTargets.length >= MAX_CASE_INCIDENT_TARGETS}>Add incident link</button>
     </form>
     {#if incidentTargets.length}
       <ol class="target-list">
         {#each incidentTargets as target}
-          <li><a href={target.url} target="_blank" rel="noopener noreferrer">{target.url}<span class="sr-only"> (opens in a new tab)</span></a><button class="btn small" type="button" disabled={busy} onclick={() => void resolveIncidentTarget(target.assertionId)}>Resolve</button></li>
+          <li><div class="target-context"><a href={target.url} target="_blank" rel="noopener noreferrer">{target.url}<span class="sr-only"> (opens in a new tab)</span></a><label>Reporting platform for this incident<select aria-label={`Reporting platform for ${target.url}`} value={manualPlatforms[target.id] ?? ''} onchange={event => manualPlatforms[target.id] = event.currentTarget.value as IncidentPlatformId | ''}><option value="">Match the exact hostname</option>{#each INCIDENT_PLATFORMS as platform}<option value={platform.id}>{platform.label} · analyst-selected</option>{/each}</select></label></div><button class="btn small" type="button" disabled={busy} onclick={() => void resolveIncidentTarget(target.id)}>Resolve</button></li>
         {/each}
       </ol>
     {:else}
@@ -280,10 +281,12 @@
     {/if}
   </section>
 
+  {#key record.id}<CaseIncidentCoverage {record} />{/key}
+
   {#if routeGroups.length}
     <section class="reporting-routes" aria-labelledby={`reporting-routes-title-${record.id}`}>
-      <div class="section-heading"><div><h5 id={`reporting-routes-title-${record.id}`}>Official platform routes</h5><p>Matched from exact incident-link hostnames and the selected Case types.</p></div></div>
-      <p class="empty">Retained catalogue: {catalogueHealth.state === 'limited' ? 'review due soon' : catalogueHealth.state} · reviewed {catalogueHealth.reviewedAt.slice(0, 10)} · review after {catalogueHealth.reviewAfter.slice(0, 10)}. No live route check is performed.</p>
+      <div class="section-heading"><div><h5 id={`reporting-routes-title-${record.id}`}>Official platform routes</h5><p>Matched from incident hostnames or your explicit platform choice and the selected Case types. A manual choice is not provider evidence, is not saved and does not contact anyone.</p></div></div>
+      <p class="empty">Retained catalogue: {catalogueHealth.state} · reviewed {catalogueHealth.reviewedAt.slice(0, 10)} to {catalogueHealth.latestReviewedAt.slice(0, 10)} · earliest review deadline {catalogueHealth.reviewAfter.slice(0, 10)}. {catalogueHealth.currentRouteCount} within review windows · {catalogueHealth.staleRouteCount} stale · {catalogueHealth.unavailableRouteCount} not yet reviewable. No live route check is performed.</p>
       <div class="route-groups">
         {#each routeGroups as group (JSON.stringify([record.id, group.key, group.targets]))}
           <article>
@@ -312,6 +315,7 @@
 
 <style>
   .workflow-details{display:grid;gap:13px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .target-context{display:grid;gap:8px;min-width:0;flex:1}.target-context label{display:grid;gap:4px;font-size:var(--text-2xs)}.target-context select{max-width:100%;min-width:0;min-height:44px}
   .route-checklist{display:grid;min-width:0;gap:7px;margin:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.route-checklist legend{padding:0 5px;font-weight:650}.route-checklist label{display:flex;align-items:start;gap:7px;cursor:pointer}.route-checklist input{width:auto;flex:none;margin-top:3px}.route-checklist span{min-width:0;overflow-wrap:anywhere}
   .workflow-details>header,.section-heading,.route-groups article>header,.route>div:first-child{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px}.workflow-details h4,.workflow-details h5{margin:2px 0 0;font:700 var(--text-sm) var(--mono)}
   .case-number{display:grid;grid-template-columns:auto auto;align-items:center;gap:3px 8px;max-width:100%}.case-number>span{grid-column:1/-1;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}.case-number code{max-width:min(100%,430px);padding:5px 7px;background:var(--panel-raised);font-size:var(--text-2xs);overflow-wrap:anywhere;white-space:normal}.case-number button{grid-column:2;grid-row:2}

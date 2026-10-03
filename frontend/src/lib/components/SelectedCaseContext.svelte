@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { onMount, tick } from 'svelte';
   import { page } from '$app/state';
-  import { getCase, dispositionLabel, statusLabel } from '$lib/cases';
+  import { getCase } from '../cases.ts';
+  import { dispositionLabel, statusLabel } from '../../../../packages/cases/case-record-decisions.mts';
   import { formattedCaseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { caseWorkspaceContext } from '$lib/analysis/case-workspace-context';
   import { selectConsoleCase } from '$lib/console-workflow-state';
@@ -25,7 +27,9 @@
     publish: (next) => { contextState = next; },
   });
 
-  function date(value: string | null) { return value ? new Date(value).toLocaleString() : 'Observation time unavailable'; }
+  function date(value: string | null): string {
+    return formatEvidenceDate(value, 'Observation time unavailable');
+  }
   function requestRefresh() {
     if (insideCaseEditor || document.visibilityState === 'hidden') return;
     void reader.refresh();
@@ -85,7 +89,7 @@
           </section>
           <section aria-label="Case evidence pins">
             <h2>Selected evidence ({record.evidencePins.length} {record.evidencePins.length === 1 ? 'pin' : 'pins'})</h2>
-            {#if record.evidencePins.length}<ul>{#each record.evidencePins as pin}<li><CaseEvidenceFact {pin} /></li>{/each}</ul>{:else}<p>No evidence pins retained.</p>{/if}
+            {#if record.evidencePins.length}<ul>{#each record.evidencePins as pin}<li><CaseEvidenceFact {pin} copyable /></li>{/each}</ul>{:else}<p>No evidence pins retained.</p>{/if}
           </section>
           <section aria-label="Case report history">
             <h2>Response history ({record.actions.length} {record.actions.length === 1 ? 'action' : 'actions'})</h2>

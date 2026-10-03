@@ -95,6 +95,7 @@ export function buildLookupObservationProjection(
     const id = String(identity.id || '').trim();
     if (id) evidenceObservedAtById[`external-${id}`] = rec(provider.observation).observedAt;
   }
+  if (lookupView.threatIntelligenceWithheld.length) evidenceObservedAtById['external-withheld'] = null;
   return { lookupObservedAt, evidenceObservedAtById };
 }
 
@@ -168,42 +169,40 @@ export function buildLookupTaskEvidence(
   return evidence;
 }
 
-export function hasLookupWebEvidence(
-  result: LookupHttpResponse | null,
-  lookupView: LookupViewModel,
-  profile: BrandProfile | null,
+/** Source presence is shared by the family gate and its individual surfaces.
+ * It deliberately includes partial/unsupported records, not just successful ones. */
+export function lookupWebEvidenceSources(view: LookupViewModel) {
+  return {
+    network: view.observedNetworkContext.contextVersion === 1,
+    reverseDns: view.reverseDns.source === 'reverse_dns',
+    dns: view.dnsEvidence.source === 'dns',
+    http: view.httpEvidence.source === 'http',
+    tls: view.tlsEvidence.source === 'tls',
+    sslbl: view.sslbl.sslblVersion === 1,
+    page: view.pageIdentity.source === 'html',
+    credentials: view.credentialSurfaceProfile.source === 'html',
+    structuredIdentity: view.structuredDataIdentity.source === 'html',
+    technology: view.technologyProfile.source === 'derived',
+    pageRole: view.pageRoleProfile.source === 'derived',
+    clientBehaviour: view.clientBehaviorProfile.source === 'derived',
+    posture: view.securityPosture.source === 'derived',
+    disclosure: view.securityTxt.securityTxtVersion === 1,
+  };
+}
+
+export function lookupPageComparisonState(
+  result: Pick<LookupHttpResponse, 'type'> | null,
+  profile: Pick<BrandProfile, 'pageBaseline'> | null,
   pageComparison: unknown,
+): 'available' | 'unavailable' | 'hidden' {
+  if (pageComparison) return 'available';
+  return profile?.pageBaseline && result?.type === 'domain' ? 'unavailable' : 'hidden';
+}
+
+export function hasLookupWebEvidence(
+  lookupView: LookupViewModel,
+  pageComparisonState: ReturnType<typeof lookupPageComparisonState>,
 ): boolean {
-  const {
-    observedNetworkContext,
-    reverseDns,
-    dnsEvidence,
-    httpEvidence,
-    tlsEvidence,
-    sslbl,
-    pageIdentity,
-    credentialSurfaceProfile,
-    structuredDataIdentity,
-    technologyProfile,
-    pageRoleProfile,
-    clientBehaviorProfile,
-    securityPosture,
-    securityTxt,
-  } = lookupView;
-  return observedNetworkContext.contextVersion === 1
-    || reverseDns.source === 'reverse_dns'
-    || dnsEvidence.source === 'dns'
-    || httpEvidence.source === 'http'
-    || tlsEvidence.source === 'tls'
-    || sslbl.sslblVersion === 1
-    || pageIdentity.source === 'html'
-    || credentialSurfaceProfile.source === 'html'
-    || structuredDataIdentity.source === 'html'
-    || technologyProfile.source === 'derived'
-    || pageRoleProfile.source === 'derived'
-    || clientBehaviorProfile.source === 'derived'
-    || securityPosture.source === 'derived'
-    || securityTxt.securityTxtVersion === 1
-    || Boolean(pageComparison)
-    || Boolean(profile?.pageBaseline && result?.type === 'domain');
+  return Object.values(lookupWebEvidenceSources(lookupView)).some(Boolean)
+    || pageComparisonState !== 'hidden';
 }

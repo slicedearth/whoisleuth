@@ -1,5 +1,5 @@
 import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from '../evidence/artifact-integrity.mts';
-import { boundedJsonLimitsForBytes, parseBoundedJson } from '../../lib/bounded-json.mts';
+import { boundedJsonLimitsForBytes, parseBoundedJson } from '../analysis/bounded-json.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { MAIL_REPORT_SCHEMA, MAIL_REPORT_VERSION } from '../contracts/analyst-interchange.mts';
 import { MAX_PROFILE_VALUES, MAX_PROFILE_VALUE_INPUTS } from '../contracts/workspace-portability.mts';

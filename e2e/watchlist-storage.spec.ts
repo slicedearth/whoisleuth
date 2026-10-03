@@ -1,6 +1,7 @@
 import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
-import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, readBrowserLocalCollection } from './helpers';
+import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalCollectionReadAfterWrite, readBrowserLocalCollection } from './helpers';
+import { appendWatchlistScan } from '../packages/workspace/watchlist-history.mts';
 
 const WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
 const NOW = '2026-07-14T08:00:00.000Z';
@@ -20,6 +21,100 @@ async function seed(page: import('@playwright/test').Page, value: unknown) {
   await page.goto('/monitor');
   await openConsoleView(page, 'watchlists');
 }
+
+test('incomplete web collection is visible while a usable Watchlist baseline survives reload', async ({ page }) => {
+  const complete = { domain: 'quality.invalid', availability: 'registered', scanDepth: 'deep', pageTitle: 'Earlier page',
+    hasPasswordField: true, riskScore: 80, riskModelVersion: 8, webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' } };
+  const first = appendWatchlistScan(null, [complete], { checkedAt: '2026-07-13T08:00:00.000Z', mode: 'deep' }).entry;
+  const latest = appendWatchlistScan(first, [{ ...complete, hasPasswordField: false, riskScore: 10,
+    webCollectionQuality: { version: 1, page: 'unavailable', favicon: 'unknown', combined: 'partial' } }], { checkedAt: NOW, mode: 'deep' }).entry;
+  await seed(page, { Quality: latest });
+  await page.getByRole('row', { name: /Quality/ }).getByRole('button', { name: 'History', exact: true }).click();
+  await expect(page.locator('.events article').first()).toContainText('Web comparison was limited for 1 domain');
+  await expect(page.locator('.events article').first().locator('li')).toHaveCount(0);
+  await page.getByLabel('History focus', { exact: true }).selectOption('quality.invalid');
+  await expect(page.locator('.history-summary')).toContainText('Page: unavailable · Favicon: unknown');
+  const stored = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
+  expect(stored.records[0]!.value.baseline[0]!.riskScore).toBe(80);
+  expect(stored.records[0]!.value.results[0]!.riskScore).toBe(10);
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+});
+
+test('unknown Watchlist times remain visible and portable without invented dates', async ({ page }) => {
+  await seed(page, { Undated: { ...entry('undated.invalid'), updatedAt: null, history: [{
+    checkedAt: null, mode: 'saved', resultCount: 1, conclusiveCount: 1, changeCount: 1, omittedChanges: 0,
+    changes: [{ domain: 'undated.invalid', field: 'nameservers', before: ['ns1.example.test'],
+      after: ['ns2.example.test'], kind: 'infrastructure_changed', tone: 'warn' }],
+  }] } });
+  const row = page.getByRole('row', { name: /Undated/ });
+  await expect(row).toContainText('Time unknown');
+  await row.getByRole('button', { name: 'History', exact: true }).click();
+  await page.getByLabel('History focus', { exact: true }).selectOption('undated.invalid');
+  await expect(page.locator('.history')).toContainText('cannot be placed on the dated chart');
+  await expect(page.locator('.domain-events')).toContainText('Time unknown');
+  await expect(page.locator('.domain-events')).not.toContainText('1970');
+  const stored = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
+  expect(stored.records[0]!.value.updatedAt).toBeNull();
+  expect(stored.records[0]!.value.history[0]!.checkedAt).toBeNull();
+  const downloadEvent = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export JSON', exact: true }).click();
+  const download = await downloadEvent;
+  const stream = await download.createReadStream();
+  if (!stream) throw new Error('Watchlist export stream is unavailable.');
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  const exported = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  expect(exported.version).toBe(4);
+  expect(exported.watchlists.Undated.history[0].checkedAt).toBeNull();
+  for (const theme of ['dark', 'light']) for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
+    await expect(page.locator('.domain-events')).toContainText('Time unknown');
+    await expect(page.locator('.history-summary')).toContainText('Times unknown');
+    await expectNoHorizontalOverflow(page);
+    if (width === 320) {
+      const table = page.getByRole('region', { name: 'Saved watchlists', exact: true });
+      await table.focus();
+      await page.keyboard.press('ArrowRight');
+      await expect.poll(() => table.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+      await row.getByRole('button', { name: 'History', exact: true }).focus();
+      await expect(row.getByRole('button', { name: 'History', exact: true })).toBeInViewport();
+      await table.evaluate(element => element.scrollLeft = 0);
+    }
+    if (process.env.WHOISLEUTH_E2E_VISUAL_EVIDENCE === '1') {
+      await test.info().attach(`watchlist-unknown-${theme}-${width}`, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+    }
+  }
+});
+
+for (const all of [false, true]) test(`a committed watchlist ${all ? 'clear' : 'deletion'} remains visible when rereading fails`, async ({ page }) => {
+  await seed(page, { Priority: entry('priority.invalid'), Other: entry('other.invalid') });
+  const before = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 2 });
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'watchlists');
+  page.once('dialog', dialog => dialog.accept());
+  await (all ? page.getByRole('button', { name: 'Clear all', exact: true }) : page.getByRole('row', { name: /Priority/ }).getByRole('button', { name: 'Delete', exact: true })).click();
+  const result = page.getByRole('status').filter({ hasText: all ? 'Cleared all watchlists.' : 'Deleted "Priority".' });
+  await expect(result).toContainText('committed');
+  await expect(page.getByRole('row', { name: /Priority/ })).toHaveCount(0);
+  await expect(result).not.toContainText('Could not');
+  const after = await readBrowserLocalCollection(page, 'watchlists', { minimumRevision: before.manifest.revision + 1 });
+  expect(after.records.map(record => record.id)).toEqual(all ? [] : ['Other']);
+});
+
+test('history distinguishes omitted changes from a completed check with no changes', async ({ page }) => {
+  await seed(page, { Priority: { ...entry('priority.invalid'), history: [
+    { checkedAt: NOW, mode: 'fast', resultCount: 1, conclusiveCount: 1, changeCount: 0, omittedChanges: 3, changes: [] },
+    { checkedAt: '2026-07-13T08:00:00.000Z', mode: 'fast', resultCount: 1, conclusiveCount: 1, changeCount: 0, omittedChanges: 0, changes: [] },
+  ] } });
+  await page.getByRole('row', { name: /Priority/ }).getByRole('button', { name: 'History', exact: true }).click();
+  const events = page.locator('.history .events article');
+  await expect(events).toHaveCount(2);
+  const omitted = events.filter({ hasText: '3 change details were omitted' });
+  await expect(omitted).toHaveCount(1);
+  await expect(omitted).not.toContainText('No comparable material changes');
+  await expect(events.filter({ hasText: 'No comparable material changes' })).toHaveCount(1);
+});
 
 test('a future watchlist schema is never overwritten by an older app', async ({ page }) => {
   const future = { schema: 'whoisleuth.watchlists', version: 99, watchlists: { Future: entry('future.invalid') }, futureMetadata: { retain: true } };
@@ -67,8 +162,8 @@ test('watchlist history filters material changes and hands retained domains back
 
   const activity = page.getByRole('region', { name: 'Watchlist activity' });
   await expect(activity).toBeVisible();
-  await expect(activity.getByRole('img', { name: /2 retained watchlist checks with 1 material changes from 2026-06-17 through 2026-07-14, grouped by UTC calendar day/u })).toBeVisible();
-  await expect(activity).toContainText('Rows are UTC weekdays and columns are consecutive seven-day blocks');
+  await expect(activity.getByRole('img', { name: /2 retained watchlist checks with 1 material change from 2026-06-17 through 2026-07-14, grouped by UTC calendar day/u })).toBeVisible();
+  await expect(activity).toContainText('Each column covers seven days; dates use UTC.');
   await expect(activity.locator('.day-label')).toHaveCount(7);
   await expect(activity.locator('.week-label')).toHaveCount(4);
   await expect(activity.locator('g[data-state="changed"]')).toHaveCount(1);

@@ -11,6 +11,7 @@ import type { WhoisHandlerDependencies } from '../netlify/functions/whois.mts';
 import type { NetlifyFunctionEvent } from '../lib/netlify-function-types.mts';
 import { requiredValue } from './value-assertions.mts';
 import { eventFixtureForFetch } from './netlify-fetch-fixture.mts';
+import { CtCollectionError } from '../lib/ct-search.mts';
 
 process.env.SITE_PASSWORD ||= 'test-only-secret';
 process.env.SESSION_SECRET ||= 'test-only-session-signing-secret';
@@ -62,6 +63,14 @@ function fixtureService<T extends (...args: never[]) => unknown>(
 }
 
 describe('fixture-injected Netlify network handlers', () => {
+  test('returns the same actionable certificate-search failure vocabulary as the local host', async () => {
+    for (const [code, status] of [['CT_TIMEOUT', 504], ['CT_OVERLOADED', 503], ['CT_QUERY_TOO_BROAD', 422], ['CT_INVALID_RESPONSE', 502], ['CT_UPSTREAM_ERROR', 502]] as const) {
+      const response = await createCtSearchHandler({ searchCertificateTransparency: async () => { throw new CtCollectionError(code); } })(event({ q: 'privatekeyword' }));
+      assert.equal(response.statusCode, status);
+      assert.equal(body(response).errorCode, code);
+      assert.doesNotMatch(String(body(response).error), /privatekeyword/u);
+    }
+  });
   test('selected URL POSTs retain guard and target parity with the local endpoint', async () => {
     const calls: unknown[] = [];
     const handler = createLookupHandler({

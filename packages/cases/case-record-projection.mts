@@ -1,5 +1,5 @@
 import type { CaseRecord } from './case-record-contracts.mts';
-import { PUBLIC_CASE_SCHEMA_VERSION, INCIDENT_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { PUBLIC_CASE_SCHEMA_VERSION, INCIDENT_CASE_SCHEMA_VERSION, EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import { caseStatusIsClosed } from './case-record-decisions.mts';
 
 export type CaseAudience = 'internal' | 'public' | 'trusted';
@@ -130,6 +130,14 @@ const CASE_FIELD_RULES = Object.freeze({
     audienceExclusions: { public: { label: 'Brand Profile references', order: 2 } },
   }),
   tags: fieldRule('tags', PRESERVE, (record) => [...record.tags]),
+  workflowMetadata: fieldRule('workflowMetadata', PUBLIC_REDACT, (record, profile) => (
+    record.workflowMetadata === undefined ? undefined : profile === 'public'
+      ? { types: [...record.workflowMetadata.types], incidentTargets: [], investigationContext: null }
+      : structuredClone(record.workflowMetadata)
+  ), {
+    nestedSensitiveFields: ['incidentTargets', 'investigationContext'],
+    audienceExclusions: { public: { label: 'Private incident links and investigation context', order: 4, sinceVersion: EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION } },
+  }),
   notes: fieldRule('notes', SHARED_EXCLUDE, (record, profile) => (
     profile === 'trusted' || profile === 'public'
       ? []
@@ -143,6 +151,9 @@ const CASE_FIELD_RULES = Object.freeze({
   source: preservedField('source'),
   evidenceHistory: fieldRule('evidenceHistory', PRESERVE, (record) => structuredClone(record.evidenceHistory)),
   evidencePins: fieldRule('evidencePins', PRESERVE, (record) => structuredClone(record.evidencePins)),
+  evidenceLinks: fieldRule('evidenceLinks', PUBLIC_EXCLUDE, (record, profile) => (
+    profile === 'public' ? undefined : structuredClone(record.evidenceLinks)
+  ), { audienceExclusions: { public: { label: 'Analyst evidence relationships', order: 4, sinceVersion: EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION } } }),
   decisions: fieldRule('decisions', PRESERVE, (record) => structuredClone(record.decisions)),
   actions: fieldRule('actions', TRUSTED_REDACT_PUBLIC_EXCLUDE, (record, profile) => (
     profile === 'public'

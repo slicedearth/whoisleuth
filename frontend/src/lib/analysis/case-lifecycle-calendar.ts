@@ -135,7 +135,7 @@ export function collectCaseLifecycleEvents(
     const caseContext = {
       caseReference: caseNumber(record.id),
       domain: record.domain,
-      classification: caseTypeSummary(record.tags) || null,
+      classification: caseTypeSummary(record) || null,
     };
     const followUpSources = caseFollowUpSources({
       ...record,

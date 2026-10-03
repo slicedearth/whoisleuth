@@ -66,6 +66,51 @@ function archive(...records: Uint8Array[]): ArrayBuffer {
 }
 
 describe('portable WARC evidence import', () => {
+  test('admits repeatable references, header whitespace and long values within the aggregate bound', async () => {
+    const block = responseBlock({ extraHeaders: ['X-Context:\tfirst\tsecond', '\tcontinued', `X-Long: ${'x'.repeat(8_192)}`, 'Link: <https://one.example/>', 'Link: <https://two.example/>', 'X-Empty:'] });
+    const result = await parseWarcEvidenceArchive(archive(record('response', block, {
+      target: 'https://example.test/', extraHeaders: ['WARC-Concurrent-To: <urn:uuid:first>', 'WARC-Concurrent-To: <urn:uuid:second>', 'WARC-Extra: Résumé', '\tcontinued'],
+    })));
+    assert.equal(result.accepted, 1);
+    assert.equal(result.document.findings[0]?.completeness, 'complete');
+    assert.doesNotMatch(JSON.stringify(result), /Résumé|continued|x{100}|one\.example|two\.example/u);
+  });
+
+  test('excludes unusable HTTP records individually while preserving independent later evidence', async () => {
+    const valid = record('response', responseBlock({ title: 'Retained page' }), { target: 'https://admitted.example/', date: '2026-08-01T00:00:00Z' });
+    for (const extraHeaders of [
+      ['Set-Cookie: secret=one', 'Set-Cookie: secret=two'],
+      ['Malformed private-value'], ['Content-Type: application/json'], ['X-Context: ' + 'x'.repeat(65_536)],
+      ['Transfer-Encoding: chunked'], ['X-Control: forbidden\u0000'], ['Name : invalid'],
+    ]) {
+      const result = await parseWarcEvidenceArchive(archive(
+        record('response', responseBlock({ extraHeaders }), { target: 'https://excluded.example/', date: '2026-07-31T00:00:00Z' }), valid,
+      ));
+      assert.equal(result.accepted, 1); assert.equal(result.excluded, 1);
+      assert.equal(result.document.findings[0]?.domain, 'admitted.example');
+      assert.equal(result.document.source.collectedAt, '2026-08-01T00:00:00.000Z');
+      assert.doesNotMatch(JSON.stringify(result), /secret|private-value|forbidden|excluded\.example/u);
+      assert.ok(result.exclusions.length > 0);
+    }
+  });
+
+  test('rejects ambiguous WARC framing rather than skipping bytes to an apparent next record', async () => {
+    const original = record('response', responseBlock(), { target: 'https://example.test/' });
+    const originalText = new TextDecoder().decode(original);
+    for (const malformed of [
+      originalText.replace('WARC/1.1', 'WARC/1.10'),
+      originalText.replace(/Content-Length: \d+/u, 'Content-Length: 0x10'),
+      originalText.replace(/Content-Length: \d+/u, 'Content-Length: 1e2'),
+      originalText.replace(/Content-Length: \d+/u, 'Content-Length: '),
+      originalText.replace(/Content-Length: \d+/u, 'Content-Length: 0\r\nContent-Length: 0'),
+    ]) await assert.rejects(parseWarcEvidenceArchive(archive(encoder.encode(malformed))), /version line|Content-Length|ambiguous repeated header/u);
+    const invalidUtf8 = original.slice(); invalidUtf8[invalidUtf8.indexOf(58) + 2] = 0xff;
+    await assert.rejects(parseWarcEvidenceArchive(archive(invalidUtf8)), /invalid UTF-8 headers/u);
+    await assert.rejects(parseWarcEvidenceArchive(archive(record('response', responseBlock(), {
+      target: 'https://example.test/', extraHeaders: [`WARC-Extra: ${'x'.repeat(65_536)}`],
+    }))), /bounded header block/u);
+  });
+
   test('owns the archive before digesting, independent of caller mutation or transfer', async () => {
     for (const action of ['mutate', 'transfer'] as const) {
       const input = archive(record('response', responseBlock({ title: 'Original evidence' }), { target: 'https://example.test/' }));

@@ -2,13 +2,9 @@
 // transient relationship observations. It introduces no persistence or
 // network work: entities and edges remain traceable to bounded source records.
 
-import {
-  CASE_SCHEMA_VERSION,
-  MAX_CASES,
-  normalizeCaseStore,
-  type CaseRecord,
-  type CaseEvidenceSnapshot,
-} from '../cases/case-model.mts';
+import { CASE_SCHEMA_VERSION, MAX_CASES } from '../contracts/case-portability.mts';
+import { normalizeCaseStore } from '../cases/case-migration-model.mts';
+import type { CaseRecord, CaseEvidenceSnapshot } from '../cases/case-model.mts';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
   MAX_PROFILES,
@@ -79,22 +75,14 @@ export const INVESTIGATION_OBSERVATION_KINDS = Object.freeze([
 ] as const);
 export type InvestigationObservationKind = (typeof INVESTIGATION_OBSERVATION_KINDS)[number];
 export type InvestigationStoreName = 'cases' | 'campaigns' | 'brandProfiles' | 'relationshipRows' | 'relationshipObservations';
-export type InvestigationRelationshipType =
-  | 'domain_uses_nameserver_set'
-  | 'domain_reached_http_origin'
-  | 'case_documents_domain'
-  | 'brand_declares_official_domain'
-  | 'brand_declares_official_favicon'
-  | 'domain_observed_favicon'
-  | 'campaign_contains_domain'
-  | 'campaign_contains_case'
-  | 'domain_presented_certificate'
-  | 'domain_resolved_to_ip'
-  | 'domain_aliases_to_domain'
-  | 'domain_uses_mail_server'
-  | 'domain_exposed_tracking_identifier'
-  | 'domain_related_by_favicon'
-  | 'domain_loaded_official_asset';
+export const INVESTIGATION_RELATIONSHIP_TYPES = Object.freeze([
+  'domain_uses_nameserver_set', 'domain_reached_http_origin', 'case_documents_domain',
+  'brand_declares_official_domain', 'brand_declares_official_favicon', 'domain_observed_favicon',
+  'campaign_contains_domain', 'campaign_contains_case', 'domain_presented_certificate',
+  'domain_resolved_to_ip', 'domain_aliases_to_domain', 'domain_uses_mail_server',
+  'domain_exposed_tracking_identifier', 'domain_related_by_favicon', 'domain_loaded_official_asset',
+] as const);
+export type InvestigationRelationshipType = typeof INVESTIGATION_RELATIONSHIP_TYPES[number];
 export type InvestigationRelationshipClassification = 'direct' | 'normalized' | 'derived';
 
 export interface InvestigationProjectionInput {

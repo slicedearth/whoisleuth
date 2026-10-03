@@ -1,4 +1,6 @@
 import { readdirSync } from 'node:fs';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import type { Server } from 'node:http';
 import { join, relative, sep } from 'node:path';
 import { after, before, describe, test } from 'node:test';
@@ -6,11 +8,13 @@ import assert from 'node:assert/strict';
 import express from 'express';
 
 import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from '../lib/security-headers.mts';
+import { checkPrerenderedHtmlRateLimit, getClientIp, PRERENDERED_HTML_RATE_LIMIT } from '../lib/rate-limit.mts';
+import { csr as missingPageClientRouting } from '../frontend/src/routes/404/+page.ts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
 
-const { app, sendPrerenderedHtmlFile } = await import('../server.mts');
+const { app, sendPrerenderedHtmlFile, notFoundPageHandler } = await import('../server.mts');
 const {
   CANONICAL_TRAILING_SLASH_REDIRECTS,
   PERMANENT_ROUTE_REDIRECTS,
@@ -103,7 +107,50 @@ describe('canonical route redirects', () => {
 
     assert.equal(response.status, 404);
     assert.equal(response.headers.get('location'), null);
-    assert.match(response.headers.get('content-security-policy') || '', /default-src 'none'/u);
+    assert.equal(response.headers.get('content-security-policy'), HTTP_BASELINE_CONTENT_SECURITY_POLICY);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow');
+    assert.doesNotMatch(await response.text(), /outside/u);
+  });
+
+  test('unknown API endpoints return bounded JSON without reflecting the requested address', async () => {
+    for (const method of ['GET', 'POST', 'HEAD']) {
+      const response = await fetch(`${origin}/api/missing-private-path?token=private-query`, { method });
+      assert.equal(response.status, 404);
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      assert.match(response.headers.get('content-type') ?? '', /^application\/json/u);
+      if (method === 'HEAD') assert.equal(await response.text(), '');
+      else assert.deepEqual(await response.json(), { error: 'Endpoint not found', errorCode: 'NOT_FOUND' });
+    }
+  });
+
+  test('serves only the fixed missing-page artefact and retains status with or without a build', async () => {
+    assert.equal(missingPageClientRouting, false, 'Unknown URLs must not activate client routing from the fixed missing-page document');
+    const directory = await mkdtemp(join(tmpdir(), 'missing-page-'));
+    const filename = join(directory, '404.html');
+    await writeFile(filename, '<!doctype html><title>Page not found</title><a href="/">Home</a>');
+    const isolatedApp = express().use(notFoundPageHandler(filename));
+    const listener = await new Promise<Server>(resolve => {
+      const value = isolatedApp.listen(0, '127.0.0.1', () => resolve(value));
+    });
+    try {
+      const address = listener.address();
+      assert.ok(address && typeof address !== 'string');
+      const url = `http://127.0.0.1:${address.port}/missing?private=query`;
+      const found = await fetch(url);
+      assert.equal(found.status, 404);
+      assert.equal(await found.text(), '<!doctype html><title>Page not found</title><a href="/">Home</a>');
+      const head = await fetch(url, { method: 'HEAD' });
+      assert.equal(head.status, 404);
+      assert.equal(await head.text(), '');
+      await rm(filename);
+      const missing = await fetch(url);
+      assert.equal(missing.status, 404);
+      assert.equal(await missing.text(), 'Not found\n');
+    } finally {
+      await new Promise<void>((resolve, reject) => listener.close(error => error ? reject(error) : resolve()));
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   test('falls through without exposing a missing prerendered file path', async () => {
@@ -139,5 +186,28 @@ describe('canonical route redirects', () => {
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('content-security-policy'), HTTP_BASELINE_CONTENT_SECURITY_POLICY);
+  });
+
+  test('missing pages enforce the shared HTML admission boundary before their file handler', async (t) => {
+    const now = Date.now();
+    t.mock.method(Date, 'now', () => now);
+    const identity = getClientIp({}, '127.0.0.1');
+    const admitted = await fetch(`${origin}/first-missing-page`);
+    assert.equal(admitted.status, 404);
+    await admitted.text();
+
+    // Fill the actual shared bucket without hundreds of redundant HTTP calls.
+    for (let index = 0; index < PRERENDERED_HTML_RATE_LIMIT.limit; index += 1) {
+      checkPrerenderedHtmlRateLimit(identity);
+    }
+    const refused = await fetch(`${origin}/another-missing-page`);
+    assert.equal(refused.status, 429);
+    assert.equal((await refused.json()).errorCode, 'RATE_LIMITED');
+    assert.ok(Number(refused.headers.get('retry-after')) > 0);
+    assert.doesNotMatch(refused.headers.get('content-type') ?? '', /text\/html/u);
+
+    const session = await fetch(`${origin}/api/session`);
+    assert.equal(session.status, 200, 'HTML capacity must not consume the independent API boundary');
+    await session.text();
   });
 });

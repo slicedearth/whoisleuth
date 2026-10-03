@@ -12,6 +12,11 @@ import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.
 
 export type MaintainerJsonRecord = Record<string, unknown>;
 
+/** Root editor preferences do not define runtime schemas or application inputs. */
+export function isOptionalEditorConfiguration(relative: string): boolean {
+  return /^(?:\.editorconfig|\.prettierignore|\.prettierrc(?:\.(?:json|json5|ya?ml|toml|[cm]?js|ts))?|prettier\.config\.[cm]?[jt]s)$/u.test(relative);
+}
+
 const UNSAFE_TEXT_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
 const UNSAFE_TEXT_GLOBAL_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu;
 
@@ -48,6 +53,13 @@ export function boundedControlFreeText(value: unknown, label: string, maximum: n
     throw new TypeError(`${label} must be control-free text no longer than ${maximum} characters.`);
   }
   return value.trim();
+}
+
+export function boundedUnpaddedText(value: unknown, label: string, maximum = 240): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > maximum || value.trim() !== value) {
+    throw new TypeError(`${label} must be a non-empty bounded string.`);
+  }
+  return value;
 }
 
 export function canonicalControlFreeTimestamp(value: unknown, label: string): string {
@@ -106,6 +118,7 @@ export function boundedSafeRelativePath(value: unknown, label: string, maximum =
     || value.includes('\\')
     || hasMaintainerUnsafeCharacters(value)
     || path.posix.isAbsolute(value)
+    || path.win32.isAbsolute(value)
     || path.posix.normalize(value) !== value
     || value.split('/').some((part) => !part || part === '.' || part === '..')) {
     throw new TypeError(`${label} must be a bounded safe relative path.`);
@@ -123,6 +136,16 @@ export function pathIsWithin(root: string, candidate: string): boolean {
 
 export function npmExecutableName(platform = process.platform): string {
   return platform === 'win32' ? 'npm.cmd' : 'npm';
+}
+
+/** Resolve the published command, not the dependency's internal file layout. */
+export function dependencyCruiserExecutable(repositoryRoot: string): string {
+  const packageRoot = path.join(repositoryRoot, 'node_modules', 'dependency-cruiser');
+  const manifest = requireJsonRecord(JSON.parse(readBoundedStableRegularFileSync(
+    path.join(packageRoot, 'package.json'), 256 * 1024, 'Dependency analyser manifest',
+  ).toString('utf8')), 'Dependency analyser manifest');
+  const commands = requireJsonRecord(manifest.bin, 'Dependency analyser commands');
+  return path.join(packageRoot, boundedSafeRelativePath(commands.depcruise, 'Dependency analyser command'));
 }
 
 export async function localPortIsFree(port: number, timeoutMs = 1_000): Promise<boolean> {

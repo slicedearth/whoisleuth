@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeBoundedUtf8, readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
 import { MAX_FORWARDING_SOURCE_BYTES, moduleForwardingSpecifier, moduleIsTypeOnly } from './module-forwarding.mts';
+import { nodeTestFiles, runUnitTests } from './toolchain-compatibility.mts';
 
 export const MAX_PRODUCTION_COVERAGE_BYTES = 16 * 1024 * 1024;
 export const MAX_PRODUCTION_COVERAGE_FILES = 2_000;
@@ -80,12 +80,14 @@ export const PRODUCTION_COVERAGE_EXCLUSIONS: readonly CoverageExclusion[] = Obje
   Object.freeze({ source: 'frontend/src/lib/investigation-search.ts', category: 'browser_adapter', owner: 'e2e/investigation-search.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/investigation-templates.ts', category: 'browser_adapter', owner: 'e2e/dashboard.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/local-data-platform-probe.ts', category: 'browser_adapter', owner: 'e2e/local-data-platform.spec.ts' }),
+  Object.freeze({ source: 'frontend/src/lib/pdf-intake-worker.ts', category: 'browser_adapter', owner: 'e2e/selected-document-intake.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/relationship-observations.ts', category: 'browser_adapter', owner: 'e2e/case-relationship-workflows.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/review-session.ts', category: 'browser_adapter', owner: 'e2e/review-session.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/shortlist.ts', category: 'browser_adapter', owner: 'e2e/shortlist-storage.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/website-snapshots.ts', category: 'browser_adapter', owner: 'e2e/hosted-monitoring.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/workers/investigation-package.worker.ts', category: 'browser_adapter', owner: 'e2e/investigation-package.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/workers/local-application.worker.ts', category: 'browser_adapter', owner: 'e2e/local-application.spec.ts' }),
+  Object.freeze({ source: 'frontend/src/lib/workers/pdf-parser.worker.ts', category: 'browser_adapter', owner: 'e2e/selected-document-intake.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/workspace-archive.ts', category: 'browser_adapter', owner: 'e2e/dashboard.spec.ts' }),
   Object.freeze({ source: 'frontend/src/routes/(public)/guide/+page.ts', category: 'framework_entry', owner: 'e2e/public-guide.spec.ts' }),
   Object.freeze({ source: 'frontend/src/routes/(public)/resources/[slug]/+page.ts', category: 'framework_entry', owner: 'e2e/public-guide.spec.ts' }),
@@ -111,6 +113,8 @@ export const PRODUCTION_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
     'cli/formatters/terminal-lookup.mts': Object.freeze({ lines: 95, branches: 85, functions: 100 }),
     'cli/formatters/terminal-command-formats.mts': Object.freeze({ lines: 95, branches: 55, functions: 90 }),
     'frontend/src/lib/browser-local-data.ts': Object.freeze({ lines: 80, branches: 65, functions: 75 }),
+    'frontend/src/lib/browser-local-data-content.ts': Object.freeze({ lines: 80, branches: 65, functions: 75 }),
+    'frontend/src/lib/browser-indexeddb-storage.ts': Object.freeze({ lines: 80, branches: 65, functions: 75 }),
     'frontend/src/lib/controllers/lookup-case-controller.ts': Object.freeze({ lines: 95, branches: 90, functions: 95 }),
     'frontend/src/lib/analysis/brand-profile-signals.ts': Object.freeze({ lines: 95, branches: 90, functions: 100 }),
     'frontend/src/lib/analysis/lookup-dns-display.ts': Object.freeze({ lines: 95, branches: 80, functions: 100 }),
@@ -442,7 +446,7 @@ export function formatProductionCoverage(
 
 // Instrumentation and validation share the same source boundaries and global
 // floors. Generated files discovered in another package need no script edit.
-export function productionCoverageArguments(testPattern = 'test/*.test.mts'): string[] {
+export function productionCoverageArguments(testPattern?: string): string[] {
   return [
     '--test', '--test-concurrency=4', '--experimental-test-coverage',
     ...Object.entries(PRODUCTION_COVERAGE_POLICY.global).map(([metric, minimum]) => `--test-coverage-${metric}=${minimum}`),
@@ -451,18 +455,15 @@ export function productionCoverageArguments(testPattern = 'test/*.test.mts'): st
     ...GENERATED_SOURCE_GLOBS.map((pattern) => `--test-coverage-exclude=${pattern}`),
     '--test-reporter=spec', '--test-reporter-destination=stdout',
     '--test-reporter=lcov', '--test-reporter-destination=test-coverage.lcov',
-    testPattern,
+    ...(testPattern ? [testPattern] : nodeTestFiles('unit', REPOSITORY_ROOT)),
   ];
 }
 
 export async function main(args = process.argv.slice(2)): Promise<number> {
   try {
     if (args.length === 1 && args[0] === '--run') {
-      const result = spawnSync(process.execPath, productionCoverageArguments(), {
-        cwd: REPOSITORY_ROOT, env: process.env, stdio: 'inherit',
-      });
-      if (result.error) throw result.error;
-      if (result.status !== 0) return result.status ?? 2;
+      const status = runUnitTests(productionCoverageArguments(), { cwd: REPOSITORY_ROOT, probeShells: false });
+      if (status !== 0) return status;
       args = [];
     }
     if (args.length > 1 || args[0]?.startsWith('-')) throw new TypeError('Usage: node tools/production-coverage.mts [--run|lcov-path]');

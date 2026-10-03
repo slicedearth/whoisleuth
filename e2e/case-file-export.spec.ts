@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import { readBrowserLocalCollection, expectNoHorizontalOverflow, useTheme } from './helpers';
@@ -35,7 +36,7 @@ test('selected retained files export exact bytes and source declarations without
           const box = input.getBoundingClientRect(); return box.width > 0 && box.left >= outer.left - 1 && box.right <= outer.right + 1;
         });
       })).toBe(true);
-      await page.screenshot({ path: testInfo.outputPath(`selected-file-export-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`selected-file-export-${theme}-${width}.png`) }); }
     }
   }
 });

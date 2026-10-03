@@ -1,10 +1,12 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalManifestWrites, migrateLegacyBrowserData, openBulkWorkspaceTools, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, requiredValue, selectBulkResultView, useTheme } from './helpers';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import type { ArchiveInspectionReport } from '../cli/archive-inspect.mts';
-import { CASE_SCHEMA_VERSION, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
 import { canonicalArtifactJson, sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity';
 import { createCase as createCaseInBrowser } from './case-test-fixtures';
 import { INVESTIGATION_GUIDE_KEY } from '../frontend/src/lib/investigation-guide-storage';
@@ -363,7 +365,7 @@ test('a rich 2,000-row Bulk workspace remains readable after saving and plain or
     encryptedDownloadBytes: Buffer.byteLength(encrypted.content),
     durationMs: performance.now() - startedAt,
   }), contentType: 'application/json' });
-  await page.screenshot({ path: testInfo.outputPath('restored-bulk-mobile.png'), fullPage: false });
+  if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath('restored-bulk-mobile.png'), fullPage: false }); }
 });
 
 test('the Dashboard waits for every collection and then presents only genuine first-use actions', {

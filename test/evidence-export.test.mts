@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import * as evidence from '../frontend/src/lib/analysis/evidence-export.ts';
+import { readFileSync } from 'node:fs';
+import { validateLookupEvidenceArtifactStructure } from '../cli/artifact-validation/lookup-evidence.mts';
 import { analyzeStructuredDataIdentity } from '../lib/structured-data-identity.mts';
 import { arrayValue, recordValue, requiredValue } from './value-assertions.mts';
 import {
@@ -379,6 +381,17 @@ function fixtureResponse(): Record<string, unknown> {
 }
 
 describe('lookup evidence export', () => {
+  test('retains exact published URI validation separately from current privacy-minimised output', () => {
+    for (const version of [26, 27, 28]) {
+      const historical = JSON.parse(readFileSync(new URL(`./fixtures/lookup-evidence-v${version}.json`, import.meta.url), 'utf8'));
+      validateLookupEvidenceArtifactStructure(historical);
+      historical.analysis.availability.pageIdentity = { canonical: { url: 'mailto:role@example.test?body=historical-value#historical-fragment' } };
+      assert.doesNotThrow(() => validateLookupEvidenceArtifactStructure(historical));
+      const projected = evidence.projectLookupEvidenceAvailability(historical.analysis.availability);
+      assert.doesNotMatch(JSON.stringify(projected), /historical-value|historical-fragment/u);
+    }
+  });
+
   test('does not normalise non-ASCII case-folding aliases into exported hostnames', () => {
     for (const inputHostname of ['portal.\u212a.example', 'portal.\u017f.example']) {
       assert.deepEqual(evidence.projectLookupEvidenceQuery({
@@ -418,7 +431,7 @@ describe('lookup evidence export', () => {
   test('binds registrar standing to the unambiguous retained registration identity', () => {
     const response = fixtureResponse();
     response.registrarStanding = buildRegistrarStanding({
-      registrarIanaId: '4318',
+      registrarIanaId: '900003',
       now: new Date('2026-09-03T12:00:00.000Z'),
     });
     assert.throws(

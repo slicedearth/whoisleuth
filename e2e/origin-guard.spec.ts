@@ -1,10 +1,28 @@
 import { expect, test } from '@playwright/test';
 import { createServer } from 'node:net';
 import { BASE_URL } from './constants.ts';
-import { ALLOWED_ORIGIN, installNetworkGuard, installBrowserGuards, isAllowedRequestOrigin, test as guardedTest } from './fixtures';
+import { ALLOWED_ORIGIN, installNetworkGuard, installBrowserGuards, isAllowedRequestOrigin, isLookupEndpointUrl, test as guardedTest } from './fixtures';
 
 guardedTest('the default context receives the service-worker block before guard installation', async ({ serviceWorkers }) => {
   expect(serviceWorkers).toBe('block');
+});
+
+guardedTest('offline collection interceptors match both query-bearing and body-bearing Lookup requests', async ({ page }) => {
+  const requests: string[] = [];
+  await page.route(url => isLookupEndpointUrl(url.href), async route => {
+    requests.push(`${route.request().method()} ${new URL(route.request().url()).pathname}${new URL(route.request().url()).search}`);
+    await route.fulfill({ status: 200, json: { intercepted: true } });
+  });
+  await page.goto('/dashboard');
+  const results = await page.evaluate(async () => Promise.all([
+    fetch('/api/lookup?q=fixture.example.test&mode=fast').then(response => response.json()),
+    fetch('/api/lookup', { method: 'POST', body: '{}' }).then(response => response.json()),
+  ]));
+  expect(results).toEqual([{ intercepted: true }, { intercepted: true }]);
+  expect(requests.sort()).toEqual(['GET /api/lookup?q=fixture.example.test&mode=fast', 'POST /api/lookup']);
+  for (const url of ['https://example.invalid/api/lookup?q=fixture.example.test', `${ALLOWED_ORIGIN}/api/lookup-extra`, `${ALLOWED_ORIGIN}/api/lookup/other`]) {
+    expect(isLookupEndpointUrl(url)).toBe(false);
+  }
 });
 
 // Exercises the predicate every spec's automatic network guard
@@ -12,6 +30,25 @@ guardedTest('the default context receives the service-worker block before guard 
 // weakens or removes the origin check gets caught here even in a run where
 // no test happens to make an off-origin request.
 test.describe('network origin guard', () => {
+  test('failed build assets retain bounded path-only first-failure diagnostics', async ({ browser, browserName }) => {
+    const context = await browser.newContext();
+    const guard = await installBrowserGuards(browser, { browserName, networkGuardOrigin: ALLOWED_ORIGIN,
+      allowExpectedBulkLookup400Noise: false, allowExpectedLookup429Noise: false,
+      allowExpectedLookup504Noise: false, allowExpectedLogout500Noise: false });
+    const asset = '/_app/immutable/chunks/fixture.A.js';
+    let disposed = false;
+    try {
+      const page = await context.newPage();
+      await page.route(`**${asset}*`, route => route.abort('failed'));
+      const failed = page.waitForEvent('requestfailed', request => new URL(request.url()).pathname === asset);
+      await page.evaluate(url => fetch(url).catch(() => undefined), ALLOWED_ORIGIN + asset + '?private=sentinel');
+      await failed;
+      await guard.dispose(); disposed = true;
+      expect(guard.assetIssues).toEqual([`${asset}: request failed`]);
+      expect(JSON.stringify(guard.assetIssues)).not.toContain('sentinel');
+      expect(guard.offOriginRequests).toEqual([]);
+    } finally { if (!disposed) await guard.dispose(); await context.close(); }
+  });
   test('guards existing pages, later pages and separately created contexts with real negative controls', async ({ browser, browserName }) => {
     let connections = 0;
     const sink = createServer(socket => { connections++; socket.destroy(); });

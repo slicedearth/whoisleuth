@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { tick } from 'svelte';
   import Pagination from './Pagination.svelte';
   import BoundedRelationshipMap from '$lib/components/BoundedRelationshipMap.svelte';
@@ -118,7 +119,7 @@
                 <span>{edge.label}</span>
                 <strong>{nodesById.get(edge.target)?.label ?? edge.target}</strong>
               </div>
-              <p>{edge.sourceLabel} · {edge.observedAt ? new Date(edge.observedAt).toLocaleString() : 'Observation time unavailable'} · {edge.completeness}</p>
+              <p>{edge.sourceLabel} · {edge.observedAt ? formatEvidenceDate(edge.observedAt) : 'Observation time unavailable'} · {edge.completeness}</p>
               {#if edge.boundary}<p class="boundary">{edge.boundary.replaceAll('_', ' ')}</p>{/if}
               {#if edge.limitations.length}<small>{edge.limitations.join(' ')}</small>{/if}
               {#if evidenceLinks}<a href={edge.href}>Open source evidence</a>{/if}
@@ -135,7 +136,7 @@
           {#each graph.sources as source (source.id)}
             <li>
               <div><strong>{source.label}</strong><span class:partial-source={source.completeness !== 'complete'}>{source.completeness}</span></div>
-              <p>{source.observedAt ? new Date(source.observedAt).toLocaleString() : 'Observation time unavailable'}</p>
+              <p>{source.observedAt ? formatEvidenceDate(source.observedAt) : 'Observation time unavailable'}</p>
               {#if source.limitations.length}<small>{source.limitations.join(' ')}</small>{/if}
               {#if evidenceLinks}<a href={source.href}>Open attributed evidence</a>{/if}
             </li>

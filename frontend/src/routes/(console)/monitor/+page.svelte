@@ -1,9 +1,10 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { evidenceTime } from '$lib/analysis/evidence-time';
   import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { goto } from '$app/navigation';
   import { parseBoundedJson } from '$lib/bounded-json';
-  import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
+import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { setCaseNavigationContext } from '$lib/console-workflow-state';
   import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
@@ -38,7 +39,7 @@
   import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, restoreHostedWatchlist as restoreHostedWatchlistAtomically, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
   import { editCase, loadCases, openCase, type CaseRecord } from '$lib/cases';
-  import { casesForDomain } from '$lib/analysis/case-model.ts';
+  import { casesForDomain } from '../../../../../packages/cases/case-selection.mts';
   import { loadCampaigns, type CampaignRecord } from '$lib/campaigns';
   import { loadDetectionRules, type DetectionRule } from '$lib/detection-rules';
   import {
@@ -115,9 +116,15 @@
     conclusiveCount:event.conclusiveCount,
   }))));
   async function refresh(){const hadSnapshot=watchlistsSourceState==='ready';watchlistsRefreshing=true;try{watchlists=await loadWatchlists();watchlistsSourceState='ready';if(selected&&!watchlists[selected])selected='';}catch(cause){if(!hadSnapshot)watchlistsSourceState='unavailable';throw cause;}finally{watchlistsRefreshing=false;}}
-  function date(value:string){const parsed=new Date(value);return Number.isNaN(parsed.getTime())?value:parsed.toLocaleString();}
-  async function remove(name:string){if(!confirm(`Delete watchlist "${name}" and its history?`))return;try{await deleteWatchlist(name);await refresh();message=`Deleted "${name}".`;}catch(cause){message=cause instanceof Error?cause.message:'Could not delete watchlist.';}}
-  async function clearAll(){if(!names.length||!confirm('Delete every saved watchlist and its history?'))return;try{await writeWatchlists({});await refresh();message='Cleared all watchlists.';}catch(cause){message=cause instanceof Error?cause.message:'Could not clear watchlists.';}}
+  function date(value:string|null){return evidenceTime(value)?.readable ?? 'Time unknown';}
+  async function reconcileCommittedWatchlists(committed:Watchlists,saved:string){
+    watchlists=committed;
+    if(selected&&!watchlists[selected])selected='';
+    message=saved;
+    try{await refresh();}catch{message=`${saved} Refreshing the saved list failed. The committed result is shown; reload to retry the read, not the deletion.`;}
+  }
+  async function remove(name:string){if(!confirm(`Delete watchlist "${name}" and its history?`))return;let committed:Watchlists;try{committed=await deleteWatchlist(name);}catch(cause){message=cause instanceof Error?cause.message:'Could not delete watchlist.';return;}await reconcileCommittedWatchlists(committed,`Deleted "${name}".`);}
+  async function clearAll(){if(!names.length||!confirm('Delete every saved watchlist and its history?'))return;try{await writeWatchlists({});}catch(cause){message=cause instanceof Error?cause.message:'Could not clear watchlists.';return;}await reconcileCommittedWatchlists({},'Cleared all watchlists.');}
   async function downloadWatchlists(){try{await exportWatchlists();}catch(cause){message=cause instanceof Error?cause.message:'Could not export watchlists.';}}
   async function rescan(name:string){const current=watchlists[name];if(!current)return;const candidates=current.results.map(record=>({domain:String(record.domain),source:name,mutationTypes:Array.isArray(record.mutationTypes)?record.mutationTypes:[]}));const handoffResult=saveCandidateHandoff('watchlist',candidates);if(!handoffResult.saved){message='This browser could not retain the watchlist candidates for Bulk. Check site-storage access and try again.';return;}await goto(`/bulk?source=watchlist&handoff=${handoffResult.token}`);}
   async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_WATCHLIST_IMPORT_BYTES)throw new Error('Watchlist imports are limited to 2 MB.');const result=await importWatchlists(parseBoundedJson(await file.text(),{label:'Watchlist import',maximumBytes:MAX_WATCHLIST_IMPORT_BYTES}));const skipped=result.skipped?`; skipped ${result.skipped} older, same-time, invalid or over-limit watchlist${result.skipped===1?'':'s'}; local watchlists were retained`:'';const saved=`Imported ${result.added} new and ${result.updated} updated watchlists${skipped}.`;try{await refresh();message=saved;}catch{message=`${saved} Refreshing the saved list failed. Reload before another import.`;}}catch(cause){message=cause instanceof Error?cause.message:'Import failed';}finally{input.value='';}}
@@ -465,11 +472,11 @@
     {#if campaignsSourceState==='ready'&&relationshipsSourceState==='ready'}
       <DeferredSurface load={()=>import('$lib/components/CaseRelationshipClusters.svelte')} loadingLabel="Loading Case relationship clusters…" unavailableLabel="Case relationship clusters could not be loaded." props={{summary:relationshipClusters}} />
     {:else}
-      <LocalCollectionState state={campaignsSourceState==='loading'||relationshipsSourceState==='loading'?'loading':'unavailable'} title="Relationship augmentation incomplete" detail="Readable Case evidence remains below. Campaign or retained-relationship augmentation could not be fully loaded, so combined relationship counts remain unavailable rather than being inferred as zero." />
+      <LocalCollectionState state={campaignsSourceState==='loading'||relationshipsSourceState==='loading'?'loading':'unavailable'} title="Some relationship sources are unavailable" detail="Case evidence remains below. Campaigns or saved relationships could not be loaded, so combined totals are unavailable." />
     {/if}
     <DeferredSurface load={()=>import('$lib/components/CaseRelationshipWorkspace.svelte')} loadingLabel="Loading Case relationship workspace…" unavailableLabel="The Case relationship workspace could not be loaded. Retained Cases remain available in the Cases view." props={{records:cases,summary:relationshipSummary,onselect:openRelatedCase}} placeholder="workspace" />
   {:else}
-    <LocalCollectionState state={casesSourceState} title="Case relationships unavailable" detail="Cases must be readable before cross-case relationships can be projected. Readable website-profile and retained-relationship evidence remains separately attributed above." />
+    <LocalCollectionState state={casesSourceState} title="Case relationships unavailable" detail="Load saved Cases to see relationships between them. Available website profiles and saved relationships are shown above." />
   {/if}
 </div>
 {/if}

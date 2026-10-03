@@ -10,6 +10,21 @@ export interface IdnConfusableCalibrationCase {
 }
 
 const calibrationCases: readonly Readonly<IdnConfusableCalibrationCase>[] = Object.freeze([
+  ...[
+    ['a', 'ꭤ'], ['b', '𝈇'], ['c', 'ᲃ'], ['d', '𐆋'], ['f', 'ʄ'],
+    ['f', '𐅾'], ['j', 'ȷ'], ['j', 'յ'], ['l', 'ꞁ'], ['l', 'ꟾ'],
+    ['m', 'ՠ'], ['o', 'ᲂ'], ['w', 'ꟺ'], ['z', 'ⱬ'], ['z', 'ⲍ'],
+  ].map(([ascii, observed], index) => Object.freeze({
+    id: `unicode-18-mapping-${index + 1}`,
+    category: 'source-backed-expansion',
+    reference: `${ascii}x`,
+    observed: `${observed}x`,
+    expectedMatch: true,
+  })),
+  Object.freeze({
+    id: 'unicode-18-unrelated-label', category: 'negative',
+    reference: 'ax', observed: 'ꭤz', expectedMatch: false,
+  }),
   Object.freeze({
     id: 'whole-label-cyrillic',
     category: 'whole-label',

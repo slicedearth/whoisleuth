@@ -40,12 +40,19 @@ export async function saveInvestigationTemplate(
   raw: unknown,
   makeId = () => crypto.randomUUID(),
   expected?: InvestigationTemplate | null,
+  sourceExpected?: InvestigationTemplate,
 ): Promise<InvestigationTemplate[]> {
   return updateBrowserLocalData('investigation_templates', (current) => {
     const id = raw && typeof raw === 'object' && 'id' in raw ? String((raw as { id?: unknown }).id ?? '') : '';
     const existing = id ? current.find((item) => item.id === id) : null;
     if (expected === null && existing) throw new LocalRecordConflictError('investigation template');
     assertLocalRecordCurrent(existing, expected ?? null, 'investigation template');
+    if (sourceExpected) {
+      assertLocalRecordCurrent(current.find(item => item.id === sourceExpected.id), sourceExpected, 'source investigation template');
+      if (id === sourceExpected.id || existing) throw new LocalRecordConflictError('new template revision');
+      const provenance = raw && typeof raw === 'object' && 'lessonRevision' in raw ? raw.lessonRevision as { parentTemplateId?: unknown } | undefined : undefined;
+      if (provenance?.parentTemplateId !== sourceExpected.id) throw new Error('The revision does not identify its selected source template.');
+    }
     const candidate = createInvestigationTemplate({
       ...existing,
       ...(raw && typeof raw === 'object' ? raw : {}),

@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { untrack } from 'svelte';
   import type { DecisionFact } from '../../../../packages/evidence/decision-fact.mts';
-  import { buildLookupEvidenceQualityModel } from '$lib/analysis/lookup-evidence-quality-model.ts';
+  import { buildLookupEvidenceQualityModel, buildLookupCollectionOutcomeReview } from '$lib/analysis/lookup-evidence-quality-model.ts';
   import type { LookupEvidenceQualityMatrix } from '$lib/analysis/lookup-decision-support.ts';
   import { formatCollectionDuration } from '$lib/analysis/lookup-display-shared.ts';
   import type { LookupHttpResponse, LookupTiming } from '$lib/analysis/lookup-response.ts';
@@ -37,6 +38,7 @@
     matrix,
     facts: lookupDecisionFacts,
   }));
+  const collectionReview = $derived(buildLookupCollectionOutcomeReview(original, depth, model.entries));
 
   const initialFreshnessPolicy = untrack(() => refreshPlan.freshnessPolicy);
   let policyMode = $state<'task-default' | 'analyst-custom'>(initialFreshnessPolicy.id === 'analyst-custom' ? 'analyst-custom' : 'task-default');
@@ -68,8 +70,7 @@
   }
 
   function observed(value: string | null): string {
-    if (!value) return 'Observation time unavailable';
-    return new Date(value).toLocaleString();
+    return formatEvidenceDate(value, 'Observation time unavailable');
   }
 </script>
 
@@ -88,6 +89,27 @@
       </div>
     </header>
 
+    {#if collectionReview.groups.length}
+    <details class="collection-outcomes">
+      <summary>Compare the completed plan and source outcomes</summary>
+      <p>{collectionReview.mode === 'deep' ? 'Deep' : 'Fast'} recipe for {collectionReview.target}. This review uses the completed result, not the editable query or current provider configuration.</p>
+      <p>Recipe eligibility is not proof that a request ran. Original optional selections are not retained; a missing record does not establish that a source was declined, disabled or had no findings. Each source keeps its own state and time. Use the detailed records below for limitations and deliberate refreshes.</p>
+      <ul class="outcome-groups" aria-label="Completed collection source outcomes">
+        {#each collectionReview.groups as group (group.id)}
+          <li data-planned-source={group.id}>
+            <strong>{group.label}</strong>
+            <p>Recipe: {group.expectation === 'selection_unknown' ? 'optional; original selection unknown' : group.expectation}.{group.diagnosticState ? ` Completed diagnostic: ${group.diagnosticState.replaceAll('_', ' ')}.` : ' Completed diagnostic unavailable.'}</p>
+            {#if group.id === 'domain_evidence'}<p>The domain diagnostic describes the availability branch; DNS, HTTP and TLS outcomes remain separate below.</p>{/if}
+            {#if group.records.length}
+              <ul>{#each group.records as entry (entry.id)}<li>
+                <strong>{entry.label}</strong>: {entry.statePresentation.label}{entry.sourceState ? ` · Provider result: ${entry.sourceState.replaceAll('_', ' ')}` : ''} · {entry.freshnessPresentation.label} · {observed(entry.observedAt)}{entry.truncated ? ' · Truncated' : ''}
+              </li>{/each}</ul>
+            {:else}<p>No separately attributed source record is available in this result.</p>{/if}
+          </li>
+        {/each}
+      </ul>
+    </details>
+    {/if}
     <details class="records-disclosure">
       <summary>Review {model.entries.length} source and analysis records</summary>
       <div
@@ -117,6 +139,7 @@
           >
           <div class="quality-row" role="row">
             <div class="source" role="cell">
+              <span class="mobile-column-label" aria-hidden="true">Source</span>
               <small>{entry.category}</small>
               <strong>{entry.label}</strong>
               <span class="endpoint">{entry.endpointClass}</span>
@@ -124,47 +147,51 @@
               {#if entry.refreshAvailable}<span class="refresh">Refresh available</span>{/if}
             </div>
             <div role="cell">
+              <span class="mobile-column-label" aria-hidden="true">State</span>
               <span
                 class="state tone-{entry.statePresentation.tone}"
                 data-evidence-state={entry.evidenceState}
                 data-tone={entry.statePresentation.tone}
-                aria-label={`${entry.statePresentation.label}. ${entry.statePresentation.assistiveText}`}
               >
                 <span class="presentation-icon" data-icon={entry.statePresentation.icon} aria-hidden="true"></span>
                 <span>{entry.statePresentation.label}</span>
+                <span class="sr-only">{entry.statePresentation.assistiveText}</span>
               </span>
               <ul class="contributors" aria-label={`Canonical contributors for ${entry.label}`}>
                 {#each entry.contributors as contributor (contributor.id)}
                   <li
                     data-contributor-id={contributor.id}
                     data-provenance={contributor.provenance}
-                    aria-label={`${contributor.label}. ${contributor.provenancePresentation.label}. ${contributor.provenancePresentation.assistiveText}`}
                   >
                     <span class="presentation-icon" data-icon={contributor.provenancePresentation.icon} aria-hidden="true"></span>
                     <span><strong>{contributor.label}</strong><small>{contributor.provenancePresentation.label}</small></span>
+                    <span class="sr-only">{contributor.provenancePresentation.assistiveText}</span>
                   </li>
                 {/each}
               </ul>
               {#if entry.truncated}<span class="truncated">Truncated</span>{/if}
             </div>
             <div class="observed" role="cell">
-              <span>{observed(entry.observedAt)}</span>
+              <span class="mobile-column-label" aria-hidden="true">Observed</span>
+              <span class="observation-time">{observed(entry.observedAt)}</span>
               {#if entry.ageDays !== null}<small>{entry.ageDays} day{entry.ageDays === 1 ? '' : 's'} old</small>{/if}
               <span
                 class="freshness tone-{entry.freshnessPresentation.tone}"
                 data-freshness={entry.freshness}
                 data-tone={entry.freshnessPresentation.tone}
-                aria-label={`${entry.freshnessPresentation.label}. ${entry.freshnessPresentation.assistiveText}`}
               >
                 <span class="presentation-icon" data-icon={entry.freshnessPresentation.icon} aria-hidden="true"></span>
                 <span>{entry.freshnessPresentation.label}</span>
+                <span class="sr-only">{entry.freshnessPresentation.assistiveText}</span>
               </span>
             </div>
             <div class="timing" role="cell">
+              <span class="mobile-column-label" aria-hidden="true">Timing</span>
               <span class:rejected={entry.timingOutcome === 'rejected'}>{formatCollectionDuration(entry.durationMs)}</span>
               {#if entry.timingOutcome}<small>{entry.timingOutcome === 'rejected' ? 'Request error' : 'Settled branch'}</small>{/if}
             </div>
             <div class="supports" role="cell">
+              <span class="mobile-column-label" aria-hidden="true">Supports</span>
               {entry.supports.length ? entry.supports.join(', ') : 'Source-specific evidence'}
             </div>
           </div>
@@ -220,6 +247,7 @@
 {/if}
 
 <style>
+  .mobile-column-label{display:none}
   .quality{min-width:0;padding:var(--card-pad);scroll-margin-top:calc(var(--local-nav-anchor-offset, 72px) + 12px)}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
   header h4{margin:2px 0 0;font:700 var(--text-lg) var(--mono)}
@@ -229,6 +257,7 @@
   .metrics strong{color:var(--text);font-size:var(--text-sm)}
   .metrics .attention strong{color:var(--amber)}
   details{margin-top:12px;border-top:1px solid var(--border)}
+  .outcome-groups{display:grid;gap:12px;margin:12px 0;padding-left:20px}.outcome-groups li{min-width:0;overflow-wrap:anywhere}.outcome-groups p{margin:4px 0}.outcome-groups ul{padding-left:20px}
   summary{padding:12px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
   .matrix{display:grid;gap:7px}
@@ -286,7 +315,8 @@
   .policy-form label{display:grid;gap:4px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   .policy-form p{grid-column:2/-1;align-self:center;margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   @media(max-width:920px){
-    .matrix-head{display:none}
+    .matrix-head{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+    .mobile-column-label{display:block;color:var(--muted);font:650 var(--text-2xs) var(--mono);margin-bottom:4px}
     .quality-row{grid-template-columns:repeat(2,minmax(0,1fr))}
     .supports{grid-column:1/-1}
   }

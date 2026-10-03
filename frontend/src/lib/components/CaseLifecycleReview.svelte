@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import type { CaseRecord } from '$lib/cases';
@@ -144,7 +145,7 @@
     <ol class="timeline" aria-label="Saved lifecycle review timeline">
       {#each pagedEvents as event, index (event.uid)}
         <li>
-          <label class="event-select"><input type="checkbox" checked={selectedEventSet.has(event.uid)} onchange={(input) => toggleEvent(event.uid, input.currentTarget.checked)} aria-label={`Select event ${(eventPage - 1) * eventPageSize + index + 1}: ${event.summary}${event.recipient ? ` · ${event.recipient}` : ''} · ${event.startsAt}`}><time datetime={event.startsAt}>{new Date(event.startsAt).toLocaleString()}</time></label>
+          <label class="event-select"><input type="checkbox" checked={selectedEventSet.has(event.uid)} onchange={(input) => toggleEvent(event.uid, input.currentTarget.checked)} aria-label={`Select event ${(eventPage - 1) * eventPageSize + index + 1}: ${event.summary}${event.recipient ? ` · ${event.recipient}` : ''} · ${event.startsAt}`}><time datetime={event.startsAt}>{formatEvidenceDate(event.startsAt)}</time></label>
           <div><strong>{event.summary}</strong>{#if event.recipient}<small>Recipient or owner: {event.recipient}</small>{/if}<p>{event.description}</p><small>{event.sourceLabel}</small><a href={caseWorkspaceHref(event.caseId, 'response')}>Open {event.domain}</a></div>
         </li>
       {/each}

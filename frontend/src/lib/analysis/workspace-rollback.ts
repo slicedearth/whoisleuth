@@ -1,4 +1,4 @@
-import type { AnyLocalDataCollectionDefinition } from '../browser-local-data.ts';
+import type { AnyLocalDataCollectionDefinition } from '../browser-local-data-content.ts';
 
 export function guardedWorkspaceRollback(
   definitions: readonly AnyLocalDataCollectionDefinition[],

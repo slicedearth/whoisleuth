@@ -64,7 +64,8 @@ test('retained archive readers reuse checksums but never share mutable preview d
     shortlist: [{ domain: 'review.example', availability: 'unknown', mutationTypes: [], savedAt: NOW }],
   }, { selectedSectionIds: ['shortlist'] });
   assert.equal(next.sections.find((section) => section.id === 'shortlist')?.added, 0);
-  assert.equal(next.sections.find((section) => section.id === 'shortlist')?.updated, 1);
+  assert.equal(next.sections.find((section) => section.id === 'shortlist')?.updated, 0);
+  assert.equal(next.sections.find((section) => section.id === 'shortlist')?.skipped, 1);
   assert.deepEqual(next.sections.filter((section) => section.selected).map((section) => section.id), ['shortlist']);
   assert.deepEqual(next.limitations, expectedRead.limitations);
   assert.equal(calls, raw.manifest.sectionCount);
@@ -72,8 +73,11 @@ test('retained archive readers reuse checksums but never share mutable preview d
 
 test('invalid archives cannot create a reusable verified reader', async () => {
   const raw = await buildArchive();
-  raw.sections.shortlist.entries[0]!.domain = 'tampered.example';
-  await assert.rejects(prepareWorkspaceArchive(raw), /byte-count|checksum/u);
+  await assert.doesNotReject(prepareWorkspaceArchive(raw));
+  const bytes = Buffer.byteLength(JSON.stringify(raw.sections.shortlist));
+  raw.sections.shortlist.entries[0]!.domain = 'edited.example';
+  assert.equal(Buffer.byteLength(JSON.stringify(raw.sections.shortlist)), bytes);
+  await assert.rejects(prepareWorkspaceArchive(raw), /shortlist failed its archive checksum check/u);
   await assert.rejects(prepareWorkspaceArchive({ verified: true, read: () => raw }), /ordinary JSON/u);
 });
 

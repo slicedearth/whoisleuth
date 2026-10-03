@@ -13,6 +13,7 @@ import * as contracts from '../packages/contracts/case-portability.mts';
 import { buildCaseSupportedContractBaseline } from '../packages/contracts/case-supported-contract-baseline.mts';
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import { buildSchemaCompatibilityInventory } from '../tools/schema-compatibility.mts';
+import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 
 const NOW = '2026-08-22T00:00:00.000Z';
 const PASSPHRASE = 'reserved fixture passphrase';
@@ -70,13 +71,15 @@ function packetInput(actionId: string) {
 }
 
 describe('canonical Case portability lifecycle', () => {
-  test('keeps latest public writer identities backed by the frozen published formats', async () => {
-    assert.equal(contracts.LATEST_PUBLIC_APPLICATION_VERSION, '2.3.0');
-    assert.equal(contracts.LATEST_PUBLIC_CASE_SCHEMA_VERSION, (await fixture<{ version: number }>('browser-case-v15')).version);
-    assert.equal(contracts.LATEST_PUBLIC_CASE_REPORT_SCHEMA_VERSION, (await fixture<{ schemaVersion: number }>('case-report-v11')).schemaVersion);
-    assert.equal(contracts.LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION, (await fixture<{ schemaVersion: number }>('case-response-packet-v9')).schemaVersion);
-    assert.equal(contracts.LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION, (await fixture<{ version: number }>('case-response-review-inputs-v3')).version);
-    assert.equal(contracts.LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION, (await fixture<{ version: number }>('workspace-archive-v8-empty-current')).version);
+  test('keeps the published format checkpoint backed by independent frozen formats', async () => {
+    const publishedPack = await fixture<{ packet: { reports: { application: { version: string } }[] } }>('cli-case-pack-v2-case-v16-current');
+    assert.equal(contracts.LATEST_PUBLIC_APPLICATION_VERSION, publishedPack.packet.reports[0]?.application.version);
+    assert.equal(contracts.LATEST_PUBLIC_CASE_SCHEMA_VERSION, (await fixture<{ version: number }>('browser-case-v16')).version);
+    assert.equal(contracts.LATEST_PUBLIC_CASE_REPORT_SCHEMA_VERSION, (await fixture<{ schemaVersion: number }>('case-report-v12')).schemaVersion);
+    assert.equal(contracts.LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION, (await fixture<{ schemaVersion: number }>('case-response-packet-v10')).schemaVersion);
+    assert.equal(contracts.LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION, (await fixture<{ version: number }>('case-response-review-inputs-v4')).version);
+    assert.equal(contracts.LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION, (await fixture<{ version: number }>('workspace-archive-v9-empty-current')).version);
+    assert.equal(contracts.PUBLISHED_V2_3_WORKSPACE_ARCHIVE_VERSION, (await fixture<{ version: number }>('workspace-archive-v8-empty-current')).version);
   });
 
   test('owns current facade identities and one durable contract per compatibility family', () => {
@@ -88,10 +91,10 @@ describe('canonical Case portability lifecycle', () => {
     assert.equal(workspace.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS, contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS);
     assert.equal(encryptedWorkspace.ENCRYPTED_WORKSPACE_ARCHIVE_VERSION, contracts.ENCRYPTED_WORKSPACE_ARCHIVE_VERSION);
 
-    assert.deepEqual([...contracts.CASE_BROWSER_SUPPORTED_VERSIONS], [12, 13, 14, 15, contracts.CASE_SCHEMA_VERSION]);
-    assert.deepEqual([...contracts.CASE_IMPORT_VERSIONS], [12, 13, 14, 15, contracts.CASE_SCHEMA_VERSION]);
-    assert.deepEqual([...contracts.CASE_REPORT_OUTPUT_VERSIONS], [9, 10, 11, contracts.CASE_REPORT_SCHEMA_VERSION]);
-    assert.deepEqual([...contracts.SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS], [6, 7, 8, 9, contracts.CASE_RESPONSE_PACKET_VERSION]);
+    assert.deepEqual([...contracts.CASE_BROWSER_SUPPORTED_VERSIONS], [12, 13, 14, 15, 16, contracts.CASE_SCHEMA_VERSION]);
+    assert.deepEqual([...contracts.CASE_IMPORT_VERSIONS], [12, 13, 14, 15, 16, contracts.CASE_SCHEMA_VERSION]);
+    assert.deepEqual([...contracts.CASE_REPORT_OUTPUT_VERSIONS], [9, 10, 11, 12, contracts.CASE_REPORT_SCHEMA_VERSION]);
+    assert.deepEqual([...contracts.SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS], [6, 7, 8, 9, 10, contracts.CASE_RESPONSE_PACKET_VERSION]);
     assert.deepEqual([...contracts.SUPPORTED_CLI_CASE_PACK_VERSIONS], [2]);
     assert.deepEqual([...contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS], [5, 6, 7, 8, 9]);
 
@@ -137,7 +140,8 @@ describe('canonical Case portability lifecycle', () => {
       }, NOW);
       assert.equal(record.evidencePins.length, 1);
       assert.equal(record.sightings.length, 1);
-      const imported = caseModel.normalizeCaseStore({ version, cases: [record] });
+      const { workflowMetadata: _workflow, ...historical } = record;
+      const imported = caseModel.normalizeCaseStore({ version, cases: [version < contracts.CASE_SCHEMA_VERSION ? historical : record] });
       const restored = caseModel.normalizeCaseStore(JSON.parse(caseModel.serializeCaseStore(imported.cases)));
       const exported = caseModel.buildCaseExport(restored.cases, NOW);
       const merged = caseModel.mergeCases([], exported).cases[0]!;
@@ -169,7 +173,7 @@ describe('canonical Case portability lifecycle', () => {
       browserStore,
     );
 
-    for (const name of ['browser-case-v12', 'browser-case-v13', 'browser-case-v14', 'browser-case-v15']) {
+    for (const name of ['browser-case-v12', 'browser-case-v13', 'browser-case-v14', 'browser-case-v15', 'browser-case-v16']) {
       assert.deepEqual(caseModel.normalizeCaseStore(await fixture(name)), browserStore);
     }
 
@@ -186,13 +190,13 @@ describe('canonical Case portability lifecycle', () => {
       currentExport,
     );
 
-    for (const name of ['case-response-packet-v6', 'case-response-packet-v7', 'case-response-packet-v8', 'case-response-packet-v9', CURRENT_PACKET]) {
+    for (const name of ['case-response-packet-v6', 'case-response-packet-v7', 'case-response-packet-v8', 'case-response-packet-v9', 'case-response-packet-v10', CURRENT_PACKET]) {
       const packet = await fixture<Record<string, unknown>>(name);
       validateOfflineArtifactStructure(contracts.CASE_RESPONSE_PACKET_SCHEMA, packet);
       assert.equal(await responsePacket.verifyCaseResponsePacketIntegrity(packet), true);
     }
 
-    for (const name of ['cli-case-pack-v2-case-v12-public', 'cli-case-pack-v2-case-v13', 'cli-case-pack-v2-case-v14', 'cli-case-pack-v2-case-v15', 'cli-case-pack-v2-case-v15-current', contracts.CLI_CASE_PACK_WRITER_FIXTURE_ID]) {
+    for (const name of ['cli-case-pack-v2-case-v12-public', 'cli-case-pack-v2-case-v13', 'cli-case-pack-v2-case-v14', 'cli-case-pack-v2-case-v15', 'cli-case-pack-v2-case-v15-current', 'cli-case-pack-v2-case-v16-current', contracts.CLI_CASE_PACK_WRITER_FIXTURE_ID]) {
       const pack = await fixture(name);
       assert.ok(casePack.verifyCliCasePack(pack).caseCount > 0);
       assert.ok(caseModel.mergeCases([], pack).added > 0);
@@ -231,10 +235,20 @@ describe('canonical Case portability lifecycle', () => {
     assert.deepEqual(caseReport.buildCaseReport(currentCase, { generatedAt: NOW }).json, await fixture(CURRENT_REPORT));
     assert.deepEqual((await responsePacket.buildCaseResponsePacket(currentCase, packetInput(actionId), NOW)).json, await fixture(CURRENT_PACKET));
     assert.deepEqual(responsePacket.buildCaseResponseReviewInputs(currentCase, packetInput(actionId), NOW), await fixture(CURRENT_REVIEW_INPUTS));
-    assert.deepEqual(
-      casePack.buildCliCasePack(contracts.serialiseCasePortableJson(currentExport), { audience: 'internal', reviewed: true }, NOW),
-      await fixture(contracts.CLI_CASE_PACK_WRITER_FIXTURE_ID),
-    );
+    const freshPack = casePack.buildCliCasePack(contracts.serialiseCasePortableJson(currentExport), { audience: 'internal', reviewed: true }, NOW);
+    const frozenPack = await fixture<typeof freshPack>(contracts.CLI_CASE_PACK_WRITER_FIXTURE_ID);
+    assert.equal(casePack.verifyCliCasePack(freshPack).caseCount, 1);
+    assert.equal(casePack.verifyCliCasePack(frozenPack).caseCount, 1);
+    for (const report of freshPack.packet.reports) assert.equal(report.application.version, WHOISLEUTH_APPLICATION_VERSION);
+    // Only patch-level producer metadata and its digest vary. Every other
+    // field remains independently anchored to the published writer fixture.
+    const { integrity: _freshIntegrity, ...freshUnsigned } = freshPack;
+    const { integrity: _frozenIntegrity, ...frozenUnsigned } = frozenPack;
+    assert.deepEqual({ ...freshUnsigned, packet: { ...freshUnsigned.packet,
+      reports: freshUnsigned.packet.reports.map((report, index) => ({ ...report,
+        application: { ...report.application, version: frozenPack.packet.reports[index]!.application.version },
+      })),
+    } }, frozenUnsigned);
     const frozenArchive = await fixture<workspace.WorkspaceArchiveDocument>(`workspace-archive-v${contracts.WORKSPACE_ARCHIVE_VERSION}-empty-current`);
     const archive = await workspace.buildWorkspaceArchive(emptyWorkspaceInput(), { generatedAt: frozenArchive.generatedAt });
     const { manifest: frozenManifest, sections: frozenSections, ...frozenEnvelope } = frozenArchive;

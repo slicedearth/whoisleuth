@@ -75,8 +75,10 @@ function factSourceExplicitlyComplete(
   fallbackFact: LookupEvidenceReplay['facts'][number] | undefined,
   replay: LookupEvidenceReplay,
 ): boolean {
-  if (fact) return explicitlyCompleteSourceState(fact.sourceState, fact.sourceComplete);
+  if (fact) return (fact.id === 'dns.a' || fact.id === 'dns.aaaa') && fact.sourceState === 'not_found'
+    ? fact.sourceComplete === true : explicitlyCompleteSourceState(fact.sourceState, fact.sourceComplete);
   if (!fallbackFact) return false;
+  if (fallbackFact.id === 'dns.a' || fallbackFact.id === 'dns.aaaa') return false;
   const source = replay.sources.find((item) => item.id === fallbackFact.sourceId);
   return Boolean(source && explicitlyCompleteSourceState(source.state, source.complete));
 }
@@ -188,7 +190,8 @@ export function buildLookupEvidenceReplayDiff(
     const scopeChanged = [before?.sourceId, after?.sourceId].some((source) => source && (
       observationTargetChanged && HOSTNAME_SCOPED_SOURCES.has(source)
       || selectedPageContext(left, right) && WEB_SCOPED_SOURCES.has(source)));
-    const kind = sourceChanged || scopeChanged
+    const incompleteDnsFamily = (id === 'dns.a' || id === 'dns.aaaa') && !sourcesExplicitlyComplete;
+    const kind = sourceChanged || scopeChanged || incompleteDnsFamily
       ? 'collection_quality_difference'
       : unchanged
       ? 'unchanged'
@@ -208,7 +211,9 @@ export function buildLookupEvidenceReplayDiff(
             ? 'The hostname differs or a selected URL has no retained complete target identity; this is not reported as change at one target.'
             : sourceChanged
             ? 'The retained source attribution changed, so the values are not represented as a target change even when they differ.'
-            : 'One observation lacks this fact without explicitly complete positive source evidence on both sides; this is a collection or provenance difference, not observed removal.'
+            : incompleteDnsFamily
+              ? 'The DNS family outcome is unknown or incomplete on at least one side; this is not evidence of address removal.'
+              : 'One observation lacks this fact without explicitly complete positive source evidence on both sides; this is a collection or provenance difference, not observed removal.'
           : 'The bounded normalised value is unchanged.',
     });
   }

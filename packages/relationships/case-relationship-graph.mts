@@ -34,6 +34,7 @@ const CASE_X = 30;
 const RELATIONSHIP_X = 570;
 const NODE_WIDTH = 300;
 const NODE_HEIGHT = 32;
+export const RELATIONSHIP_GRAPH_LABEL_LAYOUT = Object.freeze({ inset: 34, endPadding: 12, fontSize: 13, glyphAdvance: 8.5 });
 
 export interface CaseRelationshipGraphOptions extends CaseRelationshipFilterOptions {
   hiddenIds?: unknown;
@@ -144,9 +145,21 @@ function plainRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function label(value: unknown, maxLength = 40): string {
+function label(value: unknown): string {
   const normalized = String(value || '').replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim();
-  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 1)}…`;
+  const { inset, endPadding, glyphAdvance } = RELATIONSHIP_GRAPH_LABEL_LAYOUT;
+  const budget = Math.floor((NODE_WIDTH - inset - endPadding) / glyphAdvance);
+  // Reserve two monospace cells for non-ASCII glyphs; full text stays in the
+  // inspector, native SVG title and accessible name.
+  const glyphs = [...normalized];
+  const cells = (glyph: string) => /^[\x20-\x7e]$/u.test(glyph) ? 1 : 2;
+  if (glyphs.reduce((sum, glyph) => sum + cells(glyph), 0) <= budget) return normalized;
+  let output = '', used = 0;
+  for (const glyph of glyphs) {
+    if (used + cells(glyph) > budget - 2) break;
+    output += glyph; used += cells(glyph);
+  }
+  return `${output}…`;
 }
 
 function graphHeight(caseCount: number, relationshipCount: number): number {
@@ -325,7 +338,7 @@ export function projectCaseRelationshipGraph(
     }
   }
 
-  const caseItems = [...cases.values()].sort((left, right) => left.domain.localeCompare(right.domain));
+  const caseItems = [...cases.values()].sort((left, right) => left.domain.localeCompare(right.domain) || left.id.localeCompare(right.id));
   const caseIds = new Set(caseItems.map((item) => item.id));
   const candidateEdges: CaseRelationshipGraphEdge[] = [];
   const candidateEdgeIds = new Set<string>();

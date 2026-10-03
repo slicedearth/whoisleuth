@@ -3,11 +3,12 @@
 // against a last-known baseline so browser-local storage does not grow by one complete
 // result set on every check.
 
-import { explainRiskScore, normalizeRiskModelVersion } from '../../lib/risk-scoring.mts';
+import { explainRiskScore, normalizeRiskModelVersion } from '../analysis/risk-scoring.mts';
 import { HTTP_SECURITY_HEADER_TOKENS, normalizeHttpSummary } from '../cases/http-summary.mts';
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { registryDateIso } from '../evidence/registry-dates.mts';
+import { mergeWebCollectionQuality, normalizeWebCollectionQuality, webCollectionAllowsComparison, type WebCollectionQuality } from '../evidence/collection-quality.mts';
 import {
   MAX_WATCHLIST_CHANGES_PER_EVENT,
   MAX_WATCHLIST_DOMAINS,
@@ -40,6 +41,7 @@ export type WatchlistScanMode = WatchlistScanDepth | 'saved';
 export interface WatchlistComparableRecord extends Record<string, unknown> {
   domain: string;
   scanDepth: WatchlistScanDepth;
+  webCollectionQuality?: WebCollectionQuality;
   riskModelVersion?: number | null;
   riskScore?: number | null;
 }
@@ -63,17 +65,18 @@ export interface WatchlistChange {
 }
 
 export interface WatchlistHistoryEvent {
-  checkedAt: string;
+  checkedAt: string | null;
   mode: WatchlistScanMode;
   resultCount: number;
   conclusiveCount: number;
   changeCount: number;
   omittedChanges: number;
+  webComparisonLimitedCount?: number;
   changes: WatchlistChange[];
 }
 
 export interface WatchlistEntry {
-  updatedAt: string;
+  updatedAt: string | null;
   results: CompactWatchlistRecord[];
   baseline: WatchlistComparableRecord[];
   history: WatchlistHistoryEvent[];
@@ -92,7 +95,7 @@ export interface WatchlistHistoryGroup {
 }
 
 export interface WatchlistDomainHistoryEvent {
-  checkedAt: string;
+  checkedAt: string | null;
   mode: WatchlistScanMode;
   groups: WatchlistHistoryGroup[];
 }
@@ -242,13 +245,6 @@ function boundedText(
   return normalized || (allowNull ? null : '');
 }
 
-function isoTimestamp(
-  value: unknown,
-  fallback = new Date(0).toISOString(),
-): string {
-  return normalizeExplicitIsoTimestamp(value) ?? fallback;
-}
-
 function boundedInteger(value: unknown, maximum: number, fallback = 0): number {
   return Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= maximum
     ? Number(value)
@@ -304,11 +300,14 @@ function compactRecord(value: unknown): CompactWatchlistRecord | null {
   const domain = normalizeDomain(record.domain);
   if (!domain) return null;
   const scanDepth = inferredScanDepth(record);
+  const webCollectionQuality = normalizeWebCollectionQuality(record.webCollectionQuality, scanDepth);
   const httpSummary = normalizeHttpSummary(record) || {};
   const providedRiskScore = typeof record.riskScore === 'number' && Number.isFinite(record.riskScore)
     ? Math.max(0, Math.min(100, Math.round(record.riskScore)))
     : null;
-  const computedRisk = scanDepth === 'deep' && providedRiskScore === null ? explainRiskScore(record) : null;
+  const computedRisk = scanDepth === 'deep' && providedRiskScore === null
+    && (!webCollectionQuality || (record.riskScore === undefined
+      && webCollectionAllowsComparison('riskScore', webCollectionQuality, scanDepth))) ? explainRiskScore(record) : null;
   const riskScore = scanDepth === 'deep' ? (providedRiskScore ?? computedRisk?.score ?? null) : null;
   const riskModelVersion = riskScore === null
     ? null
@@ -318,6 +317,7 @@ function compactRecord(value: unknown): CompactWatchlistRecord | null {
   return {
     domain,
     scanDepth,
+    ...(webCollectionQuality ? { webCollectionQuality } : {}),
     availability: hasString(AVAILABILITY_VALUES, record.availability) ? record.availability : null,
     registrarName: boundedText(record.registrarName),
     nameservers: normalizeNameservers(record.nameservers),
@@ -357,6 +357,7 @@ export function compactWatchlistResults(results: unknown): CompactWatchlistRecor
 
 function isComparable(field: string, value: unknown, record: WatchlistComparableRecord): boolean {
   if (DEEP_FIELDS.has(field) && record.scanDepth !== 'deep') return false;
+  if (!webCollectionAllowsComparison(field, record.webCollectionQuality, record.scanDepth)) return false;
   if (field === 'availability') return hasString(CONCLUSIVE_AVAILABILITY, value);
   if (field === 'nameservers') return Array.isArray(value) && value.length > 0;
   if (field === 'httpSecurityHeaders') return Array.isArray(value);
@@ -453,7 +454,7 @@ export function mergeWatchlistBaseline(
   return current.map((next) => {
     const previous = previousByDomain.get(next.domain);
     const updated: WatchlistComparableRecord = {
-      ...(previous || {}),
+      ...(previous || next),
       domain: next.domain,
       scanDepth: previous?.scanDepth === 'deep' || next.scanDepth === 'deep' ? 'deep' : 'fast',
     };
@@ -464,9 +465,11 @@ export function mergeWatchlistBaseline(
     // mean "unversioned" to the comparator, but retaining the key makes the
     // stored/exported contract unambiguous and prevents consumers from having
     // to infer why a score was deliberately excluded from comparison.
-    if (next.scanDepth === 'deep' && typeof next.riskScore === 'number') {
+    if (next.scanDepth === 'deep' && typeof next.riskScore === 'number' && isComparable('riskScore', next.riskScore, next)) {
       updated.riskModelVersion = normalizeRiskModelVersion(next.riskModelVersion);
     }
+    const quality = mergeWebCollectionQuality(previous?.webCollectionQuality, next.webCollectionQuality);
+    if (quality) updated.webCollectionQuality = quality;
     return updated;
   });
 }
@@ -534,12 +537,13 @@ function initialHistoryEvent(
   baseline: WatchlistComparableRecord[],
 ): WatchlistHistoryEvent {
   return {
-    checkedAt: entry.updatedAt || new Date(0).toISOString(),
+    checkedAt: entry.updatedAt,
     mode: 'saved',
     resultCount: Array.isArray(entry.results) ? entry.results.length : baseline.length,
     conclusiveCount: baseline.filter((record) => hasString(CONCLUSIVE_AVAILABILITY, record.availability)).length,
     changeCount: 0,
     omittedChanges: 0,
+    webComparisonLimitedCount: limitedWebComparisonCount(baseline),
     changes: [],
   };
 }
@@ -563,7 +567,7 @@ export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
         : [];
       const rawMode = event.mode;
       return {
-        checkedAt: isoTimestamp(event.checkedAt, new Date(0).toISOString()),
+        checkedAt: normalizeExplicitIsoTimestamp(event.checkedAt),
         mode: typeof rawMode === 'string' && ['fast', 'deep', 'saved'].includes(rawMode)
           ? rawMode as WatchlistScanMode
           : 'saved',
@@ -571,18 +575,28 @@ export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
         conclusiveCount: boundedInteger(event.conclusiveCount, MAX_WATCHLIST_DOMAINS),
         changeCount: boundedInteger(event.changeCount, MAX_CHANGE_COUNT, changes.length),
         omittedChanges: boundedInteger(event.omittedChanges, MAX_CHANGE_COUNT),
+        ...(event.webComparisonLimitedCount !== undefined
+          ? { webComparisonLimitedCount: boundedInteger(event.webComparisonLimitedCount, MAX_WATCHLIST_DOMAINS) } : {}),
         changes,
       };
     }).slice(-MAX_WATCHLIST_HISTORY_EVENTS)
     : [];
   const normalized = {
-    updatedAt: isoTimestamp(input.updatedAt, new Date(0).toISOString()),
+    updatedAt: normalizeExplicitIsoTimestamp(input.updatedAt),
     results,
     baseline,
     history,
   };
   if (normalized.history.length === 0) normalized.history.push(initialHistoryEvent(normalized, baseline));
   return normalized;
+}
+
+function limitedWebComparisonCount(current: WatchlistComparableRecord[], baseline: WatchlistComparableRecord[] = []): number {
+  const previous = new Map(baseline.map(record => [record.domain, record]));
+  return current.filter(record => record.scanDepth === 'deep' && (
+    !webCollectionAllowsComparison('riskScore', record.webCollectionQuality, record.scanDepth)
+    || (previous.has(record.domain) && !webCollectionAllowsComparison('riskScore', previous.get(record.domain)!.webCollectionQuality, previous.get(record.domain)!.scanDepth))
+  )).length;
 }
 
 /**
@@ -595,7 +609,7 @@ export function appendWatchlistScan(
   results: unknown,
   options: AppendWatchlistScanOptions = {},
 ) {
-  const checkedAt = isoTimestamp(options.checkedAt, new Date().toISOString());
+  const checkedAt = options.checkedAt === undefined ? new Date().toISOString() : normalizeExplicitIsoTimestamp(options.checkedAt);
   const mode: WatchlistScanMode = typeof options.mode === 'string' && ['fast', 'deep', 'saved'].includes(options.mode)
     ? options.mode as WatchlistScanMode
     : 'saved';
@@ -612,6 +626,7 @@ export function appendWatchlistScan(
     conclusiveCount: current.filter((record) => hasString(CONCLUSIVE_AVAILABILITY, record.availability)).length,
     changeCount: changes.length,
     omittedChanges: Math.max(0, changes.length - storedChanges.length),
+    webComparisonLimitedCount: limitedWebComparisonCount(current, previous?.baseline),
     changes: storedChanges,
   };
   const history = [...(previous?.history || []), event].slice(-MAX_WATCHLIST_HISTORY_EVENTS);

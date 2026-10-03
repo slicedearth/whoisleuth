@@ -1,5 +1,4 @@
 export const CRITICAL_MUTATION_MANIFEST_VERSION = 1;
-export const MAX_CRITICAL_MUTANTS = 12;
 export const MAX_CRITICAL_MUTATION_TEXT_BYTES = 2_048;
 export const MAX_CRITICAL_MUTATION_TIMEOUT_MS = 30_000;
 export const MAX_CRITICAL_MUTATION_OUTPUT_BYTES = 64 * 1024;
@@ -18,8 +17,13 @@ export type CriticalMutant = Readonly<{
     | 'evidence_completeness'
     | 'protocol_null_mx'
     | 'observation_time_order'
-    | 'comparison_source_qualification';
-  file: string;
+    | 'comparison_source_qualification'
+    | 'private_import_fields'
+    | 'replay_source_qualification'
+    | 'client_deadline_bound'
+    | 'retained_fixture_freshness'
+    | 'retired_contract_refusal'
+    | 'verification_inventory_identity';
   search: string;
   replacement: string;
   focusedTests: readonly string[];
@@ -33,11 +37,50 @@ export function assertUniqueCriticalMutationPattern(source: string, search: stri
   }
 }
 
+/** Follow the statement through production-module extraction, not a stored file
+ * location. The loader still requires exactly one application in the test run. */
+export function isCriticalMutationSource(relativePath: string): boolean {
+  return /^(?:lib|packages|cli|tools|frontend\/src)\/(?:[A-Za-z0-9_-][A-Za-z0-9._-]*\/)*[A-Za-z0-9_-][A-Za-z0-9._-]*\.(?:mts|ts)$/u.test(relativePath)
+    && !/\.(?:test|spec)\.(?:mts|ts)$/u.test(relativePath);
+}
+
 export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.freeze([
+  Object.freeze({
+    id: 'lookup-import-rejects-private-fields', area: 'private_import_fields',
+    search: "const source = record(value, 'Lookup evidence RDAP source');",
+    replacement: "const source = record(value, 'Lookup evidence RDAP source'); delete source.raw;",
+    focusedTests: Object.freeze(['test/lookup-evidence-replay.test.mts']), timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'replay-requires-admitted-source-state', area: 'replay_source_qualification',
+    search: "return complete === true && ['complete', 'success', 'provided'].includes(canonical);",
+    replacement: 'return complete === true;',
+    focusedTests: Object.freeze(['test/lookup-evidence-replay-diff.test.mts']), timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'injected-client-deadline-remains-bounded', area: 'client_deadline_bound',
+    search: 'Math.min(LOOKUP_CLIENT_TIMEOUT_MS, Math.max(1, Math.round(Number(options.timeoutMs))))',
+    replacement: 'Math.max(1, Math.round(Number(options.timeoutMs)))',
+    focusedTests: Object.freeze(['test/lookup-request.test.mts']), timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'retained-fixture-age-affects-health', area: 'retained_fixture_freshness',
+    search: 'ageDays < 0 || ageDays > maxAgeDays', replacement: 'false',
+    focusedTests: Object.freeze(['test/registry-fixture-tooling.test.mts']), timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'retired-contract-cannot-be-read-or-written', area: 'retired_contract_refusal',
+    search: '|| contract.readable\n        || contract.emitted\n        || !contract.exactKeys', replacement: '|| !contract.exactKeys',
+    focusedTests: Object.freeze(['test/schema-lifecycle-variants.test.mts']), timeoutMs: 20_000,
+  }),
+  Object.freeze({
+    id: 'timing-profile-rejects-unknown-tests', area: 'verification_inventory_identity',
+    search: 'if (missing.length || unknown.length)', replacement: 'if (missing.length)',
+    focusedTests: Object.freeze(['test/verification-architecture.test.mts']), timeoutMs: 20_000,
+  }),
   Object.freeze({
     id: 'authority-dns-delegation-required',
     area: 'authority_availability',
-    file: 'lib/availability.mts',
     search: 'if (!rdapFound && !hasWhoisRegistrationData && !dnsDelegated) {',
     replacement: 'if (!rdapFound && !hasWhoisRegistrationData) {',
     focusedTests: Object.freeze(['test/availability-dns.test.mts']),
@@ -46,7 +89,6 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
   Object.freeze({
     id: 'schema-future-version-descriptor-refusal',
     area: 'schema_refusal',
-    file: 'packages/contracts/schema-lifecycle.mts',
     search: '          : contract.futureVersionBehaviour !== descriptor.futureVersionBehavior)\n',
     replacement: '          : false)\n',
     focusedTests: Object.freeze(['test/schema-lifecycle-variants.test.mts']),
@@ -55,7 +97,6 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
   Object.freeze({
     id: 'privacy-notes-require-opt-in',
     area: 'privacy_projection',
-    file: 'packages/cases/case-report.mts',
     search: '  const includeNotes = options.includeNotes === true;',
     replacement: '  const includeNotes = true;',
     focusedTests: Object.freeze(['test/case-report.test.mts']),
@@ -64,7 +105,6 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
   Object.freeze({
     id: 'scoring-missing-coverage-stays-unknown',
     area: 'missing_evidence_scoring',
-    file: 'lib/scoring-evidence-quality.mts',
     search: "  if (!coverage.length || depth === 'unknown') state = 'unknown';",
     replacement: "  if (depth === 'unknown') state = 'unknown';",
     focusedTests: Object.freeze(['test/scoring.test.mts']),
@@ -73,7 +113,6 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
   Object.freeze({
     id: 'scoring-unreviewed-page-match-remains-neutral',
     area: 'unreviewed_evidence_scoring',
-    file: 'lib/risk-scoring.mts',
     search: '  includePageBaselineMatch: false,',
     replacement: '  includePageBaselineMatch: true,',
     focusedTests: Object.freeze(['test/scoring.test.mts']),
@@ -82,7 +121,6 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
   Object.freeze({
     id: 'ssrf-unrecognised-literal-fails-closed',
     area: 'public_address_enforcement',
-    file: 'lib/safe-fetch.mts',
     search: '  return true; // not a recognizable IP literal - fail closed',
     replacement: '  return false; // mutant must be killed by fail-closed regression coverage',
     focusedTests: Object.freeze(['test/safe-fetch.test.mts']),
@@ -91,7 +129,6 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
   Object.freeze({
     id: 'artifact-projection-count-matches-items',
     area: 'artifact_structure_integrity',
-    file: 'cli/artifact-validation/investigation-capsule.mts',
     search: '  if (displayed > total || omitted !== total - displayed || items.length !== displayed) fail(label);',
     replacement: '  if (displayed > total || omitted !== total - displayed) fail(label);',
     focusedTests: Object.freeze(['test/artifact-verify.test.mts']),
@@ -100,7 +137,6 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
   Object.freeze({
     id: 'local-mutation-draft-requires-commit',
     area: 'local_mutation_outcome',
-    file: 'frontend/src/lib/local-mutation-outcome.ts',
     search: "  return outcome === 'committed';",
     replacement: '  return true;',
     focusedTests: Object.freeze(['test/local-mutation-outcome.test.mts']),
@@ -109,7 +145,6 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
   Object.freeze({
     id: 'domain-change-requires-complete-evidence',
     area: 'evidence_completeness',
-    file: 'lib/domain-change-packet.mts',
     search: "    if (beforeEvidence.state !== 'complete' || afterEvidence.state !== 'complete') {",
     replacement: "    if (beforeEvidence.state !== 'complete' && afterEvidence.state !== 'complete') {",
     focusedTests: Object.freeze(['test/domain-change-packet.test.mts']),
@@ -118,7 +153,6 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
   Object.freeze({
     id: 'null-mx-requires-zero-preference',
     area: 'protocol_null_mx',
-    file: 'lib/zone-intent-review.mts',
     search: "    if (exchangeToken === '.' && preference !== 0) throw new TypeError('A Null MX exchange must use preference 0.');",
     replacement: "    if (false) throw new TypeError('A Null MX exchange must use preference 0.');",
     focusedTests: Object.freeze(['test/zone-intent-review.test.mts']),
@@ -127,7 +161,6 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
   Object.freeze({
     id: 'observation-cannot-follow-review',
     area: 'observation_time_order',
-    file: 'tools/maintainer-tool-helpers.mts',
     search: '  if (Date.parse(observedAt) > Date.parse(reviewedAt)) {',
     replacement: '  if (false) {',
     focusedTests: Object.freeze(['test/technology-fixture-review.test.mts']),
@@ -136,7 +169,6 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
   Object.freeze({
     id: 'comparison-requires-complete-sources',
     area: 'comparison_source_qualification',
-    file: 'packages/comparison/comparison-ledger-bulk.mts',
     search: '  if (!completeBulkSourceState(earlierState) || !completeBulkSourceState(laterState)) {',
     replacement: '  if (false) {',
     focusedTests: Object.freeze(['test/comparison-ledger.test.mts']),

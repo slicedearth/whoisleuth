@@ -7,6 +7,7 @@ import {
   isCancelledSessionPageDiagnostic,
   isNativePreloadTimingDiagnostic,
   isPolicyFixtureDiagnostic,
+  browserBuildAssetPath,
 } from '../tools/playwright-execution-contract.mts';
 import { ALLOWED_ORIGIN } from './constants.ts';
 
@@ -26,7 +27,7 @@ export function isAllowedRequestOrigin(url: string, allowedOrigin: string = ALLO
 
 // Exact origin + exact pathname, not a string prefix - `/api/lookup` as a
 // prefix would also match `/api/lookup-other` or `/api/lookup/whatever`.
-function isLookupEndpointUrl(url: string, allowedOrigin: string = ALLOWED_ORIGIN): boolean {
+export function isLookupEndpointUrl(url: string, allowedOrigin: string = ALLOWED_ORIGIN): boolean {
   try {
     const parsed = new URL(url);
     return parsed.origin === allowedOrigin && parsed.pathname === '/api/lookup';
@@ -61,8 +62,9 @@ const CHROME_HTTP_500_NOISE_RE = /^Failed to load resource: the server responded
 // is either passed through (allowed origin) or aborted client-side before it
 // ever reaches the network (anything else). context.route() - unlike
 // page.on('request'), which only observes traffic on one already-open page -
-// applies to every page in the context, including popups and pages opened
-// later, so this can't be bypassed by opening a new tab/window.
+// applies to attached pages in the context. Native initial documents can
+// precede driver interception; native-tab-fixtures.ts adds transport isolation
+// for the specifications exercising that browser-owned disposition.
 export async function installNetworkGuard(context: BrowserContext, allowedOrigin: string = ALLOWED_ORIGIN) {
   const offOriginRequests: string[] = [];
 
@@ -125,6 +127,9 @@ export async function installBrowserGuards(browser: Browser, options: GuardOptio
   if (origin.origin !== networkGuardOrigin || origin.protocol !== 'http:'
     || origin.hostname !== '127.0.0.1' || !origin.port) throw new Error('Browser fixtures require one exact loopback origin.');
   const offOriginRequests: string[] = [], consoleIssues: string[] = [], diagnostics: string[] = [];
+  const assetIssues: string[] = [];
+  let omittedAssetIssues = 0;
+  const assetIssue = (message: string) => { if (assetIssues.length < 32) assetIssues.push(message); else omittedAssetIssues++; };
   const contexts = new Map<BrowserContext, Promise<() => Promise<void>>>();
   let diagnosticCount = 0;
   const diagnostic = (text: string) => { diagnosticCount++; if (diagnostics.length < 8) diagnostics.push(text); };
@@ -142,14 +147,25 @@ export async function installBrowserGuards(browser: Browser, options: GuardOptio
         const successfulScripts = new Set<string>();
         const pendingErrors: Error[] = [];
         const pendingNativeWarnings: { text: string; url: string }[] = [];
+        const pendingAssets = new Set<string>();
+        const onRequest = (request: import('@playwright/test').Request) => {
+          const asset = browserBuildAssetPath(request.url(), networkGuardOrigin);
+          if (asset) { if (pendingAssets.size < 64) pendingAssets.add(asset); else omittedAssetIssues++; }
+        };
         const onResponse = (response: import('@playwright/test').Response) => {
+          const asset = browserBuildAssetPath(response.url(), networkGuardOrigin);
+          if (asset && response.status() >= 400) assetIssue(`${asset}: HTTP ${response.status()}`);
           if (response.status() === 200 && response.request().resourceType() === 'script'
             && response.url().startsWith(networkGuardOrigin + '/_app/immutable/')) successfulScripts.add(response.url());
         };
         const onFinished = (request: import('@playwright/test').Request) => {
+          const asset = browserBuildAssetPath(request.url(), networkGuardOrigin);
+          if (asset) pendingAssets.delete(asset);
           if (successfulScripts.has(request.url())) completedScripts.add(request.url());
         };
         const onFailed = (request: import('@playwright/test').Request) => {
+          const asset = browserBuildAssetPath(request.url(), networkGuardOrigin);
+          if (asset) { pendingAssets.delete(asset); assetIssue(`${asset}: request failed`); }
           if (request.url() === networkGuardOrigin + '/api/session'
             && /cancelled|canceled|aborted|interrupted/iu.test(request.failure()?.errorText ?? '')) cancelledSession = true;
         };
@@ -172,10 +188,13 @@ export async function installBrowserGuards(browser: Browser, options: GuardOptio
         page.on('console', onConsole); page.on('pageerror', onError);
         page.on('requestfailed', onFailed); page.on('framenavigated', onNavigation);
         page.on('response', onResponse); page.on('requestfinished', onFinished);
+        page.on('request', onRequest);
         pages.set(page, () => {
           page.off('console', onConsole); page.off('pageerror', onError);
           page.off('requestfailed', onFailed); page.off('framenavigated', onNavigation);
           page.off('response', onResponse); page.off('requestfinished', onFinished);
+          page.off('request', onRequest);
+          for (const asset of pendingAssets) assetIssue(`${asset}: incomplete at teardown`);
           // The native warning can precede requestfinished in the protocol.
           // Require a completed response at teardown, not event arrival order.
           for (const { text, url } of pendingNativeWarnings) {
@@ -214,7 +233,8 @@ export async function installBrowserGuards(browser: Browser, options: GuardOptio
   try { for (const context of browser.contexts()) await attach(context); }
   catch (error) { browser.newContext = original; throw error; }
   return {
-    offOriginRequests, consoleIssues, diagnostics,
+    offOriginRequests, consoleIssues, diagnostics, assetIssues,
+    get omittedAssetIssues() { return omittedAssetIssues; },
     get diagnosticCount() { return diagnosticCount; },
     async dispose() {
       browser.newContext = original;
@@ -248,6 +268,11 @@ export const test = base.extend<Options & Fixtures>({
       if (guard.diagnostics.length) await testInfo.attach('browser-engine-diagnostics', {
         body: JSON.stringify({ count: guard.diagnosticCount, samples: guard.diagnostics }), contentType: 'application/json',
       });
+      if (testInfo.status !== testInfo.expectedStatus || guard.consoleIssues.length || guard.offOriginRequests.length) {
+        await testInfo.attach('build-asset-diagnostics', {
+          body: JSON.stringify({ issues: guard.assetIssues, omitted: guard.omittedAssetIssues }), contentType: 'application/json',
+        });
+      }
       expect(guard.offOriginRequests, 'requests must stay within the local test server origin').toEqual([]);
       expect(guard.consoleIssues, 'no console errors/warnings or uncaught page errors').toEqual([]);
     },

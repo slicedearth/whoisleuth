@@ -124,6 +124,29 @@ test('Case files support the complete offline note, evidence, assessment and rec
   assert.ok((await readdir(root)).every(name => !name.endsWith('.workflow.lock') && !name.endsWith('.tmp')));
 });
 
+test('evidence relationships and withdrawals use the same offline Case file and preserve original pin material', async context => {
+  const root = await directory(context), file = join(root, 'cases.json'), input = join(root, 'relationship.json');
+  const record = createCase({ domain: 'example.test', evidencePins: [pin, { ...pin, label: 'Derived link', value: 'A link extracted from the retained page.' }] }, NOW);
+  await writeFile(file, JSON.stringify(buildCaseExport([record], NOW)));
+  await writeFile(input, JSON.stringify({ fromPinId: record.evidencePins[1]!.id, toPinId: record.evidencePins[0]!.id, kind: 'derived_from', basis: 'Recorded from the selected page.' }));
+  const linked = await invoke(['case', 'link', file, '--input', input, '--output', file, '--force']);
+  assert.equal(linked.code, EXIT_CODES.SUCCESS, linked.stderr);
+  const next = readEditableCaseExport(await readFile(file, 'utf8'))[0]!;
+  assert.deepEqual(next.evidencePins, record.evidencePins);
+  assert.equal(next.evidenceLinks?.length, 1);
+  const shown = await invoke(['case', 'show', file, '--no-color']);
+  assert.match(shown.stdout, /Evidence relationship.*analyst declaration/u);
+  await writeFile(input, JSON.stringify({ id: next.evidenceLinks![0]!.id, reason: 'Corrected attribution' }));
+  const withdrawn = await invoke(['case', 'withdraw-link', file, '--input', input, '--output', file, '--force']);
+  assert.equal(withdrawn.code, EXIT_CODES.SUCCESS, withdrawn.stderr);
+  const final = readEditableCaseExport(await readFile(file, 'utf8'))[0]!;
+  assert.equal(final.evidenceLinks?.[0]?.withdrawal?.reason, 'Corrected attribution');
+  assert.deepEqual(final.evidencePins, record.evidencePins);
+  const raw = await readFile(file, 'utf8');
+  const repeated = await invoke(['case', 'withdraw-link', file, '--input', input, '--output', file, '--force']);
+  assert.equal(repeated.code, EXIT_CODES.USAGE); assert.equal(await readFile(file, 'utf8'), raw);
+});
+
 test('independent incidents require an explicit Case selection and stale reviewed digests cannot overwrite them', async context => {
   const root = await directory(context), file = await initialFile(root);
   const first = readEditableCaseExport(await readFile(file, 'utf8'))[0]!;

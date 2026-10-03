@@ -1,5 +1,5 @@
 import express from 'express';
-import type { IncomingHttpHeaders } from 'node:http';
+import { STATUS_CODES, type IncomingHttpHeaders } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { Request, Response } from 'express';
@@ -24,8 +24,8 @@ import {
   PERMANENT_ROUTE_REDIRECTS,
   PRERENDERED_HTML_FILE_OVERRIDES,
 } from './lib/prerendered-routes.mts';
-import { searchCertificateTransparency } from './lib/ct-search.mts';
-import { isCtQueryError, normalizeCtQuery } from './lib/ct-query.mts';
+import { ctCollectionErrorResponse, searchCertificateTransparency } from './lib/ct-search.mts';
+import { isCtQueryError, normalizeCtQuery } from './packages/analysis/ct-query.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors, normalizeMailProtectionProfile } from './lib/domain-posture.mts';
 import { parseInheritedDnsSelection } from './lib/dns-inheritance-review.mts';
 import { capabilityReport } from './lib/capabilities.mts';
@@ -497,7 +497,7 @@ function registerNetworkApiRoutes(
           inputHostname: classified.inputHostname,
           registrableDomain: classified.registrableDomain,
           chain,
-          parsed: services.parseWhoisChain(chain),
+          parsed: services.parseWhoisChain(chain, classified.type === 'domain' ? classified.registrableDomain ?? classified.value : undefined),
         });
       } catch (err) {
         sendUnexpectedApiError(res);
@@ -563,6 +563,9 @@ function registerNetworkApiRoutes(
         if (signal.aborted) return;
         res.json({ keyword: q, ...result });
       } catch (err) {
+        if (signal.aborted) return;
+        const expected = ctCollectionErrorResponse(err);
+        if (expected) return res.status(expected.statusCode).json(expected.body);
         sendUnexpectedApiError(res);
       }
     });
@@ -619,6 +622,38 @@ function apiErrorHandler(error: unknown, _req: RequestLike, res: ResponseLike, n
 }
 
 app.use('/api', apiErrorHandler);
+app.use('/api', (_req: Request, res: Response) => {
+  res.status(404).json({ error: 'Endpoint not found', errorCode: 'NOT_FOUND' });
+});
+
+function notFoundPageHandler(filename: string) {
+  return (req: Request, res: Response) => {
+    res.status(404).setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    if (req.method !== 'GET' && req.method !== 'HEAD') return res.type('text/plain').send('Not found\n');
+    return res.sendFile(filename, error => {
+      if (error && !res.headersSent && !res.destroyed) res.status(404).type('text/plain').send('Not found\n');
+    });
+  };
+}
+
+app.use(prerenderedHtmlRateLimit, notFoundPageHandler(path.join(svelteBuildDir, '404.html')));
+
+// Static-file and non-API errors must not fall through to the environment-
+// dependent development renderer, which includes internal stack traces.
+function pageErrorHandler(error: unknown, _req: Request, res: Response, next: ErrorNext) {
+  if (res.headersSent) return next(error);
+  const candidate = recordValue(error, 'statusCode') ?? recordValue(error, 'status');
+  const status = typeof candidate === 'number' && Number.isInteger(candidate) && candidate >= 400 && candidate <= 599 ? candidate : 500;
+  if (status === 416) {
+    const range = recordValue(recordValue(error, 'headers'), 'Content-Range');
+    if (typeof range === 'string' && /^bytes \*\/[0-9]{1,20}$/u.test(range)) res.setHeader('Content-Range', range);
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(status).type('text/plain').send(`${STATUS_CODES[status] ?? 'Request failed'}\n`);
+}
+
+app.use(pageErrorHandler);
 
 function startServer() {
   reportSessionSecretConfigurationWarning();
@@ -632,5 +667,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   startServer();
 }
 
-export { app, isHttps, usesSecureCookies, requestOriginContext, requireAuth, requireNetworkRequestAdmission, rateLimit, requireFeature, apiErrorHandler, registerNetworkApiRoutes, sendPrerenderedHtmlFile, sendUnexpectedApiError, startServer };
+export { app, isHttps, usesSecureCookies, requestOriginContext, requireAuth, requireNetworkRequestAdmission, rateLimit, requireFeature, apiErrorHandler, pageErrorHandler, registerNetworkApiRoutes, sendPrerenderedHtmlFile, sendUnexpectedApiError, notFoundPageHandler, startServer };
 export type { NetworkRouteServices };

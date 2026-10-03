@@ -58,11 +58,13 @@ export type LookupEvidenceCoverageInput = Readonly<{
   sslbl?: unknown;
   technologyProfile?: unknown;
   threatIntelligenceProviders?: unknown;
+  threatIntelligenceWithheld?: unknown;
   tlsEvidence?: unknown;
   whoisParsed?: unknown;
 }>;
 
-const MAX_ENTRIES = 24;
+export const MAX_EVIDENCE_COVERAGE_ENTRIES = 24;
+const MAX_ENTRIES = MAX_EVIDENCE_COVERAGE_ENTRIES;
 const MAX_ID_LENGTH = 64;
 const MAX_LABEL_LENGTH = 120;
 const MAX_LIMITATIONS = 8;
@@ -412,6 +414,13 @@ export function buildLookupEvidenceCoverageLedger(
   const providers = Array.isArray(input.threatIntelligenceProviders)
     ? input.threatIntelligenceProviders
     : [];
+  if (Array.isArray(input.threatIntelligenceWithheld) && input.threatIntelligenceWithheld.length) {
+    items.push({
+      id: 'external-withheld', label: 'Withheld external-intelligence records', category: 'external',
+      status: 'unsupported', complete: false,
+      limitations: ['Some provider data was unsupported, unbound, malformed or over-limit. Withheld records are not evidence of no findings and cannot contribute to Risk.'],
+    });
+  }
   for (const [providerIndex, providerValue] of providers.entries()) {
     if (items.length >= MAX_ENTRIES) break;
     const provider = record(providerValue);

@@ -8,14 +8,41 @@ import {
   checkpointPinInputs,
   compareCheckpointPins,
   MAX_CHECKPOINT_FACTS,
+  type AcquisitionTransitionComparison,
 } from '../frontend/src/lib/analysis/case-evidence-checkpoint.ts';
 import { buildLookupAssetGraph } from '../packages/investigation/lookup-asset-graph.mts';
 import type { LookupEvidenceReplay } from '../frontend/src/lib/analysis/lookup-evidence-replay.ts';
 import { normalizeCaseEvidencePins } from '../frontend/src/lib/analysis/case-response-model.ts';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
 import type { LookupHttpResponse } from '../lib/lookup-response-contract.mts';
+import { MAX_CASE_CHECKPOINT_FACTS } from '../packages/contracts/case-portability.mts';
 
 const OBSERVED_AT = '2026-07-29T01:00:00.000Z';
+
+test('per-family DNS checkpoints preserve negative outcomes and IPv6 independently of unrelated failures', () => {
+  const result = response({ availability: { ...response().availability, dns: { status: 'partial', complete: false, observedAt: OBSERVED_AT,
+    records: { a: [], aaaa: ['2001:db8::1'] }, diagnostics: {
+      a: { status: 'not_found', detail: 'no_data' }, aaaa: { status: 'success', detail: 'records' }, mx: { status: 'error' },
+    } } } });
+  const facts = buildLookupCheckpointFacts(result, { collectionDepth: 'deep' });
+  assert.ok(facts.length <= MAX_CHECKPOINT_FACTS);
+  assert.equal(facts.at(-1)?.field, 'disclosure.security_txt_contacts');
+  const ipv4 = facts.find(fact => fact.field === 'dns.a')!;
+  const ipv6 = facts.find(fact => fact.field === 'dns.aaaa')!;
+  assert.equal(ipv4.value, 'No data for this record type (NODATA)');
+  assert.equal(ipv4.completeness, 'complete');
+  assert.equal(ipv6.value, '2001:db8::1');
+  assert.equal(ipv6.completeness, 'complete');
+  const pins = normalizeCaseEvidencePins(checkpointPinInputs(facts, ['dns.a', 'dns.aaaa'], { checkpointId: 'dns-checkpoint' }), OBSERVED_AT);
+  assert.equal(pins.length, 2);
+  const later = facts.map(fact => ({ ...fact, observedAt: '2026-07-30T01:00:00.000Z' }));
+  assert.ok(compareCheckpointPins(pins, later).every(item => item.state === 'equal'));
+  for (const family of ['dns.a', 'dns.aaaa']) {
+    const failure = later.map(fact => fact.field === family ? { ...fact, value: 'DNS query timed out', sourceState: 'error', completeness: 'partial' as const } : fact);
+    assert.equal(compareCheckpointPins(pins, failure).find(item => item.field === family)?.state, 'unavailable');
+  }
+  assert.throws(() => checkpointPinInputs(facts, Array.from({ length: MAX_CASE_CHECKPOINT_FACTS + 1 }, (_, index) => `field-${index}`)), /No selection was saved/u);
+});
 
 function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpResponse {
   return {
@@ -158,7 +185,7 @@ describe('case evidence checkpoints', () => {
       assert.equal(fact.completeness, 'unknown', fact.field);
       assert.match(fact.limitations.join(' '), /source observation time is unavailable/u);
     }
-    assert.deepEqual(checkpointPinInputs(facts, facts.map(fact => fact.field)), []);
+    for (const fact of facts) assert.deepEqual(checkpointPinInputs(facts, [fact.field]), []);
   });
 
   test('registration fallback keeps the selected publisher health and observation time', () => {
@@ -359,9 +386,10 @@ describe('case evidence checkpoints', () => {
       createdAt: OBSERVED_AT,
     })), OBSERVED_AT);
     const current = sourceFacts.map((fact) => {
-      if (fact.field === 'dns.mx') return { ...fact, value: 'mx.changed.example' };
+      const later = { ...fact, observedAt: '2026-07-30T01:00:00.000Z' };
+      if (fact.field === 'dns.mx') return { ...later, value: 'mx.changed.example' };
       if (fact.field === 'http.final_origin') return { ...fact, sourceState: 'unavailable', value: null };
-      return fact;
+      return later;
     });
     const states = Object.fromEntries(compareAcquisitionTransitionPins(pins, current)
       .map((item) => [item.field, item.transitionState]));
@@ -371,6 +399,27 @@ describe('case evidence checkpoints', () => {
     assert.equal(states['tls.protocol'], 'manual_review');
     assert.equal(states['http.final_origin'], 'indeterminate');
     assert.ok(pins.every((pin) => pin.transitionExpectation !== null));
+  });
+
+  test('transition verification requires a valid strictly later source observation for equal and changed values', () => {
+    const fact = buildLookupCheckpointFacts(response(), { collectionDepth: 'deep' }).find(item => item.field === 'dns.nameservers');
+    assert.ok(fact);
+    for (const expectation of ['preserve', 'change'] as const) {
+      const pins = normalizeCaseEvidencePins(checkpointPinInputs([fact], [fact.field], {
+        transitionExpectations: { [fact.field]: expectation },
+      }), OBSERVED_AT);
+      for (const observedAt of [OBSERVED_AT, '2026-07-28T01:00:00.000Z', null, 'not-a-time']) {
+        for (const value of [fact.value, 'ns.changed.example']) {
+          const result: AcquisitionTransitionComparison | undefined = compareAcquisitionTransitionPins(pins, [{ ...fact, observedAt, value }])[0];
+          assert.equal(result?.transitionState, 'indeterminate');
+          assert.match(result?.limitations.join(' ') ?? '', /strictly later/u);
+        }
+      }
+      const undated = compareAcquisitionTransitionPins(pins.map(pin => ({ ...pin, observedAt: null })), [{ ...fact, observedAt: '2026-07-30T01:00:00.000Z' }]);
+      assert.equal(undated[0]?.transitionState, 'indeterminate');
+    }
+    const pins = normalizeCaseEvidencePins(checkpointPinInputs([fact], [fact.field]), OBSERVED_AT);
+    assert.equal(compareCheckpointPins(pins, [fact])[0]?.state, 'equal', 'same-observation value comparison remains available');
   });
 
   test('keeps matching partial or differently scoped transition evidence indeterminate', () => {
@@ -402,5 +451,20 @@ describe('case evidence checkpoints', () => {
     })), [{ ...nameservers, collectionDepth: 'fast' }]);
     assert.equal(otherDepth[0]?.state, 'incomparable');
     assert.equal(otherDepth[0]?.transitionState, 'indeterminate');
+  });
+
+  test('evaluates each transition against its own pin when checkpoints share a field', () => {
+    const fact = buildLookupCheckpointFacts(response(), { collectionDepth: 'deep' }).find(item => item.field === 'dns.nameservers');
+    assert.ok(fact);
+    const inputs = checkpointPinInputs([fact], [fact.field], { transitionExpectations: { [fact.field]: 'preserve' } });
+    const pins = normalizeCaseEvidencePins([
+      { ...inputs[0], id: 'earlier-pin', value: 'ns.earlier.example' },
+      { ...inputs[0], id: 'later-pin', value: fact.value },
+    ], OBSERVED_AT);
+    const comparisons = compareAcquisitionTransitionPins(pins, [{ ...fact, observedAt: '2026-07-30T01:00:00.000Z' }]);
+    assert.equal(comparisons.length, 2);
+    assert.deepEqual(comparisons.map(item => [item.before, item.transitionState]), [
+      ['ns.earlier.example', 'unexpected_change'], [fact.value, 'verified_preserved'],
+    ]);
   });
 });

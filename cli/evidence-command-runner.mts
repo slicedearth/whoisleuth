@@ -12,11 +12,8 @@ import {
   signEvidencePackage,
   verifyEvidencePackageSignature,
 } from './evidence-signing.mts';
-import type {
-  InspectArchiveArguments,
-  SignArtifactArguments,
-  VerifySignatureArguments,
-} from './arguments.mts';
+import type { CliArguments } from './arguments.mts';
+import { commandHasOwner, type CliCommandFor } from './command-reference.mts';
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { formatJsonDocument } from './formatters/json.mts';
@@ -26,10 +23,7 @@ import { assessEvidenceSignerTrust, formatSignerTrustReport, MAX_SIGNER_TRUST_ST
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
 
 type WritableLike = { write(value: string): unknown };
-export type EvidenceCommandArguments =
-  | InspectArchiveArguments
-  | SignArtifactArguments
-  | VerifySignatureArguments;
+export type EvidenceCommandArguments = Extract<CliArguments, { action: CliCommandFor<'evidence'> }>;
 export type EvidenceCommandDependencies = Readonly<{
   stdout: WritableLike;
   stdin: BoundedTextStream;
@@ -44,9 +38,7 @@ export type EvidenceCommandDependencies = Readonly<{
 export function isEvidenceCommand(
   args: { action: string },
 ): args is EvidenceCommandArguments {
-  return args.action === 'inspect-archive'
-    || args.action === 'sign-artifact'
-    || args.action === 'verify-signature';
+  return commandHasOwner(args.action, 'evidence');
 }
 
 export function evidenceCommandFailureLabel(

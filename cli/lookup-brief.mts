@@ -1,9 +1,9 @@
 import { parseSavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 import { safeTerminalValue } from './formatters/terminal.mts';
 import { compareRdapPublications, compareRegistrySources } from '../lib/registry-comparison.mts';
+import { CLI_LOOKUP_BRIEF_SCHEMA, CLI_LOOKUP_BRIEF_VERSION } from '../packages/contracts/cli-lookup-brief.mts';
 
-export const CLI_LOOKUP_BRIEF_SCHEMA = 'whoisleuth.cli.lookup-brief';
-export const CLI_LOOKUP_BRIEF_VERSION = 3;
+export { CLI_LOOKUP_BRIEF_SCHEMA, CLI_LOOKUP_BRIEF_VERSION };
 
 function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};

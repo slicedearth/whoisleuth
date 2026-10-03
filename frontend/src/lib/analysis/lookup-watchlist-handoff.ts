@@ -1,4 +1,5 @@
-import { hashString, normalizeEvidenceDomain } from './case-model.ts';
+import { hashString, normalizeEvidenceDomain } from '../../../../packages/cases/case-record-core.mts';
+import { normalizeWebCollectionQuality } from '../../../../packages/evidence/collection-quality.mts';
 import type { WatchlistComparableRecord } from './watchlist-history.ts';
 import {
   MAX_WATCHLIST_NAME_LENGTH,
@@ -16,6 +17,7 @@ const COMPARABLE_FIELDS = Object.freeze([
   'hasSpf',
   'hasDmarc',
   'activityStatus',
+  'webCollectionQuality',
   'pageTitle',
   'httpSummaryVersion',
   'httpEvidenceStatus',
@@ -68,6 +70,11 @@ export function buildLookupWatchlistRecord(
   };
   for (const field of COMPARABLE_FIELDS) {
     if (!Object.hasOwn(evidence, field)) continue;
+    if (field === 'webCollectionQuality') {
+      const quality = normalizeWebCollectionQuality(evidence[field], scanDepth);
+      if (quality) record.webCollectionQuality = quality;
+      continue;
+    }
     if (field === 'riskModelVersion' || field === 'riskScore') {
       const value = evidence[field];
       record[field] = typeof value === 'number' && Number.isFinite(value) ? value : null;

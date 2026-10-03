@@ -114,7 +114,7 @@
   <div class="toolbar results-toolbar">
     <input value={filter} oninput={(event) => setFilter(event.currentTarget.value)} aria-label="Filter candidates" placeholder={structured ? 'Filter by domain or observed hostname' : 'Filter candidates'}>
     <label>Show
-      <select value={candidateScope} onchange={(event) => setCandidateScope(event.currentTarget.value)} aria-label="Candidate scope">
+      <select value={candidateScope} onchange={(event) => setCandidateScope(event.currentTarget.value)} aria-label="Show candidate scope">
         <option value="all">All candidates ({candidateCount})</option>
         <option value="review-cues">Has review cues ({scopeCounts.reviewCues})</option>
         <option value="unicode">Internationalised ({scopeCounts.unicode})</option>

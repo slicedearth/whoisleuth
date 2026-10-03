@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { createCase, openCasesView, openCaseResponseWorkspace } from './case-test-fixtures';
 import { openCaseSection } from './console-navigation';
@@ -9,7 +10,7 @@ test('after-action reviews retain failed drafts and save once through the Case c
   await openCaseResponseWorkspace(page);
   await openCaseSection(page, 'History');
   const region = page.getByRole('region', { name: 'Case after-action review', exact: true });
-  const summary = region.locator('summary');
+  const summary = region.getByText('Record lessons from this investigation', { exact: true });
   await summary.focus(); await summary.press('Enter');
   const form = region.locator('form');
   await form.getByRole('button', { name: 'Save review as a note', exact: true }).click();
@@ -38,7 +39,7 @@ test('after-action reviews retain failed drafts and save once through the Case c
       await page.setViewportSize({ width, height });
       await expectNoHorizontalOverflow(page);
       await summary.evaluate(element => element.scrollIntoView({ block: 'center' }));
-      await page.screenshot({ path: testInfo.outputPath(`after-action-${theme}-${width}.png`), fullPage: true });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`after-action-${theme}-${width}.png`), fullPage: true }); }
     }
   }
 });

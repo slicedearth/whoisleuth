@@ -1,7 +1,10 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { buildCaseExport, createCase, updateCase, type CaseRecord } from '../packages/cases/case-model.mts';
+import { buildCaseExport } from '../packages/cases/case-storage-model.mts';
+import { createCase, updateCase } from '../packages/cases/case-record-operations.mts';
+import type { CaseRecord } from '../packages/cases/case-model.mts';
 import { currentBrowserLocalDocument, migrateLegacyBrowserData, readBrowserLocalCollection, failNextBrowserLocalManifestWrite, failNextBrowserLocalCollectionReadAfterWrite, expectNoHorizontalOverflow, useTheme } from './helpers';
 import { openCaseSection } from './console-navigation';
 import { FILE_BYTES, FILE_NAME, selectOriginal, storedFiles } from './case-attachment-fixtures';
@@ -69,7 +72,7 @@ test('encrypted Case handoff includes selected originals, excludes recovery draf
     await page.setViewportSize({ width, height }); await useTheme(page, theme);
     await handoff.getByRole('heading', { name: 'Handoff contents checked', exact: true }).scrollIntoViewIfNeeded();
     await expectNoHorizontalOverflow(page); await expect(download).toBeVisible();
-    if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`case-handoff-${theme}-${width}.png`) });
+    if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`case-handoff-${theme}-${width}.png`) }); }
   }
   expect((await new AxeBuilder({ page }).include('.review-package').analyze()).violations).toEqual([]);
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -94,6 +97,30 @@ test('encrypted Case handoff includes selected originals, excludes recovery draf
   await packages.getByRole('button', { name: 'Unlock evidence package', exact: true }).click();
   const completeness = packages.getByRole('region', { name: 'Case handoff completeness', exact: true });
   await expect(completeness).toContainText('1 of 1 original file references have matching bytes');
+  const openTemporary = completeness.getByRole('button', { name: 'Open temporary Case review', exact: true });
+  await openTemporary.click();
+  const temporary = page.getByRole('dialog', { name: 'Temporary Case review', exact: true });
+  await expect(temporary).toBeVisible();
+  await expect(temporary).toContainText(current.title!);
+  await expect(temporary.getByRole('region', { name: 'Packaged original files' })).toContainText(FILE_NAME);
+  await expect(temporary.getByRole('button', { name: /Save|Import|Submit|Collect/u })).toHaveCount(0);
+  for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720]] as const) {
+    await page.setViewportSize({ width, height });
+    for (const theme of ['light', 'dark'] as const) {
+      await temporary.getByRole('button', { name: 'Return to package', exact: true }).click();
+      await useTheme(page, theme);
+      await openTemporary.click();
+      await expect(temporary).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      expect((await new AxeBuilder({ page }).include('dialog[open]').analyze()).violations).toEqual([]);
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`temporary-review-${theme}-${width}.png`) }); }
+    }
+  }
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  expect(await storedFiles(page)).toEqual(originalsBefore);
+  await temporary.getByRole('button', { name: 'Return to package', exact: true }).click();
+  await expect(temporary).not.toBeVisible();
+  await expect(openTemporary).toBeFocused();
   const caseDownload = page.waitForEvent('download'); await completeness.getByRole('button', { name: 'Download Case JSON', exact: true }).click();
   expect(JSON.parse(await readFile((await (await caseDownload).path())!, 'utf8')).cases).toEqual([current]);
   await page.goto(originalUrl); await section.getByText('Share a copy or review returned entries', { exact: true }).click();
@@ -247,8 +274,8 @@ for (const width of [320, 390, 1024, 1280, 2560]) for (const theme of ['light', 
     expect(picker).not.toBeNull(); expect(picker!.height).toBeGreaterThanOrEqual(44);
     expect(choice).not.toBeNull(); expect(choice!.height).toBeGreaterThanOrEqual(44);
     await section.getByRole('heading', { name: 'Review with another analyst', exact: true }).scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath(`review-return-${width}-${theme}.png`) });
+    if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`review-return-${width}-${theme}.png`) }); }
     await section.locator('pre').first().scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath(`review-return-entry-${width}-${theme}.png`) });
+    if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`review-return-entry-${width}-${theme}.png`) }); }
   });
 }

@@ -2,7 +2,7 @@
 // small structured language: field names and operators come from allowlists,
 // so imported rules cannot execute code or reach outside bounded case evidence.
 
-import { latestCaseEvidence } from '../cases/case-model.mts';
+import { latestCaseEvidence } from '../cases/case-evidence-model.mts';
 import { CASE_DISPOSITIONS, CASE_STATUSES } from '../cases/case-record-contracts.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {

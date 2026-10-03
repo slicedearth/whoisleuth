@@ -69,7 +69,7 @@ import {
   text,
   uniqueIds,
 } from './case-response-values.mts';
-import { isValidAsciiHostname } from '../../lib/hostname.mts';
+import { isValidAsciiHostname } from '../contracts/domain-name.mts';
 import { readCaseRecheckContext } from './case-recheck-model.mts';
 
 export * from './case-response-records.mts';
@@ -320,6 +320,7 @@ export function appendCaseEvidencePins(
   now: string,
 ): CaseEvidencePin[] {
   if (!Array.isArray(raw) || !raw.length) throw new Error('An evidence checkpoint requires at least one selected fact.');
+  if (raw.length > MAX_CASE_CHECKPOINT_FACTS) throw new Error(`A checkpoint can retain at most ${MAX_CASE_CHECKPOINT_FACTS} selected facts. No evidence was saved.`);
   let output = [...current];
   let added = 0;
   for (const item of raw.slice(0, MAX_CASE_CHECKPOINT_FACTS)) {
@@ -372,6 +373,16 @@ export function normalizeCaseDecisions(
   return [...byId.values()]
     .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt))
     .slice(-MAX_CASE_DECISIONS);
+}
+
+/** Counts decisions, not links; references to pins no longer retained do not
+ * support a decision. Inputs have already passed their owning normalisers. */
+export function countEvidenceLinkedCaseDecisions(
+  decisions: readonly Pick<CaseDecisionRecord, 'evidencePinIds'>[],
+  pins: readonly Pick<CaseEvidencePin, 'id'>[],
+): number {
+  const retainedPinIds = new Set(pins.map(pin => pin.id));
+  return decisions.filter(decision => decision.evidencePinIds.some(id => retainedPinIds.has(id))).length;
 }
 
 export function appendCaseDecision(

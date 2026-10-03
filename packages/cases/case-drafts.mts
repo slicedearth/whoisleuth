@@ -1,4 +1,4 @@
-import { assertBoundedJsonStructure } from '../../lib/bounded-json.mts';
+import { assertBoundedJsonStructure } from '../analysis/bounded-json.mts';
 import {
   CASE_DRAFT_SCHEMA, CASE_DRAFT_VERSION, MAX_CASE_DRAFT_BYTES,
   MAX_CASE_DRAFT_RECORDS, MAX_CASE_DRAFT_STORE_BYTES,

@@ -38,82 +38,26 @@
     {
       "name": "domain-packages-stay-independent-of-runtime-adapters",
       "severity": "error",
-      "comment": "Evidence and collector-interface packages may use shared contracts and pure package peers but must not depend on application runtimes, tools, or presentation adapters.",
+      "comment": "Runtime-neutral domain packages may use package peers but must not reach runtime services, presentation, tooling or deployment adapters. New domain directories inherit this boundary.",
       "from": {
-        "path": "^(?:test/fixtures/architecture/)?packages/(?:evidence|collectors)/"
+        "path": "^(?:test/fixtures/architecture/)?packages/(?!(?:contracts|web-capture|local-application)(?:/|$))"
       },
       "to": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|lib|netlify/functions|tools)(?:/|$)|server\\.mts$)",
+        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|lib|netlify/functions|tools)(?:/|$)|packages/(?:web-capture|local-application)(?:/|$)|server\\.mts$)",
         "reachable": true
       }
     },
     {
-      "name": "case-domain-stays-independent-of-runtime-adapters",
+      "name": "domain-packages-no-node-core",
       "severity": "error",
-      "comment": "The pure Case domain may reuse the exact bounded root-domain primitives retained for compatibility, but it must not reach runtime, tool, network, filesystem, environment, or presentation adapters.",
+      "comment": "Domain rules execute in both browser and Node runtimes and cannot depend on Node core modules.",
       "from": {
-        "path": "^(?:test/fixtures/architecture/)?packages/cases/"
+        "path": "^(?:test/fixtures/architecture/)?packages/(?!(?:contracts|web-capture|local-application)(?:/|$))"
       },
       "to": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|netlify/functions|tools)(?:/|$)|lib/(?!(?:analyst-taxonomy|bounded-json|external-intelligence-risk|hostname|http-evidence-bounds|opportunity-scoring|portable-generator|project-metadata|registrable-domain|risk-scoring|scoring-evidence-quality|semantic-version|threat-intelligence-types)\\.mts$)|server\\.mts$)",
-        "reachable": true
-      }
-    },
-    {
-      "name": "case-domain-no-node-core",
-      "severity": "error",
-      "comment": "The shared Case domain must remain equivalent in Node and browser runtimes and cannot import Node core modules.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?packages/cases/"
-      },
-      "to": {
-        "dependencyTypes": ["core"]
-      }
-    },
-    {
-      "name": "workspace-domain-stays-independent-of-runtime-adapters",
-      "severity": "error",
-      "comment": "Pure workspace collection behaviour may reuse shared package owners and the small allowlisted cross-runtime scoring and query primitives, but cannot reach runtime, tool, network, filesystem, environment, or presentation adapters.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?packages/workspace/"
-      },
-      "to": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|netlify/functions|tools)(?:/|$)|lib/(?!(?:analyst-taxonomy|bounded-json|ct-query|external-intelligence-risk|hostname|http-evidence-bounds|opportunity-scoring|perceptual-hash-comparison|portable-generator|project-metadata|registrable-domain|risk-scoring|scoring-evidence-quality|semantic-version|threat-intelligence-types)\\.mts$)|server\\.mts$)",
-        "reachable": true
-      }
-    },
-    {
-      "name": "workspace-domain-no-node-core",
-      "severity": "error",
-      "comment": "Shared workspace collection behaviour must remain equivalent in browser and Node runtimes and cannot import Node core modules.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?packages/workspace/"
-      },
-      "to": {
-        "dependencyTypes": ["core"]
-      }
-    },
-    {
-      "name": "portable-domain-packages-stay-independent-of-runtime-adapters",
-      "severity": "error",
-      "comment": "Monitoring, investigation, interchange, relationship, and comparison behaviour may reuse dependency-neutral package peers and the established pure cross-runtime primitives, but cannot reach runtime, tool, network, filesystem, environment, or presentation adapters.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?packages/(?:monitoring|investigation|interchange|relationships|comparison)/"
-      },
-      "to": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|netlify/functions|tools)(?:/|$)|lib/(?!(?:analyst-taxonomy|bounded-json|candidate-provenance-bounds|ct-query|ct-response-bounds|external-intelligence-risk|hostname|http-evidence-bounds|opportunity-scoring|perceptual-hash-comparison|portable-generator|project-metadata|registrable-domain|risk-calibration-summary|risk-scoring|scoring-evidence-quality|semantic-version|threat-intelligence-types)\\.mts$)|server\\.mts$)",
-        "reachable": true
-      }
-    },
-    {
-      "name": "portable-domain-packages-no-node-core",
-      "severity": "error",
-      "comment": "Shared monitoring, investigation, interchange, relationship, and comparison behaviour must remain equivalent in browser and Node runtimes and cannot import Node core modules.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?packages/(?:monitoring|investigation|interchange|relationships|comparison)/"
-      },
-      "to": {
-        "dependencyTypes": ["core"]
+        "dependencyTypes": [
+          "core"
+        ]
       }
     },
     {
@@ -133,8 +77,7 @@
       "severity": "error",
       "comment": "Production evidence consumers use the pure observation owner; the historical lib facade remains only for compatibility adapters and public imports.",
       "from": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)",
-        "pathNot": "^(?:frontend/src/lib/(?:candidate-handoff-core|scheduled-monitoring)\\.ts|frontend/src/routes/\\(console\\)/lookup/\\+page\\.svelte)$"
+        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)"
       },
       "to": {
         "path": "^(?:test/fixtures/architecture/)?lib/observation\\.mts$"
@@ -143,10 +86,10 @@
     {
       "name": "production-no-orphans",
       "severity": "error",
-      "comment": "Shared, CLI, and browser-library modules must have an application consumer so obsolete production files cannot survive behind tests alone.",
+      "comment": "Detect isolated shared, CLI and browser-library modules with no incoming or outgoing edges in the runtime graph. This is not a general entry-point reachability check.",
       "from": {
         "path": "^(?:cli|frontend/src/lib|lib)/",
-        "pathNot": "^(?:cli/runner-types\\.mts|frontend/src/lib/local-data-platform-probe\\.ts|lib/(?:netlify-function-types|threat-intelligence-types|whois-contracts)\\.mts)$",
+        "pathNot": "^(?:cli/runner-types\\.mts|frontend/src/lib/local-data-platform-probe\\.ts|lib/(?:analyst-taxonomy|bounded-json|candidate-provenance-bounds|ct-query|ct-response-bounds|external-intelligence-risk|http-evidence-bounds|opportunity-scoring|perceptual-hash-comparison|portable-generator|project-metadata|registrable-domain|risk-calibration-summary|risk-scoring|scoring-evidence-quality|semantic-version|threat-intelligence-types|netlify-function-types|whois-contracts)\\.mts)$",
         "orphan": true
       },
       "to": {}
@@ -154,16 +97,29 @@
     {
       "name": "frontend-no-server-only",
       "severity": "error",
-      "comment": "Browser code must not reach server networking, secrets, authentication, filesystem, CLI, or function modules.",
+      "comment": "Browser code must not reach server networking, secrets, authentication, filesystem, CLI, or function modules. New server-only implementations inherit the lib/server boundary; established entry points remain protected.",
       "from": {
-        "path": "^frontend/src/"
+        "path": "^(?:test/fixtures/architecture/)?frontend/src/"
       },
       "to": {
         "path": [
-          "^(?:bin|cli|netlify/functions|tools)(?:/|$)",
-          "^server\\.mts$",
+          "^(?:test/fixtures/architecture/)?(?:bin|cli|netlify/functions|tools)(?:/|$)",
+          "^(?:test/fixtures/architecture/)?server\\.mts$",
+          "^(?:test/fixtures/architecture/)?lib/server/",
           "^lib/(?:abusech-auth|auth|availability|capabilities|ct-search|distributed-operation-budget|dns-intelligence|dns-mx|domain-posture|favicon|feature-policy|http|http-intelligence|lookup|lookup-cache|netlify-function-types|netlify-network-guard|observed-network-context|operation-budget|rate-limit|rdap|safe-fetch|scheduled-monitor-configuration|scheduled-monitor-crypto|scheduled-monitor-cycle|scheduled-monitor-management|scheduled-monitor-netlify-store|scheduled-monitor-repository|scheduled-monitor-runtime|security-txt|service-binding-dns|threatfox-intelligence|tls-intelligence|urlhaus-intelligence|urlscan-intelligence|whois)\\.mts$"
         ],
+        "reachable": true
+      }
+    },
+    {
+      "name": "verification-policy-does-not-load-builders",
+      "severity": "error",
+      "comment": "Selecting checks may read shared metadata but must not load package assembly or document-writing entry points.",
+      "from": {
+        "path": "^(?:test/fixtures/architecture/)?tools/verification-policy\\.mts$"
+      },
+      "to": {
+        "path": "^(?:test/fixtures/architecture/)?tools/(?:cli-package|capability-manifest)\\.mts$",
         "reachable": true
       }
     },
@@ -175,7 +131,9 @@
         "path": "^frontend/src/"
       },
       "to": {
-        "dependencyTypes": ["core"]
+        "dependencyTypes": [
+          "core"
+        ]
       }
     },
     {
@@ -229,9 +187,23 @@
       "fileName": "tsconfig.dependency-cruiser.json"
     },
     "enhancedResolveOptions": {
-      "exportsFields": ["exports"],
-      "conditionNames": ["import", "require", "node", "default"],
-      "extensions": [".mts", ".ts", ".svelte", ".mjs", ".js", ".json"]
+      "exportsFields": [
+        "exports"
+      ],
+      "conditionNames": [
+        "import",
+        "require",
+        "node",
+        "default"
+      ],
+      "extensions": [
+        ".mts",
+        ".ts",
+        ".svelte",
+        ".mjs",
+        ".js",
+        ".json"
+      ]
     }
   }
 }

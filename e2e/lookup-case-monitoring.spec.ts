@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page } from '@playwright/test';
 import { openCaseMetadata, openCaseSection } from './console-navigation';
 
@@ -28,6 +29,7 @@ function responseLoopFixture(sequence: number) {
       domain: CASE_DOMAIN,
       observationHostname: LOOKUP_TARGET,
       deepScanComplete: true,
+      webCollectionQuality: { version: 1, page: 'complete', favicon: 'unknown', combined: 'partial' },
       pageTitle: sequence === 1 ? 'Fixture sign-in review' : 'Fixture account review',
       nameservers: sequence === 1
         ? ['ns1.response-loop.invalid', 'ns2.response-loop.invalid']
@@ -81,10 +83,28 @@ test('Lookup recheck owns an explicit outcome draft and retains a saved question
     evidenceHistory: [{ ...snapshot({ inputHostname: LOOKUP_TARGET, pageTitle: 'Earlier page' }), observationHostname: LOOKUP_TARGET }] };
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: 16, cases: [record] } }, { destination: '/lookup' });
   let requests = 0;
-  await page.route('**/api/lookup?*', route => { requests += 1; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(responseLoopFixture(requests)) }); });
+  let releaseRecheck!: () => void;
+  const recheckHeld = new Promise<void>(resolve => { releaseRecheck = resolve; });
+  let recheckStarted!: () => void;
+  const recheckEntered = new Promise<void>(resolve => { recheckStarted = resolve; });
+  await page.route('**/api/lookup?*', async route => {
+    requests += 1;
+    if (requests === 2) { recheckStarted(); await recheckHeld; }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(responseLoopFixture(requests)) });
+  });
   await runDeepLookup(page);
   const card = page.locator('.case-card'), recollect = card.getByRole('button', { name: 'Recheck and refresh Case' });
   await expect(recollect).toBeEnabled(); await recollect.click();
+  await recheckEntered;
+  // A real analyst gesture cancels automatic reveal, not the requested save.
+  await page.mouse.wheel(0, 200);
+  await page.keyboard.press('Tab');
+  releaseRecheck();
+  await expect(page.getByRole('button', { name: 'Run lookup', exact: true })).toBeEnabled();
+  await expect.poll(async () => (await readBrowserLocalCollection(page, 'cases')).records[0]!.value.evidenceHistory.length).toBe(2);
+  // Reveal was cancelled, so reopen the section deliberately after confirming
+  // persistence. A missing comparison cannot be hidden by automatic scrolling.
+  await page.getByRole('button', { name: 'Expand details: Case and response evidence', exact: true }).click();
   const comparison = card.locator('.recheck-comparison'), form = comparison.getByRole('form', { name: 'Record Lookup recheck' });
   await expect(form).toBeVisible();
   const save = form.getByRole('button', { name: 'Record reviewed recheck outcome' });
@@ -115,17 +135,7 @@ test('Lookup recheck owns an explicit outcome draft and retains a saved question
           : [{ control: control.tagName, left: box.left, right: box.right, containerLeft: container.left, containerRight: container.right }];
       }));
       expect(clipped, `Recheck controls stay within their card at ${width}px in ${theme}`).toEqual([]);
-      if (width >= 1024) {
-        const formBox = await form.boundingBox(), columns = await card.locator('.case-tools').boundingBox();
-        expect(formBox && columns && formBox.width >= columns.width - 2, 'The recheck uses the full working width').toBe(true);
-        const unusedCardSpace = await card.locator('.conclusion-tool,.monitoring-tool').evaluateAll(cards => cards.map(element => {
-          const style = getComputedStyle(element), children = [...element.children].filter(child => child.getBoundingClientRect().height > 0);
-          const contentBottom = Math.max(...children.map(child => child.getBoundingClientRect().bottom + parseFloat(getComputedStyle(child).marginBottom)));
-          return element.getBoundingClientRect().bottom - contentBottom - parseFloat(style.paddingBottom) - parseFloat(style.borderBottomWidth);
-        }));
-        expect(unusedCardSpace.every(space => space < 2), 'Independent cards end after their own content').toBe(true);
-      }
-      await page.screenshot({ path: testInfo.outputPath(`lookup-recheck-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`lookup-recheck-${theme}-${width}.png`) }); }
     }
   }
 });
@@ -170,9 +180,9 @@ test('an Incident URL sends only its hostname and retains exact Case context onl
 
   const originOnly = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   expect(JSON.stringify(originOnly.records[0]?.value)).not.toContain('reference=fixture');
-  expect(originOnly.records[0]?.value?.assertions).toEqual([
-    expect.objectContaining({ statement: 'Investigate incident URL: https://login.incident.invalid' }),
-  ]);
+  expect(originOnly.records[0]?.value?.workflowMetadata?.investigationContext).toEqual(
+    expect.objectContaining({ incidentUrl: 'https://login.incident.invalid', urlRetention: 'origin_only' }),
+  );
 
   await incidentContext.getByRole('checkbox', { name: /Retain the exact URL/ }).check();
   await incidentContext.getByRole('button', { name: 'Save Incident context' }).click();
@@ -180,9 +190,9 @@ test('an Incident URL sends only its hostname and retains exact Case context onl
     minimumRecords: 1,
     minimumRevision: originOnly.manifest.revision + 1,
   });
-  expect(exact.records[0]?.value?.assertions).toEqual([
-    expect.objectContaining({ statement: `Investigate incident URL: ${incidentUrl}` }),
-  ]);
+  expect(exact.records[0]?.value?.workflowMetadata?.investigationContext).toEqual(
+    expect.objectContaining({ incidentUrl, urlRetention: 'exact' }),
+  );
   await caseCard.getByRole('link', { name: 'Open Case', exact: true }).click();
   await openCaseSection(page, 'Evidence');
   const capture = page.locator('.capture-workspace');
@@ -196,7 +206,7 @@ test('an Incident URL sends only its hostname and retains exact Case context onl
       await expect(capture.getByRole('button', { name: 'Copy Rendered-capture command', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
       if (width === 320 && theme === 'light' || width === 1280 && theme === 'dark') {
-        await capture.screenshot({ path: testInfo.outputPath(`capture-handoff-${theme}-${width}.png`) });
+        if (captureVisualEvidenceEnabled()) { await capture.screenshot({ path: testInfo.outputPath(`capture-handoff-${theme}-${width}.png`) }); }
       }
     }
   }

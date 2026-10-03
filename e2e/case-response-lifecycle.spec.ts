@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCaseMetadata, openCaseSection, openConsoleView } from './console-navigation';
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
@@ -396,16 +397,18 @@ test('Case stage forms remain usable across supported layouts and both themes', 
       await expect(sighting.getByLabel('Source', { exact: true })).toBeVisible();
       const geometry = await pin.evaluate((element) => {
         const panel = element.getBoundingClientRect();
-        return [...element.querySelectorAll('input, select, textarea, button')].every((control) => {
+        const controls = [...element.querySelectorAll('input, select, textarea, button')]
+          .filter(control => control.getClientRects().length > 0);
+        return controls.length > 0 && controls.every((control) => {
           const box = control.getBoundingClientRect();
           return box.width > 0 && box.left >= panel.left && box.right <= panel.right + 1;
         });
       });
       expect(geometry).toBe(true);
-      expect(await pin.locator('summary').evaluate((element) => getComputedStyle(element).cursor)).toBe('pointer');
+      expect(await pin.locator(':scope > summary').evaluate((element) => getComputedStyle(element).cursor)).toBe('pointer');
       await pin.scrollIntoViewIfNeeded();
-      await page.screenshot({ path: testInfo.outputPath(`observation-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' });
-      await sighting.screenshot({ path: testInfo.outputPath(`sighting-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`observation-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' }); }
+      if (captureVisualEvidenceEnabled()) { await sighting.screenshot({ path: testInfo.outputPath(`sighting-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' }); }
       for (const [index, stage] of stagePanels.entries()) {
         await openCaseSection(page, index === 0 ? 'Assessment' : 'Response');
         const bounds = await stage.evaluate((element) => {
@@ -431,7 +434,7 @@ test('Case stage forms remain usable across supported layouts and both themes', 
         await expect(field).toBeFocused();
         await expect(field).toBeVisible();
         expect(await stage.locator(':scope > details > summary').first().evaluate((element) => getComputedStyle(element).cursor)).toBe('pointer');
-        await stage.screenshot({ path: testInfo.outputPath(`case-stage-${index}-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' });
+        if (captureVisualEvidenceEnabled()) { await stage.screenshot({ path: testInfo.outputPath(`case-stage-${index}-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' }); }
       }
     }
   }

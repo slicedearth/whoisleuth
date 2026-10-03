@@ -2,7 +2,6 @@
   import {
     compareAcquisitionTransitionPins,
     compareCheckpointPins,
-    MAX_CHECKPOINT_FACTS,
     type CheckpointFact,
   } from '$lib/analysis/case-evidence-checkpoint.ts';
   import type {
@@ -10,6 +9,9 @@
     CaseTransitionExpectation,
   } from '$lib/cases';
   import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
+  import CopyButton from './CopyButton.svelte';
+  import { evidenceFactCitation } from '$lib/analysis/evidence-copy.ts';
+  import { MAX_CASE_CHECKPOINT_FACTS } from '../../../../packages/contracts/case-portability.mts';
 
   let {
     facts,
@@ -48,7 +50,7 @@
 
   function toggle(field: string, checked: boolean) {
     selectedFields = checked
-      ? [...new Set([...selectedFields, field])].slice(0, MAX_CHECKPOINT_FACTS)
+      ? [...new Set([...selectedFields, field])].slice(0, MAX_CASE_CHECKPOINT_FACTS)
       : selectedFields.filter((item) => item !== field);
     if (!checked) {
       const { [field]: _removed, ...rest } = transitionExpectations;
@@ -90,14 +92,15 @@
   </header>
 
   {#if selectable.length}
+    {#if selectedFields.length >= MAX_CASE_CHECKPOINT_FACTS}<p role="status">{MAX_CASE_CHECKPOINT_FACTS} facts selected. Save this checkpoint before selecting more.</p>{/if}
     {#if allowTransition}<label class="transition-toggle">
       <input type="checkbox" disabled={actionBusy} checked={transitionMode} onchange={(event) => setTransitionMode(event.currentTarget.checked)}>
       <span><strong>Plan an acquisition transition</strong><small>Declare whether each selected fact should be preserved, changed, or manually reviewed. A later Lookup verifies only what its sources can observe.</small></span>
     </label>{/if}
     <div class="fact-grid independent-grid">
       {#each selectable as fact (fact.field)}
-        <label>
-          <input type="checkbox" disabled={actionBusy || !fact.observedAt} checked={selectedFields.includes(fact.field)} onchange={(event) => toggle(fact.field, event.currentTarget.checked)}>
+        <div class="copyable-fact"><label>
+          <input type="checkbox" disabled={actionBusy || !fact.observedAt || selectedFields.length >= MAX_CASE_CHECKPOINT_FACTS && !selectedFields.includes(fact.field)} checked={selectedFields.includes(fact.field)} onchange={(event) => toggle(fact.field, event.currentTarget.checked)}>
           <span>
             <strong>{fact.label}</strong>
             <small>{fact.value}</small>
@@ -112,7 +115,7 @@
               </select>
             {/if}
           </span>
-        </label>
+        </label><CopyButton value={evidenceFactCitation(fact)} label="Copy citation" description={`Copy citation for ${fact.label}`} /></div>
       {/each}
     </div>
   {:else}
@@ -122,7 +125,7 @@
   {#if transitionComparison.length}
     <section class="transition-review" aria-labelledby={`${headingId}-transition-review`}>
       <header>
-        <div><p class="eyebrow">Post-acquisition verification</p><h5 id={`${headingId}-transition-review`}>Reviewed transition plan</h5></div>
+        <div><p class="eyebrow">Acquisition transition review</p><h5 id={`${headingId}-transition-review`}>Reviewed transition plan</h5></div>
         <span>{transitionComparison.length} planned fact{transitionComparison.length === 1 ? '' : 's'}</span>
       </header>
       <div class="comparison">
@@ -135,6 +138,7 @@
               <div><dt>Current</dt><dd>{item.after ?? 'Unavailable in this observation'}</dd></div>
             </dl>
             <small>{item.source} · {item.observedAt ?? 'Observation time unavailable'}</small>
+            {#each item.limitations as limitation}<small>{limitation}</small>{/each}
           </article>
         {/each}
       </div>
@@ -163,6 +167,7 @@
 </section>
 
 <style>
+  .copyable-fact{display:grid;gap:8px;min-width:0;align-content:start}
   .checkpoint{display:grid;gap:12px;padding:var(--card-pad)}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
   h4,header p{margin:0}h4{margin-top:3px;font:700 var(--text-md) var(--mono)}

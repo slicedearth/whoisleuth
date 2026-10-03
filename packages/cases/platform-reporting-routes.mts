@@ -4,7 +4,7 @@
 
 import type { CaseTypeId } from './case-workflow-metadata.mts';
 
-export type IncidentPlatformId = 'facebook' | 'instagram' | 'linkedin' | 'telegram' | 'tiktok' | 'x' | 'youtube';
+export type IncidentPlatformId = 'facebook' | 'instagram' | 'linkedin' | 'telegram' | 'tiktok' | 'x' | 'youtube' | 'shopify' | 'google_play' | 'google_drive' | 'google_ads';
 export type PlatformReportingChannel = 'email' | 'url';
 
 export type PlatformReportingRoute = Readonly<{
@@ -49,11 +49,18 @@ export const INCIDENT_PLATFORMS: readonly IncidentPlatform[] = Object.freeze([
   Object.freeze({ id: 'telegram', label: 'Telegram', hosts: Object.freeze(['t.me', 'telegram.me', 'telegram.org']) }),
   Object.freeze({ id: 'youtube', label: 'YouTube', hosts: Object.freeze(['youtube.com', 'youtu.be']) }),
   Object.freeze({ id: 'linkedin', label: 'LinkedIn', hosts: Object.freeze(['linkedin.com']) }),
+  Object.freeze({ id: 'shopify', label: 'Shopify storefront', hosts: Object.freeze(['myshopify.com']) }),
+  // Match product hosts, never all Google properties or custom storefronts.
+  Object.freeze({ id: 'google_play', label: 'Google Play listing', hosts: Object.freeze(['play.google.com']) }),
+  Object.freeze({ id: 'google_drive', label: 'Google hosted file or form', hosts: Object.freeze(['docs.google.com', 'drive.google.com', 'forms.gle']) }),
+  Object.freeze({ id: 'google_ads', label: 'Google advertisement', hosts: Object.freeze([]) }),
 ]);
 
-function route(input: Omit<PlatformReportingRoute, 'reviewedAt' | 'reviewAfter'>): PlatformReportingRoute {
-  return Object.freeze({ ...input, reviewedAt: REVIEWED_AT, reviewAfter: REVIEW_AFTER });
+function route(input: Omit<PlatformReportingRoute, 'reviewedAt' | 'reviewAfter'> & Partial<Pick<PlatformReportingRoute, 'reviewedAt' | 'reviewAfter'>>): PlatformReportingRoute {
+  return Object.freeze({ reviewedAt: REVIEWED_AT, reviewAfter: REVIEW_AFTER, ...input });
 }
+
+const ADDITIONAL_REVIEW = Object.freeze({ reviewedAt: '2026-10-03', reviewAfter: '2027-04-03' });
 
 export const PLATFORM_REPORTING_ROUTES: readonly PlatformReportingRoute[] = Object.freeze([
   route({
@@ -134,6 +141,36 @@ export const PLATFORM_REPORTING_ROUTES: readonly PlatformReportingRoute[] = Obje
     preparation: ['Exact profile, Page, post or message URL', 'Reason for the report', 'Supporting evidence and reporter authority'],
     privacyNote: 'LinkedIn may forward a rights notice, including claimant contact information, to the affected member.',
   }),
+  route({ ...ADDITIONAL_REVIEW,
+    id: 'shopify-merchant', platformId: 'shopify', platformLabel: 'Shopify', label: 'Choose a merchant abuse route', channel: 'url',
+    contact: 'https://www.shopify.com/legal/tools/report-an-issue/report-a-merchant', guidanceUrl: 'https://www.shopify.com/legal/tools/report-an-issue/report-a-merchant', caseTypes: GENERAL_TYPES,
+    preparation: ['Exact store and listing URLs with evidence of Shopify involvement', 'Dated observations supporting fraud or malicious practices, not resemblance alone', 'Choose fraud, malicious practices or an order complaint separately; an order process is not an abuse waiting period'],
+    privacyNote: 'Review the selected form before sharing reporter details. Do not buy an item or make a test payment. Reporting does not guarantee suspension, refund or removal.',
+  }),
+  route({ ...ADDITIONAL_REVIEW,
+    id: 'shopify-rights', platformId: 'shopify', platformLabel: 'Shopify', label: 'Review copyright or trademark grounds', channel: 'url',
+    contact: 'https://www.shopify.com/legal/tools/report-an-issue/intellectual-property', guidanceUrl: 'https://www.shopify.com/legal/tools/report-an-issue/intellectual-property', caseTypes: IP_TYPES,
+    preparation: ['Exact allegedly infringing listing or page and the original work or mark', 'Rights-owner or authorised representative review of the relevant copyright, trademark or trade-dress basis', 'Select the applicable rights process separately from fraud; copied material does not establish legal entitlement'],
+    privacyNote: 'Rights notices can require legal declarations and disclosure of claimant details. Verify the current notice and your authority; WHOISleuth neither makes declarations nor submits it.',
+  }),
+  route({ ...ADDITIONAL_REVIEW,
+    id: 'google-play-report', platformId: 'google_play', platformLabel: 'Google Play', label: 'Review app or developer reporting', channel: 'url',
+    contact: 'https://support.google.com/googleplay/answer/2853570?hl=en', guidanceUrl: 'https://support.google.com/googleplay/answer/2853570?hl=en', caseTypes: GENERAL_TYPES,
+    preparation: ['Exact app listing, package identifier and developer identity as displayed', 'Dated listing evidence and the specific policy concern; do not install or authenticate to reproduce it', 'Keep the download website and backend separate; use the linked legal process only with the required rights or legal authority'],
+    privacyNote: 'Flagging, a public review and a legal request are different processes. Review account/contact disclosure in the chosen route. A listing action does not establish backend remediation.',
+  }),
+  route({ ...ADDITIONAL_REVIEW,
+    id: 'google-drive-report', platformId: 'google_drive', platformLabel: 'Google hosted content', label: 'Review file or form abuse reporting', channel: 'url',
+    contact: 'https://support.google.com/legal/answer/2463296?hl=en', guidanceUrl: 'https://support.google.com/legal/answer/2463296?hl=en', caseTypes: GENERAL_TYPES,
+    preparation: ['Exact file, document, form or tenant object, not the entire shared platform domain', 'Dated supplied evidence and relevant viewing conditions; do not submit credentials or form responses', 'Use the official object-report instructions for your viewer/editor role; legal rights requests are separate'],
+    privacyNote: 'The provider process may collect account, reporter and complaint details. Do not share private access tokens. Google states that reporting does not guarantee removal or other action.',
+  }),
+  route({ ...ADDITIONAL_REVIEW,
+    id: 'google-ad-report', platformId: 'google_ads', platformLabel: 'Google advertising', label: 'Review an exact advertisement', channel: 'url',
+    contact: 'https://support.google.com/My-Ad-Center-Help/answer/13861201?hl=en', guidanceUrl: 'https://support.google.com/My-Ad-Center-Help/answer/13861201?hl=en', caseTypes: GENERAL_TYPES,
+    preparation: ['Identify the particular ad from its supplied More/Info or AdChoices context', 'Dated creative, displayed advertiser and observed redirect/landing evidence; retain unknown hops as unknown', 'Choose the exact ad in the official process; a changed landing page does not close the distribution object'],
+    privacyNote: 'Google says signed-out reporters need an email address. Reporting an ad does not block it. Review the form before sharing details; search visibility and source hosting are separate scopes.',
+  }),
 ]);
 
 export const PLATFORM_REPORTING_RESOURCE_REFERENCES = Object.freeze([
@@ -143,14 +180,20 @@ export const PLATFORM_REPORTING_RESOURCE_REFERENCES = Object.freeze([
   Object.freeze({ label: 'Telegram reporting guidance', href: 'https://telegram.org/faq#q-theres-illegal-content-on-telegram-how-do-i-take-it-down', description: 'Official FAQ covering public-content abuse and copyright reporting routes.' }),
   Object.freeze({ label: 'YouTube reporting guidance', href: 'https://support.google.com/youtube/answer/2802027?hl=en', description: 'Official instructions for reporting a channel, video or other YouTube content.' }),
   Object.freeze({ label: 'LinkedIn content reporting guidance', href: 'https://www.linkedin.com/help/linkedin/answer/a1339420', description: 'Official instructions for reporting profiles, Pages, messages and content.' }),
+  ...PLATFORM_REPORTING_ROUTES.filter(item => item.reviewedAt === ADDITIONAL_REVIEW.reviewedAt).map(item => Object.freeze({
+    label: `${item.platformLabel}: ${item.label}`, href: item.guidanceUrl,
+    description: `Reviewed ${item.reviewedAt}; recheck before ${item.reviewAfter}. ${item.preparation[0]}`,
+  })),
 ]);
 
 export function platformReportingCatalogueHealth(now: Date = new Date()) {
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
     throw new TypeError('Platform reporting-route health requires a valid review time.');
   }
-  const reviewedAt = `${REVIEWED_AT}T00:00:00.000Z`;
-  const reviewAfter = `${REVIEW_AFTER}T00:00:00.000Z`;
+  const reviewedAt = `${PLATFORM_REPORTING_ROUTES.map(item => item.reviewedAt).sort()[0]}T00:00:00.000Z`;
+  const reviewAfter = `${PLATFORM_REPORTING_ROUTES.map(item => item.reviewAfter).sort()[0]}T00:00:00.000Z`;
+  const unavailableRouteCount = PLATFORM_REPORTING_ROUTES.filter(item => now.getTime() < Date.parse(item.reviewedAt)).length;
+  const staleRouteCount = PLATFORM_REPORTING_ROUTES.filter(item => now.getTime() >= Date.parse(item.reviewAfter)).length;
   const reviewedMs = Date.parse(reviewedAt);
   const reviewAfterMs = Date.parse(reviewAfter);
   const warningMs = reviewAfterMs - (REVIEW_WARNING_DAYS * 86_400_000);
@@ -158,7 +201,7 @@ export function platformReportingCatalogueHealth(now: Date = new Date()) {
     ? 'unavailable'
     : now.getTime() >= reviewAfterMs
       ? 'stale'
-      : now.getTime() >= warningMs
+      : unavailableRouteCount || now.getTime() >= warningMs
         ? 'limited'
         : 'current';
   return Object.freeze({
@@ -168,6 +211,10 @@ export function platformReportingCatalogueHealth(now: Date = new Date()) {
     ageDays: now.getTime() < reviewedMs ? null : Math.floor((now.getTime() - reviewedMs) / 86_400_000),
     reviewDueInDays: Math.ceil((reviewAfterMs - now.getTime()) / 86_400_000),
     routeCount: PLATFORM_REPORTING_ROUTES.length,
+    unavailableRouteCount,
+    staleRouteCount,
+    currentRouteCount: PLATFORM_REPORTING_ROUTES.length - unavailableRouteCount - staleRouteCount,
+    latestReviewedAt: `${PLATFORM_REPORTING_ROUTES.map(item => item.reviewedAt).sort().at(-1)}T00:00:00.000Z`,
   });
 }
 
@@ -191,8 +238,13 @@ export function resolvePlatformReportingRoutes(
   value: unknown,
   selectedCaseTypes: readonly string[],
   now: Date = new Date(),
+  explicitPlatformId?: IncidentPlatformId,
 ): PlatformReportingResolution {
-  const platform = incidentPlatformForUrl(value);
+  let validUrl = false;
+  try { const parsed = new URL(typeof value === 'string' ? value : ''); validUrl = ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password; } catch { /* no route for invalid incident material */ }
+  const platform = validUrl && explicitPlatformId
+    ? INCIDENT_PLATFORMS.find(item => item.id === explicitPlatformId) ?? null
+    : incidentPlatformForUrl(value);
   if (!platform) return {
     platform: null,
     state: 'unsupported',
@@ -227,6 +279,6 @@ export function resolvePlatformReportingRoutes(
     platform,
     state: 'found',
     routes: fresh,
-    limitation: `${platform.label} matched the exact incident hostname. This identifies a possible platform reporting route, not policy breach, account ownership, legal standing or likely removal.`,
+    limitation: `${platform.label} ${explicitPlatformId ? 'was selected by the analyst for this incident; provider involvement must be evidenced' : 'matched the exact incident hostname'}. This identifies a possible platform reporting route, not policy breach, account ownership, legal standing or likely removal.`,
   };
 }

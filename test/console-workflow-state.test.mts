@@ -13,6 +13,7 @@ import {
   readCaseNavigationContext,
   setCaseNavigationContext,
 } from '../frontend/src/lib/console-workflow-state.ts';
+import { bulkReviewView, createBulkViewState } from '../frontend/src/lib/controllers/bulk-view-state.ts';
 
 const lookupState = Object.freeze({
   query: 'example.test', completedTarget: '', completedLookupDepth: null, lookupMode: 'deep', includeExternalIntelligence: false,
@@ -48,8 +49,8 @@ test('Case navigation notices are bounded, target-specific, browser-only and cle
   }
 });
 const bulkState = Object.freeze({
-  guideContext: '', input: 'example.test', mode: 'fast', pacing: 'balanced', completed: 1, total: 1, results: [], filter: 'all',
-  mutationFilter: '', signalFilters: [], sortKey: 'risk', sortDirection: -1, page: 1,
+  guideContext: '', input: 'example.test', mode: 'fast', pacing: 'balanced', completed: 1, total: 1, results: [],
+  view: bulkReviewView(createBulkViewState()), page: 1,
   status: 'Complete', indicatorFormat: 'domains', indicatorWildcards: false, watchlistName: '',
 });
 

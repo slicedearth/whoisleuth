@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { currentCaseFixture, currentCaseCollection } from '../test/support/current-case.mts';
@@ -79,7 +80,7 @@ test('review navigation spans pages and an explicit checkpoint restores filters,
     await useTheme(page, theme);
     for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720]] as const) {
       await page.setViewportSize({ width, height }); await expectNoHorizontalOverflow(page);
-      if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`review-session-${theme}-${width}.png`), fullPage: true });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`review-session-${theme}-${width}.png`), fullPage: true }); }
     }
   }
   expect(requests).toEqual([]);

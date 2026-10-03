@@ -1,4 +1,5 @@
 // Exact, bounded validation of current and published response-review inputs.
+import { readCaseEvidenceRequest, readCasePacketAmendment, assertEvidenceRequestEvent, assertEvidenceRequestHistory, assertPacketAmendmentSelection, type CaseEvidenceRequest, type CaseAmendmentAction } from './case-requested-evidence.mts';
 
 import {
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
@@ -41,7 +42,7 @@ import {
   RESPONSE_READINESS_STATES,
   type ResponseReadinessState,
 } from './case-response-packet-vocabulary.mts';
-import { isValidAsciiHostname } from '../../lib/hostname.mts';
+import { isValidAsciiHostname } from '../contracts/domain-name.mts';
 
 const CONTACT_KINDS = new Set<string>(RESPONSE_CONTACT_KINDS);
 const PRE_PLATFORM_CONTACT_KINDS = new Set<string>(RESPONSE_CONTACT_KINDS.filter((kind) => kind !== 'application_platform'));
@@ -388,7 +389,8 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
       ...(hasPlatformRoutes ? ['routeReviewAfter'] : []),
       'providerOutcome', 'outcomeDetail', 'originActionId', 'historyOmitted',
       'historyLimitations', 'transitions', 'createdAt', 'updatedAt',
-    ], 'Case-response escalation action');
+    ], 'Case-response escalation action', version >= 5 ? ['amendment'] : []);
+    readCasePacketAmendment(action.amendment);
     for (const key of ['actionId', 'recipient', 'contactSource', 'createdAt', 'updatedAt'] as const) {
       reviewText(action[key], MAX_RESPONSE_VALUE_LENGTH, `Case-response action ${key}`);
     }
@@ -406,12 +408,16 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
     reviewNullableEnum(action.providerOutcome, CASE_PROVIDER_OUTCOMES, 'Case-response action provider outcome');
     reviewCount(action.historyOmitted, MAX_CASE_ACTION_EVENTS_PER_CASE, 'Case-response omitted transition count');
     reviewStrings(action.historyLimitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response action history limitations');
+    const requestEvents: { id: string; evidenceRequest?: CaseEvidenceRequest }[] = [];
     for (const candidateTransition of boundedReviewArray(action.transitions, MAX_CASE_ACTION_EVENTS_PER_ACTION, 'Case-response transitions')) {
       const transition = exactReviewRecord(candidateTransition, [
         'id', 'previousState', 'nextState', 'occurredAt', 'sourceClass', 'provenance',
         'reference', 'evidencePinId', 'limitations', 'providerOutcome', 'outcomeDetail',
         'originActionId', 'applied',
-      ], 'Case-response transition');
+      ], 'Case-response transition', version >= 5 ? ['evidenceRequest'] : []);
+      const evidenceRequest = readCaseEvidenceRequest(transition.evidenceRequest);
+      assertEvidenceRequestEvent(evidenceRequest, transition);
+      requestEvents.push({ id: transition.id as string, ...(evidenceRequest ? { evidenceRequest } : {}) });
       for (const key of ['id', 'occurredAt', 'provenance'] as const) {
         reviewText(transition[key], MAX_RESPONSE_VALUE_LENGTH, `Case-response transition ${key}`);
       }
@@ -425,6 +431,7 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
       if (typeof transition.applied !== 'boolean') throw new TypeError('Case-response transition applied state is invalid.');
       reviewStrings(transition.limitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response transition limitations');
     }
+    assertEvidenceRequestHistory(requestEvents, Number(action.historyOmitted) > 0);
   }
   if (currentLineageActionIds
     && (currentLineageActionIds.length !== escalationActionIds.length
@@ -432,6 +439,10 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
     throw new TypeError('Case-response escalation history must match the selected action lineage in order.');
   }
   reviewCount(source.escalationHistoryOmitted, MAX_CASE_ACTIONS, 'Case-response omitted action count');
+  if (version >= 5) assertPacketAmendmentSelection((source.escalationHistory as Record<string, unknown>[]).map(action => ({
+    id: action.actionId, history: action.transitions, originActionId: action.originActionId, amendment: action.amendment,
+  } as CaseAmendmentAction)), currentLineageActionIds?.[0] ?? null,
+  new Set((source.selectedEvidence as { id: string }[]).map(pin => pin.id)));
   reviewStrings(source.escalationHistoryLimitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response escalation limitations');
   validateReviewLifecycle(source.responseLifecycle);
 

@@ -3,10 +3,11 @@ import { once } from 'node:events';
 import net from 'node:net';
 import { describe, test } from 'node:test';
 import {
-  collectDnsInheritanceChecks, parseInheritedDnsSelection, reviewInheritedDmarc, reviewParentDelegation,
+  collectDnsInheritanceReview, MAX_DMARC_REVIEW_QUERIES, parseInheritedDnsSelection, reviewInheritedDmarc, reviewParentDelegation,
   type InheritanceDnsDependencies,
 } from '../lib/dns-inheritance-review.mts';
 import { defaultTcpExchange } from '../lib/service-binding-dns.mts';
+import { walkDmarcTree } from '../lib/dmarc-discovery.mts';
 
 const TIME = '2026-09-19T01:00:00.000Z';
 const empty = { records: [], error: null, observedAt: TIME };
@@ -50,17 +51,17 @@ describe('explicit inherited DNS admission', () => {
   test('rejects malformed targets before any dependency runs', async () => {
     const fail = async () => assert.fail('No DNS operation is permitted');
     for (const target of ['bad name.test', 'EXAMPLE.TEST', 'example.test/path', `${'x'.repeat(64)}.test`]) {
-      await assert.rejects(collectDnsInheritanceChecks(target, empty, empty, {}, dependencies({ resolveTxt: fail, resolveNs: fail })), /normalised domain/);
+      await assert.rejects(collectDnsInheritanceReview(target, empty, empty, {}, dependencies({ resolveTxt: fail, resolveNs: fail })), /normalised domain/);
     }
   });
   test('pre-cancellation starts no DNS operation', async () => {
-    await assert.rejects(collectDnsInheritanceChecks('example.test', empty, empty, { signal: AbortSignal.abort(new Error('cancelled')) }, dependencies({
+    await assert.rejects(collectDnsInheritanceReview('example.test', empty, empty, { signal: AbortSignal.abort(new Error('cancelled')) }, dependencies({
       resolveNs: async () => assert.fail('No parent discovery'), resolveTxt: async () => assert.fail('No tree walk'),
     })), /cancelled/);
   });
   test('combines both evidence sources without retaining raw policy contacts', async () => {
     const queries: string[] = [];
-    const results = await collectDnsInheritanceChecks('mail.example.test', empty, empty, {}, dependencies({
+    const { checks: results } = await collectDnsInheritanceReview('mail.example.test', empty, empty, {}, dependencies({
       resolveTxt: async owner => { queries.push(owner); return ['v=DMARC1; p=reject; psd=n; rua=mailto:private@example.test']; },
     }));
     assert.deepEqual(queries, ['_dmarc.example.test']);
@@ -70,7 +71,7 @@ describe('explicit inherited DNS admission', () => {
   });
   test('propagates cancellation during a direct query and does not start a second server', async () => {
     const controller = new AbortController(); let calls = 0;
-    const result = collectDnsInheritanceChecks('example.test', observation('v=DMARC1; p=reject'), empty, { signal: controller.signal }, dependencies({
+    const result = collectDnsInheritanceReview('example.test', observation('v=DMARC1; p=reject'), empty, { signal: controller.signal }, dependencies({
       exchange: async (_query, _endpoint, options) => { calls++; assert.ok(options.signal); controller.abort(new Error('cancelled during exchange')); options.signal.throwIfAborted(); return Buffer.alloc(0); },
     }));
     await assert.rejects(result, /cancelled during exchange/); assert.equal(calls, 1);
@@ -132,6 +133,95 @@ describe('inherited DMARC publication', () => {
     const result = await reviewInheritedDmarc('example.test', { records, error: null, observedAt: 'private\ntime' }, async () => assert.fail('Must not continue'));
     assert.match(result.summary, /could not be determined/); assert.match(result.records[0]!, /time unavailable/);
     assert.doesNotMatch(JSON.stringify(result), /private/);
+  });
+});
+
+describe('DMARC reporting organisational boundaries', () => {
+  test('walks past an exact policy for an organisational boundary, but stops at explicit n or y', async () => {
+    const calls: string[] = [];
+    const result = await walkDmarcTree('mail.example.test', observation('v=DMARC1; p=reject'), async name => {
+      calls.push(name); return observation('v=DMARC1; p=reject; psd=n');
+    }, 'organisation');
+    assert.equal(result.organisationalDomain, 'example.test');
+    assert.deepEqual(calls, ['_dmarc.example.test']);
+    for (const psd of ['n', 'y']) {
+      const exact = await walkDmarcTree('mail.example.test', observation(`v=DMARC1; p=reject; psd=${psd}`), async () => assert.fail('No ancestor query'), 'organisation');
+      assert.equal(exact.organisationalDomain, 'mail.example.test');
+    }
+  });
+
+  test('selects the child of a DNS-declared suffix and retains no-policy versus unavailable outcomes', async () => {
+    const result = await walkDmarcTree('mail.tenant.hosted.example', empty, async name => name === '_dmarc.hosted.example'
+      ? observation('v=DMARC1; p=reject; psd=y') : empty, 'organisation');
+    assert.equal(result.organisationalDomain, 'tenant.hosted.example');
+    const none = await walkDmarcTree('mail.example.test', empty, async () => empty, 'organisation');
+    assert.equal(none.organisationalDomain, 'mail.example.test');
+    const failed = await walkDmarcTree('mail.example.test', observation('v=DMARC1; p=reject'), async () => ({ ...empty, error: 'resolver unavailable' }), 'organisation');
+    assert.equal(failed.organisationalDomain, null);
+    const invalid = await walkDmarcTree('mail.example.test', observation('v=DMARC1; p=invalid'), async () => observation('v=DMARC1; p=reject; psd=n'), 'organisation');
+    assert.equal(invalid.organisationalDomain, null);
+  });
+
+  test('same-organisation apex and sibling recipients need no authorisation, with shared questions cached', async () => {
+    const calls: string[] = [];
+    const exact = observation('v=DMARC1; p=reject; rua=mailto:private@example.test,mailto:another@reports.example.test; ruf=mailto:private@reports.example.test');
+    const result = await collectDnsInheritanceReview('mail.example.test', exact, empty, {}, dependencies({
+      resolveNs: async () => [],
+      resolveTxt: async name => {
+        calls.push(name); assert.doesNotMatch(name, /_report/);
+        return name === '_dmarc.example.test' ? ['v=DMARC1; p=reject; psd=n'] : [];
+      },
+    }));
+    assert.deepEqual(result.dmarcAuthorizations.map(item => item.state), ['self', 'self', 'self']);
+    assert.deepEqual(calls, ['_dmarc.example.test', '_dmarc.reports.example.test']);
+    const boundary = result.checks.find(item => item.id === 'dmarc_reporting_boundaries');
+    assert.ok(boundary);
+    assert.ok(boundary.records.includes('reports.example.test: organisational domain example.test.'));
+    assert.doesNotMatch(JSON.stringify(result), /private@|another@/);
+  });
+
+  test('a descendant with its own explicit boundary requires recipient authorisation', async () => {
+    for (const authorised of [false, true]) {
+      const calls: string[] = [];
+      const result = await collectDnsInheritanceReview('example.test', observation('v=DMARC1; p=reject; psd=n; rua=mailto:reports@tenant.example.test'), empty, {}, dependencies({
+        resolveNs: async () => [],
+        resolveTxt: async name => {
+          calls.push(name);
+          if (name === '_dmarc.tenant.example.test') return ['v=DMARC1; p=reject; psd=n'];
+          return authorised ? ['v=DMARC1'] : [];
+        },
+      }));
+      assert.deepEqual(calls, ['_dmarc.tenant.example.test', 'example.test._report._dmarc.tenant.example.test']);
+      assert.equal(result.dmarcAuthorizations[0]?.state, authorised ? 'authorized' : 'not_found');
+    }
+  });
+
+  test('unknown boundaries cannot turn a missing optional authorisation into a missing requirement', async () => {
+    const result = await collectDnsInheritanceReview('mail.example.test', observation('v=DMARC1; p=reject; rua=mailto:reports@example.test'), empty, {}, dependencies({
+      resolveNs: async () => [],
+      resolveTxt: async name => {
+        if (name === '_dmarc.example.test') throw new Error('private resolver detail');
+        return [];
+      },
+    }));
+    assert.equal(result.dmarcAuthorizations[0]?.state, 'unavailable');
+    assert.match(result.dmarcAuthorizations[0]?.error ?? '', /no authorisation requirement/);
+    assert.doesNotMatch(JSON.stringify(result), /private resolver/);
+  });
+
+  test('shares one finite TXT budget across every recipient, tree walk and authorisation', async () => {
+    const recipients = Array.from({ length: 10 }, (_, i) => `mailto:report@a${i}.b${i}.c${i}.d${i}.e${i}.f${i}.g${i}.example.test`);
+    const calls: string[] = [];
+    const result = await collectDnsInheritanceReview('example.test', observation(`v=DMARC1; p=reject; psd=n; rua=${recipients.join(',')}`), empty, {}, dependencies({
+      resolveNs: async () => [], resolveTxt: async name => { calls.push(name); return []; },
+    }));
+    assert.equal(calls.length, MAX_DMARC_REVIEW_QUERIES);
+    assert.equal(new Set(calls).size, calls.length);
+    assert.equal(result.dmarcAuthorizations.length, 10);
+    assert.ok(result.dmarcAuthorizations.some(item => item.state === 'self'));
+    assert.ok(result.dmarcAuthorizations.some(item => item.state === 'unavailable'));
+    assert.ok(result.checks.every(item => item.records.length <= 64));
+    assert.doesNotMatch(JSON.stringify(result.checks), /report@/);
   });
 });
 

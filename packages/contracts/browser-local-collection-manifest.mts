@@ -47,7 +47,11 @@ import {
 } from './analyst-review-state-contract.mts';
 import { ANALYST_REVIEW_STATE_COMPATIBILITY } from './analyst-review-state.mts';
 import type { SchemaCompatibilityDescriptor } from './schema-compatibility.mts';
-import { CASE_DRAFT_COMPATIBILITY, MAX_CASE_DRAFT_RECORDS, MAX_CASE_DRAFT_STORE_BYTES } from './case-drafts.mts';
+import {
+  CASE_DRAFT_COMPATIBILITY,
+  MAX_CASE_DRAFT_RECORDS,
+  MAX_CASE_DRAFT_STORE_BYTES,
+} from './case-drafts.mts';
 import { CASE_VIEWS_COMPATIBILITY } from './case-views.mts';
 import { MAX_CASE_VIEWS, MAX_CASE_VIEWS_BYTES } from './case-views-contract.mts';
 import { REVIEW_SESSION_COMPATIBILITY } from './review-session.mts';
@@ -63,12 +67,18 @@ export type BrowserLocalCollectionStaticDefinition = Readonly<{
   maximumRecords: number;
 }>;
 
-function definition(value: Omit<BrowserLocalCollectionStaticDefinition, 'schemaVersion' | 'minimumReadableVersion' | 'acceptsUnversionedLegacy'> & {
-  compatibility: SchemaCompatibilityDescriptor;
-  schemaVersion?: number;
-  minimumReadableVersion?: number;
-  acceptsUnversionedLegacy?: boolean;
-}): BrowserLocalCollectionStaticDefinition {
+function definition<const Id extends string>(
+  value: Omit<
+    BrowserLocalCollectionStaticDefinition,
+    'id' | 'schemaVersion' | 'minimumReadableVersion' | 'acceptsUnversionedLegacy'
+  > & {
+    id: Id;
+    compatibility: SchemaCompatibilityDescriptor;
+    schemaVersion?: number;
+    minimumReadableVersion?: number;
+    acceptsUnversionedLegacy?: boolean;
+  },
+): BrowserLocalCollectionStaticDefinition & Readonly<{ id: Id }> {
   const {
     compatibility,
     schemaVersion = compatibility.currentVersion,
@@ -85,21 +95,111 @@ function definition(value: Omit<BrowserLocalCollectionStaticDefinition, 'schemaV
 }
 
 export const BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID = Object.freeze({
-  review_session: definition({ id: 'review_session', label: 'Saved review position', compatibility: REVIEW_SESSION_COMPATIBILITY, maximumBytes: MAX_REVIEW_SESSION_BYTES, maximumRecords: 1 }),
-  case_drafts: definition({ id: 'case_drafts', label: 'Unfinished Case forms', compatibility: CASE_DRAFT_COMPATIBILITY, maximumBytes: MAX_CASE_DRAFT_STORE_BYTES, maximumRecords: MAX_CASE_DRAFT_RECORDS }),
-  case_views: definition({ id: 'case_views', label: 'Saved Case views', compatibility: CASE_VIEWS_COMPATIBILITY, maximumBytes: MAX_CASE_VIEWS_BYTES, maximumRecords: MAX_CASE_VIEWS }),
-  cases: definition({ id: 'cases', label: 'Cases', compatibility: CASE_BROWSER_COMPATIBILITY, maximumBytes: MAX_CASE_STORE_BYTES, maximumRecords: MAX_CASES }),
-  campaigns: definition({ id: 'campaigns', label: 'Campaigns', compatibility: CAMPAIGN_BROWSER_COMPATIBILITY, maximumBytes: MAX_CAMPAIGN_STORE_BYTES, maximumRecords: MAX_CAMPAIGNS }),
-  brand_profiles: definition({ id: 'brand_profiles', label: 'Brand Profiles', compatibility: BRAND_PROFILE_BROWSER_COMPATIBILITY, maximumBytes: MAX_PROFILE_STORE_BYTES, maximumRecords: MAX_PROFILES }),
-  watchlists: definition({ id: 'watchlists', label: 'Watchlists', compatibility: WATCHLIST_BROWSER_COMPATIBILITY, maximumBytes: MAX_WATCHLIST_STORE_BYTES, maximumRecords: MAX_WATCHLISTS }),
-  shortlist: definition({ id: 'shortlist', label: 'Shortlist', compatibility: SHORTLIST_BROWSER_COMPATIBILITY, maximumBytes: MAX_SHORTLIST_STORE_BYTES, maximumRecords: MAX_SHORTLIST_ENTRIES }),
-  ct_history: definition({ id: 'ct_history', label: 'Certificate Transparency history', compatibility: CT_HISTORY_BROWSER_COMPATIBILITY, maximumBytes: MAX_CT_HISTORY_STORE_BYTES, maximumRecords: MAX_CT_HISTORY_SEARCHES }),
-  detection_rules: definition({ id: 'detection_rules', label: 'Custom rules', compatibility: DETECTION_RULE_BROWSER_COMPATIBILITY, maximumBytes: MAX_RULE_STORE_BYTES, maximumRecords: MAX_DETECTION_RULES }),
-  relationship_observations: definition({ id: 'relationship_observations', label: 'Retained relationship observations', compatibility: RELATIONSHIP_OBSERVATION_BROWSER_COMPATIBILITY, maximumBytes: MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES, maximumRecords: MAX_RELATIONSHIP_OBSERVATIONS }),
-  bulk_sessions: definition({ id: 'bulk_sessions', label: 'Saved Bulk sessions', compatibility: BULK_SESSION_BROWSER_COMPATIBILITY, maximumBytes: MAX_BULK_SESSION_STORE_BYTES, maximumRecords: MAX_BULK_SESSIONS }),
-  website_snapshots: definition({ id: 'website_snapshots', label: 'Website profile snapshots', compatibility: WEBSITE_SNAPSHOT_BROWSER_COMPATIBILITY, maximumBytes: MAX_WEBSITE_SNAPSHOT_STORE_BYTES, maximumRecords: MAX_WEBSITE_SNAPSHOTS }),
-  investigation_templates: definition({ id: 'investigation_templates', label: 'Investigation templates', compatibility: INVESTIGATION_TEMPLATE_BROWSER_COMPATIBILITY, maximumBytes: MAX_INVESTIGATION_TEMPLATE_STORE_BYTES, maximumRecords: MAX_INVESTIGATION_TEMPLATES }),
-  bulk_review: definition({ id: 'bulk_review', label: 'Bulk review views and queue state', compatibility: BULK_REVIEW_BROWSER_COMPATIBILITY, maximumBytes: MAX_BULK_REVIEW_STORE_BYTES, maximumRecords: MAX_BULK_REVIEW_PRESETS + MAX_BULK_REVIEW_ROWS }),
+  review_session: definition({
+    id: 'review_session',
+    label: 'Saved review position',
+    compatibility: REVIEW_SESSION_COMPATIBILITY,
+    maximumBytes: MAX_REVIEW_SESSION_BYTES,
+    maximumRecords: 1,
+  }),
+  case_drafts: definition({
+    id: 'case_drafts',
+    label: 'Unfinished Case forms',
+    compatibility: CASE_DRAFT_COMPATIBILITY,
+    maximumBytes: MAX_CASE_DRAFT_STORE_BYTES,
+    maximumRecords: MAX_CASE_DRAFT_RECORDS,
+  }),
+  case_views: definition({
+    id: 'case_views',
+    label: 'Saved Case views',
+    compatibility: CASE_VIEWS_COMPATIBILITY,
+    maximumBytes: MAX_CASE_VIEWS_BYTES,
+    maximumRecords: MAX_CASE_VIEWS,
+  }),
+  cases: definition({
+    id: 'cases',
+    label: 'Cases',
+    compatibility: CASE_BROWSER_COMPATIBILITY,
+    maximumBytes: MAX_CASE_STORE_BYTES,
+    maximumRecords: MAX_CASES,
+  }),
+  campaigns: definition({
+    id: 'campaigns',
+    label: 'Campaigns',
+    compatibility: CAMPAIGN_BROWSER_COMPATIBILITY,
+    maximumBytes: MAX_CAMPAIGN_STORE_BYTES,
+    maximumRecords: MAX_CAMPAIGNS,
+  }),
+  brand_profiles: definition({
+    id: 'brand_profiles',
+    label: 'Brand Profiles',
+    compatibility: BRAND_PROFILE_BROWSER_COMPATIBILITY,
+    maximumBytes: MAX_PROFILE_STORE_BYTES,
+    maximumRecords: MAX_PROFILES,
+  }),
+  watchlists: definition({
+    id: 'watchlists',
+    label: 'Watchlists',
+    compatibility: WATCHLIST_BROWSER_COMPATIBILITY,
+    maximumBytes: MAX_WATCHLIST_STORE_BYTES,
+    maximumRecords: MAX_WATCHLISTS,
+  }),
+  shortlist: definition({
+    id: 'shortlist',
+    label: 'Shortlist',
+    compatibility: SHORTLIST_BROWSER_COMPATIBILITY,
+    maximumBytes: MAX_SHORTLIST_STORE_BYTES,
+    maximumRecords: MAX_SHORTLIST_ENTRIES,
+  }),
+  ct_history: definition({
+    id: 'ct_history',
+    label: 'Certificate Transparency history',
+    compatibility: CT_HISTORY_BROWSER_COMPATIBILITY,
+    maximumBytes: MAX_CT_HISTORY_STORE_BYTES,
+    maximumRecords: MAX_CT_HISTORY_SEARCHES,
+  }),
+  detection_rules: definition({
+    id: 'detection_rules',
+    label: 'Custom rules',
+    compatibility: DETECTION_RULE_BROWSER_COMPATIBILITY,
+    maximumBytes: MAX_RULE_STORE_BYTES,
+    maximumRecords: MAX_DETECTION_RULES,
+  }),
+  relationship_observations: definition({
+    id: 'relationship_observations',
+    label: 'Retained relationship observations',
+    compatibility: RELATIONSHIP_OBSERVATION_BROWSER_COMPATIBILITY,
+    maximumBytes: MAX_RELATIONSHIP_OBSERVATION_STORE_BYTES,
+    maximumRecords: MAX_RELATIONSHIP_OBSERVATIONS,
+  }),
+  bulk_sessions: definition({
+    id: 'bulk_sessions',
+    label: 'Saved Bulk sessions',
+    compatibility: BULK_SESSION_BROWSER_COMPATIBILITY,
+    maximumBytes: MAX_BULK_SESSION_STORE_BYTES,
+    maximumRecords: MAX_BULK_SESSIONS,
+  }),
+  website_snapshots: definition({
+    id: 'website_snapshots',
+    label: 'Website profile snapshots',
+    compatibility: WEBSITE_SNAPSHOT_BROWSER_COMPATIBILITY,
+    maximumBytes: MAX_WEBSITE_SNAPSHOT_STORE_BYTES,
+    maximumRecords: MAX_WEBSITE_SNAPSHOTS,
+  }),
+  investigation_templates: definition({
+    id: 'investigation_templates',
+    label: 'Investigation templates',
+    compatibility: INVESTIGATION_TEMPLATE_BROWSER_COMPATIBILITY,
+    maximumBytes: MAX_INVESTIGATION_TEMPLATE_STORE_BYTES,
+    maximumRecords: MAX_INVESTIGATION_TEMPLATES,
+  }),
+  bulk_review: definition({
+    id: 'bulk_review',
+    label: 'Bulk review views and queue state',
+    compatibility: BULK_REVIEW_BROWSER_COMPATIBILITY,
+    maximumBytes: MAX_BULK_REVIEW_STORE_BYTES,
+    maximumRecords: MAX_BULK_REVIEW_PRESETS + MAX_BULK_REVIEW_ROWS,
+  }),
   // The IndexedDB revision is independent of the portable document version:
   // revision 1 was unreleased, while public review-state documents remain v1.
   analyst_review_state: definition({
@@ -113,24 +213,9 @@ export const BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID = Object.freeze({
   }),
 } as const);
 
-export const BROWSER_LOCAL_COLLECTION_MANIFEST = Object.freeze([
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.review_session,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.case_drafts,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.case_views,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.cases,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.campaigns,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.brand_profiles,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.watchlists,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.shortlist,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.ct_history,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.detection_rules,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.relationship_observations,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.bulk_sessions,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.website_snapshots,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.investigation_templates,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.bulk_review,
-  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.analyst_review_state,
-]);
+export const BROWSER_LOCAL_COLLECTION_MANIFEST = Object.freeze(
+  Object.values(BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID),
+);
 
 // Archive membership is distinct from browser persistence. Recovery drafts and
 // saved review positions and transient certificate searches remain local and are not portable sections.
@@ -148,4 +233,7 @@ export const WORKSPACE_ARCHIVE_COLLECTIONS = [
   ['bulkReview', 'bulk_review'],
   ['analystReviewState', 'analyst_review_state'],
   ['caseViews', 'case_views'],
-] as const satisfies readonly (readonly [string, keyof typeof BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID])[];
+] as const satisfies readonly (readonly [
+  string,
+  keyof typeof BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID,
+])[];

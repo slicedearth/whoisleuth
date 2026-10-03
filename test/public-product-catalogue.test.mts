@@ -23,12 +23,15 @@ import {
   publicExamples,
   publicMethodology,
   renderPublicCliCatalogueModule,
+  renderPublicCliGrammarModule,
   renderPublicCliGuidanceModule,
   renderPublicCliIndexModule,
   renderPublicCoverageModule,
   renderPublicCoverageSummaryModule,
   renderPublicExamplesIndexModule,
   renderPublicExamplesModule,
+  renderPublicExampleOutputModules,
+  GENERATED_MODULE_NOTICE,
   renderPublicMethodologyModule,
 } from '../tools/public-product-catalogue-renderer.mts';
 import {
@@ -38,8 +41,10 @@ import {
   renderPublicSitemap,
 } from '../lib/prerendered-routes.mts';
 import { WHOISLEUTH_SITE_ORIGIN } from '../lib/project-metadata.mts';
-import { FRONTEND_ROUTE_GZIP_BUDGETS } from '../tools/frontend-loading-report.mts';
-import { writeAtomically } from '../tools/public-product-catalogue.mts';
+import { writeAtomically, obsoleteExampleOutputs } from '../tools/public-product-catalogue.mts';
+import { PUBLIC_CLI_CATALOGUE } from '../frontend/src/lib/generated/public-cli-catalogue.ts';
+import { PUBLIC_CLI_GRAMMAR } from '../frontend/src/lib/generated/public-cli-grammar.ts';
+import { PUBLIC_EXAMPLE_LOADERS } from '../frontend/src/lib/generated/public-examples.ts';
 
 const GENERATED_DIRECTORY = new URL('../frontend/src/lib/generated/', import.meta.url);
 const ROUTES_DIRECTORY = new URL('../frontend/src/routes/(public)/', import.meta.url);
@@ -52,6 +57,11 @@ function strings(value: unknown): string[] {
 }
 
 describe('public product catalogue', () => {
+  test('generated command data preserves every canonical field after sharing repeated options', () => {
+    assert.deepEqual(PUBLIC_CLI_CATALOGUE, JSON.parse(JSON.stringify(publicCliCatalogue())));
+    assert.deepEqual(PUBLIC_CLI_GRAMMAR, Object.fromEntries(CLI_COMMAND_REGISTRY.map(definition => [definition.command, definition.grammar])));
+  });
+
   test('projects all installed commands and fixed workflows from canonical metadata', () => {
     const catalogue = publicCliCatalogue();
     const workflows = buildWorkflowRecipeCatalogue();
@@ -125,6 +135,11 @@ describe('public product catalogue', () => {
         continue;
       }
       const document = JSON.parse(example.content) as { cases?: readonly { tags?: readonly string[] }[] };
+      if (example.direction === 'input') {
+        assert.ok(example.command.includes('--input'));
+        assert.ok(!Object.hasOwn(document, 'id'));
+        continue;
+      }
       assert.equal(document.cases?.every((item) => item.tags?.includes('synthetic')) ?? false, true, example.id);
     }
     assert.ok(first.examples.some((example) => example.large));
@@ -143,11 +158,13 @@ describe('public product catalogue', () => {
   test('retains byte-exact generated frontend projections without browser execution imports', () => {
     const artifacts = [
       ['public-cli-catalogue.ts', renderPublicCliCatalogueModule()],
+      ['public-cli-grammar.ts', renderPublicCliGrammarModule()],
       ['public-cli-guidance.ts', renderPublicCliGuidanceModule()],
       ['public-cli-index.ts', renderPublicCliIndexModule()],
       ['public-coverage.ts', renderPublicCoverageModule()],
       ['public-coverage-summary.ts', renderPublicCoverageSummaryModule()],
       ['public-examples.ts', renderPublicExamplesModule()],
+      ...renderPublicExampleOutputModules().map(({ name, content }) => [name, content] as const),
       ['public-examples-index.ts', renderPublicExamplesIndexModule()],
       ['public-methodology.ts', renderPublicMethodologyModule()],
     ] as const;
@@ -162,7 +179,34 @@ describe('public product catalogue', () => {
     ]);
   });
 
-  test('registers every public reference route, canonical redirect, sitemap URL and loading budget', () => {
+  test('discovers individual example payloads from the same canonical catalogue', async () => {
+    const examples = publicExamples().examples;
+    assert.deepEqual(Object.keys(PUBLIC_EXAMPLE_LOADERS), examples.map(example => example.id));
+    for (const [id, load] of Object.entries(PUBLIC_EXAMPLE_LOADERS)) {
+      assert.deepEqual(await load(), examples.find(example => example.id === id));
+    }
+    const unsafe = [{ ...examples[0]!, id: '../escape' }] as unknown as Parameters<typeof renderPublicExampleOutputModules>[0];
+    assert.throws(() => renderPublicExampleOutputModules(unsafe), /filename-safe/u);
+    assert.throws(() => renderPublicExampleOutputModules([examples[0]!, examples[0]!]), /unique/u);
+  });
+
+  test('identifies retired generated examples without deleting unexpected local material', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'whoisleuth-example-outputs-'));
+    try {
+      assert.deepEqual(obsoleteExampleOutputs(path.join(root, 'absent'), []), []);
+      writeFileSync(path.join(root, 'current.ts'), `${GENERATED_MODULE_NOTICE}export const value = 1;`);
+      writeFileSync(path.join(root, 'retired.ts'), `${GENERATED_MODULE_NOTICE}export const value = 2;`);
+      assert.deepEqual(obsoleteExampleOutputs(root, ['current.ts']), [path.join(root, 'retired.ts')]);
+      assert.equal(readFileSync(path.join(root, 'retired.ts'), 'utf8').includes('value = 2'), true);
+      writeFileSync(path.join(root, 'local.ts'), 'export const local = true;');
+      assert.throws(() => obsoleteExampleOutputs(root, ['current.ts']), /not marked as generated/u);
+      rmSync(path.join(root, 'local.ts'));
+      writeFileSync(path.join(root, 'notes.md'), 'Keep this local note.');
+      assert.throws(() => obsoleteExampleOutputs(root, ['current.ts']), /unrecognised entry/u);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  test('registers every public reference route, canonical redirect and sitemap URL', () => {
     const routes = ['/cli', '/methodology', '/coverage', '/examples'] as const;
     const redirects = new Map(CANONICAL_TRAILING_SLASH_REDIRECTS);
     const robots = readFileSync(new URL('../frontend/static/robots.txt', import.meta.url), 'utf8');
@@ -172,8 +216,6 @@ describe('public product catalogue', () => {
     for (const route of routes) {
       assert.ok(PRERENDERED_ROUTES.includes(route));
       assert.equal(redirects.get(`${route}/`), route);
-      assert.equal(typeof FRONTEND_ROUTE_GZIP_BUDGETS[route], 'number');
-      assert.ok(FRONTEND_ROUTE_GZIP_BUDGETS[route]! > 0);
       assert.ok(sitemap.includes(`<loc>${WHOISLEUTH_SITE_ORIGIN}${route}</loc>`));
     }
   });

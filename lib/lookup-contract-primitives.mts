@@ -3,7 +3,7 @@
 // copying untrusted values.
 
 import { MAX_OBSERVATION_DIAGNOSTICS } from '../packages/evidence/observation.mts';
-import { MAX_HTTP_PROVENANCE_URL } from './http-evidence-bounds.mts';
+import { MAX_HTTP_PROVENANCE_URL } from '../packages/analysis/http-evidence-bounds.mts';
 
 type JsonPrimitive = boolean | number | string | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[];

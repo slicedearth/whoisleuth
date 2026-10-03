@@ -8,7 +8,9 @@ import type {
   CaseObservedEffectHistory,
   CaseSightingRecord,
 } from './case-response-model.mts';
-import { ANALYST_REVIEW_REASONS } from '../../lib/analyst-taxonomy.mts';
+import type { CaseActionTransitionEvent, CaseObservedEffectReview, CaseClosureRecord } from './case-response-records.mts';
+import { ANALYST_REVIEW_REASONS } from '../analysis/analyst-taxonomy.mts';
+import type { WebCollectionQuality } from '../evidence/collection-quality.mts';
 import {
   CASE_IMPORT_VERSIONS,
   CASE_SCHEMA_VERSION,
@@ -34,6 +36,8 @@ import {
 } from '../contracts/case-portability.mts';
 import type { CaseInvestigationBranch } from './case-investigation-branch-model.mts';
 import type { CaseAttachment } from './case-attachment-model.mts';
+import type { CaseEvidenceLink } from './case-evidence-links.mts';
+import type { CaseWorkflowMetadata, CaseTypeId } from './case-workflow-metadata.mts';
 import {
   CASE_DISPOSITIONS,
   CASE_STATUSES,
@@ -110,6 +114,7 @@ export type CaseEvidenceSnapshot = {
   observationHostname?: string | null;
   webObservationMode?: 'selected_url';
   scanDepth: string;
+  webCollectionQuality?: WebCollectionQuality;
   availability: string | null;
   confidence: string | null;
   riskModelVersion: number | null;
@@ -167,10 +172,12 @@ export type CaseRecord = {
   reviewReasonCode?: string | null;
   brandProfileIds: string[];
   tags: string[];
+  workflowMetadata?: CaseWorkflowMetadata;
   notes: CaseNote[];
   source: CaseSource;
   evidenceHistory: CaseEvidenceSnapshot[];
   evidencePins: CaseEvidencePin[];
+  evidenceLinks?: CaseEvidenceLink[];
   decisions: CaseDecisionRecord[];
   actions: CaseActionRecord[];
   assertions: CaseAssertionRecord[];
@@ -194,9 +201,15 @@ export type CaseInput = {
   brandProfileIds?: unknown;
   source?: unknown;
   tags?: unknown;
+  caseTypes?: unknown;
+  incidentTarget?: unknown;
+  incidentTargetResolution?: unknown;
+  investigationContext?: unknown;
   evidence?: unknown;
   evidencePin?: unknown;
   evidencePins?: unknown;
+  evidenceLink?: unknown;
+  evidenceLinkWithdrawal?: unknown;
   decision?: unknown;
   action?: unknown;
   actionUpdate?: unknown;
@@ -210,7 +223,49 @@ export type CaseInput = {
   branchUpdate?: unknown;
   note?: unknown;
 };
-export type CasePatch = Omit<Partial<CaseInput>, 'domain'> & { expectedTitle?: string };
+type CaseEditExpectations = {
+  expectedTitle?: string;
+  expectedStatus?: CaseStatus;
+  expectedDisposition?: CaseDisposition;
+  expectedReviewReasonCode?: string | null;
+  expectedTags?: readonly string[];
+  expectedCaseTypes?: readonly CaseTypeId[];
+};
+export type CasePatch = Omit<Partial<CaseInput>, 'domain'> & CaseEditExpectations;
+
+/** Application-authored response values, distinct from hostile import admission.
+ * Runtime operations still validate relationships, limits and lifecycle policy. */
+type AuthoredFields<T> = Partial<Omit<T, 'id' | 'createdAt' | 'updatedAt'>>;
+type ActionMetadata = Pick<CaseActionRecord,
+  'type' | 'recipient' | 'contactSource' | 'routeObservedAt' | 'routeReviewAfter'
+  | 'contactLimitations' | 'dueAt' | 'followUpAt' | 'originActionId' | 'amendment'>;
+export type CaseResponseMutation = CaseEditExpectations & {
+  title?: string;
+  status?: CaseStatus;
+  disposition?: CaseDisposition;
+  reviewReasonCode?: string | null;
+  tags?: string[];
+  caseTypes?: CaseTypeId[];
+  incidentTarget?: string;
+  incidentTargetResolution?: string;
+  investigationContext?: { objective: string; incidentUrl: string; retainExactUrl: boolean };
+  note?: string;
+  evidencePin?: AuthoredFields<CaseEvidencePin>;
+  evidencePins?: AuthoredFields<CaseEvidencePin>[];
+  evidenceLink?: Omit<CaseEvidenceLink, 'id' | 'createdAt' | 'withdrawal'>;
+  evidenceLinkWithdrawal?: { id: string; reason: string };
+  decision?: AuthoredFields<CaseDecisionRecord>;
+  action?: Partial<ActionMetadata>;
+  actionUpdate?: Partial<ActionMetadata> & { id: string; transition?: AuthoredFields<CaseActionTransitionEvent> };
+  assertion?: AuthoredFields<CaseAssertionRecord>;
+  assertionUpdate?: AuthoredFields<CaseAssertionRecord> & { id: string; expectedUpdatedAt?: string };
+  trailEvent?: AuthoredFields<CaseManualTrailEvent>;
+  sighting?: AuthoredFields<CaseSightingRecord>;
+  observedEffectReview?: Omit<CaseObservedEffectReview, 'id' | 'createdAt'>;
+  closure?: Omit<CaseClosureRecord, 'id' | 'createdAt'>;
+  branch?: AuthoredFields<CaseInvestigationBranch>;
+  branchUpdate?: AuthoredFields<CaseInvestigationBranch> & { id: string };
+};
 export type SnapshotOptions = {
   source?: string;
   fallback?: string | null;
@@ -219,7 +274,7 @@ export type SnapshotOptions = {
 };
 export type EvidenceChange = { field: string; label: string; before: unknown; after: unknown; tone: string };
 export type CompareFieldSpec = {
-  field: keyof CaseEvidenceSnapshot;
+  field: keyof CaseEvidenceMaterial;
   scope: 'registration' | 'hostname' | 'web';
   label: string;
   type: string;

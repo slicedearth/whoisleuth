@@ -11,6 +11,25 @@ import {
 } from '../frontend/src/lib/analysis/web-capture-import.ts';
 
 describe('sanitised web-capture import', () => {
+  test('accounts for supplied qualification omissions before summary and manifest projection', () => {
+    const limitations = Array.from({ length: 8 }, (_, index) => `Qualification ${index + 1}`);
+    const { manifest } = captureReviewFixture();
+    const summary = parseWebCaptureSummary({ schema: WEB_CAPTURE_SUMMARY_SCHEMA, schemaVersion: 1,
+      source: manifest.source, captures: [{ domain: 'capture.example', capturedAt: manifest.captures[0]!.capturedAt,
+        completeness: 'complete', pageTitle: 'Example page', limitations }] });
+    const capture = parseWebCaptureManifest({ ...manifest, schemaVersion: 2,
+      captures: [{ ...manifest.captures[0]!, pageBehaviour: undefined, completeness: 'complete', limitations }] });
+    for (const document of [summary, capture]) {
+      assert.ok(document.findings.length > 0);
+      for (const finding of document.findings) {
+        assert.equal(finding.completeness, 'partial');
+        assert.equal(finding.limitations.length, 8);
+        assert.deepEqual(finding.limitations.slice(1, 7), limitations.slice(0, 6));
+        assert.match(finding.limitations[7]!, /^2 supplied limitations were omitted /u);
+      }
+    }
+  });
+
   test('preserves bounded declared conditions without inventing them for older captures', () => {
     const { manifest } = captureReviewFixture();
     assert.equal(readWebCaptureManifest(manifest).captures[0]!.conditions, null);
@@ -21,8 +40,12 @@ describe('sanitised web-capture import', () => {
     assert.equal(parsed.captures[0]!.observerLabel, 'Analyst A');
     const retained = parsed.document.findings.map(finding => finding.summary).join(' ');
     assert.match(retained, /1024.*768.*en-AU/u); assert.match(retained, /Analyst A/u);
-    for (const invalid of [{ ...conditions, timezone: 'x'.repeat(81) }, { ...conditions, viewport: { width: 0, height: 768 } }, { ...conditions, cookies: [] }]) {
-      assert.throws(() => readWebCaptureManifest({ ...declared, captures: [{ ...declared.captures[0]!, conditions: invalid }] }));
+    for (const [invalid, expected] of [
+      [{ ...conditions, timezone: 'x'.repeat(81) }, /Capture timezone/u],
+      [{ ...conditions, viewport: { width: 0, height: 768 } }, /Image width has an unsupported or malformed structure/u],
+      [{ ...conditions, cookies: [] }, /Capture conditions has an unsupported or malformed structure/u],
+    ] as const) {
+      assert.throws(() => readWebCaptureManifest({ ...declared, captures: [{ ...declared.captures[0]!, conditions: invalid }] }), expected);
     }
   });
   test('requires explicit zones for the current manifest and rejects reader-only version 1', () => {
@@ -50,10 +73,10 @@ describe('sanitised web-capture import', () => {
     assert.throws(() => parseWebCaptureManifest(manifest(WEB_CAPTURE_MANIFEST_VERSION, zoneLess)), /explicit timezone/u);
     assert.throws(
       () => parseWebCaptureManifest(manifest(1, '2026-07-01T12:00:00.000Z')),
-      /schema version 2/u,
+      /schema version 3/u,
     );
     assert.equal(
-      parseWebCaptureManifest(manifest(WEB_CAPTURE_MANIFEST_VERSION, '2026-07-01T12:00:00.000+01:00')).findings[0]?.observedAt,
+      parseWebCaptureManifest(manifest(2, '2026-07-01T12:00:00.000+01:00')).findings[0]?.observedAt,
       '2026-07-01T11:00:00.000Z',
     );
   });
@@ -83,17 +106,19 @@ describe('sanitised web-capture import', () => {
   });
 
   test('rejects complete URLs and unsupported raw capture fields', () => {
-    assert.throws(() => parseWebCaptureSummary({
+    const document = {
       schema: WEB_CAPTURE_SUMMARY_SCHEMA,
       schemaVersion: 1,
       source: { name: 'Capture', reference: null, collectedAt: null },
       captures: [{
         domain: 'example.test',
         capturedAt: '2026-07-01T00:00:00Z',
-        finalOrigin: 'https://example.test/private?token=secret',
-        rawHtml: '<p>private</p>',
+        finalOrigin: 'https://example.test',
       }],
-    }), /unsupported fields|origin without credentials/i);
+    };
+    assert.doesNotThrow(() => parseWebCaptureSummary(document));
+    assert.throws(() => parseWebCaptureSummary({ ...document, captures: [{ ...document.captures[0], finalOrigin: 'https://example.test/private?token=secret' }] }), /origin without credentials/iu);
+    assert.throws(() => parseWebCaptureSummary({ ...document, captures: [{ ...document.captures[0], rawHtml: '<p>private</p>' }] }), /unsupported fields/iu);
   });
 
   test('does not accept embedded screenshot data in place of a digest', () => {
@@ -136,7 +161,7 @@ describe('sanitised web-capture import', () => {
   test('validates bounded capture artifact metadata without accepting artifact bytes', () => {
     const document = parseWebCaptureManifest({
       schema: WEB_CAPTURE_MANIFEST_SCHEMA,
-      schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
+      schemaVersion: 2,
       source: { name: 'Reviewed isolated capture', reference: 'capture-17', collectedAt: '2026-07-01T00:00:00Z' },
       captures: [{
         domain: 'example.test',
@@ -184,7 +209,7 @@ describe('sanitised web-capture import', () => {
     }];
     const document = parseWebCaptureManifest({
       schema: WEB_CAPTURE_MANIFEST_SCHEMA,
-      schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
+      schemaVersion: 2,
       source: { name: 'Local capture package', reference: null, collectedAt: '2026-08-01T00:00:00Z' },
       captures: [{
         domain: 'one.example.test', capturedAt: '2026-08-01T00:00:00Z', completeness: 'partial',
@@ -215,7 +240,7 @@ describe('sanitised web-capture import', () => {
   test('accepts current screenshot perceptual hashes and rejects reader-only version 1', () => {
     const current = parseWebCaptureManifest({
       schema: WEB_CAPTURE_MANIFEST_SCHEMA,
-      schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
+      schemaVersion: 2,
       source: { name: 'Local capture package', reference: null, collectedAt: '2026-08-01T00:00:00Z' },
       captures: [{
         domain: 'example.test',
@@ -238,13 +263,13 @@ describe('sanitised web-capture import', () => {
           sha256: 'a'.repeat(64), perceptualHash: '0123456789abcdef', bytes: 100, width: 100, height: 100,
         }],
       }],
-    }), /schema version 2/u);
+    }), /schema version 3/u);
   });
 
   test('rejects path traversal, archive payloads, and unsupported artifact declarations', () => {
     const base = {
       schema: WEB_CAPTURE_MANIFEST_SCHEMA,
-      schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
+      schemaVersion: 2,
       source: { name: 'Capture', reference: null, collectedAt: null },
       captures: [{
         domain: 'example.test',

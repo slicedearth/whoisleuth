@@ -16,6 +16,7 @@ function deepEvidence(overrides: Record<string, unknown> = {}): Record<string, u
   return {
     inputHostname: null,
     scanDepth: 'deep',
+    webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
     availability: 'registered',
     riskModelVersion: 1,
     riskScore: 40,
@@ -302,7 +303,7 @@ describe('Incident URL context', () => {
     assert.equal(model.parseIncidentUrlContext('file:///tmp/evidence'), null);
   });
 
-  test('retains exact or origin-only context through the existing Case assertion contract', () => {
+  test('retains exact or origin-only typed context without creating assertions', () => {
     const original = model.createCase({ domain: 'example.test' }, ISO);
     const exact = model.recordCaseInvestigationContext([original], original.id, {
       objective: 'Determine whether the page is impersonating the affected service.',
@@ -313,7 +314,7 @@ describe('Incident URL context', () => {
       objective: 'Determine whether the page is impersonating the affected service.',
       incidentUrl: 'https://login.example.test/sign-in?token=secret',
       urlRetention: 'exact',
-      assertionId: exact.record.assertions[0]?.id,
+      id: exact.record.workflowMetadata?.investigationContext?.id,
       updatedAt: LATER,
     });
 
@@ -322,12 +323,12 @@ describe('Incident URL context', () => {
       incidentUrl: 'https://login.example.test/different?identifier=private',
       retainExactUrl: false,
     }, LATEST);
-    assert.equal(originOnly.record.assertions.length, 1);
+    assert.equal(originOnly.record.assertions.length, 0);
     assert.deepEqual(model.caseInvestigationContext(originOnly.record), {
       objective: 'Prepare the reviewed evidence needed for a response decision.',
-      incidentUrl: 'https://login.example.test/',
+      incidentUrl: 'https://login.example.test',
       urlRetention: 'origin_only',
-      assertionId: originOnly.record.assertions[0]?.id,
+      id: exact.record.workflowMetadata?.investigationContext?.id,
       updatedAt: LATEST,
     });
     assert.doesNotMatch(JSON.stringify(originOnly.record), /identifier=private/u);
@@ -344,6 +345,18 @@ describe('Incident URL context', () => {
 });
 
 describe('reviewed recheck outcome', () => {
+  test('preserves declared and independently detected summary truncation through export', () => {
+    const original = model.createCase({ domain: 'example.test' }, ISO);
+    for (const summary of [{ comparisonSummary: 'Whole entries; [more changes omitted]', comparisonTruncated: true }, { comparisonSummary: 'x'.repeat(1_001) }]) {
+      const result = model.recordCaseRecheckOutcome([original], original.id, {
+        state: 'changed', observedAt: LATER, completeness: 'complete', source: 'Analyst review', ...summary,
+      }, LATER);
+      assert.equal(result.record.evidencePins[0]?.truncated, true);
+      assert.ok((result.record.evidencePins[0]?.value.length ?? Infinity) <= 1_000);
+      assert.equal(model.buildCaseExport(result.cases, LATER).cases[0]?.evidencePins[0]?.truncated, true);
+    }
+  });
+
   test('retains a comparison pin and links the independent outcome atomically', () => {
     const original = model.createCase({ domain: 'example.test' }, ISO);
     const result = model.recordCaseRecheckOutcome([original], original.id, {
@@ -377,6 +390,54 @@ describe('reviewed recheck outcome', () => {
       collectionDepth: 'deep',
     }, LATER), /independent observed-effect review requires/u);
     assert.equal(original.evidencePins.length, 0);
+  });
+});
+
+describe('additive import retention', () => {
+  test('full local notes and observations survive newer imports, including duplicate-material reconciliation', () => {
+    const local = requiredValue(model.normalizeCase({
+      domain: 'retention.example', id: 'retention-case', createdAt: ISO, updatedAt: ISO,
+      notes: Array.from({ length: model.MAX_NOTES_PER_CASE }, (_, i) => ({ id: `local-${i}`, body: `Local note ${i}`, createdAt: ISO })),
+      evidenceHistory: Array.from({ length: model.MAX_EVIDENCE_SNAPSHOTS_PER_CASE }, (_, i) => ({ ...deepEvidence({ registrar: `Local registrar ${i}` }), capturedAt: ISO })),
+    }, undefined, ISO));
+    const exported = model.buildCaseExport([{
+      ...local, updatedAt: LATER,
+      notes: [...local.notes.slice(0, 1), { id: 'imported-note', body: 'New import', createdAt: LATER }],
+      evidenceHistory: model.normalizeEvidenceHistory([
+        { ...local.evidenceHistory[0], capturedAt: LATER },
+        { ...deepEvidence({ registrar: 'Imported registrar' }), capturedAt: LATER },
+      ], { fallback: LATER, caseDomain: local.domain }),
+    }], LATER);
+    const result = model.mergeCases([local], exported);
+    const retained = requiredValue(result.cases[0]);
+    assert.deepEqual(retained.notes, local.notes);
+    assert.deepEqual(new Set(retained.evidenceHistory.map(item => item.registrar)), new Set(local.evidenceHistory.map(item => item.registrar)));
+    const duplicate = retained.evidenceHistory.find(item => item.registrar === local.evidenceHistory[0]?.registrar);
+    assert.equal(duplicate?.firstCapturedAt, ISO);
+    assert.equal(duplicate?.capturedAt, LATER);
+    assert.equal(result.authoredHistoryOmitted, 1);
+    assert.equal(result.evidenceHistoryOmitted, 1);
+    const again = model.mergeCases(result.cases, exported);
+    assert.deepEqual(again.cases, result.cases);
+    assert.equal(again.evidenceHistoryOmitted, 1);
+    const available = model.mergeCases([{ ...local, notes: local.notes.slice(0, -1), evidenceHistory: local.evidenceHistory.slice(0, -1) }], exported);
+    assert.equal(available.cases[0]?.notes.some(note => note.id === 'imported-note'), true);
+    assert.equal(available.authoredHistoryOmitted, 0);
+    assert.equal(available.cases[0]?.evidenceHistory.length, model.MAX_EVIDENCE_SNAPSHOTS_PER_CASE);
+    assert.equal(available.evidenceHistoryOmitted, 0, 'One available slot admits the distinct observation without evicting locals.');
+  });
+
+  test('unobserved registration scalars are incomparable rather than removed, including fast captures', () => {
+    const before = normalizedSnapshot({ scanDepth: 'fast', registrar: 'Observed registrar', createdDate: ISO, expiryDate: LATEST }, { fallback: ISO });
+    for (const field of ['registrar', 'createdDate', 'expiryDate'] as const) {
+      const missing = normalizedSnapshot({ ...before, [field]: null, capturedAt: LATER });
+      for (const [a, b] of [[before, missing], [missing, before]] as const) {
+        assert.equal(model.compareCaseEvidence(a, b).some(change => change.field === field), false);
+        assert.ok(model.caseEvidenceIncomparableReasons(a, b).includes('collection-quality'));
+      }
+    }
+    const after = normalizedSnapshot({ ...before, registrar: 'Different registrar', expiryDate: '2027-07-01T00:00:00.000Z', capturedAt: LATER });
+    assert.deepEqual(model.compareCaseEvidence(before, after).map(change => change.field), ['registrar', 'expiryDate']);
   });
 });
 
@@ -1166,8 +1227,8 @@ describe('compareCaseEvidence', () => {
 
   test('ignores casing-only and order-only differences', () => {
     const changes = model.compareCaseEvidence(
-      snap({ registrar: 'GoDaddy', nameservers: ['A.NS.example', 'b.ns.example'] }),
-      snap({ registrar: 'godaddy', nameservers: ['b.ns.example.', 'a.ns.example'] }),
+      snap({ registrar: 'Example Registrar', nameservers: ['A.NS.example', 'b.ns.example'] }),
+      snap({ registrar: 'example registrar', nameservers: ['b.ns.example.', 'a.ns.example'] }),
     );
     assert.equal(changes.length, 0);
   });
@@ -1200,8 +1261,8 @@ describe('compareCaseEvidence', () => {
   });
 
   test('reports a deep->deep signal removal', () => {
-    const before = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', faviconMatch: true }, { fallback: ISO });
-    const after = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', faviconMatch: false }, { fallback: LATER });
+    const before = normalizedSnapshot(deepEvidence({ faviconMatch: true }), { fallback: ISO });
+    const after = normalizedSnapshot(deepEvidence({ faviconMatch: false }), { fallback: LATER });
     const change = find(model.compareCaseEvidence(before, after), 'faviconMatch');
     assert.ok(change);
     assert.equal(change.before, true);
@@ -1237,8 +1298,8 @@ describe('compareCaseEvidence', () => {
   });
 
   test('reports a factor change even when the total score is unchanged', () => {
-    const before = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', riskModelVersion: 1, riskScore: 70, riskFactors: [{ label: 'A', points: 40 }, { label: 'B', points: 30 }] }, { fallback: ISO });
-    const after = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', riskModelVersion: 1, riskScore: 70, riskFactors: [{ label: 'A', points: 50 }, { label: 'B', points: 20 }] }, { fallback: LATER });
+    const before = normalizedSnapshot(deepEvidence({ riskScore: 70, riskFactors: [{ label: 'A', points: 40 }, { label: 'B', points: 30 }] }), { fallback: ISO });
+    const after = normalizedSnapshot(deepEvidence({ riskScore: 70, riskFactors: [{ label: 'A', points: 50 }, { label: 'B', points: 20 }] }), { fallback: LATER });
     const changes = model.compareCaseEvidence(before, after);
     assert.equal(find(changes, 'riskScore'), undefined); // total unchanged
     assert.ok(find(changes, 'riskFactors')); // composition changed -> explainable material change

@@ -1,5 +1,5 @@
 import { PUBLIC_RESOURCE_ROUTES } from './public-resource-routes.mts';
-import { WHOISLEUTH_SITE_ORIGIN } from './project-metadata.mts';
+import { WHOISLEUTH_SITE_ORIGIN } from '../packages/analysis/project-metadata.mts';
 
 // Shared source of truth for the statically prerendered Svelte pages exposed
 // by the portable Express host. Route groups are build-time structure only and
@@ -7,6 +7,7 @@ import { WHOISLEUTH_SITE_ORIGIN } from './project-metadata.mts';
 
 const PRERENDERED_ROUTE_DEFINITIONS = Object.freeze([
   { path: '/', indexed: true },
+  { path: '/404', indexed: false },
   { path: '/brands', indexed: false },
   { path: '/bulk', indexed: false },
   { path: '/cases', indexed: false },

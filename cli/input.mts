@@ -73,7 +73,7 @@ export async function readCliTextInput(
       if (options.signal?.aborted) throw abortError(options.signal);
       if (error instanceof CliUsageError) throw error;
       const message = error instanceof Error ? error.message : `${options.label} could not be read.`;
-      throw new CliUsageError(message);
+      throw new CliUsageError(message, error instanceof TypeError ? 'invalid_input' : 'input_unavailable');
     }
   }
   if (!stdin || stdin.isTTY) return '';
@@ -145,7 +145,7 @@ export async function readCliHeaderInput(
     } catch (error) {
       if (error instanceof CliUsageError || options.signal?.aborted) throw error;
       const message = error instanceof Error ? error.message : `${options.label} could not be read.`;
-      throw new CliUsageError(message);
+      throw new CliUsageError(message, error instanceof TypeError ? 'invalid_input' : 'input_unavailable');
     } finally {
       await handle?.close();
     }

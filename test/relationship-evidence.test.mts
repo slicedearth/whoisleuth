@@ -112,10 +112,10 @@ describe('relationshipObservation', () => {
 
 describe('buildScanRelationships', () => {
   it('builds distinct, explainable relationship families in deterministic order', () => {
-    const shared = evidence.relationshipObservation(availability(), ['official.example']);
+    const shared = evidence.relationshipObservation(availability({ dns: { records: { a: ['11.12.13.14'] } } }), ['official.example']);
     const other = evidence.relationshipObservation(availability({
       nameservers: ['ns1.example', 'ns2.example'],
-      dns: { records: { a: ['203.0.113.8'] } },
+      dns: { records: { a: ['11.12.13.14'] } },
       externalAssetHosts: [],
     }), ['official.example']);
     const result = evidence.buildScanRelationships([
@@ -127,6 +127,19 @@ describe('buildScanRelationships', () => {
     assert.match(result.limitations.join(' '), /not proof of common ownership/);
     assert.match(result.limitations.join(' '), /exact native TLS leaf-certificate SHA-256/i);
     assert.equal('score' in result, false);
+  });
+
+  it('keeps non-public DNS answers as observations but excludes them from public-infrastructure groups', () => {
+    const addresses = ['0.0.0.0', '127.0.0.1', '10.0.0.1', '169.254.1.1', '100.64.0.1', '192.0.2.1', '::1', 'fc00::1', 'fe80::1', '2001:db8::1'];
+    const observation = evidence.relationshipObservation({ dns: { records: { a: addresses, aaaa: ['2606:4700::1111'] } } });
+    const before = structuredClone(observation);
+    for (const version of [2, 3, 4]) {
+      const result = evidence.buildScanRelationships(['one.example', 'two.example'].map(domain => row(domain, { ...observation, version })));
+      assert.deepEqual(result.groups.filter(group => group.type === 'ip_address').map(group => group.value), ['2606:4700::1111']);
+      assert.match(result.limitations.join(' '), /20 non-public address observations were excluded/u);
+    }
+    assert.deepEqual(observation, before);
+    assert.equal(observation.ipAddresses.length, 11);
   });
 
   it('requires an exact full nameserver set, not a partial overlap', () => {
@@ -268,8 +281,8 @@ describe('buildScanRelationships', () => {
     assert.equal(result.truncated, true);
 
     const groupedRows = Array.from({ length: evidence.MAX_RELATIONSHIP_GROUPS + 1 }, (_, groupIndex) => [
-      row(`group-${groupIndex}-a.example`, evidence.relationshipObservation({ dns: { records: { a: [`10.1.${Math.floor(groupIndex / 250)}.${groupIndex % 250}`] } } })),
-      row(`group-${groupIndex}-b.example`, evidence.relationshipObservation({ dns: { records: { a: [`10.1.${Math.floor(groupIndex / 250)}.${groupIndex % 250}`] } } })),
+      row(`group-${groupIndex}-a.example`, evidence.relationshipObservation({ dns: { records: { a: [`11.1.${Math.floor(groupIndex / 250)}.${groupIndex % 250}`] } } })),
+      row(`group-${groupIndex}-b.example`, evidence.relationshipObservation({ dns: { records: { a: [`11.1.${Math.floor(groupIndex / 250)}.${groupIndex % 250}`] } } })),
     ]).flat();
     const manyGroups = evidence.buildScanRelationships(groupedRows);
     assert.equal(manyGroups.groups.length, evidence.MAX_RELATIONSHIP_GROUPS);

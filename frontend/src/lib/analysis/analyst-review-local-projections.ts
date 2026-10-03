@@ -178,7 +178,9 @@ function comparisonItems(input: Readonly<{
     omittedAtLeast: index.omissions.indexItems,
     totalIsLowerBound: index.omissions.inputScanTruncations > 0,
     items: index.items.map((entry) => item({
-      stable: [entry.ownerType, entry.ownerId, entry.entityId, entry.mode],
+      // A Case owns many adjacent snapshot pairs. Keep ownership separate from
+      // the reviewed pair; old ambiguous decisions remain visible as orphaned.
+      stable: [entry.ownerType, entry.ownerId, entry.entityId, entry.mode, ...(entry.ownerType === 'case' ? [entry.id] : [])],
       material: [entry.id, entry.earlier, entry.later, entry.completeness, entry.truncated, entry.limitations],
       kind: 'comparison',
       family: 'comparison',

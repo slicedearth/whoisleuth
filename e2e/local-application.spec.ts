@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import AxeBuilder from '@axe-core/playwright';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
@@ -8,7 +9,9 @@ import { selectOriginal, openRetainedFiles, FILE_BYTES, FILE_NAME } from './case
 import { downloadWorkspaceArchive, downloadEncryptedWorkspaceArchive, reviewWorkspaceBackup, workspaceArchiveRegion } from './workspace-backup';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
 import { caseStoreAtCapacity } from '../test/workspace-backup-capacity-fixture.mts';
-import { serializeCaseStore, normalizeCaseStore, MAX_CASE_STORE_BYTES } from '../packages/cases/case-model.mts';
+import { serializeCaseStore } from '../packages/cases/case-storage-model.mts';
+import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
+import { MAX_CASE_STORE_BYTES } from '../packages/contracts/case-portability.mts';
 import { MAX_SELECTED_FILE_TOTAL_BYTES } from '../packages/contracts/selected-file-limits.mts';
 
 async function pinForm(page: import('@playwright/test').Page) {
@@ -123,7 +126,7 @@ for (const theme of ['light', 'dark'] as const) {
       { width: 1280, height: 720 }, { width: 1920, height: 1080 }, { width: 2560, height: 1440 }, { width: 3840, height: 2160 }];
     for (const viewport of viewports) {
       await page.setViewportSize(viewport); await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`local-login-${theme}-${viewport.width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`local-login-${theme}-${viewport.width}.png`) }); }
     }
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     await openLocalApplication(page, localApplication);
@@ -139,7 +142,7 @@ for (const theme of ['light', 'dark'] as const) {
       const heading = await workspace.getByRole('heading', { name: 'Filesystem workspace', exact: true }).boundingBox();
       expect(header).not.toBeNull(); expect(heading).not.toBeNull();
       expect(heading!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
-      await page.screenshot({ path: testInfo.outputPath(`local-workspace-${theme}-${viewport.width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`local-workspace-${theme}-${viewport.width}.png`) }); }
       if (viewport.width === 320 || viewport.width === 1280) expect((await new AxeBuilder({ page }).include('.local-workspace').analyze()).violations).toEqual([]);
     }
     const link = workspace.getByRole('link', { name: 'Local application setup and recovery', exact: true });

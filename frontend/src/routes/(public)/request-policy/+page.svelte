@@ -8,7 +8,7 @@
     MAX_HOMEPAGE_BYTES,
     MAX_OUTBOUND_REDIRECTS,
   } from '../../../../../lib/outbound-request-bounds.mts';
-  import { WHOISLEUTH_REQUEST_POLICY_URL } from '../../../../../lib/project-metadata.mts';
+  import { WHOISLEUTH_REQUEST_POLICY_URL } from '../../../../../packages/analysis/project-metadata.mts';
 
   const seconds = (milliseconds: number) => Math.round(milliseconds / 1_000);
   const bytes = (value: number) => value.toLocaleString('en-US');

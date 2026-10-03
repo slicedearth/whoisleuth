@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
-  import { parseBoundedJson } from '$lib/bounded-json';
   import {
     importExternalFindingsIntoCase,
     type CaseRecord,
@@ -8,10 +7,6 @@
   } from '$lib/cases';
   import { externalFindingsCaseTargets } from '$lib/analysis/external-findings-import.ts';
   import { buildLocalRenderedCaptureHandoff } from '$lib/analysis/local-rendered-capture-handoff.ts';
-  import {
-    WEB_CAPTURE_MANIFEST_SCHEMA,
-    parseWebCaptureManifest,
-  } from '$lib/analysis/web-capture-import.ts';
   import CopyableCommand from '$lib/components/CopyableCommand.svelte';
   import ArtifactPreview from './ArtifactPreview.svelte';
   import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
@@ -21,20 +16,23 @@
   import { retainCaseAttachments, type SelectedCaseAttachment } from '$lib/case-attachments.ts';
   import { readCaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
   import { sha256ArtifactBytes } from '../../../../packages/evidence/artifact-integrity.mts';
-  import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
+  import type { PersistCaseOperation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { MAX_WEB_CAPTURE_MANIFEST_BYTES } from '../../../../packages/contracts/web-capture.mts';
   import CaptureComparison from './CaptureComparison.svelte';
+  import PageBehaviourReview from './PageBehaviourReview.svelte';
 
   let {
     record,
     exactIncidentUrl,
     persistOperation,
+    persist,
     mutationBusy,
     onmessage,
   }: {
     record: CaseRecord;
     exactIncidentUrl: string | null;
     persistOperation: PersistCaseOperation;
+    persist: PersistCaseResponse;
     mutationBusy: boolean;
     onmessage: (message: string) => void;
   } = $props();
@@ -83,26 +81,20 @@
     manifestFile = null; attachments = null; activeArtifact = ''; attachmentController?.abort(); checking = false; retainMatching = false;
     parsing = Boolean(file);
     if (!file) return;
+    const controller = new AbortController(); attachmentController = controller;
     try {
       if (file.size > MAX_WEB_CAPTURE_MANIFEST_BYTES) {
         throw new Error('Rendered-capture manifests are limited to 1 MiB.');
       }
-      const decoded = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer());
-      if (generation !== selectionGeneration) return;
-      const value = parseBoundedJson(decoded, {
-        label: 'Rendered-capture manifest',
-        maximumBytes: MAX_WEB_CAPTURE_MANIFEST_BYTES,
-      });
-      if (!value || typeof value !== 'object' || Array.isArray(value)
-        || (value as Record<string, unknown>).schema !== WEB_CAPTURE_MANIFEST_SCHEMA) {
-        throw new Error(`Select a ${WEB_CAPTURE_MANIFEST_SCHEMA} manifest produced by the local rendered-capture command.`);
-      }
-      const document = parseWebCaptureManifest(value);
+      const reviewed = await runInvestigationPackageWorker('capture', { manifest: file, files: [] }, { signal: controller.signal });
+      if (generation !== selectionGeneration || controller.signal.aborted) return;
+      const document = reviewed.document;
       const targets = externalFindingsCaseTargets(document, record.domain);
       if (generation !== selectionGeneration) return;
       preview = document;
       previewTargets = targets;
       manifestFile = file;
+      attachments = reviewed;
       onmessage(`Validated ${countLabel(document.findings.length, 'capture finding')} for this Case. Review the manifest summary before importing.`);
     } catch (cause) {
       if (generation === selectionGeneration) {
@@ -110,6 +102,7 @@
       }
     } finally {
       if (generation === selectionGeneration) parsing = false;
+      if (attachmentController === controller) attachmentController = null;
       input.value = '';
     }
   }
@@ -178,7 +171,7 @@
       }
       if (generation !== selectionGeneration || record.id !== caseId) return;
       const success = retainFiles ? 'Imported capture metadata and retained the manifest and matching original files.' : 'Imported capture metadata. Original files were not retained.';
-      if (await persistOperation(() => retainFiles ? retainCaseAttachments(caseId, files, document) : importExternalFindingsIntoCase(caseId, document), success, () => manifestInput ?? null)
+      if (await persistOperation(() => retainFiles ? retainCaseAttachments(caseId, files, { findings: document }) : importExternalFindingsIntoCase(caseId, document), success, () => manifestInput ?? null)
         && generation === selectionGeneration) await clearPreview();
     } catch (cause) {
       onmessage(cause instanceof Error ? cause.message : 'Could not import the rendered-capture manifest.');
@@ -204,6 +197,7 @@
         {parsing ? 'Checking manifest…' : 'Select capture manifest'}
         <input bind:this={manifestInput} type="file" accept="application/json,.json" onchange={selectManifest} disabled={parsing || importing || checking}>
       </label>
+      {#if parsing}<button class="btn" type="button" onclick={() => { void clearPreview(); parsing = false; }}>Cancel manifest review</button>{/if}
       {#if preview}
         <section class="capture-preview" aria-labelledby={`capture-preview-${record.id}`}>
           <header><div><p class="eyebrow">Local preview</p><h4 id={`capture-preview-${record.id}`}>Manifest evidence</h4></div><span>{countLabel(preview.findings.length, 'finding')}</span></header>
@@ -224,6 +218,7 @@
           </label>
           {#if checking}<button class="btn" type="button" onclick={cancelAttachments}>Cancel attachment check</button>{/if}
           {#if attachments}
+            {#each attachments.captures as capture}<PageBehaviourReview value={capture.pageBehaviour} />{/each}
             <section aria-label="Selected capture attachment checks">
               <h4>Attachment bytes</h4>
               <ol>{#each attachments.matches as match, index}
@@ -242,10 +237,10 @@
               {/each}</ol>
               {#if attachments.unusedIds.length}<p>{attachments.unusedIds.length} selected file{attachments.unusedIds.length === 1 ? '' : 's'} did not match a declared attachment.</p>{/if}
             </section>
-            <CaptureComparison left={attachments} />
+            <CaptureComparison left={attachments} caseDomain={record.domain} {persist} {mutationBusy} />
           {/if}
           <label class="retain-files"><input type="checkbox" bind:checked={retainMatching} disabled={importing || checking || mutationBusy}> Retain this manifest and verified matching files in this workspace</label>
-          <p>{retainMatching ? 'The selected originals are stored unchanged using this workspace’s storage and encryption. Unmatched files are not included; you can retain them separately under Retained files.' : 'Only sanitised metadata and declared digests enter the Case; original files stay in page memory.'} Matching bytes do not authenticate the capture or establish its accuracy.</p>
+          <p>{retainMatching ? 'The selected originals are stored unchanged using this workspace’s storage and encryption. Unmatched files are not included; you can retain them separately under Retained files.' : 'Only summaries and declared digests enter the Case. Retain the manifest to preserve its full page-observation set; otherwise originals stay in page memory.'} Matching bytes do not authenticate the capture or establish its accuracy.</p>
           <div class="actions"><button class="primary" type="button" onclick={() => void importManifest()} disabled={importing || checking || mutationBusy}>{importing ? 'Importing…' : 'Import into this Case'}</button><button class="btn" type="button" onclick={clearPreview} disabled={importing}>Cancel</button></div>
         </section>
       {/if}

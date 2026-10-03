@@ -1,4 +1,4 @@
-import { normalizeEvidenceDomain } from './case-model.ts';
+import { normalizeEvidenceDomain } from '../../../../packages/cases/case-record-core.mts';
 import {
   MAX_RDAP_NAMESERVER_SEARCH_RESULTS,
   RDAP_NAMESERVER_SEARCH_SCHEMA,

@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { evidenceStatusChipClass } from '$lib/analysis/evidence-status-tone.ts';
-  import { availabilityStatusDisplay } from '$lib/analysis/availability-status-display.ts';
   import {
     buildLookupReplayCaseEvidence,
     LOOKUP_EVIDENCE_REPLAY_MAX_BYTES,
@@ -10,9 +8,8 @@
   import { buildLookupReplayCheckpointFacts } from '$lib/analysis/case-evidence-checkpoint.ts';
   import { LookupCaseController } from '$lib/controllers/lookup-case-controller.ts';
   import type { CaseRecord, CaseTransitionExpectation } from '$lib/cases';
-  import LookupAssetGraph from '$lib/components/LookupAssetGraph.svelte';
+  import LookupEvidenceReading from './LookupEvidenceReading.svelte';
   import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
-  import LookupMetadataDisclosure from '$lib/components/LookupMetadataDisclosure.svelte';
   import CasePicker from './CasePicker.svelte';
   import { buildLookupEvidenceReplayDiff } from '$lib/analysis/lookup-evidence-replay-diff.ts';
 
@@ -29,7 +26,6 @@
   let caseCandidates = $state.raw<CaseRecord[]>([]);
   let caseStatus = $state('');
   let caseBusy = $state(false);
-  const replayAvailability = $derived(availabilityStatusDisplay(replay?.availability));
   const replayCheckpointFacts = $derived(replay ? buildLookupReplayCheckpointFacts(replay) : []);
   const caseController = new LookupCaseController();
   let replayGeneration = 0;
@@ -175,19 +171,7 @@
 
     {#if replay}
       <section class="replay-result" aria-labelledby="replay-title">
-        <header>
-          <div>
-            <p class="eyebrow">Offline evidence</p>
-            <h2 id="replay-title">{replay.target}</h2>
-            <p>Exported {replay.exportedAt} · {replay.targetType} · schema {replay.schemaVersion}{replay.generatorVersion ? ` · WHOISleuth ${replay.generatorVersion}` : ''}</p>
-          </div>
-          <span class="chip {replayAvailability.className}">{replayAvailability.label}</span>
-        </header>
-
-        <div class="digest">
-          <small>File SHA-256 · {replay.digestVerified ? 'verified against supplied checksum' : 'calculated locally; no expected checksum supplied'}</small>
-          <code>{replay.digestSha256}</code>
-        </div>
+        <LookupEvidenceReading {replay} />
 
         {#if replay.caseDomain}
           <section class="case-handoff" aria-labelledby="replay-case-title">
@@ -213,61 +197,6 @@
           {/if}
         {/if}
 
-        <div class="source-grid" role="group" aria-label="Replayed source health">
-          {#each replay.sources as source (source.id)}
-            <article>
-              <strong>{source.label}</strong>
-              <span class="chip {evidenceStatusChipClass(source.state, source.complete === null ? {} : { complete: source.complete })}">{source.state}</span>
-              <small>{source.observedAt ? `Observed ${source.observedAt}` : 'Observation time not reported'}</small>
-            </article>
-          {/each}
-        </div>
-
-        {#if replay.facts.length}
-          <h3>Normalised facts</h3>
-          <dl>
-            {#each replay.facts as fact}
-              <div><dt>{fact.label}</dt><dd>{fact.value}<small>{fact.source} · {fact.sourceState}{fact.sourceComplete === false ? ' · incomplete' : ''}</small></dd></div>
-            {/each}
-          </dl>
-        {/if}
-
-        {#if replay.pagePublicationMetadata || replay.httpDeliveryMetadata}
-          <section class="retained-homepage-metadata" aria-labelledby="replay-homepage-metadata-title">
-            <h3 id="replay-homepage-metadata-title">Retained homepage metadata</h3>
-            <p class="note">These bounded values came from the exported observation. No source was contacted during replay.</p>
-            {#if replay.pagePublicationMetadata}<LookupMetadataDisclosure label="Publication metadata" metadata={replay.pagePublicationMetadata} />{/if}
-            {#if replay.httpDeliveryMetadata}<LookupMetadataDisclosure label="Delivery and cache metadata" metadata={replay.httpDeliveryMetadata} />{/if}
-          </section>
-        {/if}
-
-        {#if replay.contradictions.length}
-          <aside class="contradictions" data-tone="danger">
-            <strong>Contradictory registration evidence</strong>
-            <ul>{#each replay.contradictions as contradiction}<li>{contradiction}</li>{/each}</ul>
-          </aside>
-        {/if}
-
-        <section class="brief" aria-labelledby="replay-brief-title">
-          <h3 id="replay-brief-title">Historical review brief</h3>
-          <div>
-            <article>
-              <strong>Retained normalised facts</strong>
-              <p>{replay.facts.length} normalised fact{replay.facts.length === 1 ? '' : 's'} retained with source labels.</p>
-            </article>
-            <article>
-              <strong>Unknown or incomplete</strong>
-              {#if replay.unknowns.length}<ul>{#each replay.unknowns as unknown}<li>{unknown}</li>{/each}</ul>{:else}<p>No incomplete replay source was identified.</p>{/if}
-            </article>
-            <article>
-              <strong>Next manual steps</strong>
-              <ol>{#each replay.recommendedSteps as step}<li>{step}</li>{/each}</ol>
-            </article>
-          </div>
-        </section>
-
-        <LookupAssetGraph graph={replay.graph} headingId="replay-asset-graph-title" evidenceLinks={false} />
-
         <section class="comparison" aria-labelledby="replay-comparison-title">
           <h3 id="replay-comparison-title">Compare another capture</h3>
           <p class="note">Choose a second export for the same target. The comparison separates observed value changes from source-quality and application-interpretation differences.</p>
@@ -280,10 +209,7 @@
           {/if}
         </section>
 
-        <details class="limits">
-          <summary>Replay limitations</summary>
-          <ul>{#each replay.limitations as limitation}<li>{limitation}</li>{/each}</ul>
-        </details>
+
       </section>
     {/if}
   </div>
@@ -306,40 +232,11 @@
   .status-error{color:var(--danger)}
   .replay-status:empty,.comparison-status:empty{min-height:0;margin:0}
   .replay-result{display:grid;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
-  .replay-result>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-  h2{margin:2px 0 0;font-size:var(--text-lg);overflow-wrap:anywhere}
-  header p:not(.eyebrow){margin:5px 0 0;color:var(--muted);font-size:var(--text-xs)}
-  .digest{display:grid;gap:4px;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .digest small{color:var(--muted)}
-  .digest code{font-size:var(--text-2xs);overflow-wrap:anywhere}
   .case-handoff{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px 14px;padding:11px;border:1px solid color-mix(in srgb,var(--accent2) 38%,var(--border));border-radius:var(--radius-sm);background:var(--panel-raised)}
   .case-handoff h3,.case-handoff p{margin:0}.case-handoff .note{margin-top:5px}.case-status{grid-column:1/-1;margin:0;color:var(--muted);font-size:var(--text-xs)}.case-status:empty{display:none}.case-link{grid-column:1/-1;width:max-content;font:680 var(--text-xs) var(--mono)}
-  .source-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
-  .source-grid article{display:grid;gap:3px;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .source-grid strong{font-size:var(--text-xs)}
-  .source-grid span{width:max-content;font-size:var(--text-2xs);text-transform:capitalize}
-  .source-grid small{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
   h3{margin:2px 0 -3px;font-size:var(--text-sm)}
-  dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0}
-  dl div{display:grid;gap:3px;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm)}
-  dt{color:var(--muted);font-size:var(--text-2xs)}
-  dd{margin:0;font-size:var(--text-xs);overflow-wrap:anywhere}
-  dd small{display:block;margin-top:3px;color:var(--muted)}
-  aside{padding:10px;border:1px solid color-mix(in srgb,var(--danger) 52%,var(--border));border-radius:var(--radius-sm);background:rgb(var(--danger-rgb) / .08)}
-  aside ul,.limits ul{margin:7px 0 0;padding-left:18px;font-size:var(--text-xs);line-height:1.5}
-  .brief{display:grid;gap:8px}
-  .retained-homepage-metadata{display:grid;gap:8px;min-width:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .brief>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
-  .brief article{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .brief strong{font-size:var(--text-xs)}
-  .brief p,.brief ul,.brief ol{margin:5px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
-  .brief ul,.brief ol{padding-left:17px}
-  .limits{border-top:1px solid var(--border)}
   .comparison{display:grid;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.comparison .picker{width:max-content;margin:0}.comparison-counts{display:flex;flex-wrap:wrap;gap:6px}.comparison-counts span{padding:6px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:var(--text-2xs)}.comparison ol{display:grid;gap:6px;margin:0;padding:0;list-style:none}.comparison li{min-width:0;padding:8px;border:1px solid color-mix(in srgb,var(--amber) 48%,var(--border));border-radius:var(--radius-sm);background:rgb(var(--amber-rgb) / .06)}.comparison li div{display:flex;justify-content:space-between;gap:8px}.comparison li span{color:var(--amber);font:650 var(--text-2xs) var(--mono)}.comparison li p,.comparison li small{overflow-wrap:anywhere}.comparison li p{margin:5px 0;font-size:var(--text-xs)}.comparison li small{color:var(--muted)}
-  .limits>summary{padding:10px 0;font:680 var(--text-xs) var(--mono);cursor:pointer}
   @media(max-width:760px){
-    .source-grid,dl,.brief>div{grid-template-columns:minmax(0,1fr)}
-    .replay-result>header{display:grid}
     .case-handoff{grid-template-columns:minmax(0,1fr)}.case-handoff .btn{width:100%}.case-status,.case-link{grid-column:1}
   }
 </style>

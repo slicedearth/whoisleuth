@@ -34,21 +34,21 @@ export const PUBLIC_COVERAGE_SUMMARY = {
   ],
   "summary": {
     "capabilityFamilies": 32,
-    "cliOperations": 49,
+    "cliOperations": 51,
     "registrySnapshot": {
       "schema": "whoisleuth\u002eregistry-standards-coverage",
       "version": 1,
-      "verifiedAt": "2026-08-03",
+      "verifiedAt": "2026-10-03",
       "counts": {
-        "activeTlds": 1438,
+        "activeTlds": 1437,
         "countryCode": 309,
-        "nonCountryCode": 1129,
-        "generic": 1111,
+        "nonCountryCode": 1128,
+        "generic": 1110,
         "genericRestricted": 3,
         "sponsored": 14,
         "infrastructure": 1,
-        "rdapBootstrapServiceGroups": 590,
-        "genericAndRestrictedRdapCovered": 1114,
+        "rdapBootstrapServiceGroups": 592,
+        "genericAndRestrictedRdapCovered": 1113,
         "sponsoredRdapCovered": 12,
         "infrastructureRdapCovered": 0
       },

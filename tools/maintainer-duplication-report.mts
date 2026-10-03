@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
-import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import { compareCodeUnits } from './maintainer-tool-helpers.mts';
 
 type WritableLike = { write(value: string): unknown };
@@ -49,9 +49,12 @@ export const MAINTAINED_SOURCE_ROOTS = Object.freeze([
   'tools',
 ]);
 export const MAINTAINED_ROOT_SOURCE_FILES = Object.freeze(['server.mts']);
-export const MAX_MAINTAINED_SOURCE_FILES = 1_024;
 export const MAX_MAINTAINED_SOURCE_FILE_BYTES = 512 * 1024;
 export const MAX_MAINTAINED_SOURCE_TOTAL_BYTES = 16 * 1024 * 1024;
+// Charge at least 1 KiB per source for file identity, metadata and traversal.
+// Splitting code does not require changing a historical module-count baseline.
+const MIN_SOURCE_PROCESSING_BYTES = 1024;
+export const MAX_MAINTAINED_SOURCE_FILES = MAX_MAINTAINED_SOURCE_TOTAL_BYTES / MIN_SOURCE_PROCESSING_BYTES;
 export const MAX_MAINTAINED_SOURCE_AST_NODES = 3_000_000;
 export const MAX_MAINTAINED_SOURCE_FUNCTIONS = 20_000;
 export const MAX_MAINTAINED_SOURCE_CALL_EDGES = 40_000;
@@ -333,6 +336,7 @@ export async function buildMaintainerDuplicationReport(options: ReportOptions = 
   const allTopLevelFunctions: FunctionCandidate[] = [];
   const allCalls: Array<Readonly<{ caller: string; callee: string; kind: 'local' | 'imported' }>> = [];
   let totalBytes = 0;
+  let processingBytes = 0;
   let astNodes = 0;
 
   for (const file of sourceFiles) {
@@ -343,8 +347,9 @@ export async function buildMaintainerDuplicationReport(options: ReportOptions = 
     });
     const bytes = new TextEncoder().encode(text).byteLength;
     totalBytes += bytes;
-    if (totalBytes > MAX_MAINTAINED_SOURCE_TOTAL_BYTES) {
-      throw new TypeError(`Maintained source exceeds the ${MAX_MAINTAINED_SOURCE_TOTAL_BYTES}-byte aggregate limit.`);
+    processingBytes += Math.max(bytes, MIN_SOURCE_PROCESSING_BYTES);
+    if (processingBytes > MAX_MAINTAINED_SOURCE_TOTAL_BYTES) {
+      throw new TypeError(`Maintained source exceeds the ${MAX_MAINTAINED_SOURCE_TOTAL_BYTES}-byte processing budget including per-file metadata.`);
     }
     const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     const parseDiagnostics = (source as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics ?? [];

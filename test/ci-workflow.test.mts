@@ -22,7 +22,7 @@ import {
   resetPerformanceSampleState,
   resolvePlaywrightExecutionContract,
 } from '../tools/playwright-execution-contract.mts';
-import { buildBalancedBrowserShardPlan, readVerificationTestInventory, readVerificationTimingProfile } from '../tools/verification-timing-profile.mts';
+import { buildBalancedBrowserShardPlan, readVerificationTestInventory, readVerificationTimingProfile, VERIFICATION_BROWSER_SHARD_COUNT } from '../tools/verification-timing-profile.mts';
 import {
   CI_BROWSER_HEALTH_SCRIPTS,
   CI_BROWSER_BUILD_SCRIPTS,
@@ -40,6 +40,7 @@ import {
   ciCommandGroupScripts,
   expectedHostedCiScriptPlan,
   formatLocalCiPlan,
+  localCiRevisionRange,
   parseCiVerificationArguments,
   playwrightBrowserCacheDirectory,
   readHostedCiScriptPlan,
@@ -48,12 +49,14 @@ import {
 } from '../tools/ci-verification.mts';
 import {
   buildToolchainCompatibilityReport,
+  nodeTestFiles,
   main as toolchainCompatibilityMain,
   resolveUnitTestExecutables,
   satisfiesCaretAlternatives,
   unitTestExecutableEnvironment,
 } from '../tools/toolchain-compatibility.mts';
-import { runFunctionalRunsSerially } from '../tools/playwright-balanced-suite.mts';
+import { runFunctionalRuns, localBrowserJobs } from '../tools/playwright-balanced-suite.mts';
+import { captureVisualEvidenceEnabled, browserBuildAssetPath } from '../tools/playwright-execution-contract.mts';
 import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 import { assertAppliedBrowserSafety } from '../tools/analyst-journey-assurance.mts';
 
@@ -91,9 +94,14 @@ const FRONTEND_PACKAGE_MANIFEST = JSON.parse(fs.readFileSync(
 type WorkflowFixture = {
   on: Record<string, unknown>;
   permissions: Record<string, string>;
+  concurrency?: { 'cancel-in-progress'?: boolean };
   jobs: Record<string, {
     if?: string;
     needs?: string[];
+    permissions?: Record<string, string>;
+    env?: Record<string, string>;
+    'timeout-minutes'?: number;
+    'continue-on-error'?: boolean;
     steps: Array<{
       name?: string;
       uses?: string;
@@ -130,11 +138,38 @@ function toolchainManifests() {
 }
 
 function pinnedActions(workflow: string): ReadonlyArray<Readonly<{ action: string; revision: string }>> {
-  return [...workflow.matchAll(/^\s+uses: ([^@\s]+)@([^\s#]+)/gmu)]
-    .map((match) => ({
-      action: requiredValue(match[1]),
-      revision: requiredValue(match[2]),
-    }));
+  return workflowSteps(parse(workflow) as WorkflowFixture).flatMap(step => {
+    if (!step.uses) return [];
+    const [action, revision] = step.uses.split('@');
+    return [{ action: requiredValue(action), revision: requiredValue(revision) }];
+  });
+}
+
+function workflowSteps(workflow: WorkflowFixture) {
+  return Object.values(workflow.jobs).flatMap(job => job.steps);
+}
+
+function workflowCommands(workflow: WorkflowFixture): string {
+  return workflowSteps(workflow).flatMap(step => step.run ? [step.run] : []).join('\n');
+}
+
+function scheduledWorkflow(source: string, cron: string): WorkflowFixture {
+  const workflow = parse(source) as WorkflowFixture;
+  assert.deepEqual(Object.keys(workflow.on).sort(), ['schedule', 'workflow_dispatch']);
+  assert.deepEqual(workflow.on.schedule, [{ cron }]);
+  assert.deepEqual(workflow.permissions, { contents: 'read' });
+  assert.equal(workflow.concurrency?.['cancel-in-progress'], false);
+  for (const job of Object.values(workflow.jobs)) {
+    assert.ok(Number.isInteger(job['timeout-minutes']) && job['timeout-minutes']! > 0 && job['timeout-minutes']! <= 60);
+    assert.notEqual(job['continue-on-error'], true);
+    if (job.permissions) assert.ok(Object.values(job.permissions).every(value => value === 'read' || value === 'none'));
+    for (const step of job.steps) assert.notEqual(step['continue-on-error'], true);
+  }
+  for (const { revision } of pinnedActions(source)) assert.match(revision, /^[a-f0-9]{40}$/u);
+  const checkouts = workflowSteps(workflow).filter(step => step.uses?.startsWith('actions/checkout@'));
+  assert.ok(checkouts.length > 0);
+  for (const checkout of checkouts) assert.equal(checkout.with?.['persist-credentials'], false);
+  return workflow;
 }
 
 function occurrences(value: string, pattern: RegExp): number {
@@ -146,6 +181,26 @@ function escapeRegExp(value: string): string {
 }
 
 describe('continuous integration workflow', () => {
+  test('discovers disjoint unit and integration lanes without a maintained file list', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'whoisleuth-test-lanes-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    fs.mkdirSync(path.join(root, 'test'));
+    for (const name of ['ordinary.test.mts', 'new-owner.integration.test.mts', 'helper.mts']) fs.writeFileSync(path.join(root, 'test', name), '');
+    assert.deepEqual(nodeTestFiles('unit', root), ['test/ordinary.test.mts']);
+    assert.deepEqual(nodeTestFiles('integration', root), ['test/new-owner.integration.test.mts']);
+    assert.deepEqual([...nodeTestFiles('unit', root), ...nodeTestFiles('integration', root)].sort(), nodeTestFiles('all', root));
+    assert.ok(CI_UNIT_SCRIPTS.includes('test:integration'));
+  });
+  test('audits the full locked dependency set through the shared quality group', () => {
+    assert.ok(CI_QUALITY_SCRIPTS.includes('dependencies:review'));
+    const args = PACKAGE_MANIFEST.scripts?.['dependencies:review']?.split(/\s+/u) ?? [];
+    assert.deepEqual(args.slice(0, 2), ['npm', 'audit']);
+    for (const flag of ['--package-lock-only', '--include=dev', '--include=optional', '--audit-level=moderate', '--registry=https://registry.npmjs.org']) {
+      assert.ok(args.includes(flag), `The shared dependency gate requires ${flag}.`);
+    }
+    assert.equal(args.some(arg => arg.startsWith('--omit=')), false);
+  });
+
   test('keeps deliberately interrupted subprocesses outside the parent coverage collector', (context) => {
     const source = { PATH: '/fixture/bin', NODE_V8_COVERAGE: '/fixture/coverage' };
     assert.deepEqual(environmentWithoutV8Coverage(source), { PATH: '/fixture/bin', NODE_V8_COVERAGE: undefined });
@@ -244,22 +299,47 @@ describe('continuous integration workflow', () => {
     assert.throws(() => assertHostedCiParity('x'.repeat(512 * 1024 + 1)), /bound/u);
   });
 
-  test('executes the final gate against every result, including newly added lanes', () => {
-    const workflow = workflowFixture();
-    const verify = fixtureJob(workflow, 'verify');
-    const gate = requiredValue(verify.steps.find((step) => step.env?.NEEDS_RESULTS));
-    assert.equal(gate.env?.NEEDS_RESULTS, '${{ toJSON(needs) }}');
-    const successes = Object.fromEntries(requiredValue(verify.needs).map((name) => [name, { result: 'success' }]));
-    const execute = (results: unknown) => spawnSync('bash', ['-e', '-o', 'pipefail', '-c', requiredValue(gate.run)], {
-      env: { ...process.env, NEEDS_RESULTS: JSON.stringify(results) }, encoding: 'utf8', timeout: 5000,
-    }).status;
-    assert.equal(execute(successes), 0);
-    assert.notEqual(execute({}), 0);
-    for (const name of [...Object.keys(successes), 'future-verification']) {
-      for (const result of ['failure', 'cancelled', 'skipped', null]) {
-        assert.notEqual(execute({ ...successes, [name]: { result } }), 0, `${name}: ${result}`);
-      }
+  test('produces separate machine and human browser-health reports', () => {
+    const commands = fixtureJob(workflowFixture(), 'browser-health').steps
+      .flatMap(step => step.run?.includes('test:e2e:aggregate') ? [step.run] : []);
+    assert.equal(commands.length, 2);
+    assert.deepEqual(commands.map(command => /(?:^|\s)--summary(?:\s|$)/u.test(command)).sort(), [false, true]);
+  });
+
+  test('rejects stale shard and report bindings while allowing harmless command quoting', () => {
+    const mutations: Array<(workflow: WorkflowFixture) => void> = [
+      workflow => {
+        const step = fixtureJob(workflow, 'browser').steps.find(step => step.run?.includes('test:e2e:shard'))!;
+        step.run = 'npm run test:e2e:shard -- --run=1/4';
+      },
+      workflow => {
+        const step = fixtureJob(workflow, 'browser').steps.find(step => step.run?.includes('test:e2e:shard'))!;
+        step.run += ' --run=1/4';
+      },
+      workflow => { fixtureJob(workflow, 'browser').env!.WHOISLEUTH_PLAYWRIGHT_RUN_KIND = 'functional'; },
+      workflow => {
+        const step = fixtureJob(workflow, 'browser').steps.find(step => step.run === 'npm run test:e2e:summary')!;
+        step.env!.WHOISLEUTH_PLAYWRIGHT_SHARD = '1/4';
+      },
+      workflow => {
+        const step = fixtureJob(workflow, 'browser').steps.find(step => step.run === 'npm run test:e2e:summary')!;
+        step.env!.WHOISLEUTH_PLAYWRIGHT_RUN_LABEL = 'same-label';
+      },
+      workflow => {
+        for (const step of fixtureJob(workflow, 'browser-health').steps) {
+          if (step.run?.includes('test:e2e:aggregate')) step.run = step.run.replace('--summary', '');
+        }
+      },
+    ];
+    for (const mutate of mutations) {
+      const workflow = workflowFixture();
+      mutate(workflow);
+      assert.throws(() => assertHostedCiParity(stringify(workflow)), /matrix|machine inventory/u);
     }
+    const workflow = workflowFixture();
+    const shard = fixtureJob(workflow, 'browser').steps.find(step => step.run?.includes('test:e2e:shard'))!;
+    shard.run = 'npm run test:e2e:shard -- --run "${{matrix.shard}}"';
+    assert.doesNotThrow(() => assertHostedCiParity(stringify(workflow)));
   });
 
   test('can inspect and run pre-install checks without loading the development parser', () => {
@@ -274,20 +354,59 @@ describe('continuous integration workflow', () => {
       if (main(['--list']) !== 0) process.exit(2);
       const scripts = [];
       runCiCommandGroup('preflight', (script) => scripts.push(script));
-      if (!scripts.includes('release:check')) process.exit(3);
+      if (!scripts.includes('version:check') || scripts.includes('release:check')) process.exit(3);
     `], { cwd: path.join(__dirname, '..'), encoding: 'utf8', timeout: 5000 });
     assert.equal(child.status, 0, child.stderr);
+  });
+
+  test('resolves an explicit ancestor without a remote and never falls back from an invalid base', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-base-'));
+    const git = (...args: string[]) => {
+      const result = spawnSync('git', ['-c', 'commit.gpgsign=false', ...args], {
+        cwd: directory, encoding: 'utf8', input: '', timeout: 5_000,
+        env: { ...process.env, GIT_AUTHOR_NAME: 'Fixture', GIT_AUTHOR_EMAIL: 'fixture@example.test',
+          GIT_COMMITTER_NAME: 'Fixture', GIT_COMMITTER_EMAIL: 'fixture@example.test' },
+      });
+      assert.ifError(result.error);
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout.trim();
+    };
+    try {
+      git('init', '--quiet');
+      const tree = git('hash-object', '-w', '-t', 'tree', '--stdin');
+      const base = git('commit-tree', tree, '-m', 'Base fixture');
+      const head = git('commit-tree', tree, '-p', base, '-m', 'Head fixture');
+      const sibling = git('commit-tree', tree, '-p', base, '-m', 'Sibling fixture');
+      git('update-ref', 'HEAD', head);
+      // An unchanged tree can still have a legitimate commit-range comparison.
+      assert.equal(localCiRevisionRange(base, directory), `${base}..${head}`);
+      assert.throws(() => localCiRevisionRange(undefined, directory), /Git preflight/u);
+      git('update-ref', 'refs/remotes/origin/main', base);
+      assert.equal(localCiRevisionRange(undefined, directory), `${base}..${head}`);
+      for (const invalid of ['HEAD', base.slice(0, 8), '0'.repeat(40), tree, head, sibling]) {
+        assert.throws(() => localCiRevisionRange(invalid, directory), invalid);
+      }
+      git('tag', '-a', 'fixture-base', '-m', 'Annotated fixture', base);
+      assert.throws(() => localCiRevisionRange(git('rev-parse', 'fixture-base'), directory), /strictly before HEAD/u);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   test('executes canonical local groups and stops at the first failed command', () => {
     const shardPlan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
     const assigned = shardPlan.shards.flatMap((shard) => shard.files);
-    assert.equal(shardPlan.shards.length, 4);
+    assert.equal(shardPlan.shards.length, VERIFICATION_BROWSER_SHARD_COUNT);
     assert.equal(new Set(assigned).size, assigned.length);
     assert.deepEqual(assigned.sort(), readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
     assert.equal(PACKAGE_MANIFEST.scripts?.['verification:ci'], 'node tools/ci-verification.mts');
     assert.deepEqual(CI_COMMAND_GROUPS, ['preflight', 'quality', 'unit', 'browser-build', 'cli-runtime']);
     assert.deepEqual(parseCiVerificationArguments([]), { mode: 'full' });
+    assert.deepEqual(parseCiVerificationArguments([`--base=${'a'.repeat(40)}`]), { mode: 'full', base: 'a'.repeat(40) });
+    for (const args of [['--base=HEAD'], ['--base=abc'], [`--base=${'A'.repeat(40)}`],
+      [`--base=${'a'.repeat(40)}`, '--list'], [`--base=${'a'.repeat(40)}`, '--group=unit']]) {
+      assert.throws(() => parseCiVerificationArguments(args), /Usage/u);
+    }
     assert.deepEqual(parseCiVerificationArguments(['--list']), { mode: 'list' });
     assert.deepEqual(parseCiVerificationArguments(['--group=quality']), { mode: 'group', group: 'quality' });
     assert.deepEqual(parseCiVerificationArguments(['--group', 'browser-build']), { mode: 'group', group: 'browser-build' });
@@ -303,6 +422,7 @@ describe('continuous integration workflow', () => {
     assert.deepEqual(stopped, CI_QUALITY_SCRIPTS.slice(0, 2));
     assert.deepEqual(ciCommandGroupScripts('browser-build'), CI_BROWSER_BUILD_SCRIPTS);
     const localPlan = formatLocalCiPlan();
+    assert.match(localPlan, /security:codeql \(application and workflow analyses; no upload\)/);
     for (const script of [...CI_PREFLIGHT_SCRIPTS, ...CI_QUALITY_SCRIPTS, ...CI_UNIT_SCRIPTS, ...CI_BROWSER_BUILD_SCRIPTS]) {
       assert.match(localPlan, new RegExp(`^${escapeRegExp(script)}$`, 'mu'));
     }
@@ -310,8 +430,8 @@ describe('continuous integration workflow', () => {
     assert.match(localPlan, /^verification:artifacts cleanup=all$/mu);
     assert.match(localPlan, /^test:e2e:critical:install$/mu);
     assert.doesNotMatch(localPlan, /^test:e2e:install$/mu);
-    assert.ok(localPlan.indexOf('changed-line secret scan') < localPlan.indexOf('release:check'));
-    assert.ok(localPlan.indexOf('release:check') < localPlan.indexOf('locked install'));
+    assert.ok(localPlan.indexOf('changed-line secret scan') < localPlan.indexOf('version:check'));
+    assert.ok(localPlan.indexOf('version:check') < localPlan.indexOf('locked install'));
     assert.ok(localPlan.indexOf('locked install') < localPlan.indexOf('toolchain:check'));
     assert.match(localPlan, /locked install \(install-time audit disabled; scheduled and release audits are separate\)/u);
     assert.deepEqual(CI_HOSTED_ONLY_BROWSER_SCRIPTS, [
@@ -330,7 +450,7 @@ describe('continuous integration workflow', () => {
     assert.equal(CI_CLI_RUNTIME_NODE_MAJOR, 26);
     assert.ok(CI_CLI_RUNTIME_SCRIPTS.includes('cli:package:check'));
     assert.ok(CI_CLI_RUNTIME_SCRIPTS.includes('capture:package:check'));
-    assert.match(localPlan, /^cli:package:check \(Node 26 compatibility runtime\)$/mu);
+    assert.match(localPlan, /^cli:package:check \(one assembly; primary and Node 26 installations\)$/mu);
     assert.equal(
       selectNodeRuntimeExecutable(26, ['/fixture/node-24', '/fixture/node-26'], (candidate) => (
         candidate.endsWith('node-26') ? '26' : '24'
@@ -449,17 +569,24 @@ describe('continuous integration workflow', () => {
   });
 
   test('keeps the live production audit outside required per-push verification', () => {
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^on:\s*\n\s{2}schedule:\s*\n\s{4}- cron: '29 3 \* \* 2'\s*\n\s{2}workflow_dispatch:$/mu);
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s{2}cancel-in-progress: false$/mu);
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s{4}timeout-minutes: 10$/mu);
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s+run: npm run dependencies:audit$/mu);
-    assert.doesNotMatch(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /npm (?:ci|install)|continue-on-error|write\b/iu);
+    const workflow = scheduledWorkflow(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, '29 3 * * 2');
+    assert.match(workflowCommands(workflow), /^npm run dependencies:audit$/mu);
+    assert.doesNotMatch(workflowCommands(workflow), /npm (?:ci|install)/u);
     const actions = pinnedActions(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW);
     assert.deepEqual(actions.map(({ action }) => action), ['actions/checkout', 'actions/setup-node']);
     for (const { revision } of actions) assert.match(requiredValue(revision), /^[a-f0-9]{40}$/u);
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s{10}persist-credentials: false$/mu);
-    assert.match(PRODUCTION_DEPENDENCY_AUDIT_WORKFLOW, /^\s{10}package-manager-cache: false$/mu);
+    assert.equal(requiredValue(workflowSteps(workflow).find(step => step.uses?.startsWith('actions/setup-node@'))).with?.['package-manager-cache'], false);
+  });
+
+  test('scheduled policy ignores presentation but rejects ignored failures and elevated permissions', () => {
+    const workflow = parse(TEST_HEALTH_WORKFLOW) as WorkflowFixture;
+    for (const step of workflowSteps(workflow)) step.name = 'Descriptive step label';
+    scheduledWorkflow(stringify(workflow, { indent: 4, defaultStringType: 'QUOTE_DOUBLE' }), '43 3 * * 3');
+    requiredValue(workflowSteps(workflow)[0])['continue-on-error'] = true;
+    assert.throws(() => scheduledWorkflow(stringify(workflow), '43 3 * * 3'));
+    delete requiredValue(workflowSteps(workflow)[0])['continue-on-error'];
+    workflow.permissions.contents = 'write';
+    assert.throws(() => scheduledWorkflow(stringify(workflow), '43 3 * * 3'));
   });
 
   test('resolves the same safe Playwright contract across local, hosted and performance lanes', () => {
@@ -488,6 +615,10 @@ describe('continuous integration workflow', () => {
     assertSafeConfiguration(hosted);
     assert.equal(hosted.hosted, true);
     assert.equal(hosted.useExistingBuild, true);
+    assert.equal(hosted.testTimeoutMs, local.testTimeoutMs);
+    assert.equal(hosted.assertionTimeoutMs, local.assertionTimeoutMs);
+    assert.ok(Number.isSafeInteger(local.assertionTimeoutMs) && local.assertionTimeoutMs > 0);
+    assert.ok(local.testTimeoutMs > local.assertionTimeoutMs && local.testTimeoutMs <= 120_000);
 
     const performance = resolvePlaywrightExecutionContract({
       WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1',
@@ -561,10 +692,13 @@ describe('continuous integration workflow', () => {
       path.join(root, 'node_modules/@playwright/test/cli.js'), 'test',
       '--config=e2e/cross-browser.config.ts', '--grep=@cross-browser-critical', '--list', '--reporter=json',
     ], {
-      cwd: root, encoding: 'utf8', timeout: 30_000, maxBuffer: 4 * 1024 * 1024,
+      // This loads the complete critical-specification import graph. Bound a
+      // stalled inventory process without making cold discovery speed a gate.
+      cwd: root, encoding: 'utf8', timeout: 3 * 60_000, maxBuffer: 4 * 1024 * 1024,
       env: { ...environment, WHOISLEUTH_PLAYWRIGHT_SHARD: '' },
     });
-    assert.equal(child.status, 0, child.stderr || child.error?.message);
+    assert.ifError(child.error);
+    assert.equal(child.status, 0, child.stderr);
     type Suite = { suites?: Suite[]; specs?: { title: string; tests: { projectName: string; expectedStatus: string }[] }[] };
     const report = JSON.parse(child.stdout) as { suites: Suite[]; errors: unknown[] };
     assert.deepEqual(report.errors, []);
@@ -705,7 +839,7 @@ describe('continuous integration workflow', () => {
     assert.equal(unavailable.viewport, null);
   });
 
-  test('stops serial local browser shards after an interruption without hiding ordinary failures', async () => {
+  test('stops queued local browser shards after interruption, failure or missing evidence', async () => {
     const runs = ['1/4', '2/4', '3/4'].map((identity, index) => ({
       label: `functional shard ${identity}`,
       environment: {},
@@ -715,7 +849,7 @@ describe('continuous integration workflow', () => {
     const interruptedLaunches: string[] = [];
     const verifiedPorts: number[] = [];
     let interrupted = false;
-    const interruptedResult = await runFunctionalRunsSerially(runs, {
+    const interruptedResult = await runFunctionalRuns(runs, {
       execute: async (run) => {
         interruptedLaunches.push(run.label);
         interrupted = true;
@@ -733,7 +867,7 @@ describe('continuous integration workflow', () => {
 
     const ordinaryLaunches: string[] = [];
     let liveResult = '';
-    const ordinaryResult = await runFunctionalRunsSerially(runs, {
+    const ordinaryResult = await runFunctionalRuns(runs, {
       execute: async (run) => {
         ordinaryLaunches.push(run.label);
         liveResult = `${run.label} report`;
@@ -743,16 +877,16 @@ describe('continuous integration workflow', () => {
       readResult: () => liveResult,
       isInterrupted: () => false,
     });
-    assert.deepEqual(ordinaryLaunches, runs.map((run) => run.label));
+    assert.deepEqual(ordinaryLaunches, runs.slice(0, 2).map((run) => run.label));
     assert.deepEqual(ordinaryResult, {
-      exits: [0, 2, 0],
-      reports: ['functional shard 1/4 report', 'functional shard 3/4 report'],
+      exits: [0, 2],
+      reports: ['functional shard 1/4 report'],
       interrupted: false,
     });
 
     const launchesBeforeMissingReport: string[] = [];
     await assert.rejects(
-      runFunctionalRunsSerially(runs, {
+      runFunctionalRuns(runs, {
         execute: async (run) => {
           launchesBeforeMissingReport.push(run.label);
           return 0;
@@ -766,6 +900,50 @@ describe('continuous integration workflow', () => {
       /Functional shard report is missing/u,
     );
     assert.deepEqual(launchesBeforeMissingReport, ['functional shard 1/4']);
+  });
+
+  test('bounds concurrent shards, keeps report order and drains active work after failure', async () => {
+    const runs = Array.from({ length: 4 }, (_, index) => ({ label: String(index), environment: {}, port: 4180 + index, args: [] }));
+    const pending = new Map<string, (code: number) => void>();
+    const started: string[] = [];
+    const completed: string[] = [];
+    const running = runFunctionalRuns(runs, {
+      execute: run => new Promise(resolve => { started.push(run.label); pending.set(run.label, resolve); }),
+      verifyPortFree: async run => { completed.push(run.label); },
+      readResult: run => run.label,
+      isInterrupted: () => false,
+    }, 2);
+    assert.deepEqual(started, ['0', '1']);
+    pending.get('1')!(2);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(started, ['0', '1']);
+    pending.get('0')!(0);
+    const result = await running;
+    assert.deepEqual(result.exits, [0, 2]);
+    assert.deepEqual(result.reports, ['0']);
+    assert.deepEqual(completed, ['1', '0']);
+    const success = await runFunctionalRuns(runs, {
+      execute: async () => 0, verifyPortFree: async () => undefined,
+      readResult: run => run.label, isInterrupted: () => false,
+    }, 2);
+    assert.deepEqual(success.reports, ['0', '1', '2', '3']);
+    assert.equal(localBrowserJobs({}), 1);
+    assert.equal(localBrowserJobs({ WHOISLEUTH_E2E_LOCAL_JOBS: '2' }), 2);
+    assert.throws(() => localBrowserJobs({ WHOISLEUTH_E2E_LOCAL_JOBS: '8' }), /1 or 2/u);
+  });
+
+  test('makes passing visual galleries explicit without disabling failure evidence', () => {
+    assert.equal(captureVisualEvidenceEnabled({}), false);
+    assert.equal(captureVisualEvidenceEnabled({ WHOISLEUTH_E2E_VISUAL_EVIDENCE: '1' }), true);
+    assert.equal(captureVisualEvidenceEnabled({ WHOISLEUTH_E2E_VISUAL_EVIDENCE: '0' }), false);
+    assert.throws(() => captureVisualEvidenceEnabled({ WHOISLEUTH_E2E_VISUAL_EVIDENCE: 'yes' }), /0 or 1/u);
+  });
+
+  test('asset diagnostics exclude query values, target requests and external origins', () => {
+    const origin = 'http://127.0.0.1:4173', asset = '/_app/immutable/chunks/example.A.js';
+    assert.equal(browserBuildAssetPath(origin + asset + '?private=sentinel#secret', origin), asset);
+    for (const value of [origin + '/api/lookup?target=example.test', 'https://example.test' + asset,
+      'malformed', 'http://user:password@127.0.0.1:4173' + asset]) assert.equal(browserBuildAssetPath(value, origin), null);
   });
 
   test('browser tests synchronize on observable state instead of fixed delays', () => {
@@ -797,67 +975,33 @@ describe('continuous integration workflow', () => {
   });
 
   test('repeats timing-sensitive browser workflows without retries on a bounded schedule', () => {
-    assert.match(STRESS_WORKFLOW, /^\s{2}schedule:\s*\n\s{4}- cron: '17 3 \* \* 1'\s*\n\s{2}workflow_dispatch:$/mu);
-    assert.match(STRESS_WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
-    assert.doesNotMatch(STRESS_WORKFLOW, /\b(?:contents|issues|pull-requests|actions): write\b/u);
-    assert.match(STRESS_WORKFLOW, /^\s+run: npm run test:e2e:stress$/mu);
-    assert.match(STRESS_WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts --audit=false$/mu);
-    assert.match(STRESS_WORKFLOW, /^\s+run: npm run test:e2e:summary$/mu);
-    assert.equal(
-      PACKAGE_MANIFEST.scripts?.['test:e2e:stress'],
-      'playwright test --grep @timing-sensitive --workers=1 --retries=0 --repeat-each=10',
-    );
-    assert.equal(occurrences(STRESS_WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 1);
-    const actions = pinnedActions(STRESS_WORKFLOW);
-    assert.deepEqual(actions.map(({ action }) => action), [
-      'actions/checkout',
-      'actions/setup-node',
-      'actions/upload-artifact',
-      'actions/upload-artifact',
-    ]);
-    for (const { revision } of actions) assert.match(revision, /^[a-f0-9]{40}$/u);
+    scheduledWorkflow(STRESS_WORKFLOW, '17 3 * * 1');
+    // Native shell integration checks the executed commands and stress arguments.
   });
 
   test('runs expanded property checks and duration profiling on a bounded schedule', () => {
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{2}schedule:\s*\n\s{4}- cron: '43 3 \* \* 3'\s*\n\s{2}workflow_dispatch:$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
-    assert.doesNotMatch(TEST_HEALTH_WORKFLOW, /\b(?:contents|issues|pull-requests|actions): write\b/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts --audit=false$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER: '10'$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{10}WHOISLEUTH_FAST_CHECK_SEED: \$\{\{ github\.run_number \}\}$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm run test:properties$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s+run: npm run verification:timing:check$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /npm run sources:health \| tee "\$RUNNER_TEMP\/source-health-report\.txt"/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s+npm run sources:health -- --github-annotations$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /## Offline retained source health/u);
-    assert.match(TEST_HEALTH_WORKFLOW, />> "\$GITHUB_STEP_SUMMARY"/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /apt-get install[^\n]*\bzsh\b/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /for run in 1 2 3; do\s+npm run test:profile > "\$RUNNER_TEMP\/test-duration-report-\$run\.txt"\s+done/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /npm run test:duration-health --/u);
-    for (const run of [1, 2, 3]) {
-      assert.match(TEST_HEALTH_WORKFLOW, new RegExp(`--report="\\$RUNNER_TEMP/test-duration-report-${run}\\.txt"`, 'u'));
+    const workflow = scheduledWorkflow(TEST_HEALTH_WORKFLOW, '43 3 * * 3');
+    const properties = requiredValue(workflowSteps(workflow).find(step => step.env?.WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER));
+    assert.equal(properties.env?.WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER, '10');
+    assert.equal(properties.env?.WHOISLEUTH_FAST_CHECK_SEED, '${{ github.run_number }}');
+    const candidate = requiredValue(workflowSteps(workflow).find(step => step.env?.PROFILE_PROVENANCE));
+    assert.equal(candidate.env?.PROFILE_PROVENANCE, 'unit-ci-${{ github.run_id }}-${{ github.run_attempt }}');
+    const uploads = workflowSteps(workflow).filter(step => step.uses?.startsWith('actions/upload-artifact@'));
+    assert.ok(uploads.length > 0);
+    for (const upload of uploads) {
+      assert.equal(upload.if, 'always()');
+      assert.equal(upload.with?.['retention-days'], 14);
     }
-    assert.match(TEST_HEALTH_WORKFLOW, /cat "\$RUNNER_TEMP\/test-duration-health\.md" >> "\$GITHUB_STEP_SUMMARY"/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /--provenance-id="unit-ci-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}"/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /npm run --silent verification:timing:update-candidate --/u);
-    assert.equal(occurrences(TEST_HEALTH_WORKFLOW, /--report="\$RUNNER_TEMP\/test-duration-report-[123]\.txt"/gu), 6);
-    assert.doesNotMatch(TEST_HEALTH_WORKFLOW, /--sample-count=/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{12}\$\{\{ runner\.temp \}\}\/test-duration-report-\*\.txt$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{12}\$\{\{ runner\.temp \}\}\/test-duration-health\.md$/mu);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{12}\$\{\{ runner\.temp \}\}\/verification-timing-unit-candidate\.json$/mu);
-    assert.doesNotMatch(TEST_HEALTH_WORKFLOW, /^\s{10}path: test-duration-report/mu);
-    assert.equal(occurrences(TEST_HEALTH_WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 1);
-    const actions = pinnedActions(TEST_HEALTH_WORKFLOW);
-    assert.deepEqual(actions.map(({ action }) => action), [
-      'actions/checkout',
-      'actions/setup-node',
-      'actions/upload-artifact',
-    ]);
-    for (const { revision } of actions) assert.match(revision, /^[a-f0-9]{40}$/u);
-    assert.match(PACKAGE_MANIFEST.scripts?.['test:properties'] ?? '', /verification-state-machines\.test\.mts/u);
-    assert.match(PACKAGE_MANIFEST.scripts?.['test:properties:stress'] ?? '', /WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER=10/u);
-    assert.match(PACKAGE_MANIFEST.scripts?.['test:properties:stress'] ?? '', /WHOISLEUTH_FAST_CHECK_SEED=334462/u);
-    assert.equal(PACKAGE_MANIFEST.scripts?.['test:duration-health'], 'node tools/test-duration-health.mts');
+    assert.ok(workflowSteps(workflow).some(step => step.run === 'npm run test:mutation'));
+    const browserJob = requiredValue(Object.values(workflow.jobs).find(job =>
+      job.steps.some(step => step.run === 'npm run test:e2e:cross-browser')));
+    assert.equal(browserJob.env?.WHOISLEUTH_E2E_USE_BUILD, '1');
+    const commands = browserJob.steps.flatMap(step => step.run ? [step.run] : []);
+    const suite = commands.indexOf('npm run test:e2e:cross-browser');
+    const build = commands.indexOf('npm run verification:ci -- --group=browser-build');
+    const browsers = commands.indexOf('npm run test:e2e:critical:install');
+    assert.ok(build >= 0 && build < suite, 'verify the production build before browser execution');
+    assert.ok(browsers >= 0 && browsers < suite, 'install the declared engines before browser execution');
   });
 });
 

@@ -1,7 +1,8 @@
 // Pure defensive-domain export formatting for filtered Bulk findings. These
 // files are generated locally and never submitted or applied automatically.
 
-import { caseDispositionSupportsDefensiveResponse, normalizeDomain } from '../cases/case-model.mts';
+import { caseDispositionSupportsDefensiveResponse } from '../cases/case-record-decisions.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   DEFENSIVE_INDICATOR_EXPORT_VERSION,

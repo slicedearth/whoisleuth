@@ -32,7 +32,6 @@ type CandidateAssessment = Readonly<{
 export const LOCAL_DATA_PLATFORM_EVALUATION_SCHEMA = 'whoisleuth.local-data-platform-evaluation';
 export const LOCAL_DATA_PLATFORM_EVALUATION_VERSION = 2;
 export const LOCAL_STORAGE_REFERENCE_BYTES = 5 * 1024 * 1024;
-export const MAX_LOCAL_DATA_EVALUATION_STORES = 16;
 export const MAX_LOCAL_DATA_EVALUATION_CANDIDATES = 8;
 export const MAX_LOCAL_DATA_EVALUATION_DETAIL_LENGTH = 320;
 
@@ -98,7 +97,7 @@ function boundedDetail(value: string): string {
 }
 
 export function buildLocalDataPlatformEvaluation(options: Readonly<{ now?: () => Date }> = {}) {
-  const stores = CURRENT_STORES.slice(0, MAX_LOCAL_DATA_EVALUATION_STORES);
+  const stores = CURRENT_STORES;
   const declaredMaximumBytes = stores.reduce((total, store) => total + store.maximumBytes, 0);
   const exceedsReferenceByBytes = Math.max(0, declaredMaximumBytes - LOCAL_STORAGE_REFERENCE_BYTES);
   const candidates = CANDIDATES.slice(0, MAX_LOCAL_DATA_EVALUATION_CANDIDATES);
@@ -153,7 +152,7 @@ export function buildLocalDataPlatformEvaluation(options: Readonly<{ now?: () =>
       recommendedCandidate: 'native_indexeddb',
       rationale: boundedDetail('The verified non-destructive migration now uses the dependency-free IndexedDB provider while retaining collection bounds and explicit rollback copies.'),
       migrationApproved: true,
-      independentFutureWork: Object.freeze(['encryption', 'pwa', 'synchronization']),
+      independentFutureWork: Object.freeze(['pwa', 'synchronization']),
     }),
     limitations: Object.freeze([
       boundedDetail('Declared store budgets are safety ceilings, not a measurement of one user workspace or a browser quota guarantee.'),
@@ -172,7 +171,7 @@ export function formatLocalDataPlatformEvaluation(report: ReturnType<typeof buil
     `Capacity above reference: ${report.current.exceedsReferenceByMiB} MiB`,
     `Decision: ${report.decision.state}`,
     `Candidate: ${recommended?.id || 'none'} (${recommended?.productionDependency ? 'dependency required' : 'no production dependency'})`,
-    'Encryption, PWA support, and synchronisation remain separately gated.',
+    'Encrypted named workspaces are available. PWA support and synchronisation are not provided.',
     'Use --json for the complete versioned report.',
   ].join('\n');
 }

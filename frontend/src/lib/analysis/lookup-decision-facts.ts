@@ -23,10 +23,10 @@ import type {
   LookupEvidenceQualityMatrix,
   LookupNextAction,
 } from './lookup-decision-support.ts';
+import { MAX_LOOKUP_DECISION_ENTRIES } from './lookup-decision-support.ts';
 
 type LookupEvidenceQualityEntry = LookupEvidenceQualityMatrix['entries'][number];
 
-const MAX_LOOKUP_DECISION_ENTRIES = 16;
 const MAX_LOOKUP_COVERAGE_ENTRIES = 24;
 const MAX_LOOKUP_SOURCE_LABEL_LENGTH = 160;
 const INSPECTION_DESTINATION_REFERENCE = 'inspection-destination:';

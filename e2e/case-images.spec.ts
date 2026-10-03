@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
@@ -40,7 +41,7 @@ test('changed-region review counts pixels, masks overlaps once and never mutates
       expect(await comparison.locator('input,button,svg').evaluateAll(elements => elements.filter(element => element.getClientRects().length).every(element => {
         const bounds = element.getBoundingClientRect(); return bounds.left >= 0 && bounds.right <= innerWidth;
       }))).toBe(true);
-      if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`pixel-review-${theme}-${width}.png`) });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`pixel-review-${theme}-${width}.png`) }); }
     }
     expect((await new AxeBuilder({ page }).include('.image-change-review').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   }
@@ -175,9 +176,9 @@ test('image drafts survive stage changes and cancelled navigation; pointer, keyb
         });
       });
       expect(geometry).toBe(true);
-      await page.screenshot({ path: testInfo.outputPath(`image-review-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`image-review-${theme}-${width}.png`) }); }
       await review.locator('.image-edit').scrollIntoViewIfNeeded();
-      await page.screenshot({ path: testInfo.outputPath(`image-editor-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`image-editor-${theme}-${width}.png`) }); }
     }
     expect((await new AxeBuilder({ page }).include('.image-review').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   }

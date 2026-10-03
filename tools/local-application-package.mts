@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { verifyPackageRuntimes, readPackageRuntimeRequest, withPackageInstallation } from './package-runtime-check.mts';
 import { execFile as execFileCallback } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
@@ -8,20 +9,19 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { parseBoundedJson } from '../lib/bounded-json.mts';
+import { parseBoundedJson } from '../packages/analysis/bounded-json.mts';
 import { readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
-import { normalizeBoundedStableSemanticVersion } from '../lib/semantic-version.mts';
-import { WHOISLEUTH_PROJECT_URL, WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL } from '../lib/project-metadata.mts';
+import { normalizeBoundedStableSemanticVersion } from '../packages/analysis/semantic-version.mts';
+import { WHOISLEUTH_PROJECT_URL, WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL } from '../packages/analysis/project-metadata.mts';
 import { LOCAL_APPLICATION_WORKER_URL } from '../lib/local-application-worker-client.mts';
 import { assertFrontendBuildIntegrity } from './frontend-build-integrity.mts';
 import {
-  assertCliPackageSourceSnapshot, captureCliPackageSourceSnapshot, compilePackageSources,
-  discoverPackageCompilerClosure, materializeCliPackageSourceSnapshot,
-  MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES, MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES, MAX_CLI_PACKAGE_GRAPH_BYTES,
-  CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
-} from './cli-package.mts';
-import { optionalPackageInputs, assertInstalledPackageDependencies, emittedPackageFiles, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, buildOptionalPackageNotices } from './optional-package.mts';
-import { pathIsWithin, requireJsonRecord as object } from './maintainer-tool-helpers.mts';
+  assertPackageSourceSnapshot, capturePackageSourceSnapshot, compilePackageSources,
+  discoverPackageCompilerClosure, emittedPackageFiles, materializePackageSourceSnapshot,
+} from './package-source.mts';
+import { MAX_PACKAGE_COMPILER_CONTEXT_BYTES, MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES, MAX_PACKAGE_GRAPH_BYTES, PACKAGE_PROCESS_TIMEOUT_MS } from './package-resource-bounds.mts';
+import { optionalPackageInputs, assertInstalledPackageDependencies, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, buildOptionalPackageNotices } from './optional-package.mts';
+import { pathIsWithin, requireJsonRecord as object, dependencyCruiserExecutable } from './maintainer-tool-helpers.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ENTRY = 'packages/local-application/bin/whoisleuth-local.mts';
@@ -36,7 +36,7 @@ const SUPPORT = [['packages/local-application/README.md', 'README.md'], ['LICENS
 export const MAX_LOCAL_PACKAGE_PACKED_BYTES = 128 * 1024 * 1024;
 export const MAX_LOCAL_PACKAGE_UNPACKED_BYTES = 320 * 1024 * 1024;
 const execFile = promisify(execFileCallback);
-const parse = (bytes: Buffer | string) => object(parseBoundedJson(bytes.toString(), { maximumBytes: MAX_CLI_PACKAGE_GRAPH_BYTES }), 'Package input');
+const parse = (bytes: Buffer | string) => object(parseBoundedJson(bytes.toString(), { maximumBytes: MAX_PACKAGE_GRAPH_BYTES }), 'Package input');
 
 export function localApplicationPackageInputs(graph: unknown, rootManifest: unknown) {
   return optionalPackageInputs(graph, { requiredSources: ENTRIES, acceptsSource: source => SOURCE.test(source),
@@ -53,28 +53,59 @@ export function localApplicationPackageManifest(sourceValue: unknown, lockfileVa
     dependencies: pinned, bundleDependencies: [...dependencies], repository: { type: 'git', url: WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL }, homepage: WHOISLEUTH_PROJECT_URL };
 }
 
+type LocalInstalledInput = Readonly<{
+  root: string; manifest: ReturnType<typeof localApplicationPackageManifest>; lockfile: Record<string, unknown>;
+  dependencies: readonly string[]; fileIdentity: readonly (readonly [string, { bytes: number; sha256: string }])[];
+}>;
+
+async function verifyInstalledLocal(archive: string, input: LocalInstalledInput) {
+  const { root, manifest, lockfile, dependencies, fileIdentity } = input;
+  return withPackageInstallation(async ({ installed, home, run }) => {
+    await writeFile(path.join(installed, 'package.json'), '{"private":true}\n');
+    await run('npm', ['install', '--offline', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund', archive], installed);
+    const packageRoot = path.join(installed, 'node_modules', ...manifest.name.split('/'));
+    const dependencyCount = await assertInstalledOptionalPackage(packageRoot, new Map(fileIdentity), parse(await readFile(path.join(installed, 'package-lock.json'))), lockfile, dependencies, manifest.name);
+    assert.deepEqual(parse(await readFile(path.join(packageRoot, 'package.json'))), manifest);
+    const executable = path.join(packageRoot, 'runtime', ENTRY.replace(/\.mts$/u, '.mjs'));
+    const guard = ['--import', path.join(root, 'tools/browser-server-egress-guard.mts')];
+    const checks: string[] = ['exact installed package and dependency integrity'];
+    for (const args of [[], ['--help'], ['-h'], ['--version']]) {
+      const result = await run(process.execPath, [...guard, executable, ...args], home);
+      assert.equal(result.stderr, '');
+      if (args[0] === '--version') assert.equal(result.stdout, `${manifest.version}\n`); else assert.match(result.stdout, /Saved records, drafts and retained files live in the selected folder/u);
+      checks.push(args.join(' ') || 'zero-argument help');
+    }
+    const smoke = await run(process.execPath, [path.join(root, 'tools/local-application-package-smoke.mts'), packageRoot, path.join(root, 'tools/browser-server-egress-guard.mts')], home);
+    assert.equal(smoke.stderr, '');
+    const smokeChecks: unknown = JSON.parse(smoke.stdout);
+    if (!Array.isArray(smokeChecks) || !smokeChecks.length || smokeChecks.some(value => typeof value !== 'string')) throw new Error('Installed local checks did not report completion.');
+    checks.push(...smokeChecks);
+    return { installedChecks: checks, dependencyCount };
+  });
+}
+
 export async function checkLocalApplicationPackage(repositoryRoot = ROOT, candidateDirectory?: string) {
   const root = await realpath(repositoryRoot), build = assertFrontendBuildIntegrity(root);
   const temporary = await mkdtemp(path.join(tmpdir(), 'whoisleuth-local-package-'));
   const sourceRoot = path.join(temporary, 'source'), staged = path.join(temporary, 'package'), runtime = path.join(staged, 'runtime');
-  const packed = path.join(temporary, 'packed'), installed = path.join(temporary, 'installed'), home = path.join(temporary, 'home');
+  const packed = path.join(temporary, 'packed'), home = path.join(temporary, 'home');
   const environment: NodeJS.ProcessEnv = { ...process.env, HOME: home, USERPROFILE: home,
     npm_config_registry: 'https://registry.npmjs.org', npm_config_cache: path.join(temporary, 'cache'), npm_config_userconfig: path.join(home, 'npmrc'),
     npm_config_globalconfig: path.join(home, 'global-npmrc'), npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false' };
   for (const key of ['NODE_OPTIONS', 'NODE_PATH', 'NPM_TOKEN', 'NODE_AUTH_TOKEN', 'SITE_PASSWORD', 'SESSION_SECRET']) delete environment[key];
-  const run = (command: string, args: string[], cwd: string) => execFile(command, args, { cwd, env: environment, encoding: 'utf8', timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS, maxBuffer: MAX_CLI_PACKAGE_GRAPH_BYTES, killSignal: 'SIGTERM' });
+  const run = (command: string, args: string[], cwd: string) => execFile(command, args, { cwd, env: environment, encoding: 'utf8', timeout: PACKAGE_PROCESS_TIMEOUT_MS, maxBuffer: MAX_PACKAGE_GRAPH_BYTES, killSignal: 'SIGTERM' });
   try {
-    await Promise.all([sourceRoot, staged, packed, installed, home].map(directory => mkdir(directory)));
+    await Promise.all([sourceRoot, staged, packed, home].map(directory => mkdir(directory)));
     await Promise.all(['npmrc', 'global-npmrc'].map(name => writeFile(path.join(home, name), '')));
-    const metadata = await captureCliPackageSourceSnapshot(root, ['package.json', 'package-lock.json', PACKAGE_SOURCE, ...SUPPORT.map(([source]) => source)], { totalBytes: 0 });
+    const metadata = await capturePackageSourceSnapshot(root, ['package.json', 'package-lock.json', PACKAGE_SOURCE, ...SUPPORT.map(([source]) => source)], { totalBytes: 0 });
     const lockfile = parse(metadata.get('package-lock.json')!.bytes);
-    const graph = parse((await run(process.execPath, [path.join(root, 'node_modules/dependency-cruiser/bin/dependency-cruise.mjs'), '--config', path.join(root, '.dependency-cruiser.json'), '--exclude', '^$', '--output-type', 'json', ...ENTRIES], root)).stdout);
+    const graph = parse((await run(process.execPath, [dependencyCruiserExecutable(root), '--config', path.join(root, '.dependency-cruiser.json'), '--exclude', '^$', '--output-type', 'json', ...ENTRIES], root)).stdout);
     const inputs = localApplicationPackageInputs(graph, parse(metadata.get('package.json')!.bytes));
     const closure = await discoverPackageCompilerClosure(root, temporary, inputs.sources, { acceptsSource: source => SOURCE.test(source) });
-    const sources = await captureCliPackageSourceSnapshot(root, closure.sources, { totalBytes: 0 });
-    const compiler = await captureCliPackageSourceSnapshot(root, closure.contextFiles, { totalBytes: 0, maximumBytes: MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES, maximumFileBytes: MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES });
+    const sources = await capturePackageSourceSnapshot(root, closure.sources, { totalBytes: 0 });
+    const compiler = await capturePackageSourceSnapshot(root, closure.contextFiles, { totalBytes: 0, maximumBytes: MAX_PACKAGE_COMPILER_CONTEXT_BYTES, maximumFileBytes: MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES });
     for (const [file, content] of metadata) if (sources.has(file)) assert.deepEqual(sources.get(file)!.bytes, content.bytes, 'Source metadata changed.');
-    await materializeCliPackageSourceSnapshot(sourceRoot, new Map([...sources, ...metadata, ...compiler]));
+    await materializePackageSourceSnapshot(sourceRoot, new Map([...sources, ...metadata, ...compiler]));
     const frozen = await discoverPackageCompilerClosure(sourceRoot, temporary, ENTRIES, { acceptsSource: source => SOURCE.test(source) });
     for (const file of frozen.sources) if (!sources.has(file)) throw new Error('Materialised local source closure changed.');
     for (const file of frozen.contextFiles) if (!compiler.has(file)) throw new Error('Materialised local compiler context changed.');
@@ -108,29 +139,15 @@ export async function checkLocalApplicationPackage(repositoryRoot = ROOT, candid
       || !Number.isSafeInteger(pack.unpackedSize) || Number(pack.unpackedSize) > MAX_LOCAL_PACKAGE_UNPACKED_BYTES) throw new Error('Local application archive exceeds its processing bounds.');
     if (typeof pack.filename !== 'string' || !/^[A-Za-z0-9._-]+\.tgz$/u.test(pack.filename)) throw new Error('Invalid local archive filename.');
     const archive = await readBoundedRegularFileWithin(packed, pack.filename, { maximumBytes: MAX_LOCAL_PACKAGE_PACKED_BYTES, minimumBytes: 1, label: 'Local application archive' });
-    await assertCliPackageSourceSnapshot(root, sources); await assertCliPackageSourceSnapshot(root, metadata);
-    await assertCliPackageSourceSnapshot(root, compiler, MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES);
+    await assertPackageSourceSnapshot(root, sources); await assertPackageSourceSnapshot(root, metadata);
+    await assertPackageSourceSnapshot(root, compiler, MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES);
     assert.deepEqual(assertFrontendBuildIntegrity(root), build);
     assert.equal(await buildOptionalPackageNotices(root, inputs.dependencies, 'Local application server', lockfile), notices);
-    await writeFile(path.join(installed, 'package.json'), '{"private":true}\n');
-    await run('npm', ['install', '--offline', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund', path.join(packed, pack.filename)], installed);
-    const packageRoot = path.join(installed, 'node_modules', ...manifest.name.split('/'));
-    const dependencyCount = await assertInstalledOptionalPackage(packageRoot, fileIdentity, parse(await readFile(path.join(installed, 'package-lock.json'))), lockfile, inputs.dependencies, manifest.name);
-    assert.deepEqual(parse(await readFile(path.join(packageRoot, 'package.json'))), manifest);
-    const executable = path.join(packageRoot, 'runtime', ENTRY.replace(/\.mts$/u, '.mjs'));
-    const guard = ['--import', path.join(root, 'tools/browser-server-egress-guard.mts')];
-    const checks: string[] = ['exact installed package and dependency integrity'];
-    for (const args of [[], ['--help'], ['-h'], ['--version']]) {
-      const result = await run(process.execPath, [...guard, executable, ...args], home);
-      assert.equal(result.stderr, '');
-      if (args[0] === '--version') assert.equal(result.stdout, `${manifest.version}\n`); else assert.match(result.stdout, /Saved records, drafts and retained files live in the selected folder/u);
-      checks.push(args.join(' ') || 'zero-argument help');
-    }
-    const smoke = await run(process.execPath, [path.join(root, 'tools/local-application-package-smoke.mts'), packageRoot, path.join(root, 'tools/browser-server-egress-guard.mts')], home);
-    assert.equal(smoke.stderr, '');
-    const smokeChecks: unknown = JSON.parse(smoke.stdout);
-    if (!Array.isArray(smokeChecks) || !smokeChecks.length || smokeChecks.some(value => typeof value !== 'string')) throw new Error('Installed local checks did not report completion.');
-    checks.push(...smokeChecks);
+    const { installedChecks: checks, dependencyCount } = await verifyPackageRuntimes(
+      fileURLToPath(import.meta.url), path.join(packed, pack.filename), MAX_LOCAL_PACKAGE_PACKED_BYTES,
+      { root, manifest, lockfile, dependencies: inputs.dependencies, fileIdentity: [...fileIdentity] },
+      verifyInstalledLocal,
+    );
     const archiveFile = `whoisleuth-local-${manifest.version}.tgz`;
     const report = { packageName: manifest.name, packageVersion: manifest.version, applicationVersion, sourceModules: frozen.sources.length,
       servedFiles: build.served.fileCount, servedBytes: build.served.totalBytes, servedDigestSha256: build.served.digestSha256,
@@ -150,7 +167,12 @@ export async function checkLocalApplicationPackage(repositoryRoot = ROOT, candid
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const args = process.argv.slice(2);
-    if (args.length && (args.length !== 2 || args[0] !== '--candidate' || !args[1])) throw new Error('Usage: local-application-package [--candidate <new-external-directory>]');
-    process.stdout.write(JSON.stringify(await checkLocalApplicationPackage(ROOT, args[1]), null, 2) + '\n');
+    if (args.length === 2 && args[0] === '--installed-check') {
+      const { archive, input } = await readPackageRuntimeRequest<LocalInstalledInput>(args[1]!, MAX_LOCAL_PACKAGE_PACKED_BYTES);
+      process.stdout.write(JSON.stringify(await verifyInstalledLocal(archive, input)) + '\n');
+    } else {
+      if (args.length && (args.length !== 2 || args[0] !== '--candidate' || !args[1])) throw new Error('Usage: local-application-package [--candidate <new-external-directory>]');
+      process.stdout.write(JSON.stringify(await checkLocalApplicationPackage(ROOT, args[1]), null, 2) + '\n');
+    }
   } catch (cause) { process.stderr.write((cause instanceof Error ? cause.message : 'Local application package verification failed.') + '\n'); process.exitCode = 1; }
 }

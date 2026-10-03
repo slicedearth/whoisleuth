@@ -7,7 +7,7 @@ import ts from 'typescript';
 import { moduleForwardingSpecifier } from './module-forwarding.mts';
 
 import { decodeBoundedUtf8, readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
-import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import type { SchemaLifecycleRegistry } from '../packages/contracts/schema-lifecycle.mts';
 import {
   CASE_CONTRACT_OWNER,

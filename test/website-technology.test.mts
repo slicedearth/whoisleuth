@@ -216,7 +216,7 @@ describe('website technology profile', () => {
     assert.deepEqual(result.findings.map((item) => item.id), ['php', 'vercel']);
     assert.ok(result.findings.every((item) => item.evidence[0]?.source === 'passive response header'));
     assert.equal(result.diagnostics.passiveHeadersEvaluated, 2);
-    assert.doesNotMatch(JSON.stringify(result), /8\\.4|private-build|private-request-value|unused-private-generator|must-not-be-evaluated/);
+    assert.doesNotMatch(JSON.stringify(result), /8\.4|private-build|private-request-value|unused-private-generator|must-not-be-evaluated/);
   });
 
   test('recognises the default CMS runtime header without retaining its value', async () => {

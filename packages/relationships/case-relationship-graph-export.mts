@@ -333,7 +333,7 @@ export function buildRelationshipGraphDocument(
   for (const node of graph.caseNodes) {
     const canonical = text(node.label, 253);
     if (!canonical) continue;
-    const id = stableId('case', canonical, seenIds);
+    const id = stableId('case', `${canonical}\u0000${node.id}`, seenIds);
     sourceToExportId.set(node.id, id);
     nodes.push({ id, kind: 'case', label: canonical, canonical });
   }

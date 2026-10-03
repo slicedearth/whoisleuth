@@ -1,59 +1,22 @@
 import type { CliArguments } from './arguments.mts';
-import { CLI_COMMANDS, commandDefinition, type CliCommand } from './command-reference.mts';
 import {
-  ASSURANCE_INLINE_COMMANDS,
-  HISTORY_INLINE_COMMANDS,
-  REVIEW_INLINE_COMMANDS,
-  SUPPORT_INLINE_COMMANDS,
-  WORKFLOW_INLINE_COMMANDS,
-} from './inline-command-families.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+  CLI_COMMANDS, INLINE_COMMAND_FAMILIES, inlineCommandFamily, inlineCommandsFor,
+  type CliCommand, type InlineCommandFamily,
+} from './command-reference.mts';
+import type { CliWorkflowContext, CliDependencies } from './runner-types.mts';
 
-type InlineCommandFamily = 'assurance' | 'history' | 'review' | 'support' | 'workflow';
-
-const FAMILY_COMMANDS: readonly Readonly<{
-  family: InlineCommandFamily;
-  commands: readonly CliCommand[];
-}>[] = Object.freeze([
-  Object.freeze({ family: 'support', commands: SUPPORT_INLINE_COMMANDS }),
-  Object.freeze({ family: 'review', commands: REVIEW_INLINE_COMMANDS }),
-  Object.freeze({ family: 'assurance', commands: ASSURANCE_INLINE_COMMANDS }),
-  Object.freeze({ family: 'workflow', commands: WORKFLOW_INLINE_COMMANDS }),
-  Object.freeze({ family: 'history', commands: HISTORY_INLINE_COMMANDS }),
-]);
-
-function buildInlineCommandOwnership(): ReadonlyMap<CliCommand, InlineCommandFamily> {
-  const ownership = new Map<CliCommand, InlineCommandFamily>();
-  for (const { family, commands } of FAMILY_COMMANDS) {
-    for (const command of commands) {
-      if (ownership.has(command)) throw new Error(`Inline CLI command ${command} has more than one command-family owner.`);
-      ownership.set(command, family);
-    }
-  }
-  return ownership;
-}
-
-const INLINE_COMMAND_OWNERSHIP = buildInlineCommandOwnership();
+const FAMILY_COMMANDS = Object.freeze(INLINE_COMMAND_FAMILIES.map(family =>
+  Object.freeze({ family, commands: inlineCommandsFor(family) })));
 const INLINE_CLI_COMMANDS: readonly CliCommand[] = Object.freeze(
-  CLI_COMMANDS.filter((command) => commandDefinition(command).execution.handlerOwner === 'inline'),
+  CLI_COMMANDS.filter((command) => inlineCommandFamily(command) !== null),
 );
-
-function validateInlineCommandOwnership(): void {
-  const missing = INLINE_CLI_COMMANDS.filter((command) => !INLINE_COMMAND_OWNERSHIP.has(command));
-  const unexpected = [...INLINE_COMMAND_OWNERSHIP.keys()].filter((command) => !INLINE_CLI_COMMANDS.includes(command));
-  if (missing.length || unexpected.length) {
-    throw new Error(`Inline CLI command-family ownership is inconsistent (missing: ${missing.join(', ') || 'none'}; unexpected: ${unexpected.join(', ') || 'none'}).`);
-  }
-}
-
-validateInlineCommandOwnership();
 
 async function runInlineCommand(
   args: CliArguments,
   dependencies: CliDependencies,
-  context: CliCommandContext,
+  context: CliWorkflowContext,
 ): Promise<number> {
-  const family = INLINE_COMMAND_OWNERSHIP.get(args.action as CliCommand);
+  const family = inlineCommandFamily(args.action as CliCommand);
   if (family === 'support') {
     const { runSupportCommand } = await import('./support-command-runner.mts');
     return runSupportCommand(args as Parameters<typeof runSupportCommand>[0], dependencies, context);

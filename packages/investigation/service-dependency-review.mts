@@ -1,3 +1,5 @@
+import { MAX_LOOKUP_DNS_RECORDS_PER_TYPE } from '../analysis/lookup-network-evidence-bounds.mts';
+
 export const SERVICE_DEPENDENCY_REVIEW_VERSION = 3;
 
 export type ServiceDependencyReviewState = 'candidate' | 'review' | 'observed' | 'not_observed' | 'unavailable';
@@ -52,6 +54,8 @@ export type ServiceDependencyReview = Readonly<{
   state: ServiceDependencyReviewState;
   label: string;
   dependencies: readonly ServiceDependency[];
+  complete: boolean;
+  unreviewedRecords: Readonly<Record<'CNAME' | 'HTTPS' | 'NS' | 'MX', number>>;
   authorizedScope: readonly string[];
   nextSteps: readonly string[];
   limitations: readonly string[];
@@ -64,7 +68,6 @@ type NormalizedServiceDependencySignature = ServiceDependencySignature & Readonl
 }>;
 
 const HOSTNAME = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
-const MAX_DEPENDENCIES = 20;
 const MAX_SCOPE_NAMES = 20;
 const MAX_SIGNATURES = 32;
 const MAX_SIGNATURE_SUFFIXES = 12;
@@ -381,12 +384,11 @@ function cnameDependencies(
   if (!Array.isArray(raw)) return [];
   const unique = new Set<string>();
   const dependencies: ServiceDependency[] = [];
-  for (const value of raw.slice(0, MAX_DEPENDENCIES * 2)) {
+  for (const value of raw.slice(0, MAX_LOOKUP_DNS_RECORDS_PER_TYPE)) {
     const target = normalizedHostname(value);
     if (!target || unique.has(target)) continue;
     unique.add(target);
     dependencies.push(dependency('CNAME', target, domain, authorizedScope, signatures, activeTargets, falsePositiveTargets, pageTitle, stale, complete));
-    if (dependencies.length >= MAX_DEPENDENCIES) break;
   }
   return dependencies;
 }
@@ -394,7 +396,6 @@ function cnameDependencies(
 function httpsDependencies(
   raw: unknown,
   domain: string,
-  remaining: number,
   authorizedScope: readonly string[],
   signatures: readonly NormalizedServiceDependencySignature[],
   activeTargets: ReadonlySet<string>,
@@ -403,17 +404,16 @@ function httpsDependencies(
   stale: boolean,
   complete: boolean,
 ): ServiceDependency[] {
-  if (!Array.isArray(raw) || remaining <= 0) return [];
+  if (!Array.isArray(raw)) return [];
   const unique = new Set<string>();
   const dependencies: ServiceDependency[] = [];
-  for (const value of raw.slice(0, remaining * 2)) {
+  for (const value of raw.slice(0, MAX_LOOKUP_DNS_RECORDS_PER_TYPE)) {
     const item = record(value);
     if (item.mode !== 'alias' || item.serviceUnavailable === true) continue;
     const target = normalizedHostname(item.target);
     if (!target || unique.has(target)) continue;
     unique.add(target);
     dependencies.push(dependency('HTTPS', target, domain, authorizedScope, signatures, activeTargets, falsePositiveTargets, pageTitle, stale, complete));
-    if (dependencies.length >= remaining) break;
   }
   return dependencies;
 }
@@ -422,7 +422,6 @@ function hostnameDependencies(
   raw: unknown,
   recordType: 'NS' | 'MX',
   domain: string,
-  remaining: number,
   authorizedScope: readonly string[],
   signatures: readonly NormalizedServiceDependencySignature[],
   activeTargets: ReadonlySet<string>,
@@ -431,15 +430,14 @@ function hostnameDependencies(
   stale: boolean,
   complete: boolean,
 ): ServiceDependency[] {
-  if (!Array.isArray(raw) || remaining <= 0) return [];
+  if (!Array.isArray(raw)) return [];
   const unique = new Set<string>();
   const dependencies: ServiceDependency[] = [];
-  for (const value of raw.slice(0, remaining * 2)) {
+  for (const value of raw.slice(0, MAX_LOOKUP_DNS_RECORDS_PER_TYPE)) {
     const target = normalizedHostname(recordType === 'MX' ? record(value).exchange : value);
     if (!target || unique.has(target)) continue;
     unique.add(target);
     dependencies.push(dependency(recordType, target, domain, authorizedScope, signatures, activeTargets, falsePositiveTargets, pageTitle, stale, complete));
-    if (dependencies.length >= remaining) break;
   }
   return dependencies;
 }
@@ -459,7 +457,6 @@ function urlHostname(value: unknown): string {
 function httpDependency(
   httpEvidence: UnknownRecord,
   domain: string,
-  remaining: number,
   authorizedScope: readonly string[],
   signatures: readonly NormalizedServiceDependencySignature[],
   activeTargets: ReadonlySet<string>,
@@ -468,7 +465,7 @@ function httpDependency(
   stale: boolean,
   complete: boolean,
 ): ServiceDependency[] {
-  if (remaining <= 0 || httpEvidence.source !== 'http') return [];
+  if (httpEvidence.source !== 'http') return [];
   const target = urlHostname(httpEvidence.finalUrl);
   if (!target || target === domain) return [];
   return [dependency('HTTP', target, domain, authorizedScope, signatures, activeTargets, falsePositiveTargets, pageTitle, stale, complete)];
@@ -517,8 +514,16 @@ export function buildServiceDependencyReview(input: Readonly<{
   const activeTargets = new Set<string>();
   const finalHttpTarget = urlHostname(httpEvidence.finalUrl);
   if (finalHttpTarget) activeTargets.add(finalHttpTarget);
+  const unreviewedCount = (value: unknown) => Array.isArray(value) ? Math.max(0, value.length - MAX_LOOKUP_DNS_RECORDS_PER_TYPE) : 0;
+  const unreviewedRecords = {
+    CNAME: unreviewedCount(dnsRecords.cname), HTTPS: unreviewedCount(dnsRecords.https),
+    NS: unreviewedCount(dnsRecords.ns), MX: unreviewedCount(dnsRecords.mx),
+  };
+  const unreviewedTotal = Object.values(unreviewedRecords).reduce((sum, count) => sum + count, 0);
   const complete = dnsEvidence.source === 'dns'
     && dnsEvidence.complete === true
+    && dnsEvidence.truncated !== true
+    && unreviewedTotal === 0
     && ['success', 'not_found'].includes(diagnosticStatus(diagnostics, 'cname'))
     && ['success', 'not_found'].includes(diagnosticStatus(diagnostics, 'https'))
     && ['success', 'not_found'].includes(diagnosticStatus(diagnostics, 'ns'))
@@ -527,7 +532,6 @@ export function buildServiceDependencyReview(input: Readonly<{
   const https = httpsDependencies(
     dnsRecords.https,
     domain,
-    MAX_DEPENDENCIES - cname.length,
     authorizedScope,
     signatures,
     activeTargets,
@@ -540,7 +544,6 @@ export function buildServiceDependencyReview(input: Readonly<{
     dnsRecords.ns,
     'NS',
     domain,
-    MAX_DEPENDENCIES - cname.length - https.length,
     authorizedScope,
     signatures,
     activeTargets,
@@ -553,7 +556,6 @@ export function buildServiceDependencyReview(input: Readonly<{
     dnsRecords.mx,
     'MX',
     domain,
-    MAX_DEPENDENCIES - cname.length - https.length - ns.length,
     authorizedScope,
     signatures,
     activeTargets,
@@ -565,7 +567,6 @@ export function buildServiceDependencyReview(input: Readonly<{
   const http = httpDependency(
     httpEvidence,
     domain,
-    MAX_DEPENDENCIES - cname.length - https.length - ns.length - mx.length,
     authorizedScope,
     signatures,
     activeTargets,
@@ -605,8 +606,10 @@ export function buildServiceDependencyReview(input: Readonly<{
   return {
     version: SERVICE_DEPENDENCY_REVIEW_VERSION,
     state,
-    label,
+    label: dependencies.length && !complete ? `${label} · review incomplete` : label,
     dependencies,
+    complete,
+    unreviewedRecords,
     authorizedScope,
     nextSteps: dependencies.length
       ? [
@@ -629,6 +632,7 @@ export function buildServiceDependencyReview(input: Readonly<{
       'Candidate, unresolved, active, not-classified, and false-positive labels organise manual review only. None establishes dangling status, vulnerability, claimability, ownership, control, safety, or maliciousness.',
       'No observed dependency in complete point-in-time evidence is not a general security finding and does not cover uncollected provider account state.',
       ...(dnsEvidence.truncated === true ? ['The DNS observation was capped, so additional dependencies may not be represented.'] : []),
+      ...(unreviewedTotal ? [`${unreviewedTotal} input records exceeded the per-type DNS review bound and were not examined; their validity and dependencies are unknown.`] : []),
     ],
   };
 }

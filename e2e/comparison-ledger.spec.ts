@@ -1,8 +1,9 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import type { WebsiteProfileSnapshot, WebsiteSnapshotTechnology } from '../packages/workspace/website-snapshot-model.mts';
 import {
   TECHNOLOGY_PROFILE_VERSION,
@@ -412,7 +413,7 @@ test('uses exact stacked cards without page overflow at narrow supported widths'
       await expect(detail).toBeVisible();
       await detail.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`exact-comparison-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`exact-comparison-${theme}-${width}.png`) }); }
     }
   }
   await desktop.getByRole('button', { name: /^Inspect exact values/u }).press('Enter');

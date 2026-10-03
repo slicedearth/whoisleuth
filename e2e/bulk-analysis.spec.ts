@@ -1,9 +1,11 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { BULK_REVIEW_MANIFEST_VERSION } from '../packages/contracts/investigation-portability.mts';
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
+import { boundingBox, currentBrowserLocalDocument, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
+import { createCase } from '../packages/cases/case-model.mts';
 import { captureDownloads, invalidDomains } from './bulk-analysis-fixtures';
 
 // Bulk queue, review, comparison and retained-work coverage.
@@ -13,14 +15,34 @@ test.use({ allowExpectedBulkLookup400Noise: true });
 test.beforeEach(async ({ page }) => {
   await page.goto('/bulk');
 });
-test('the scan button only takes the high-contrast primary treatment once ready', async ({ page }) => {
-  const scanButton = page.locator('.queue-actions button.primary');
+
+test('creating selected Cases appends current Bulk evidence to the existing incident', async ({ page }) => {
+  const record = createCase({ domain: 'existing-incident.example' }, '2026-08-01T00:00:00.000Z');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [record] }) });
+  await page.route('**/api/lookup?*', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+    availability: { applicable: true, domain: record.domain, state: 'registered', confidence: 'high', registrarName: 'Current fixture registrar' },
+    diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+  }) }));
+  await runBulkScan(page, [record.domain]);
+  await page.getByRole('button', { name: `Add ${record.domain} to shortlist`, exact: true }).click();
+  await openBulkFilters(page);
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Create cases', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '1 committed, 0 rejected' })).toBeVisible();
+  const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(saved.records).toHaveLength(1);
+  expect(saved.records[0]?.value.id).toBe(record.id);
+  expect(saved.records[0]?.value.evidenceHistory).toHaveLength(1);
+  expect(saved.records[0]?.value.evidenceHistory[0]).toMatchObject({ source: 'bulk', availability: 'registered' });
+});
+test('the scan action is available only when the queue contains a target', async ({ page }) => {
+  const scanButton = page.getByRole('button', { name: /^Scan(?: \d+)? domains?$/u });
   await expect(scanButton).toBeDisabled();
-  expect(await scanButton.evaluate((el) => getComputedStyle(el).backgroundImage)).toBe('none');
 
   await page.locator('#domains').fill(invalidDomains(1).join('\n'));
   await expect(scanButton).toBeEnabled();
-  expect(await scanButton.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('gradient');
+  await page.locator('#domains').fill('');
+  await expect(scanButton).toBeDisabled();
 });
 
 test('canonicalises equivalent hostnames into one request per registrable target', async ({ page }) => {
@@ -129,7 +151,7 @@ for (const width of [320, 1_280]) {
         await expect(page.getByRole('heading', { name: 'Shortlist · —', exact: true })).toBeVisible();
         await expect(page.getByText(/No Bulk sessions have been saved|No shortlisted domains|could not be read/u)).toHaveCount(0);
         await expectNoHorizontalOverflow(page);
-        await page.screenshot({ path: testInfo.outputPath('loading-collections.png'), fullPage: true });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath('loading-collections.png'), fullPage: true }); }
       } finally {
         await release();
       }
@@ -144,7 +166,7 @@ for (const width of [320, 1_280]) {
       await expect(page.getByText('No Bulk sessions have been saved in this workspace.', { exact: true })).toBeVisible();
       await expect(page.getByText(/still loading|could not be read/u)).toHaveCount(0);
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath('ready-collections.png'), fullPage: true });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath('ready-collections.png'), fullPage: true }); }
     });
   }
 }
@@ -569,7 +591,7 @@ test('filters, groups, and selected-only actions use compact observed evidence',
           return split;
         });
         expect(splitWords).toEqual([]);
-        await test.info().attach(`bulk-export-status-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+        if (captureVisualEvidenceEnabled()) { await test.info().attach(`bulk-export-status-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       }
     }
   } finally {
@@ -685,15 +707,41 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
 
   const cockpit = page.getByRole('region', { name: 'Review one result' });
   await expect(cockpit).toContainText('1 of 2');
-  await cockpit.getByRole('button', { name: 'Mark reviewed' }).click();
-  await cockpit.getByRole('button', { name: 'Next unresolved' }).click();
+  const markReviewed = cockpit.getByRole('button', { name: 'Mark reviewed' });
+  await expect(markReviewed).not.toHaveAttribute('aria-keyshortcuts');
+  await cockpit.getByRole('button', { name: 'Enable shortcuts' }).click();
+  await expect(markReviewed).toHaveAttribute('aria-keyshortcuts', 'Alt+R');
+  // Option changes the character on some layouts, but not the physical key.
+  expect(await cockpit.evaluate(element => {
+    const event = new KeyboardEvent('keydown', { key: '®', code: 'KeyR', altKey: true, bubbles: true, cancelable: true });
+    element.querySelector<HTMLButtonElement>('[aria-pressed="true"]')!.dispatchEvent(event);
+    return event.defaultPrevented;
+  })).toBe(true);
+  await expect(cockpit.locator('.review-state')).toHaveText('reviewed');
+  await cockpit.getByRole('button', { name: 'Next unresolved' }).focus();
+  await page.keyboard.press('Alt+ArrowRight');
   await expect(cockpit.getByRole('heading', { level: 3 })).toHaveText('right-review.example');
+  await expect(page).toHaveURL(/\/bulk/u);
+  const monitorName = cockpit.getByLabel('Monitor list for the current row');
+  await monitorName.focus();
+  expect(await monitorName.evaluate(element => {
+    const event = new KeyboardEvent('keydown', { key: '®', code: 'KeyR', altKey: true, bubbles: true, cancelable: true });
+    element.dispatchEvent(event); return event.defaultPrevented;
+  })).toBe(false);
+  for (const extra of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { repeat: true }, { isComposing: true }]) {
+    expect(await markReviewed.evaluate((element, flags) => {
+      const event = new KeyboardEvent('keydown', { key: 'r', code: 'KeyR', altKey: true, bubbles: true, cancelable: true, ...flags });
+      element.dispatchEvent(event); return event.defaultPrevented;
+    }, extra)).toBe(false);
+  }
+  await cockpit.getByRole('button', { name: 'Disable shortcuts' }).click();
+  await expect(markReviewed).not.toHaveAttribute('aria-keyshortcuts');
   await expect(cockpit.getByText('Evidence freshness')).toBeVisible();
   await cockpit.getByRole('button', { name: 'Create case' }).click();
   await expect(cockpit.getByLabel('Case disposition')).toBeEnabled();
   await cockpit.getByLabel('Case disposition').selectOption('suspicious');
   await expect(cockpit.getByRole('status')).toContainText('Marked right-review.example as Suspicious');
-  await cockpit.getByLabel('Current row monitor list').fill('Focused review');
+  await cockpit.getByLabel('Monitor list for the current row').fill('Focused review');
   await cockpit.getByRole('button', { name: 'Save current to Monitor' }).click();
   await expect(cockpit.getByRole('status')).toContainText('Saved right-review.example to Focused review');
   const storedCase = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value;
@@ -762,9 +810,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   await page.setViewportSize({ width: 393, height: 852 });
   const exactTable = comparison.getByRole('table', { name: 'Exact retained values, source states, and derived field deltas' });
   await expect(exactTable).toBeVisible();
-  await expect(exactTable).toHaveCSS('display', 'block');
   await expect(technologyRow).toBeVisible();
-  await expect(technologyRow).toHaveCSS('display', 'block');
   await expect(technologyRow).toContainText('fixture-cms, shared-edge');
   await expect(technologyRow).toContainText('fixture-commerce, shared-edge');
   await expect(technologyRow).toContainText('Exact source state complete');
@@ -838,7 +884,7 @@ test('persists named review views and per-domain review state without restarting
 
   await page.reload();
   await openBulkWorkspaceTools(page, 'review');
-  await page.getByLabel('Saved Bulk review view').selectOption({ label: 'Limited active review' });
+  await page.getByLabel('Saved view for Bulk review').selectOption({ label: 'Limited active review' });
   await page.getByRole('button', { name: 'Load view' }).click();
   await expect(page.getByLabel('Filter by review state')).toHaveValue('reviewing');
   await expect(page.locator('.results-table')).toHaveCount(0);
@@ -966,14 +1012,17 @@ test('sorts complete results by registration, confidence, website, registrar, an
 });
 
 test('keeps partial Bulk Risk evidence inconclusive and outside the comparable sort cohort', async ({ page }) => {
+  await page.getByLabel('Scan mode').selectOption('deep');
   await page.route('**/api/lookup?*', async (route) => {
     const domain = new URL(route.request().url()).searchParams.get('q') || '';
     const limited = domain === 'partial-risk.example';
+    const incompleteWeb = domain === 'partial-web.example';
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        availability: { applicable: true, domain, state: 'registered', confidence: 'high' },
+        availability: { applicable: true, domain, state: 'registered', confidence: 'high',
+          webCollectionQuality: { version: 1, page: 'complete', favicon: incompleteWeb ? 'unknown' : 'complete', combined: incompleteWeb ? 'partial' : 'complete' } },
         diagnostics: {
           version: 7,
           rdap: { status: limited ? 'partial' : 'complete' },
@@ -984,21 +1033,27 @@ test('keeps partial Bulk Risk evidence inconclusive and outside the comparable s
     });
   });
 
-  await runBulkScan(page, ['partial-risk.example', 'settled-risk.example']);
+  await runBulkScan(page, ['partial-risk.example', 'settled-risk.example', 'partial-web.example']);
   await openBulkFilters(page);
   const partial = page.locator('.results-table tbody tr', { hasText: 'partial-risk.example' });
   const settled = page.locator('.results-table tbody tr', { hasText: 'settled-risk.example' });
+  const web = page.locator('.results-table tbody tr', { hasText: 'partial-web.example' });
   await expect(settled.locator('td[data-label="Risk"]')).toContainText('Lower');
   await expect(partial.locator('td[data-label="Risk"]')).toContainText('Inconclusive');
   await expect(partial.locator('td[data-label="Risk"]')).not.toContainText('Lower');
-  await expect(page.getByText(/Risk sorting compares 1 of 2 rows/u)).toBeVisible();
-  await expect(page.getByText(/1 incompatible or inconclusive row sorts last/u)).toBeVisible();
+  await expect(web.locator('td[data-label="Risk"]')).toContainText('Inconclusive');
+  await expect(web.locator('td[data-label="Risk"]')).not.toContainText('Lower');
+  await expect(page.getByText(/Risk sorting compares 1 of 3 rows/u)).toBeVisible();
+  await expect(page.getByText(/2 incompatible or inconclusive rows sort last/u)).toBeVisible();
   await expect(page.locator('.results-table tbody td[data-label="Domain"] strong')).toHaveText([
     'settled-risk.example',
     'partial-risk.example',
+    'partial-web.example',
   ]);
   await partial.locator('td[data-label="Risk"] summary[aria-label*="Inspect Risk model and factors"]').click();
   await expect(partial.locator('td[data-label="Risk"]')).toContainText(/source evidence is partial or unavailable/u);
+  await web.locator('td[data-label="Risk"] summary[aria-label*="Inspect Risk model and factors"]').click();
+  await expect(web.locator('td[data-label="Risk"]')).toContainText('Incomplete or unknown web collection; score is not comparable.');
 });
 
 test('keeps the current queue, results, filters, sort, and page during console navigation only', async ({ page }) => {

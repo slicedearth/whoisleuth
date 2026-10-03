@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openInboxReview } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalManifestWrite, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, openBrandProfileList, openBrandWorkbench, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
@@ -6,7 +7,7 @@ import {
   buildDomainControlManifest,
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
 } from '../lib/domain-control-manifest.mts';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { PUBLIC_BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { extractHtmlSignals } from '../lib/html-signals.mts';
 import { LEGACY_WEBSITE_SNAPSHOTS_KEY } from '../frontend/src/lib/browser-local-data-contract.ts';
@@ -43,6 +44,58 @@ function profileFixture() {
     updatedAt: ISO,
   };
 }
+
+test('expected-setting domain switches require an explicit decision before discarding a draft', async ({ page }) => {
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([{ ...profileFixture(), officialDomains: ['first.example', 'second.example'] }]),
+    [ACTIVE_KEY]: 'profile-1',
+  });
+  await openBrandWorkbench(page, 'baselines');
+  const baseline = page.locator('#desired-posture-baseline');
+  const domain = baseline.getByRole('combobox', { name: 'Official domain', exact: true });
+  await expect(domain).toHaveValue('first.example');
+  await baseline.getByLabel('Analyst note', { exact: true }).fill('Keep this unsaved domain note');
+  page.once('dialog', dialog => dialog.dismiss());
+  await domain.selectOption('second.example');
+  await expect(domain).toHaveValue('first.example');
+  await expect(baseline.getByLabel('Analyst note', { exact: true })).toHaveValue('Keep this unsaved domain note');
+  page.once('dialog', dialog => dialog.accept());
+  await domain.selectOption('second.example');
+  await expect(domain).toHaveValue('second.example');
+  await expect(baseline.getByLabel('Analyst note', { exact: true })).toHaveValue('');
+  const stored = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(stored.records[0]?.value.desiredPostureBaselines).toEqual([]);
+});
+
+test('official-domain review and comparison include later batches without implicit collection', async ({ page }) => {
+  const officialDomains = Array.from({ length: 21 }, (_, index) => `d${String(index).padStart(2, '0')}.example`);
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([{ ...profileFixture(), officialDomains }]), [ACTIVE_KEY]: 'profile-1',
+  });
+  const requested: string[] = [];
+  await page.route('**/api/domain-posture?*', async route => {
+    const domain = new URL(route.request().url()).searchParams.get('q')!;
+    requested.push(domain);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(postureFixture(domain)) });
+  });
+  await openBrandWorkbench(page, 'posture');
+  await page.getByRole('combobox', { name: 'Official-domain batch', exact: true }).selectOption('1');
+  expect(requested).toEqual([]);
+  await page.getByRole('button', { name: 'Review official domains', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toHaveText('Reviewed 1/1 official domain in this batch; 21 domains in the profile.');
+  expect(requested).toEqual(['d20.example']);
+  await openBrandWorkbench(page, 'portfolio');
+  const matrix = page.getByRole('region', { name: 'Owned-domain comparison' });
+  await matrix.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(matrix).toContainText('d20.example');
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const theme of ['light', 'dark'] as const) { await useTheme(page, theme); await expectNoHorizontalOverflow(page); }
+  }
+  expect(requested).toEqual(['d20.example']);
+});
 
 function availabilityFixture() {
   return {
@@ -158,11 +211,11 @@ test('Brand Profile saving preserves a newer editable draft', async ({ page }) =
 test('Brand refresh preserves separate profile, allowlist and account-control drafts', async ({ page }) => {
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, { [PROFILES_KEY]: currentBrandProfileBrowserStore([profileFixture()]), [ACTIVE_KEY]: 'profile-1' });
-  await page.getByRole('button', { name: 'Edit Stored Brand (profile-1)', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Stored Brand', exact: true }).click();
   await page.getByLabel('Brand name', { exact: true }).fill('Unsaved profile name');
   const allowlist = page.getByRole('region', { name: 'Allowlist', exact: true });
   await allowlist.getByLabel('Add domains').fill('submitted.example');
-  await allowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
+  await allowlist.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
   await openBrandWorkbench(page, 'attestations');
   const control = page.getByRole('group', { name: 'Registrar MFA', exact: true });
   await control.getByLabel('Review state').selectOption('observed');
@@ -182,7 +235,7 @@ test('Brand refresh preserves separate profile, allowlist and account-control dr
   await expect(control.getByLabel('Review note')).toHaveValue('A separate unsaved review');
   await expect(control.getByLabel('Review note')).toBeFocused();
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
-  await allowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
+  await allowlist.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
   await allowlist.getByRole('button', { name: 'Save allowlist', exact: true }).click();
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved the allowlist');
   await page.getByRole('tab', { name: 'Tools', exact: true }).click();
@@ -277,7 +330,7 @@ test('account controls preserve failed and later drafts without refreshing untou
 test('a committed Brand review with failed refresh retains drafts and retries only the read', async ({ page }) => {
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, { [PROFILES_KEY]: currentBrandProfileBrowserStore([profileFixture()]), [ACTIVE_KEY]: 'profile-1' });
-  await page.getByRole('button', { name: 'Edit Stored Brand (profile-1)', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Stored Brand', exact: true }).click();
   await page.getByLabel('Brand name', { exact: true }).fill('Retained primary draft');
   const allowlist = page.getByRole('region', { name: 'Allowlist', exact: true });
   await allowlist.getByLabel('Add domains').fill('unadded.example');
@@ -324,7 +377,7 @@ test('a refreshed peer selection does not replace the open Brand tool owner', as
     await page.getByRole('tab', { name: 'Overview', exact: true }).click();
     await expect(allowlist.getByLabel('Add domains')).toHaveValue('retained.example');
     await expect(page.getByText('Open drafts belong to “Stored Brand”.', { exact: false })).toBeVisible();
-    await allowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
+    await allowlist.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
     await expect(allowlist.getByText('retained.example', { exact: true })).toBeVisible();
     await expect(allowlist.getByRole('button', { name: 'Save allowlist', exact: true })).toBeDisabled();
     await openBrandWorkbench(page, 'control');
@@ -346,11 +399,11 @@ test('Brand editors reject same-clock peer changes without replacing unsaved dra
   await page.clock.setFixedTime(ISO);
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, { [PROFILES_KEY]: currentBrandProfileBrowserStore([profileFixture()]), [ACTIVE_KEY]: 'profile-1' });
-  await page.getByRole('button', { name: 'Edit Stored Brand (profile-1)', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Stored Brand', exact: true }).click();
   await page.getByLabel('Brand name', { exact: true }).fill('Local name draft');
   const allowlist = page.getByRole('region', { name: 'Allowlist', exact: true });
   await allowlist.getByLabel('Add domains').fill('local.example');
-  await allowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
+  await allowlist.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
   await openBrandWorkbench(page, 'attestations');
   const mfa = page.getByRole('group', { name: 'Registrar MFA', exact: true });
   await mfa.getByLabel('Review note').fill('Local review draft');
@@ -358,13 +411,13 @@ test('Brand editors reject same-clock peer changes without replacing unsaved dra
   try {
     await peer.clock.setFixedTime(ISO);
     await peer.goto('/brands');
-    await peer.getByRole('button', { name: 'Edit Stored Brand (profile-1)', exact: true }).click();
+    await peer.getByRole('button', { name: 'Edit Stored Brand', exact: true }).click();
     await peer.getByLabel('Brand name', { exact: true }).fill('Peer profile');
     await peer.getByRole('button', { name: 'Save profile', exact: true }).click();
     await expect(peer.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved "Peer profile"');
     const peerList = peer.getByRole('region', { name: 'Allowlist', exact: true });
     await peerList.getByLabel('Add domains').fill('peer.example');
-    await peerList.getByRole('button', { name: 'Add', exact: true }).first().click();
+    await peerList.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
     await peerList.getByRole('button', { name: 'Save allowlist', exact: true }).click();
     await expect(peer.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved the allowlist');
     await openBrandWorkbench(peer, 'attestations');
@@ -391,15 +444,62 @@ test('Brand editors reject same-clock peer changes without replacing unsaved dra
   } finally { await peer.close(); }
 });
 
+for (const peerChangesBaseline of [false, true]) {
+  test(`removing an official domain confirms expected-setting loss${peerChangesBaseline ? ' and rejects a stale confirmation' : ''}`, async ({ page, context }) => {
+    await page.goto('/brands');
+    await migrateLegacyBrowserData(page, {
+      [PROFILES_KEY]: currentBrandProfileBrowserStore([{ ...profileFixture(), officialDomains: ['stored.example', 'kept.example'],
+        desiredPostureBaselines: [{ domain: 'stored.example', nameservers: ['ns.original.example'], updatedAt: ISO }],
+      }]), [ACTIVE_KEY]: 'profile-1',
+    });
+    await page.getByRole('button', { name: 'Edit Stored Brand', exact: true }).click();
+    await page.getByLabel('Official domains').fill('kept.example');
+    page.once('dialog', async dialog => {
+      expect(dialog.message()).toContain('Remove expected settings for 1 official domain (stored.example)');
+      await dialog.dismiss();
+    });
+    await page.getByRole('button', { name: 'Save profile', exact: true }).click();
+    const status = page.getByRole('status', { name: 'Brand Profile action status' });
+    await expect(status).toContainText('Profile not saved');
+    await expect(page.getByLabel('Official domains')).toHaveValue('kept.example');
+    const before = await readBrowserLocalCollection(page, 'brand_profiles');
+    expect(before.records[0]?.value.desiredPostureBaselines).toHaveLength(1);
+    const peer = peerChangesBaseline ? await context.newPage() : null;
+    try {
+      if (peer) {
+        await peer.goto('/brands');
+        await openBrandWorkbench(peer, 'baselines');
+        const baseline = peer.locator('#desired-posture-baseline');
+        await baseline.getByLabel('Nameservers', { exact: true }).fill('ns.peer.example');
+        await baseline.getByRole('button', { name: 'Save expected settings', exact: true }).click();
+        await expect(peer.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved expected domain settings');
+      }
+      const expected = await readBrowserLocalCollection(page, 'brand_profiles');
+      page.once('dialog', dialog => dialog.accept());
+      await page.getByRole('button', { name: 'Save profile', exact: true }).click();
+      await expect(status).toContainText(peer ? 'Brand Profile changed or was deleted' : 'Saved "Stored Brand"');
+      const after = await readBrowserLocalCollection(page, 'brand_profiles');
+      if (peer) {
+        expect(after.records).toEqual(expected.records);
+        expect(after.manifest.revision).toBe(expected.manifest.revision);
+        await expect(page.getByLabel('Official domains')).toHaveValue('kept.example');
+      } else {
+        expect(after.records[0]?.value.officialDomains).toEqual(['kept.example']);
+        expect(after.records[0]?.value.desiredPostureBaselines).toEqual([]);
+      }
+    } finally { await peer?.close(); }
+  });
+}
+
 test('deleting a Brand Profile preserves later typing as a distinct new-identity draft', async ({ page, context }) => {
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, { [PROFILES_KEY]: currentBrandProfileBrowserStore([profileFixture()]), [ACTIVE_KEY]: 'profile-1' });
-  await page.getByRole('button', { name: 'Edit Stored Brand (profile-1)', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Stored Brand', exact: true }).click();
   const peer = await context.newPage();
   await peer.goto('/brands');
-  await expect(peer.getByRole('button', { name: 'Edit Stored Brand (profile-1)', exact: true })).toBeVisible();
+  await expect(peer.getByRole('button', { name: 'Edit Stored Brand', exact: true })).toBeVisible();
   const dialogPromise = page.waitForEvent('dialog');
-  const deletion = page.getByRole('button', { name: 'Delete Stored Brand (profile-1)', exact: true }).click();
+  const deletion = page.getByRole('button', { name: 'Delete Stored Brand', exact: true }).click();
   const dialog = await dialogPromise;
   // The confirmation follows the fresh Case-impact read. Hold only the
   // subsequent write, using the other tab while confirmation is open.
@@ -407,7 +507,7 @@ test('deleting a Brand Profile preserves later typing as a distinct new-identity
   try {
     await dialog.accept();
     await deletion;
-    await expect(page.getByRole('button', { name: 'Delete Stored Brand (profile-1)', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Delete Stored Brand', exact: true })).toBeDisabled();
     await page.getByLabel('Brand name', { exact: true }).fill('Later retained profile');
   } finally { await release(); await peer.close(); }
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Deleted "Stored Brand"');
@@ -447,6 +547,7 @@ test('expected-setting drafts follow the selected profile even for a shared doma
 test('a rejected profile write keeps optional drafts for a deliberate retry and returns focus after success', async ({ page }) => {
   await cleanBrandStorage(page);
   await openProfileForm(page, 'Matching and mail settings');
+  await expect(page.getByLabel('Product names', { exact: true })).toHaveAccessibleDescription(/Discovery defaults/u);
   await page.getByLabel('Product names', { exact: true }).fill('Retained product draft');
   await page.getByText('Matching and mail settings', { exact: true }).click();
   await page.getByText('Rights and official channels', { exact: true }).click();
@@ -551,11 +652,11 @@ test('the active Brand Profile has a separate maintainable allowlist', async ({ 
   const allowlist = page.getByRole('region', { name: 'Allowlist' });
   await expect(allowlist).toBeVisible();
   await allowlist.getByLabel('Add domains').fill('reviewed.example\nstored.example');
-  await allowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
+  await allowlist.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
   await expect(allowlist.getByText('reviewed.example', { exact: true })).toBeVisible();
   await expect(allowlist.locator('li', { hasText: 'stored.example' })).toHaveCount(0);
   await allowlist.getByLabel('Add registrar names').fill('Example Registrar');
-  await allowlist.getByRole('button', { name: 'Add', exact: true }).nth(1).click();
+  await allowlist.getByRole('region', { name: 'Registrars', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
   await expect(allowlist.getByText('Example Registrar', { exact: true })).toBeVisible();
   await expect(allowlist).toContainText('Unsaved allowlist changes');
   await allowlist.getByRole('button', { name: 'Save allowlist' }).click();
@@ -574,7 +675,7 @@ test('the active Brand Profile has a separate maintainable allowlist', async ({ 
 
   const openEditorAllowlist = page.getByRole('region', { name: 'Allowlist' });
   await openEditorAllowlist.getByLabel('Add domains').fill('later-review.example');
-  await openEditorAllowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
+  await openEditorAllowlist.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
   await openEditorAllowlist.getByRole('button', { name: 'Save allowlist' }).click();
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved the allowlist');
   await page.getByLabel('Brand name').fill('Renamed Example Brand');
@@ -662,7 +763,7 @@ test('public HTML baselines migrate unchanged and a deliberate recapture adopts 
   expect(website.records[0]?.value.identity).toEqual(publishedIdentity);
   expect(website.records[0]?.value.profileProvenance.pageFingerprint).toEqual({ version: 1, state: 'known' });
   expect(requests).toBe(0);
-  await page.getByRole('button', { name: 'Edit Example account (baseline-profile)', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Example account', exact: true }).click();
   await page.getByText('Official-site identity', { exact: true }).click();
   await page.getByRole('button', { name: 'Update official-site baseline' }).click();
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Captured a complete page baseline');
@@ -885,7 +986,7 @@ test('editing the active profile invalidates its in-flight posture audit before 
   await page.getByRole('button', { name: 'Review official domains' }).click();
   await auditStarted;
   await openBrandProfileList(page);
-  await page.getByRole('button', { name: 'Edit Stored Brand (profile-1)' }).click();
+  await page.getByRole('button', { name: 'Edit Stored Brand' }).click();
   await page.getByLabel('Official domains').fill('changed.example');
   await page.getByRole('button', { name: 'Save profile' }).click();
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved "Stored Brand"');
@@ -950,7 +1051,9 @@ test('defensive mail settings, retired selectors, and expiring reviewed controls
   await openProfileForm(page, 'Matching and mail settings');
   await page.getByLabel('Mail posture profile').selectOption('defensive_no_mail');
   await page.getByLabel('Active DKIM selectors').fill('active');
-  await page.getByLabel('Retired DKIM selectors').fill('retired, active');
+  const retiredSelectors = page.getByLabel('Retired DKIM selectors', { exact: true });
+  await expect(retiredSelectors).toHaveAccessibleDescription(/continued publication/u);
+  await retiredSelectors.fill('retired, active');
   await page.getByRole('button', { name: 'Save profile' }).click();
   await openBrandWorkbench(page, 'attestations');
 
@@ -1040,7 +1143,7 @@ test('valid posture results disclose bounded SPF and external-dependency evidenc
   await expect(page.getByText('ns1.example.net', { exact: true })).toBeVisible();
 });
 
-test('additional DNS review is explicit, visible and not retained as a background preference', async ({ page }) => {
+test('additional DNS review is explicit, visible and not retained as a background preference', async ({ page }, testInfo) => {
   const selections: Array<string | null> = [];
   await page.route('**/api/domain-posture?*', async route => {
     const query = new URL(route.request().url()).searchParams;
@@ -1049,6 +1152,10 @@ test('additional DNS review is explicit, visible and not retained as a backgroun
     if (query.get('includeInheritedDns') === '1') {
       report.checks.push({ id: 'dmarc_inheritance', label: 'Inherited DMARC policy', status: 'info', summary: 'Inherited policy published at _dmarc.example.', detail: 'Existing and nonexistent names remain separate.', records: ['Recursive DNS TXT _dmarc.example · policy reject'], remediation: '' });
       report.summary.info += 1;
+      report.dmarcAuthorizations = [
+        { destination: 'reports.stored.example', reportType: 'aggregate', recordName: null, state: 'self', error: null },
+        { destination: 'reports.other.example', reportType: 'aggregate', recordName: null, state: 'unavailable', error: 'The organisational boundary is unknown; no authorisation requirement can be inferred from the missing record.' },
+      ];
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(report) });
   });
@@ -1057,6 +1164,7 @@ test('additional DNS review is explicit, visible and not retained as a backgroun
   await openBrandWorkbench(page, 'posture');
   const option = page.getByRole('checkbox', { name: 'Include inherited DMARC and direct parent delegation' });
   await expect(option).not.toBeChecked();
+  await expect(page.locator('.inheritance-detail')).toContainText('32 additional TXT queries within ten seconds');
   const button = page.getByRole('button', { name: 'Review official domains' });
   const status = page.getByRole('status', { name: 'Brand Profile action status' });
   await button.click(); await expect(status).toHaveText('Reviewed 1/1 official domain.');
@@ -1067,6 +1175,15 @@ test('additional DNS review is explicit, visible and not retained as a backgroun
   expect(selections).toEqual([null, '1']);
   const disclosure = page.locator('.checks details').filter({ has: page.getByText('Inherited DMARC policy', { exact: true }) });
   await disclosure.locator('summary').click(); await expect(disclosure).toContainText('Recursive DNS TXT _dmarc.example');
+  const reporting = page.locator('.audit details').filter({ has: page.getByText('DMARC reporting authorisation', { exact: true }) });
+  await reporting.locator('summary').click();
+  await expect(reporting).toContainText('same organisational scope');
+  await expect(reporting).toContainText('no authorisation requirement can be inferred');
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: 800 }); await useTheme(page, theme);
+    await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await reporting.screenshot({ path: testInfo.outputPath(`reporting-${width}-${theme}.png`) });
+  }
   await page.reload(); await openBrandWorkbench(page, 'posture'); await expect(option).not.toBeChecked();
   expect(selections).toEqual([null, '1']);
 });
@@ -1316,7 +1433,7 @@ test('official-site baseline controls fit a narrow mobile viewport without horiz
   expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(box!.x + box!.width);
 });
 
-test('cross-domain posture matrix links exact retained baselines and observations without collection', async ({ page }) => {
+test('cross-domain posture matrix links exact retained baselines and observations without collection', async ({ page }, testInfo) => {
   await page.clock.setFixedTime(new Date(ISO));
   let postureRequests = 0;
   await page.route('**/api/domain-posture**', (route) => {
@@ -1331,11 +1448,17 @@ test('cross-domain posture matrix links exact retained baselines and observation
       desiredPostureBaselines: [{
         domain: 'stored.example',
         nameservers: ['ns1.stored.example'],
+        mx: ['10 mail.stored.example'],
         ds: ['12345 13 2 abcdef'],
+        renewalReviewAt: '2026-07-12T00:00:00.000Z',
+        approvedChangeWindows: [{ startsAt: '2026-07-11T00:00:00.000Z', endsAt: '2026-07-13T00:00:00.000Z', summary: 'Reviewed nameserver migration' }],
         observationHistory: [{
           observedAt: '2026-07-12T00:00:00.000Z',
           context: brandPostureObservationContext(requiredValue(normalizeBrandProfile({ ...profileFixture(), officialDomains: ['stored.example', 'unavailable.example', 'unset.example'] }), 'The profile fixture is invalid.'), 'stored.example'),
-          checks: [{ id: 'nameservers', status: 'pass', records: ['ns1.stored.example'], sourceContext: { version: 1, source: 'dns_ns', observedAt: '2026-07-12T00:00:00.000Z', state: 'complete', omittedRecords: 0 } }],
+          checks: [
+            { id: 'nameservers', status: 'pass', records: ['ns1.stored.example'], sourceContext: { version: 1, source: 'dns_ns', observedAt: '2026-07-12T00:00:00.000Z', state: 'complete', omittedRecords: 0 } },
+            { id: 'mx', status: 'pass', records: ['20 changed-mail.stored.example'], sourceContext: { version: 1, source: 'dns_mx', observedAt: '2026-07-12T00:00:00.000Z', state: 'complete', omittedRecords: 0 } },
+          ],
         }],
         updatedAt: ISO,
       }, {
@@ -1353,6 +1476,11 @@ test('cross-domain posture matrix links exact retained baselines and observation
   const storedRow = matrix.locator('tbody tr', { hasText: 'stored.example' });
   await expect(storedRow).toContainText('Aligned');
   await expect(storedRow).toContainText('Unsupported');
+  await expect(storedRow).toContainText('Review due');
+  await expect(storedRow.locator('.state-approved_window')).toContainText('Window · all settings');
+  await expect(storedRow.locator('.state-approved_window .window-context')).toBeVisible();
+  await expect(storedRow.locator('.state-approved_window')).toContainText('Reviewed nameserver migration');
+  await expect(storedRow).not.toContainText('Drift');
   const unavailableRow = matrix.locator('tbody tr', { hasText: 'unavailable.example' });
   await expect(unavailableRow).toContainText('Unavailable');
   const unconfiguredRow = matrix.locator('tbody tr', { hasText: 'unset.example' });
@@ -1368,14 +1496,28 @@ test('cross-domain posture matrix links exact retained baselines and observation
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(matrix.locator('.mobile-rows')).toBeVisible();
+  await expect(matrix.locator('.mobile-rows')).toContainText('Review due');
+  await expect(matrix.locator('.mobile-rows .state-approved_window')).toContainText('Window · all settings');
+  await expect(matrix.locator('.mobile-rows .state-approved_window .window-context')).toBeVisible();
   await expectNoHorizontalOverflow(page);
+  if (captureVisualEvidenceEnabled()) {
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      for (const theme of ['light', 'dark'] as const) {
+        await useTheme(page, theme);
+        await expectNoHorizontalOverflow(page);
+        await matrix.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath(`renewal-comparison-${width}-${theme}.png`) });
+      }
+    }
+  }
 });
 
 test('retained certificate events replay reviewed expectations without mobile overflow', async ({ page }) => {
   await page.goto('/brands');
   const profile = {
     ...profileFixture(),
-    officialDomains: ['stored.example'],
+    officialDomains: [...Array.from({ length: 20 }, (_, index) => `d${String(index).padStart(2, '0')}.example`), 'stored.example'],
     desiredPostureBaselines: [{
       domain: 'stored.example',
       tlsIssuer: 'Fixture issuer',
@@ -1425,6 +1567,7 @@ test('retained certificate events replay reviewed expectations without mobile ov
 
   const replay = page.getByRole('region', { name: 'Certificate event review' });
   await expect(replay).toContainText('1 retained event');
+  await replay.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(replay).toContainText('Aligned');
   await replay.getByText(/Certificate …/u).click();
   await expect(replay).toContainText('The retained event matches the reviewed expectation.');
@@ -1511,6 +1654,9 @@ test('owned-domain baseline feedback reflects the committed browser-local write'
   await expect(consumers).toContainText('owned-domain posture matrix currently marks DS comparison unsupported');
   await expect(consumers).toContainText('certificate-policy review');
   await expect(consumers).toContainText('SAN patterns are not a posture-matrix column');
+  await expect(baseline.getByLabel('TLS SAN patterns', { exact: true })).toHaveAttribute('aria-describedby', 'tls-san-expectation-help');
+  await expect(baseline.locator('#tls-san-expectation-help')).toContainText('every pattern must match a name, and every name must match a pattern');
+  await expect(baseline.getByText('Each window covers all expected settings', { exact: false })).toBeVisible();
   await expect(consumers).toContainText('DNS change rehearsal');
   await baseline.getByRole('combobox', { name: 'Nameservers expectation', exact: true }).selectOption('expect_records');
   await baseline.getByRole('textbox', { name: 'Nameservers', exact: true }).fill('ns1.stored.example');
@@ -1756,6 +1902,46 @@ test('requires an explicit official-domain choice before enabling new-domain pas
   await expect(region.getByRole('status')).toContainText('Domain control passport has expired.');
   await expect(region.getByRole('heading', { name: 'Import preview' })).toHaveCount(0);
   expect(await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).toEqual(beforeExpiry);
+});
+
+test('passport capacity blocks new baselines while keeping existing baseline updates available', async ({ page }, testInfo) => {
+  await page.clock.setFixedTime(ISO);
+  await page.goto('/brands');
+  const domains = Array.from({ length: 20 }, (_, index) => `d${index}.example`);
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([{ ...profileFixture(), officialDomains: [...domains, 'new.example'],
+      desiredPostureBaselines: domains.map(domain => ({ domain, nameservers: ['ns.old.example'], updatedAt: ISO })),
+    }]), [ACTIVE_KEY]: 'profile-1',
+  });
+  await openBrandWorkbench(page, 'passport');
+  const passport = buildDomainControlManifest({ schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, version: 1,
+    expiresAt: '2026-09-13T04:05:06.000Z',
+    entries: ['d0.example', 'new.example'].map(domain => ({ domain, nameservers: ['ns.updated.example'] })),
+  }, ISO);
+  const region = page.getByRole('region', { name: 'Portable domain settings' });
+  await region.getByLabel('Review passport').setInputFiles({ name: 'capacity-passport.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(passport)) });
+  const blocked = region.locator('fieldset', { hasText: 'new.example' });
+  await expect(blocked.locator('legend').getByRole('checkbox')).toBeDisabled();
+  await expect(blocked).toContainText('already has 20 configured baselines');
+  await expect(region.locator('fieldset', { hasText: 'd0.example' }).locator('legend').getByRole('checkbox')).toBeEnabled();
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled() && width !== 390) {
+        await blocked.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath(`passport-capacity-${width}-${theme}.png`) });
+      }
+    }
+  }
+  await region.getByRole('button', { name: 'Import selected fields' }).click();
+  await expect(region.getByRole('status')).toContainText('Imported reviewed fields for 1 domain.');
+  const saved = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  const baselines = saved.records[0]!.value.desiredPostureBaselines as Array<{ domain: string; nameservers: string[] }>;
+  expect(baselines).toHaveLength(20);
+  expect(baselines.find(item => item.domain === 'd0.example')?.nameservers).toEqual(['ns.updated.example']);
+  expect(baselines.some(item => item.domain === 'new.example')).toBe(false);
 });
 
 test('a future Brand Profile schema is never overwritten by an older app', async ({ page }) => {

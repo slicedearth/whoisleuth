@@ -10,12 +10,14 @@ import { checkInstalledSigningTrust } from '../tools/cli-signing-package-check.m
 test('the installed signing packet exercises current trust states and rejects weakened package outputs', async () => {
   for (const diagnostic of ['none', 'private-key', 'legacy-shape', 'policy', 'privacy', 'quiet']) {
     const directory = await mkdtemp(join(tmpdir(), 'whoisleuth-signing-packet-'));
+    const invocations: string[] = [];
     try {
       const packet = checkInstalledSigningTrust(fileURLToPath(new URL('..', import.meta.url)), directory, async (args, label, expected = 0) => {
         let stdout = '', stderr = '';
         const code = await runCli(args, { stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } } });
         assert.equal(code, expected, stderr);
         assert.equal(stderr, '');
+        invocations.push(label);
         if (diagnostic === 'private-key' && label === 'offline evidence signing') return `${stdout}PRIVATE KEY`;
         if (diagnostic === 'legacy-shape' && label === 'offline signature verification') return '{}';
         if (diagnostic === 'policy' && label === 'offline signer revoked policy') {
@@ -27,7 +29,13 @@ test('the installed signing packet exercises current trust states and rejects we
         if (diagnostic === 'quiet' && label === 'quiet signer trusted policy') return 'unexpected';
         return stdout;
       });
-      if (diagnostic === 'none') assert.deepEqual(await packet, ['offline-signing-and-verification', 'offline-signer-trust-policy']);
+      if (diagnostic === 'none') {
+        await packet;
+        assert.deepEqual(invocations, [
+          'offline evidence signing', 'offline signature verification',
+          ...['trusted', 'retired', 'revoked', 'unknown'].flatMap(state => [`offline signer ${state} policy`, `quiet signer ${state} policy`]),
+        ]);
+      }
       else await assert.rejects(packet, /Installed (?:signing|signature|signer trust|quiet signer)/u);
     } finally { await rm(directory, { recursive: true, force: true }); }
   }

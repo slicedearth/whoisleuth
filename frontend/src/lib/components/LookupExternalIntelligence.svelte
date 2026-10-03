@@ -1,5 +1,6 @@
 <script lang="ts">
   import { evidenceStatusChipClass } from '$lib/analysis/evidence-status-tone.ts';
+  import type { WithheldThreatIntelligence } from '$lib/analysis/lookup-response.ts';
 
   type JsonRecord = Record<string, unknown>;
   type RiskContext = {
@@ -10,8 +11,9 @@
     unknownAgeProviderCount: number;
   };
 
-  let { providers, riskContext, riskModelVersion, showValue, formatDate }: {
+  let { providers, withheld, riskContext, riskModelVersion, showValue, formatDate }: {
     providers: JsonRecord[];
+    withheld: readonly WithheldThreatIntelligence[];
     riskContext: RiskContext;
     riskModelVersion: number | null;
     showValue: (value: unknown) => string;
@@ -30,6 +32,12 @@
 <section class="threat-intelligence evidence-card card" aria-labelledby="threat-intelligence-title">
   <header class="section-head"><div><p class="eyebrow">External intelligence</p><h4 id="threat-intelligence-title">Archived provider verdicts</h4></div><span>Separately attributed</span></header>
   <p class="card-note">Third-party observations remain attributed and do not decide availability. Risk changes only when qualifying records agree across at least two publisher families.</p>
+  {#if withheld.length}
+    <section class="callout warn" aria-label="Withheld external-intelligence records">
+      <p>Some external-intelligence data could not be used. This is not evidence of no findings.</p>
+      <ul>{#each withheld as item}<li><strong>{item.label}{item.count !== null && item.count !== 1 ? ` (${item.count})` : ''}</strong>: {item.reason}</li>{/each}</ul>
+    </section>
+  {/if}
   {#if riskContext.eligibleProviderCount}
     <p class="callout warn external-risk-context">
       {#if riskContext.contribution}

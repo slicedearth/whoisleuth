@@ -3,7 +3,7 @@ import { lstat } from 'node:fs/promises';
 
 import { recordOrNull } from '../lib/bounded-contract-normalizers.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
-import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import type { BulkCollectionContext, BulkLookupResult } from './bulk.mts';

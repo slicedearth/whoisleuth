@@ -2,6 +2,7 @@ import type { CaseRecord } from './case-record-contracts.mts';
 import { latestObservationCohort } from '../evidence/latest-observations.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { caseFollowUpSources } from './case-follow-ups.mts';
+import { casePinHasCompleteObservation } from './case-evidence-quality.mts';
 
 /** Read-only projection of bounded Case records. A link is not an inferred verdict. */
 export function buildCaseDecisionOverview(record: CaseRecord, now: string) {
@@ -39,9 +40,8 @@ export function buildCaseDecisionOverview(record: CaseRecord, now: string) {
         && Date.parse(latestEvidence) > Date.parse(decision.createdAt),
     })),
     earlierConclusions: conclusions.superseded,
-    evidenceGaps: record.evidencePins.filter(pin => pin.completeness !== 'complete' || pin.truncated === true
-      || !normalizeExplicitIsoTimestamp(pin.observedAt)
-      || !['complete', 'success', 'reviewed', 'not_found'].includes(pin.sourceState ?? '')),
+    evidenceGaps: record.evidencePins.filter(pin => !casePinHasCompleteObservation(pin)
+      || !normalizeExplicitIsoTimestamp(pin.observedAt)),
     reviews,
   };
 }

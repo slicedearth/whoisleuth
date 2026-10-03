@@ -1,3 +1,4 @@
+import '../tools/browser-server-egress-guard.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -86,8 +87,8 @@ describe('evidence-storage measurement', () => {
       liveTargets: false,
       eligibleFields: ['evidenceHistory', 'evidencePins', 'decisions', 'actions'],
       browserDatabase: 'whoisleuth-browser-data-v1',
-      browserDatabaseVersion: 1,
-      browserObjectStores: ['records', 'manifests'],
+      browserDatabaseVersion: 2,
+      browserObjectStores: ['records', 'manifests', 'files'],
       browserCodec: 'json-v1',
       browserCollectionCount: BROWSER_LOCAL_COLLECTION_MANIFEST.length,
     });

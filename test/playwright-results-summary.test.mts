@@ -15,7 +15,7 @@ import {
   renderBrowserShardTimingSummary,
 } from '../tools/playwright-shard-aggregate.mts';
 import { PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS } from '../tools/playwright-execution-contract.mts';
-import type { VerificationTimingProfile } from '../tools/verification-timing-profile.mts';
+import { VERIFICATION_BROWSER_SHARD_COUNT, type VerificationTimingProfile } from '../tools/verification-timing-profile.mts';
 
 function fixture(attachmentBody?: string) {
   return {
@@ -136,8 +136,9 @@ describe('Playwright result summary', () => {
   });
 
   test('aggregates the exact functional shard inventory without hiding retries or duplicates', () => {
-    const files = ['a', 'b', 'c', 'd'].map((name, index) => Object.freeze({
-      file: `e2e/${name}.spec.ts`,
+    const shardCount = VERIFICATION_BROWSER_SHARD_COUNT;
+    const files = Array.from({ length: shardCount }, (_, index) => Object.freeze({
+      file: `e2e/fixture-${index}.spec.ts`,
       lane: 'browser' as const,
       weightMs: 100 - index,
       sampleCount: 1,
@@ -147,7 +148,7 @@ describe('Playwright result summary', () => {
       profileVersion: 1,
       inventoryFingerprint: 'a'.repeat(64),
       provenance: Object.freeze([Object.freeze({
-        id: 'browser', lane: 'browser', environmentClass: 'fixture', sampleBasis: 'fixture', sampleCount: 4,
+        id: 'browser', lane: 'browser', environmentClass: 'fixture', sampleBasis: 'fixture', sampleCount: shardCount,
       })]),
       files: Object.freeze([
         ...files,
@@ -155,7 +156,7 @@ describe('Playwright result summary', () => {
           file, lane: 'browser' as const, weightMs: 500, sampleCount: 1, provenanceId: 'browser',
         })),
         Object.freeze({
-          file: 'e2e/auth.setup.ts', lane: 'browser_setup' as const, weightMs: 10, sampleCount: 4, provenanceId: 'browser',
+          file: 'e2e/auth.setup.ts', lane: 'browser_setup' as const, weightMs: 10, sampleCount: shardCount, provenanceId: 'browser',
         }),
       ]),
     });
@@ -178,21 +179,23 @@ describe('Playwright result summary', () => {
     const accepted = files.map((item, index) => report(item.file, 10 + index));
     const inventory = [...files.map((item) => item.file), ...PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS, 'e2e/auth.setup.ts'];
     const result = aggregatePlaywrightShardTimings(accepted, profile, inventory);
-    assert.equal(result.summary.passed, 8);
-    assert.equal(result.summary.browserSpecifications, 4);
+    assert.equal(result.summary.passed, shardCount * 2);
+    assert.equal(result.summary.browserSpecifications, shardCount);
     assert.equal(result.summary.setupFiles, 1);
-    assert.deepEqual(result.summary.observedShardWeightsMs, [50, 50, 50, 50]);
-    assert.equal(result.aggregate.files.find((item) => item.file === 'e2e/auth.setup.ts')?.sampleCount, 4);
-    assert.equal(result.aggregate.files.find((item) => item.file === 'e2e/auth.setup.ts')?.weightMs, 12);
+    assert.deepEqual(result.summary.observedShardWeightsMs, Array.from({ length: shardCount }, () => 50));
+    assert.equal(result.aggregate.files.find((item) => item.file === 'e2e/auth.setup.ts')?.sampleCount, shardCount);
+    assert.equal(result.aggregate.files.find((item) => item.file === 'e2e/auth.setup.ts')?.weightMs, Math.round(10 + (shardCount - 1) / 2));
     assert.ok(PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS.every((file) => (
       result.aggregate.files.every((item) => item.file !== file)
     )));
     assert.match(renderBrowserShardTimingSummary(result.summary), /0 failed, flaky, skipped, or retried/u);
 
     assert.throws(
-      () => aggregatePlaywrightShardTimings([accepted[0]!, accepted[0]!, accepted[2]!, accepted[3]!], profile, inventory),
+      () => aggregatePlaywrightShardTimings([accepted[0]!, accepted[0]!, ...accepted.slice(2)], profile, inventory),
       /uniquely match/u,
     );
+    assert.throws(() => aggregatePlaywrightShardTimings(accepted.slice(1), profile, inventory), /exactly/u);
+    assert.throws(() => aggregatePlaywrightShardTimings([...accepted, accepted[0]], profile, inventory), /exactly/u);
     const retried = structuredClone(accepted);
     const retryTest = retried[0]!.suites[0]!.specs[1]!.tests[0]!;
     retryTest.status = 'flaky';

@@ -16,6 +16,8 @@ import {
 
 export const MAX_FORCE_GRAPH_NODES = 48;
 export const MAX_FORCE_GRAPH_LINKS = 80;
+export const FORCE_GRAPH_LABEL_FONT_SIZE = 12;
+export const FORCE_GRAPH_LABEL_LINE_HEIGHT = 17;
 
 export const FORCE_GRAPH_LINK_KINDS = [
   'observed',
@@ -206,13 +208,13 @@ function forceGraphClusterCenters(
 function forceGraphNodeBounds(node: ProjectedForceNode) {
   if (node.kind === 'target') {
     const halfWidth = (node.labelWidth + 20) / 2;
-    const halfHeight = (node.labelLines.length * 13 + 17) / 2;
+    const halfHeight = (node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 17) / 2;
     return { halfWidth, above: halfHeight, below: halfHeight };
   }
   return {
     halfWidth: Math.max(20, node.labelWidth / 2),
     above: 22,
-    below: 33 + node.labelLines.length * 13,
+    below: 33 + node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT,
   };
 }
 
@@ -273,7 +275,7 @@ function resolveForceGraphLabelCollisions(
 export function projectBoundedForceGraph(
   rawNodes: readonly ForceGraphNodeInput[],
   rawLinks: readonly ForceGraphLinkInput[],
-  options: Readonly<{ focusNodeId?: string }> = {},
+  options: Readonly<{ focusNodeId?: string; layout?: 'force' | 'grouped' }> = {},
 ) {
   const rawNodeCount = Array.isArray(rawNodes) ? rawNodes.length : 0;
   const rawLinkCount = Array.isArray(rawLinks) ? rawLinks.length : 0;
@@ -288,7 +290,7 @@ export function projectBoundedForceGraph(
       const kind = boundedId(node?.kind) || 'evidence';
       const group = forceGraphGroup(kind, node?.group, node?.groupLabel);
       const labelLines = wrapForceGraphLabel(label);
-      const labelWidth = Math.max(54, Math.min(142, Math.max(...labelLines.map((line) => line.length)) * 6.2 + 16));
+      const labelWidth = Math.max(54, Math.max(...labelLines.map((line) => line.length)) * FORCE_GRAPH_LABEL_FONT_SIZE * 0.62 + 16);
       return {
         id,
         label,
@@ -345,7 +347,7 @@ export function projectBoundedForceGraph(
     const rightLabel = groupLabels.get(right) ?? right;
     return leftLabel.localeCompare(rightLabel) || left.localeCompare(right);
   });
-  const height = Math.max(500, Math.min(700, 450 + Math.max(0, nodes.length - 14) * 16));
+  let height = Math.max(500, Math.min(700, 450 + Math.max(0, nodes.length - 14) * 16));
   const width = 900;
   const centerX = width / 2;
   const centerY = height / 2;
@@ -353,7 +355,22 @@ export function projectBoundedForceGraph(
   const clusterIndex = new Map(groupIds.map((group) => [group, forceGraphClusterIndex(group)]));
   for (const node of nodes) node.clusterIndex = clusterIndex.get(node.group) ?? 0;
 
-  if (nodes.length) {
+  if (options.layout === 'grouped') {
+    // Type/namespace bands are visual organisation, not additional graph edges.
+    let cursor = focusNode ? 225 : 40;
+    if (focusNode) { focusNode.x = centerX; focusNode.y = 112; }
+    for (const group of groupIds) {
+      const members = nodes.filter(node => node.group === group && node !== focusNode);
+      const rowHeight = Math.max(...members.map(node => 62 + node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT), 80);
+      const columns = Math.max(1, Math.floor(width / (Math.max(...members.map(node => node.labelWidth), 54) + 12)));
+      members.forEach((node, index) => {
+        node.x = width / columns * (index % columns + 0.5);
+        node.y = cursor + Math.floor(index / columns) * rowHeight + 22;
+      });
+      cursor += Math.ceil(members.length / columns) * rowHeight + 24;
+    }
+    height = Math.max(500, cursor + 30);
+  } else if (nodes.length) {
     if (focusNode) {
       focusNode.fx = centerX;
       focusNode.fy = centerY;
@@ -378,7 +395,7 @@ export function projectBoundedForceGraph(
     for (const node of nodes) {
       const horizontalInset = Math.max(38, Math.min(82, node.collisionRadius));
       const topInset = node.kind === 'target' ? 28 : 34;
-      const bottomInset = Math.max(52, 34 + node.labelLines.length * 13);
+      const bottomInset = Math.max(52, 34 + node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT);
       node.x = Math.max(horizontalInset, Math.min(width - horizontalInset, Number(node.x) || centerX));
       node.y = Math.max(topInset, Math.min(height - bottomInset, Number(node.y) || centerY));
     }

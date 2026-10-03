@@ -1,8 +1,9 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import { BROWSER_LOCAL_COLLECTIONS, type BrowserLocalCollectionId } from '../frontend/src/lib/browser-local-data-definitions';
 import { buildWorkspaceArchive, readWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
-import { createCase } from '../packages/cases/case-model.mts';
+import { createCase } from '../packages/cases/case-record-operations.mts';
 
 import { DIRECTORY, SELECTION, DEFAULT_DATABASE, NOW, namedDatabase, manager, indicator, directoryRows, openManager, createWorkspace, switchWorkspace, openArchive } from './browser-workspace-fixtures';
 
@@ -319,7 +320,7 @@ test('workspace controls remain navigable, wrapped and focusable across supporte
       const input = panel.getByLabel('Workspace name', { exact: true });
       await input.focus();
       await expect(input).toBeInViewport();
-      await testInfo.attach(`workspaces-${theme}-${viewport.width}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`workspaces-${theme}-${viewport.width}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       await panel.getByRole('button', { name: 'Cancel workspace change' }).click();
       await expect(panel.getByRole('button', { name: `Rename workspace ${row.name}`, exact: true })).toBeFocused();
     }

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { verifyPackageRuntimes, readPackageRuntimeRequest, withPackageInstallation } from './package-runtime-check.mts';
 import { execFile as execFileCallback } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
@@ -8,25 +9,25 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { parseBoundedJson } from '../lib/bounded-json.mts';
+import { parseBoundedJson } from '../packages/analysis/bounded-json.mts';
 import { readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
-import { normalizeBoundedStableSemanticVersion } from '../lib/semantic-version.mts';
-import { WHOISLEUTH_PROJECT_URL, WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL } from '../lib/project-metadata.mts';
+import { normalizeBoundedStableSemanticVersion } from '../packages/analysis/semantic-version.mts';
+import { WHOISLEUTH_PROJECT_URL, WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL } from '../packages/analysis/project-metadata.mts';
 import {
-  assertCliPackageSourceSnapshot, captureCliPackageSourceSnapshot, compilePackageSources,
-  discoverPackageCompilerClosure, materializeCliPackageSourceSnapshot,
-  MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES, MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES,
-  MAX_CLI_PACKAGE_GRAPH_BYTES, CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
-} from './cli-package.mts';
+  assertPackageSourceSnapshot, capturePackageSourceSnapshot, compilePackageSources,
+  discoverPackageCompilerClosure, emittedPackageFiles, materializePackageSourceSnapshot,
+} from './package-source.mts';
+import { MAX_PACKAGE_COMPILER_CONTEXT_BYTES, MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES, MAX_PACKAGE_GRAPH_BYTES, PACKAGE_PROCESS_TIMEOUT_MS } from './package-resource-bounds.mts';
 import { playwrightBrowserCacheDirectory } from './ci-verification.mts';
-import { optionalPackageInputs, assertInstalledPackageDependencies, emittedPackageFiles, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, buildOptionalPackageNotices } from './optional-package.mts';
+import { dependencyCruiserExecutable } from './maintainer-tool-helpers.mts';
+import { optionalPackageInputs, assertInstalledPackageDependencies, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, buildOptionalPackageNotices } from './optional-package.mts';
 
 const execFile = promisify(execFileCallback);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGE_SOURCE = 'packages/web-capture/package.json';
 const ENTRY = 'packages/web-capture/bin/whoisleuth-capture.mts';
 const ENTRY_OUTPUT = ENTRY.replace(/\.mts$/u, '.mjs');
-const SOURCE = /^(?:package\.json|(?:lib|packages\/(?:comparison|contracts|evidence|web-capture))\/[A-Za-z0-9._/-]+\.(?:mts|ts|json))$/u;
+const SOURCE = /^(?:package\.json|(?:lib|packages\/(?!local-application\/)[A-Za-z0-9._-]+)\/[A-Za-z0-9._/-]+\.(?:mts|ts|json))$/u;
 const SUPPORT = [['packages/web-capture/README.md', 'README.md'], ['LICENSE', 'LICENSE'], ['NOTICE', 'NOTICE'], ['DISCLOSURE', 'DISCLOSURE']] as const;
 // This package includes its reviewed automation runtime, but no browser binary.
 // Its processing bounds are independent of the main CLI's source-only archive.
@@ -37,7 +38,7 @@ function object(value: unknown, label: string): Json {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} must be an object.`);
   return value as Json;
 }
-function parse(bytes: Buffer | string): Json { return object(parseBoundedJson(bytes.toString(), { label: 'Package input', maximumBytes: MAX_CLI_PACKAGE_GRAPH_BYTES }), 'Package input'); }
+function parse(bytes: Buffer | string): Json { return object(parseBoundedJson(bytes.toString(), { label: 'Package input', maximumBytes: MAX_PACKAGE_GRAPH_BYTES }), 'Package input'); }
 
 export function capturePackageInputs(value: unknown): Readonly<{ sources: readonly string[]; dependencies: readonly string[] }> {
   return optionalPackageInputs(value, { requiredSources: [ENTRY], acceptsSource: source => SOURCE.test(source), dependencies: ['playwright', 'undici'] });
@@ -77,6 +78,40 @@ export function assertCaptureInstalledDependencies(installedValue: unknown, revi
   return assertInstalledPackageDependencies(installedValue, reviewedValue, direct, '@slicedearth/whoisleuth-web-capture');
 }
 
+type CaptureInstalledInput = Readonly<{
+  root: string; manifest: Json; lockfile: Json;
+  dependencies: readonly string[]; fileIdentity: readonly (readonly [string, { bytes: number; sha256: string }])[];
+  browserSmoke: boolean;
+}>;
+
+async function verifyInstalledCapture(archive: string, input: CaptureInstalledInput) {
+  const { root, manifest, lockfile, dependencies, fileIdentity, browserSmoke } = input;
+  return withPackageInstallation(async ({ installed, home, environment, run }) => {
+    if (browserSmoke) environment.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowserCacheDirectory();
+    await writeFile(path.join(installed, 'package.json'), '{"private":true}\n');
+    await run('npm', ['install', '--offline', '--package-lock=true', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund', archive], installed);
+    const packageRoot = path.join(installed, 'node_modules', ...String(manifest.name).split('/'));
+    const dependencyCount = await assertInstalledOptionalPackage(packageRoot, new Map(fileIdentity), parse(await readFile(path.join(installed, 'package-lock.json'))), lockfile, dependencies, String(manifest.name));
+    assert.deepEqual(parse(await readFile(path.join(packageRoot, 'package.json'))), manifest);
+    const executable = path.join(packageRoot, 'runtime', ENTRY_OUTPUT);
+    const offlineGuard = ['--import', path.join(root, 'tools/browser-server-egress-guard.mts')];
+    const checks: string[] = ['installed dependency identities and integrity'];
+    for (const args of [[], ['--help'], ['-h'], ['compare', '--help'], ['--version']]) {
+      const output = await run(process.execPath, [...offlineGuard, executable, ...args], home);
+      assert.equal(output.stderr, '');
+      if (args[0] === '--version') assert.equal(output.stdout, `${String(manifest.version)}\n`);
+      else assert.match(output.stdout, /Compare verifies selected local artefacts and makes no network requests/u);
+      checks.push(args.join(' ') || 'zero-argument help');
+    }
+    const smoke = await run(process.execPath, [...offlineGuard, path.join(root, 'tools/capture-package-smoke.mts'), packageRoot, ...(browserSmoke ? ['--browser'] : [])], home);
+    assert.equal(smoke.stderr, '');
+    const checked = JSON.parse(smoke.stdout) as string[];
+    if (!Array.isArray(checked) || checked.some(value => typeof value !== 'string') || !checked.length) throw new Error('Installed capture smoke checks did not report completion.');
+    checks.push(...checked);
+    return { installedChecks: checks, dependencyCount };
+  });
+}
+
 export async function checkCapturePackage(repositoryRoot = ROOT, candidateDirectory?: string, browserSmoke = false) {
   const root = await realpath(repositoryRoot);
   const temporary = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-package-'));
@@ -84,28 +119,27 @@ export async function checkCapturePackage(repositoryRoot = ROOT, candidateDirect
   const staged = path.join(temporary, 'package');
   const runtime = path.join(staged, 'runtime');
   const packed = path.join(temporary, 'packed');
-  const installed = path.join(temporary, 'installed');
   const home = path.join(temporary, 'home');
   const environment: NodeJS.ProcessEnv = { ...process.env, HOME: home, USERPROFILE: home, npm_config_registry: 'https://registry.npmjs.org', npm_config_cache: path.join(temporary, 'cache'), npm_config_userconfig: path.join(home, 'npmrc'), npm_config_globalconfig: path.join(home, 'global-npmrc'), npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false', PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' };
   if (browserSmoke) environment.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowserCacheDirectory();
   for (const name of ['NODE_OPTIONS', 'NODE_PATH', 'NPM_TOKEN', 'NODE_AUTH_TOKEN']) delete environment[name];
-  const run = (command: string, args: string[], cwd: string) => execFile(command, args, { cwd, env: environment, encoding: 'utf8', timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS, maxBuffer: MAX_CLI_PACKAGE_GRAPH_BYTES, killSignal: 'SIGTERM' });
+  const run = (command: string, args: string[], cwd: string) => execFile(command, args, { cwd, env: environment, encoding: 'utf8', timeout: PACKAGE_PROCESS_TIMEOUT_MS, maxBuffer: MAX_PACKAGE_GRAPH_BYTES, killSignal: 'SIGTERM' });
   try {
-    await Promise.all([sourceRoot, staged, packed, installed, home].map(directory => mkdir(directory)));
+    await Promise.all([sourceRoot, staged, packed, home].map(directory => mkdir(directory)));
     await Promise.all(['npmrc', 'global-npmrc'].map(name => writeFile(path.join(home, name), '')));
     // Retain external dependency edges in this package report. The shared
     // do-not-follow rule still prevents traversing dependency internals.
-    const graph = parse((await run(process.execPath, [path.join(root, 'node_modules/dependency-cruiser/bin/dependency-cruise.mjs'), '--config', path.join(root, '.dependency-cruiser.json'), '--exclude', '^$', '--output-type', 'json', ENTRY], root)).stdout);
+    const graph = parse((await run(process.execPath, [dependencyCruiserExecutable(root), '--config', path.join(root, '.dependency-cruiser.json'), '--exclude', '^$', '--output-type', 'json', ENTRY], root)).stdout);
     const inputs = capturePackageInputs(graph);
     const closure = await discoverPackageCompilerClosure(root, temporary, inputs.sources, { acceptsSource: source => SOURCE.test(source) });
     const state = { totalBytes: 0 };
-    const sources = await captureCliPackageSourceSnapshot(root, closure.sources, state);
-    const metadata = await captureCliPackageSourceSnapshot(root, ['package.json', 'package-lock.json', PACKAGE_SOURCE, ...SUPPORT.map(([source]) => source)], state);
-    const compiler = await captureCliPackageSourceSnapshot(root, closure.contextFiles, { totalBytes: 0, maximumBytes: MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES, maximumFileBytes: MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES });
+    const sources = await capturePackageSourceSnapshot(root, closure.sources, state);
+    const metadata = await capturePackageSourceSnapshot(root, ['package.json', 'package-lock.json', PACKAGE_SOURCE, ...SUPPORT.map(([source]) => source)], state);
+    const compiler = await capturePackageSourceSnapshot(root, closure.contextFiles, { totalBytes: 0, maximumBytes: MAX_PACKAGE_COMPILER_CONTEXT_BYTES, maximumFileBytes: MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES });
     const manifest = capturePackageManifest(parse(metadata.get(PACKAGE_SOURCE)!.bytes), parse(metadata.get('package-lock.json')!.bytes), inputs.dependencies);
     const captured = new Map([...sources, ...metadata, ...compiler]);
     for (const [file, identity] of sources) if (metadata.has(file)) assert.deepEqual(metadata.get(file)!.bytes, identity.bytes, 'Capture source metadata changed during snapshotting.');
-    await materializeCliPackageSourceSnapshot(sourceRoot, captured);
+    await materializePackageSourceSnapshot(sourceRoot, captured);
     const verified = await discoverPackageCompilerClosure(sourceRoot, temporary, [ENTRY], { acceptsSource: source => SOURCE.test(source) });
     for (const file of verified.sources) if (!sources.has(file)) throw new Error('Materialised capture source closure changed.');
     for (const file of verified.contextFiles) if (!compiler.has(file)) throw new Error('Materialised capture compiler context changed.');
@@ -133,30 +167,15 @@ export async function checkCapturePackage(repositoryRoot = ROOT, candidateDirect
     if (!Number.isSafeInteger(pack.size) || Number(pack.size) < 1 || Number(pack.size) > MAX_CAPTURE_PACKAGE_PACKED_BYTES || !Number.isSafeInteger(pack.unpackedSize) || Number(pack.unpackedSize) > MAX_CAPTURE_PACKAGE_UNPACKED_BYTES) throw new Error('Capture archive exceeds its byte bounds.');
     if (typeof pack.filename !== 'string' || !/^[A-Za-z0-9._-]+\.tgz$/u.test(pack.filename)) throw new Error('Invalid capture archive filename.');
     const archive = await readBoundedRegularFileWithin(packed, pack.filename, { maximumBytes: MAX_CAPTURE_PACKAGE_PACKED_BYTES, minimumBytes: 1, label: 'Capture archive' });
-    await assertCliPackageSourceSnapshot(root, sources);
-    await assertCliPackageSourceSnapshot(root, metadata);
-    await assertCliPackageSourceSnapshot(root, compiler, MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES);
+    await assertPackageSourceSnapshot(root, sources);
+    await assertPackageSourceSnapshot(root, metadata);
+    await assertPackageSourceSnapshot(root, compiler, MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES);
     assert.equal(await buildOptionalPackageNotices(root, inputs.dependencies, 'Capture companion', parse(metadata.get('package-lock.json')!.bytes)), notices, 'Capture licence inputs changed.');
-    await writeFile(path.join(installed, 'package.json'), '{"private":true}\n');
-    await run('npm', ['install', '--offline', '--package-lock=true', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund', path.join(packed, pack.filename)], installed);
-    const packageRoot = path.join(installed, 'node_modules', ...String(manifest.name).split('/'));
-    const dependencyCount = await assertInstalledOptionalPackage(packageRoot, fileIdentity, parse(await readFile(path.join(installed, 'package-lock.json'))), parse(metadata.get('package-lock.json')!.bytes), inputs.dependencies, String(manifest.name));
-    assert.deepEqual(parse(await readFile(path.join(packageRoot, 'package.json'))), manifest);
-    const executable = path.join(packageRoot, 'runtime', ENTRY_OUTPUT);
-    const offlineGuard = ['--import', path.join(root, 'tools/browser-server-egress-guard.mts')];
-    const checks: string[] = ['installed dependency identities and integrity'];
-    for (const args of [[], ['--help'], ['-h'], ['compare', '--help'], ['--version']]) {
-      const output = await run(process.execPath, [...offlineGuard, executable, ...args], home);
-      assert.equal(output.stderr, '');
-      if (args[0] === '--version') assert.equal(output.stdout, `${String(manifest.version)}\n`);
-      else assert.match(output.stdout, /Compare verifies selected local artefacts and makes no network requests/u);
-      checks.push(args.join(' ') || 'zero-argument help');
-    }
-    const smoke = await run(process.execPath, [...offlineGuard, path.join(root, 'tools/capture-package-smoke.mts'), packageRoot, ...(browserSmoke ? ['--browser'] : [])], home);
-    assert.equal(smoke.stderr, '');
-    const checked = JSON.parse(smoke.stdout) as string[];
-    if (!Array.isArray(checked) || checked.some(value => typeof value !== 'string') || !checked.length) throw new Error('Installed capture smoke checks did not report completion.');
-    checks.push(...checked);
+    const { installedChecks: checks, dependencyCount } = await verifyPackageRuntimes(
+      fileURLToPath(import.meta.url), path.join(packed, pack.filename), MAX_CAPTURE_PACKAGE_PACKED_BYTES,
+      { root, manifest, lockfile: parse(metadata.get('package-lock.json')!.bytes), dependencies: inputs.dependencies, fileIdentity: [...fileIdentity], browserSmoke },
+      verifyInstalledCapture,
+    );
     const report = { packageName: manifest.name, packageVersion: manifest.version, applicationVersion, sourceModules: verified.sources.length, archiveFile: pack.filename, packedEntries: entries.length, packedBytes: archive.byteLength, unpackedBytes: pack.unpackedSize, archiveSha256: createHash('sha256').update(archive).digest('hex'), dependencies: manifest.dependencies, installedDependencies: dependencyCount, installedChecks: checks, publicationEnabled: false };
     if (candidateDirectory) {
       const destination = path.resolve(candidateDirectory);
@@ -174,9 +193,14 @@ export async function checkCapturePackage(repositoryRoot = ROOT, candidateDirect
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const args = process.argv.slice(2);
-    const browserSmoke = args[0] === '--browser-smoke';
-    if (browserSmoke) args.shift();
-    if (args.length && (args.length !== 2 || args[0] !== '--candidate' || !args[1])) throw new Error('Usage: capture-package [--browser-smoke] [--candidate <new-external-directory>]');
-    process.stdout.write(JSON.stringify(await checkCapturePackage(ROOT, args[1], browserSmoke), null, 2) + '\n');
+    if (args.length === 2 && args[0] === '--installed-check') {
+      const { archive, input } = await readPackageRuntimeRequest<CaptureInstalledInput>(args[1]!, MAX_CAPTURE_PACKAGE_PACKED_BYTES);
+      process.stdout.write(JSON.stringify(await verifyInstalledCapture(archive, input)) + '\n');
+    } else {
+      const browserSmoke = args[0] === '--browser-smoke';
+      if (browserSmoke) args.shift();
+      if (args.length && (args.length !== 2 || args[0] !== '--candidate' || !args[1])) throw new Error('Usage: capture-package [--browser-smoke] [--candidate <new-external-directory>]');
+      process.stdout.write(JSON.stringify(await checkCapturePackage(ROOT, args[1], browserSmoke), null, 2) + '\n');
+    }
   } catch (cause) { process.stderr.write((cause instanceof Error ? cause.message : 'Capture package verification failed.') + '\n'); process.exitCode = 1; }
 }

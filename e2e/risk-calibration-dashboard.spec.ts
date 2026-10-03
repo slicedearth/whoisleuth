@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import AxeBuilder from '@axe-core/playwright';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
@@ -61,7 +62,7 @@ test('external evaluation with missing authority stays unmeasured in the console
       await expectNoHorizontalOverflow(page);
       const results = await new AxeBuilder({ page }).include('.calibration-dashboard').analyze();
       expect(results.violations).toEqual([]);
-      await dashboard.screenshot({ path: testInfo.outputPath(`external-evaluation-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await dashboard.screenshot({ path: testInfo.outputPath(`external-evaluation-${theme}-${width}.png`) }); }
     }
   }
   expect(requests).toEqual([]);

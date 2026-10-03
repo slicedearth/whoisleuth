@@ -3,7 +3,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { parse as parseSvelte, type AST } from 'svelte/compiler';
 
-import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 import {
   LOCAL_SCHEMA_IDENTIFIER_SOURCE,
   isCanonicalLocalSchemaIdentifier,
@@ -23,72 +23,6 @@ export const MAX_SCHEMA_SOURCE_JSON_CONTAINER_ITEMS = 10_000;
 const TOKEN_PATTERN = new RegExp(`(?<![a-z0-9._:-])${LOCAL_SCHEMA_IDENTIFIER_SOURCE}(?![a-z0-9._:-])`, 'gu');
 const CASE_INSENSITIVE_TOKEN_PATTERN = new RegExp(`(?<![a-z0-9._:-])${LOCAL_SCHEMA_IDENTIFIER_SOURCE}(?![a-z0-9._:-])`, 'giu');
 const DEFINITION_NAME_PATTERN = /(?:^|_)SCHEMA$/u;
-
-const SCHEMA_METADATA_FILES = new Set([
-  'lib/interchange-fidelity-registry.mts',
-  'packages/contracts/case-portability.mts',
-  'packages/contracts/external-observation-interchange.mts',
-  'packages/contracts/investigation-portability.mts',
-  'packages/contracts/offline-comparison.mts',
-  'packages/contracts/schema-compatibility.mts',
-  'packages/contracts/schema-lifecycle.mts',
-  'packages/contracts/workspace-portability.mts',
-  'tools/public-product-catalogue-renderer.mts',
-  'tools/schema-compatibility.mts',
-  'tools/schema-source-coverage.mts',
-  'tools/schema-source-parsers.mts',
-]);
-// These owners propagate markers selected by runtime validators. Static source
-// inspection cannot resolve their values; occurrence counts prove no additional
-// correctness. Keep the narrow owner/role boundary and reject stale allowances.
-export const SCHEMA_DYNAMIC_USE_ALLOWLIST = Object.freeze([
-  ['cli/archive-inspect.mts', 'writer', 'Copies validated archive markers into inspection projections.'],
-  ['cli/artifact-validation/signed-review.mts', 'reader', 'Confirms a directly selected signed-review contract before family-specific validation.'],
-  ['cli/artifact-verify.mts', 'reader', 'Compares bounded artifact markers during manifest verification.'],
-  ['cli/artifact-verify.mts', 'writer', 'Projects verified canonical and bounded artifact markers into reports.'],
-  ['cli/evidence-signing.mts', 'writer', 'Copies a verified source-artifact marker into signature metadata.'],
-  ['cli/export-evidence.mts', 'reader', 'Checks a builder result against its injected canonical contract marker.'],
-  ['cli/formatters/json.mts', 'writer', 'Projects the selected canonical CLI result marker.'],
-  ['cli/interchange-report.mts', 'reader', 'Matches a bounded container marker to a reviewed interchange contract.'],
-  ['cli/interchange-report.mts', 'writer', 'Copies the matched interchange marker into a report.'],
-  ['cli/investigation-artifacts.mts', 'reader', 'Checks fixed-recipe outputs against canonical format identities and existing reusable-input validators.'],
-  ['cli/investigation-artifacts.mts', 'writer', 'Copies the checked output identity into content-bound checkpoint metadata.'],
-  ['packages/investigation/investigation-manifest.mts', 'writer', 'Projects a reviewed manifest-entry marker.'],
-  ['cli/retained-artifact-diff.mts', 'reader', 'Requires bounded retained documents to declare the same marker.'],
-  ['cli/risk-calibration.mts', 'writer', 'Copies the validated calibration marker into report metadata.'],
-  ['cli/sharing-review.mts', 'writer', 'Projects a bounded reviewed artifact marker.'],
-  ['frontend/src/lib/analysis/case-evidence-checkpoint.ts', 'reader', 'Compares a retained, normalised source-schema identity without selecting a schema handler.'],
-  ['frontend/src/lib/browser-local-data-definitions.ts', 'reader', 'Compares the marker selected by a canonical collection definition.'],
-  ['frontend/src/lib/components/CaseRenderedCapture.svelte', 'reader', 'Dispatches a selected local capture through the canonical manifest reader.'],
-  ['frontend/src/lib/components/ExternalFindingsImport.svelte', 'reader', 'Dispatches bounded local imports through reviewed marker families.'],
-  ['frontend/src/routes/(console)/bulk/+page.svelte', 'writer', 'Initialises a browser-local store from its reviewed contract constant.'],
-  ['packages/cases/case-response-model.mts', 'writer', 'Copies bounded source-provenance fields after local normalisation.'],
-  ['packages/contracts/analyst-interchange.mts', 'writer', 'Registers the reviewed external profile identity.'],
-  ['packages/contracts/case-supported-contract-baseline.mts', 'writer', 'Projects a validated compatibility marker into the Case baseline.'],
-  ['packages/contracts/extracted-domain-lifecycle.mts', 'reader', 'Matches immutable fixtures to registered lifecycle contracts.'],
-  ['packages/contracts/extracted-domain-lifecycle.mts', 'writer', 'Projects statically registered lifecycle identities.'],
-  ['packages/contracts/privacy-data-flow-catalogue.mts', 'writer', 'Projects validated canonical lifecycle identities.'],
-  ['packages/interchange/external-findings-converters.mts', 'reader', 'Checks a marker supplied by a reviewed observation-row adapter.'],
-  ['packages/interchange/external-findings-import.mts', 'writer', 'Copies a validated nested source-provenance marker.'],
-  ['packages/investigation/investigation-capsule.mts', 'writer', 'Projects the linked evidence contract marker.'],
-  ['packages/investigation/investigation-capsule.mts', 'reader', 'Compares an exact external source marker after independent file identity verification.'],
-  ['packages/investigation/investigation-package.mts', 'reader', 'Matches bounded manifest markers to the included files and exact capsule source identities.'],
-  ['packages/investigation/investigation-package.mts', 'writer', 'Retains bounded source markers in an in-memory file-identity review, without selecting a source-format validator.'],
-  ['packages/monitoring/scheduled-monitor-model.mts', 'writer', 'Copies a normalised monitor-state marker into an export.'],
-  ['packages/relationships/case-relationship-graph-export.mts', 'writer', 'Copies canonical graph markers into portable projections.'],
-  ['packages/workspace/workspace-archive-crypto.mts', 'writer', 'Copies a validated envelope marker into authenticated metadata.'],
-  ['packages/workspace/workspace-archive.mts', 'reader', 'Compares bounded archive-section markers with canonical definitions.'],
-  ['packages/workspace/workspace-archive.mts', 'writer', 'Projects canonical section markers into runtime definitions and manifests.'],
-  ['tools/evidence-storage-measurement.mts', 'writer', 'Copies a validated measurement-fixture marker into the deterministic profile.'],
-  ['tools/first-use-analyst-study.mts', 'writer', 'Projects fixed study-task markers into local reports.'],
-  ['tools/registry-fixture-freshness.mts', 'writer', 'Copies fixed fixture provenance into a maintainer report.'],
-  ['tools/synthetic-analyst-journeys.mts', 'writer', 'Projects fixed journey markers into maintainer results.'],
-  ['tools/technology-example-review.mts', 'writer', 'Projects fixed review-input and provenance markers.'],
-  ['tools/technology-fixture-review.mts', 'reader', 'Checks a bounded fixture against its reviewed source marker.'],
-  ['tools/technology-fixture-review.mts', 'writer', 'Copies a fixed reviewed-fixture marker into a maintainer record.'],
-  ['tools/technology-review-candidate.mts', 'writer', 'Copies a fixed review-input marker into a candidate record.'],
-  ['tools/technology-signature-benchmark.mts', 'writer', 'Copies fixed signature-fixture markers into a benchmark record.'],
-] as const);
 
 export type SourceOccurrence = Readonly<{
   identifier: string;
@@ -729,6 +663,9 @@ function discoverTypeScriptSource(
       recordInitializer(node.name.text, node.initializer);
     }
     if ((ts.isTemplateExpression(node)
+        || (ts.isCallExpression(node)
+          && ts.isPropertyAccessExpression(node.expression)
+          && ['concat', 'join', 'replace', 'replaceAll'].includes(node.expression.name.text))
         || (ts.isBinaryExpression(node)
           && node.operatorToken.kind === ts.SyntaxKind.PlusToken
           && (!ts.isBinaryExpression(node.parent) || node.parent.operatorToken.kind !== ts.SyntaxKind.PlusToken)))
@@ -763,21 +700,20 @@ function discoverTypeScriptSource(
         pendingSchemaDeclarations.push({ node, expression: initializer });
       }
     }
-    if (!SCHEMA_METADATA_FILES.has(file) && ts.isPropertyAssignment(node)) {
+    if (ts.isPropertyAssignment(node)) {
       pendingProperties.push({ node, expression: node.initializer });
     }
-    if (!SCHEMA_METADATA_FILES.has(file)
-      && ts.isPropertyDeclaration(node)
+    if (ts.isPropertyDeclaration(node)
       && node.initializer) {
       pendingProperties.push({ node, expression: node.initializer });
     }
-    if (!SCHEMA_METADATA_FILES.has(file) && ts.isGetAccessorDeclaration(node)) {
+    if (ts.isGetAccessorDeclaration(node)) {
       pendingGetters.push(node);
     }
-    if (!SCHEMA_METADATA_FILES.has(file) && ts.isJsxAttribute(node)) {
+    if (ts.isJsxAttribute(node)) {
       pendingJsxAttributes.push(node);
     }
-    if (!SCHEMA_METADATA_FILES.has(file) && ts.isCallExpression(node)) {
+    if (ts.isCallExpression(node)) {
       const callee = unwrapExpression(node.expression);
       if (ts.isPropertyAccessExpression(callee)
         && ts.isIdentifier(callee.expression)
@@ -795,12 +731,11 @@ function discoverTypeScriptSource(
         pendingSchemaCalls.push(node);
       }
     }
-    if (!SCHEMA_METADATA_FILES.has(file)
-      && ts.isShorthandPropertyAssignment(node)
+    if (ts.isShorthandPropertyAssignment(node)
       && node.name.text === 'schema') {
       recordUse(node, node.name, 'writer');
     }
-    if (!SCHEMA_METADATA_FILES.has(file) && ts.isBinaryExpression(node)) {
+    if (ts.isBinaryExpression(node)) {
       const operator = node.operatorToken.kind;
       if (ASSIGNMENT_OPERATORS.has(operator)) {
         const left = unwrapExpression(node.left);
@@ -852,7 +787,6 @@ function discoverTypeScriptSource(
     const value = unwrapExpression(expression);
     return ts.isIdentifier(value)
       && (DEFINITION_NAME_PATTERN.test(value.text)
-        || value.text === 'schema'
         || schemaImportLocals.has(value.text));
   };
 
@@ -1082,6 +1016,15 @@ function discoverTypeScriptSource(
     if (expression.kind === ts.SyntaxKind.NullKeyword
       || (ts.isIdentifier(expression) && expression.text === 'undefined')) continue;
     if (ts.isIdentifier(expression)) {
+      const resolved = resolveStatic(expression);
+      if (resolved?.constructed && hasLocalSchemaPrefix(resolved.value)) {
+        admitBinding(dynamicConstructions, {
+          file,
+          line: lineFor(pending.node.getStart(sourceFile)),
+          identifier: exactSchemaIdentifier(resolved.value),
+          reason: 'dynamic',
+        });
+      }
       admitBinding(emitters, {
         identifier: null,
         file,
@@ -1123,9 +1066,15 @@ function discoverTypeScriptSource(
         symbol: null,
         role: pending.role,
       });
-      if (!SCHEMA_DYNAMIC_USE_ALLOWLIST.some(([allowedFile, allowedRole]) => (
-        allowedFile === file && allowedRole === pending.role
-      ))) {
+      // Runtime propagation and selection are not new identities. This source
+      // inventory cannot certify a value's validation; domain readers and their
+      // independent fixtures own that contract. Still reject constructed marker
+      // expressions instead of maintaining a list of files allowed to copy one.
+      if (((ts.isCallExpression(expression) && ts.isPropertyAccessExpression(expression.expression)
+            && ['concat', 'join', 'replace', 'replaceAll', 'reduce'].includes(expression.expression.name.text))
+          || ts.isTemplateExpression(expression)
+          || (ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.PlusToken))
+        && schemaRelevantExpression(expression)) {
         admitBinding(dynamicConstructions, {
           file,
           line,

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { caseLookupTarget, type CaseRecord } from '$lib/cases';
+  import { caseLookupTarget } from '../../../../packages/cases/case-evidence-model.mts';
+  import type { CaseRecord } from '../cases.ts';
   import { caseRecheckQuestions, readCaseRecheckContext } from '../../../../packages/cases/case-recheck-model.mts';
   import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
@@ -18,7 +19,7 @@
         baselinePinId: draft.value.baselinePinId || null, conditions: draft.value.conditions.trim() });
       const unchanged = draft.capture();
       if (!await draft.persist(persist, { assertion: { kind: 'next_step', statement: draft.value.question.trim(), state: 'open',
-        evidencePinIds: recheck?.baselinePinId ? [recheck.baselinePinId] : [], recheck } }, 'Saved the recheck question. No collection was started.') || !unchanged()) return;
+        evidencePinIds: recheck?.baselinePinId ? [recheck.baselinePinId] : [], ...(recheck ? { recheck } : {}) } }, 'Saved the recheck question. No collection was started.') || !unchanged()) return;
       draft.value.question = ''; draft.value.conditions = ''; draft.value.baselinePinId = '';
     } catch (cause) { error = cause instanceof Error ? cause.message : 'The recheck question could not be saved.'; }
   }

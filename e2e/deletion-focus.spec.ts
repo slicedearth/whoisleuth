@@ -10,7 +10,7 @@ import {
   readBrowserLocalCollection,
 } from './helpers';
 import { caseRecord } from './case-test-fixtures';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
 const NOW = '2026-08-15T00:00:00.000Z';
 

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
+import { buildRegistryFixtureScaffold } from '../cli/registry-fixture-scaffold.mts';
+import { commandDefinition } from '../cli/command-reference.mts';
 
 const NOW = '2026-08-05T00:00:00.000Z';
 
@@ -38,4 +40,10 @@ test('prints a sanitised registry fixture scaffold through the CLI', async () =>
   assert.match(stdout, /Synthetic scaffold only/u);
   assert.match(stdout, /EXAMPLE\.AC/u);
   assert.doesNotMatch(stdout, /@(?:gmail|outlook|yahoo)\./iu);
+});
+
+test('the scaffold example runs offline and an unknown profile explains catalogue discovery', async () => {
+  const args = commandDefinition('registry-scaffold').reference.example.split(' ').slice(1);
+  assert.equal(await runCli(args, { stdout: { write() {} }, stderr: { write() {} }, now: () => NOW }), EXIT_CODES.SUCCESS);
+  assert.throws(() => buildRegistryFixtureScaffold('unknown-profile', 'test', 'registered'), /registry-support <suffix> --json/u);
 });

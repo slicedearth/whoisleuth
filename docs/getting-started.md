@@ -10,7 +10,13 @@ tasks.
 - Node.js 24 or later; use the exact `.nvmrc` runtime for repository work
 - npm with lockfile support
 - Chromium for browser end-to-end tests
-- Bash, zsh, Fish and PowerShell (`pwsh`) for the completion contract tests
+- Bash, zsh, Fish and PowerShell (`pwsh`) for completion integration tests;
+  these are not required by the unit or coverage lane
+- A local Docker engine for distributed-budget integration tests. These run the
+  actual scripts in a digest-pinned Redis container with synthetic state, no
+  network, published ports, persistent storage or host mounts. The first run
+  downloads the pinned image. The prepared Linux verification image includes
+  the same binaries and uses a private Unix socket instead of nested containers.
 
 Use the committed lockfile. Do not replace it with an independently resolved
 dependency tree.
@@ -19,7 +25,6 @@ dependency tree.
 
 ```bash
 npm ci --include=optional --ignore-scripts --audit=false
-npm run dev
 ```
 
 The install command matches required CI and keeps registry advisory availability
@@ -27,10 +32,42 @@ separate from source verification. Run `npm run dependencies:audit` when
 reviewing dependencies and before a release; its online, fail-closed policy is
 documented in [Dependency maintenance](dependency-maintenance.md).
 
-The development server prints its local URL. The protected Console requires the
-same authentication configuration described in the operations guide; public
-routes and the fixed synthetic demo do not perform live investigation
-collection.
+For bundled registry, threat-intelligence and Unicode data, use the separate
+[retained source checks and refresh procedure](source-maintenance.md).
+
+### Public pages and demo
+
+Run `npm run dev` and open the URL it prints. This starts the frontend only.
+Public pages and the fixed synthetic demo need no API server and make no live
+investigation requests.
+
+### Authenticated Console
+
+Create an ignored `.env.local` in the repository root containing `SITE_PASSWORD`
+and a separate `SESSION_SECRET`, following [authentication configuration](operations.md#authentication-boundary).
+Use development-only values, not production credentials. Generate a signing
+secret with `node -p "require('node:crypto').randomBytes(32).toString('hex')"`.
+
+Keep these two commands running in separate terminals, both at the repository
+root:
+
+```bash
+# Terminal 1: API on port 3000
+node --env-file=.env.local server.mts
+```
+
+```bash
+# Terminal 2: frontend with live reload
+npm run dev
+```
+
+Open the frontend URL and sign in with the development password. Vite forwards
+`/api` requests to `http://localhost:3000`; starting Vite alone cannot provide
+sign-in or collection. If port 3000 is occupied, stop the conflicting service
+or use the filesystem-local application below. Starting either server does not
+start an investigation; collection begins when you request it in the Console.
+
+### Production build on the Express host
 
 Build and run the portable Express host with:
 
@@ -43,7 +80,7 @@ npm start
 The application reads deployment settings from the environment. Never commit
 passwords, session secrets, provider credentials or production configuration.
 
-## Frontend development
+### Filesystem-local application
 
 For the Console with a filesystem workspace, see the separate
 [local application](../packages/local-application/README.md). Build the frontend,
@@ -52,6 +89,8 @@ Choose a folder outside the checkout for real work. This mode uses a private
 launch link rather than the hosting password and does not use IndexedDB for
 saved collections. `npm run local:package:check` verifies an installed package
 against the current production build.
+
+## Frontend development
 
 The SvelteKit frontend is under `frontend/`. Root scripts invoke the workspace
 commands. Run `npm run check` for Svelte validation or `npm run build` for a
@@ -64,7 +103,9 @@ Architecture checks enforce that direction.
 ## Verification
 
 Use [Contributing](../CONTRIBUTING.md) to locate an owner and choose checks for
-an ordinary change. During editing and before a feature-branch push:
+an ordinary change. Presentation-only changes use Svelte validation and rendered
+review, not a full local test run. For behavioural changes during editing and
+before a feature-branch push:
 
 ```bash
 npm run verification:focused -- --list
@@ -72,10 +113,17 @@ npm run verification:focused
 ```
 
 The plan explains selected owners and import dependents. Pass explicit
-repository-relative paths after `--` to narrow the declared scope. Documentation
+repository-relative paths after `--` to narrow the declared scope, or
+`--since=<base-commit>` to include a batch's local commits and working changes.
+Documentation
 changes select offline document checks; documents included in the CLI also
-select package-document checks. Unknown import impact falls back to the full
-unit inventory. Browser selection remains deliberately conservative.
+select package-document checks. Unit selection retains resolved runtime consumers,
+tests reachable from unresolved local imports, and missing test roots. No resolved
+consumer or an unavailable dependency graph selects the full unit inventory.
+Browser selection remains deliberately conservative. The inventory includes all
+tracked files and unignored additions, excluding ignored build output and private
+files. A missing or ambiguous owner is reported explicitly and selects complete
+unit and functional browser inventories, compiler checks and specialised checks.
 
 Complete required hosted checks must pass against the current merge candidate
 before merge or deployment. A routine contribution does not require a second
@@ -83,24 +131,104 @@ complete run on the contributor's machine. State which checks were run and
 which were not; a focused result is not release evidence.
 
 For verification-infrastructure changes, reproducing hosted failures, or full
-offline assurance, run the complete local boundary from a clean commit:
+local assurance, run the complete boundary from a clean commit:
 
 ```bash
 npm run verification:ci
 ```
 
 It requires the exact `.nvmrc` runtime, tested shells and a Node 26 executable
-on `PATH` (or `WHOISLEUTH_CLI_RUNTIME_NODE`). It performs a locked install,
-quality checks, coverage, production-browser tests and CLI compatibility checks.
+on `PATH` (or `WHOISLEUTH_CLI_RUNTIME_NODE`). By default, the merge base of
+`origin/main` and `HEAD` bounds the changed-line secret scan; refresh that ref
+before delivery. A checkout without that ref can use
+`npm run verification:ci -- --base=<full-commit-sha>` with an explicitly reviewed
+ancestor of `HEAD`. The range is printed and invalid bases fail without fallback;
+choosing a base does not prove it matches the current upstream branch.
+Fixture tests do not collect live
+investigation data, but this full command is not offline: dependency/tool downloads
+and advisory checks require network access. It performs a locked install,
+quality checks, unit coverage, repository integration tests, production-browser
+tests and package compatibility checks. Each package is assembled once and its
+exact archive is installed independently under both runtimes. No prior test
+result substitutes for either installation.
 Shared executable groups keep the required local and hosted checks aligned.
 Already-prepared lanes can use `npm run verification:ci -- --group=<name>`;
 group mode does not install dependencies or orchestrate other lanes.
 
+`npm test`, integration and scheduled profiling check shell prerequisites before
+test workers start; the unit-only and coverage lanes do not. Native shell tests
+reuse the resolved executable paths. Startup checks use a hang guard, not a
+performance target, and stop integration before execution if a shell is missing
+or unusable.
+
+Use Linux locally when a change depends on operating-system behaviour or when
+reproducing a hosted failure. It is not a prerequisite for every contribution.
+Preview the existing focused selection without Docker, then run it in an
+isolated Linux checkout:
+
+```bash
+npm run verification:linux -- --focused --list test/linux-verification.test.mts
+npm run verification:linux -- --focused test/linux-verification.test.mts
+```
+
+Paths are explicit because the container verifies a clean commit, not a working
+diff. Browser selections build the application and run the selected existing
+specifications; they do not maintain a separate Linux suite. A focused pass is
+not full CI or release assurance. Complete sharded hosted coverage remains
+required before merge.
+
+For a whole lane, use `--group=<name>` with the same groups as `verification:ci`.
+The container installs locked dependencies and prepares the build for the
+package lane. Use `--full` only when complete local Linux assurance is needed;
+it includes the full browser suite. With no selection, the command prints help
+without starting Docker.
+
+The runner builds an Ubuntu 24.04 image with the locked browser release, the primary
+Node version and the compatibility runtime. It uses the local engine's native
+AMD64 or ARM64 architecture, including pinned security-analysis and shell tools,
+and checks analysis memory before a full run, not before checks that omit
+analysis. It does not silently emulate another architecture. Image digests, architecture and memory
+are recorded for each run; hosted runner hardware and architecture remain
+separate from this local check. Only committed source and local tag history enter the container: no host
+dependencies, credentials, development servers or Docker socket are mounted.
+The browser sandbox remains enabled. Container elapsed times are not a proxy
+for hosted runner performance.
+`-- --build-image` prepares the environment without requiring a clean checkout.
+Private logs and environment details remain outside the repository. Failed
+containers are stopped and retained for diagnosis; remove them when finished.
+
+Local and hosted quality checks audit all locked dependencies against the same
+registry, rejecting moderate-or-higher advisories. The stricter production and
+release audits remain separate. Advisory data can change between runs. Alert
+reconciliation, action execution and deployment acceptance still involve hosted
+services; Linux rehearsal does not certify those services or replace required
+checks on the merge candidate.
+
+Static security analysis honours operating-system and container memory limits,
+reserves memory for the operating system, and refuses an allocation below the
+analyser's minimum before creating a database. Larger codebases may need more
+than the minimum; see the [analyser hardware guidance](https://docs.github.com/en/code-security/reference/code-scanning/codeql/hardware-resources-for-codeql).
+
+For an approved version change, `npm run release:prepare -- <version>` updates
+the two application manifests and regenerates public examples through their
+existing owner. It creates no commit, tag or publication. Ordinary local and
+hosted CI use `npm run version:check` before dependencies are installed: manifests
+must agree and retain the latest reachable public tag's durable commitments,
+including when the application version is unchanged. Contribution checks do not
+certify a release or require a version bump for each dependency update.
+`npm run release:check` additionally enforces immutable release-input identity;
+release preparation and publishable package assembly keep that strict boundary.
+Installed package tests
+then check fresh writer metadata. Published fixtures are not rewritten merely
+to change a patch number.
+
 Performance reports retain samples, execution context, readiness, long tasks
 and layout evidence. Elapsed time is observational, not a limit calibrated to
 one development machine. Compare repeated workloads under comparable
-conditions. Functional readiness, network boundaries, byte limits and bounded
-timeouts remain enforced.
+conditions. Interaction reports separate deliberate expansion from movement
+after usable paint: transition movement is observational; post-readiness
+stability and cold-page layout checks remain blocking. Functional readiness,
+network boundaries, byte limits and bounded timeouts remain enforced.
 
 Coverage includes loaded production TypeScript and independent critical I/O
 floors. Exclusions must identify their type, build, browser or process check.
@@ -152,7 +280,8 @@ navigation. Run that same isolated packet against a verified build with
 The targeted cross-browser packet reuses complete functional specifications in
 Firefox and WebKit: authentication, workspace isolation and encryption, Case
 recovery and returns, offline evidence, source progress and public navigation.
-It keeps the same production server, fixture guards and zero-retry policy:
+It runs weekly in Test health and keeps the same production server, fixture
+guards and zero-retry policy. Run it locally with:
 
 ```bash
 npx playwright install firefox webkit
@@ -182,10 +311,10 @@ The less common commands below each have one narrow purpose:
 | `npm run schema:inventory` | Verify current schema ownership, compatibility and evidence-storage baselines. |
 | `npm run capabilities:check` | Verify generated capability and public-product projections. |
 | `npm run privacy:check` | Verify the generated privacy/data-flow catalogue. |
-| `npm run verification:ownership:check` | Ensure every tracked verification surface has one owner. |
+| `npm run verification:ownership:check` | Account for every tracked file and unignored addition; report classified owners and conservative fallbacks separately. |
 | `npm run verification:timing:check` | Check the retained timing profile without accepting a new candidate. |
 | `npm run test:duration-health -- --report=/absolute/path` | Compare medians from exactly three complete unit profiles (repeat `--report` three times) without rewriting the retained timing baseline. |
-| `npm run frontend:loading-report` | Measure route closures against loading budgets. |
+| `npm run frontend:loading-report` | Measure every route and check public/workspace isolation. Use `-- --json` to save measurements and `-- --compare=report.json` to show changes against an earlier report. |
 | `npm run benchmark:workflow` | Exercise the offline synthetic workflow benchmark. |
 | `npm run technology:coverage-check` | Verify reviewed technology-signature coverage. |
 | `npm run unicode:confusables` | Audit the local confusable catalogue and labelled corpus. |

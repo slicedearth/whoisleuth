@@ -1,4 +1,5 @@
 // Framework-neutral response record types and vocabulary.
+import type { CaseEvidenceRequest, CasePacketAmendment } from './case-requested-evidence.mts';
 
 
 export const CASE_EVIDENCE_RELATION_STANCES = ['supports', 'contradicts', 'unresolved'] as const;
@@ -240,6 +241,7 @@ export type CaseActionTransitionEvent = {
   outcomeDetail: string | null;
   originActionId: string | null;
   applied: boolean;
+  evidenceRequest?: CaseEvidenceRequest;
 };
 
 export type CaseActionRecord = {
@@ -257,6 +259,7 @@ export type CaseActionRecord = {
   providerOutcome: CaseProviderOutcome | null;
   outcome: string | null;
   originActionId: string | null;
+  amendment?: CasePacketAmendment;
   history: CaseActionTransitionEvent[];
   historyOmitted: number;
   historyLimitations: string[];

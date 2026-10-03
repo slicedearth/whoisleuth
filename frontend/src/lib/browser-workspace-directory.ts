@@ -138,6 +138,17 @@ export function createBrowserWorkspaceDirectory(options: DirectoryOptions = {}) 
     return manager;
   }
   const lockName = (id: string) => `whoisleuth-workspace:${browserWorkspaceDatabaseName(id)}`;
+  async function requestLock<Result>(id: string, options: LockOptions, operation: (lock: Lock | null) => Promise<Result>): Promise<Result> {
+    // Some engines report a rejected native callback as uncaught even when the
+    // request promise is handled. Keep that callback fulfilled and propagate
+    // the unchanged failure through the caller-owned promise instead.
+    const outcome = await requireLocks().request(lockName(id), options, async lock => {
+      try { return { ok: true as const, value: await operation(lock) }; }
+      catch (cause) { return { ok: false as const, cause }; }
+    });
+    if (!outcome.ok) throw outcome.cause;
+    return outcome.value;
+  }
   const list = () => transact('readonly', rows => rows);
   const ready = async (id: string) => {
     browserWorkspaceDatabaseName(id);
@@ -172,7 +183,7 @@ export function createBrowserWorkspaceDirectory(options: DirectoryOptions = {}) 
       store.add(candidate); return candidate;
     });
     if (!encryption || !protection) return insert();
-    return requireLocks().request(lockName(id), { mode: 'exclusive', ifAvailable: true }, async lock => {
+    return requestLock(id, { mode: 'exclusive', ifAvailable: true }, async lock => {
       if (!lock) throw new Error('That workspace identity is already in use. Refresh the directory before retrying.');
       await prepareEncryptedBrowserWorkspace(id, encryption, protection.passphrase, factory());
       try { return await insert(); }
@@ -206,11 +217,10 @@ export function createBrowserWorkspaceDirectory(options: DirectoryOptions = {}) 
   }
 
   async function acquire(id: string, mode: 'shared' | 'exclusive' = 'shared'): Promise<Readonly<{ workspace: BrowserWorkspace; release: () => Promise<void> }>> {
-    const manager = requireLocks();
     return new Promise((resolve, reject) => {
       let release!: () => void;
       const held = new Promise<void>(done => { release = done; });
-      const request = manager.request(lockName(id), { mode, ifAvailable: true }, async lock => {
+      const request = requestLock(id, { mode, ifAvailable: true }, async lock => {
         if (!lock) throw new Error('The workspace is in use or being deleted. Close its other tabs or finish its recovery rehearsal before opening it.');
         const workspace = await ready(id);
         resolve({ workspace, release: async () => { release(); await request; } });
@@ -222,7 +232,7 @@ export function createBrowserWorkspaceDirectory(options: DirectoryOptions = {}) 
 
   async function remove(expected: BrowserWorkspace, currentId: string): Promise<void> {
     if (expected.id === requireBrowserWorkspaceId(currentId)) throw new Error('Switch away from this workspace before deleting it.');
-    await requireLocks().request(lockName(expected.id), { mode: 'exclusive', ifAvailable: true }, async lock => {
+    await requestLock(expected.id, { mode: 'exclusive', ifAvailable: true }, async lock => {
       if (!lock) throw new Error('This workspace is open in another tab. Close its tabs before deleting it.');
       const deleting = await transact('readwrite', (rows, store) => {
         const current = expectedRow(rows, expected);

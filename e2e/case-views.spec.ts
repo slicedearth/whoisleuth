@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
@@ -95,7 +96,7 @@ test('saved Case views preserve failed drafts, reject concurrent replacement and
     });
     expect(geometry).toHaveLength(7);
     for (const control of geometry) { expect(control.left).toBeGreaterThanOrEqual(-1); expect(control.right).toBeLessThanOrEqual(control.width + 1); if (width < 500) expect(control.height).toBeGreaterThanOrEqual(44); }
-    await page.screenshot({ path: testInfo.outputPath(`case-views-${theme}-${width}.png`) });
+    if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`case-views-${theme}-${width}.png`) }); }
   }
   expect((await new AxeBuilder({ page }).include('.saved-views').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   page.once('dialog', dialog => dialog.accept());

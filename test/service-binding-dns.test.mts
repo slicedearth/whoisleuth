@@ -105,6 +105,28 @@ test('builds deterministic HTTPS and SVCB DNS wire questions', () => {
   );
 });
 
+test('binds service answers to the question through a complete unambiguous alias chain', () => {
+  const parse = (answers: WireAnswer[]) => parseServiceBindingDnsResponse(response({ answers }), {
+    transactionId: 0x1234, name: 'example.test', type: 'HTTPS',
+  });
+  const service = { owner: 'service.example.test', rdata: serviceRdata(1, '.') };
+  const result = parse([
+    service,
+    { owner: 'alias.example.test', type: 5, rdata: dnsName('service.example.test') },
+    { type: 5, rdata: dnsName('alias.example.test') },
+  ]);
+  assert.equal(result.records[0]?.owner, 'service.example.test');
+  assert.equal(result.records[0]?.target, 'service.example.test');
+  for (const answers of [
+    [service],
+    [{ type: 5, rdata: dnsName('alias.example.test') }, service],
+    [{ type: 5, rdata: dnsName('alias.example.test') }, { type: 5, rdata: dnsName('service.example.test') }, service],
+    [{ type: 5, rdata: dnsName('alias.example.test') }, { owner: 'alias.example.test', type: 5, rdata: dnsName('example.test') }],
+    [{ type: 5, rdata: dnsName('service.example.test') }, { rdata: serviceRdata(1, '.') }, service],
+    [{ type: 5, rdata: Buffer.concat([dnsName('service.example.test'), Buffer.from([0])]) }, service],
+  ]) assert.throws(() => parse(answers), ServiceBindingDnsError);
+});
+
 test('parses bounded service-mode HTTPS parameters without retaining opaque values', () => {
   const alpn = Buffer.from([2, 0x68, 0x32, 2, 0x68, 0x33]);
   const ipv4 = Buffer.from([192, 0, 2, 10]);

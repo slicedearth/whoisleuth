@@ -40,10 +40,19 @@ export type CaaAuthorization = Readonly<{
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
 const KNOWN_ISSUERS: readonly Readonly<{ pattern: RegExp; identifiers: readonly string[] }>[] = Object.freeze([
   { pattern: /let'?s encrypt|isrg/iu, identifiers: ['letsencrypt.org'] },
-  { pattern: /digicert|geotrust|thawte|rapidssl/iu, identifiers: ['digicert.com'] },
+  // Equivalent TLS identifiers, checked 2026-10-02:
+  // https://docs.digicert.com/en/certcentral/perform-domain-control-validation--dcv-/validate-domains-and-perform-validation-checks/manage-dns-caa-records/dns-caa-resource-record-check.html
+  { pattern: /digicert|geotrust|thawte|rapidssl/iu, identifiers: [
+    'www.digicert.com', 'digicert.com', 'digicert.ne.jp', 'cybertrust.ne.jp', 'thawte.com',
+    'geotrust.com', 'rapidssl.com', 'symantec.com', 'volusion.digitalcertvalidation.com',
+    'stratossl.digitalcertvalidation.com', 'intermediatecertificate.digitalcertvalidation.com',
+    '1and1.digitalcertvalidation.com', 'amazon.com', 'amazontrust.com', 'awstrust.com',
+    'amazonaws.com', 'digitalcertvalidation.com', 'quovadisglobal.com', 'pkioverheid.nl',
+  ] },
   { pattern: /sectigo|comodo/iu, identifiers: ['sectigo.com', 'comodoca.com'] },
   { pattern: /google trust|gts ca/iu, identifiers: ['pki.goog'] },
-  { pattern: /amazon/iu, identifiers: ['amazon.com'] },
+  // https://docs.aws.amazon.com/acm/latest/userguide/troubleshooting-caa.html — checked 2026-10-02.
+  { pattern: /amazon/iu, identifiers: ['amazon.com', 'amazontrust.com', 'awstrust.com', 'amazonaws.com'] },
   { pattern: /globalsign/iu, identifiers: ['globalsign.com'] },
   { pattern: /ssl\.com/iu, identifiers: ['ssl.com'] },
   { pattern: /entrust/iu, identifiers: ['entrust.net'] },
@@ -222,15 +231,18 @@ function caaFinding(input: Readonly<{
     };
   }
   const aligned = identifiers.some((identifier) => issuerAuthorizations.includes(identifier));
+  const unknownAuthorization = issuerAuthorizations.some((identifier) => !KNOWN_ISSUERS.some((item) => item.identifiers.includes(identifier)));
   return {
     id: 'caa',
     label: 'Current CAA and observed issuer',
-    state: aligned ? 'aligned' : 'apparently_outside_current_policy',
+    state: aligned ? 'aligned' : unknownAuthorization ? 'indeterminate' : 'apparently_outside_current_policy',
     observed: [input.issuer, ...identifiers],
     expected,
     detail: aligned
       ? `The observed certificate issuer maps to an authorization identifier published in the current CAA evidence${input.effectiveOwner ? ` at ${input.effectiveOwner}` : ''}.`
-      : `The observed certificate issuer did not map to an authorization identifier in the current CAA evidence${input.effectiveOwner ? ` at ${input.effectiveOwner}` : ''}.`,
+      : unknownAuthorization
+        ? 'Current CAA includes an identifier outside the reviewed issuer mappings. Its relationship to the observed issuer is unknown.'
+        : `The observed certificate issuer did not map to an authorization identifier in the current CAA evidence${input.effectiveOwner ? ` at ${input.effectiveOwner}` : ''}.`,
     sources: ['DNS', 'TLS certificate'],
     limitations: fixedLimitations,
   };

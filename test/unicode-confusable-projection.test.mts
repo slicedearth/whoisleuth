@@ -9,7 +9,7 @@ import {
   GENERATED_CONFUSABLE_MAPPING_VERSION,
   GENERATED_CONFUSABLE_STATS,
   GENERATED_GENERATION_CONFUSABLE_GROUPS,
-} from '../lib/generated/unicode-confusables-17.mts';
+} from '../lib/generated/unicode-confusables.mts';
 import {
   MAX_CONFUSABLE_SOURCE_BYTES,
   MAX_GENERATION_CONFUSABLES_PER_ASCII,
@@ -135,6 +135,9 @@ describe('checked-in Unicode confusable calibration', () => {
       () => buildUnicodeConfusableAudit([{ id: 'bad', category: 'test', reference: 'secret value', observed: 'x', expectedMatch: true }]),
       /bounded domain-label/,
     );
+    for (const reference of ['$', 'a.b', '-abc', 'a'.repeat(64), 'a\u200bb']) {
+      assert.throws(() => buildUnicodeConfusableAudit([{ id: 'invalid', category: 'test', reference, observed: 'x', expectedMatch: false }]), /domain.label/u);
+    }
   });
 });
 

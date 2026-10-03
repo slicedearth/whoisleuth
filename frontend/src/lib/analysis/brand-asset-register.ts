@@ -1,4 +1,4 @@
-import { normalizeDomain } from './case-model.ts';
+import { normalizeDomain } from '../../../../packages/evidence/domain-name.mts';
 import { normalizeOpaqueReferenceId } from './opaque-reference-id.ts';
 import { recordOrNull } from '../../../../lib/json-record.mts';
 

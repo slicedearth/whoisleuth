@@ -1,12 +1,17 @@
 import type { InvestigationProjectionInput, InvestigationStoreName } from './analysis/investigation-projection.ts';
-import type { InvestigationSearchResponse } from './analysis/investigation-search.ts';
+import type { InvestigationHistory, InvestigationSearchResponse } from './analysis/investigation-search.ts';
 import type { InvestigationContextPreview } from './analysis/investigation-context-preview.ts';
+import type { InvestigationInfrastructure, InvestigationInfrastructureOptions,
+  InvestigationInfrastructureRelationships } from './analysis/investigation-infrastructure.ts';
 import type { InvestigationSearchSummary, SearchWorkerOperation, SearchWorkerRequest, SearchWorkerResponse } from './investigation-search-worker-model.ts';
 
 export type InvestigationSearchSession = Readonly<{
   summary: InvestigationSearchSummary;
   search: (query: string, options?: Readonly<{ page?: number; pageSize?: number }>) => Promise<InvestigationSearchResponse>;
   preview: (query: string, page?: number) => Promise<InvestigationContextPreview>;
+  history: (entityId: string, page?: number) => Promise<InvestigationHistory>;
+  infrastructure: (options?: InvestigationInfrastructureOptions) => Promise<InvestigationInfrastructure>;
+  infrastructureRelationships: (entityId: string, page?: number) => Promise<InvestigationInfrastructureRelationships>;
   dispose: () => void;
 }>;
 type Pending = {
@@ -15,7 +20,7 @@ type Pending = {
   reject: (error: Error) => void;
 };
 
-/** One active query and one replaceable queued query bound work during typing. */
+/** One active operation and the latest queued query per operation bound work without cancelling unrelated views. */
 export async function createInvestigationSearchSession(
   collections: InvestigationProjectionInput,
   unavailableStores: readonly InvestigationStoreName[],
@@ -26,7 +31,7 @@ export async function createInvestigationSearchSession(
     : new Worker(new URL('./workers/investigation-search.worker.ts', import.meta.url), { type: 'module', name: 'saved-work-search' });
   let sequence = 0;
   let active: Pending | null = null;
-  let queued: Pending | null = null;
+  const queued = new Map<SearchWorkerOperation['kind'], Pending>();
   let closed = false;
   let closeReason: Error = new DOMException('Saved-work search was cancelled.', 'AbortError');
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -42,9 +47,9 @@ export async function createInvestigationSearchSession(
     worker.onmessageerror = null;
     worker.terminate();
     active?.reject(error);
-    queued?.reject(error);
+    for (const pending of queued.values()) pending.reject(error);
     active = null;
-    queued = null;
+    queued.clear();
   }
   function abort() { close(new DOMException('Saved-work search was cancelled.', 'AbortError')); }
   function start(pending: Pending) {
@@ -59,8 +64,8 @@ export async function createInvestigationSearchSession(
       const pending: Pending = { request: { ...operation, id: ++sequence }, resolve, reject };
       if (!active) start(pending);
       else {
-        queued?.reject(new DOMException('A newer saved-work query replaced this query.', 'AbortError'));
-        queued = pending;
+        queued.get(operation.kind)?.reject(new DOMException('A newer saved-work query replaced this query.', 'AbortError'));
+        queued.set(operation.kind, pending);
       }
     });
   }
@@ -73,9 +78,8 @@ export async function createInvestigationSearchSession(
     if (reply.kind === 'error') completed.reject(new Error(reply.detail));
     else if (reply.kind !== completed.request.kind) completed.reject(new Error('Saved-work search returned an unexpected operation.'));
     else completed.resolve(reply);
-    const next = queued;
-    queued = null;
-    if (next) start(next);
+    const next = queued.values().next().value;
+    if (next) { queued.delete(next.request.kind); start(next); }
   };
   worker.onerror = (event) => {
     event.preventDefault();
@@ -97,6 +101,21 @@ export async function createInvestigationSearchSession(
       async preview(query: string, page?: number) {
         const reply = await request({ kind: 'preview', query, ...(page === undefined ? {} : { page }) });
         if (reply.kind !== 'preview') throw new Error('Saved context could not return results.');
+        return reply.result;
+      },
+      async history(entityId: string, page?: number) {
+        const reply = await request({ kind: 'history', entityId, ...(page === undefined ? {} : { page }) });
+        if (reply.kind !== 'history') throw new Error('Saved history could not return results.');
+        return reply.result;
+      },
+      async infrastructure(parameters: InvestigationInfrastructureOptions = {}) {
+        const reply = await request({ kind: 'infrastructure', options: parameters });
+        if (reply.kind !== 'infrastructure') throw new Error('Retained infrastructure could not return results.');
+        return reply.result;
+      },
+      async infrastructureRelationships(entityId: string, page?: number) {
+        const reply = await request({ kind: 'infrastructure_relationships', entityId, ...(page === undefined ? {} : { page }) });
+        if (reply.kind !== 'infrastructure_relationships') throw new Error('Retained relationships could not return results.');
         return reply.result;
       },
       dispose: abort,

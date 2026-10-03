@@ -3,6 +3,7 @@
 // existing DNS timeout and missing/error semantics.
 
 import { parse as parseDomain } from 'tldts';
+import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
 
 import { parseDmarcRecords, parseDmarcReportingAuthorization, parseReportingDestination, parseSpfRecords } from './domain-posture-parsers.mts';
 
@@ -244,13 +245,15 @@ function reportDestinationDomain(value: unknown): string | null {
   const uri = value.trim().replace(/![0-9]+[kmgt]?$/iu, '');
   if (/[!,;]/u.test(uri)) return null;
   const destination = parseReportingDestination(uri);
-  return destination?.scheme === 'mailto' ? strictHostname(destination.host) : null;
+  const domain = destination?.scheme === 'mailto' ? strictHostname(destination.host) : null;
+  return domain && isValidAsciiHostname(domain) ? domain : null;
 }
 
 async function validateDmarcExternalReporting(
   ownerDomain: string,
   dmarcQuery: DnsQuery,
   resolveTxt: (domain: string) => Promise<DnsQuery>,
+  resolveOrganisationalDomain?: (domain: string) => Promise<string | null>,
 ): Promise<DmarcExternalAuthorization[]> {
   if (dmarcQuery.error) return [];
   const parsed = parseDmarcRecords(dmarcQuery.records);
@@ -274,7 +277,7 @@ async function validateDmarcExternalReporting(
       });
       continue;
     }
-    if (destinationDomain === ownerDomain || destinationDomain.endsWith(`.${ownerDomain}`)) {
+    if (destinationDomain === ownerDomain) {
       results.push({
         destination: destinationDomain,
         reportType: item.reportType,
@@ -282,6 +285,20 @@ async function validateDmarcExternalReporting(
         state: 'self',
         error: null,
       });
+      continue;
+    }
+    const ownerOrganisation = resolveOrganisationalDomain ? await resolveOrganisationalDomain(ownerDomain) : null;
+    const recipientOrganisation = ownerOrganisation && resolveOrganisationalDomain ? await resolveOrganisationalDomain(destinationDomain) : null;
+    if (ownerOrganisation && ownerOrganisation === recipientOrganisation) {
+      results.push({ destination: destinationDomain, reportType: item.reportType, recordName: null, state: 'self', error: null });
+      continue;
+    }
+    const externalConfirmed = Boolean(ownerOrganisation && recipientOrganisation);
+    // Descendant reporting previously made no authorisation request. Do not
+    // broaden default collection to resolve its unknown organisational scope.
+    if (!resolveOrganisationalDomain && destinationDomain.endsWith(`.${ownerDomain}`)) {
+      results.push({ destination: destinationDomain, reportType: item.reportType, recordName: null, state: 'unavailable',
+        error: 'The organisational boundary was not checked. Select the additional DNS review to determine whether external reporting authorisation is required.' });
       continue;
     }
     const recordName = `${ownerDomain}._report._dmarc.${destinationDomain}`;
@@ -304,8 +321,9 @@ async function validateDmarcExternalReporting(
       destination: destinationDomain,
       reportType: item.reportType,
       recordName,
-      state: query.error ? 'unavailable' : authorized ? 'authorized' : 'not_found',
-      error: query.error,
+      state: query.error ? 'unavailable' : authorized ? 'authorized' : externalConfirmed ? 'not_found' : 'unavailable',
+      error: query.error ?? (!authorized && !externalConfirmed
+        ? 'The organisational boundary is unknown; no authorisation requirement can be inferred from the missing record.' : null),
     });
   }
   return results;

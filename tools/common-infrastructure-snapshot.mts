@@ -8,6 +8,9 @@ import { fileURLToPath } from 'node:url';
 
 import { writePrivateFile } from '../cli/output-file.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
+import { readTextCapped, safeFetchDetailed } from '../lib/safe-fetch.mts';
+import retainedSnapshot from '../packages/relationships/common-infrastructure-snapshot.json' with { type: 'json' };
+import { parseCommonInfrastructureSnapshot } from '../packages/relationships/common-infrastructure.mts';
 import {
   COMMON_INFRASTRUCTURE_SCHEMA,
   COMMON_INFRASTRUCTURE_VERSION,
@@ -39,12 +42,17 @@ type SourceSnapshot = Readonly<{
   sourceDate: string;
   sourceDigestSha256: string;
   values: readonly string[];
+  verification?: Readonly<{
+    observedAt: string;
+    rangesSha256: string;
+    sources: readonly Readonly<{ url: string; sha256: string }>[];
+  }>;
 }>;
 type ParsedSource = Readonly<{
   snapshot: SourceSnapshot;
   ageDays: number;
 }>;
-type Snapshot = Readonly<{
+export type Snapshot = Readonly<{
   schema: typeof COMMON_INFRASTRUCTURE_SCHEMA;
   version: typeof COMMON_INFRASTRUCTURE_VERSION;
   generatedAt: string;
@@ -66,14 +74,18 @@ type Snapshot = Readonly<{
 }>;
 type MainOptions = Readonly<{
   repositoryRoot?: string;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: (url: string, init: RequestInit) => Promise<Response>;
   now?: () => Date;
   stdout?: WritableLike;
   stderr?: WritableLike;
 }>;
 
 export const SNAPSHOT_PATH = 'packages/relationships/common-infrastructure-snapshot.json';
-export const DEFAULT_UPSTREAM_COMMIT = '1a2b119f7bd492b8e0626b947fc7b69ac4456df3';
+export const DEFAULT_UPSTREAM_COMMIT = 'cdb6cf3076786277eceffbddc03d56bbf8687c5c';
+export const CLOUDFLARE_RANGE_URLS = Object.freeze([
+  'https://www.cloudflare.com/ips-v4',
+  'https://www.cloudflare.com/ips-v6',
+]);
 export const MAX_SOURCE_BYTES = 1024 * 1024;
 export const FRESHNESS_DAYS = 30;
 export const REVIEWED_PUBLIC_RESOLVERS_SOURCE_DATE = '2026-08-10';
@@ -181,7 +193,7 @@ async function boundedResponseText(response: Response, maximum: number): Promise
   return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 }
 
-function parseSource(
+export function parseSource(
   definition: SourceDefinition,
   rawText: string,
   now: Date,
@@ -222,12 +234,86 @@ function parseSource(
   return Object.freeze({ snapshot, ageDays });
 }
 
+async function fetchSource(url: string, init?: RequestInit): Promise<Response> {
+  return (await safeFetchDetailed(url, init, { maxRedirects: 0 })).response;
+}
+
+export async function verifyCloudflareRanges(
+  values: readonly string[],
+  now: Date,
+  fetchImpl: (url: string, init: RequestInit) => Promise<Response> = fetchSource,
+): Promise<NonNullable<SourceSnapshot['verification']>> {
+  const official: string[] = [];
+  const sources = [];
+  for (const [index, url] of CLOUDFLARE_RANGE_URLS.entries()) {
+    const response = await fetchImpl(url, { signal: AbortSignal.timeout(10_000), headers: { accept: 'text/plain' } });
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new Error(`Official range verification returned HTTP ${response.status}.`);
+    }
+    const body = await readTextCapped(response, 16 * 1024, { fatalUtf8: true });
+    if (body.truncated) throw new RangeError('Official ranges exceeded their response byte limit.');
+    const rows = body.text.trim().split(/\s+/u);
+    if (!rows.length || rows.length > MAX_SNAPSHOT_ENTRIES
+      || rows.some(value => normalizedCidr(value) !== value || isIP(value.split('/')[0]!) !== (index === 0 ? 4 : 6))) {
+      throw new TypeError('Official ranges contain malformed entries.');
+    }
+    official.push(...rows);
+    sources.push({ url, sha256: createHash('sha256').update(body.text).digest('hex') });
+  }
+  const sorted = [...official].sort((left, right) => left.localeCompare(right));
+  if (new Set(sorted).size !== sorted.length) throw new TypeError('Official ranges contain duplicate entries.');
+  if (!isDeepStrictEqual(sorted, [...values])) {
+    throw new OfficialRangeMismatchError('Retained edge ranges differ from the official source; review the pinned warning list before refreshing.');
+  }
+  return Object.freeze({
+    observedAt: now.toISOString(),
+    rangesSha256: createHash('sha256').update(JSON.stringify(sorted)).digest('hex'),
+    sources: Object.freeze(sources),
+  });
+}
+
+export class OfficialRangeMismatchError extends Error {}
+
+export function commonInfrastructureHealth(now = new Date(), value: unknown = retainedSnapshot) {
+  const admitted = parseCommonInfrastructureSnapshot(value);
+  const raw = record(value, 'Retained infrastructure');
+  const sources = raw.sources as SourceSnapshot[];
+  const ages: number[] = [];
+  const sourceAges: { id: string; ageDays: number }[] = [];
+  for (const source of sources) {
+    if (source.id === 'public-dns-core') continue;
+    const proof = source.verification;
+    if (proof && (source.id !== 'cloudflare'
+      || !Array.isArray(proof.sources) || proof.sources.length !== CLOUDFLARE_RANGE_URLS.length
+      || !proof.sources.every((item, index) => item.url === CLOUDFLARE_RANGE_URLS[index] && /^[a-f0-9]{64}$/u.test(item.sha256))
+      || proof.rangesSha256 !== createHash('sha256').update(JSON.stringify(source.values)).digest('hex')
+      || !Number.isFinite(Date.parse(proof.observedAt))
+      || new Date(proof.observedAt).toISOString() !== proof.observedAt
+      || Date.parse(proof.observedAt) > Date.parse(admitted.generatedAt)
+      || Date.parse(proof.observedAt) < Date.parse(source.sourceDate))) {
+      throw new TypeError('Retained range verification has invalid provenance.');
+    }
+    const age = Math.floor((now.getTime() - Date.parse(proof?.observedAt ?? source.sourceDate)) / 86_400_000);
+    ages.push(age);
+    sourceAges.push({ id: source.id, ageDays: age });
+  }
+  const ageDays = ages.length ? Math.max(...ages) : null;
+  const state = !Number.isFinite(now.getTime()) || Date.parse(admitted.generatedAt) > now.getTime()
+    || ages.some(age => age < 0) || !ages.length
+    ? 'unavailable' as const
+    : admitted.excludedSources.length || (ageDays ?? 0) > FRESHNESS_DAYS ? 'stale' as const : 'current' as const;
+  return Object.freeze({ state, ageDays: state === 'unavailable' ? null : ageDays,
+    observedAt: admitted.generatedAt, itemCount: admitted.entryCount, excludedCount: admitted.excludedSources.length,
+    sourceAges: Object.freeze(sourceAges) });
+}
+
 export async function buildCommonInfrastructureSnapshot(
   commit: string,
   options: MainOptions = {},
 ): Promise<Snapshot> {
   if (!COMMIT_RE.test(commit)) throw new TypeError('Upstream commit must be a full lowercase SHA-1.');
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const fetchImpl = options.fetchImpl ?? fetchSource;
   const now = options.now?.() ?? new Date();
   const sources: SourceSnapshot[] = [];
   const excludedSources: Array<Readonly<{ id: string; reason: string }>> = [];
@@ -240,7 +326,13 @@ export async function buildCommonInfrastructureSnapshot(
     });
     const text = await boundedResponseText(response, MAX_SOURCE_BYTES);
     const parsed = parseSource(definition, text, now);
-    if (parsed.ageDays > FRESHNESS_DAYS) {
+    if (parsed.ageDays > FRESHNESS_DAYS && definition.id === 'cloudflare') {
+      // Unchanged allocations are not stale merely because their publisher has
+      // not changed the list. Preserve that date and independently record a
+      // digest-bound observation against both official address-family lists.
+      const verification = await verifyCloudflareRanges(parsed.snapshot.values, now, fetchImpl);
+      sources.push(Object.freeze({ ...parsed.snapshot, verification }));
+    } else if (parsed.ageDays > FRESHNESS_DAYS) {
       excludedSources.push(Object.freeze({
         id: definition.id,
         reason: 'stale',
@@ -286,7 +378,7 @@ export async function buildCommonInfrastructureSnapshot(
       'A match identifies an address range published as shared cloud or delivery infrastructure. It does not identify the origin host, tenant, account, operator, ownership, intent, safety, or maliciousness.',
       'Non-matches are inconclusive because the catalogue is deliberately bounded and does not cover every provider, product, address, hosting service, resolver, or historical allocation.',
       'The snapshot is used locally and never causes a provider request during Lookup, Bulk, Monitor, cases, or graph review.',
-      'A fully validated source older than the reviewed freshness window is listed as excluded and contributes no active ranges until its publisher refreshes it.',
+      'An older warning list is excluded unless its complete range set is independently verified against the recorded official provider sources. Publisher change dates and verification times remain distinct.',
     ]),
   });
 }
@@ -352,7 +444,7 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
       }
       stdout.write(`Validated retained content: ${snapshot.entryCount} Common-infrastructure entries and ${snapshot.excludedSources.length} excluded sources; no snapshot replaced.\n`);
       const staleSources = snapshot.sources.filter(source => source.id !== 'public-dns-core'
-        && Math.floor((now.getTime() - Date.parse(`${source.sourceDate}T00:00:00.000Z`)) / 86_400_000) > FRESHNESS_DAYS);
+        && Math.floor((now.getTime() - Date.parse(source.verification?.observedAt ?? `${source.sourceDate}T00:00:00.000Z`)) / 86_400_000) > FRESHNESS_DAYS);
       if (staleSources.length) {
         stderr.write(`Freshness review required: retained upstream sources exceed ${FRESHNESS_DAYS} days: ${staleSources.map(source => source.id).join(', ')}. Content is unchanged; refresh from reviewed upstream sources.\n`);
         return 1;

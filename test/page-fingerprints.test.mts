@@ -1,5 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import {
   PAGE_FINGERPRINT_VERSION,
   MAX_FINGERPRINT_SOURCE_BYTES,
@@ -22,6 +23,52 @@ function fingerprints(
 }
 
 describe('page fingerprints', () => {
+  test('retains historical identifier normalisation at ASCII word boundaries', () => {
+    // A bounded reference to the historical normalisation, independent of the
+    // replacement implementation. Never run its backtracking pattern on long
+    // input; the large-input test below has a separate process hang guard.
+    const historical = (value: string) => value
+      .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, '<id>')
+      .replace(/\b\d{4}-\d{1,2}-\d{1,2}(?:[t\s]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:z|[+-]\d{2}:?\d{2})?)?\b/gi, '<time>')
+      .replace(/\b\d{10,13}\b/g, '<time>')
+      .replace(/\b[a-f0-9]{16,}\b/gi, '<id>')
+      .replace(/\b(?=[a-z0-9_-]{20,}\b)(?=[a-z0-9_-]*[a-z])(?=[a-z0-9_-]*\d)[a-z0-9_-]+\b/gi, '<id>');
+    const html = (text: string) => `<main>${text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</main>`;
+    const samples = ['2026-01-02T03:04:05Z', 'AB1234567890AB1234567890', '9f91ac24-0d4b-48c8-8aee-c8111a9a1def'];
+    for (const size of [18, 19, 20, 21, 64]) {
+      for (const middle of ['g'.repeat(size), '7'.repeat(size), 'g-'.repeat(size), 'g_'.repeat(size)]) {
+        for (const prefix of ['', '-', '__', 'é', '!']) {
+          for (const suffix of ['', '1', '-', '__', 'é', '!']) samples.push(prefix + middle + suffix);
+        }
+      }
+    }
+    for (const text of samples) {
+      const actual = fingerprints(html(text));
+      const expected = fingerprints(html(historical(text)));
+      assert.equal(actual.normalizedHtml.value, expected.normalizedHtml.value, JSON.stringify(text));
+      assert.deepEqual(actual.visibleText, expected.visibleText, JSON.stringify(text));
+    }
+  });
+
+  test('processes long hyphenated text without discarding the admitted body', () => {
+    const moduleUrl = new URL('../lib/page-fingerprints.mts', import.meta.url).href;
+    execFileSync(process.execPath, ['--input-type=module', '--eval', `
+      import assert from 'node:assert/strict';
+      import { createPageFingerprints, MAX_FINGERPRINT_SOURCE_BYTES } from ${JSON.stringify(moduleUrl)};
+      const expected = createPageFingerprints('<main>&lt;id&gt;</main>');
+      for (const size of [65_536, 131_072, MAX_FINGERPRINT_SOURCE_BYTES - 32]) {
+        const text = 'g-'.repeat(Math.floor(size / 2));
+        const ordinary = createPageFingerprints('<main>' + text + '</main>');
+        const identifier = createPageFingerprints('<main>' + text + '1</main>');
+        assert.equal(ordinary.exact.scope, 'complete-body');
+        assert.equal(ordinary.exact.bytes, text.length + 13);
+        assert.notEqual(ordinary.normalizedHtml.value, identifier.normalizedHtml.value);
+        assert.equal(identifier.normalizedHtml.value, expected.normalizedHtml.value);
+        assert.deepEqual(identifier.visibleText, expected.visibleText);
+      }
+    `], { timeout: 30_000, stdio: 'pipe' });
+  });
+
   test('returns independently versioned exact, normalized, text, DOM, form, host, and identifier components', () => {
     const result = fingerprints(`
       <html><body><h1>Account centre</h1>

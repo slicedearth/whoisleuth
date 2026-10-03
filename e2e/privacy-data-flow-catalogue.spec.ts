@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
@@ -66,7 +67,7 @@ test('privacy guidance stays concise, request-free and responsive', async ({ pag
     await expect(policyLink).toHaveAttribute('href', '/request-policy');
     if (surface.width === 320 || surface.width === 1280) {
       await page.getByRole('heading', { name: 'Privacy policy', exact: true }).scrollIntoViewIfNeeded();
-      await page.screenshot({ path: test.info().outputPath(`privacy-${surface.width}-${surface.theme}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: test.info().outputPath(`privacy-${surface.width}-${surface.theme}.png`) }); }
     }
     const metadata = page.locator('p').filter({ hasText: 'Optional metadata CSV' });
     await expect(metadata).toContainText('collection and report times');
@@ -74,34 +75,34 @@ test('privacy guidance stays concise, request-free and responsive', async ({ pag
     await metadata.scrollIntoViewIfNeeded();
     await expect(metadata).toBeInViewport();
     await expectNoHorizontalOverflow(page);
-    await test.info().attach(`csv-privacy-${surface.width}-${surface.theme}`, {
+    if (captureVisualEvidenceEnabled()) { await test.info().attach(`csv-privacy-${surface.width}-${surface.theme}`, {
       body: await page.screenshot(), contentType: 'image/png',
-    });
+    }); }
     const bulkManifest = page.locator('p').filter({ hasText: 'Selected Bulk CSV exports include a review manifest' });
     await expect(bulkManifest).toContainText('source states, observation times');
     await expect(bulkManifest).toContainText('Raw responses, contacts, Profile contents and notes are excluded.');
     await bulkManifest.scrollIntoViewIfNeeded();
     await expect(bulkManifest).toBeInViewport();
     await expectNoHorizontalOverflow(page);
-    await test.info().attach(`bulk-manifest-privacy-${surface.width}-${surface.theme}`, {
+    if (captureVisualEvidenceEnabled()) { await test.info().attach(`bulk-manifest-privacy-${surface.width}-${surface.theme}`, {
       body: await page.screenshot(), contentType: 'image/png',
-    });
+    }); }
     const trust = page.locator('p').filter({ hasText: 'An optional signer trust file' });
     await expect(trust).toContainText('not private keys');
     await expect(trust).toContainText('without its path or other entries');
     await trust.scrollIntoViewIfNeeded();
     await expect(trust).toBeInViewport();
     await expectNoHorizontalOverflow(page);
-    await test.info().attach(`signer-privacy-${surface.width}-${surface.theme}`, {
+    if (captureVisualEvidenceEnabled()) { await test.info().attach(`signer-privacy-${surface.width}-${surface.theme}`, {
       body: await page.screenshot(), contentType: 'image/png',
-    });
+    }); }
     const cases = page.locator('p').filter({ hasText: 'The offline case command creates and updates ordinary local Case files' });
     await expect(cases).toContainText('private analyst content');
     await expect(cases).toContainText('Case files are unencrypted unless packaged separately with encryption.');
     await cases.scrollIntoViewIfNeeded();
     await expect(cases).toBeInViewport();
     await expectNoHorizontalOverflow(page);
-    if (surface.width === 320 || surface.width === 1280) await page.screenshot({ path: test.info().outputPath(`case-file-privacy-${surface.width}-${surface.theme}.png`) });
+    if (surface.width === 320 || surface.width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: test.info().outputPath(`case-file-privacy-${surface.width}-${surface.theme}.png`) }); }
   }
 });
 
@@ -120,7 +121,7 @@ test('request policy exposes the current capture boundary across supported width
       await expect(captureLimit).toBeVisible();
       await expectNoHorizontalOverflow(page);
       if (viewport.width === 320 || viewport.width === 1280) {
-        await page.screenshot({ path: test.info().outputPath(`request-policy-${viewport.width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: test.info().outputPath(`request-policy-${viewport.width}-${theme}.png`) }); }
       }
     }
   }

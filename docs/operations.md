@@ -292,6 +292,14 @@ while the configured worker runtime receives the encryption key from its
 deployment environment; encryption therefore does not protect against an
 operator or hosting runtime with access to that environment.
 
+The data key and namespace are required to open existing monitoring state.
+Changing either does not re-encrypt that state. Preserve the original values
+securely before rotation; restore them to recover access if appropriate. If the
+key is lost or must remain revoked, disable monitoring and deliberately reset
+the Blob as described above, then recreate the watchlists. Wrong keys and
+damaged encrypted state produce the same management error; waiting alone will
+not repair them, and the application never resets the stored data automatically.
+
 ## Netlify deployment
 
 ### Protected public contact route
@@ -343,6 +351,11 @@ hostname/action checked; no remote-IP field is forwarded by WHOISleuth.
 Static routes such as `/lookup`, `/bulk`, and `/monitor` are independent
 prerendered entries. API routes are rewrites to thin functions that call the
 same shared modules as Express.
+
+The build includes `404.html`, which the static host serves for unknown page
+addresses with HTTP 404. Express serves the same page and returns bounded JSON
+for unknown `/api/` endpoints. Neither response reflects the requested address;
+the page needs no client runtime and is excluded from search indexing.
 
 Bulk makes one compact `/api/lookup` call per domain with bounded browser
 concurrency. It does not hold one serverless invocation open for the complete

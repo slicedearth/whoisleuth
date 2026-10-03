@@ -1,31 +1,52 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { page } from '$app/state';
   import { beforeNavigate, goto } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
   import { parseBoundedJson } from '$lib/bounded-json';
-  import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
+import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   import { registerAnalystUndo } from '$lib/analyst-undo';
   import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
-  import { hasUnprotectedCaseDrafts } from '$lib/controllers/case-draft.svelte.ts';
+  import { hasUnprotectedCaseDrafts, trackTransientCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import { preloadBestEffort } from '$lib/idle-preload';
   import { readCaseNavigationContext, selectConsoleCase } from '$lib/console-workflow-state';
   import { monitorRouteKey, monitorRouteTarget } from '$lib/controllers/monitor-route-controller.ts';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
-  import { casesForDomain, type CaseIncidentInput } from '$lib/analysis/case-model.ts';
+  import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
+  import type { CaseIncidentInput } from '../analysis/case-model.ts';
   import { filterCaseList } from '../../../../packages/cases/case-list-view.mts';
   import type { CaseViewFilters } from '../../../../packages/contracts/case-views-contract.mts';
   import { loadInvestigationGuide } from '$lib/investigation-guide';
   import { loadProfiles, type BrandProfile } from '$lib/brand-profiles';
   import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
   import {
-    addCaseBrandProfileAssociation, addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES,
-    caseFreeformTags, caseTagsWithTypes, caseTypeIds, deleteCase,
-    dispositionLabel, editCase, editCaseTags, restoreCaseTags, exportCases,
-    exportRiskCalibrationDataset, importCases, loadCases, MAX_CASE_IMPORT_BYTES,
-    openCase, createCaseIncident, previewRiskCalibrationDataset, removeCaseBrandProfileAssociation,
-    statusLabel, type CaseRecord, type RiskCalibrationExportPreview,
-    CaseAssociationCapacityError, exportCaseSnapshot, type CaseAssociationRetention,
-  } from '$lib/cases';
+    addCaseBrandProfileAssociation,
+    addCaseNote,
+    deleteCase,
+    editCase,
+    editCaseTags,
+    restoreCaseTags,
+    exportCases,
+    exportRiskCalibrationDataset,
+    importCases,
+    loadCases,
+    openCase,
+    createCaseIncident,
+    previewRiskCalibrationDataset,
+    removeCaseBrandProfileAssociation,
+    type CaseRecord,
+    type RiskCalibrationExportPreview,
+    CaseAssociationCapacityError,
+    exportCaseSnapshot,
+    type CaseAssociationRetention,
+  } from '../cases.ts';
+  import {
+    CASE_DISPOSITIONS,
+    CASE_STATUSES,
+    dispositionLabel,
+    statusLabel,
+  } from '../../../../packages/cases/case-record-decisions.mts';
+  import { MAX_CASE_IMPORT_BYTES } from '../../../../packages/contracts/case-portability.mts';
   import LocalCollectionState from '$lib/components/LocalCollectionState.svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
@@ -64,9 +85,11 @@
   let calibrationMode = $state(false);
   let noteDraft = $state('');
   let tagDraft = $state('');
+  let tagExpected = $state<string[]>([]);
   let newDomain = $state('');
   let openingCase = $state(false);
   let incidentDraftDirty = $state(false);
+  trackTransientCaseDraft(() => incidentDraftDirty);
   let incidentOpeningIntent: (() => boolean) | null = null;
   let calibrationCaseIds = $state<string[]>([]);
   let calibrationReview = $state<RiskCalibrationExportPreview | null>(null);
@@ -91,9 +114,8 @@
   const casePageCount = $derived(Math.max(1, Math.ceil(filteredCases.length / CASE_PAGE_SIZE)));
   const currentCasePage = $derived(Math.min(casePage, casePageCount));
   const pagedCases = $derived(filteredCases.slice((currentCasePage - 1) * CASE_PAGE_SIZE, currentCasePage * CASE_PAGE_SIZE));
-  function date(value: string) {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+  function date(value: string | null): string {
+    return formatEvidenceDate(value, 'Unknown time');
   }
   function setCasePage(value: number) {
     selectionRevision.changed();
@@ -110,7 +132,11 @@
       casePage = Math.floor(index / CASE_PAGE_SIZE) + 1;
   }
   function caseTagDraft(record: CaseRecord) {
-    return caseFreeformTags(record.tags).join(', ');
+    return record.tags.join(', ');
+  }
+  function loadTagDraft(record: CaseRecord) {
+    tagDraft = caseTagDraft(record);
+    tagExpected = [...record.tags];
   }
   async function selectCase(record: CaseRecord) {
     selectionRevision.changed();
@@ -153,7 +179,7 @@
     casePage = 1;
     showCasePage(record);
     expandedId = record.id;
-    tagDraft = caseTagDraft(record);
+    loadTagDraft(record);
     noteDraft = '';
     await navigateCase(record.id, responseRequested);
   }
@@ -192,7 +218,7 @@
       casePage = 1;
       showCasePage(record);
       expandedId = record.id;
-      tagDraft = caseTagDraft(record);
+      loadTagDraft(record);
       noteDraft = '';
       await navigateCase(record.id);
       if (unchanged())
@@ -226,7 +252,7 @@
   }
   async function setStatus(record: CaseRecord, value: string) {
     try {
-      const committed = await editCase(record.id, { status: value });
+      const committed = await editCase(record.id, { status: value, expectedStatus: record.status });
       await reconcileCommittedCaseMutation(committed, `Set ${record.domain} to ${statusLabel(value)}.`);
     }
     catch (cause) {
@@ -235,7 +261,7 @@
   }
   async function setDisposition(record: CaseRecord, value: string) {
     try {
-      const committed = await editCase(record.id, { disposition: value });
+      const committed = await editCase(record.id, { disposition: value, expectedDisposition: record.disposition });
       await reconcileCommittedCaseMutation(committed, `Marked ${record.domain} as ${dispositionLabel(value)}.`);
     }
     catch (cause) {
@@ -244,7 +270,7 @@
   }
   async function setReviewReason(record: CaseRecord, value: string) {
     try {
-      const committed = await editCase(record.id, { reviewReasonCode: value });
+      const committed = await editCase(record.id, { reviewReasonCode: value, expectedReviewReasonCode: record.reviewReasonCode ?? null });
       await reconcileCommittedCaseMutation(committed, `Updated the review reason for ${record.domain}.`);
     }
     catch (cause) {
@@ -318,14 +344,15 @@
     return changeBrandProfileAssociation(record, profileId, 'remove');
   }
   async function saveTags(record: CaseRecord) {
-    const previous = [...record.tags];
+    const previous = [...tagExpected];
     const submittedDraft = tagDraft;
     const unchanged = tagRevision.capture();
     try {
-      const next = caseTagsWithTypes(submittedDraft.split(/[,\n]+/).map(value => value.trim()).filter(Boolean), caseTypeIds(record.tags));
+      const next = submittedDraft.split(/[,\n]+/).map(value => value.trim()).filter(Boolean);
       if (previous.join('\\0') === next.join('\\0'))
         return;
-      const committed = await editCaseTags(record.id, next);
+      const committed = await editCaseTags(record.id, next, previous);
+      if (expandedId === record.id) tagExpected = [...committed.record.tags];
       if (unchanged())
         tagDraft = caseTagDraft(committed.record);
       await reconcileCommittedCaseSnapshot(committed, `Updated tags for ${record.domain}.`, expandedId === record.id ? committed.record : null);
@@ -334,6 +361,7 @@
         undo: async () => {
           const unchangedUndo = tagRevision.capture();
           const restored = await restoreCaseTags(committed.undo);
+          if (expandedId === restored.record.id) tagExpected = [...restored.record.tags];
           if (expandedId === restored.record.id && unchangedUndo())
             tagDraft = caseTagDraft(restored.record);
           await reconcileCommittedCaseSnapshot(restored, `Restored the previous tags for ${record.domain}.`, expandedId === restored.record.id ? restored.record : null);
@@ -448,7 +476,7 @@
       if (file.size > MAX_CASE_IMPORT_BYTES)
         throw new Error(`Case imports are limited to ${MAX_CASE_IMPORT_BYTES} bytes.`);
       const result = await importCases(parseBoundedJson(await file.text(), { label: 'Case import', maximumBytes: MAX_CASE_IMPORT_BYTES }));
-      const success = `Imported ${result.added} new and ${result.updated} merged cases${result.skipped ? `; skipped ${result.skipped} invalid or over-limit record${result.skipped === 1 ? '' : 's'}` : ''}${result.brandProfileReferencesOmitted ? `; omitted ${result.brandProfileReferencesOmitted} Brand Profile reference${result.brandProfileReferencesOmitted === 1 ? '' : 's'} beyond the retained bounds` : ''}${result.authoredHistoryOmitted ? `; omitted ${result.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${result.authoredHistoryOmitted === 1 ? '' : 's'}` : ''}.`;
+      const success = `Imported ${result.added} new and ${result.updated} merged cases${result.skipped ? `; skipped ${result.skipped} invalid or over-limit record${result.skipped === 1 ? '' : 's'}` : ''}${result.brandProfileReferencesOmitted ? `; omitted ${result.brandProfileReferencesOmitted} Brand Profile reference${result.brandProfileReferencesOmitted === 1 ? '' : 's'} beyond the retained bounds` : ''}${result.authoredHistoryOmitted ? `; omitted ${result.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${result.authoredHistoryOmitted === 1 ? '' : 's'}` : ''}${result.evidenceHistoryOmitted ? `; omitted ${result.evidenceHistoryOmitted} imported evidence snapshot${result.evidenceHistoryOmitted === 1 ? '' : 's'} to preserve local history` : ''}.`;
       await reconcileCommittedCaseSnapshot(result, success);
     }
     catch (cause) {
@@ -558,7 +586,7 @@
       showCasePage(record);
       if (expandedId !== record.id) {
         expandedId = record.id;
-        tagDraft = caseTagDraft(record);
+        loadTagDraft(record);
         noteDraft = '';
       }
       await tick();

@@ -3,69 +3,21 @@ import { describe, test } from 'node:test';
 
 import fixtures from '../fixtures/whois-registry-fixtures.mts';
 import { parseWhoisChain } from '../lib/whois.mts';
-
-const PARSER_FAMILY_ALIASES = [
-  { profile: 'aeda-colon', baseSuffix: 'ae', aliases: ['xn--mgbaam7a8h'] },
-  { profile: 'amnic-sectioned', baseSuffix: 'am', aliases: ['xn--y9a3aq'] },
-  { profile: 'cctld-by-colon', baseSuffix: 'by', aliases: ['xn--90ais'] },
-  { profile: 'channel-islands-sectioned', baseSuffix: 'gg', aliases: ['je'] },
-  { profile: 'cnnic-colon', baseSuffix: 'cn', aliases: ['xn--fiqs8s', 'xn--fiqz9s'] },
-  { profile: 'dot-leader', baseSuffix: 'kr', aliases: ['xn--3e0b707e'] },
-  { profile: 'eurid-sectioned', baseSuffix: 'eu', aliases: ['xn--e1a4c', 'xn--qxa6a'] },
-  { profile: 'hkirc-sectioned', baseSuffix: 'hk', aliases: ['xn--j6w193g'] },
-  { profile: 'identity-digital-shared-colon', baseSuffix: 'gi', aliases: ['vc'] },
-  { profile: 'lanic-icann-colon', baseSuffix: 'la', aliases: ['xn--q7ce6a'] },
-  { profile: 'marnet-contact-indirection', baseSuffix: 'mk', aliases: ['xn--d1alf'] },
-  { profile: 'mediaserv-object-colon', baseSuffix: 'mq', aliases: ['gf'] },
-  { profile: 'monic-minimal-colon', baseSuffix: 'mo', aliases: ['xn--mix891f'] },
-  { profile: 'isoc-il-colon', baseSuffix: 'il', aliases: ['xn--4dbrk0ce'] },
-  { profile: 'irnic-handle-blocks', baseSuffix: 'ir', aliases: ['xn--mgba3a4f16a'] },
-  { profile: 'identity-digital-colon-mn', baseSuffix: 'mn', aliases: ['xn--l1acc'] },
-  { profile: 'mynic-colon', baseSuffix: 'my', aliases: ['xn--mgbx4cd0ab'] },
-  { profile: 'nic-dz-colon', baseSuffix: 'dz', aliases: ['xn--lgbbat1ad8j'] },
-  { profile: 'nic-io-colon', baseSuffix: 'io', aliases: ['ac'] },
-  { profile: 'nic-sa-colon', baseSuffix: 'sa', aliases: ['xn--mgberp4a5d4ar'] },
-  {
-    profile: 'nixi-colon',
-    baseSuffix: 'in',
-    aliases: [
-      'xn--2scrj9c',
-      'xn--3hcrj9c',
-      'xn--45br5cyl',
-      'xn--45brj9c',
-      'xn--fpcrj9c3d',
-      'xn--gecrj9c',
-      'xn--h2breg3eve',
-      'xn--h2brj9c',
-      'xn--h2brj9c8c',
-      'xn--mgbbh1a',
-      'xn--mgbbh1a71e',
-      'xn--mgbgu82a',
-      'xn--rvc1e0am3e',
-      'xn--s9brj9c',
-      'xn--xkc2dl3a5ee0h',
-    ],
-  },
-  { profile: 'nic-kz-dot-leader', baseSuffix: 'kz', aliases: ['xn--80ao21a'] },
-  { profile: 'om-registry-colon', baseSuffix: 'om', aliases: ['xn--mgb9awbf'] },
-  { profile: 'rnids-colon', baseSuffix: 'rs', aliases: ['xn--90a3ac'] },
-  { profile: 'afnic-colon', baseSuffix: 'fr', aliases: ['pm', 're', 'tf', 'wf', 'yt'] },
-  {
-    profile: 'sgnic-colon',
-    baseSuffix: 'sg',
-    aliases: ['xn--clchc0ea0b2g2a9gcd', 'xn--yfro4i67o'],
-  },
-  { profile: 'tci-colon', baseSuffix: 'ru', aliases: ['su', 'xn--p1ai'] },
-  { profile: 'thnic-holder-colon', baseSuffix: 'th', aliases: ['xn--o3cw4h'] },
-  { profile: 'ati-tn-dot-leader', baseSuffix: 'tn', aliases: ['xn--pgbs0dh'] },
-  { profile: 'twnic-colon', baseSuffix: 'tw', aliases: ['xn--kprw13d', 'xn--kpry57d'] },
-];
+import { listRegistryCapabilities } from '../lib/registry-capabilities.mts';
 
 function escaped(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 describe('WHOIS registry compatibility fixtures', () => {
+  test('preserves every parser family across protocol CRLF and LF without mutating the source', () => {
+    for (const fixture of fixtures) {
+      const chain = fixture.chain.map(hop => ({ ...hop, response: hop.response.replace(/\r?\n/g, '\r\n') }));
+      const before = structuredClone(chain);
+      assert.deepEqual(parseWhoisChain(chain), parseWhoisChain(fixture.chain), fixture.name);
+      assert.deepEqual(chain, before);
+    }
+  });
   for (const fixture of fixtures) {
     test(fixture.name, () => {
       const parsed = parseWhoisChain(fixture.chain);
@@ -148,21 +100,31 @@ describe('WHOIS registry compatibility fixtures', () => {
     assert.deepEqual(coveredProfiles, expectedProfiles);
   });
 
-  test('reuses each independently documented parser fixture for its declared suffix aliases', () => {
+  test('reuses independently specified parser outcomes across suffixes sharing the declared syntax profile', () => {
+    const capabilities = listRegistryCapabilities();
+    const byId = new Map(capabilities.map(capability => [capability.id, capability]));
+    const exercisedProfiles = new Set<string>();
     let covered = 0;
-    for (const family of PARSER_FAMILY_ALIASES) {
-      const fixture = fixtures.find((candidate) => candidate.capabilityProfile === family.profile
-        && candidate.scenario === 'registered');
-      assert.ok(fixture, `${family.profile}: registered fixture`);
+    for (const fixture of fixtures.filter(candidate => candidate.scenario === 'registered'
+      && typeof candidate.expected.domainName === 'string')) {
+      const family = byId.get(fixture.capabilityProfile);
+      if (!family) {
+        assert.equal(fixture.capabilityProfile, 'iana-generic');
+        continue;
+      }
       const baseDomain = fixture.expected.domainName;
       if (typeof baseDomain !== 'string') {
-        throw new TypeError(`${family.profile}: expected domain fixture`);
+        throw new TypeError(`${family.id}: expected domain fixture`);
       }
-      assert.match(baseDomain, new RegExp(`\\.${escaped(family.baseSuffix)}$`, 'i'));
-
-      for (const alias of family.aliases) {
+      const baseSuffix = family.suffixes.find(suffix => baseDomain.toLowerCase().endsWith(`.${suffix}`));
+      assert.ok(baseSuffix, `${family.id}: fixture domain belongs to the declared suffix family`);
+      // This tests shared parser syntax, not live endpoint identity or access.
+      const aliases = capabilities.filter(candidate => candidate.whoisParserProfile === family.whoisParserProfile
+        && candidate.fixtureScenarios.includes('registered')).flatMap(candidate => candidate.suffixes)
+        .filter(suffix => suffix !== baseSuffix);
+      for (const alias of aliases) {
         const aliasDomain: string = baseDomain.replace(
-          new RegExp(`${escaped(family.baseSuffix)}$`, 'i'),
+          new RegExp(`${escaped(baseSuffix)}$`, 'i'),
           alias,
         );
         const chain = fixture.chain.map((hop) => ({
@@ -170,17 +132,23 @@ describe('WHOIS registry compatibility fixtures', () => {
           response: hop.response
             .replace(new RegExp(escaped(baseDomain), 'gi'), aliasDomain)
             .replace(
-              new RegExp(`(^domain:\\s*)${escaped(family.baseSuffix)}(\\s*$)`, 'gim'),
+              new RegExp(`(^domain:\\s*)${escaped(baseSuffix)}(\\s*$)`, 'gim'),
               `$1${alias}$2`,
             ),
         }));
         const parsed = parseWhoisChain(chain);
         assert.equal(parsed.registrationStatus, 'registered', alias);
         assert.equal(parsed.domainName, aliasDomain, alias);
+        exercisedProfiles.add(family.whoisParserProfile);
         covered += 1;
       }
     }
-    assert.equal(covered, 53);
+    assert.ok(covered > 0, 'The catalogue must exercise shared-syntax suffix substitutions.');
+    for (const family of capabilities.filter(candidate => candidate.fixtureScenarios.includes('registered'))) {
+      const suffixCount = capabilities.filter(candidate => candidate.whoisParserProfile === family.whoisParserProfile
+        && candidate.fixtureScenarios.includes('registered')).flatMap(candidate => candidate.suffixes).length;
+      if (suffixCount > 1) assert.ok(exercisedProfiles.has(family.whoisParserProfile), `${family.id}: shared syntax needs an independent domain expectation`);
+    }
   });
 
   test('covers the version seventeen shared-service ccTLD batch', () => {

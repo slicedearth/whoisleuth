@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { CliUsageError } from './errors.mts';
 import { cliInvocationOptionIndices, cliMetaActionForInvocation } from './command-reference.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
-import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 
 export const CLI_CONFIG_SCHEMA = 'whoisleuth.cli.config';
 export const CLI_CONFIG_VERSION = 1;

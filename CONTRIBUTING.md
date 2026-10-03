@@ -1,25 +1,68 @@
 # Contributing
 
 Start with [local setup](docs/getting-started.md). Use the committed lockfile
-and development runtime in `.nvmrc`. Keep changes focused and add a regression
-test that would fail without the change.
+and development runtime in `.nvmrc`. Keep changes focused. Add an independent
+regression test for a behavioural defect; inspect cosmetic changes in the
+rendered interface rather than freezing individual CSS values in tests.
+Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+Common changes: [interface behaviour](#change-interface-behaviour),
+[portable Case fields](#change-a-portable-case-field),
+[saved collections](#add-a-saved-collection),
+[CLI options and commands](#change-cli-options-and-commands),
+[verification](#select-local-verification) and [workflows](#change-workflows).
+
+Format edited source with `npm run format -- <path> ...`; quote paths containing
+parentheses. The shared configuration also works in editors. Keep formatting
+focused on the files being changed, and put larger readability-only changes in
+their own commit. It is an editing aid, not a blocking CI style gate. Generated
+references, retained data and compatibility fixtures use their existing owners.
 
 ## Find the owner
 
-- **Interface behaviour:** start at `frontend/src/routes/`, follow component
+- **Interface behaviour:** start at [routes](frontend/src/routes/), follow component
   imports, and keep temporary form state with the form. Domain rules belong in
   `packages/`; browser storage and DOM operations belong in frontend adapters.
-- **Case decisions:** `packages/cases/case-record-decisions.mts` owns identities
+- **Case decisions:** [case-record-decisions.mts](packages/cases/case-record-decisions.mts) owns identities
   and labels. Transition policy is separate from presentation. Response forms
   use the existing workspace save coordinator, not independent writes.
-- **Response history:** `case-response-actions.mts` owns action transitions;
-  `case-response-outcomes.mts` owns observed effects and closure. Packet input
-  validation is in `case-response-review-inputs.mts`, separate from construction.
-- **Lookup downloads:** `frontend/src/lib/analysis/lookup-exports.ts` prepares
+- **Response history:** [case-response-actions.mts](packages/cases/case-response-actions.mts) owns action transitions;
+  [case-response-outcomes.mts](packages/cases/case-response-outcomes.mts) owns observed effects and closure. Packet input
+  validation is in [case-response-review-inputs.mts](packages/cases/case-response-review-inputs.mts), separate from construction.
+  [case-response-progress.ts](frontend/src/lib/analysis/case-response-progress.ts) projects workspace stages; recheck
+  admissibility uses structured reasons in [case-recheck-model.mts](packages/cases/case-recheck-model.mts), independently of display wording.
+- **Lookup downloads:** [lookup-exports.ts](frontend/src/lib/analysis/lookup-exports.ts) prepares
   projections and files; the route owns visible status, not export formatting.
-- **CLI options:** `cli/command-reference.mts` owns grammar and command bindings.
-  Help and completion derive from it; command handlers own execution.
-- **Portable fields:** `packages/cases/case-record-projection.mts` requires
+- **Lookup state:** [lookup-session.ts](frontend/src/lib/controllers/lookup-session.ts) owns request state, URL
+  reconciliation and session snapshots; [lookup-view-state.ts](frontend/src/lib/controllers/lookup-view-state.ts) restores observations.
+  [lookup-case-workspace.ts](frontend/src/lib/controllers/lookup-case-workspace.ts) and [lookup-watchlist-workspace.ts](frontend/src/lib/controllers/lookup-watchlist-workspace.ts) own their drafts,
+  saves and stale-result guards. [lookup-section-navigation.ts](frontend/src/lib/controllers/lookup-section-navigation.ts) handles section
+  buttons, evidence links and hash restoration through the shared anchor controller.
+  Request and storage adapters retain their collection and transaction boundaries.
+  [lookup-page-lifecycle.ts](frontend/src/lib/controllers/lookup-page-lifecycle.ts) owns restoration, context refresh and disposal;
+  [lookup-case-form.ts](frontend/src/lib/controllers/lookup-case-form.ts) owns temporary response-form defaults and reset policy.
+  Section presenters ([Registry](frontend/src/lib/components/LookupRegistrySection.svelte), [Relationships](frontend/src/lib/components/LookupRelationshipsSection.svelte),
+  [Source quality](frontend/src/lib/components/LookupSourceQualitySection.svelte) and [Web evidence](frontend/src/lib/components/LookupWebEvidenceSection.svelte)) own their display
+  projections and child wiring. [LookupEvidenceSection](frontend/src/lib/components/LookupEvidenceSection.svelte) owns the shared heading
+  and spacing; section controls delegate to the existing navigation owner.
+- **Bulk state:** [bulk-scan-controller.ts](frontend/src/lib/controllers/bulk-scan-controller.ts) owns a scan from start through pause,
+  cancellation and disposal. [bulk-view-state.ts](frontend/src/lib/controllers/bulk-view-state.ts) creates, resets and projects
+  filters. [bulk-session-workspace.ts](frontend/src/lib/controllers/bulk-session-workspace.ts) owns saved-session drafts, retention
+  approval and write/reload outcomes; [bulk-collection-workflow.ts](frontend/src/lib/controllers/bulk-collection-workflow.ts) connects it
+  to collection, while the route supplies visible effects.
+- **Bulk actions:** [bulk-case-actions.ts](frontend/src/lib/controllers/bulk-case-actions.ts) coordinates Case writes and refreshes;
+  [bulk-monitor-actions.ts](frontend/src/lib/controllers/bulk-monitor-actions.ts) admits every Monitor save through the same checks.
+  [bulk-export.ts](frontend/src/lib/analysis/bulk-export.ts) owns CSV columns; the route only downloads the result.
+- **Brand Profile editing:** [brand-profile-editor.ts](frontend/src/lib/controllers/brand-profile-editor.ts) owns form values,
+  reset/load, submission and capture cancellation. The route's existing mutation
+  coordinator still owns writes, conflicts and recovery reads.
+- **CLI options:** family `cli/*-command-definitions.mts` files own command
+  bindings; [command-definition.mts](cli/command-definition.mts) owns shared options. Help and completion
+  derive from them; command handlers own execution.
+- **CLI recipes:** [investigation-recipes.mts](cli/investigation-recipes.mts) owns recipe definitions. Names,
+  argument choices and catalogue entries derive; plan construction validates
+  each step against the command's independent network contract.
+- **Portable fields:** [case-record-projection.mts](packages/cases/case-record-projection.mts) requires
   explicit audience treatment. Preserve independent privacy assertions and
   immutable published-version fixtures; do not derive their expected answers
   from the implementation being tested.
@@ -29,6 +72,12 @@ the metadata version and empty optional policies; variants still need explicit
 discriminators and fixture bindings. Public document versions are separate.
 
 Follow imports and nearby tests rather than adding another registration table.
+Cross-runtime analysis belongs in `packages/analysis/`; domain directories
+inherit dependency boundaries without a filename allowlist. Existing public
+facades stay compatible, but new internal imports use the implementation owner.
+Put new server-only implementations in `lib/server/`; browser imports are rejected
+for the whole directory, including modules without Node imports. Existing runtime
+entry points remain protected and need not move merely to adopt this convention.
 An ordinary helper in an existing area needs no package-inventory baseline or
 ownership exception. New unit tests follow `test/<name>.test.mts` and are
 discovered automatically. Source counts are reported; resource bounds still
@@ -39,24 +88,121 @@ scheduling estimate until accepted measurements are available.
 
 ## Check the change
 
+Choose checks for the behaviour changed, not the number of files touched.
+
+| Change | Local verification |
+| --- | --- |
+| Spacing, colours, typography or equivalent wording | `npm run check`, `git diff --check`, and rendered review of affected pages at desktop/mobile widths and both themes. No new regression test or full local suite is required. |
+| A pure domain rule or helper | Run its independent unit tests and compiler checks. Preserve relevant property, hostile-input and compatibility tests. |
+| Navigation, forms, loading, persistence or meaningful evidence copy | Use the focused plan below and exercise the changed workflow. Keep accessibility and privacy expectations independent. |
+| Shared protocols, schemas, authentication, packaging or verification infrastructure | Use the relevant integration and contract checks; broaden to the full local boundary when the change crosses those boundaries. |
+
+Visual review includes alignment, hierarchy, density, legibility, hover/focus and
+clipping. Screenshots help review a substantial redesign; they are not an
+automatic request for screenshot baselines or pixel assertions. Changes to
+disclosed scope, uncertainty, privacy or accessibility are behavioural, not
+equivalent wording.
+
+### Select local verification
+
+For behavioural changes:
+
 ```bash
 npm run verification:focused -- --list
 npm run verification:focused
 ```
 
-The default scope is the working diff. For a committed or smaller change, pass
-its paths explicitly after `--`. Read the plan: runtime imports find unit and
-browser consumers, while domain rules preserve workflow checks. Ordinary Svelte
-components inherit the checks of their consuming routes; known component families
+While editing, add `--iteration` to run the selected unit/type checks and
+browser-import discovery without building or executing browsers, packages,
+native integration tests or repository-wide integration gates. The plan explains
+which changed paths selected each check and lists every deferred gate. Run the
+same selection without `--iteration` at the coherent batch boundary. Neither mode replaces
+the complete required pre-merge checks.
+
+For a fast all-domain feedback pass, use `npm run test:unit`. Repository-wide
+integration checks use the `.integration.test.mts` suffix and run through
+`npm run test:integration`. `npm test` still discovers both; required CI runs
+product coverage and integration checks separately, without instrumenting the
+repository analyser itself. New test files need no inventory registration.
+The unit and coverage lanes need no optional shells. Native completion and
+workflow-shell checks run in integration and require Bash, zsh, Fish and
+PowerShell; the complete local CI entry point checks those prerequisites before
+expensive work.
+
+Small leaf components can have a `<kebab-name>.component.spec.ts` browser
+contract exercised through a real page. Focused selection uses it only when the
+component imports no local modules and has no cross-cutting owner. Shared state,
+storage, navigation and unresolved imports retain workflow coverage. Full
+pre-merge browser coverage is unchanged.
+
+Passing screenshots are an optional review gallery: set
+`WHOISLEUTH_E2E_VISUAL_EVIDENCE=1` when collecting images for inspection. Ordinary
+runs retain all viewport, accessibility and behaviour assertions; failures still
+retain automatic screenshots and traces. `WHOISLEUTH_E2E_LOCAL_JOBS=2` permits
+two functional shards on a host with sufficient capacity. The default is one,
+performance measurements remain isolated, and queued shards stop on failure.
+Loading reports record transfer, timing and long tasks without historical
+bundle-size ceilings. Prepared interactions still require zero new assets;
+readiness, layout stability, module isolation and request boundaries remain
+blocking. Review measurements for material regressions rather than updating
+a size baseline whenever an implementation changes.
+
+The default scope is the working diff. For a batch spanning local commits, use
+`npm run verification:focused -- --since=<base-commit> --list`, then omit `--list`
+to run it. This includes committed, staged, unstaged and new files. To select
+explicit paths during editing:
+
+```bash
+npm run verification:focused -- --iteration --list cli/doctor.mts
+npm run verification:focused -- --iteration 'frontend/src/lib/components/CopyButton.svelte'
+```
+
+The first `--` passes arguments through npm. An optional second `--` separates
+verification options from paths. `--list` previews without executing checks;
+remove `--iteration` for integration acceptance. Read the plan: runtime imports
+and routes referenced by browser tests find consumers, while domain rules
+preserve workflow checks. Ordinary frontend
+components and models inherit the checks of their consuming routes; known families
 retain their workflow suites. Shared-code edits keep all compiler projects checked,
 so erased type imports need not select unrelated runtime tests.
-Missing runtime import evidence falls back to all unit tests, and unexplained
-interface changes select all functional browser tests. A full run remains available for infrastructure
+No known runtime consumer falls back to all unit tests. An unresolved local import
+keeps its reachable test consumers selected for every source change and is named
+in the plan; missing graph roots remain conservative. Unexplained interface
+changes select all functional browser tests. A full run remains available for infrastructure
 changes and reproducing CI; see [verification](docs/getting-started.md#verification).
+
+Verification responsibilities are separate: `tools/verification-policy.mts`
+contains the curated workflow obligations; `runtime-test-consumers.mts` indexes
+runtime dependents; `verification-ownership.mts` combines them into the explained
+plan. An ordinary module or test still requires no registration.
+
+### Change interface behaviour
+
+UI tests should assert the behaviour they protect. Locate navigation by its
+destination and accessible role; avoid layout classes or whole explanatory
+sentences when their wording is not the contract. Keep independent assertions
+for meaningful names, privacy disclosures and evidence limitations. Run the
+affected tests before broad verification.
+
+Scope repeated controls to their named region or group rather than their position.
+Prove filter membership and disclosure state directly; catalogue totals and
+incidental dimensions should not need updating after unrelated content changes.
+
+Lookup and Bulk collection start in `controllers/*-collection-workflow.ts`:
+admission, submitted context and completion live there. Routes supply view effects;
+request controllers own cancellation and workspace controllers own saved mutations.
+Lookup section eligibility and deferred imports live together in
+`components/lookup-section-surfaces.ts` and `lookup-web-surfaces.ts`, shared by
+rendering and intent loading.
 
 Selected browser specifications are loaded before expensive checks. This catches
 test-discovery and import errors without starting a server or browser; it is not
 a substitute for the subsequent verified-build execution.
+
+Frontend build identity discovers local build helpers through configuration
+imports. Adding or extracting a helper needs no inventory entry. Unrelated test
+tools are not frontend inputs; source bytes, served bytes and the build revision
+must still match before reusing an artefact.
 
 For ordinary Case setup, `test/support/current-case.mts` supplies a deterministic,
 detached current record and collection envelope. Invalid overrides fail at setup
@@ -64,10 +210,96 @@ instead of being silently normalised. Keep the expected behaviour in the test
 independent. Historical-format and hostile-input tests must retain their own
 explicit inputs, not regenerate them through a current fixture builder.
 
+### Change a portable Case field
+
+For a portable Case field, start with `case-record-contracts.mts`, then declare
+its audience treatment in `case-record-projection.mts`. Creation, updates and
+current recovery are in `case-record-operations.mts`; historical input adaptation
+is in `case-record-version-input.mts`. In `case-migration-model.mts`,
+`extractImportPatch` validates imports, `caseFromPatch` creates imported records,
+and `applyImportPatch` merges them without treating absent fields as defaults or
+older records as newer. Check all three when adding a field; successful current
+normalisation alone does not establish an import round trip. Change the format owner in
+`packages/contracts/case-portability.mts` only when the durable contract changes.
+Run the Case ownership and portability lifecycle tests; retain published
+fixtures unchanged and add an independent current fixture when required.
+
+### Add a saved collection
+
+Declare its format and limits in the [collection manifest](packages/contracts/browser-local-collection-manifest.mts),
+then implement its adapter in
+[browser-local-data-definitions.ts](frontend/src/lib/browser-local-data-definitions.ts).
+Document and decoded-record types derive from the adapter; ordering derives from the manifest.
+Archive membership is a separate privacy decision: unfinished drafts and other
+local recovery state must not become portable merely because they are saved.
+
+Decide how existing plaintext, encrypted and filesystem workspaces admit the new
+collection. Encrypted workspaces fail closed when a manifest is missing; do not
+silently create an empty collection or assume the saved-views repair applies to
+other data. Follow approval in the [Console layout](frontend/src/routes/%28console%29/+layout.svelte),
+initialisation options in the [service](frontend/src/lib/browser-local-data-service.ts),
+and migration policy in the [provider](frontend/src/lib/browser-local-data.ts).
+The [named-workspace provider](frontend/src/lib/browser-workspace-provider.ts)
+requires existing encrypted manifests; the [IndexedDB](frontend/src/lib/browser-indexeddb-storage.ts)
+and [filesystem](lib/local-application-store.mts) backends own atomic revision,
+retained-record and retained-file checks. Implement an explicit migration or recovery path and test an existing
+workspace fixture, missing manifests with retained records/files, and concurrent
+creation. Follow the [storage recovery boundary](docs/browser-local-data.md#encrypted-working-workspaces)
+and the [provider](test/browser-local-data-provider.test.mts),
+[encrypted migration](e2e/encrypted-workspaces.spec.ts) and
+[filesystem transaction](test/local-application-store.test.mts) tests. Keep historical
+fixtures independent. Version archive changes through their portable contract
+owner; browser persistence alone does not add export fields.
+
+### Change CLI options and commands
+
+CLI commands are grouped by responsibility: collection, network, evidence,
+review, assurance, workflow, history and support. Each family's
+`cli/*-command-definitions.mts` owns its reference and grammar bindings;
+`cli/*-arguments.mts` owns its parsed contract and semantic validation.
+The combined argument union is inferred from those parsers. Shared option
+definitions live in `command-definition.mts`; help, completion and browser
+reference pages derive from them. Keep effects in the corresponding runner,
+not in the data-only definition. Independent network and privacy expectations
+remain in the contract tests.
+Each parser's argument type uses its result's `action` to check direct option
+reads against that command's declarations. Shared helpers accept the option union.
+The catalogue's coarse offline/network label derives from the declared execution
+effect; write the collection scope once and preserve independent no-request tests.
+Each runner declares its own dependency type beside its handlers; the dispatcher
+composes those types. Add a new injectable effect at its consumer, not to a
+parallel central list. Only workflow handlers receive recursive command execution.
+Output flags use the shared presentation definition and the family's declared
+options; no separate flag-to-format map belongs in a parser. If the same flag has
+a genuinely different meaning for one command, declare its `optionOverrides`
+beside that command, using the shared option constructors; grammar, defaults and
+help consume the same choice. Do not add command-name branches to shared options.
+A command added to
+an existing family needs [execution semantics](packages/contracts/cli-command-semantics.mts), definition, parser and handler, plus
+independent behaviour/network tests—not a new dispatcher branch, argument-union
+entry, help list or ownership registration. Add a new family only for a genuinely
+different execution responsibility.
+
+For example, follow [collection definitions](cli/collection-command-definitions.mts)
+→ [collection arguments](cli/collection-arguments.mts)
+→ [Lookup runner](cli/lookup-command-runner.mts), with independent
+[registry](test/cli-command-registry.test.mts) and [process](test/cli-process.test.mts) tests.
+
 Before submitting a feature branch, run proportionate local checks and state
 any omissions. Merge requires complete fresh hosted checks against the current
 merge candidate. Release verification is a separate boundary. Local success
 does not promise identical behaviour on every supported environment.
+For a Linux-specific change, `npm run verification:linux -- --focused <path> ...`
+runs the existing selection in a clean container; add `--list` to preview it.
+The complete local Linux run is opt-in with `--full`, not a routine push requirement.
+
+### Change workflows
+
+`tools/ci-verification.mts` owns the shared verification groups. Add or change a
+required check there; `.github/workflows/ci.yml` invokes those groups rather than
+copying their command lists. `test/ci-workflow.test.mts` checks group coverage,
+failure propagation and build handoff. Job setup and artefact transfer remain
+explicit workflow responsibilities.
 
 For workflow changes, run `npm run workflow:check`. Local and hosted quality
 checks use the same pinned actionlint release and platform archive digests.
@@ -92,15 +324,23 @@ narrow-screen layout for affected forms.
 
 For a concrete editing rehearsal, use one small change at a time:
 
-- Change a Case form's presentation in its owning component. Inspect the
-  focused plan and exercise the affected control with keyboard and narrow-screen
-  checks; do not change domain rules to achieve a visual result.
+- Change a Case form's presentation in its owning component and review its
+  rendered appearance and keyboard operation. Do not change domain rules or
+  add tests for individual style values to achieve a visual result.
 - Change a recheck rule in `packages/cases/case-recheck-model.mts` and add an
   independently expected result in `test/case-recheck.test.mts`. A failed
   collection must remain inconclusive.
 - Extract a private helper from an existing module, preserving its exported
   behaviour. The existing consumer tests and focused plan should still find it
   without an inventory baseline or a new registration table.
+
+For state changes, add a field to its owning state type and factory, then define
+whether it survives reset and navigation. Exercise the lifecycle through that
+owner instead of adding another route-level reset list. For removals, update
+consumers and inspect the focused plan's conservative fallback for deleted files.
+Remove obsolete behaviour tests, not historical compatibility or privacy evidence.
+Retain a forwarding export when the removed internal location is a supported
+public entry point.
 
 Review the actual diff and selected checks after each exercise. These rehearsals
 show the change path; they do not establish that an unfamiliar contributor
@@ -123,6 +363,12 @@ Automated browser checks, simulated sessions and elapsed time alone are not
 evidence of human usability.
 
 Do not include credentials, private investigations or local paths in source,
-fixtures or reports. Automated tests use deterministic reserved targets and
-must not perform live collection. Report security issues through
+fixtures or reports. Automated tests use deterministic fixtures and must not
+perform live collection. Prefer reserved names and documentation addresses for
+display, export and replay. Real suffixes, catalogue/provider identifiers and
+address-policy boundaries are appropriate when those exact values define the
+contract being tested; inject their transport responses. Do not rewrite
+digest-bound historical fixtures. Synthetic registrar observations must not
+attribute invented compliance actions to real registrar identifiers.
+Report security issues through
 [the security policy](SECURITY.md).

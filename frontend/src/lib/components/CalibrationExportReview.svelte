@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { CASE_REVIEW_REASONS, dispositionLabel, type RiskCalibrationExportPreview } from '$lib/cases';
+  import { CASE_REVIEW_REASONS } from '../../../../packages/cases/case-record-contracts.mts';
+  import { dispositionLabel } from '../../../../packages/cases/case-record-decisions.mts';
+  import type { RiskCalibrationExportPreview } from '../cases.ts';
 
   let {
     preview,
@@ -85,7 +87,7 @@
         <p class="eyebrow">Local export review</p>
         <h2 id="calibration-review-title">Confirm Risk calibration dataset</h2>
       </div>
-      <button class="close" type="button" disabled={busy} aria-label="Cancel calibration export" onclick={cancel}>Esc</button>
+      <button class="close" type="button" disabled={busy} aria-label="Cancel calibration export" onclick={cancel}>Cancel <kbd aria-hidden="true">Esc</kbd></button>
     </header>
 
     <div class="review-body">

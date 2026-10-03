@@ -19,7 +19,7 @@ import {
   browserLocalDataProvider,
   readBrowserLocalDataCollections,
 } from './browser-local-data-service.ts';
-import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
+import type { AnyLocalDataCollectionDefinition } from './browser-local-data-content.ts';
 import { guardedWorkspaceRollback, guardedWorkspaceSettingsRollback } from './analysis/workspace-rollback.ts';
 import { rethrowUnknownWorkspaceCommit } from './analysis/workspace-import-outcome.ts';
 import { WORKSPACE_ARCHIVE_COLLECTIONS as SECTION_COLLECTIONS } from '../../../packages/contracts/browser-local-collection-manifest.mts';
@@ -43,11 +43,12 @@ export type WorkspaceImportSummary = {
   pruned: number;
   brandProfileReferencesOmitted: number;
   authoredHistoryOmitted: number;
+  evidenceHistoryOmitted: number;
 };
 
 function importSummary(
   id: string,
-  result: { added: number; updated: number; skipped: number; pruned?: number; brandProfileReferencesOmitted?: number; authoredHistoryOmitted?: number },
+  result: Pick<WorkspaceImportSummary, 'added' | 'updated' | 'skipped'> & Partial<Omit<WorkspaceImportSummary, 'id'>>,
 ): WorkspaceImportSummary {
   return {
     id,
@@ -57,6 +58,7 @@ function importSummary(
     pruned: result.pruned ?? 0,
     brandProfileReferencesOmitted: result.brandProfileReferencesOmitted ?? 0,
     authoredHistoryOmitted: result.authoredHistoryOmitted ?? 0,
+    evidenceHistoryOmitted: result.evidenceHistoryOmitted ?? 0,
   };
 }
 
@@ -169,10 +171,10 @@ async function applySettings(
   if (!setThemePreference(theme)) throw new Error('Could not save the imported theme preference. Browser storage may be full or unavailable.');
   if (activeProfileAvailable) {
     setActiveProfile(requestedProfileId);
-    return { added: 0, updated: section.updated, skipped: section.skipped, pruned: 0, brandProfileReferencesOmitted: 0, authoredHistoryOmitted: 0 };
+    return importSummary(section.id, { added: 0, updated: section.updated, skipped: section.skipped });
   }
   if (!requestedProfileId) setActiveProfile('');
-  return { added: 0, updated: section.updated, skipped: section.skipped, pruned: 0, brandProfileReferencesOmitted: 0, authoredHistoryOmitted: 0 };
+  return importSummary(section.id, { added: 0, updated: section.updated, skipped: section.skipped });
 }
 
 /** Revalidates the archive, then applies only selected ready sections. */
@@ -223,7 +225,7 @@ async function mergeWorkspacePreview(
     const settingsSection = sections.find((section) => section.id === 'settings');
     if (settingsSection) {
       const result = await applySettings(settingsSection, (settings) => { appliedSettings = settings; });
-      results.push({ id: settingsSection.id, added: result.added ?? 0, updated: result.updated ?? 0, skipped: result.skipped ?? 0, pruned: result.pruned ?? 0, brandProfileReferencesOmitted: 0, authoredHistoryOmitted: 0 });
+      results.push(importSummary(settingsSection.id, result));
     }
   } catch (cause) {
     rethrowUnknownWorkspaceCommit(cause);

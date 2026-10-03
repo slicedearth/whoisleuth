@@ -9,6 +9,7 @@ import type { CaseEvidenceSnapshot } from './case-model.ts';
 import { RISK_MODEL_VERSION } from './scoring.ts';
 import { inspectRdapCapabilities } from '../../../../lib/rdap-capabilities.mts';
 import { parseBoundedJson } from '../bounded-json.ts';
+import { capturedWebCollectionQuality } from '../../../../packages/evidence/collection-quality.mts';
 import {
   MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
   MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES,
@@ -214,6 +215,7 @@ function frozenCandidate(value: SyntheticCandidateInput): SyntheticDemoCandidate
     source: 'lookup',
     inputHostname: null,
     scanDepth: 'deep',
+    webCollectionQuality: capturedWebCollectionQuality(value.facts.websiteComplete ? 'complete' : 'unavailable', value.facts.websiteComplete ? 'complete' : 'unknown'),
     availability: availability === 'unknown' ? 'unknown' : 'registered',
     confidence: availability === 'unknown' ? 'low' : 'high',
     riskModelVersion: RISK_MODEL_VERSION,
@@ -788,7 +790,7 @@ export function syntheticDemoLookupView(id: string) {
       alternativeNamesTruncated: false,
       chain: [],
       chainTruncated: false,
-      validFrom: candidate.facts.certificateObserved ? '2026-07-01T00:00:00.000Z' : null,
+      validFrom: candidate.facts.certificateObserved ? '2026-06-01T00:00:00.000Z' : null,
       validTo: candidate.facts.certificateObserved ? '2026-10-01T00:00:00.000Z' : null,
       observedAt,
       validationDetails: [{ label: 'Source', value: certificate.source }],

@@ -187,7 +187,7 @@ test('current offline reviews retain explicit absence and observation-only state
     mx: { state: 'observed', values: [], source: 'Saved DNS MX', observedAt: AT },
     caa: { state: 'observed', values: ['0 iodef "https://reports.example/CaseX"'], source: 'Saved DNS CAA', observedAt: AT },
   });
-  assert.equal(report.version, 2);
+  assert.equal(report.version, 3);
   assert.equal(report.domains[0]?.comparisons.find((value) => value.field === 'mx')?.state, 'aligned');
   assert.equal(report.domains[0]?.comparisons.find((value) => value.field === 'mx')?.expectation, 'expect_none');
   assert.equal(report.domains[0]?.comparisons.find((value) => value.field === 'caa')?.state, 'observed');
@@ -232,7 +232,7 @@ test('review readers preserve independent public bytes and reject current contra
   const wrong = JSON.parse(JSON.stringify(report));
   wrong.domains[0].comparisons.find((value: { field: string }) => value.field === 'mx').expectation = 'observe_only';
   assert.throws(() => validateDomainControlReviewDocument(wrong), /expectation is inconsistent/);
-  assert.throws(() => validateDomainControlReviewDocument({ ...report, version: 3 }), /version/);
+  assert.throws(() => validateDomainControlReviewDocument({ ...report, version: 4 }), /version/);
 });
 
 test('current offline review preserves and validates every member of a complete 64-record set', () => {

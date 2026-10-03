@@ -74,16 +74,9 @@ test('signs in through the login form and back out again', async ({ page }) => {
   const publicFooter = page.locator('.public-footer');
   const publicPrivacyLink = publicFooter.getByRole('link', { name: 'Privacy' });
   const publicSourceLink = publicFooter.getByRole('link', { name: /Source and licence/ });
-  const publicAuthorLink = publicFooter.getByRole('link', { name: /slicedearth/ });
   await expect(publicPrivacyLink).toHaveAttribute('href', '/privacy');
   await expectVersionedSourceLink(publicSourceLink);
   await expect(publicFooter.locator('.new-tab')).toHaveCount(0);
-  await expect(publicPrivacyLink).toHaveCSS('text-decoration-line', 'none');
-  await expect(publicSourceLink).toHaveCSS('text-decoration-line', 'none');
-  await expect(publicAuthorLink).toHaveCSS('text-decoration-line', 'none');
-  await expect(publicPrivacyLink).toHaveCSS('font-weight', '700');
-  await expect(publicSourceLink).toHaveCSS('font-weight', '700');
-  await expect(publicAuthorLink).toHaveCSS('font-weight', '700');
   await expect(page.getByText('See the workflow', { exact: true })).toHaveCount(0);
   await expect.poll(() => publicSessionRequests).toBe(1);
   await expect(page.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/login');
@@ -205,7 +198,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page.locator('.demo-footer').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.locator('.demo-footer').getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await page.goto('/resources');
-  await expect(page.locator('.closing-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
+  await expect(page.getByRole('main').getByRole('link', { name: 'Open console', exact: true })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await page.goto('/');
   const publicSignOutButton = page.getByRole('button', { name: 'Sign out' });

@@ -5,7 +5,7 @@
   } from '$lib/analysis/visualization-models.ts';
 
   type TimelineEvent = {
-    checkedAt: string;
+    checkedAt: string | null;
     mode: string;
     groups: Array<{ key: string; label: string; changes: unknown[] }>;
   };
@@ -15,7 +15,7 @@
     formatDate,
   }: {
     events: TimelineEvent[];
-    formatDate: (value: string) => string;
+    formatDate: (value: string | null) => string;
   } = $props();
 
   const timeline = $derived(projectMonitorTimeline(events.map((event, index): MonitorTimelineInput => ({
@@ -30,13 +30,14 @@
   }))));
 </script>
 
+{#if timeline.undatedEvents}<p class="undated">{timeline.undatedEvents} retained check{timeline.undatedEvents === 1 ? ' has' : 's have'} an unknown time and cannot be placed on the dated chart. The details remain below.</p>{/if}
 {#if timeline.events.length && timeline.lanes.length}
   <section class="timeline" aria-labelledby="domain-change-timeline-title">
     <header><div><p class="eyebrow">Change sequence</p><h4 id="domain-change-timeline-title">Observed domain timeline</h4></div>{#if timeline.truncated}<span>Partial visual</span>{/if}</header>
     <p>Each column is a retained check. Filled cells show the categories with recorded changes; the exact before and after values remain below.</p>
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -- scrollable timeline must be keyboard reachable -->
     <div class="timeline-frame" role="img" tabindex="0" aria-label={`Observed domain timeline with ${timeline.events.length} checks and ${timeline.lanes.length} evidence categories`}>
-      <svg viewBox={`0 0 ${timeline.width} ${timeline.height}`} aria-hidden="true">
+      <svg class="data-chart" width={timeline.width} height={timeline.height} viewBox={`0 0 ${timeline.width} ${timeline.height}`} aria-hidden="true">
         {#each timeline.lanes as lane}
           <text x="8" y={lane.y + lane.height / 2 + 3}>{lane.label}</text>
         {/each}
@@ -52,7 +53,11 @@
               fill-opacity={cell.count > 0 ? Math.max(.22, cell.count / timeline.maxChanges) : 1}
             ><title>{formatDate(event.checkedAt)}: {cell.label}, {cell.count} change{cell.count === 1 ? '' : 's'}</title></rect>
           {/each}
-          <text x={event.x + event.width / 2} y="25" text-anchor="middle" class="date">{formatDate(event.checkedAt).slice(0, 10)}</text>
+          <text x={event.x + event.width / 2} y="18" text-anchor="middle" class="date">
+            <title>{formatDate(event.checkedAt)}</title>
+            <tspan x={event.x + event.width / 2}>{new Date(event.checkedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</tspan>
+            <tspan x={event.x + event.width / 2} dy="15">{new Date(event.checkedAt).getUTCFullYear()}</tspan>
+          </text>
         {/each}
       </svg>
       <div class="mobile-events" aria-hidden="true">
@@ -75,6 +80,7 @@
 {/if}
 
 <style>
+  .undated{color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .timeline{min-width:0;margin-top:15px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
   h4{margin:2px 0 0;font:700 var(--text-sm) var(--mono)}
@@ -82,12 +88,12 @@
   .timeline>p{max-width:780px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .timeline-frame{max-width:100%;margin-top:11px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .timeline-frame:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-  svg{display:block;width:100%;min-width:680px;height:auto}
+  svg{min-width:680px}
   .mobile-events{display:none}
   rect{fill:var(--panel);stroke:var(--border);stroke-width:1}
   rect.changed{fill:var(--accent);stroke:var(--accent)}
-  text{fill:var(--text);font:600 9px var(--mono)}
-  text.date{fill:var(--muted);font-size:8px}
+  text{fill:var(--text);font:600 12px var(--mono)}
+  text.date{fill:var(--muted);font-size:12px}
   @media(max-width:620px){
     .timeline-frame{overflow:visible}
     .timeline-frame svg{display:none}

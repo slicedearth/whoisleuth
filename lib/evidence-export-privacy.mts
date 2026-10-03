@@ -1,9 +1,10 @@
 // Portable tree bounds, private-field exclusion and availability projection.
 // Source-specific publication assembly remains in evidence-export.mts.
-import { isSafeJsonObjectKey } from './bounded-json.mts';
+import { isSafeJsonObjectKey } from '../packages/analysis/bounded-json.mts';
 import { recordOrNull, type UnknownRecord } from './json-record.mts';
-import { isUriShapedLabel } from './portable-generator.mts';
+import { isUriShapedLabel } from '../packages/analysis/portable-generator.mts';
 import { validHttpDeliveryMetadata, validPagePublicationMetadata } from './homepage-metadata-contract.mts';
+import { normalizeWebCollectionQuality } from '../packages/evidence/collection-quality.mts';
 import {
   LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES, LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES,
   LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS,
@@ -27,7 +28,9 @@ const LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
   ...[...PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS]
     .filter((key) => !['registrar', 'registrant', 'abuse'].includes(key)),
   'registryContactsExcluded', 'observationHostname', 'webObservationMode',
+  'webCollectionQuality',
 ]);
+const HISTORICAL_LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([...LOOKUP_AVAILABILITY_ANALYSIS_KEYS].filter(key => key !== 'webCollectionQuality'));
 const PRIVATE_EVIDENCE_KEYS = new Set([
   'authorization', 'proxyauthorization', 'cookie', 'cookies', 'setcookie',
   'session', 'sessionid', 'sessiontoken', 'token', 'accesstoken', 'refreshtoken',
@@ -187,7 +190,7 @@ function privateEvidenceKey(value: string, item: unknown): boolean {
     || (normalized.includes('credential') && !normalized.startsWith('credentialsurface'));
 }
 
-export function portableUri(value: unknown): string | null {
+export function portableUri(value: unknown, legacyUris = false): string | null {
   const text = boundedString(value, 2048);
   if (!text) return null;
   try {
@@ -195,7 +198,7 @@ export function portableUri(value: unknown): string | null {
     if (!['http:', 'https:', 'mailto:', 'tel:', 'dns:', 'openpgp4fpr:'].includes(url.protocol)
       || url.username
       || url.password) return null;
-    if (url.protocol === 'http:' || url.protocol === 'https:') {
+    if (!legacyUris || url.protocol === 'http:' || url.protocol === 'https:') {
       url.search = '';
       url.hash = '';
     }
@@ -293,7 +296,7 @@ function projectLookupEvidenceAvailabilityPublicValue(
   if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
   if (typeof value === 'string') {
     const normalizedParent = normalizedEvidenceKey(path.at(-1) || '');
-    if (PORTABLE_URL_KEYS.has(normalizedParent)) return portableUri(value);
+    if (PORTABLE_URL_KEYS.has(normalizedParent)) return portableUri(value, true);
     if (PORTABLE_ORIGIN_COLLECTION_KEYS.has(normalizedParent)) return portableOrigin(value);
     return projectPortableString(value);
   }
@@ -336,18 +339,19 @@ function projectLookupEvidenceAvailabilityValue(
   path: readonly string[],
   state: PortableProjectionState,
   depth: number,
+  legacyUris: boolean,
 ): unknown {
   consumePortableProjectionEntry(state, depth);
   if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
   if (typeof value === 'string') {
     const normalizedParent = normalizedEvidenceKey(path.at(-1) || '');
-    if (PORTABLE_URL_KEYS.has(normalizedParent)) return portableUri(value);
+    if (PORTABLE_URL_KEYS.has(normalizedParent)) return portableUri(value, legacyUris);
     if (PORTABLE_ORIGIN_COLLECTION_KEYS.has(normalizedParent)) return portableOrigin(value);
     return projectLookupEvidenceAvailabilityString(value);
   }
   if (Array.isArray(value)) {
     return value.slice(0, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS)
-      .map((item) => projectLookupEvidenceAvailabilityValue(item, path, state, depth + 1));
+      .map((item) => projectLookupEvidenceAvailabilityValue(item, path, state, depth + 1, legacyUris));
   }
   const source = recordOrNull(value);
   if (!source) return null;
@@ -382,7 +386,7 @@ function projectLookupEvidenceAvailabilityValue(
     if (key === 'value'
       && (!LOOKUP_AVAILABILITY_VALUE_PATHS.has(parentPath)
         || (item !== null && typeof item !== 'string'))) continue;
-    output[key] = projectLookupEvidenceAvailabilityValue(item, [...path, key], state, depth + 1);
+    output[key] = projectLookupEvidenceAvailabilityValue(item, [...path, key], state, depth + 1, legacyUris);
   }
   return output;
 }
@@ -398,6 +402,7 @@ function projectLookupEvidenceAvailabilityWithKeys(
   rootKeys: ReadonlySet<string>,
   registryContactsExcluded: boolean,
   currentPrivacyRules: boolean,
+  legacyUris = false,
 ): UnknownRecord | null {
   const source = recordOrNull(value);
   if (!source) return null;
@@ -408,8 +413,12 @@ function projectLookupEvidenceAvailabilityWithKeys(
     if (!Object.hasOwn(source, key)) continue;
     const item = source[key];
     if (privateEvidenceKey(key, item)) continue;
+    if (key === 'webCollectionQuality') {
+      output[key] = normalizeWebCollectionQuality(item);
+      continue;
+    }
     output[key] = currentPrivacyRules
-      ? projectLookupEvidenceAvailabilityValue(item, [key], state, 1)
+      ? projectLookupEvidenceAvailabilityValue(item, [key], state, 1, legacyUris)
       : projectLookupEvidenceAvailabilityPublicValue(item, [key], state, 1);
   }
   if (registryContactsExcluded) output.registryContactsExcluded = true;
@@ -457,16 +466,17 @@ export function projectLookupEvidenceAvailabilityPublic(value: unknown): Unknown
  * and abuse contact routes are deliberately excluded at the root boundary;
  * the marker prevents that privacy omission from being read as source absence.
  */
-export function projectLookupEvidenceAvailability(value: unknown): UnknownRecord | null {
+export function projectLookupEvidenceAvailability(value: unknown, { legacyUris = false } = {}): UnknownRecord | null {
   return projectLookupEvidenceAvailabilityWithKeys(
     value,
-    LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
+    legacyUris ? HISTORICAL_LOOKUP_AVAILABILITY_ANALYSIS_KEYS : LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
     true,
     true,
+    legacyUris,
   );
 }
 
-export function assertLookupEvidencePrivacySafeTree(value: unknown): void {
+export function assertLookupEvidencePrivacySafeTree(value: unknown, { legacyUris = false } = {}): void {
   assertLookupEvidencePortableTree(value);
   const pending: unknown[] = [value];
   while (pending.length) {
@@ -489,7 +499,7 @@ export function assertLookupEvidencePrivacySafeTree(value: unknown): void {
       if (privateEvidenceKey(normalized, item)) {
         throw new TypeError('Lookup evidence contains excluded private request or session material.');
       }
-      if (typeof item === 'string' && PORTABLE_URL_KEYS.has(normalized) && portableUri(item) !== item) {
+      if (typeof item === 'string' && PORTABLE_URL_KEYS.has(normalized) && portableUri(item, legacyUris) !== item) {
         throw new TypeError('Lookup evidence contains a credential-bearing or non-portable URL.');
       }
       pending.push(item);

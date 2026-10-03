@@ -2,11 +2,8 @@
 // authority for normalization and merge semantics; this module only packages
 // their portable contracts, verifies integrity, and previews conflicts.
 
-import {
-  buildCaseExport,
-  enforceStoreBudget,
-  mergeCases,
-} from '../cases/case-model.mts';
+import { buildCaseExport, enforceStoreBudget } from '../cases/case-storage-model.mts';
+import { mergeCases } from '../cases/case-migration-model.mts';
 import type { CaseRecord } from '../cases/case-model.mts';
 import {
   assertBrandProfileStoreBudget,
@@ -185,6 +182,7 @@ export interface WorkspaceArchivePreviewSection extends Omit<WorkspaceArchiveSec
   pruned?: number;
   brandProfileReferencesOmitted?: number;
   authoredHistoryOmitted?: number;
+  evidenceHistoryOmitted?: number;
   selected: boolean;
   normalizedSettings?: WorkspaceSettings | null;
 }
@@ -213,6 +211,7 @@ interface WorkspaceMergeResult {
   pruned?: number;
   brandProfileReferencesOmitted?: number;
   authoredHistoryOmitted?: number;
+  evidenceHistoryOmitted?: number;
   profiles?: BrandProfile[];
   settings?: WorkspaceSettings;
   reason?: string;
@@ -832,15 +831,14 @@ function previewVerifiedWorkspaceArchive(
       results.push({
         ...section,
         status: 'ready',
-        reason: definition.id === 'settings' && selected && (result.skipped ?? 0) > 0
-          ? result.reason ?? 'The imported workspace preference was skipped. Existing browser-local context is preserved.'
-          : section.reason,
+        reason: selected && result.reason ? result.reason : section.reason,
         added: result.added ?? 0,
         updated: result.updated ?? 0,
         skipped: result.skipped ?? 0,
         pruned: result.pruned ?? 0,
         brandProfileReferencesOmitted: result.brandProfileReferencesOmitted ?? 0,
         authoredHistoryOmitted: result.authoredHistoryOmitted ?? 0,
+        evidenceHistoryOmitted: result.evidenceHistoryOmitted ?? 0,
         selected,
         normalizedSettings: result.settings || null,
       });
@@ -882,6 +880,7 @@ function previewVerifiedWorkspaceArchive(
         pruned: 0,
         brandProfileReferencesOmitted: 0,
         authoredHistoryOmitted: 0,
+        evidenceHistoryOmitted: 0,
         selected: false,
         normalizedSettings: dependentId === 'settings' ? null : dependentSection.normalizedSettings ?? null,
       };

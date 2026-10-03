@@ -2,54 +2,53 @@
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { onDestroy } from 'svelte';
   import { PUBLIC_EXAMPLES_INDEX } from '$lib/generated/public-examples-index';
+  import { PUBLIC_EXAMPLE_LOADERS, type PublicExampleId, type PublicExampleOutput } from '$lib/generated/public-examples';
   import {
     DEFERRED_MODULE_RECOVERY_DETAIL,
     loadDeferredModule,
     reloadDeferredModulePage,
   } from '$lib/deferred-module';
 
-  type FullExamples = typeof import('$lib/generated/public-examples')['PUBLIC_EXAMPLES'];
-  type ExampleOutput = FullExamples['examples'][number];
+  type ExampleOutput = PublicExampleOutput;
 
   let format = $state('all');
+  let direction = $state('all');
   let openedId = $state('');
   let loadingId = $state('');
   let loadError = $state('');
   let actionStatus = $state('');
-  let outputs = $state<FullExamples | null>(null);
-  let outputsPromise: Promise<FullExamples> | null = null;
+  let outputs = $state<Partial<Record<PublicExampleId, ExampleOutput>>>({});
+  const pendingOutputs = new Map<PublicExampleId, Promise<ExampleOutput>>();
   let loadGeneration = 0;
   let active = true;
   const moduleController = new AbortController();
 
   const formats = Object.freeze([...new Set(PUBLIC_EXAMPLES_INDEX.examples.map((example) => example.format))]);
-  const filtered = $derived(PUBLIC_EXAMPLES_INDEX.examples.filter((example) => format === 'all' || example.format === format));
+  const filtered = $derived(PUBLIC_EXAMPLES_INDEX.examples.filter((example) => (format === 'all' || example.format === format) && (direction === 'all' || example.direction === direction)));
 
-  function outputFor(id: string): ExampleOutput | null {
-    return outputs?.examples.find((example) => example.id === id) ?? null;
+  function outputFor(id: PublicExampleId): ExampleOutput | null {
+    return outputs[id] ?? null;
   }
 
-  async function ensureOutputs(): Promise<FullExamples> {
-    if (outputs) return outputs;
-    outputsPromise ??= loadDeferredModule(
-      () => import('$lib/generated/public-examples'),
-      { signal: moduleController.signal },
-    )
-      .then((module) => module.PUBLIC_EXAMPLES)
-      .catch((error) => {
-        outputsPromise = null;
-        throw error;
-      });
-    outputs = await outputsPromise;
-    return outputs;
+  function ensureOutput(id: PublicExampleId): Promise<ExampleOutput> {
+    const retained = outputs[id];
+    if (retained) return Promise.resolve(retained);
+    let pending = pendingOutputs.get(id);
+    if (!pending) {
+      pending = loadDeferredModule<ExampleOutput>(PUBLIC_EXAMPLE_LOADERS[id], { signal: moduleController.signal })
+        .then(output => { if (active) outputs[id] = output; return output; })
+        .finally(() => pendingOutputs.delete(id));
+      pendingOutputs.set(id, pending);
+    }
+    return pending;
   }
 
-  function preloadOutputs(): void {
+  function preloadOutput(id: PublicExampleId): void {
     if (loadError) return;
-    void ensureOutputs().catch(() => undefined);
+    void ensureOutput(id).catch(() => undefined);
   }
 
-  async function toggleOutput(id: string) {
+  async function toggleOutput(id: PublicExampleId) {
     if (loadError) return;
     if (openedId === id) {
       openedId = '';
@@ -60,12 +59,12 @@
     actionStatus = '';
     loadingId = id;
     try {
-      await ensureOutputs();
+      await ensureOutput(id);
       if (!active || request !== loadGeneration) return;
       openedId = id;
     } catch {
       if (!active || request !== loadGeneration) return;
-      loadError = 'Synthetic output is unavailable.';
+      loadError = 'The synthetic example is unavailable.';
     } finally {
       if (active && request === loadGeneration) loadingId = '';
     }
@@ -93,22 +92,22 @@
 </script>
 
 <section class="gallery" aria-labelledby="example-gallery-title" data-testid="public-example-gallery">
-  <div class="gallery-heading"><div><p class="eyebrow">Example output</p><h2 id="example-gallery-title">Open a synthetic format</h2><p>Generated from reserved fixtures and marked as demonstration material.</p></div><label><span>Format</span><select bind:value={format}><option value="all">All formats</option>{#each formats as item}<option value={item}>{item}</option>{/each}</select></label></div>
+  <div class="gallery-heading"><div><p class="eyebrow">Inputs and outputs</p><h2 id="example-gallery-title">Open a synthetic format</h2><p>Fictional examples for the current CLI.</p></div><label><span>Example type</span><select bind:value={direction}><option value="all">Inputs and outputs</option><option value="input">Inputs</option><option value="output">Outputs</option></select></label><label><span>Format</span><select bind:value={format}><option value="all">All formats</option>{#each formats as item}<option value={item}>{item}</option>{/each}</select></label></div>
   {#if loadError}<div class="load-error" role="alert"><p>{loadError}</p><small>{DEFERRED_MODULE_RECOVERY_DETAIL}</small><button type="button" onclick={reloadDeferredModulePage}>Reload page</button></div>{/if}
   <p class="action-status" role="status" aria-live="polite">{actionStatus}</p>
   <div class="example-grid independent-grid">
     {#each filtered as example (example.id)}
-      <article class="card" data-example={example.id}>
-        <header><span class="synthetic-chip">Synthetic</span><span>{example.format}{example.large ? ' · larger output' : ''}</span></header>
+      <article class="card" id={`example-${example.id}`} data-example={example.id}>
+        <header><span class="synthetic-chip">Synthetic</span><span>{example.format} · {example.direction}{example.large ? ' · larger output' : ''}</span></header>
         <h3>{example.title}</h3>
         <p>{example.summary}</p>
         <code>{example.command}</code>
-        <button type="button" disabled={Boolean(loadError)} aria-expanded={openedId === example.id} aria-controls={openedId === example.id && outputFor(example.id) ? `example-output-${example.id}` : undefined} onpointerenter={preloadOutputs} onfocus={preloadOutputs} onclick={() => void toggleOutput(example.id)}>{loadingId === example.id ? 'Loading synthetic output…' : openedId === example.id ? 'Close synthetic output' : 'Open synthetic output'}</button>
+        <button type="button" disabled={Boolean(loadError)} aria-expanded={openedId === example.id} aria-controls={openedId === example.id && outputFor(example.id) ? `example-output-${example.id}` : undefined} onpointerenter={() => preloadOutput(example.id)} onfocus={() => preloadOutput(example.id)} onclick={() => void toggleOutput(example.id)}>{loadingId === example.id ? `Loading synthetic ${example.direction}…` : openedId === example.id ? `Close synthetic ${example.direction}` : `Open synthetic ${example.direction}`}</button>
         {#if openedId === example.id && outputFor(example.id)}
           {@const output = outputFor(example.id)!}
           <div class="example-output" id={`example-output-${example.id}`}>
             <strong>{output.notice}</strong>
-            <textarea class="output-scroll" readonly aria-label={`${output.title} synthetic output`} value={output.content}></textarea>
+            <textarea class="output-scroll" readonly aria-label={`${output.title} synthetic ${output.direction}`} value={output.content}></textarea>
             <div class="output-actions"><button type="button" onclick={() => void copyOutput(output)}>Copy example</button><button type="button" onclick={() => downloadOutput(output)}>Download example</button></div>
           </div>
         {/if}

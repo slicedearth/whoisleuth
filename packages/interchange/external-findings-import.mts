@@ -1,10 +1,7 @@
-import {
-  normalizeDomain,
-  openOrCreateCase,
-  updateCase,
-  type CaseRecord,
-} from '../cases/case-model.mts';
-import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
+import { openOrCreateCase, updateCase } from '../cases/case-record-operations.mts';
+import type { CaseRecord } from '../cases/case-model.mts';
+import { canonicalRegistrableDomain } from '../analysis/registrable-domain.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { canonicalArtifactJsonV2 } from '../evidence/artifact-integrity.mts';
 import { sha256IdentityHex } from '../evidence/record-identity.mts';
@@ -276,16 +273,7 @@ function structuredObservation(value: unknown, index: number): ExternalFindingSt
 }
 
 function findingKey(finding: ExternalFinding, sourceName: string): string {
-  return [
-    finding.domain,
-    finding.category,
-    finding.evidenceClass,
-    finding.summary,
-    finding.observedAt,
-    finding.completeness,
-    sourceName,
-    finding.structuredObservation?.eventId ?? '',
-  ].join('\u0000');
+  return canonicalArtifactJsonV2({ sourceName, finding });
 }
 
 export function parseExternalFindingsDocument(value: unknown): ExternalFindingsDocument {

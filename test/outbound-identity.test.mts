@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
 import packageDocument from '../package.json' with { type: 'json' };
+import { fetchHomepage } from '../lib/availability.mts';
 
 import {
   WHOISLEUTH_REQUEST_POLICY_URL,
@@ -25,16 +26,19 @@ test('outbound identity matches the package version and public request policy', 
 });
 
 test('legacy and divergent outbound identities do not return to production code', () => {
-  const files = [
-    'lib/availability.mts',
-    'lib/ct-search.mts',
-    'lib/domain-posture.mts',
-    'lib/favicon.mts',
-    'lib/threatfox-intelligence.mts',
-    'lib/urlhaus-intelligence.mts',
-    'lib/urlscan-intelligence.mts',
-  ];
+  const files = readdirSync(join(root, 'lib')).filter(file => file.endsWith('.mts')).map(file => join('lib', file));
   const source = files.map((file) => readFileSync(join(root, file), 'utf8')).join('\n');
   assert.doesNotMatch(source, /DomainStatusChecker|WHOISleuth-Posture|WHOISleuth\/1\.0/u);
-  for (const file of files) assert.match(readFileSync(join(root, file), 'utf8'), /whoisleuthRequestHeaders/u);
+});
+
+test('homepage requests carry the current identity through the collector boundary', async () => {
+  let requests = 0;
+  const result = await fetchHomepage('example.test', { fetcher: async (_url, options) => {
+    requests++;
+    assert.equal(new Headers(options.headers).get('User-Agent'), WHOISLEUTH_USER_AGENT);
+    assert.ok(options.signal instanceof AbortSignal);
+    return new Response('<title>Example</title>', { status: 200 });
+  } });
+  assert.equal(requests, 1);
+  assert.equal(result.status, 'fetched');
 });

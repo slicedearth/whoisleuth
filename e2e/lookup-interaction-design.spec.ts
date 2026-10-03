@@ -205,6 +205,13 @@ test('Lookup analyst question and disclosure controls change presentation withou
   await page.getByText('Open assessment', { exact: true }).click();
   await expect(detailedAssessment).toHaveAttribute('open', '');
   await expect(page.getByRole('heading', { name: 'What the current evidence can support' })).toBeVisible();
+  const readiness = detailedAssessment.locator('.claim-readiness');
+  const states = await readiness.locator('.claims > li > .claim-head > .state').allTextContents();
+  expect(states.length).toBeGreaterThan(0);
+  for (const [label, summaryLabel] of [['Evidence ready', 'ready'], ['Limited', 'limited'], ['Not ready', 'not ready']]) {
+    const count = states.filter(value => value.trim() === label).length;
+    await expect(readiness.getByRole('group', { name: 'Evidence Readiness summary' }).locator('span').filter({ hasText: new RegExp(`^${count} ${summaryLabel}$`, 'u') })).toHaveCount(1);
+  }
   await page.evaluate(() => {
     const state = window as typeof window & { __claimPassportWrites?: number };
     state.__claimPassportWrites = 0;
@@ -226,7 +233,7 @@ test('Lookup analyst question and disclosure controls change presentation withou
   });
   const requestCountBeforeExport = lookupRequests.length;
   const passportDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download portable passport for Registration-state statement' }).click();
+  await page.getByRole('button', { name: 'Download passport for Registration-state statement' }).click();
   const downloadedPassport = await passportDownload;
   expect(downloadedPassport.suggestedFilename()).toMatch(/^whoisleuth-claim-presentation-options\.invalid-registration-state-\d{4}-\d{2}-\d{2}\.json$/u);
   const passportPath = await downloadedPassport.path();
@@ -255,16 +262,12 @@ test('Lookup analyst question and disclosure controls change presentation withou
   expect(lookupRequests).toHaveLength(requestCountBeforeExport);
   await page.getByText('Close assessment', { exact: true }).click();
   await expect(detailedAssessment).not.toHaveAttribute('open', '');
-  await expect(page.getByRole('button', { name: 'Expand Advanced evidence' })).toBeVisible();
-  const familyToggle = page.getByRole('button', { name: 'Expand Registration evidence' }).locator('.toggle-icon');
-  await expect(familyToggle).toHaveText('');
-  await expect(familyToggle).toHaveCSS('width', '17px');
-  await expect(familyToggle).toHaveCSS('height', '17px');
+  await expect(page.getByRole('button', { name: 'Expand details: Advanced evidence' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Validated lookup response' })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Registration evidence' }).click();
   await expect(page.locator('#evidence-registry')).toBeVisible();
-  await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Registration evidence' }).click();
   await expect(page.locator('#evidence-registry')).toHaveCount(0);
 
   const visibility = controls.getByRole('group', { name: 'Evidence family visibility' });
@@ -283,9 +286,9 @@ test('Lookup analyst question and disclosure controls change presentation withou
   await expect(validatedResponse).toContainText('complete-response-tail');
   await expect(validatedResponse).not.toContainText('[preview omitted]');
   await expect(page.locator('#raw-data details')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Registration evidence' }).click();
   await expect(page.locator('#evidence-registry')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Registration evidence' }).click();
   await expect(page.locator('#evidence-registry')).toBeVisible();
 
   await expect(page.locator('#evidence-dns .dns-card')).toHaveJSProperty('open', false);
@@ -305,9 +308,9 @@ test('Lookup analyst question and disclosure controls change presentation withou
   ]);
 
   await visibility.getByRole('button', { name: 'Collapse all' }).click();
-  await expect(page.getByRole('button', { name: 'Expand Registration evidence' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Expand details: Registration evidence' })).toBeVisible();
   await expect(page.locator('#evidence-registry')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Expand Source quality evidence' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Expand details: Source quality evidence' })).toBeVisible();
   for (const surface of [
     { width: 1280, height: 720, theme: 'light' },
     { width: 1280, height: 720, theme: 'dark' },
@@ -589,7 +592,7 @@ test('same-route Lookup URL changes reconcile retained evidence, depth, and tran
       await page.getByRole('radio', { name: new RegExp(completedDepth, 'iu') }).check();
       await page.getByRole('button', { name: 'Run lookup' }).click();
       await expect(page.locator('#result')).toBeVisible();
-      await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+      await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
       await page.getByRole('tab', { name: /^Evidence/u }).click();
       await expect(page.locator('.target-detail-copy')).toContainText(`${targetType} · ${completedDepth} lookup`);
 
@@ -600,7 +603,7 @@ test('same-route Lookup URL changes reconcile retained evidence, depth, and tran
       await page.locator('#console-navigation').getByRole('link', { name: /^Lookup/u }).click();
       await expect(page.locator('#result')).toBeVisible();
       await expect(page.getByRole('radio', { name: new RegExp(otherDepth, 'iu') })).toBeChecked();
-      await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+      await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
       await page.getByRole('tab', { name: /^Evidence/u }).click();
       await expect(page.locator('.target-detail-copy')).toContainText(`${targetType} · ${completedDepth} lookup`);
 

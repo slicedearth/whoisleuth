@@ -12,6 +12,9 @@
   import EvidencePackageInput from './EvidencePackageInput.svelte';
   import { readPackagedCaseReview } from '$lib/case-review-package.ts';
   import BagItEvidenceReview from './BagItEvidenceReview.svelte';
+  import DeferredSurface from './DeferredSurface.svelte';
+  import { LOOKUP_EVIDENCE_SCHEMA } from '$lib/analysis/evidence-export.ts';
+  import type { LookupEvidenceReplay } from '$lib/analysis/lookup-evidence-replay.ts';
 
   let { onworkspace }: { onworkspace?: (file: Blob) => Promise<void> } = $props();
   type Selection = SelectedInvestigationFile & { name: string; key: number };
@@ -21,6 +24,30 @@
   let selectedPage = $state(0);
   let review = $state.raw<BrowserInvestigationPackageReview | null>(null);
   let caseReview = $state.raw<Awaited<ReturnType<typeof readPackagedCaseReview>> | null>(null);
+  let temporaryCase = $state(false);
+  let temporaryTrigger: HTMLButtonElement | null = null;
+  let lookupReview = $state.raw<LookupEvidenceReplay | null>(null);
+  let lookupPending = $state(false);
+  let lookupGeneration = 0;
+  let lookupTrigger: HTMLButtonElement | null = null;
+  $effect(() => { caseReview; temporaryCase = false; });
+  $effect(() => { review; lookupGeneration++; lookupReview = null; lookupPending = false; });
+
+  async function closeTemporaryCase() { temporaryCase = false; await tick(); temporaryTrigger?.focus(); }
+  async function closeTemporaryLookup() { lookupReview = null; await tick(); lookupTrigger?.focus(); }
+  async function openLookup(id: string, trigger: HTMLButtonElement) {
+    const current = review;
+    if (!current || lookupPending) return;
+    const generation = ++lookupGeneration;
+    lookupTrigger = trigger; lookupPending = true; error = '';
+    try {
+      const { readPackagedLookupReview } = await import('$lib/packaged-lookup-review.ts');
+      const result = await readPackagedLookupReview(current, id);
+      if (generation === lookupGeneration && review === current) lookupReview = result;
+    } catch (cause) {
+      if (generation === lookupGeneration) error = cause instanceof Error ? cause.message : 'This Lookup cannot be replayed. Its verified bytes remain downloadable.';
+    } finally { if (generation === lookupGeneration) lookupPending = false; }
+  }
   let reviewPage = $state(0);
   let activeArtifact = $state('');
   let artifactTrigger: HTMLButtonElement | null = null;
@@ -138,7 +165,7 @@
     downloadLocalFile(file, `${id}.${json ? 'json' : 'bin'}`);
     message = `Prepared verified bytes for ${id} for download. Confirm that the download completed; no browser data was imported.`;
   }
-  onDestroy(() => controller?.abort());
+  onDestroy(() => { controller?.abort(); lookupGeneration++; });
 </script>
 
 <section class="package card" aria-labelledby="investigation-package-title">
@@ -189,7 +216,8 @@
         <h4>Case handoff completeness</h4>
         <p>One exact current Case in {caseReview.entryId}. {caseReview.attachments.length - caseReview.missing.length} of {caseReview.attachments.length} original file references have matching bytes. This does not establish who reviewed the Case or whether its conclusions are correct.</p>
         <button class="btn" type="button" onclick={() => downloadEntry(caseReview!.entryId, true)}>Download Case JSON</button>
-        <p>Import the Case JSON into a separate workspace before reviewing. Unfinished forms are not included. Accepting returned entries in an existing Case never imports response authority, status or file bytes.</p>
+        <button class="primary" type="button" onclick={event => { temporaryTrigger = event.currentTarget; temporaryCase = true; }}>Open temporary Case review</button>
+        <p>Review without importing, or download the Case JSON for an explicit import into a separate workspace. Unfinished forms are not included.</p>
         {#if caseReview.attachments.length}<details><summary>Original file matches</summary><ul>{#each caseReview.attachments as item}<li>{item.attachment.fileName}: {item.entries.length ? item.entries.join(', ') : 'matching bytes absent'}</li>{/each}</ul></details>{/if}
       </section>{/if}
       {#if review.links.length}<ul class="links">{#each review.links as link}<li>Capsule {link.capsuleEntryId}: {link.state === 'linked' ? `exact source identity linked to ${link.sourceEntryId}` : `source identity ${link.state}`}</li>{/each}</ul>{/if}
@@ -210,7 +238,9 @@
             <details><summary>Digests and custody</summary><p class="digest">Raw bytes: {item.entry.contentDigestSha256}</p>{#if item.entry.canonicalDigestSha256}<p class="digest">Canonical JSON: {item.entry.canonicalDigestSha256}</p>{/if}<p>{review.manifest.version === 3 ? `Packaged as entry ${item.entry.sequence} at ${review.manifest.generatedAt}. No earlier custody is established.` : 'The historical manifest records ordering, not a custody time.'}</p></details>
             {#if item.issue}<p class="error">{item.issue}</p>{/if}
             {#if item.state === 'identity_verified'}
-              <div class="entry-actions"><button class="btn" type="button" onclick={() => downloadEntry(item.entry.id, item.interpretation !== 'opaque')} disabled={busy}>Download {item.entry.id}</button>{#if workspace && onworkspace}<button class="primary" type="button" onclick={() => void openWorkspace(item.entry.id)} disabled={busy}>Review workspace {item.entry.id}</button>{/if}</div>
+              <div class="entry-actions"><button class="btn" type="button" onclick={() => downloadEntry(item.entry.id, item.interpretation !== 'opaque')} disabled={busy}>Download {item.entry.id}</button>{#if workspace && onworkspace}<button class="primary" type="button" onclick={() => void openWorkspace(item.entry.id)} disabled={busy}>Review workspace {item.entry.id}</button>{/if}
+                {#if item.entry.schema === LOOKUP_EVIDENCE_SCHEMA}<button class="primary" type="button" disabled={lookupPending} onclick={event => void openLookup(item.entry.id, event.currentTarget)}>Review Lookup {item.entry.id}</button>{/if}
+              </div>
               {@const mediaType = 'mediaType' in item.entry ? item.entry.mediaType : 'application/json'}
               {#if supportsArtifactPreview(mediaType) && review.contents.has(item.entry.id)}
                 <button class="btn" type="button" aria-expanded={activeArtifact === item.entry.id}
@@ -227,6 +257,9 @@
   {/if}
   {/if}
 </section>
+{#if temporaryCase && caseReview}<DeferredSurface load={() => import('./PackagedCaseReview.svelte')} props={{review:caseReview,onclose:closeTemporaryCase}} loadingLabel="Opening temporary Case review…" unavailableLabel="The temporary review could not be opened. Verified file downloads remain available." />{/if}
+{#if lookupPending}<p role="status">Preparing the selected Lookup evidence…</p>{/if}
+{#if lookupReview}<DeferredSurface load={() => import('./PackagedLookupReview.svelte')} props={{replay:lookupReview,onclose:closeTemporaryLookup}} loadingLabel="Opening temporary Lookup review…" unavailableLabel="The temporary review could not be opened. Verified file downloads remain available." />{/if}
 
 <style>
   .review-format{margin-block:18px 12px;max-width:28rem}.review-format select{min-width:0;max-width:100%}

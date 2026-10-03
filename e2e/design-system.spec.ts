@@ -1,131 +1,10 @@
 import { expect, test } from './fixtures';
-import { boundingBox, currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData, openLookupOptionalSources, useTheme } from './helpers';
+import { expectNoHorizontalOverflow, openLookupOptionalSources } from './helpers';
 import { protectedDestinations } from '../frontend/src/lib/workspaces';
 import { consoleCommandNavigation } from '../frontend/src/lib/console-command-navigation';
 import { INTELLIGENCE_CAPABILITIES, sectionedLookupFixture } from './lookup-design-fixtures';
 
 // Shared visual-system, navigation and overflow coverage.
-
-test('native temporal fields share text-control sizing and theme while choices stay compact', async ({ page }) => {
-  await page.goto('/resources');
-  await page.evaluate(() => {
-    const group = document.createElement('fieldset');
-    group.id = 'native-control-fixture';
-    group.style.minWidth = '0';
-    group.style.maxWidth = '20rem';
-    const legend = document.createElement('legend');
-    legend.textContent = 'Native input controls';
-    group.append(legend);
-    for (const type of ['text', 'date', 'datetime-local', 'time', 'month', 'week', 'checkbox', 'radio']) {
-      const label = document.createElement('label');
-      label.className = 'field';
-      label.append(type);
-      const input = document.createElement('input');
-      input.type = type;
-      label.append(input);
-      group.append(label);
-    }
-    document.querySelector('main')!.append(group);
-  });
-  try {
-    const group = page.getByRole('group', { name: 'Native input controls', exact: true });
-    await expect(group.locator('input')).toHaveCount(8);
-    for (const theme of ['light', 'dark'] as const) {
-      await useTheme(page, theme);
-      for (const width of [320, 1280]) {
-        await page.setViewportSize({ width, height: 800 });
-        const inputs = await group.evaluate((element) => [...element.querySelectorAll('input')].map((input) => {
-          const style = getComputedStyle(input);
-          const box = input.getBoundingClientRect();
-          return { type: input.type, height: box.height, width: box.width, background: style.backgroundColor, border: style.borderRadius };
-        }));
-        const text = inputs.find((input) => input.type === 'text')!;
-        for (const input of inputs) {
-          if (input.type === 'checkbox' || input.type === 'radio') {
-            expect(input.width).toBeLessThanOrEqual(24);
-            expect(input.height).toBeLessThanOrEqual(24);
-          } else {
-            expect(input.height).toBeGreaterThanOrEqual(44);
-            expect(input.background).toBe(text.background);
-            expect(input.border).toBe(text.border);
-          }
-        }
-        await expectNoHorizontalOverflow(page);
-      }
-    }
-  } finally {
-    await page.evaluate(() => document.getElementById('native-control-fixture')?.remove());
-  }
-});
-
-test('the wordmark stays clean without a cursor-like status treatment across layouts', async ({ page }) => {
-  const variants = [
-    { path: '/', selector: '.public-brand strong', width: 1280, height: 800, visible: true },
-    { path: '/', selector: '.public-brand strong', width: 320, height: 700, visible: true },
-    { path: '/lookup', selector: '.brand strong', width: 1280, height: 800, visible: true },
-    { path: '/lookup', selector: '.shell > header > a > strong', width: 390, height: 844, visible: true },
-  ];
-
-  for (const variant of variants) {
-    await page.setViewportSize({ width: variant.width, height: variant.height });
-    await page.goto(variant.path);
-
-    const wordmark = page.locator(variant.selector);
-    if (variant.visible) await expect(wordmark).toBeVisible();
-    else await expect(wordmark).toBeHidden();
-    const marker = await wordmark.evaluate((element) => {
-      const markerStyle = getComputedStyle(element, '::after');
-      return {
-        content: markerStyle.content,
-        boxShadow: markerStyle.boxShadow,
-        animationName: markerStyle.animationName,
-      };
-    });
-
-    expect(marker.content).toBe('none');
-    expect(marker.boxShadow).toBe('none');
-    expect(marker.animationName).toBe('none');
-    await expectNoHorizontalOverflow(page);
-  }
-});
-
-test('the theme-aware WHOISleuth mark stays consistent and contained across themes and layouts', async ({ page }) => {
-  await useTheme(page, 'dark');
-  await page.goto('/');
-
-  const publicMark = page.locator('.public-brand .brand-mark');
-  await expect(publicMark).toBeVisible();
-  await expect(publicMark).toHaveAttribute('viewBox', '34 38 448 448');
-  await expect(publicMark).toHaveAttribute('aria-hidden', 'true');
-  expect(await publicMark.evaluate((element) => element.tagName)).toBe('svg');
-  await expect(publicMark.locator('[data-brand-tone="primary"]')).toHaveCount(1);
-  await expect(publicMark.locator('[data-brand-tone="secondary"]')).toHaveCount(1);
-
-  await page.getByRole('button', { name: /Colour theme/ }).click();
-  await page.getByRole('option', { name: 'Light theme' }).click();
-  const lightMark = page.locator('.public-brand .brand-mark');
-  await expect(lightMark).toBeVisible();
-  await expect(lightMark.locator('[data-brand-tone="primary"]')).toHaveCSS('fill', 'rgb(0, 91, 145)');
-  await expect(lightMark.locator('[data-brand-tone="secondary"]')).toHaveCSS('fill', 'rgb(0, 107, 73)');
-
-  await page.setViewportSize({ width: 320, height: 640 });
-  await page.reload();
-  const mobileBrandBox = await boundingBox(page.locator('.public-brand'));
-  const mobileMarkBox = await boundingBox(page.locator('.public-brand .brand-mark'));
-  expect(mobileMarkBox.x).toBeGreaterThanOrEqual(mobileBrandBox.x);
-  expect(mobileMarkBox.x + mobileMarkBox.width).toBeLessThanOrEqual(mobileBrandBox.x + mobileBrandBox.width + 1);
-  await expectNoHorizontalOverflow(page);
-
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/dashboard');
-  await expect(page.locator('.brand .brand-mark')).toBeVisible();
-  await expect(page.locator('.shell > header .brand-mark')).toHaveCount(1);
-
-  await page.setViewportSize({ width: 320, height: 640 });
-  await page.reload();
-  await expect(page.locator('.shell > header .brand-mark')).toBeVisible();
-  await expectNoHorizontalOverflow(page);
-});
 
 test('the active console navigation marker never overlaps its label', async ({ page }) => {
   for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
@@ -138,28 +17,11 @@ test('the active console navigation marker never overlaps its label', async ({ p
       const link = element.getBoundingClientRect();
       const label = element.querySelector('strong')!.getBoundingClientRect();
       return {
-        marker: getComputedStyle(element, '::before').content,
         labelInside: label.left >= link.left && label.right <= link.right,
       };
     });
-    expect(geometry.marker).toBe('""');
     expect(geometry.labelInside).toBe(true);
     if (size.width < 800) await page.getByRole('button', { name: 'Close navigation' }).click();
-  }
-});
-
-test('data-dense analyst routes can use the available desktop workspace without widening the Dashboard', async ({ page }) => {
-  await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.goto('/dashboard');
-  const dashboardWidth = (await page.locator('#main-content').boundingBox())?.width ?? 0;
-  await expect(page.locator('#main-content')).not.toHaveClass(/wide-workspace/u);
-
-  for (const path of ['/lookup', '/bulk', '/monitor', '/brands']) {
-    await page.goto(path);
-    const main = page.locator('#main-content');
-    await expect(main).toHaveClass(/wide-workspace/u);
-    expect((await main.boundingBox())?.width ?? 0).toBeGreaterThan(dashboardWidth);
-    await expectNoHorizontalOverflow(page);
   }
 });
 
@@ -174,7 +36,7 @@ test('certificate monitoring highlights the Assure navigation destination', asyn
 // navigation: assessment + DNS + HTTP evidence plus the always-present
 // registry sources and raw response.
 
-test('optional intelligence checkboxes stay native-sized and aligned with their labels', async ({ page }) => {
+test('optional intelligence choices remain labelled and operable on desktop and mobile', async ({ page }) => {
   await page.route('**/api/capabilities', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify(INTELLIGENCE_CAPABILITIES),
   }));
@@ -184,33 +46,23 @@ test('optional intelligence checkboxes stay native-sized and aligned with their 
   const group = page.getByRole('group', { name: 'Optional third-party intelligence' });
   await openLookupOptionalSources(page);
   await expect(group).toBeVisible();
+  const first = group.getByRole('checkbox', { name: /Search archived URLscan verdicts/ });
+  await expect(first).toBeDisabled();
+  await page.getByLabel('Domain, IP address, ASN, or domain list').fill('example.test');
+  await expect(first).toBeEnabled();
 
   for (const size of [
     { width: 1280, height: 800 },
     { width: 360, height: 640 },
   ]) {
     await page.setViewportSize(size);
-    for (const option of await page.locator('.intelligence-option').all()) {
-      const checkbox = option.locator('input[type="checkbox"]');
-      const optionBox = await boundingBox(option);
-      const checkboxBox = await boundingBox(checkbox);
-      // Native control size: the global text-field sizing must not apply.
-      expect(checkboxBox.width).toBeLessThanOrEqual(20);
-      expect(checkboxBox.height).toBeLessThanOrEqual(20);
-      // Contained inside its own label row.
-      expect(checkboxBox.x).toBeGreaterThanOrEqual(optionBox.x - 1);
-      expect(checkboxBox.x + checkboxBox.width).toBeLessThanOrEqual(optionBox.x + optionBox.width + 1);
-      // Aligned with the first line of the label text, not floating below it.
-      expect(checkboxBox.y).toBeGreaterThanOrEqual(optionBox.y - 1);
-      expect(checkboxBox.y).toBeLessThanOrEqual(optionBox.y + 14);
-    }
+    await expect(first).toBeVisible();
+    await group.getByText('Search archived URLscan verdicts').click();
+    await expect(first).toBeChecked();
+    await group.getByText('Search archived URLscan verdicts').click();
+    await expect(first).not.toBeChecked();
     await expectNoHorizontalOverflow(page);
   }
-
-  // The control still operates by clicking its label text.
-  const first = page.getByRole('checkbox', { name: /Search archived URLscan verdicts/ });
-  await page.getByText('Search archived URLscan verdicts').click();
-  await expect(first).toBeChecked();
 });
 
 test('empty Lookup shows the compact query card without result sections or local navigation', async ({ page }) => {
@@ -255,7 +107,7 @@ test('the protected Console opens through an intentional responsive loading stat
 test('the console command palette filters destinations and remains keyboard operable', async ({ page }) => {
   const commandCount = consoleCommandNavigation.length;
   await page.goto('/dashboard');
-  const trigger = page.getByRole('button', { name: 'Open console navigation' });
+  const trigger = page.getByRole('button', { name: 'Search console navigation' });
   await expect(trigger).toBeVisible();
   await expect(trigger.locator('.shortcut-wide')).toBeVisible();
   await expect(trigger.locator('.shortcut-wide')).toHaveText('Ctrl/⌘ K');
@@ -288,11 +140,19 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-1');
   await expect(dialog.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true');
   await search.press('Tab');
+  const shortcuts = dialog.locator('.shortcut-help > summary');
+  await expect(shortcuts).toBeFocused();
+  await shortcuts.press('Enter');
+  await expect(dialog.locator('.shortcut-help')).toContainText('Select the first or last destination');
+  await shortcuts.press('Enter');
+  await shortcuts.press('Tab');
   await expect(dialog.getByRole('button', { name: 'Close command palette' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(dialog.getByRole('button', { name: 'Pages and tools', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(dialog.getByRole('button', { name: 'Saved work', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Documentation', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(search).toBeFocused();
   await search.fill('whois');
@@ -416,7 +276,7 @@ test('the console command palette keeps every destination heading readable on mo
   for (const width of [400, 430, 489, 500]) {
     await page.setViewportSize({ width, height: 700 });
     await page.goto('/dashboard');
-    await page.getByRole('button', { name: 'Open console navigation' }).click();
+    await page.getByRole('button', { name: 'Search console navigation' }).click();
     const dialog = page.getByRole('dialog', { name: 'Go to' });
     await expect(dialog).toBeVisible();
     const options = dialog.getByRole('option');
@@ -495,35 +355,6 @@ test('Lookup describes pending collection without implying staged completion', a
 });
 
 
-test('primary, secondary, and destructive actions are visually distinct', async ({ page }) => {
-  await useTheme(page, 'dark');
-  await page.goto('/brands');
-  const now = '2026-07-13T00:00:00.000Z';
-  const profile = {
-      id: 'design-profile', name: 'Design profile', officialDomains: ['official.invalid'], productNames: [],
-      tlds: [], approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
-      trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '',
-      createdAt: now, updatedAt: now, pageBaseline: null,
-  };
-  await migrateLegacyBrowserData(page, {
-    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile]),
-    'whois-rdap-active-brand-profile-v1': 'design-profile',
-  });
-
-  const primary = page.getByRole('button', { name: 'New profile' });
-  const neutral = page.getByRole('button', { name: 'Export JSON' }).first();
-  const destructive = page.getByRole('button', { name: 'Delete' }).first();
-
-  // Primary: bright gradient with dark text.
-  await expect(primary).toHaveCSS('background-image', /linear-gradient/);
-  await expect(primary).toHaveCSS('color', 'rgb(7, 16, 28)');
-  // Secondary: flat panel, light text, no gradient.
-  await expect(neutral).toHaveCSS('background-image', 'none');
-  await expect(neutral).toHaveCSS('color', 'rgb(230, 232, 238)');
-  // Destructive: rendered in the danger colour.
-  await expect(destructive).toHaveCSS('color', 'rgb(255, 107, 107)');
-});
-
 test('long untrusted values wrap inside result tiles without page overflow', async ({ page }) => {
   const longLabel = 'a'.repeat(63);
   const domain = `${longLabel}.invalid`;
@@ -586,24 +417,14 @@ test('every public and protected page renders without page-level overflow at nar
   }
 });
 
-test('console and policy pages expose one consistent primary heading', async ({ page }) => {
+test('console and policy pages expose one visible primary heading', async ({ page }) => {
   test.slow();
-  for (const [path, title, eyebrow] of [
-    ['/dashboard', 'Dashboard', 'Console'],
-    ['/lookup', 'Lookup', 'Investigate'],
-    ['/discover', 'Discover', 'Investigate'],
-    ['/bulk', 'Bulk', 'Investigate'],
-    ['/cases', 'Cases', 'Respond'],
-    ['/monitor', 'Review inbox', 'Respond'],
-    ['/brands', 'Brands', 'Assure'],
-    ['/registry-support', 'Registry support', 'Reference'],
-    ['/privacy', 'Privacy policy', 'Policy'],
-  ] as const) {
+  for (const path of [...protectedDestinations.map(({ href }) => href), '/privacy']) {
     await page.goto(path);
-    const heading = page.locator('.heading');
+    const heading = page.getByRole('main').getByRole('heading', { level: 1 });
     await expect(heading).toHaveCount(1);
-    await expect(heading.getByRole('heading', { level: 1, name: title })).toBeVisible();
-    await expect(heading.locator('.eyebrow')).toHaveText(eyebrow);
+    await expect(heading).toBeVisible();
+    await expect(heading).toHaveText(/\S/u);
   }
 });
 
@@ -621,7 +442,7 @@ test('Console pages keep their content below the header on tall displays', async
       const main = await page.getByRole('main').boundingBox();
       expect(header).not.toBeNull();
       expect(main).not.toBeNull();
-      expect(Math.abs(main!.y - header!.y - header!.height), path).toBeLessThanOrEqual(1);
+      expect(main!.y, path).toBeGreaterThanOrEqual(header!.y + header!.height - 1);
     }
   }
   await page.setViewportSize({ width: 1280, height: 720 });

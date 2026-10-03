@@ -23,6 +23,10 @@ function fixtureResolver(fixtures: Record<string, ReturnType<typeof query>>) {
   };
 }
 
+// Independently established organisational boundaries for authorisation-record
+// parsing tests; DNS tree-walk behaviour is exercised in the collector suite.
+const distinctOrganisations = async (domain: string) => domain;
+
 describe('bounded SPF expansion', () => {
   test('recurses through literal include and redirect policies with explicit counts', async () => {
     const resolver = fixtureResolver({
@@ -103,7 +107,7 @@ describe('DMARC reporting authorization', () => {
       'v=DMARC10', 'v=dmarc1', 'v=DMARC1; broken', 'v=DMARC1; v=DMARC1',
       'v=DMARC1; rua=mailto:reports@different.example.test', 'v=DMARC1; rua=not-a-uri',
     ]) {
-      const result = await validateDmarcExternalReporting('example.test', query(['v=DMARC1; p=reject; rua=mailto:reports@external.example.net']), async () => query([record]));
+      const result = await validateDmarcExternalReporting('example.test', query(['v=DMARC1; p=reject; rua=mailto:reports@external.example.net']), async () => query([record]), distinctOrganisations);
       assert.equal(result.length, 1);
       assert.equal(result[0]?.state, 'not_found', record);
     }
@@ -163,6 +167,19 @@ describe('DMARC reporting authorization', () => {
     assert.equal(result[0]?.state, 'invalid_destination');
     assert.equal(result[1]?.state, 'unavailable');
     assert.equal(reportDestinationDomain('mailto:reports@reports.example.net!10m'), 'reports.example.net');
+  });
+
+  test('does not infer reporting boundaries from an owner suffix or a missing optional authorisation', async () => {
+    const resolver = fixtureResolver({});
+    const result = await validateDmarcExternalReporting('mail.example.test', query([
+      'v=DMARC1; p=reject; rua=mailto:a@mail.example.test,mailto:b@child.mail.example.test,mailto:c@example.test,mailto:d@sibling.example.test',
+    ]), resolver.resolveTxt);
+    assert.deepEqual(result.map(item => item.state), ['self', 'unavailable', 'unavailable', 'unavailable']);
+    assert.deepEqual(resolver.requests, [
+      'mail.example.test._report._dmarc.example.test', 'mail.example.test._report._dmarc.sibling.example.test',
+    ]);
+    assert.ok(result.slice(1).every(item => /organisational boundary/iu.test(item.error ?? '')));
+    assert.ok(result.every(item => item.state !== 'not_found'));
   });
 });
 

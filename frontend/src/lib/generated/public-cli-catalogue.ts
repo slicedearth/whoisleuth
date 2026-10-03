@@ -1,6 +1,1448 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
+const SHARED_COMMAND_OPTIONS = [
+  {
+    "option": "--help",
+    "scope": "common",
+    "usage": "--help",
+    "description": "Show command usage, options and an example without executing it.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--output",
+    "scope": "common",
+    "usage": "--output \u003cfile>",
+    "description": "Write output atomically to this local file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--force",
+    "scope": "common",
+    "usage": "--force",
+    "description": "Allow replacement of the selected output file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--config",
+    "scope": "common",
+    "usage": "--config \u003cfile>",
+    "description": "Load explicit versioned CLI configuration from this file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--profile",
+    "scope": "common",
+    "usage": "--profile \u003cvalue>",
+    "description": "Select a named profile from the supplied configuration.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--palette",
+    "scope": "common",
+    "usage": "--palette \u003cauto|light|dark>",
+    "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
+    "values": [
+      "auto",
+      "light",
+      "dark"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--network",
+    "scope": "command",
+    "usage": "--network",
+    "description": "Include the optional public DNS and port 43 runtime checks.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--json",
+    "scope": "command",
+    "usage": "--json",
+    "description": "Write structured JSON to stdout or the selected output file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--quiet",
+    "scope": "command",
+    "usage": "--quiet",
+    "description": "Suppress ordinary terminal presentation.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--no-color",
+    "scope": "command",
+    "usage": "--no-color",
+    "description": "Suppress ANSI colour in terminal output.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--common",
+    "scope": "command",
+    "usage": "--common",
+    "description": "Show only commands marked as common.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--group",
+    "scope": "command",
+    "usage": "--group \u003cinvestigate|respond|assure|utilities>",
+    "description": "Filter commands by task group.",
+    "values": [
+      "investigate",
+      "respond",
+      "assure",
+      "utilities"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--mode",
+    "scope": "command",
+    "usage": "--mode \u003coffline|network>",
+    "description": "Filter commands by offline or network collection mode.",
+    "values": [
+      "offline",
+      "network"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--workflow",
+    "scope": "command",
+    "usage": "--workflow \u003cvalue>",
+    "description": "Label the workflow recorded in the evidence manifest.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--configuration-digest",
+    "scope": "command",
+    "usage": "--configuration-digest \u003cvalue>",
+    "description": "Record a supplied configuration digest in the manifest provenance.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--package",
+    "scope": "command",
+    "usage": "--package",
+    "description": "Create a portable evidence ZIP containing the selected files.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--bagit",
+    "scope": "command",
+    "usage": "--bagit",
+    "description": "Create a BagIt 1.0 package with SHA-512 checksums.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--passphrase-file",
+    "scope": "command",
+    "usage": "--passphrase-file \u003cfile>",
+    "description": "Read the archive passphrase from a local file, not a command-line value.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--folder",
+    "scope": "command",
+    "usage": "--folder \u003cfile>",
+    "description": "Create a new evidence folder containing the selected files.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--junit",
+    "scope": "command",
+    "usage": "--junit",
+    "description": "Write JUnit XML for automated result reporting.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--markdown",
+    "scope": "command",
+    "usage": "--markdown",
+    "description": "Write a Markdown report.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--html",
+    "scope": "command",
+    "usage": "--html",
+    "description": "Write an HTML report.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--no-attribution",
+    "scope": "command",
+    "usage": "--no-attribution",
+    "description": "Omit the optional product attribution from presentation output.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--fast",
+    "scope": "command",
+    "usage": "--fast",
+    "description": "Select registration-first Fast collection.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--deep",
+    "scope": "command",
+    "usage": "--deep",
+    "description": "Select broader Deep collection and its additional source requests.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--exact-url",
+    "scope": "command",
+    "usage": "--exact-url",
+    "description": "With Deep Lookup, send the selected URL path and query to the website; omit its fragment.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--observer",
+    "scope": "command",
+    "usage": "--observer \u003cvalue>",
+    "description": "Attach the supplied observer label to the retained observation.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--vantage",
+    "scope": "command",
+    "usage": "--vantage \u003cvalue>",
+    "description": "Attach the supplied collection-vantage label.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--plan",
+    "scope": "command",
+    "usage": "--plan",
+    "description": "Describe intended collection and limits without making requests.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--summary",
+    "scope": "command",
+    "usage": "--summary",
+    "description": "Show a concise terminal result.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--verbose",
+    "scope": "command",
+    "usage": "--verbose",
+    "description": "Show the detailed terminal result.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--browse",
+    "scope": "command",
+    "usage": "--browse",
+    "description": "Open the interactive terminal evidence browser.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--save-lookup",
+    "scope": "command",
+    "usage": "--save-lookup \u003cfile>",
+    "description": "After a normal evidence-browser close, save the completed private Lookup JSON to a new file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--strict-exit",
+    "scope": "command",
+    "usage": "--strict-exit",
+    "description": "Use the command’s strict outcome policy when deciding the exit status.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--fail-on",
+    "scope": "command",
+    "usage": "--fail-on \u003cpolicy[,policy...]>",
+    "description": "Return a failure-policy exit status for the selected comma-separated outcomes.",
+    "values": [
+      "source-failure",
+      "inconclusive",
+      "danger"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--events",
+    "scope": "command",
+    "usage": "--events",
+    "description": "Emit collection progress events on stderr.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--jsonl",
+    "scope": "command",
+    "usage": "--jsonl",
+    "description": "Write one JSON record per line.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--csv",
+    "scope": "command",
+    "usage": "--csv",
+    "description": "Write compact CSV rows.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--csv-with-metadata",
+    "scope": "command",
+    "usage": "--csv-with-metadata",
+    "description": "Write CSV with source, observation-time and collection-state metadata.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--domains",
+    "scope": "command",
+    "usage": "--domains",
+    "description": "Write the selected domain names only.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--queries",
+    "scope": "command",
+    "usage": "--queries",
+    "description": "Write the selected original queries only.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--registered-only",
+    "scope": "command",
+    "usage": "--registered-only",
+    "description": "Keep registered results in the presented output.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--inconclusive-only",
+    "scope": "command",
+    "usage": "--inconclusive-only",
+    "description": "Keep inconclusive results in the presented output.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--errors-only",
+    "scope": "command",
+    "usage": "--errors-only",
+    "description": "Keep error results in the presented output.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--concurrency",
+    "scope": "command",
+    "usage": "--concurrency \u003cinteger>",
+    "description": "Set the maximum number of concurrent collection tasks.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [
+      {
+        "minimum": 1,
+        "maximum": 8,
+        "whenOptionPresent": null
+      },
+      {
+        "minimum": 1,
+        "maximum": 3,
+        "whenOptionPresent": "--deep"
+      }
+    ],
+    "defaultDescription": "4 in Fast mode; 2 in Deep mode"
+  },
+  {
+    "option": "--checkpoint",
+    "scope": "command",
+    "usage": "--checkpoint \u003cfile>",
+    "description": "Save resumable collection state to this local file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--resume",
+    "scope": "command",
+    "usage": "--resume",
+    "description": "Resume collection from the selected checkpoint.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--tlds",
+    "scope": "command",
+    "usage": "--tlds \u003cvalue>",
+    "description": "Use this comma-separated set of domain endings.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--preset",
+    "scope": "command",
+    "usage": "--preset \u003ccommon|impersonation|all>",
+    "description": "Choose candidate-generation families; explicit families select a custom set instead.",
+    "values": [
+      "common",
+      "impersonation",
+      "all"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": "all"
+  },
+  {
+    "option": "--families",
+    "scope": "command",
+    "usage": "--families \u003cvalue>",
+    "description": "Select the candidate-generation families explicitly.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--keyboard",
+    "scope": "command",
+    "usage": "--keyboard \u003cqwerty|azerty|qwertz|all>",
+    "description": "Choose keyboard layouts for adjacent-key candidates.",
+    "values": [
+      "qwerty",
+      "azerty",
+      "qwertz",
+      "all"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": "qwerty"
+  },
+  {
+    "option": "--dictionary",
+    "scope": "command",
+    "usage": "--dictionary \u003cfile>",
+    "description": "Read candidate words from this local dictionary.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--snapshot",
+    "scope": "command",
+    "usage": "--snapshot \u003cfile>",
+    "description": "Use this retained observation snapshot.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--scan-limit",
+    "scope": "command",
+    "usage": "--scan-limit \u003cinteger>",
+    "description": "Limit the number of generated candidates to collect.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [
+      {
+        "minimum": 1,
+        "maximum": 500,
+        "whenOptionPresent": null
+      },
+      {
+        "minimum": 1,
+        "maximum": 50,
+        "whenOptionPresent": "--deep"
+      }
+    ],
+    "defaultDescription": "100 in Fast mode; 50 in Deep mode"
+  },
+  {
+    "option": "--chunk-size",
+    "scope": "command",
+    "usage": "--chunk-size \u003cinteger>",
+    "description": "Set the number of candidates processed per checkpoint chunk.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [
+      {
+        "minimum": 1,
+        "maximum": 100,
+        "whenOptionPresent": null
+      }
+    ],
+    "defaultDescription": "25"
+  },
+  {
+    "option": "--resolver",
+    "scope": "command",
+    "usage": "--resolver \u003cvalue>",
+    "description": "Choose the supported DNS resolver for collection.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--allowlist",
+    "scope": "command",
+    "usage": "--allowlist \u003cfile>",
+    "description": "Read reviewed domains whose priority should be suppressed, without changing their evidence.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--observation-snapshot",
+    "scope": "command",
+    "usage": "--observation-snapshot \u003cfile>",
+    "description": "Compare with this retained observation snapshot.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--acquisition-only",
+    "scope": "command",
+    "usage": "--acquisition-only",
+    "description": "Present only acquisition candidates.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--suppressed-only",
+    "scope": "command",
+    "usage": "--suppressed-only",
+    "description": "Present only candidates suppressed by the allowlist.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--selectors",
+    "scope": "command",
+    "usage": "--selectors \u003cvalue>",
+    "description": "Supply explicit DKIM selectors; no selector enumeration is performed.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--retired-selectors",
+    "scope": "command",
+    "usage": "--retired-selectors \u003cvalue>",
+    "description": "Supply previously retired DKIM selectors for review.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--mail-profile",
+    "scope": "command",
+    "usage": "--mail-profile \u003cstandard|defensive-no-mail|parked>",
+    "description": "Choose the expected mail posture for the review.",
+    "values": [
+      "standard",
+      "defensive-no-mail",
+      "parked"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": "standard"
+  },
+  {
+    "option": "--include-inherited-dns",
+    "scope": "command",
+    "usage": "--include-inherited-dns",
+    "description": "Explicitly review inherited DMARC, reporting boundaries and parent-delegation evidence.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--sarif",
+    "scope": "command",
+    "usage": "--sarif",
+    "description": "Write the posture review as SARIF.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--owned-domain",
+    "scope": "command",
+    "usage": "--owned-domain",
+    "description": "Declare that the reviewed domain is owned by the analyst.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--trust-anchor",
+    "scope": "command",
+    "usage": "--trust-anchor \u003cfile>",
+    "description": "Read the analyst-selected DNSSEC trust anchor.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--owned-or-authorized",
+    "scope": "command",
+    "usage": "--owned-or-authorized",
+    "description": "Acknowledge ownership or permission for this active collection.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--active-probe",
+    "scope": "command",
+    "usage": "--active-probe",
+    "description": "Explicitly enable the bounded active protocol exchange.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--profile",
+    "scope": "command",
+    "usage": "--profile \u003cvalue>",
+    "description": "Select a catalogue profile; find its ID with registry-support \u003csuffix> --json.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--suffix",
+    "scope": "command",
+    "usage": "--suffix \u003cvalue>",
+    "description": "Select the registry suffix.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--scenario",
+    "scope": "command",
+    "usage": "--scenario \u003cregistered|not_found|inconclusive>",
+    "description": "Choose the expected registry fixture outcome.",
+    "values": [
+      "registered",
+      "not_found",
+      "inconclusive"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--summary-json",
+    "scope": "command",
+    "usage": "--summary-json",
+    "description": "Write the concise structured summary.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--manifest",
+    "scope": "command",
+    "usage": "--manifest \u003cfile>",
+    "description": "Use the selected investigation manifest.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--manifest-entry",
+    "scope": "command",
+    "usage": "--manifest-entry \u003cmanifest-entry>",
+    "description": "Select an artefact entry from the supplied manifest.",
+    "values": [
+      "artifact-1",
+      "artifact-2",
+      "artifact-3",
+      "artifact-4",
+      "artifact-5",
+      "artifact-6",
+      "artifact-7",
+      "artifact-8",
+      "artifact-9",
+      "artifact-10",
+      "artifact-11",
+      "artifact-12",
+      "artifact-13",
+      "artifact-14",
+      "artifact-15",
+      "artifact-16",
+      "artifact-17",
+      "artifact-18",
+      "artifact-19",
+      "artifact-20",
+      "artifact-21",
+      "artifact-22",
+      "artifact-23",
+      "artifact-24",
+      "artifact-25",
+      "artifact-26",
+      "artifact-27",
+      "artifact-28",
+      "artifact-29",
+      "artifact-30",
+      "artifact-31",
+      "artifact-32",
+      "artifact-33",
+      "artifact-34",
+      "artifact-35",
+      "artifact-36",
+      "artifact-37",
+      "artifact-38",
+      "artifact-39",
+      "artifact-40",
+      "artifact-41",
+      "artifact-42",
+      "artifact-43",
+      "artifact-44",
+      "artifact-45",
+      "artifact-46",
+      "artifact-47",
+      "artifact-48",
+      "artifact-49",
+      "artifact-50",
+      "artifact-51",
+      "artifact-52",
+      "artifact-53",
+      "artifact-54",
+      "artifact-55",
+      "artifact-56",
+      "artifact-57",
+      "artifact-58",
+      "artifact-59",
+      "artifact-60",
+      "artifact-61",
+      "artifact-62",
+      "artifact-63",
+      "artifact-64",
+      "artifact-65",
+      "artifact-66",
+      "artifact-67",
+      "artifact-68",
+      "artifact-69",
+      "artifact-70",
+      "artifact-71",
+      "artifact-72",
+      "artifact-73",
+      "artifact-74",
+      "artifact-75",
+      "artifact-76",
+      "artifact-77",
+      "artifact-78",
+      "artifact-79",
+      "artifact-80",
+      "artifact-81",
+      "artifact-82",
+      "artifact-83",
+      "artifact-84",
+      "artifact-85",
+      "artifact-86",
+      "artifact-87",
+      "artifact-88",
+      "artifact-89",
+      "artifact-90",
+      "artifact-91",
+      "artifact-92",
+      "artifact-93",
+      "artifact-94",
+      "artifact-95",
+      "artifact-96",
+      "artifact-97",
+      "artifact-98",
+      "artifact-99",
+      "artifact-100",
+      "artifact-101",
+      "artifact-102",
+      "artifact-103",
+      "artifact-104",
+      "artifact-105",
+      "artifact-106",
+      "artifact-107",
+      "artifact-108",
+      "artifact-109",
+      "artifact-110",
+      "artifact-111",
+      "artifact-112",
+      "artifact-113",
+      "artifact-114",
+      "artifact-115",
+      "artifact-116",
+      "artifact-117",
+      "artifact-118",
+      "artifact-119",
+      "artifact-120",
+      "artifact-121",
+      "artifact-122",
+      "artifact-123",
+      "artifact-124",
+      "artifact-125",
+      "artifact-126",
+      "artifact-127",
+      "artifact-128",
+      "artifact-129"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--package",
+    "scope": "command",
+    "usage": "--package",
+    "description": "Verify a portable evidence ZIP or encrypted package rather than a single report.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--bagit",
+    "scope": "command",
+    "usage": "--bagit",
+    "description": "Verify the selected package as BagIt 1.0.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--folder",
+    "scope": "command",
+    "usage": "--folder \u003cfile>",
+    "description": "Verify the evidence package within this selected folder.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--search",
+    "scope": "command",
+    "usage": "--search \u003cvalue>",
+    "description": "Search the selected local archive.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--require-match",
+    "scope": "command",
+    "usage": "--require-match",
+    "description": "Require the local archive search to find a match.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--reveal",
+    "scope": "command",
+    "usage": "--reveal",
+    "description": "Include retained values otherwise redacted by archive inspection.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--expect-content-digest",
+    "scope": "command",
+    "usage": "--expect-content-digest \u003cvalue>",
+    "description": "Compare archive content with the supplied version-qualified or historical digest.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--private-key-file",
+    "scope": "command",
+    "usage": "--private-key-file \u003cfile>",
+    "description": "Read the private signing key from this local file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--public-key-file",
+    "scope": "command",
+    "usage": "--public-key-file \u003cfile>",
+    "description": "Read the public verification key from this local file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--trust-store-file",
+    "scope": "command",
+    "usage": "--trust-store-file \u003cfile>",
+    "description": "Read the analyst-selected signer trust store.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--trusted-auth-header",
+    "scope": "command",
+    "usage": "--trusted-auth-header \u003cvalue>",
+    "description": "Select a recognised receiver header by part:header-index. This records analyst trust, not independent authentication; repeat for separate headers.",
+    "values": [],
+    "repeatable": true,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--reported-action",
+    "scope": "command",
+    "usage": "--reported-action \u003creported-action>",
+    "description": "Record an analyst-reported identity action; repeat for separate actions.",
+    "values": [
+      "opened_link",
+      "entered_password",
+      "approved_signin",
+      "granted_consent",
+      "entered_device_code",
+      "executed_command"
+    ],
+    "repeatable": true,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--mmdb",
+    "scope": "command",
+    "usage": "--mmdb \u003cfile>",
+    "description": "Read one selected local MMDB (up to 512 MiB); version-2 queries require a justified freshness policy.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--case-id",
+    "scope": "command",
+    "usage": "--case-id \u003cvalue>",
+    "description": "Select the retained Case identifier.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--domain",
+    "scope": "command",
+    "usage": "--domain \u003cvalue>",
+    "description": "Supply the Case domain.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--title",
+    "scope": "command",
+    "usage": "--title \u003cvalue>",
+    "description": "Supply the Case title.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--new-incident",
+    "scope": "command",
+    "usage": "--new-incident",
+    "description": "Create a separate incident instead of updating a matching Case.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--text",
+    "scope": "command",
+    "usage": "--text \u003cvalue>",
+    "description": "Supply the note text directly.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--note-file",
+    "scope": "command",
+    "usage": "--note-file \u003cfile>",
+    "description": "Read note text from a selected local file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--input",
+    "scope": "command",
+    "usage": "--input \u003cfile>",
+    "description": "Read the selected local input file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--expect-file-digest",
+    "scope": "command",
+    "usage": "--expect-file-digest \u003cvalue>",
+    "description": "Require the input file to match this SHA-256 digest.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--audience",
+    "scope": "command",
+    "usage": "--audience \u003cinternal|trusted|public>",
+    "description": "Choose the export audience and its field-disclosure policy.",
+    "values": [
+      "internal",
+      "trusted",
+      "public"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--reviewed",
+    "scope": "command",
+    "usage": "--reviewed",
+    "description": "Confirm the required human review of the exported material.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--previous",
+    "scope": "command",
+    "usage": "--previous \u003cfile>",
+    "description": "Compare against this earlier retained report.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--limit",
+    "scope": "command",
+    "usage": "--limit \u003cinteger>",
+    "description": "Limit the number of watchlist targets checked in this run.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [
+      {
+        "minimum": 1,
+        "maximum": 20,
+        "whenOptionPresent": null
+      }
+    ],
+    "defaultDescription": "20"
+  },
+  {
+    "option": "--concurrency",
+    "scope": "command",
+    "usage": "--concurrency \u003cinteger>",
+    "description": "Set the maximum number of concurrent collection tasks.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [
+      {
+        "minimum": 1,
+        "maximum": 3,
+        "whenOptionPresent": null
+      }
+    ],
+    "defaultDescription": "2"
+  },
+  {
+    "option": "--fail-on",
+    "scope": "command",
+    "usage": "--fail-on \u003cpolicy[,policy...]>",
+    "description": "Return a failure-policy exit status for the selected comma-separated outcomes.",
+    "values": [
+      "source-failure",
+      "inconclusive",
+      "material-drift"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--marking",
+    "scope": "command",
+    "usage": "--marking \u003cclear|green|amber|amber-strict|red>",
+    "description": "Declare the information-sharing marking.",
+    "values": [
+      "clear",
+      "green",
+      "amber",
+      "amber-strict",
+      "red"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--recipient-scope",
+    "scope": "command",
+    "usage": "--recipient-scope \u003cpublic|community|organization|named-recipients>",
+    "description": "Declare the intended recipient scope.",
+    "values": [
+      "public",
+      "community",
+      "organization",
+      "named-recipients"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--purpose",
+    "scope": "command",
+    "usage": "--purpose \u003cvalue>",
+    "description": "Record the purpose of the intended sharing.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--human-reviewed",
+    "scope": "command",
+    "usage": "--human-reviewed",
+    "description": "Confirm that a person reviewed the material.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--personal-data-reviewed",
+    "scope": "command",
+    "usage": "--personal-data-reviewed",
+    "description": "Confirm that personal-data disclosure was reviewed.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--redactions-confirmed",
+    "scope": "command",
+    "usage": "--redactions-confirmed",
+    "description": "Confirm that the intended redactions were checked.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--list",
+    "scope": "command",
+    "usage": "--list",
+    "description": "List available workflow recipes.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--explain",
+    "scope": "command",
+    "usage": "--explain \u003cexplain>",
+    "description": "Explain a selected workflow without executing it.",
+    "values": [
+      "domain-triage",
+      "lookalike-review",
+      "owned-domain-review",
+      "historical-comparison",
+      "campaign-review",
+      "certificate-anomaly",
+      "registry-disagreement",
+      "evidence-handoff",
+      "planned-domain-change",
+      "post-change-verification"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--select",
+    "scope": "command",
+    "usage": "--select \u003cvalue>",
+    "description": "Bind a literal input to a workflow step; repeat for further inputs.",
+    "values": [],
+    "repeatable": true,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--use-artifact",
+    "scope": "command",
+    "usage": "--use-artifact \u003cvalue>",
+    "description": "Connect a step input to an earlier compatible output.",
+    "values": [],
+    "repeatable": true,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--confirm-review",
+    "scope": "command",
+    "usage": "--confirm-review \u003cvalue>",
+    "description": "Confirm human review for the named step in this invocation.",
+    "values": [],
+    "repeatable": true,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--approve-network",
+    "scope": "command",
+    "usage": "--approve-network",
+    "description": "Approve the workflow’s declared network steps for this invocation.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--resume",
+    "scope": "command",
+    "usage": "--resume \u003cfile>",
+    "description": "Resume the selected workflow checkpoint; approvals must be supplied again.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--interactive",
+    "scope": "command",
+    "usage": "--interactive",
+    "description": "Prompt for missing supported inputs on an interactive terminal.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--preview",
+    "scope": "command",
+    "usage": "--preview",
+    "description": "Inspect validated retained outputs, unresolved inputs and remaining approvals without executing or writing a checkpoint.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--left-session",
+    "scope": "command",
+    "usage": "--left-session \u003cvalue>",
+    "description": "Select the left-hand retained capture session.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--right-session",
+    "scope": "command",
+    "usage": "--right-session \u003cvalue>",
+    "description": "Select the right-hand retained capture session.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--compact",
+    "scope": "command",
+    "usage": "--compact",
+    "description": "Write a compact report presentation.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  }
+] as const;
 export const PUBLIC_CLI_CATALOGUE = {
-  "commandCount": 49,
+  "commandCount": 51,
   "groups": [
     "investigate",
     "respond",
@@ -42,6 +1484,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         }
       ],
       "importantOptions": [],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -100,6 +1543,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[6], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "conditional_network",
       "disclosureClass": "conditional_bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -169,6 +1613,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[10], SHARED_COMMAND_OPTIONS[11], SHARED_COMMAND_OPTIONS[12], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -228,6 +1673,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       },
       "inputs": [],
       "importantOptions": [],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -300,6 +1746,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[13], SHARED_COMMAND_OPTIONS[14], SHARED_COMMAND_OPTIONS[15], SHARED_COMMAND_OPTIONS[16], SHARED_COMMAND_OPTIONS[17], SHARED_COMMAND_OPTIONS[18], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -375,6 +1822,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -451,6 +1899,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -546,6 +1995,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[19], SHARED_COMMAND_OPTIONS[20], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[22], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[24], SHARED_COMMAND_OPTIONS[25], SHARED_COMMAND_OPTIONS[26], SHARED_COMMAND_OPTIONS[27], SHARED_COMMAND_OPTIONS[28], SHARED_COMMAND_OPTIONS[29], SHARED_COMMAND_OPTIONS[30], SHARED_COMMAND_OPTIONS[31], SHARED_COMMAND_OPTIONS[32], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[34], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "conditional_network",
       "disclosureClass": "conditional_bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -592,11 +2042,12 @@ export const PUBLIC_CLI_CATALOGUE = {
         "dataSent": [
           "normalised_target",
           "registry_query",
-          "whois_query",
           "dns_question",
+          "whois_query",
           "homepage_request",
           "tls_handshake",
-          "public_ip_address"
+          "public_ip_address",
+          "selected_url_request"
         ],
         "recipients": [
           "registry_service",
@@ -663,6 +2114,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[36], SHARED_COMMAND_OPTIONS[19], SHARED_COMMAND_OPTIONS[37], SHARED_COMMAND_OPTIONS[38], SHARED_COMMAND_OPTIONS[39], SHARED_COMMAND_OPTIONS[40], SHARED_COMMAND_OPTIONS[41], SHARED_COMMAND_OPTIONS[42], SHARED_COMMAND_OPTIONS[43], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[24], SHARED_COMMAND_OPTIONS[44], SHARED_COMMAND_OPTIONS[45], SHARED_COMMAND_OPTIONS[46], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[28], SHARED_COMMAND_OPTIONS[34], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "conditional_network",
       "disclosureClass": "conditional_bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -722,8 +2174,8 @@ export const PUBLIC_CLI_CATALOGUE = {
         "dataSent": [
           "normalised_target",
           "registry_query",
-          "whois_query",
           "dns_question",
+          "whois_query",
           "homepage_request",
           "tls_handshake"
         ],
@@ -775,6 +2227,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -850,6 +2303,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -935,6 +2389,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[47], SHARED_COMMAND_OPTIONS[48], SHARED_COMMAND_OPTIONS[49], SHARED_COMMAND_OPTIONS[50], SHARED_COMMAND_OPTIONS[51], SHARED_COMMAND_OPTIONS[52], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[36], SHARED_COMMAND_OPTIONS[39], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -1050,6 +2505,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[47], SHARED_COMMAND_OPTIONS[48], SHARED_COMMAND_OPTIONS[49], SHARED_COMMAND_OPTIONS[50], SHARED_COMMAND_OPTIONS[51], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[24], SHARED_COMMAND_OPTIONS[53], SHARED_COMMAND_OPTIONS[54], SHARED_COMMAND_OPTIONS[44], SHARED_COMMAND_OPTIONS[55], SHARED_COMMAND_OPTIONS[56], SHARED_COMMAND_OPTIONS[45], SHARED_COMMAND_OPTIONS[46], SHARED_COMMAND_OPTIONS[57], SHARED_COMMAND_OPTIONS[41], SHARED_COMMAND_OPTIONS[42], SHARED_COMMAND_OPTIONS[58], SHARED_COMMAND_OPTIONS[59], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[28], SHARED_COMMAND_OPTIONS[34], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[36], SHARED_COMMAND_OPTIONS[37], SHARED_COMMAND_OPTIONS[38], SHARED_COMMAND_OPTIONS[39], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "conditional_network",
       "disclosureClass": "conditional_bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -1101,8 +2557,8 @@ export const PUBLIC_CLI_CATALOGUE = {
         "dataSent": [
           "normalised_target",
           "registry_query",
-          "whois_query",
           "dns_question",
+          "whois_query",
           "homepage_request",
           "tls_handshake"
         ],
@@ -1133,10 +2589,10 @@ export const PUBLIC_CLI_CATALOGUE = {
       "common": false,
       "usage": "whoisleuth posture [\u003cdomain>] [--json|--sarif] [--selectors \u003cvalue>] [--retired-selectors \u003cvalue>] [--mail-profile \u003cstandard|defensive-no-mail|parked>] [--include-inherited-dns] [--owned-domain] [--quiet] [--no-color]",
       "example": "whoisleuth posture example.test --mail-profile standard --json",
-      "boundary": "Missing or failed DNS observations remain inconclusive. --include-inherited-dns explicitly adds a bounded DMARC tree walk and direct parent-delegation sample; records retain their queried owner and source. No message is sent and receiver enforcement is not inferred.",
+      "boundary": "Missing or failed DNS observations remain inconclusive. --include-inherited-dns adds inherited policy and reporting-boundary reviews within 32 additional TXT queries and ten seconds, plus a direct parent-delegation sample. No message is sent and receiver enforcement is not inferred.",
       "collection": {
         "mode": "network",
-        "scope": "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor DMARC questions and direct DNS/TCP to sampled parent servers."
+        "scope": "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor and reporting-destination DMARC questions and direct DNS/TCP to sampled parent servers."
       },
       "inputs": [
         {
@@ -1160,6 +2616,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[60], SHARED_COMMAND_OPTIONS[61], SHARED_COMMAND_OPTIONS[62], SHARED_COMMAND_OPTIONS[63], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[64], SHARED_COMMAND_OPTIONS[65], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -1169,7 +2626,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecli.posture"
       ],
       "inputLimits": [
-        "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor DMARC questions and direct DNS/TCP to sampled parent servers.",
+        "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor and reporting-destination DMARC questions and direct DNS/TCP to sampled parent servers.",
         "domain: 0-1 text value"
       ],
       "outputLimits": [
@@ -1244,6 +2701,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -1322,6 +2780,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -1403,6 +2862,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[55], SHARED_COMMAND_OPTIONS[66], SHARED_COMMAND_OPTIONS[67], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
@@ -1485,6 +2945,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[55], SHARED_COMMAND_OPTIONS[66], SHARED_COMMAND_OPTIONS[67], SHARED_COMMAND_OPTIONS[68], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
@@ -1566,6 +3027,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -1642,6 +3104,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -1718,6 +3181,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -1772,7 +3236,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "group": "utilities",
       "common": false,
       "usage": "whoisleuth registry-scaffold --profile \u003cvalue> --suffix \u003cvalue> --scenario \u003cregistered|not_found|inconclusive>",
-      "example": "whoisleuth registry-scaffold --profile example-profile --suffix test --scenario registered",
+      "example": "whoisleuth registry-scaffold --profile nic-io-colon --suffix ac --scenario registered",
       "boundary": "The output is a sanitised template only. Its command-owned --profile selects fixture capability, --config is rejected, and contributors must not paste live responses or personal registration data into fixtures.",
       "collection": {
         "mode": "offline",
@@ -1784,6 +3248,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--suffix",
         "--scenario"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[69], SHARED_COMMAND_OPTIONS[70], SHARED_COMMAND_OPTIONS[71]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -1852,6 +3317,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[72], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -1932,6 +3398,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -1987,7 +3454,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "common": true,
       "usage": "whoisleuth verify-artifact [\u003csource>] [--passphrase-file \u003cfile>] [--manifest \u003cfile>] [--manifest-entry \u003cmanifest-entry>] [--package] [--bagit] [--folder \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
       "example": "whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit",
-      "boundary": "Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; ordinary package review also counts original references with matching bytes. Ordinary folders allow only the declared layout; BagIt allows bounded nested payloads and checks SHA-256/SHA-512 manifests without interpreting payloads. Symbolic links are refused. BagIt fetch.txt is never fetched; missing files, mismatches and unsupported algorithms remain explicit. Package digests describe bytes, not filesystem metadata or authenticity. In scripts, use --strict-exit: incomplete verification returns 4. Default exit 0 means the report was produced, not that its checks passed.",
+      "boundary": "Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; ordinary package review also counts original references with matching bytes. Ordinary folders allow only the declared layout; BagIt allows bounded nested payloads and checks SHA-256/SHA-512 manifests without interpreting payloads. Symbolic links are refused. BagIt fetch.txt is never fetched; missing files, mismatches and unsupported algorithms remain explicit. Package digests describe bytes, not filesystem metadata or authenticity. In scripts, use --strict-exit: incomplete verification returns 4. Unencrypted workspace archives always return 4 under --strict-exit because section digests do not cover mutable root metadata; structure-only formats can pass their narrower contract. Default exit 0 means the report was produced, not that its checks passed.",
       "collection": {
         "mode": "offline",
         "scope": "Reads one selected bounded artefact, ZIP or explicit evidence folder and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity."
@@ -2017,6 +3484,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[17], SHARED_COMMAND_OPTIONS[73], SHARED_COMMAND_OPTIONS[74], SHARED_COMMAND_OPTIONS[75], SHARED_COMMAND_OPTIONS[76], SHARED_COMMAND_OPTIONS[77], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2096,6 +3564,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[17], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2179,6 +3648,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[17], SHARED_COMMAND_OPTIONS[78], SHARED_COMMAND_OPTIONS[79], SHARED_COMMAND_OPTIONS[80], SHARED_COMMAND_OPTIONS[81], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2254,6 +3724,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "importantOptions": [
         "--private-key-file"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[82]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2326,6 +3797,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[83], SHARED_COMMAND_OPTIONS[84], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2405,6 +3877,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2481,6 +3954,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2557,6 +4031,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2633,6 +4108,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2686,7 +4162,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "description": "Review identity, reported authentication, domain alignment, and Received routing from selected message headers.",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth mail-headers [\u003csource>] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth mail-headers [\u003csource>] [--trusted-auth-header \u003cvalue>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth mail-headers message.eml --json",
       "boundary": "Review is offline. It makes no DNS, SMTP, HTTP, registry, or provider request, and does not retain address local parts, display names, subjects, message bodies, attachments, or raw header values. Reported authentication is not independently validated.",
       "collection": {
@@ -2705,10 +4181,12 @@ export const PUBLIC_CLI_CATALOGUE = {
         }
       ],
       "importantOptions": [
+        "--trusted-auth-header",
         "--json",
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[85], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2757,17 +4235,117 @@ export const PUBLIC_CLI_CATALOGUE = {
       }
     },
     {
+      "id": "intake",
+      "summary": "Review selected files and identity events offline",
+      "description": "Review message identities, document links, QR destinations, HTTP archives or selected identity events locally.",
+      "group": "investigate",
+      "common": true,
+      "usage": "whoisleuth intake \u003ctext|email|calendar|qr|pdf|docx|har|identity> [\u003csource>] [--json] [--reported-action \u003creported-action>] [--trusted-auth-header \u003cvalue>] [--strict-exit] [--quiet] [--no-color]",
+      "example": "whoisleuth intake email message.eml --json",
+      "boundary": "Offline only: no destination, embedded command or QR payload is opened or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.",
+      "collection": {
+        "mode": "offline",
+        "scope": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file. No collection or automatic Case write."
+      },
+      "inputs": [
+        {
+          "name": "kind",
+          "valueKind": "enum",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [
+            "text",
+            "email",
+            "calendar",
+            "qr",
+            "pdf",
+            "docx",
+            "har",
+            "identity"
+          ],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        },
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 0,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv_or_stdin",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--json",
+        "--reported-action",
+        "--trusted-auth-header",
+        "--strict-exit",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[86], SHARED_COMMAND_OPTIONS[85], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
+      "networkEffect": "offline",
+      "disclosureClass": "none",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": true,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002emessage-intake",
+        "whoisleuth\u002eidentity-events.input"
+      ],
+      "inputLimits": [
+        "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file. No collection or automatic Case write.",
+        "kind: 1-1 enum value",
+        "source: 0-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [],
+      "capability": {
+        "familyId": "offline_review",
+        "networkMode": "none",
+        "dataSent": [
+          "none"
+        ],
+        "recipients": [
+          "none"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete",
+          "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The command reads only selected bounded local input and makes no network request.",
+          "Output remains under the operator's local retention and deletion control."
+        ]
+      }
+    },
+    {
       "id": "review-evidence",
       "summary": "Review supplied evidence offline",
-      "description": "Review one versioned DNS, domain-change, routing, GeoIP, RDAP, or trust-store document offline.",
+      "description": "Review versioned protocol evidence, incident sequences, domain history, platform objects, storefronts or connector configuration offline.",
       "group": "investigate",
       "common": true,
       "usage": "whoisleuth review-evidence [\u003csource>] [--mmdb \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
       "example": "whoisleuth review-evidence domain-change.json --json --strict-exit",
-      "boundary": "The command reads only the supplied document. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.",
+      "boundary": "The command reads only the supplied document and, with --mmdb, one explicitly selected local database up to 512 MiB. MMDB parsing and lookup run in one disposable worker with a ten-second processing deadline and an 8 KiB result limit. Version-2 MMDB queries require a justified age policy; unavailable or partial current reviews return 4 under --strict-exit. Historical version-1 MMDB queries preserve their output without freshness admission. No database is bundled, downloaded, updated or transmitted. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one bounded versioned evidence or request-planning document and performs no collection."
+        "scope": "Reads one bounded versioned evidence or request-planning document and, only with --mmdb, one selected bounded local database. Performs no collection."
       },
       "inputs": [
         {
@@ -2787,22 +4365,31 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[87], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
       "planSupport": false,
       "failurePolicySupport": true,
       "supportedSchemaIdentifiers": [
+        "whoisleuth\u002econtext-review",
+        "whoisleuth\u002edomain-history.input",
+        "whoisleuth\u002eplatform-continuity.input",
+        "whoisleuth\u002estorefront-review.input",
+        "whoisleuth\u002econnector-review.input",
+        "whoisleuth\u002eincident-sequence.input",
         "whoisleuth\u002ecli.offline-evidence-review",
         "whoisleuth\u002erdap-search-input",
         "whoisleuth\u002ednssec-evidence-input",
         "whoisleuth\u002etlsa-evidence-input",
         "whoisleuth\u002erpki-route-input",
         "whoisleuth\u002elocal-geoip-query",
+        "whoisleuth\u002elocal-mmdb-query",
+        "whoisleuth\u002elocal-mmdb-review",
         "whoisleuth\u002eencrypted-dns-plan-input"
       ],
       "inputLimits": [
-        "Reads one bounded versioned evidence or request-planning document and performs no collection.",
+        "Reads one bounded versioned evidence or request-planning document and, only with --mmdb, one selected bounded local database. Performs no collection.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
@@ -2870,6 +4457,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2920,15 +4508,15 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "case",
       "summary": "Review and update ordinary local Case files",
-      "description": "Show or open a local Case, append a note or evidence pin, record an assessment, or retain an offline recheck. Use --input for pin, assessment and recheck JSON; --text or --note-file for a note. Mutations require --output and always write the complete current Case export.",
+      "description": "Show or open a local Case, append a note or evidence pin, link evidence, withdraw a link, record an assessment, or retain an offline recheck. Use --input for pin, link, withdraw-link, assessment and recheck JSON; --text or --note-file for a note. Link input contains fromPinId, toPinId, kind (derived_from or shared_source), and basis. Withdrawal input contains id and reason. Mutations require --output and always write the complete current Case export.",
       "group": "respond",
       "common": true,
-      "usage": "whoisleuth case \u003cshow|open|note|pin|assess|recheck> [\u003csource>] [--text \u003cvalue>|--note-file \u003cfile>] [--case-id \u003cvalue>] [--domain \u003cvalue>] [--title \u003cvalue>] [--new-incident] [--input \u003cfile>] [--expect-file-digest \u003cvalue>] [--json] [--no-color]",
+      "usage": "whoisleuth case \u003cshow|open|note|pin|link|withdraw-link|assess|recheck> [\u003csource>] [--text \u003cvalue>|--note-file \u003cfile>] [--case-id \u003cvalue>] [--domain \u003cvalue>] [--title \u003cvalue>] [--new-incident] [--input \u003cfile>] [--expect-file-digest \u003cvalue>] [--json] [--no-color]",
       "example": "whoisleuth case open --domain example.test --output cases.json\n  whoisleuth case show cases.json\n  whoisleuth case note cases.json --text \"Review the retained observation\" --output cases.json --force",
       "boundary": "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:\u003cdigest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads exact Case schemas 15 or 16. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 16."
+        "scope": "Reads exact Case schemas 15 or 16 or 17. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 17."
       },
       "inputs": [
         {
@@ -2941,6 +4529,8 @@ export const PUBLIC_CLI_CATALOGUE = {
             "open",
             "note",
             "pin",
+            "link",
+            "withdraw-link",
             "assess",
             "recheck"
           ],
@@ -2969,6 +4559,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--json",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[88], SHARED_COMMAND_OPTIONS[89], SHARED_COMMAND_OPTIONS[90], SHARED_COMMAND_OPTIONS[91], SHARED_COMMAND_OPTIONS[92], SHARED_COMMAND_OPTIONS[93], SHARED_COMMAND_OPTIONS[94], SHARED_COMMAND_OPTIONS[95], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2978,7 +4569,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-export"
       ],
       "inputLimits": [
-        "Reads exact Case schemas 15 or 16. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 16.",
+        "Reads exact Case schemas 15 or 16 or 17. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 17.",
         "operation: 1-1 enum value",
         "source: 0-1 file value"
       ],
@@ -3019,17 +4610,110 @@ export const PUBLIC_CLI_CATALOGUE = {
       }
     },
     {
+      "id": "indicator-set",
+      "summary": "Manage reviewed indicator revisions offline",
+      "description": "Create or revise a file-based indicator set, inspect its identities and review windows, or export the exact revision as STIX or MISP JSON. Revise takes a plan containing basis, name, expiresAt, reviewed rows and selectedDomains; later plans embed previous and explicitly select renewIds, withdrawIds or reintroduceDomains. Use --json with revise to retain the manifest. STIX and MISP operations always output JSON.",
+      "group": "respond",
+      "common": false,
+      "usage": "whoisleuth indicator-set \u003crevise|inspect|stix|misp> [\u003csource>] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth indicator-set revise indicator-plan.json --json --output indicators.json\n  whoisleuth indicator-set inspect indicators.json\n  whoisleuth indicator-set stix indicators.json --output indicators.stix.json",
+      "boundary": "Offline files only; no submission, feed synchronisation or automatic deletion. Missing candidates are unchanged. Renewal changes the review window, not the original observation. Withdrawn identities stay withdrawn; reintroduction requires a new identity. Keep prior manifests: a digest verifies content, not authorship or the complete revision chain. MISP expiry is a review deadline, not automatic enforcement.",
+      "collection": {
+        "mode": "offline",
+        "scope": "Reads a selected 16 MiB revision plan or 4 MiB manifest. Makes no requests and does not alter the source file."
+      },
+      "inputs": [
+        {
+          "name": "operation",
+          "valueKind": "enum",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [
+            "revise",
+            "inspect",
+            "stix",
+            "misp"
+          ],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        },
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 0,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--json",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
+      "networkEffect": "offline",
+      "disclosureClass": "none",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002emanaged-indicator-set"
+      ],
+      "inputLimits": [
+        "Reads a selected 16 MiB revision plan or 4 MiB manifest. Makes no requests and does not alter the source file.",
+        "operation: 1-1 enum value",
+        "source: 0-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [
+        "Managed indicator revision"
+      ],
+      "capability": {
+        "familyId": "portable_evidence",
+        "networkMode": "none",
+        "dataSent": [
+          "none"
+        ],
+        "recipients": [
+          "none"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "deliberate_bounded",
+        "outcomes": [
+          "complete"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The command reads only selected bounded local input and makes no network request.",
+          "Output remains under the operator's local retention and deletion control."
+        ]
+      }
+    },
+    {
       "id": "case-pack",
       "summary": "Build a reviewed case package",
-      "description": "Package browser-created Case records from schemas 15 or 16 as a reviewed, audience-specific Case-pack v2 with current schema 16.",
+      "description": "Package browser-created Case records from schemas 15 or 16 or 17 as a reviewed, audience-specific Case-pack v2 with current schema 17.",
       "group": "respond",
       "common": true,
       "usage": "whoisleuth case-pack [\u003csource>] --audience \u003cinternal|trusted|public> --reviewed [--json] [--quiet] [--no-color]",
       "example": "whoisleuth case-pack cases.json --audience trusted --reviewed --json",
-      "boundary": "The command is an offline handoff from the browser Case workflow: it creates a new package, never creates or mutates a durable Case, never mutates the source archive, and requires an explicit review acknowledgement.",
+      "boundary": "The command creates a separate offline package without changing the source or durable Cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, Case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one bounded Case export from schemas 15 or 16 and writes a separate audience-specific Case-pack v2."
+        "scope": "Reads one bounded Case export from schemas 15 or 16 or 17 and writes a separate audience-specific Case-pack v2."
       },
       "inputs": [
         {
@@ -3049,6 +4733,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[96], SHARED_COMMAND_OPTIONS[97], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3059,7 +4744,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-report"
       ],
       "inputLimits": [
-        "Reads one bounded Case export from schemas 15 or 16 and writes a separate audience-specific Case-pack v2.",
+        "Reads one bounded Case export from schemas 15 or 16 or 17 and writes a separate audience-specific Case-pack v2.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
@@ -3127,6 +4812,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3209,6 +4895,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[98], SHARED_COMMAND_OPTIONS[99], SHARED_COMMAND_OPTIONS[100], SHARED_COMMAND_OPTIONS[101], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[19], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -3298,6 +4985,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3375,6 +5063,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3459,6 +5148,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[102], SHARED_COMMAND_OPTIONS[103], SHARED_COMMAND_OPTIONS[104], SHARED_COMMAND_OPTIONS[105], SHARED_COMMAND_OPTIONS[106], SHARED_COMMAND_OPTIONS[107], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3558,6 +5248,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[108], SHARED_COMMAND_OPTIONS[109], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3614,9 +5305,9 @@ export const PUBLIC_CLI_CATALOGUE = {
       "description": "Execute approved steps from a fixed investigation recipe and emit a resumable checkpoint.",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification> \u003csubject> [--select \u003cvalue>] [--use-artifact \u003cvalue>] [--confirm-review \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--interactive] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification> \u003csubject> [--select \u003cvalue>] [--use-artifact \u003cvalue>] [--confirm-review \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--interactive] [--preview] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth workflow-run domain-triage example.test --approve-network --json --output run.json",
-      "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation. New runs connect compatible earlier outputs using the recipe defaults. Use --use-artifact \u003cstep-id>:\u003cinput-number>=\u003cearlier-step-id> to override a connection; input numbers start at 1. Repeat --select for remaining placeholders in order, or supply every input for a step to replace its connections with files. Values stay literal and cannot start with a hyphen or invoke a shell. Optional --interactive prompts on terminal stderr for missing inputs; a blank answer pauses. It grants neither network approval nor human-review confirmation. A step declaring human review still requires --confirm-review \u003cstep-id> for that invocation. Checkpoints do not grant later approvals. Resumes preserve recorded connections. Content digests identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.",
+      "boundary": "--preview validates the checkpoint and shows retained outputs, unresolved inputs and remaining approvals without executing or writing. It cannot be combined with approval, interactive, quiet or output-file flags. Only installed recipe commands can run. Network steps require explicit approval for each invocation. New runs connect compatible earlier outputs using the recipe defaults. Use --use-artifact \u003cstep-id>:\u003cinput-number>=\u003cearlier-step-id> to override a connection; input numbers start at 1. Repeat --select for remaining placeholders in order, or supply every input for a step to replace its connections with files. Values stay literal and cannot start with a hyphen or invoke a shell. Optional --interactive prompts on terminal stderr for missing inputs; a blank answer pauses. It grants neither network approval nor human-review confirmation. A step declaring human review still requires --confirm-review \u003cstep-id> for that invocation. Checkpoints do not grant later approvals. Resumes preserve recorded connections. Content digests identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.",
       "collection": {
         "mode": "network",
         "scope": "Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause."
@@ -3659,17 +5350,20 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--approve-network",
         "--resume",
         "--interactive",
+        "--preview",
         "--json",
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[110], SHARED_COMMAND_OPTIONS[111], SHARED_COMMAND_OPTIONS[112], SHARED_COMMAND_OPTIONS[113], SHARED_COMMAND_OPTIONS[114], SHARED_COMMAND_OPTIONS[115], SHARED_COMMAND_OPTIONS[116], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "conditional_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
       "planSupport": false,
       "failurePolicySupport": false,
       "supportedSchemaIdentifiers": [
-        "whoisleuth\u002ecli.investigation-run"
+        "whoisleuth\u002ecli.investigation-run",
+        "whoisleuth\u002ecli.investigation-preview"
       ],
       "inputLimits": [
         "Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause.",
@@ -3688,7 +5382,8 @@ export const PUBLIC_CLI_CATALOGUE = {
       ],
       "fileOutput": true,
       "primaryEvidenceArtefacts": [
-        "Resumable workflow state"
+        "Resumable workflow state",
+        "Offline resume preview"
       ],
       "capability": {
         "familyId": "workflow_execution",
@@ -3762,6 +5457,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[117], SHARED_COMMAND_OPTIONS[118], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3840,6 +5536,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3916,6 +5613,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3995,6 +5693,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--compact",
         "--no-attribution"
       ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[20], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[119], SHARED_COMMAND_OPTIONS[22]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,

@@ -65,7 +65,8 @@
       </div>
       <div class="counts" role="group" aria-label="Evidence Readiness summary">
         <span><strong>{readiness.counts.ready}</strong> ready</span>
-        <span><strong>{readiness.counts.limited + readiness.counts.not_ready}</strong> limited</span>
+        <span><strong>{readiness.counts.limited}</strong> limited</span>
+        <span><strong>{readiness.counts.not_ready}</strong> not ready</span>
       </div>
     </header>
 
@@ -89,7 +90,7 @@
                 type="button"
                 class="btn small"
                 disabled={exportingClaim !== null}
-                aria-label={`Download portable passport for ${entry.label}`}
+                aria-label={`${exportingClaim === entry.id ? 'Preparing…' : 'Download passport'} for ${entry.label}`}
                 onclick={() => void exportPassport(entry.id)}
               >{exportingClaim === entry.id ? 'Preparing…' : 'Download passport'}</button>
             {/if}

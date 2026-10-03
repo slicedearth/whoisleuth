@@ -101,12 +101,13 @@ describe('domain-posture collection orchestration', () => {
     const fixture = completeFixture();
     const additional = { id: 'dmarc_inheritance', label: 'Inherited DMARC policy', status: 'info' as const, summary: 'Exact-name policy.', detail: 'Publication only.', records: [], remediation: '' };
     let calls = 0;
-    const dependencies = { ...fixture.dependencies, collectDnsInheritanceChecks: async (...args: Parameters<NonNullable<DomainPostureCollectorDependencies['collectDnsInheritanceChecks']>>) => {
+    const dependencies = { ...fixture.dependencies, collectDnsInheritanceReview: async (...args: Parameters<NonNullable<DomainPostureCollectorDependencies['collectDnsInheritanceReview']>>) => {
       calls++; assert.equal(args[0], 'example.test');
       assert.deepEqual(args[1].records, ['v=DMARC1; p=reject; sp=reject; np=reject; rua=mailto:aggregate@reports.example.net']);
       assert.deepEqual(args[2].records, ['ns2.example.net.', 'ns1.example.net.']);
       assert.equal(args[3]?.signal, controller.signal);
-      return [additional];
+      return { checks: [additional], dmarcAuthorizations: [{ destination: 'reports.example.net', reportType: 'aggregate' as const,
+        recordName: 'example.test._report._dmarc.reports.example.net', state: 'authorized' as const, error: null }] };
     } };
     const controller = new AbortController();
     const ordinary = await checkDomainPosture('example.test', {}, dependencies);

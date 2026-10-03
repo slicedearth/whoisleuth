@@ -1,11 +1,7 @@
-import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
-import {
-  CASE_SCHEMA_VERSION,
-  MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
-  normalizeEvidenceDomain,
-  type CaseEvidenceSnapshot,
-  type CaseRecord,
-} from '../cases/case-model.mts';
+import { canonicalRegistrableDomain } from '../analysis/registrable-domain.mts';
+import { CASE_SCHEMA_VERSION, MAX_EVIDENCE_SNAPSHOTS_PER_CASE } from '../contracts/case-portability.mts';
+import { normalizeEvidenceDomain } from '../cases/case-record-core.mts';
+import type { CaseEvidenceSnapshot, CaseRecord } from '../cases/case-model.mts';
 import {
   MAX_CAMPAIGN_DOMAINS,
   type CampaignRecord,

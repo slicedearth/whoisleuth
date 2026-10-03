@@ -1,8 +1,11 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
-import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectFocusedResultsVisible, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, useTheme } from './helpers';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectFocusedResultsVisible, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, useTheme } from './helpers';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { productionChunkPath } from './production-build';
-import { normalizeCaseStore, serializeCaseStore, MAX_CASE_STORE_BYTES } from '../packages/cases/case-model.mts';
+import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
+import { serializeCaseStore } from '../packages/cases/case-storage-model.mts';
+import { MAX_CASE_STORE_BYTES } from '../packages/contracts/case-portability.mts';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
@@ -62,6 +65,240 @@ async function seedInvestigationStores(page: import('@playwright/test').Page) {
   await openDashboardSecondaryWorkspaces(page);
 }
 
+test('retained infrastructure exposes exact independent sources and keyboard return without collection', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) requests.push(path);
+  });
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [
+    caseRecord('inventory-first', 'shared.example'),
+    { ...caseRecord('inventory-second', 'shared.example'), updatedAt: '2026-07-20T00:00:00.000Z' },
+  ] } });
+  await openDashboardSecondaryWorkspaces(page);
+  await page.getByText('Browse retained infrastructure', { exact: true }).click();
+  const inventory = page.getByRole('region', { name: 'Retained infrastructure inventory', exact: true });
+  const rows = inventory.getByRole('list', { name: 'Retained infrastructure identities', exact: true });
+  await expect(rows.getByRole('listitem')).toHaveCount(1);
+  await expect(rows.getByText('2 observations · 2 one-hop relationships', { exact: true })).toBeVisible();
+  const inspect = rows.getByRole('button', { name: 'Inspect retained evidence for shared.example', exact: true });
+  await inspect.focus(); await inspect.press('Enter');
+  const detail = inventory.getByRole('region', { name: 'Selected retained infrastructure evidence', exact: true });
+  await expect(detail.getByRole('heading', { name: 'Retained evidence for shared.example', exact: true })).toBeFocused();
+  await expect(detail.getByRole('heading', { name: '2 retained observations', exact: true })).toBeVisible();
+  await expect(detail.getByRole('heading', { name: '2 one-hop relationships', exact: true })).toBeVisible();
+  await expect(detail.getByRole('list', { name: 'Retained relationship sources', exact: true }).getByRole('listitem')).toHaveCount(2);
+  for (const href of await detail.locator('a').evaluateAll(elements => elements.map(element => element.getAttribute('href')))) expect(href).toMatch(/^\/monitor\?case=/u);
+  for (const width of [1920, 1280, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      await expect(detail.getByRole('heading', { name: '2 one-hop relationships', exact: true })).toBeVisible();
+      if (captureVisualEvidenceEnabled()) {
+        await detail.evaluate(element => window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - 140, behavior: 'instant' }));
+        await page.screenshot({ path: test.info().outputPath(`infrastructure-${theme}-${width}.png`) });
+      }
+    }
+  }
+  await detail.getByRole('button', { name: 'Return to inventory results', exact: true }).click();
+  await expect(inspect).toBeFocused();
+  expect(requests).toEqual([]);
+});
+
+test('optional retained topology preserves full source list, long identity pivots and accessible mobile fallback', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) requests.push(path);
+  });
+  const prefix = 'a'.repeat(63), first = `${prefix}.one.topology.example`, second = `${prefix}.two.topology.example`;
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord('topology-first', first), caseRecord('topology-independent', first), caseRecord('topology-second', second)] },
+    'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', { campaigns: [campaign('topology-campaign', 'Long-name topology review', [first, second])] }),
+  });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 3 });
+  const campaignsBefore = await readBrowserLocalCollection(page, 'campaigns', { minimumRecords: 1 });
+  await openDashboardSecondaryWorkspaces(page);
+  await page.getByText('Browse retained infrastructure', { exact: true }).click();
+  const inventory = page.getByRole('region', { name: 'Retained infrastructure inventory', exact: true });
+  const inspect = inventory.getByRole('list', { name: 'Retained infrastructure identities', exact: true }).getByRole('button', { name: `Inspect retained evidence for ${first}`, exact: true });
+  await inspect.click();
+  const detail = inventory.getByRole('region', { name: 'Selected retained infrastructure evidence', exact: true });
+  const relationships = detail.getByRole('region', { name: 'Directly supported retained relationships', exact: true });
+  const sourceList = relationships.getByRole('list', { name: 'Retained relationship sources', exact: true });
+  await expect(sourceList.getByRole('listitem')).toHaveCount(3);
+  const toggle = relationships.getByRole('button', { name: 'Topology and list', exact: true });
+  await toggle.focus(); await toggle.press('Enter');
+  await expect(toggle).toBeFocused(); await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(relationships.getByRole('region', { name: 'Retained one-hop topology', exact: true })).toBeVisible();
+  await expect(sourceList.getByRole('listitem')).toHaveCount(3);
+  await relationships.getByRole('searchbox', { name: 'Search diagram on this source page', exact: true }).fill('no-diagram-match');
+  await expect(relationships).toContainText('No current-page source rows match this diagram search');
+  await expect(sourceList.getByRole('listitem')).toHaveCount(3);
+  await expect(sourceList.getByRole('link')).toHaveCount(3);
+  await relationships.getByRole('searchbox', { name: 'Search diagram on this source page', exact: true }).fill('');
+  const initialFocus = relationships.getByRole('combobox', { name: 'Focus diagram identity', exact: true });
+  const campaignOption = (await initialFocus.locator('option').allTextContents()).find(value => value.includes('topology-campaign · campaign'));
+  expect(campaignOption).toBeDefined();
+  await initialFocus.selectOption({ label: campaignOption! });
+  await relationships.getByRole('button', { name: 'Show exact source rows for topology-campaign', exact: true }).click();
+  await expect(sourceList.locator('li.highlighted')).toHaveCount(1);
+  await expect(sourceList.locator('li.highlighted')).toBeFocused();
+  await relationships.getByRole('button', { name: 'Inspect retained evidence for topology-campaign', exact: true }).click();
+  await expect(detail.getByRole('heading', { name: 'Retained evidence for Long-name topology review', exact: true })).toBeFocused();
+  await relationships.getByRole('button', { name: 'Topology and list', exact: true }).click();
+  const focus = relationships.getByRole('combobox', { name: 'Focus diagram identity', exact: true });
+  const options = await focus.locator('option').allTextContents();
+  expect(options.filter(value => value.includes(first))).toHaveLength(1);
+  expect(options.filter(value => value.includes(second))).toHaveLength(1);
+  await focus.selectOption({ label: options.find(value => value.includes(second))! });
+  await expect(relationships.locator('.topology-controls > p').filter({ hasText: 'Focused identity [' })).toContainText(`${second} · domain`);
+  await relationships.getByRole('button', { name: `Show exact source rows for ${second}`, exact: true }).click();
+  await expect(sourceList.locator('li.highlighted').first()).toBeFocused();
+  const map = relationships.getByRole('region', { name: 'Retained one-hop topology', exact: true });
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(map.locator('.map-frame svg')).toBeVisible();
+  await expect(map.locator('path[marker-end]')).toHaveCount(5);
+  await map.locator('.map-frame').scrollIntoViewIfNeeded();
+  const box = await map.locator('.map-frame').boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.move(box!.x + box!.width / 2, Math.max(10, Math.min(700, box!.y + box!.height / 2)));
+  const previousScroll = await page.evaluate(() => window.scrollY);
+  await page.mouse.wheel(0, 240);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(previousScroll);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 1920, 2560]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expectNoHorizontalOverflow(page);
+      if (width < 660) {
+        await expect(map.locator('.map-frame')).toBeHidden();
+        await expect(map.locator('.map-mobile')).toBeVisible();
+      }
+      if (captureVisualEvidenceEnabled()) await test.info().attach(`retained-topology-${width}-${theme}`, {
+        body: await relationships.locator('.topology-controls').screenshot(), contentType: 'image/png',
+      });
+    }
+  }
+  await relationships.getByRole('button', { name: 'List only', exact: true }).click();
+  await expect(map).toHaveCount(0);
+  await expect(sourceList.getByRole('listitem')).toHaveCount(5);
+  await sourceList.getByRole('button', { name: `Inspect retained evidence for ${second}`, exact: true }).first().click();
+  await expect(detail.getByRole('heading', { name: `Retained evidence for ${second}`, exact: true })).toBeFocused();
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 3 })).toEqual(before);
+  expect(await readBrowserLocalCollection(page, 'campaigns', { minimumRecords: 1 })).toEqual(campaignsBefore);
+  expect(requests).toEqual([]);
+});
+
+test('retained topology keeps dense source pages complete and resets diagram search on paging', async ({ page }) => {
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION,
+    cases: Array.from({ length: 53 }, (_, index) => caseRecord(`dense-case-${String(index).padStart(3, '0')}`, 'dense-topology.example')),
+  } });
+  await openDashboardSecondaryWorkspaces(page);
+  await page.getByText('Browse retained infrastructure', { exact: true }).click();
+  const inventory = page.getByRole('region', { name: 'Retained infrastructure inventory', exact: true });
+  await inventory.getByRole('combobox', { name: 'Infrastructure type', exact: true }).selectOption('domain');
+  await inventory.getByRole('list', { name: 'Retained infrastructure identities', exact: true }).getByRole('button', { name: 'Inspect retained evidence for dense-topology.example', exact: true }).click();
+  const relationships = inventory.getByRole('region', { name: 'Directly supported retained relationships', exact: true });
+  const sources = relationships.getByRole('list', { name: 'Retained relationship sources', exact: true });
+  await expect(sources.getByRole('listitem')).toHaveCount(50);
+  await relationships.getByRole('button', { name: 'Topology and list', exact: true }).click();
+  await expect(relationships.getByRole('region', { name: 'Retained one-hop topology', exact: true })).toContainText('Partial visual');
+  await expect(sources.getByRole('listitem')).toHaveCount(50);
+  if (captureVisualEvidenceEnabled()) {
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 390, 1024, 1280, 1920, 2560]) {
+        await page.setViewportSize({ width, height: 844 });
+        await test.info().attach(`retained-topology-dense-${width}-${theme}`, {
+          body: await relationships.locator('.topology-controls').screenshot(), contentType: 'image/png',
+        });
+      }
+    }
+  }
+  const search = relationships.getByRole('searchbox', { name: 'Search diagram on this source page', exact: true });
+  await search.fill('no-current-page-diagram-match');
+  await expect(relationships).toContainText('No current-page source rows match this diagram search');
+  await expect(sources.getByRole('listitem')).toHaveCount(50);
+  const pages = relationships.getByRole('navigation', { name: 'Retained relationship pages', exact: true });
+  await pages.getByRole('button', { name: 'Next', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(pages.getByText('Page 2 of 2', { exact: true })).toBeVisible();
+  await expect(relationships.getByRole('heading', { name: '53 one-hop relationships', exact: true })).toBeFocused();
+  await expect(search).toHaveValue('');
+  await expect(sources.getByRole('listitem')).toHaveCount(3);
+  const map = relationships.getByRole('region', { name: 'Retained one-hop topology', exact: true });
+  await expect(map.locator('path[marker-end]')).toHaveCount(3);
+  await expect(relationships).toContainText('Source page 2 of 2 · 3 rows shown');
+  await expect(sources.getByRole('link')).toHaveCount(3);
+});
+
+test('main search and infrastructure filters settle independently while a worker operation is held', async ({ page }) => {
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION,
+    cases: [caseRecord('concurrent-views', 'shared.example')],
+  } });
+  const probe = await page.evaluateHandle(() => {
+    const NativeWorker = window.Worker;
+    let held: (() => void) | undefined;
+    let hold = true;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        if (options?.name !== 'saved-work-search') return;
+        const post = this.postMessage.bind(this);
+        this.postMessage = (message: unknown, transfer?: Transferable[] | StructuredSerializeOptions) => {
+          const send = () => { if (Array.isArray(transfer)) post(message, transfer); else post(message, transfer); };
+          if (hold && typeof message === 'object' && message !== null && 'kind' in message && message.kind === 'infrastructure') {
+            hold = false; held = send;
+          } else send();
+        };
+      }
+    };
+    return { held: () => Boolean(held), release: () => { const send = held; held = undefined; send?.(); },
+      restore: () => { const send = held; held = undefined; send?.(); window.Worker = NativeWorker; } };
+  });
+  try {
+    await openDashboardSecondaryWorkspaces(page);
+    await page.getByText('Browse retained infrastructure', { exact: true }).click();
+    await expect.poll(() => probe.evaluate(value => value.held())).toBe(true);
+    await page.getByRole('searchbox', { name: 'Search saved work', exact: true }).fill('shared.example');
+    const inventory = page.getByRole('region', { name: 'Retained infrastructure inventory', exact: true });
+    await inventory.getByRole('searchbox', { name: 'Search retained infrastructure', exact: true }).fill('shared.example');
+    await probe.evaluate(value => value.release());
+    await expect(page.getByRole('list', { name: 'Local investigation search results' })).toContainText('shared.example');
+    await expect(inventory.getByRole('list', { name: 'Retained infrastructure identities' })).toContainText('shared.example');
+    await expect(inventory.getByRole('alert')).toHaveCount(0);
+  } finally { await probe.evaluate(value => value.restore()); await probe.dispose(); }
+});
+
+test('retained infrastructure filters before pagination and exposes every admitted match', async ({ page }) => {
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION,
+    cases: Array.from({ length: 123 }, (_, index) => caseRecord(`inventory-${index}`, `target-${index}.example`)),
+  } });
+  await openDashboardSecondaryWorkspaces(page);
+  await page.getByText('Browse retained infrastructure', { exact: true }).click();
+  const inventory = page.getByRole('region', { name: 'Retained infrastructure inventory', exact: true });
+  await inventory.getByRole('combobox', { name: 'Infrastructure type', exact: true }).selectOption('domain');
+  await inventory.getByRole('searchbox', { name: 'Search retained infrastructure', exact: true }).fill('target-');
+  const rows = inventory.getByRole('list', { name: 'Retained infrastructure identities', exact: true });
+  const pages = inventory.getByRole('navigation', { name: 'Retained infrastructure pages', exact: true });
+  await expect(rows.getByRole('listitem')).toHaveCount(50);
+  await expect(pages.getByText('Page 1 of 3', { exact: true })).toBeVisible();
+  await pages.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(pages.getByText('Page 2 of 3', { exact: true })).toBeVisible();
+  await expect(rows.getByRole('listitem')).toHaveCount(50);
+  await pages.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(pages.getByText('Page 3 of 3', { exact: true })).toBeVisible();
+  await expect(rows.getByRole('listitem')).toHaveCount(23);
+  await expect(inventory.getByRole('heading', { name: 'Retained infrastructure inventory', exact: true })).toBeFocused();
+});
+
 test('dashboard local search pivots to exact cases, campaigns, and brand profiles without scanning', async ({ page }) => {
   const lookupRequests: string[] = [];
   page.on('request', (request) => {
@@ -106,6 +343,46 @@ test('dashboard local search exposes future-store limitations without indexing f
   await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
   await expect(page.getByText(/created by a newer app version/)).toBeVisible();
   await expect(page.getByText('future-case', { exact: true })).toHaveCount(0);
+});
+
+test('saved-work history keeps independent incidents navigable without starting collection', async ({ page }) => {
+  const collections: string[] = [];
+  page.on('request', request => {
+    if (new URL(request.url()).pathname === '/api/lookup') collections.push(request.url());
+  });
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [
+      caseRecord('incident-first', 'shared.example'),
+      { ...caseRecord('incident-second', 'shared.example'), updatedAt: '2026-07-20T00:00:00.000Z' },
+    ] },
+  });
+  await openDashboardSecondaryWorkspaces(page);
+  await page.getByRole('searchbox', { name: 'Search saved work' }).fill('shared.example');
+  const result = page.locator('.result-card').filter({ has: page.locator('.type-badge', { hasText: /^Domain$/u }) });
+  await expect(result).toHaveCount(1);
+  await result.getByText('Retained history', { exact: true }).click();
+  const history = result.getByRole('region', { name: 'Retained observation history' });
+  await expect(history.getByRole('heading', { name: '2 retained observations' })).toBeVisible();
+  await expect(history.getByRole('link', { name: 'Open source case' })).toHaveCount(2);
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expect(history.getByRole('heading', { name: '2 retained observations' })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await test.info().attach(`retained-history-${viewport.width}-${theme}`, {
+        body: await result.screenshot(), contentType: 'image/png',
+      });
+    }
+  }
+  const source = history.locator('a[href="/monitor?case=incident-first"]');
+  await source.focus();
+  await expect(source).toBeFocused();
+  await source.press('Enter');
+  await expect(page).toHaveURL('/cases?case=incident-first');
+  await expect(page.locator('.case-heading', { hasText: 'shared.example' })).toBeVisible();
+  expect(collections).toEqual([]);
 });
 
 test('dashboard local search remains usable without horizontal overflow on narrow mobile screens', async ({ page }) => {
@@ -271,7 +548,7 @@ test('saved-work search waits for its worker, retains typing and pages through e
         await expectFocusedResultsVisible(page, results);
         await expectNoHorizontalOverflow(page);
         await expect(pages.getByRole('button', { name: 'Previous', exact: true })).toBeVisible();
-        await test.info().attach(`saved-search-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+        if (captureVisualEvidenceEnabled()) { await test.info().attach(`saved-search-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       }
     }
     await search.fill('item-000');

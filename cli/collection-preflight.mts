@@ -1,10 +1,11 @@
+import { bulkQueryLimit } from '../lib/bulk-limits.mts';
+
 export const CLI_COLLECTION_PREFLIGHT_SCHEMA = 'whoisleuth.cli.collection-preflight';
 export const CLI_COLLECTION_PREFLIGHT_VERSION = 1;
 
 type CollectionPreflightOptions = Readonly<{
   command: 'bulk' | 'discover-scan';
   targetCount: number;
-  targetLimit: number;
   deep: boolean;
   concurrency: number;
   output: string;
@@ -25,7 +26,7 @@ export function buildCollectionPreflight(options: CollectionPreflightOptions) {
     networkRequestsMade: false,
     scope: Object.freeze({
       selectedTargets: options.targetCount,
-      commandTargetLimit: options.targetLimit,
+      commandTargetLimit: bulkQueryLimit(options.deep ? 'deep' : 'fast'),
       concurrency: options.concurrency,
       sourceFamilies: Object.freeze(sourceFamilies),
       exactRequestCountKnown: false,
@@ -67,6 +68,12 @@ export function formatCollectionPreflight(document: ReturnType<typeof buildColle
     ...document.scope.sourceFamilies.map((source) => `  ${source}`),
     '',
     ...document.disclosure.map((item) => `Disclosure: ${item}`),
+    '',
+    `Output format: ${document.persistence.output}`,
+    `Checkpoint: ${document.persistence.checkpoint ? 'enabled' : 'not written'}. ${document.persistence.note}`,
+    ...(document.review.allowlistAffectsPriorityOnly ? ['Allowlist: affects review priority only; it does not exclude targets from collection.'] : []),
+    'Enforcement: none. This plan does not report, block or remove a target.',
+    '',
     ...document.limitations.map((item) => `Limitation: ${item}`),
     '',
   ].join('\n');

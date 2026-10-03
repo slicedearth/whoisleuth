@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { caseRecord, snapshot } from './case-test-fixtures';
@@ -202,7 +203,7 @@ for (const theme of ['light', 'dark'] as const) {
       await page.setViewportSize(viewport);
       await expectNoHorizontalOverflow(page);
       await page.locator('.incident-form').scrollIntoViewIfNeeded();
-      await page.screenshot({ path: testInfo.outputPath(`incident-${theme}-${viewport.width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`incident-${theme}-${viewport.width}.png`) }); }
     }
   });
 }

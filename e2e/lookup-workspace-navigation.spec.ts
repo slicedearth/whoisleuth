@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { expectLookupTargetAligned, INTELLIGENCE_CAPABILITIES, sectionedLookupFixture } from './lookup-design-fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
@@ -16,8 +17,8 @@ test('Lookup evidence navigation and its target remain below the console header'
     await useTheme(page, theme);
     for (const [width, height] of [[1280, 720], [1024, 768], [390, 844], [320, 700], [1920, 1080], [2560, 1440]]) {
       await page.setViewportSize({ width: width!, height: height! });
-      const expand = page.getByRole('button', { name: 'Expand Registration evidence', exact: true });
-      if (!await expand.count()) await page.getByRole('button', { name: 'Collapse Registration evidence', exact: true }).click();
+      const expand = page.getByRole('button', { name: 'Expand details: Registration evidence', exact: true });
+      if (!await expand.count()) await page.getByRole('button', { name: 'Collapse details: Registration evidence', exact: true }).click();
       await expand.click();
       await expectLookupTargetAligned(page, '#registry');
       await expect(page.locator('#registry [data-deferred-state="loading"]')).toHaveCount(0);
@@ -34,7 +35,7 @@ test('Lookup evidence navigation and its target remain below the console header'
       expect(geometry.navTop).toBeGreaterThanOrEqual(geometry.headerBottom + 4);
       expect(geometry.targetTop).toBeGreaterThanOrEqual(geometry.navBottom + 4);
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`lookup-navigation-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`lookup-navigation-${theme}-${width}.png`) }); }
     }
   }
 });
@@ -73,7 +74,7 @@ test('Lookup keeps completed evidence identity and a return to the saved Case wi
   await expect(page).toHaveURL(`/cases?case=${id}`);
   await page.getByRole('link', { name: 'Return to Lookup', exact: true }).click();
   await expect(header.getByRole('heading', { name: domain, exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Collapse Case and response evidence', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Collapse details: Case and response evidence', exact: true })).toBeVisible();
   expect(collections).toBe(1);
   const after = await readBrowserLocalCollection(page, 'cases');
   expect(after.manifest.revision).toBe(before.manifest.revision);
@@ -100,7 +101,9 @@ test('explicit Lookup Case context can be cleared and invalid references do not 
 
 test('optional sources are compact, keyboard accessible and retain explicit Deep consent', async ({ page }, testInfo) => {
   await page.route('**/api/capabilities', route => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify(INTELLIGENCE_CAPABILITIES),
+    status: 200, contentType: 'application/json', body: JSON.stringify({ ...INTELLIGENCE_CAPABILITIES,
+      features: [...INTELLIGENCE_CAPABILITIES.features, { id: 'website_probe', status: 'supported', execution: 'hosted', scanModes: ['deep'] }],
+    }),
   }));
   let collections = 0;
   page.on('request', request => { if (new URL(request.url()).pathname === '/api/lookup') collections += 1; });
@@ -125,7 +128,7 @@ test('optional sources are compact, keyboard accessible and retain explicit Deep
       await page.setViewportSize({ width: width!, height: height! });
       await page.locator('#query').scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`lookup-form-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`lookup-form-${theme}-${width}.png`) }); }
     }
   }
   await page.getByRole('radio', { name: /Fast/u }).check();
@@ -133,5 +136,20 @@ test('optional sources are compact, keyboard accessible and retain explicit Deep
   await summary.click();
   await expect(option).toBeChecked();
   await expect(option).toBeDisabled();
+  await page.getByRole('radio', { name: /Deep/u }).check();
+  const contacts = page.getByRole('checkbox', { name: /Retrieve security.txt contacts/u });
+  await contacts.check();
+  await page.locator('.collection-preflight > summary').click();
+  const plannedContacts = page.getByRole('list', { name: 'Planned source families' }).getByRole('listitem').filter({ has: page.getByText('security.txt', { exact: true }) });
+  await expect(plannedContacts.locator('small')).toHaveText('included');
+  await page.locator('#query').fill('192.0.2.1');
+  await expect(contacts).toBeChecked();
+  await expect(contacts).toBeDisabled();
+  await expect(plannedContacts).toHaveCount(0);
+  await expect(summary).toContainText('None selected');
+  await page.locator('#query').fill('optional-evidence.invalid');
+  await expect(contacts).toBeEnabled();
+  await expect(plannedContacts.locator('small')).toHaveText('included');
+  await expect(summary).toContainText('2 selected for Deep');
   expect(collections).toBe(0);
 });

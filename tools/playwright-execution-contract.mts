@@ -19,6 +19,27 @@ export const PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN = new RegExp(
 export const PLAYWRIGHT_NETWORK_GUARD_ROUTE_PATTERN = '**/*';
 export const PLAYWRIGHT_AUTOMATIC_GUARD_OPTIONS = Object.freeze({ auto: true as const });
 
+/** Passing screenshots are review artefacts, not assertions. Failures always retain
+ * the configured trace and screenshot independently of this opt-in gallery. */
+export function captureVisualEvidenceEnabled(environment: NodeJS.ProcessEnv = process.env): boolean {
+  const value = environment.WHOISLEUTH_E2E_VISUAL_EVIDENCE;
+  if (value !== undefined && value !== '' && value !== '0' && value !== '1') {
+    throw new TypeError('WHOISLEUTH_E2E_VISUAL_EVIDENCE must be 0 or 1.');
+  }
+  return value === '1';
+}
+
+/** Diagnostics retain build-asset paths only, never target URLs or queries. */
+export function browserBuildAssetPath(value: string, origin: string): string | null {
+  if (value.length > 2_048) return null;
+  try {
+    const url = new URL(value);
+    return url.origin === origin && !url.username && !url.password
+      && /^\/_app\/immutable\/(?:chunks|nodes|entry|assets)\/[A-Za-z0-9_.-]+\.(?:js|css)$/u.test(url.pathname)
+      ? url.pathname : null;
+  } catch { return null; }
+}
+
 /** Only the synthetic policy document deliberately exercises native CSP denials. */
 export function isPolicyFixtureDiagnostic(browser: string, type: string, text: string, messageUrl: string, pageUrl: string, origin: string): boolean {
   const fixture = `${origin}/__policy-fixture`;
@@ -200,6 +221,11 @@ export function resolvePlaywrightExecutionContract(environment: Environment = pr
     failOnFlakyTests: true as const,
     retries: 0 as const,
     workers: 1 as const,
+    // Operational hang guards, not performance targets. A cold instrumented
+    // browser may need more than the framework's five-second assertion default.
+    // Successful assertions return immediately in every execution environment.
+    testTimeoutMs: 90_000,
+    assertionTimeoutMs: 15_000,
     trace: 'retain-on-failure' as const,
     screenshot: 'only-on-failure' as const,
     functionalProject: Object.freeze({

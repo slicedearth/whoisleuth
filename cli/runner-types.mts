@@ -1,21 +1,22 @@
-import type { ClassifiedQuery, classifyQuery } from '../lib/classify.mts';
+import type { ClassifiedQuery } from '../lib/classify.mts';
 import type { LookupOptions } from '../lib/lookup.mts';
-import type { explainRiskScore } from '../lib/risk-scoring.mts';
-import type { RegistryCompatibilityRow } from '../lib/registry-capabilities.mts';
-import type { resolvePublicAddresses, safeFetch } from '../lib/safe-fetch.mts';
-import type { whoisQuery } from '../lib/whois-transport.mts';
-import type { validateDnssecChain } from '../lib/dnssec-chain-validation.mts';
-import type { collectMailTransportReview } from '../lib/smtp-transport-review.mts';
-import type { DomainPostureOptions } from '../lib/domain-posture.mts';
 import type { BoundedTextStream } from './bulk.mts';
-import type { createBulkCheckpointWriter } from './bulk-checkpoint.mts';
 import type { CliProgressEvents } from './progress-events.mts';
 import type { TerminalProgress } from './progress.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
-import type { TerminalEnvironment, TerminalPresentation, WritableTerminal } from './terminal-presentation.mts';
-import type { browseLookupDocument, browseLookupOperation, canBrowseLookup } from './lookup-browser.mts';
+import type { TerminalPresentation, WritableTerminal } from './terminal-presentation.mts';
 import type { canLaunchInteractiveCli, launchInteractiveCli } from './interactive-launcher.mts';
-import type { cleanupPendingOutputFiles, writePrivateFile } from './output-file.mts';
+import type { cleanupPendingOutputFiles } from './output-file.mts';
+import type { LookupCommandDependencies } from './lookup-command-runner.mts';
+import type { BulkCommandDependencies } from './bulk-command-runner.mts';
+import type { DiscoveryScanCommandDependencies } from './discovery-scan-command-runner.mts';
+import type { NetworkCommandDependencies } from './network-command-runner.mts';
+import type { ReviewCommandDependencies } from './review-command-runner.mts';
+import type { AssuranceCommandDependencies } from './assurance-command-runner.mts';
+import type { SupportCommandDependencies } from './support-command-runner.mts';
+import type { WorkflowCommandDependencies } from './workflow-command-runner.mts';
+import type { HistoryCommandDependencies } from './history-command-runner.mts';
+import type { EvidenceCommandDependencies } from './evidence-command-runner.mts';
 
 type WritableLike = WritableTerminal;
 
@@ -40,69 +41,26 @@ type DiscoveryGeneratorDependency = {
   };
 };
 
-type CliDependencies = {
-  stdout?: WritableLike;
-  stderr?: WritableLike;
-  stdin?: BoundedTextStream;
-  readStdin?: () => string | Promise<string>;
-  readBulkInput?: (source?: string | null) => string | Promise<string>;
-  readCompareInput?: (source?: string | null) => string | Promise<string>;
-  readDiffInput?: (source: string) => string | Promise<string>;
-  workflowResumeInput?: string;
-  caseFileInput?: string;
-  workflowQuestion?: (prompt: string) => Promise<string>;
-  readDiscoveryDictionary?: (source: string) => string | Promise<string>;
-  readDiscoveryAllowlist?: (source: string) => string | Promise<string>;
-  readExportInput?: (source?: string | null) => string | Promise<string>;
-  readRiskCalibrationInput?: (source?: string | null) => string | Promise<string>;
-  readArtifactInput?: (source?: string | null) => string | Promise<string>;
-  readBinaryArtifactInput?: (source: string) => Uint8Array | Promise<Uint8Array>;
-  readPassphraseFile?: (source: string) => string | Promise<string>;
-  readPrivateKeyFile?: (source: string) => string | Promise<string>;
-  readPublicKeyFile?: (source: string) => string | Promise<string>;
-  readSourceReliabilityInput?: (source?: string | null) => string | Promise<string>;
-  readMailReviewInput?: (source?: string | null) => string | Promise<string>;
-  readMailHeaderInput?: (source?: string | null) => string | Promise<string>;
-  readMailTransportInput?: (source?: string | null) => string | Promise<string>;
-  readTrustAnchorInput?: (source: string) => string | Promise<string>;
-  now?: () => string;
-  nowMs?: () => number;
-  environment?: TerminalEnvironment;
-  signal?: AbortSignal;
-  classifyQuery?: typeof classifyQuery;
-  runUnifiedLookup?: LookupDependency;
-  searchCertificateTransparency?: (keyword: unknown) => unknown | Promise<unknown>;
-  loadTyposquatGenerator?: () => Promise<DiscoveryGeneratorDependency>;
-  normalizeAuditDomain?: (raw: unknown) => string | null;
-  normalizeDkimSelectors?: (raw: unknown) => string[];
-  checkDomainPosture?: (
-    domain: string,
-    options?: DomainPostureOptions,
-  ) => unknown | Promise<unknown>;
-  fetchHomepage?: (domain: string) => unknown | Promise<unknown>;
-  normalizeTlsHostname?: (value: unknown) => string | null;
-  collectTlsIntelligence?: (hostname: string) => unknown | Promise<unknown>;
-  validateDnssecChain?: typeof validateDnssecChain;
-  collectMailTransportReview?: typeof collectMailTransportReview;
-  registryCapabilityFor?: (value: unknown) => RegistryCompatibilityRow | null;
-  registryCapabilitiesVersion?: number;
-  explainRiskScore?: typeof explainRiskScore;
-  riskModelVersion?: number;
-  riskReviewThreshold?: number;
-  loadRegistryComparison?: () => Promise<typeof import('../lib/registry-comparison.mts')>;
-  loadEvidenceExport?: () => Promise<typeof import('../lib/evidence-export.mts')>;
-  browseLookupDocument?: typeof browseLookupDocument;
-  browseLookupOperation?: typeof browseLookupOperation;
-  canBrowseLookup?: typeof canBrowseLookup;
-  canLaunchInteractiveCli?: typeof canLaunchInteractiveCli;
-  launchInteractiveCli?: typeof launchInteractiveCli;
-  writePrivateFile?: typeof writePrivateFile;
-  cleanupPendingOutputFiles?: typeof cleanupPendingOutputFiles;
-  resolvePublicAddresses?: typeof resolvePublicAddresses;
-  safeFetch?: typeof safeFetch;
-  whoisQuery?: typeof whoisQuery;
-  createBulkCheckpointWriter?: typeof createBulkCheckpointWriter;
-};
+/** Composition root: each command family declares its own injectable effects. */
+type CliDependencies = LookupCommandDependencies &
+  BulkCommandDependencies &
+  DiscoveryScanCommandDependencies &
+  NetworkCommandDependencies &
+  ReviewCommandDependencies &
+  AssuranceCommandDependencies &
+  SupportCommandDependencies &
+  WorkflowCommandDependencies &
+  HistoryCommandDependencies &
+  Partial<EvidenceCommandDependencies> & {
+    stdout?: WritableLike;
+    stderr?: WritableLike;
+    stdin?: BoundedTextStream;
+    readStdin?: () => string | Promise<string>;
+    nowMs?: () => number;
+    canLaunchInteractiveCli?: typeof canLaunchInteractiveCli;
+    launchInteractiveCli?: typeof launchInteractiveCli;
+    cleanupPendingOutputFiles?: typeof cleanupPendingOutputFiles;
+  };
 
 type CliCommandContext = Readonly<{
   packageVersion: string;
@@ -114,8 +72,16 @@ type CliCommandContext = Readonly<{
   writeBinaryOutput?(value: Uint8Array): void;
   writeStderr(value: string): void;
   readSingleInput(): Promise<string>;
-  readInput(source: string | null | undefined, maximumBytes: number, label: string): Promise<string>;
-  readHeaderInput(source: string | null | undefined, maximumBytes: number, label: string): Promise<string>;
+  readInput(
+    source: string | null | undefined,
+    maximumBytes: number,
+    label: string,
+  ): Promise<string>;
+  readHeaderInput(
+    source: string | null | undefined,
+    maximumBytes: number,
+    label: string,
+  ): Promise<string>;
   readPassphraseSource(source: string): Promise<string>;
   now(): string;
   beginProgress(message: string): TerminalProgress;
@@ -123,11 +89,16 @@ type CliCommandContext = Readonly<{
   withProgress<T>(message: string, operation: () => T | Promise<T>): Promise<T>;
   setEventProgress(progress: CliProgressEvents): void;
   setFailureLabel(label: string): void;
-  executeCli(argv: readonly string[], dependencies?: CliDependencies): Promise<number>;
 }>;
+
+type CliWorkflowContext = CliCommandContext &
+  Readonly<{
+    executeCli(argv: readonly string[], dependencies?: CliDependencies): Promise<number>;
+  }>;
 
 export type {
   CliCommandContext,
+  CliWorkflowContext,
   CliDependencies,
   DiscoveryGeneratorDependency,
   LookupDependency,

@@ -16,6 +16,14 @@ function changeByField(changes: history.WatchlistChange[], field: string) {
 }
 
 describe('watchlist history', () => {
+  test('explicitly invalid collection clocks stay unknown rather than becoming the current time', () => {
+    for (const checkedAt of [null, 'invalid', '2026-01-01T12:00:00']) {
+      const appended = history.appendWatchlistScan(null, [{ domain: 'example.test' }], { checkedAt });
+      assert.equal(appended.entry.updatedAt, null);
+      assert.equal(appended.entry.history[0]?.checkedAt, null);
+    }
+    assert.ok(history.appendWatchlistScan(null, []).entry.updatedAt);
+  });
   test('upgrades the old latest-snapshot schema without losing results', () => {
     const oldEntry = {
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -32,6 +40,7 @@ describe('watchlist history', () => {
     const first = history.appendWatchlistScan(null, [{
       domain: 'brand.example', availability: 'available', registrarName: 'Old Registrar',
       nameservers: 'NS1.OLD.EXAMPLE; NS2.OLD.EXAMPLE', scanDepth: 'deep',
+      webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
       hasMx: false, hasSpf: false, hasDmarc: false, activityStatus: 'no_site',
       pageTitle: null, faviconHash: null, faviconMatch: false, hasPasswordField: false,
       phishingLanguageMatch: null, reusesOfficialAssets: false,
@@ -40,6 +49,7 @@ describe('watchlist history', () => {
     const second = history.appendWatchlistScan(first, [{
       domain: 'brand.example', availability: 'registered', registrarName: 'New Registrar',
       nameservers: 'ns1.new.example;ns2.new.example', scanDepth: 'deep',
+      webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
       hasMx: true, hasSpf: true, hasDmarc: false, activityStatus: 'active',
       pageTitle: 'Brand secure login', faviconHash: 'abc123', faviconMatch: true, hasPasswordField: true,
       phishingLanguageMatch: 'verify your account', reusesOfficialAssets: true,
@@ -58,6 +68,7 @@ describe('watchlist history', () => {
 
   test('fast scans retain the previous deep baseline and do not invent removed signals', () => {
     const deep = history.appendWatchlistScan(null, [{
+      webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
       domain: 'brand.example', availability: 'registered', scanDepth: 'deep',
       hasMx: false, hasSpf: false, hasDmarc: false, activityStatus: 'active',
       pageTitle: 'Original title', faviconHash: null, hasPasswordField: false,
@@ -71,6 +82,7 @@ describe('watchlist history', () => {
     assert.equal(requiredValue(fast.entry.baseline[0]).pageTitle, 'Original title');
 
     const nextDeep = history.appendWatchlistScan(fast.entry, [{
+      webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
       domain: 'brand.example', availability: 'registered', scanDepth: 'deep',
       hasMx: true, hasSpf: false, hasDmarc: false, activityStatus: 'active',
       pageTitle: 'Changed title', faviconHash: null, hasPasswordField: false,
@@ -88,6 +100,7 @@ describe('watchlist history', () => {
     assert.equal(requiredValue(legacy.baseline[0]).riskModelVersion, null);
 
     const current = history.appendWatchlistScan(legacy, [{
+      webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
       domain: 'brand.example', availability: 'registered', scanDepth: 'deep', riskModelVersion: 1, riskScore: 42,
     }], { mode: 'deep' });
     assert.equal(current.changes.some((change) => change.field === 'riskScore'), false);
@@ -95,6 +108,7 @@ describe('watchlist history', () => {
     assert.equal(requiredValue(current.entry.baseline[0]).riskScore, 42);
 
     const comparable = history.appendWatchlistScan(current.entry, [{
+      webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
       domain: 'brand.example', availability: 'registered', scanDepth: 'deep', riskModelVersion: 1, riskScore: 80,
     }], { mode: 'deep' });
     const riskChange = comparable.changes.find((change) => change.field === 'riskScore');
@@ -222,9 +236,9 @@ describe('watchlist history', () => {
         conclusiveCount: 999999, changeCount: 999999, omittedChanges: -1, changes,
       }],
     });
-    assert.equal(entry.updatedAt, '1970-01-01T00:00:00.000Z');
+    assert.equal(entry.updatedAt, null);
     const event = firstEvent(entry);
-    assert.equal(event.checkedAt, '1970-01-01T00:00:00.000Z');
+    assert.equal(event.checkedAt, null);
     assert.equal(event.mode, 'saved');
     assert.equal(event.resultCount, 1);
     assert.equal(event.conclusiveCount, 0);

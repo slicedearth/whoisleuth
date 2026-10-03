@@ -30,6 +30,7 @@ function result(overrides: Partial<ScanResult> = {}): ScanResult {
     saved: {
       domain,
       scanDepth: 'deep',
+      webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
       availability: 'registered',
       registrarName: 'Example Registrar',
       nameservers: ['ns1.example'],
@@ -146,6 +147,19 @@ test('derives one transient comparable cohort and keeps incompatible Risk eviden
   assert.match(buildBulkRiskPresentation(partial, comparison).summary, /partial or unavailable/u);
   assert.equal(buildBulkRiskPresentation(legacy, comparison).exactScore, 92);
   assert.match(buildBulkRiskPresentation(legacy, comparison).summary, /model v7 is not comparable/u);
+});
+
+test('incomplete web collection cannot enter live Bulk score bands, sorting or filters', () => {
+  const complete = result({ domain: 'complete.example', risk: 12 });
+  for (const webCollectionQuality of [undefined, { version: 1, page: 'complete', favicon: 'unknown', combined: 'partial' } as const]) {
+    const row = result({ domain: 'partial.example', risk: 2, saved: { webCollectionQuality } as ScanResult['saved'] });
+    const comparison = buildBulkRiskComparison([complete, row]);
+    assert.equal(comparison.comparableCount, 1);
+    assert.equal(comparableBulkRiskScore(row, comparison), null);
+    assert.equal(buildBulkRiskPresentation(row, comparison).label, 'Inconclusive');
+    assert.equal(buildBulkRiskPresentation(row, comparison).exactScore, 2);
+    assert.match(buildBulkRiskPresentation(row, comparison).summary, /web collection/iu);
+  }
 });
 
 test('builds triage and table rows without route-owned transformation logic', () => {

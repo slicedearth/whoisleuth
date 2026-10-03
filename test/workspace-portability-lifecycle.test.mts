@@ -181,7 +181,7 @@ describe('workspace portability lifecycle', () => {
       };
       assert.throws(
         () => MERGERS[slug as keyof typeof MERGERS]([], future),
-        /newer|unsupported|expected/i,
+        /newer schema/iu,
         descriptor.id,
       );
     }
@@ -211,10 +211,10 @@ describe('workspace portability lifecycle', () => {
     assert.equal(getterCalls, 0);
   });
 
-  test('keeps archive identity with the Case portability owner and excludes CT history', () => {
+  test('keeps archive section references unique and excludes CT history', () => {
     assert.ok(WORKSPACE_PORTABILITY_ARCHIVE_SECTION_REFERENCES.length > 0);
     assert.equal(WORKSPACE_PORTABILITY_ARCHIVE_SECTION_REFERENCES.some((item) => (
-      item.sectionId.includes('certificate') || item.sectionId.includes('ct-history')
+      /certificate|ct[-_]?history/iu.test(item.sectionId)
     )), false);
     assert.equal(new Set(WORKSPACE_PORTABILITY_ARCHIVE_SECTION_REFERENCES.map((item) => item.sectionId)).size, WORKSPACE_PORTABILITY_ARCHIVE_SECTION_REFERENCES.length);
   });

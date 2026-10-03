@@ -8,7 +8,7 @@ import type { CheckpointFact } from './case-evidence-checkpoint.ts';
 import type { CaseRecord } from '../cases.ts';
 import type { LocalMutationOutcome } from '../local-mutation-outcome.ts';
 import { sourceRefreshTarget, readSourceRefreshObservation } from './lookup-source-observation.ts';
-import { scanBoundedJson } from '../../../../lib/bounded-json.mts';
+import { scanBoundedJson } from '../../../../packages/analysis/bounded-json.mts';
 import { readObservationTime } from '../../../../packages/evidence/observation.mts';
 import {
   BoundedJsonResponseError,

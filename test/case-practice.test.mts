@@ -1,21 +1,113 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createCasePracticeRecord, createCasePracticeSession, CASE_PRACTICE_LATER_AT } from '../frontend/src/lib/analysis/case-practice.ts';
+import { createCasePracticeRecord, createCasePracticeSession, CASE_PRACTICE_LATER_AT, CASE_PRACTICE_SCENARIOS, casePracticeFeedback, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeRoutes } from '../frontend/src/lib/analysis/case-practice.ts';
+import { normalizeCase } from '../packages/cases/case-record-operations.mts';
 import { replaceCaseDraft } from '../packages/cases/case-drafts.mts';
 import { caseRecheckAnswerContext } from '../packages/cases/case-recheck-model.mts';
 import { createCaseDraftRecovery, type CaseDraftRecoveryState } from '../frontend/src/lib/controllers/case-draft-recovery.ts';
+import { caseIncidentTargets } from '../packages/cases/case-workflow-metadata.mts';
+import { latestEvidenceRequests, submittedPacketReceipts } from '../packages/cases/case-requested-evidence.mts';
 
 test('practice starts from fictional, separately attributed complete and unavailable observations', () => {
   const record = createCasePracticeRecord();
   assert.equal(record.domain, 'case-practice.example');
   assert.equal(record.disposition, 'unreviewed');
-  assert.equal(record.evidencePins.length, 2);
+  assert.equal(record.evidencePins.length, 4);
   assert.equal(record.evidencePins[0]!.completeness, 'complete');
   assert.equal(record.evidencePins[1]!.completeness, 'partial');
   assert.equal(record.evidencePins[1]!.sourceState, 'unavailable');
   assert.equal(record.assertions[0]!.recheck?.baselinePinId, record.evidencePins[0]!.id);
   assert.equal(record.actions.length, 0);
   assert.equal(record.closures.records.length, 0);
+});
+
+test('required practice families have distinct supplied evidence, scope, report comparisons and recheck conditions', () => {
+  const required = ['credential-form', 'compromised-page', 'unobserved-lookalike', 'related-hosts', 'fake-shop', 'ad-redirect', 'social-payment', 'role-impersonation',
+    'email-only', 'conditional-presentation', 'hosted-object', 'app-listing', 'requested-amendment', 'restored-dispute', 'infrastructure-move', 'unexpected-notice'];
+  assert.ok(required.every(id => CASE_PRACTICE_SCENARIOS.some(item => item.id === id)));
+  assert.equal(new Set(CASE_PRACTICE_SCENARIOS.map(item => item.observation)).size, CASE_PRACTICE_SCENARIOS.length);
+  assert.equal(new Set(CASE_PRACTICE_SCENARIOS.map(item => item.adequate)).size, CASE_PRACTICE_SCENARIOS.length);
+  for (const item of CASE_PRACTICE_SCENARIOS) {
+    const record = createCasePracticeRecord(item.id);
+    assert.equal(record.evidencePins[0]!.value, item.observation);
+    assert.equal(record.assertions[0]!.statement, item.question);
+    assert.equal(record.assertions[0]!.recheck?.conditions, item.conditions);
+    assert.deepEqual(caseIncidentTargets(record).map(target => target.url), [...item.urls]);
+    assert.deepEqual(casePracticeRoutes(item.id).map(route => route.id), [...item.routes]);
+    assert.ok(item.adequate.length > 60 && item.inadequate.length > 60);
+  }
+});
+
+test('connected practice records separate recipient material, simulated delivery and independently scoped page closure', () => {
+  const session = createCasePracticeSession();
+  try {
+    const initial = session.read();
+    assert.throws(() => session.journey('prepare'), /evidence-linked/u);
+    assert.deepEqual(session.read(), initial);
+    session.edit({ decision: { summary: 'Review the observed credential request and separate distribution.', rationale: 'Copied prose and name resemblance do not establish rights or actor identity.', evidencePinIds: [initial.evidencePins[0]!.id] } });
+    const prepared = session.journey('prepare');
+    const materials = casePracticeJourneyMaterials(prepared);
+    assert.equal(materials.length, 2);
+    assert.deepEqual(materials.map(item => item.recipientRoute?.contact), ['page-review@example.invalid', 'ad-review@example.invalid']);
+    assert.deepEqual(materials.map(item => item.incident.abusiveUrls), [['https://case-practice.example/offer'], ['https://distribution.example/ad/7']]);
+    assert.deepEqual(materials.map(item => item.selectedEvidence.map(pin => pin.label)), [['Earlier page', 'Reference offer text'], ['Advertisement distribution object']]);
+    assert.ok(materials.every(item => item.selectedEvidence.every(pin => !Object.hasOwn(pin, 'value'))));
+    const signature = JSON.stringify(materials);
+    session.edit({ actionUpdate: { id: prepared.actions[0]!.id, recipient: 'changed-recipient@example.invalid' } });
+    assert.throws(() => session.journey('deliver', signature), /changed/u);
+    const delivered = session.journey('deliver', JSON.stringify(casePracticeJourneyMaterials(session.read())));
+    assert.deepEqual(casePracticeJourneyActions(delivered).map(action => action.state), ['acknowledged', 'submitted']);
+    assert.equal(delivered.observedEffects.reviews.length, 0, 'acknowledgement cannot invent independent remediation');
+    assert.ok(delivered.actions.every(action => action.history.some(event => event.nextState === 'submitted' && event.reference?.startsWith('Practice-only'))));
+    const closed = session.journey('close-page');
+    assert.equal(casePracticeJourneyActions(closed)[0]!.state, 'terminal');
+    assert.equal(casePracticeJourneyActions(closed)[1]!.state, 'submitted');
+    assert.equal(closed.observedEffects.reviews.at(-1)!.state, 'not_reproduced');
+    assert.deepEqual(caseIncidentTargets(closed).map(target => target.url), ['https://distribution.example/ad/7']);
+    assert.notEqual(closed.status, 'resolved');
+    assert.equal(closed.closures.records.length, 0, 'closing one page must not close the whole Case');
+    assert.deepEqual(normalizeCase(closed), closed);
+    assert.deepEqual(initial.actions, []);
+    assert.throws(() => session.journey('close-page'), /separate fictional deliveries/u);
+  } finally { session.close(); }
+});
+
+test('requested-evidence practice preserves synthetic original delivery and current causal request metadata', () => {
+  const record = createCasePracticeRecord('requested-amendment');
+  const action = record.actions[0]!;
+  assert.equal(action.state, 'acknowledged');
+  const receipt = submittedPacketReceipts(action)[0]!;
+  const request = latestEvidenceRequests(action)[0]!;
+  assert.equal(receipt.digestSha256, request.evidenceRequest.packetDigestSha256);
+  assert.equal(request.evidenceRequest.state, 'requested');
+  assert.deepEqual(request.evidenceRequest.previousEventIds, []);
+  const page = record.evidencePins.find(pin => pin.label === 'Requested exact-page evidence')!;
+  assert.equal(page.source, 'Fictional supplied capture');
+  assert.equal(page.observationHostname, record.domain);
+  assert.equal(page.sourceState, 'complete');
+  assert.notEqual(page.source, record.evidencePins[0]!.source, 'request provenance must not be presented as the requested page capture');
+  assert.equal(record.actions.filter(item => item.amendment).length, 0);
+  const other = createCasePracticeSession('requested-amendment');
+  assert.throws(() => other.journey('prepare'), /only/u);
+  other.close();
+});
+
+test('every practice scenario uses valid current records and only checks explicit recorded relationships', () => {
+  for (const { id } of CASE_PRACTICE_SCENARIOS) {
+    const record = createCasePracticeRecord(id), ids = record.evidencePins.map(pin => pin.id);
+    assert.deepEqual(normalizeCase(record), record);
+    assert.ok(casePracticeFeedback(record, ids, id).every(check => !check.complete));
+    const session = createCasePracticeSession(id), current = session.read();
+    const pinIds = current.evidencePins.map(pin => pin.id);
+    session.edit({ decision: { summary: 'The evidence needs review.', rationale: 'No automatic verdict.', confidence: 'low', evidencePinIds: [pinIds[0]!] } });
+    assert.equal(casePracticeFeedback(session.read(), pinIds, id)[1]!.complete, id !== 'contradictory-sources');
+    if (id === 'provider-resolved') {
+      assert.equal(record.actions[0]!.providerOutcome, 'provider_reports_resolved');
+      assert.deepEqual(record.observedEffects.reviews, []);
+      assert.deepEqual(record.closures.records, []);
+    }
+    session.close();
+  }
 });
 
 test('practice sessions and detached read results cannot alter each other', () => {

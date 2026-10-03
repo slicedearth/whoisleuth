@@ -4,7 +4,6 @@ import { buildCaseDecisionQualityReport } from '../frontend/src/lib/analysis/cas
 import { buildCaseTypeEvidenceReadiness } from '../frontend/src/lib/analysis/case-type-evidence-readiness.ts';
 import { createCase, updateCase } from '../frontend/src/lib/analysis/case-model.ts';
 import type { CaseDisposition, CaseRecord } from '../frontend/src/lib/analysis/case-record-contracts.ts';
-import { caseIncidentTargetAssertion, caseTagsWithTypes } from '../packages/cases/case-workflow-metadata.mts';
 
 const NOW = '2026-09-01T08:00:00.000Z';
 
@@ -70,10 +69,10 @@ test('type guidance remains empty until the analyst selects a Case type', () => 
 test('phishing guidance distinguishes retained observations from missing message and route evidence', () => {
   let record = createCase({
     domain: 'review.example',
-    tags: caseTagsWithTypes([], ['phishing']),
+    caseTypes: ['phishing'],
   }, NOW);
   record = updateCase([record], record.id, {
-    assertion: caseIncidentTargetAssertion('https://review.example/sign-in'),
+    incidentTarget: 'https://review.example/sign-in',
     evidencePin: {
       label: 'Observed credential form',
       field: 'web.page.form',
@@ -111,7 +110,7 @@ test('phishing guidance distinguishes retained observations from missing message
 test('multiple selected types merge checks without downgrading a required check', () => {
   const record = createCase({
     domain: 'review.example',
-    tags: caseTagsWithTypes([], ['phishing', 'malware_distribution']),
+    caseTypes: ['phishing', 'malware_distribution'],
   }, NOW);
   const readiness = buildCaseTypeEvidenceReadiness(record);
   assert.deepEqual(readiness.selectedTypes, ['phishing', 'malware_distribution']);
@@ -124,10 +123,29 @@ test('multiple selected types merge checks without downgrading a required check'
   );
 });
 
+test('timed readiness requires an explicit valid observation time, not the record creation time', () => {
+  const base = createCase({ domain: 'review.example', caseTypes: ['phishing'] }, NOW);
+  for (const observedAt of [null, '', 'invalid', '2026-09-01', '2026-09-01T08:00:00', NOW, '2026-09-01T18:00:00+10:00']) {
+    for (const kind of ['evidencePin', 'sighting'] as const) {
+      const saved = updateCase([base], base.id, kind === 'evidencePin' ? {
+        evidencePin: { label: 'Page observation', source: 'Local capture', value: 'Page title', observedAt: NOW },
+      } : { sighting: { state: 'analyst_confirmed', category: 'website', source: 'Local capture', observedAt: NOW } }, NOW).record;
+      // Exercise the projection independently of the normaliser's own timestamp validation.
+      const record = kind === 'evidencePin'
+        ? { ...saved, evidencePins: saved.evidencePins.map((pin) => ({ ...pin, observedAt })) }
+        : { ...saved, sightings: saved.sightings.map((sighting) => ({ ...sighting, observedAt })) };
+      const row = buildCaseTypeEvidenceReadiness(record).rows.find((item) => item.id === 'timed_observation');
+      const usable = observedAt === NOW || observedAt === '2026-09-01T18:00:00+10:00';
+      assert.equal(row?.state, usable ? 'present' : 'missing', `${kind}: ${observedAt}`);
+      assert.equal(row?.evidence, usable ? '1 retained timed observation' : 'No retained source observation with a usable time');
+    }
+  }
+});
+
 test('free-text plans and negated assertions do not satisfy typed malware evidence', () => {
   let record = createCase({
     domain: 'review.example',
-    tags: caseTagsWithTypes([], ['malware_distribution']),
+    caseTypes: ['malware_distribution'],
   }, NOW);
   record = updateCase([record], record.id, {
     assertion: {

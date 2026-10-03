@@ -1,7 +1,7 @@
 // Pure defensive-registration profile-listing aggregation. A candidate can belong
 // to several mutation groups, so group totals intentionally overlap; the
 // summary counts unique domains exactly once.
-import { publicSuffixForAsciiHostname } from '../../../../lib/registrable-domain.mts';
+import { publicSuffixForAsciiHostname } from '../../../../packages/analysis/registrable-domain.mts';
 
 const REGISTERED_STATES = new Set(['registered', 'for_sale', 'expiring']);
 

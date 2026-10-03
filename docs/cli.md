@@ -7,6 +7,11 @@ collection boundaries and output. Installed `whoisleuth --help`, focused
 version. The [CLI reference](cli-reference.md) covers durable command and
 artefact contracts.
 
+The [website command reference](https://www.whoisleuth.com/cli) starts with common
+tasks, then offers searchable commands with examples, option explanations and
+defaults. Command-section links can be bookmarked. Its option guidance and
+installed help derive from the same command definitions.
+
 The generated [privacy and data-flow catalogue](https://github.com/slicedearth/whoisleuth/blob/main/docs/privacy-data-flow-catalogue.md)
 lists the network, recipient, retention and export boundary for every command.
 
@@ -80,6 +85,11 @@ offline CLI workflow below.
 When several incident Cases share a domain, select the intended Case before
 retaining replay evidence. Case packs preserve each current Case ID separately;
 trusted and public packs exclude analyst-entered incident titles.
+Every audience retains tags, decision summaries and rationale as well as domain
+evidence and Case, pin and decision IDs. Public does not mean anonymous.
+Browser Lookup evidence can be verified or packaged in the CLI. `brief`,
+`export`, `compare`, `registry-doctor` and `source-report` instead require a
+saved CLI Lookup; they do not reconstruct it from a browser export.
 
 Process selected local input:
 
@@ -136,6 +146,93 @@ their focused help. They do not use the hosted login or hosted usage controls.
 `lookup --plan` lists planned source families and disclosure targets before
 collection. `doctor` is offline unless `--network` is selected.
 
+Deep Lookup reports IPv4 and IPv6 results separately, including empty answers,
+NODATA, resolver-reported missing names and query failures. These outcomes remain
+distinct in evidence exports; none alone establishes domain removal.
+
+Plans are target-specific: Fast IP and ASN plans contain RDAP only; Deep IP
+adds WHOIS and eligible reverse DNS, while Deep ASN adds WHOIS. Domain-only web,
+TLS and selected intelligence do not apply to address or ASN targets.
+Plans do not probe source health or measure remaining quota, cost, result fan-out
+or exact request counts. CLI configuration profiles repeat supported settings;
+optional selections made on the website do not transfer to a CLI command.
+For completed website results, see [Source quality](https://github.com/slicedearth/whoisleuth/blob/main/docs/application-guide.md#lookup).
+
+### Message and link intake
+
+Use `intake email message.eml --json` for MIME email and nested messages,
+`intake calendar invitation.ics`, `intake qr selected.png`, or `intake text`
+with text on standard input. These commands never open a destination or execute
+supplied content. Output compares displayed and actual hosts, retains reported
+header authentication and interprets supplied authorisation parameters without
+retaining URL tokens. The source hash identifies the original bytes.
+Defanged schemes and hosts are accepted, including `hxxps[:]//host[.]example`.
+Path, query and fragment characters keep their supplied meaning; text scanning
+removes unmatched surrounding prose brackets, while explicit links remain exact.
+
+Add a repeatable `--reported-action`, such as `entered_device_code` or
+`granted_consent`, to include account-recovery guidance based on an explicitly
+reported action. The report does not infer a stolen session from domain evidence.
+`--strict-exit` returns 4 for a partial review. QR review supports still PNGs;
+no decoded result is not proof that a symbol is absent.
+Excluded links and unsupported QR payloads make the review partial, with
+category counts rather than private payload text. Bare QR hostnames are not
+automatically treated as URLs.
+
+### Local IP-location database review
+
+`review-evidence query.json --mmdb selected.mmdb --json --strict-exit` reads
+one analyst-selected database locally. It never downloads, updates or transmits
+the database. A current query uses this input:
+
+```json
+{
+  "schema": "whoisleuth.local-mmdb-query",
+  "version": 2,
+  "address": "192.0.2.1",
+  "sourceLabel": "Selected local database",
+  "databaseVersion": "Analyst-declared edition",
+  "license": "Analyst-declared licence",
+  "freshnessPolicy": {
+    "maxAgeDays": 90,
+    "rationale": "Quarterly research review; recheck before operational use"
+  }
+}
+```
+
+Replace the reserved example address with the public IP under review. Reserved
+and private addresses are unavailable in current reviews. Select and justify an
+age limit appropriate to the task; the example is not a default or an accuracy
+guarantee. The policy requires positive whole days and a plain-text rationale
+of at most 240 characters. The command's review time is compared with the
+intrinsic build time; a future build, stale database, unsupported format/type,
+miss or unusable record cannot supply current location context. Malformed
+fields remain unknown, with partial coverage when other useful fields survive.
+
+Current output retains SHA-256 of the exact read bytes, byte length, intrinsic
+database type, build time, binary format and IP version. Analyst source, version
+and licence labels remain separate claims. Only coarse network, country, region,
+city and ASN attribution can be returned; no raw record or local path is included.
+The existing version-1 review envelope contains the self-described
+`whoisleuth.local-mmdb-review` version-1 result. Reject future result versions
+rather than treating them as current evidence.
+
+The file must remain a regular, stable file of at most 512 MiB. After the bounded
+read and digest, one disposable worker limits synchronous parsing and lookup to
+ten seconds, with bounded heap/stack and an 8 KiB result. This is not a ten-second
+whole-command or filesystem deadline. Default exit 0 means a report was produced;
+`--strict-exit` returns 4 for unavailable or partial current reviews. Version-1
+queries retain their historical JSON shape and exit behaviour, without intrinsic
+metadata or freshness admission; terminal output identifies that limitation.
+
+### Contextual reviews
+
+`review-evidence` also accepts [contextual review inputs](contextual-reviews.md)
+for source-qualified incident sequences, retained domain history, platform-object continuity, authorised storefront
+comparison and connector provenance. These workflows are offline; partial
+context reviews return 4 when `--strict-exit` is selected. Browser-generated
+reusable inputs use the same validators.
+
 ### Message-header review
 
 `mail-headers` parses only the bounded header block from a selected message file
@@ -145,6 +242,43 @@ reported order. It makes no request and does not retain address local parts,
 display names, subject, body, attachments, or raw header values in its output.
 Authentication states are header claims, not an independent DNS or
 cryptographic validation, and alignment differences can be legitimate.
+Both `mail-headers` and `intake email` preserve individual authentication header
+positions and service identifiers. Evaluate the receiver boundary yourself; to
+record trust in one exact header, add `--trusted-auth-header 1:3` (message part 1,
+header 3). Repeat for separate headers. This annotates the supplied claim without
+validating it or extending trust to matching service names or nested messages.
+
+`intake pdf selected.pdf`, `intake docx selected.docx` and `intake har selected.har`
+use the same offline review as the browser. Document results include part hashes,
+page references and extraction coverage. Encrypted documents require a separately
+decrypted copy; no password is requested. HAR results preserve file order and
+reported timings, with unavailable values distinct from zero. Neither document
+resources nor recorded requests are fetched. Add `--strict-exit` for exit 4 when
+coverage is partial, and `--json` for the minimised report.
+
+`intake identity events.json --json` reads an Entra sign-in `value` array or an
+Okta System Log array. To record a scoped comparison, wrap the selected provider
+records in this input (timestamps require an explicit timezone):
+
+```json
+{
+  "schema": "whoisleuth.identity-events.input",
+  "version": 1,
+  "provider": "entra",
+  "events": [],
+  "match": {
+    "applicationId": "11111111-1111-4111-8111-111111111111",
+    "tenantId": null,
+    "actorLabel": null,
+    "startedAt": "2026-01-01T00:00:00Z",
+    "endedAt": "2026-01-01T01:00:00Z"
+  }
+}
+```
+
+Replace `events` with the selected records. Actor labels apply only within that
+file; missing fields stay unavailable. The source hash identifies the complete
+selected file, including an envelope when supplied. No provider API is contacted.
 
 ## Output and automation
 
@@ -162,13 +296,19 @@ Use `--case-id` when the file contains several Cases. `open` reuses the selected
 Case; `--new-incident --title "Another incident"` creates a distinct ID for the
 same domain. It does not open a browser or collect anything.
 
-`pin`, `assess` and `recheck` read a selected JSON file with `--input`:
+`pin`, `link`, `withdraw-link`, `assess` and `recheck` read a selected JSON file with `--input`:
 
 ```sh
 whoisleuth case pin cases.json --input pin.json --output cases.json --force
+whoisleuth case link cases.json --input relationship.json --output cases.json --force
 whoisleuth case assess cases.json --input assessment.json --output cases.json --force
 whoisleuth case recheck cases.json --input recheck.json --output cases.json --force
 ```
+
+For `link`, use `fromPinId`, `toPinId`, `kind` (`derived_from` or
+`shared_source`) and `basis`. `withdraw-link` takes the relationship `id` and
+`reason`; its original declaration remains in the file. `case show` lists the
+identities and `--json` includes the full history.
 
 A pin describes the supplied observation, not a new collection. For example:
 
@@ -316,6 +456,17 @@ selected evidence exports, not complete workspace backups.
 
 ### Resuming a fixed workflow
 
+Inspect a paused run without executing any step or rewriting its checkpoint:
+
+```sh
+whoisleuth workflow-run domain-triage example.test --resume run.json --preview --json
+```
+
+The preview separates validated complete and partial outputs, failed steps that
+can be retried, unresolved inputs, pending upstream outputs and fresh approval
+requirements. It does not open selected input files. Preview output goes to
+stdout; approval, interactive and output-file flags cannot be combined with it.
+
 All recipes listed by `workflow-plan --list` can run through `workflow-run`.
 Planning remains offline. Execution emits a checkpoint; terminal output shows
 retained steps, output identities, missing inputs and the next required action.
@@ -347,6 +498,12 @@ remain analyst selections. No external file is inferred or extracted automatical
 `reconcile` lists each observation time and declared observer/vantage, keeping
 disagreement and unavailable evidence separate. Distinct labels do not verify
 independent collection; timing and shared caches can affect the comparison.
+
+`domain-control-flight-recorder` retains the last comparable complete observation
+across failed or partial collections. A changed recovery records the interval
+between complete source observations; it does not assign the change to the
+recovery time. An approved window must contain that entire interval. Historical
+report versions remain readable without acquiring this newer qualification.
 
 For example, registry review can reuse its collection without extracting files:
 
@@ -385,6 +542,52 @@ an interrupted process, confirm that its owner has stopped before removing its
 abandoned lock. Locks have no automatic expiry. Shell redirection and external
 editors do not participate in this cooperative file-ownership protocol.
 
+### Managed indicator revisions
+
+`indicator-set` uses the same file-backed revision model as Bulk. It performs
+no collection or submission. A plan names the set, gives a review `basis` and
+UTC `expiresAt`, and supplies `rows` plus an explicit `selectedDomains` list.
+Rows use the normal Bulk eligibility rules, including available profile
+context, a Suspicious or Confirmed abuse disposition and retained risk evidence.
+Supply `officialDomains`, `allowlistedDomains` and `commonInfrastructureDomains`
+where applicable; excluded candidates never become additions.
+
+Example plan shape (fictional input; replace the evidence and expiry):
+
+```json
+{
+  "name": "Reviewed candidates",
+  "basis": "Reviewed the selected page observation",
+  "expiresAt": "2026-10-23T00:00:00.000Z",
+  "selectedDomains": ["candidate.example.test"],
+  "rows": [{
+    "domain": "candidate.example.test", "availability": "registered",
+    "analystDisposition": "suspicious", "risk": 80,
+    "profileContext": { "sourceState": "ready" }
+  }]
+}
+```
+
+```sh
+whoisleuth indicator-set revise indicator-plan.json --json --output indicators-r1.json
+whoisleuth indicator-set inspect indicators-r1.json
+whoisleuth verify-artifact indicators-r1.json --strict-exit
+whoisleuth indicator-set stix indicators-r1.json --output indicators-r1.stix.json
+whoisleuth indicator-set misp indicators-r1.json --output indicators-r1.misp.json
+```
+
+Later plans embed the last manifest as `previous` and explicitly list `renewIds`
+or `withdrawIds`. New domains still require reviewed rows and selection.
+`reintroduceDomains` permits a previously withdrawn domain to receive a new
+identity; it never revives the old one. Missing domains stay unchanged.
+Renewal updates the review window and note, not the original observation.
+
+Keep previous manifests and use separate output paths. File ownership checks
+reject concurrent source/destination changes and refuse replacing the input,
+even with `--force`. STIX and MISP operations always emit JSON. MISP expiry is
+a review deadline, not automatic deletion; exports require separate recipient
+review. Digests verify content, not authorship or an unavailable earlier chain.
+
 ### Formats and exit behaviour
 
 Terminal text is the default. Commands expose JSON, JSONL, CSV, Markdown, HTML
@@ -414,7 +617,20 @@ diagnostics, and missing health metadata remains unmeasured.
 collection times visible. Source-output and review-generation times do not
 stand in for missing observation times. `domain-change` and
 `domain-change-packet` retain authority, resolver and certificate observation
-times; previously published version-2 packets remain verifiable.
+times; previously published version-2 and version-3 packets remain verifiable.
+Current DNS convergence and domain-change inputs use version 2. Each snapshot
+declares `queries`, for example
+`[{"owner":"example.test","type":"MX","state":"observed"}]`.
+An `observed` query with no matching records means an empty answer; `partial`
+and `unavailable` queries do not. Omitted queries are not queried. Version-1
+inputs remain readable but establish query scope only for supplied records.
+An expected empty set alone cannot establish an observed empty answer.
+
+Domain-control review version 3 keeps renewal reminders separate from observed
+configuration: `due` and `not_due` describe the chosen review date, not DNS or
+registration changes. Incomplete evidence remains `partial` even when a reminder
+is due. Terminal and JUnit summaries report due reminders separately. Previous
+review and monitor checkpoints retain their original versioned interpretation.
 
 ## Exit codes
 
@@ -426,6 +642,11 @@ For scripts, use `whoisleuth verify-artifact evidence.json --json --strict-exit`
 An incomplete verification returns **4** with that option. Without it, **0**
 means a report was produced, not that the artefact passed verification; inspect
 the report's state and checks.
+Unencrypted workspace archives retain mutable root metadata outside their
+section digests, so they return 4 under `--strict-exit` even when all supported
+section checks pass. Structure-only exports can pass their narrower contract;
+strict exit is not a ranking of cryptographic assurance. `interchange-report`
+separately describes import/export support and is not the full verifier inventory.
 
 ## Command details
 

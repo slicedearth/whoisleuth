@@ -1,4 +1,4 @@
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import {
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
@@ -6,6 +6,7 @@ import {
   MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
   MAX_EXTERNAL_FINDING_SUMMARY_LENGTH,
   parseExternalFindingsDocument,
+  retainExternalFindingLimitations,
   type ExternalFindingsDocument,
 } from './external-findings-import.mts';
 import {
@@ -13,10 +14,12 @@ import {
   MAX_WEB_CAPTURE_SCREENSHOT_BYTES,
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
+  WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS,
   WEB_CAPTURE_SUMMARY_SCHEMA,
   WEB_CAPTURE_SUMMARY_VERSION,
 } from '../contracts/web-capture.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { readManifestPageBehaviour, type PageBehaviour } from '../investigation/page-behaviour.mts';
 import { readCaptureConditions, readObservationLabel, type ObservationContext } from '../comparison/capture-context.mts';
 export {
   WEB_CAPTURE_MANIFEST_SCHEMA,
@@ -45,6 +48,7 @@ const CAPTURE_KEYS = new Set([
   'networkOrigins',
 ]);
 const MANIFEST_CAPTURE_KEYS = new Set([
+  'pageBehaviour',
   'conditions', 'observerLabel', 'vantageLabel',
   'domain',
   'capturedAt',
@@ -166,17 +170,17 @@ export function parseWebCaptureSummary(value: unknown): ExternalFindingsDocument
       screenshotSha256 ? `Screenshot SHA-256: ${screenshotSha256}.` : '',
     ].filter(Boolean);
     if (!summaries.length) throw new Error(`Web capture ${index + 1} contains no supported summary evidence.`);
+    const retainedLimitations = retainExternalFindingLimitations(limitations, [
+      'Imported sanitised capture summary; WHOISleuth did not collect or independently verify this observation.',
+    ]);
     findings.push({
       domain,
       category: technologies.length && summaries.length === 1 ? 'http' : 'page',
       evidenceClass: 'deployment_observation',
       summary: summaries.join(' '),
       observedAt,
-      completeness,
-      limitations: [
-        'Imported sanitised capture summary; WHOISleuth did not collect or independently verify this observation.',
-        ...limitations,
-      ].slice(0, 8),
+      completeness: limitations.every((item) => retainedLimitations.includes(item)) ? completeness : 'partial',
+      limitations: retainedLimitations,
       reference: sourceReference,
     });
   }
@@ -250,18 +254,19 @@ export type CaptureArtifactDeclaration = Readonly<{
   sha256: string;
   bytes: number;
 }>;
+export type CaptureManifestContext = ObservationContext & Readonly<{ domain: string; completeness: string; pageBehaviour: PageBehaviour | null }>;
 
 export function readWebCaptureManifest(value: unknown): Readonly<{
   document: ExternalFindingsDocument;
   artifacts: readonly CaptureArtifactDeclaration[];
-  captures: readonly (ObservationContext & Readonly<{ domain: string; completeness: string }>)[];
+  captures: readonly CaptureManifestContext[];
 }> {
   const root = record(value);
   if (
     !root
     || !onlyKeys(root, ROOT_KEYS)
     || root.schema !== WEB_CAPTURE_MANIFEST_SCHEMA
-    || root.schemaVersion !== WEB_CAPTURE_MANIFEST_VERSION
+    || !WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS.includes(root.schemaVersion as number)
   ) {
     throw new Error(`Web capture manifests must use ${WEB_CAPTURE_MANIFEST_SCHEMA} schema version ${WEB_CAPTURE_MANIFEST_VERSION}.`);
   }
@@ -275,7 +280,7 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
   }
   const findings: Array<Record<string, unknown>> = [];
   const artifacts: CaptureArtifactDeclaration[] = [];
-  const contexts: Array<ObservationContext & Readonly<{ domain: string; completeness: string }>> = [];
+  const contexts: CaptureManifestContext[] = [];
   const domainCounts = new Map<string, number>();
   const findingCounts = new Map<string, number>();
   for (const [index, raw] of root.captures.entries()) {
@@ -300,7 +305,9 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
       ? capture.completeness
       : 'unknown';
     const limitations = stringList(capture.limitations, 8, 240, `Web capture manifest ${index + 1} limitations`);
-    contexts.push({ domain, observedAt, completeness: String(completeness), conditions, observerLabel, vantageLabel });
+    const pageBehaviour = readManifestPageBehaviour(capture.pageBehaviour, root.schemaVersion);
+    if (pageBehaviour?.state === 'partial' && completeness === 'complete') throw new Error('Partial page observations cannot declare a complete capture.');
+    contexts.push({ domain, observedAt, completeness: String(completeness), conditions, observerLabel, vantageLabel, pageBehaviour });
     const page = record(capture.page);
     if (page && !onlyKeys(page, PAGE_KEYS)) throw new Error(`Web capture manifest ${index + 1} page metadata contains unsupported fields.`);
     const pageTitle = text(page?.title, 300, `Web capture manifest ${index + 1} title`, true);
@@ -359,6 +366,8 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
         : '',
       ...listSummaryFragments('Observed technology labels', technologies),
       ...listSummaryFragments('Observed request domains', requestDomains),
+      ...(pageBehaviour ? [`Page observations: ${pageBehaviour.requests.length} navigation/script/frame responses; ${pageBehaviour.elements.length} script/frame/form elements; ${pageBehaviour.clipboardWriteAttempts} blocked Clipboard API write attempts. State: ${pageBehaviour.state}. Full observations remain in the selected manifest.`,
+        ...listSummaryFragments('Requested-action wording in body text', pageBehaviour.actionHints)] : []),
       ...artifactSummaries,
     ].filter(Boolean);
     const summaries = partitionSummary(summaryFragments);
@@ -367,6 +376,9 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
       throw new Error(`Web capture manifests exceed the ${MAX_EXTERNAL_FINDINGS_PER_DOMAIN}-finding per-domain import limit after preserving bounded metadata.`);
     }
     findingCounts.set(domain, priorFindingCount + summaries.length);
+    const retainedLimitations = retainExternalFindingLimitations(limitations, [
+      'Imported capture metadata, not independently collected website evidence; artefact bytes and separate byte checks are not retained in these findings.',
+    ]);
     for (const summary of summaries) {
       findings.push({
         domain,
@@ -374,11 +386,8 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
         evidenceClass: 'deployment_observation',
         summary,
         observedAt,
-        completeness,
-        limitations: [
-          'Imported capture metadata, not independently collected website evidence; artefact bytes and separate byte checks are not retained in these findings.',
-          ...limitations,
-        ].slice(0, 8),
+        completeness: limitations.every((item) => retainedLimitations.includes(item)) ? completeness : 'partial',
+        limitations: retainedLimitations,
         reference: sourceReference,
       });
     }

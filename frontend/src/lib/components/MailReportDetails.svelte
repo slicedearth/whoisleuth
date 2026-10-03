@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { tick } from 'svelte';
   import Pagination from './Pagination.svelte';
   import type { ParsedMailReport } from '$lib/analysis/mail-report-workbench.ts';
@@ -24,7 +25,7 @@
   $effect(() => { identity; page = 1; query = ''; });
 
   const number = (value: number) => value.toLocaleString();
-  const timestamp = (value: string | null) => value ? new Date(value).toLocaleString() : 'unknown';
+  const timestamp = (value: string | null) => value ? formatEvidenceDate(value) : 'unknown';
 
   async function setPage(value: number) {
     const expectedIdentity = identity;
@@ -56,7 +57,7 @@
       {:else if report.kind === 'tls-rpt' && report.policyCoverage.supplied > report.policyCoverage.inspected}
         <p class="limitation">Parsed {number(report.policyCoverage.retained)} of {number(report.policyCoverage.supplied)} supplied policies. {number(report.policyCoverage.supplied - report.policyCoverage.inspected)} policies were not inspected; totals cover retained policies only.</p>
       {/if}
-      <label class="field">Search {report.kind === 'dmarc' ? 'rows' : 'policies'}<input type="search" aria-label={`Search ${label}`} bind:value={query} oninput={() => page = 1} maxlength="200"></label>
+      <label class="field">Search {report.kind === 'dmarc' ? 'rows' : 'policies'}<input type="search" aria-label={`Search ${report.kind === 'dmarc' ? 'rows' : 'policies'}: ${label}`} bind:value={query} oninput={() => page = 1} maxlength="200"></label>
       <p class="coverage" role="status">{count ? `Showing ${number(offset + 1)}–${number(Math.min(count, offset + pageSize))} of ${number(count)} matching ${report.kind === 'dmarc' ? 'rows' : 'policies'}` : 'No retained result matches this search.'}</p>
       <div class="paged-results" tabindex="-1" role="group" aria-label={`${label} results`} bind:this={resultList}>
         {#if report.kind === 'dmarc'}

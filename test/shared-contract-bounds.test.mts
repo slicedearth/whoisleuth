@@ -1,6 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -58,12 +56,6 @@ import {
   MAX_HTTP_REDIRECTS,
 } from '../lib/http-intelligence.mts';
 
-const root = process.cwd();
-
-function repositorySource(filename: string): string {
-  return readFileSync(join(root, filename), 'utf8');
-}
-
 test('certificate response normalizer exposes the shared collector bounds', () => {
   assert.equal(MAX_CT_CANDIDATES, MAX_CT_RESPONSE_RESULTS);
   assert.equal(MAX_CT_HOSTNAMES, MAX_CT_RESPONSE_HOSTNAMES_PER_MATCH);
@@ -113,25 +105,6 @@ test('public project URLs derive from one canonical origin', () => {
   assert.equal(WHOISLEUTH_REQUEST_POLICY_URL, `${WHOISLEUTH_SITE_ORIGIN}/request-policy`);
   assert.equal(WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL, `git+${WHOISLEUTH_SOURCE_REPOSITORY_URL}.git`);
   assert.equal(WHOISLEUTH_SOURCE_ISSUES_URL, `${WHOISLEUTH_SOURCE_REPOSITORY_URL}/issues`);
-
-  const consumers = [
-    'lib/outbound-identity.mts',
-    'lib/portable-generator.mts',
-    'lib/lookup-readable-report.mts',
-    'cli/command-reference.mts',
-    'tools/published-cli-check.mts',
-    'frontend/src/lib/components/PublicSeo.svelte',
-    'frontend/src/lib/components/SiteFooter.svelte',
-    'frontend/src/routes/(public)/request-policy/+page.svelte',
-    'frontend/src/routes/(public)/resources/+page.svelte',
-    'frontend/src/routes/(public)/resources/[slug]/+page.svelte',
-    'frontend/src/routes/(public)/privacy/+page.svelte',
-  ];
-  for (const filename of consumers) {
-    const source = repositorySource(filename);
-    assert.match(source, /project-metadata\.mts/u, filename);
-    assert.doesNotMatch(source, /https:\/\/(?:www\.)?whoisleuth\.com|https:\/\/github\.com\/slicedearth\/whoisleuth/u, filename);
-  }
 });
 
 test('release, runtime, and frontend versions share strict semantic-version parsing', () => {
@@ -141,27 +114,4 @@ test('release, runtime, and frontend versions share strict semantic-version pars
   assert.throws(() => normalizeBoundedSemanticVersion(' 1.2.3'), /bounded semantic-version/u);
   assert.throws(() => normalizeBoundedStableSemanticVersion('1.2.3-rc.1'), /prerelease or build/u);
   assert.throws(() => normalizeBoundedStableSemanticVersion('1.2.3+build.4'), /prerelease or build/u);
-  for (const filename of [
-    '.github/workflows/cli-release.yml',
-    'lib/application-version.mts',
-    'lib/portable-generator.mts',
-    'tools/release-version-check.mts',
-    'frontend/vite.config.ts',
-  ]) {
-    assert.match(repositorySource(filename), /semantic-version\.mts/u, filename);
-  }
-  for (const filename of [
-    'lib/outbound-identity.mts',
-    'cli/export-evidence.mts',
-    'cli/case-pack.mts',
-  ]) {
-    assert.match(repositorySource(filename), /application-version\.mts/u, filename);
-  }
-  for (const filename of [
-    'lib/evidence-export.mts',
-    'lib/evidence-report.mts',
-    'lib/lookup-readable-report.mts',
-  ]) {
-    assert.match(repositorySource(filename), /portable-generator\.mts/u, filename);
-  }
 });

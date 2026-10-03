@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { gzipSync } from 'node:zlib';
 import { readFileSync } from 'node:fs';
@@ -209,7 +210,7 @@ test('mail review retains fifty thousand rows, reaches the last row and exports 
     await expect(pages.getByRole('status')).toHaveText('Page 1000 of 1000');
     await expect(results.getByText('sender-49999.example', { exact: true })).toBeVisible();
     await expectFocusedResultsVisible(page, results, results.locator('tbody tr').first());
-    await workbench.getByRole('searchbox', { name: 'Search DMARC report 1' }).fill('sender-49999.example');
+    await workbench.getByRole('searchbox', { name: 'Search rows: DMARC report 1' }).fill('sender-49999.example');
     await expect(results.locator('tbody tr')).toHaveCount(1);
     await expect(pages).toHaveCount(0);
     const pending = page.waitForEvent('download');
@@ -246,9 +247,9 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768
         await expect(pages.getByRole('status')).toHaveText('Page 2 of 2');
         await expect(results.locator(kind === 'DMARC' ? 'tbody tr' : '.policy-grid > article')).toHaveCount(11);
         await expectFocusedResultsVisible(page, results, results.locator(kind === 'DMARC' ? 'tbody tr' : '.policy-grid > article').first()); await expectNoHorizontalOverflow(page);
-        await test.info().attach(`mail-${kind.toLowerCase()}-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+        if (captureVisualEvidenceEnabled()) { await test.info().attach(`mail-${kind.toLowerCase()}-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
         await pages.scrollIntoViewIfNeeded();
-        await test.info().attach(`mail-pages-${kind.toLowerCase()}-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+        if (captureVisualEvidenceEnabled()) { await test.info().attach(`mail-pages-${kind.toLowerCase()}-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
         await disclosure.locator(':scope > summary').click();
       }
     });

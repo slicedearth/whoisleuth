@@ -386,9 +386,11 @@ const CLI_OPERATION_POLICY = Object.freeze({
   'page-compare': OFFLINE_PER_SOURCE,
   'mail-review': OFFLINE_PER_ITEM,
   'mail-headers': OFFLINE_PER_ITEM,
+  intake: OFFLINE_PER_ITEM,
   'review-evidence': offlinePolicy('explicit_document', ['complete', 'partial', 'blocked']),
   brief: OFFLINE_PER_SOURCE,
   case: OFFLINE_ALL_OR_NOTHING,
+  'indicator-set': OFFLINE_ALL_OR_NOTHING,
   'case-pack': OFFLINE_ALL_OR_NOTHING,
   'domain-control': OFFLINE_PER_SOURCE,
   'monitor-once': Object.freeze({ kind: 'monitor' }),
@@ -917,7 +919,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     outcomes: COMPLETE_OR_LIMITED,
     privacyLimitations: [
       'Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration.',
-      'Inherited DMARC and direct parent delegation require a separate opt-in: at most seven ancestor TXT questions, one parent NS discovery and A/AAAA discovery for at most two parent servers, followed by one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate.',
+      'Inherited DMARC and direct parent delegation require a separate opt-in: up to 32 additional TXT questions within ten seconds cover ancestor policies, reporting-destination boundaries and authorisation. One parent NS discovery and A/AAAA discovery for at most two parent servers precede one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate.',
     ],
     featurePolicyId: 'domain_posture',
     featurePolicyDependencies: ['dns_intelligence'],
@@ -1409,7 +1411,6 @@ function passiveCliOperation(
   command: string,
   capabilityId: CapabilityId,
   options: Readonly<{
-    disclosedData: readonly CapabilityDataClass[];
     recipients: readonly CapabilityRecipientClass[];
     scoringEffect?: CapabilityScoringEffect;
     networkMode?: CapabilityNetworkMode;
@@ -1423,10 +1424,15 @@ function passiveCliOperation(
     partialResults?: CapabilityPartialResults;
     outcomes?: readonly CapabilityOutcomeState[];
     documentStates?: readonly string[];
-    variants?: readonly CliExecutionVariant[];
     privacyLimitations: readonly string[];
-  }>,
+  } & (
+    | { variants: readonly CliExecutionVariant[]; disclosedData?: never }
+    | { variants?: undefined; disclosedData: readonly CapabilityDataClass[] }
+  )>,
 ): CliOperationDefinition {
+  const disclosures = options.variants
+    ? [...new Set(options.variants.flatMap(variant => variant.disclosedData))]
+    : options.disclosedData;
   return freezeCliOperation({
     recordId: `command.cli.${command}`,
     command,
@@ -1435,7 +1441,7 @@ function passiveCliOperation(
     planes: options.planes ?? ['local_cli_network'],
     trigger: 'explicit_cli_command',
     networkMode: options.networkMode ?? 'bounded_passive',
-    disclosedData: options.disclosedData,
+    disclosedData: disclosures.length > 1 ? disclosures.filter(value => value !== 'none') : disclosures,
     recipients: options.recipients,
     requestBudget: options.requestBudget ?? 'collector_specific',
     responseBudget: options.responseBudget ?? 'collector_specific',
@@ -1516,7 +1522,6 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
     return passiveCliOperation(command, capabilityId, {
       planes: ['local_cli_offline', 'local_cli_network'],
       networkMode: 'conditional_bounded_passive',
-      disclosedData: ['fixed_diagnostic_probe'],
       recipients: ['dns_resolver', 'target_public_service', 'registry_service'],
       requestBudget: 'variant_specific',
       responseBudget: 'bounded_runtime_report',
@@ -1575,11 +1580,6 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
     return passiveCliOperation(command, capabilityId, {
       planes: ['local_cli_offline', 'local_cli_network'],
       networkMode: 'conditional_bounded_passive',
-      disclosedData: [
-        'normalised_target', 'registry_query', 'whois_query', 'dns_question',
-        'homepage_request', 'tls_handshake',
-        ...(lookupCommand === 'lookup' ? ['public_ip_address' as const] : []),
-      ],
       recipients: ['registry_service', 'dns_resolver', 'target_public_service'],
       requestBudget: 'variant_specific',
       scoringEffect: 'bounded_risk_and_acquisition_input',
@@ -1689,7 +1689,6 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
     return passiveCliOperation(command, capabilityId, {
       planes: ['local_cli_offline', 'local_cli_network'],
       networkMode: 'conditional_bounded_passive',
-      disclosedData,
       recipients,
       requestBudget: 'variant_specific',
       authorisation: 'explicit_network_approval',

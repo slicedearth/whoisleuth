@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { openCaseMetadata, openCaseSection } from './console-navigation';
 import { caseRecord, createCase, snapshot } from './case-test-fixtures';
@@ -39,7 +40,7 @@ test('direct and legacy Cases navigation restore the same canonical selection', 
 
 test('the command palette includes the direct Cases destination', async ({ page }) => {
   await page.goto('/dashboard');
-  await page.getByRole('button', { name: 'Open console navigation' }).click();
+  await page.getByRole('button', { name: 'Search console navigation' }).click();
   const dialog = page.getByRole('dialog', { name: 'Go to' });
   await dialog.getByRole('combobox', { name: 'Search pages and tools' }).fill('Cases');
   await dialog.getByRole('option', { name: /^Cases\b/u }).click();
@@ -281,8 +282,8 @@ test('Cases first use and retained records remain readable across major widths a
         expect(button!.height).toBeGreaterThanOrEqual(44);
         const name = `cases-${populated ? 'retained' : 'empty'}-${theme}-${viewport.width}.png`;
         const screenshot = testInfo.outputPath(name);
-        await page.screenshot({ path: screenshot });
-        await testInfo.attach(name, { path: screenshot, contentType: 'image/png' });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: screenshot }); }
+        if (captureVisualEvidenceEnabled()) { await testInfo.attach(name, { path: screenshot, contentType: 'image/png' }); }
       }
     }
   }

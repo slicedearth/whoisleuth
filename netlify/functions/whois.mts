@@ -35,7 +35,7 @@ async function handleWhois(
       inputHostname: classified.inputHostname,
       registrableDomain: classified.registrableDomain,
       chain,
-      parsed: dependencies.parseWhoisChain(chain),
+      parsed: dependencies.parseWhoisChain(chain, classified.type === 'domain' ? classified.registrableDomain ?? classified.value : undefined),
     });
   });
 }

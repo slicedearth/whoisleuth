@@ -132,7 +132,8 @@ describe('domain-control monitor schema lifecycle', () => {
       contract.futureVersionBehaviour,
     ]), [
       [CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, 1, 'document', true, false, 'reject'],
-      [CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, 2, 'document', true, true, 'reject'],
+      [CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, 2, 'document', true, false, 'reject'],
+      [CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, 3, 'document', true, true, 'reject'],
     ]);
     assert.equal(recursivelyFrozen(DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE), true);
     assert.deepEqual(DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE.metadata.hooks.map((hook) => [
@@ -147,7 +148,7 @@ describe('domain-control monitor schema lifecycle', () => {
   });
 
   test('owns exact shape, bounds, privacy, and composition relationships', () => {
-    for (const version of [1, 2]) {
+    for (const version of [1, 2, 3]) {
       const shape = DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE.metadata.shapes.find((candidate) => (
         candidate.schema === CLI_DOMAIN_CONTROL_MONITOR_SCHEMA && candidate.versions.includes(version)
       ));

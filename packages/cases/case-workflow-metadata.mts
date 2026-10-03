@@ -1,22 +1,15 @@
-// Stable analyst-facing Case metadata built on the existing Case fields.
-// Types are namespaced tags and incident targets are structured assertions, so
-// deployed Case, report, packet and workspace schemas do not gain duplicate
-// identity or compatibility surfaces.
+// Typed analyst metadata; ordinary tags and assertions are always literal.
+import { MAX_CASE_ASSERTIONS, MAX_RESPONSE_RATIONALE_LENGTH, MAX_CASE_OBJECTIVE_LENGTH } from '../contracts/case-portability.mts';
+import type { CaseRecord, CasePatch } from './case-record-contracts.mts';
+import { caseInvestigationContext, prepareCaseInvestigationContext, parseIncidentUrlContext, normalizeCaseObjective, type CaseInvestigationContext } from './case-incident-context.mts';
+import { safeId, makeId } from './case-record-core.mts';
+import { array, enumeration, exact, iso, text } from '../evidence/artifact-structure.mts';
+import { assertWorkspaceInputGraph } from '../workspace/hostile-input.mts';
 
-import {
-  MAX_RESPONSE_RATIONALE_LENGTH,
-  type CaseAssertionRecord,
-} from './case-response-model.mts';
-import {
-  MAX_TAGS_PER_CASE,
-  type CaseRecord,
-} from './case-record-contracts.mts';
-import { caseInvestigationContext } from './case-record-operations.mts';
-import { normalizeTags } from './case-record-core.mts';
-
-export const CASE_TYPE_TAG_PREFIX = 'case-type:';
-export const INCIDENT_TARGET_STATEMENT_PREFIX = 'Incident target URL: ';
+// Preserve the maximum URL previously admitted inside a 21-character label.
+export const MAX_CASE_INCIDENT_TARGET_URL_LENGTH = MAX_RESPONSE_RATIONALE_LENGTH - 21;
 export const MAX_CASE_INCIDENT_TARGETS = 20;
+export const MAX_CASE_INCIDENT_TARGET_HISTORY = MAX_CASE_ASSERTIONS;
 
 export const CASE_TYPES = Object.freeze([
   Object.freeze({ id: 'phishing', label: 'Phishing', description: 'Deceptive content or messages intended to obtain credentials or other sensitive information.' }),
@@ -39,49 +32,27 @@ const CASE_TYPE_IDS = new Set<string>(CASE_TYPES.map((item) => item.id));
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const CASE_REFERENCE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
-export function caseTypeIds(tags: readonly string[]): CaseTypeId[] {
-  const selected = new Set<string>();
-  for (const tag of tags) {
-    const id = tag.toLowerCase().startsWith(CASE_TYPE_TAG_PREFIX)
-      ? tag.slice(CASE_TYPE_TAG_PREFIX.length).toLowerCase()
-      : '';
-    if (CASE_TYPE_IDS.has(id)) selected.add(id);
-  }
-  return CASE_TYPES.map((item) => item.id).filter((id) => selected.has(id));
+export function readCaseTypes(value: unknown): CaseTypeId[] {
+  assertWorkspaceInputGraph(value, 'Case types');
+  const selected = array(value, 'Case types', CASE_TYPES.length).map(id => {
+    if (typeof id !== 'string' || !CASE_TYPE_IDS.has(id)) throw new TypeError('Unknown Case type.');
+    return id as CaseTypeId;
+  });
+  if (new Set(selected).size !== selected.length) throw new TypeError('Case types must be unique.');
+  return CASE_TYPES.map(item => item.id).filter(id => selected.includes(id));
 }
 
-export function caseTypeRecords(tags: readonly string[]) {
-  const selected = new Set(caseTypeIds(tags));
+export function caseTypeIds(record: Pick<CaseRecord, 'workflowMetadata'>): CaseTypeId[] {
+  return [...(record.workflowMetadata?.types ?? [])];
+}
+
+export function caseTypeRecords(record: Pick<CaseRecord, 'workflowMetadata'>) {
+  const selected = new Set(caseTypeIds(record));
   return CASE_TYPES.filter((item) => selected.has(item.id));
 }
 
-export function caseFreeformTags(tags: readonly string[]): string[] {
-  return tags.filter((tag) => {
-    const lower = tag.toLowerCase();
-    if (!lower.startsWith(CASE_TYPE_TAG_PREFIX)) return true;
-    return !CASE_TYPE_IDS.has(lower.slice(CASE_TYPE_TAG_PREFIX.length));
-  });
-}
-
-export function caseTagsWithTypes(tags: readonly string[], typeIds: readonly string[]): string[] {
-  const selected = new Set(typeIds.filter((id) => CASE_TYPE_IDS.has(id)));
-  const typeTags = CASE_TYPES
-    .filter((item) => selected.has(item.id))
-    .map((item) => `${CASE_TYPE_TAG_PREFIX}${item.id}`);
-  const freeformTags = caseFreeformTags(tags);
-  const unique = new Map<string, string>();
-  for (const tag of [...typeTags, ...freeformTags]) {
-    const normalized = normalizeTags([tag])[0];
-    if (normalized && !unique.has(normalized.toLowerCase())) unique.set(normalized.toLowerCase(), normalized);
-  }
-  if (unique.size > MAX_TAGS_PER_CASE) {
-    throw new RangeError(`Case types and additional tags are limited to ${MAX_TAGS_PER_CASE} combined values.`);
-  }
-  return [...unique.values()];
-}
-
-export function caseTypeSummary(tags: readonly string[]): string {
-  const labels = caseTypeRecords(tags).map((item) => item.label);
+export function caseTypeSummary(record: Pick<CaseRecord, 'workflowMetadata'>): string {
+  const labels = caseTypeRecords(record).map((item) => item.label);
   if (!labels.length) return '';
   if (labels.length <= 2) return labels.join(' and ');
   return `${labels.slice(0, 2).join(', ')} and ${labels.length - 2} more`;
@@ -124,7 +95,7 @@ export function formattedCaseNumber(caseId: unknown): string {
 }
 
 export function normalizeCaseIncidentTargetUrl(value: unknown): string | null {
-  if (typeof value !== 'string' || !value.trim()) return null;
+  if (typeof value !== 'string' || value.length > MAX_CASE_INCIDENT_TARGET_URL_LENGTH || !value.trim()) return null;
   let parsed: URL;
   try {
     parsed = new URL(value.trim());
@@ -133,52 +104,136 @@ export function normalizeCaseIncidentTargetUrl(value: unknown): string | null {
   }
   if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password) return null;
   const normalized = parsed.toString();
-  const maximum = MAX_RESPONSE_RATIONALE_LENGTH - INCIDENT_TARGET_STATEMENT_PREFIX.length;
-  return normalized.length <= maximum ? normalized : null;
+  return normalized.length <= MAX_CASE_INCIDENT_TARGET_URL_LENGTH ? normalized : null;
 }
 
 export type CaseIncidentTarget = Readonly<{
-  assertionId: string;
+  id: string;
   url: string;
-  state: CaseAssertionRecord['state'];
+  state: 'open' | 'resolved';
   createdAt: string;
   updatedAt: string;
 }>;
 
-export function caseIncidentTargets(
-  record: Pick<CaseRecord, 'assertions'>,
-  options: Readonly<{ includeResolved?: boolean }> = {},
-): CaseIncidentTarget[] {
-  const seen = new Set<string>();
-  const targets: CaseIncidentTarget[] = [];
-  for (const assertion of record.assertions) {
-    if (!assertion.statement.startsWith(INCIDENT_TARGET_STATEMENT_PREFIX)) continue;
-    if (!options.includeResolved && assertion.state !== 'open') continue;
-    const url = normalizeCaseIncidentTargetUrl(assertion.statement.slice(INCIDENT_TARGET_STATEMENT_PREFIX.length));
-    if (!url || seen.has(`${assertion.state}\u0000${url}`)) continue;
-    seen.add(`${assertion.state}\u0000${url}`);
-    targets.push({
-      assertionId: assertion.id,
-      url,
-      state: assertion.state,
-      createdAt: assertion.createdAt,
-      updatedAt: assertion.updatedAt,
-    });
-    if (targets.length >= MAX_CASE_INCIDENT_TARGETS) break;
-  }
-  return targets;
+/** Local review only: analyst link state is not independent observed coverage. */
+export function buildCaseIncidentCoverage(record: Pick<CaseRecord, 'workflowMetadata'>): readonly Readonly<{
+  target: CaseIncidentTarget;
+  hostname: string;
+  actionCoverage: 'unknown';
+  observationCoverage: 'unknown';
+}>[] {
+  return caseIncidentTargets(record, { includeResolved: true }).map(target => ({
+    target,
+    hostname: new URL(target.url).hostname,
+    actionCoverage: 'unknown',
+    observationCoverage: 'unknown',
+  }));
 }
 
-export function caseIncidentTargetAssertion(value: unknown) {
-  const url = normalizeCaseIncidentTargetUrl(value);
-  if (!url) throw new Error('Enter an exact HTTP(S) incident URL without embedded credentials.');
-  return {
-    kind: 'unknown' as const,
-    statement: `${INCIDENT_TARGET_STATEMENT_PREFIX}${url}`,
-    rationale: 'Analyst-retained incident target for review and possible reporting. The URL alone does not establish infringement, abuse, ownership or platform responsibility.',
-    evidenceRelations: [],
-    state: 'open' as const,
-  };
+export type CaseWorkflowMetadata = {
+  types: CaseTypeId[];
+  incidentTargets: CaseIncidentTarget[];
+  investigationContext: CaseInvestigationContext | null;
+};
+
+export function emptyCaseWorkflowMetadata(): CaseWorkflowMetadata {
+  return { types: [], incidentTargets: [], investigationContext: null };
+}
+
+function identifier(value: unknown): string {
+  const id = safeId(value);
+  if (!id || id !== value) throw new TypeError('Case metadata identity is invalid.');
+  return id;
+}
+
+/** Strict admission before persistence; no inferred defaults for typed fields. */
+export function readCaseWorkflowMetadata(value: unknown, domain: string): CaseWorkflowMetadata | undefined {
+  if (value === undefined) return undefined;
+  assertWorkspaceInputGraph(value, 'Case workflow metadata');
+  const row = exact(value, ['types', 'incidentTargets', 'investigationContext'], 'Case workflow metadata');
+  const types = readCaseTypes(row.types);
+  const incidentTargets = array(row.incidentTargets, 'Incident target history', MAX_CASE_INCIDENT_TARGET_HISTORY).map(raw => {
+    const item = exact(raw, ['id', 'url', 'state', 'createdAt', 'updatedAt'], 'Incident target');
+    const url = normalizeCaseIncidentTargetUrl(item.url);
+    if (!url || url !== item.url) throw new TypeError('Incident target URL is invalid.');
+    iso(item.createdAt, 'Incident target creation time');
+    iso(item.updatedAt, 'Incident target update time');
+    if (Date.parse(item.updatedAt as string) < Date.parse(item.createdAt as string)) throw new TypeError('Incident target update precedes creation.');
+    return { id: identifier(item.id), url, state: enumeration(item.state, ['open', 'resolved'] as const, 'Incident target state'),
+      createdAt: item.createdAt as string, updatedAt: item.updatedAt as string };
+  });
+  if (new Set(incidentTargets.map(item => item.id)).size !== incidentTargets.length) throw new TypeError('Incident target identities must be unique.');
+  let investigationContext: CaseInvestigationContext | null = null;
+  if (row.investigationContext !== null) {
+    const item = exact(row.investigationContext, ['id', 'objective', 'incidentUrl', 'urlRetention', 'updatedAt'], 'Incident context');
+    const objective = text(item.objective, 'Investigation objective', MAX_CASE_OBJECTIVE_LENGTH);
+    if (!objective || normalizeCaseObjective(objective) !== objective) throw new TypeError('Investigation objective is invalid.');
+    const parsed = parseIncidentUrlContext(item.incidentUrl);
+    const urlRetention = enumeration(item.urlRetention, ['exact', 'origin_only'] as const, 'Incident URL retention');
+    if (!parsed || parsed.registrableDomain !== domain
+      || item.incidentUrl !== (urlRetention === 'exact' ? parsed.exactUrl : parsed.originUrl)) {
+      throw new TypeError('Incident context URL does not match its Case domain or retention choice.');
+    }
+    iso(item.updatedAt, 'Incident context update time');
+    investigationContext = { id: identifier(item.id), objective, incidentUrl: item.incidentUrl as string,
+      urlRetention, updatedAt: item.updatedAt as string };
+  }
+  return { types, incidentTargets, investigationContext };
+}
+
+/** Mutations use the existing Case save coordinator and compare-and-swap rules. */
+export function updateCaseWorkflowMetadata(current: CaseWorkflowMetadata, patch: CasePatch, domain: string, now: string): CaseWorkflowMetadata {
+  const next = structuredClone(current);
+  if (patch.caseTypes !== undefined) {
+    if (patch.expectedCaseTypes !== undefined && JSON.stringify(readCaseTypes(patch.expectedCaseTypes)) !== JSON.stringify(current.types)) {
+      throw new Error('The Case types changed after this edit was started. Reopen the Case before saving; your draft was not applied.');
+    }
+    next.types = readCaseTypes(patch.caseTypes);
+  }
+  if (patch.incidentTarget !== undefined) {
+    const url = normalizeCaseIncidentTargetUrl(patch.incidentTarget);
+    if (!url) throw new TypeError('Enter an exact HTTP(S) incident URL without embedded credentials.');
+    if (next.incidentTargets.some(target => target.state === 'open' && target.url === url)) throw new Error('That exact incident URL is already active in this Case.');
+    if (next.incidentTargets.filter(target => target.state === 'open').length >= MAX_CASE_INCIDENT_TARGETS) throw new Error(`A Case can retain at most ${MAX_CASE_INCIDENT_TARGETS} active incident links. Resolve one before adding another.`);
+    if (next.incidentTargets.length >= MAX_CASE_INCIDENT_TARGET_HISTORY) throw new Error(`The retained incident link history is full (${MAX_CASE_INCIDENT_TARGET_HISTORY}). Export this Case and open another; no history was removed.`);
+    next.incidentTargets.push({ id: makeId(), url, state: 'open', createdAt: now, updatedAt: now });
+  }
+  if (patch.incidentTargetResolution !== undefined) {
+    const id = identifier(patch.incidentTargetResolution);
+    const target = next.incidentTargets.find(item => item.id === id);
+    if (!target || target.state !== 'open') throw new Error('That incident target is missing or already resolved. Refresh the Case before continuing.');
+    next.incidentTargets = next.incidentTargets.map(item => item.id === id ? { ...item, state: 'resolved', updatedAt: now } : item);
+  }
+  if (patch.investigationContext !== undefined) {
+    assertWorkspaceInputGraph(patch.investigationContext, 'New incident context');
+    const raw = exact(patch.investigationContext, ['objective', 'incidentUrl', 'retainExactUrl'], 'New incident context');
+    if (typeof raw.retainExactUrl !== 'boolean') throw new TypeError('Choose whether to retain the exact incident URL.');
+    next.investigationContext = { ...prepareCaseInvestigationContext({ objective: raw.objective, incidentUrl: raw.incidentUrl, retainExactUrl: raw.retainExactUrl }),
+      id: current.investigationContext?.id ?? makeId(), updatedAt: now };
+  }
+  return readCaseWorkflowMetadata(next, domain)!;
+}
+
+/** Add missing targets, retaining the newer state for an existing identity. */
+export function mergeCaseWorkflowMetadata(local: CaseWorkflowMetadata, incoming: CaseWorkflowMetadata, importNewer: boolean, domain: string): CaseWorkflowMetadata {
+  const targets = new Map(local.incidentTargets.map(target => [target.id, target]));
+  for (const target of incoming.incidentTargets) {
+    const existing = targets.get(target.id);
+    if (existing && (existing.url !== target.url || existing.createdAt !== target.createdAt)) throw new TypeError('Imported incident target identity conflicts with retained history. No data was changed.');
+    if (!existing || Date.parse(target.updatedAt) > Date.parse(existing.updatedAt)) targets.set(target.id, target);
+  }
+  const left = local.investigationContext, right = incoming.investigationContext;
+  const investigationContext = right && (!left || Date.parse(right.updatedAt) > Date.parse(left.updatedAt)) ? right : left;
+  return readCaseWorkflowMetadata({ types: importNewer ? incoming.types : local.types,
+    incidentTargets: [...targets.values()], investigationContext }, domain)!;
+}
+
+export function caseIncidentTargets(
+  record: Pick<CaseRecord, 'workflowMetadata'>,
+  options: Readonly<{ includeResolved?: boolean }> = {},
+): CaseIncidentTarget[] {
+  return (record.workflowMetadata?.incidentTargets ?? [])
+    .filter(target => options.includeResolved || target.state === 'open').map(target => ({ ...target }));
 }
 
 export function caseResponseIncidentUrls(record: CaseRecord): string[] {

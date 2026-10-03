@@ -1,11 +1,14 @@
 import {
   INVESTIGATION_RECIPES,
   normalizeInvestigationGuideTemplateSnapshot,
+  SAFE_TEMPLATE_ID_RE,
   type InvestigationGuideTemplateSnapshot,
   type InvestigationRecipeId,
 } from './investigation-guide.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
+import { exact, HEX_DIGEST_RE, text } from '../evidence/artifact-structure.mts';
+import { SORTED_JSON_V2 } from '../evidence/artifact-integrity.mts';
 import {
   INVESTIGATION_TEMPLATE_SCHEMA,
   INVESTIGATION_TEMPLATE_SUPPORTED_VERSIONS,
@@ -26,6 +29,31 @@ export {
 export interface InvestigationTemplate extends InvestigationGuideTemplateSnapshot {
   createdAt: string;
   updatedAt: string;
+  lessonRevision?: InvestigationTemplateLessonRevision;
+}
+
+export interface InvestigationTemplateLessonRevision {
+  parentTemplateId: string;
+  parentContentSha256: string;
+  lessonContentSha256: string;
+  canonicalization: typeof SORTED_JSON_V2;
+  applicability: string;
+  rationale: string;
+}
+
+export function readTemplateLessonRevision(raw: unknown): InvestigationTemplateLessonRevision | undefined {
+  if (raw === undefined) return undefined;
+  assertWorkspaceInputGraph(raw, 'Template revision provenance');
+  const value = exact(raw, ['parentTemplateId', 'parentContentSha256', 'lessonContentSha256', 'canonicalization', 'applicability', 'rationale'], 'Template revision provenance');
+  if (typeof value.parentTemplateId !== 'string' || !SAFE_TEMPLATE_ID_RE.test(value.parentTemplateId)
+    || value.canonicalization !== SORTED_JSON_V2
+    || typeof value.parentContentSha256 !== 'string' || !HEX_DIGEST_RE.test(value.parentContentSha256)
+    || typeof value.lessonContentSha256 !== 'string' || !HEX_DIGEST_RE.test(value.lessonContentSha256)) throw new TypeError('Template revision provenance is invalid.');
+  const applicability = text(value.applicability, 'Template applicability', 400).trim();
+  const rationale = text(value.rationale, 'Template revision reason', 400).trim();
+  if (!applicability || !rationale) throw new TypeError('Template applicability and revision reason must not be empty.');
+  return { parentTemplateId: value.parentTemplateId, parentContentSha256: value.parentContentSha256, lessonContentSha256: value.lessonContentSha256,
+    canonicalization: SORTED_JSON_V2, applicability, rationale };
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -47,12 +75,14 @@ function template(raw: unknown): InvestigationTemplate | null {
   const snapshot = normalizeInvestigationGuideTemplateSnapshot(value);
   const createdAt = timestamp(value?.createdAt);
   const updatedAt = timestamp(value?.updatedAt);
+  const lessonRevision = readTemplateLessonRevision(value?.lessonRevision);
   return snapshot && createdAt && updatedAt
-    ? { ...snapshot, createdAt, updatedAt }
+    ? { ...snapshot, createdAt, updatedAt, ...(lessonRevision ? { lessonRevision } : {}) }
     : null;
 }
 
 export function normalizeInvestigationTemplate(raw: unknown): InvestigationTemplate | null {
+  assertWorkspaceInputGraph(raw, 'Investigation template');
   return template(raw);
 }
 
@@ -65,6 +95,9 @@ export function normalizeInvestigationTemplateStore(raw: unknown) {
     throw new Error(`Investigation-template schema ${String(value.version)} is unsupported; no data was changed.`);
   }
   const source = Array.isArray(raw) ? raw : Array.isArray(value?.templates) ? value.templates : [];
+  if (value?.version === 2 && source.some(candidate => record(candidate)?.lessonRevision !== undefined)) {
+    throw new Error('Template revision provenance requires schema 3; no data was changed.');
+  }
   const templates: InvestigationTemplate[] = [];
   const seen = new Set<string>();
   for (const candidate of source.slice(0, MAX_INVESTIGATION_TEMPLATES * 2)) {

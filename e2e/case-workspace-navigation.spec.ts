@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { openCaseSection } from './console-navigation';
 import { caseRecord, snapshot } from './case-test-fixtures';
@@ -151,11 +152,21 @@ test('Case sections retain reading position and keep the assessment evidence and
     for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720], [2560, 1440]] as const) {
       await page.setViewportSize({ width, height });
       await expect(evidence).toBeVisible();
-      expect(await nav.getByRole('link').evaluateAll(links => links.every(link => {
-        const range = document.createRange();
-        range.selectNodeContents(link);
-        return range.getClientRects().length === 1 && link.scrollWidth <= link.clientWidth;
-      }))).toBe(true);
+      if (width <= 600) {
+        const selector = nav.getByRole('combobox', { name: 'Case section', exact: true });
+        await expect(selector).toBeVisible();
+        await expect(selector).toHaveValue('assessment');
+        await expect(selector.locator('option')).toHaveText(['Summary', 'Evidence', 'Assessment', 'Response', 'History']);
+        expect((await selector.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        await expect(nav.getByRole('link', { includeHidden: true })).toHaveCount(5);
+        await expect(nav.getByRole('link', { name: 'Evidence', includeHidden: true })).toBeHidden();
+      } else {
+        await expect(nav.getByRole('link')).toHaveCount(5);
+        expect(await nav.getByRole('link').evaluateAll(links => links.every(link => {
+          const range = document.createRange(); range.selectNodeContents(link);
+          return range.getClientRects().length === 1 && link.scrollWidth <= link.clientWidth;
+        }))).toBe(true);
+      }
       const layout = await evidence.evaluate(element => {
         const evidence = element.getBoundingClientRect();
         const draft = document.querySelector('.assessment-draft')!.getBoundingClientRect();
@@ -171,7 +182,7 @@ test('Case sections retain reading position and keep the assessment evidence and
       const navigation = await nav.boundingBox();
       expect(focus && navigation && focus.y >= navigation.y + navigation.height).toBe(true);
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`case-continuity-${theme}-${width}.png`), animations: 'disabled' });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`case-continuity-${theme}-${width}.png`), animations: 'disabled' }); }
     }
   }
   await expect(draft).toContainText('Analyst confidence');
@@ -205,8 +216,12 @@ test('legacy response deep links still open the packet and Case follow-up keeps 
   await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('Keep this draft through response navigation');
   await page.getByRole('link', { name: 'Review follow-up', exact: true }).click();
   await expect(page).toHaveURL('/monitor?view=inbox&queue=all&case-review=workspace-first');
-  await expect(page.getByRole('group', { name: 'Review queue' })).toContainText('Selected Case');
-  await expect(page.getByRole('link', { name: 'Show all Cases', exact: true })).toBeVisible();
+  const inbox = page.getByRole('region', { name: 'Review inbox', exact: true });
+  const clearCaseScope = inbox.getByRole('link', { name: 'Show all Cases', exact: true });
+  await expect(clearCaseScope).toBeVisible();
+  await expect(clearCaseScope).toHaveAttribute('href', '/monitor?view=inbox&queue=all');
+  await clearCaseScope.click();
+  await expect(page).toHaveURL('/monitor?view=inbox&queue=all');
 });
 
 for (const theme of ['light', 'dark'] as const) {
@@ -220,7 +235,7 @@ for (const theme of ['light', 'dark'] as const) {
         await expectNoHorizontalOverflow(page);
       }
       await openCaseSection(page, 'Summary');
-      await page.screenshot({ path: testInfo.outputPath(`case-${theme}-${viewport.width}.png`), fullPage: true });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`case-${theme}-${viewport.width}.png`), fullPage: true }); }
     }
   });
 }

@@ -1,7 +1,7 @@
 import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openBulkShortlist } from './helpers';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
 const NOW = '2026-07-17T00:00:00.000Z';
 
@@ -154,12 +154,13 @@ test('campaign and member pagination preserve expansion and case controls', asyn
   await expect(campaignPages).toContainText('Page 2 of 2');
   await page.locator('.campaign-head', { hasText: 'Campaign 11' }).click();
 
-  const memberPages = page.getByRole('navigation', { name: 'Case pages for Campaign 11' });
+  const membersRegion = page.getByRole('region', { name: 'Cases in Campaign 11', exact: true });
+  const memberPages = membersRegion.getByRole('navigation', { name: 'Case pages for Campaign 11' });
   await expect(memberPages).toContainText('Page 1 of 2');
   await memberPages.getByRole('button', { name: 'Next' }).click();
   await expect(memberPages).toContainText('Page 2 of 2');
-  await expect(page.getByText('member-26.invalid', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Remove' })).toBeVisible();
+  await expect(membersRegion.getByText('member-26.invalid', { exact: true })).toBeVisible();
+  await expect(membersRegion.getByRole('button', { name: 'Remove', exact: true })).toBeVisible();
 });
 
 test('case consistency pagination exposes every bounded finding', async ({ page }) => {

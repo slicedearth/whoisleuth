@@ -1,654 +1,75 @@
-import { assertBoundedJsonStructure, boundedJsonLimitsForBytes, scanBoundedJson } from './bounded-json.ts';
-import { plaintextLocalBinaryCodec, type BrowserLocalBinaryCodec, type BrowserLocalStoredBinary } from './browser-local-binaries.ts';
+import { boundedJsonLimitsForBytes, scanBoundedJson } from './bounded-json.ts';
+import { IndexedDbLocalDataStorage, UnacknowledgedIndexedDbCommit, LOCAL_DATA_DATABASE_NAME } from './browser-indexeddb-storage.ts';
+import {
+  BrowserLocalDataError, plaintextJsonCodec, boundedIdentifier, normalizeDefinition,
+  decodeLocalDataSnapshots, prepareLocalDataContent, assertLocalDataManifest,
+  assertSerializedBound, byteLength, sha256, collectionBinaryReferences,
+  captureBrowserLocalDataUpdateOptions, requirePendingLocalDataUpdate,
+  collectionContentMatches, proposedManifest,
+  LOCAL_DATA_OPERATION_TIMEOUT_MS, MAX_LOCAL_DATA_OPERATION_TIMEOUT_MS,
+  MAX_LOCAL_DATA_CODEC_ID_LENGTH, MAX_LOCAL_DATA_COLLECTIONS,
+  MAX_LOCAL_DATA_RECORD_ID_LENGTH, MAX_LOCAL_DATA_UPDATE_ATTEMPTS,
+  type BrowserStorage, type BrowserLocalDataCodec, type BrowserLocalDataCommitListener,
+  type BrowserLocalDataSnapshotDecoder, type BrowserLocalDataPreparer,
+  type BrowserLocalDataInitializationOptions, type BrowserLocalDataInitialization,
+  type AnyLocalDataCollectionDefinition, type LocalDataCollectionDefinition,
+  type BrowserLocalDataUpdater, type BrowserLocalDataUpdateOptions,
+  type BrowserLocalDataBatchUpdateOptions, type LegacyRollbackCopyResult,
+  type PreparedCollection, type PreparedBinaryFiles, type CollectionSnapshot,
+  type BrowserLocalCommitState, type ExpectedManifest,
+} from './browser-local-data-content.ts';
+import type { BrowserLocalBinaryCodec, BrowserLocalStoredBinary } from './browser-local-binaries.ts';
 import { captureRetainedFiles, readRetainedFileReference, type RetainedFileInput, type RetainedFileReference } from '../../../packages/evidence/retained-file.mts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../packages/contracts/selected-file-limits.mts';
 import {
   localDataManifestMatches as manifestMatchesExpected,
-  localDataRecordContent as canonicalRecordContent,
-  type LocalDataStoredRecord as BrowserLocalStoredRecord,
   type LocalDataManifest as BrowserLocalCollectionManifest,
-  type LocalDataCapture as CapturedLocalDataCollection,
   type LocalDataBinaryChanges as PreparedBinaryChanges,
   type LocalDataStorage,
 } from '../../../packages/workspace/local-data-storage.mts';
-export type {
-  LocalDataStoredRecord as BrowserLocalStoredRecord,
-  LocalDataManifest as BrowserLocalCollectionManifest,
-  LocalDataCapture as CapturedLocalDataCollection,
-} from '../../../packages/workspace/local-data-storage.mts';
 
-export const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
-export const LOCAL_DATA_DATABASE_VERSION = 2;
-export const LOCAL_DATA_RECORD_STORE = 'records';
-export const LOCAL_DATA_MANIFEST_STORE = 'manifests';
-export const LOCAL_DATA_BINARY_STORE = 'files';
-export const LOCAL_DATA_OPERATION_TIMEOUT_MS = 10_000;
-export const MAX_LOCAL_DATA_OPERATION_TIMEOUT_MS = 60_000;
-export const MAX_LOCAL_DATA_COLLECTIONS = 16;
-export const MAX_LOCAL_DATA_RECORDS_PER_COLLECTION = 2_000;
-export const MAX_LOCAL_DATA_RECORD_ID_LENGTH = 256;
-export const MAX_LOCAL_DATA_CODEC_ID_LENGTH = 64;
-export const MAX_LOCAL_DATA_UPDATE_ATTEMPTS = 3;
-
-const RECORD_COLLECTION_INDEX = 'collection';
-const RECORD_ORDER_INDEX = 'collection-order';
-const TEXT_ENCODER = new TextEncoder();
-
-type BrowserStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
-
-export type LocalDataRecord = Readonly<{
-  id: string;
-  value: unknown;
-}>;
-
-export type BrowserLocalDataInitializationOptions = Readonly<{
-  /** Explicit approval to create only these absent, record-free collections. */
-  createMissingCollections?: readonly string[];
-}>;
-
-type LocalDataCollectionMetadata = Readonly<{
-  id: string;
-  label: string;
-  legacyKey: string;
-  legacyRollback?: boolean;
-  schemaVersion: number;
-  minimumReadableVersion?: number;
-  acceptsUnversionedLegacy?: boolean;
-  maximumBytes: number;
-  maximumRecords: number;
-}>;
-
-export type LocalDataCollectionDefinition<T> = LocalDataCollectionMetadata & Readonly<{
-  empty: () => T;
-  acceptLegacyRoot: (raw: unknown) => boolean;
-  normalize: (raw: unknown) => T;
-  version: (raw: unknown) => number | null;
-  serialize: (document: T) => string;
-  split: (document: T) => LocalDataRecord[];
-  /** Optional compact wire records; split always exposes normalized values. */
-  storageRecords?: (document: T) => LocalDataRecord[];
-  /** Immutable content referenced by this collection, separately from provenance. */
-  binaryReferences?: (document: T) => readonly RetainedFileReference[];
-  join: (records: LocalDataRecord[], schemaVersion: number) => unknown;
-}>;
-
-// Heterogeneous batch operations cannot retain each collection's private
-// document type in one array. Method syntax keeps those parameters correlated
-// at the concrete definition while the provider treats mixed documents as
-// unknown until the owning definition normalizes them.
-export type AnyLocalDataCollectionDefinition = LocalDataCollectionMetadata & Readonly<{
-  empty(): unknown;
-  acceptLegacyRoot(raw: unknown): boolean;
-  normalize(raw: unknown): unknown;
-  version(raw: unknown): number | null;
-  serialize(document: unknown): string;
-  split(document: unknown): LocalDataRecord[];
-  storageRecords?(document: unknown): LocalDataRecord[];
-  binaryReferences?(document: unknown): readonly RetainedFileReference[];
-  join(records: LocalDataRecord[], schemaVersion: number): unknown;
-}>;
-
-export type EncodedLocalDataRecord = Readonly<{
-  lookupKey: string;
-  payload: string;
-}>;
-
-export function localDataStorageRecords<T>(definition: LocalDataCollectionDefinition<T>, document: T): LocalDataRecord[] {
-  return definition.storageRecords ? definition.storageRecords(document) : definition.split(document);
-}
-
-export type DecodedLocalDataRecord = Readonly<{
-  id: string;
-  value: unknown;
-}>;
-
-/**
- * The provider owns persistence while the codec owns record confidentiality and
- * lookup-key disclosure. The current json-v1 codec stores plaintext records.
- */
-export interface BrowserLocalDataCodec {
-  readonly id: string;
-  /** Optional immutable-file storage; missing support must never use plaintext. */
-  readonly binary?: BrowserLocalBinaryCodec;
-  /** Encoding overhead only; decoded collection and record bounds are unchanged. */
-  encodedBytes?(plaintextBytes: number, records: number): number;
-  /** A keyed codec authenticates the ordered collection, not just each record. */
-  digestCollection?(input: Readonly<{ collection: string; schemaVersion: number; serializedBytes: number; content: string }>): Promise<string>;
-  encode(input: Readonly<{ collection: string; id: string; value: unknown; maximumBytes: number }>): Promise<EncodedLocalDataRecord>;
-  decode(input: Readonly<{ collection: string; lookupKey: string; payload: string; maximumBytes: number }>): Promise<DecodedLocalDataRecord>;
-}
-
-export type PreparedLocalDataContent = Readonly<{
-  records: BrowserLocalStoredRecord[];
-  serializedBytes: number;
-  digest: string;
-}>;
-
-type PreparedCollection = PreparedLocalDataContent & Readonly<{
-  definition: AnyLocalDataCollectionDefinition;
-  source: BrowserLocalCollectionManifest['source'];
-  legacyDigest: string | null;
-}>;
-
-/** A pure update may be repeated against a newer revision after a conflict. */
-export type BrowserLocalDataUpdater<T, R> = (current: T) =>
-  | Readonly<{ document: T; result: R }>
-  | Promise<Readonly<{ document: T; result: R }>>;
-
-export type BrowserLocalDataUpdateOptions = Readonly<{
-  preparation?: 'background';
-  signal?: AbortSignal;
-  files?: readonly RetainedFileInput[];
-}>;
-
-export function captureBrowserLocalDataUpdateOptions(options: BrowserLocalDataUpdateOptions): BrowserLocalDataUpdateOptions {
-  return Object.freeze({ ...options, ...(options.files ? { files: captureRetainedFiles(options.files) } : {}) });
-}
-
-type PreparedBinaryFiles = ReadonlyMap<string, Readonly<{ reference: RetainedFileReference; record: BrowserLocalStoredBinary }>>;
-export type BrowserLocalDataBatchUpdateOptions = Readonly<{ files?: ReadonlyMap<string, readonly RetainedFileInput[]> }>;
-
-function collectionBinaryReferences(definition: AnyLocalDataCollectionDefinition, document: unknown): Map<string, RetainedFileReference> {
-  const references = definition.binaryReferences?.(document) ?? [];
-  if (!Array.isArray(references) || references.length > definition.maximumRecords * MAX_SELECTED_FILES) {
-    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_UPDATE', `${definition.label} exceeds its bounded file-reference count.`);
-  }
-  const unique = new Map<string, RetainedFileReference>();
-  for (const value of references) {
-    const reference = readRetainedFileReference(value);
-    const previous = unique.get(reference.digestSha256);
-    if (previous && previous.byteLength !== reference.byteLength) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'One file digest has conflicting byte lengths.');
-    unique.set(reference.digestSha256, reference);
-  }
-  return unique;
-}
-
-export type BrowserLocalDataPreparer = (
-  definition: AnyLocalDataCollectionDefinition,
-  input: unknown,
-  codec: BrowserLocalDataCodec,
-  options?: Readonly<{ signal?: AbortSignal }>,
-) => Promise<PreparedLocalDataContent>;
-
-function requirePendingLocalDataUpdate(signal?: AbortSignal): void {
-  if (signal?.aborted) throw new DOMException('Browser-local update was cancelled before saving.', 'AbortError');
-}
-
-type CollectionSnapshot<T> = Readonly<{
-  document: T;
-  manifest: BrowserLocalCollectionManifest;
-}>;
-
-export type BrowserLocalDataSnapshotDecoder = <T>(
-  definitions: readonly LocalDataCollectionDefinition<T>[],
-  captured: readonly CapturedLocalDataCollection[],
-  codec: BrowserLocalDataCodec,
-) => Promise<T[]>;
-
-type BrowserLocalCommitState = 'confirmed' | 'recovering' | 'unknown';
-type ExpectedManifest = BrowserLocalCollectionManifest | null;
-
-function collectionContentMatches(
-  prepared: PreparedCollection,
-  manifest: BrowserLocalCollectionManifest,
-  codec: string,
-): boolean {
-  return manifest.schemaVersion === prepared.definition.schemaVersion
-    && manifest.codec === codec
-    && manifest.recordCount === prepared.records.length
-    && manifest.serializedBytes === prepared.serializedBytes
-    && manifest.digest === prepared.digest;
-}
-
-function proposedManifest(item: PreparedCollection, revision: number, codec: string, updatedAt: string): BrowserLocalCollectionManifest {
-  const manifest = Object.freeze({
-    collection: item.definition.id, schemaVersion: item.definition.schemaVersion,
-    codec, revision: revision + 1, recordCount: item.records.length,
-    serializedBytes: item.serializedBytes, digest: item.digest, source: item.source,
-    updatedAt, legacyKey: item.definition.legacyKey, legacyDigest: item.legacyDigest,
-  });
-  assertLocalDataManifest(item.definition, manifest);
-  return manifest;
-}
-
-export type BrowserLocalDataInitialization = Readonly<{
-  state: 'ready';
-  databaseName: string;
-  migratedCollections: readonly string[];
-  retainedLegacyKeys: readonly string[];
-  codec: string;
-}>;
-
-export type LegacyRollbackCopyResult = Readonly<{
-  collectionCount: number;
-  serializedBytes: number;
-  keys: readonly string[];
-}>;
-
-export class BrowserLocalDataError extends Error {
-  readonly code: string;
-
-  constructor(code: string, message: string, options: { cause?: unknown } = {}) {
-    super(message, options);
-    this.name = 'BrowserLocalDataError';
-    this.code = code;
-  }
-}
-
-export function isExpectedBrowserLocalDataFailure(cause: unknown): boolean {
-  return cause instanceof BrowserLocalDataError || cause instanceof DOMException;
-}
-
-function boundedIdentifier(value: unknown, label: string, maximumLength: number): string {
-  if (typeof value !== 'string') throw new BrowserLocalDataError('INVALID_LOCAL_DATA_ID', `${label} must be a string.`);
-  const normalized = value.trim();
-  if (!normalized || normalized.length > maximumLength || /[\u0000-\u001f\u007f]/u.test(normalized)) {
-    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_ID', `${label} is invalid or exceeds its bound.`);
-  }
-  return normalized;
-}
-
-function byteLength(value: string): number {
-  return TEXT_ENCODER.encode(value).byteLength;
-}
-
-function isDigest(value: unknown): value is string {
-  return typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/u.test(value);
-}
-
-function encodedByteLimit(codec: BrowserLocalDataCodec, plaintextBytes: number, records: number): number {
-  const limit = codec.encodedBytes?.(plaintextBytes, records) ?? plaintextBytes;
-  if (!Number.isSafeInteger(limit) || limit < plaintextBytes || limit > plaintextBytes * 4 + records * 256) {
-    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_CODEC', 'The local-data codec declares an unsupported encoding bound.');
-  }
-  return limit;
-}
-
-async function collectionDigest(codec: BrowserLocalDataCodec, collection: string, schemaVersion: number, serializedBytes: number, records: readonly BrowserLocalStoredRecord[]): Promise<string> {
-  const content = canonicalRecordContent(records);
-  const digest = codec.digestCollection
-    ? await codec.digestCollection({ collection, schemaVersion, serializedBytes, content })
-    : await sha256(content);
-  if (!isDigest(digest)) throw new BrowserLocalDataError('INVALID_LOCAL_DATA_CODEC', 'The local-data codec returned an invalid integrity value.');
-  return digest;
-}
-
-function assertSerializedBound(value: string, maximumBytes: number, label: string): number {
-  if (typeof value !== 'string') throw new BrowserLocalDataError('INVALID_LOCAL_DATA', `${label} did not serialize to text.`);
-  const bytes = byteLength(value);
-  if (bytes > maximumBytes) {
-    throw new BrowserLocalDataError('LOCAL_DATA_QUOTA', `${label} exceeds its ${maximumBytes}-byte application limit.`);
-  }
-  return bytes;
-}
-
-function base64Url(bytes: Uint8Array): string {
-  let binary = '';
-  for (const value of bytes) binary += String.fromCharCode(value);
-  return btoa(binary).replace(/\+/gu, '-').replace(/\//gu, '_').replace(/=+$/gu, '');
-}
-
-async function sha256(value: string): Promise<string> {
-  const subtle = globalThis.crypto?.subtle;
-  if (!subtle) throw new BrowserLocalDataError('LOCAL_DATA_CRYPTO_UNAVAILABLE', 'Browser cryptography is unavailable, so local-data integrity cannot be verified.');
-  return base64Url(new Uint8Array(await subtle.digest('SHA-256', TEXT_ENCODER.encode(value))));
-}
-
-function withDeadline<T>(label: string, task: Promise<T>, timeoutMs: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new BrowserLocalDataError('LOCAL_DATA_TIMEOUT', `${label} timed out.`)), timeoutMs);
-    task.then(
-      (value) => { clearTimeout(timer); resolve(value); },
-      (cause) => { clearTimeout(timer); reject(cause); },
-    );
-  });
-}
-
-function requestResult<T>(request: IDBRequest<T>, label: string, timeoutMs: number): Promise<T> {
-  return withDeadline(label, new Promise<T>((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new BrowserLocalDataError('LOCAL_DATA_REQUEST_FAILED', `${label} failed.`));
-  }), timeoutMs);
-}
-
-function transactionComplete(transaction: IDBTransaction, label: string, timeoutMs: number): Promise<void> {
-  const completion = withDeadline(label, new Promise<void>((resolve, reject) => {
-    transaction.oncomplete = () => resolve();
-    transaction.onabort = () => reject(transaction.error || new BrowserLocalDataError('LOCAL_DATA_TRANSACTION_ABORTED', `${label} was aborted.`));
-    transaction.onerror = () => { /* onabort carries the stable terminal failure */ };
-  }), timeoutMs);
-  // Some operations deliberately await one or more request results before
-  // awaiting the transaction. Observe an earlier transaction failure now so a
-  // stalled renderer cannot surface it as an unhandled rejection; callers
-  // still receive the original rejection when they await `completion`.
-  void completion.catch(() => undefined);
-  return completion;
-}
-
-function verifyStoredRecord(
-  record: BrowserLocalStoredRecord,
-  definition: Pick<AnyLocalDataCollectionDefinition, 'id' | 'label' | 'maximumRecords'>,
-  codec: string,
-  lookupKeys: Set<string>,
-  remainingBytes: number,
-): void {
-  if (!record || typeof record !== 'object'
-    || record.collection !== definition.id
-    || !Array.isArray(record.key)
-    || record.key.length !== 2
-    || record.key[0] !== definition.id
-    || record.key[1] !== record.lookupKey
-    || typeof record.lookupKey !== 'string'
-    || !record.lookupKey
-    || record.lookupKey.length > MAX_LOCAL_DATA_RECORD_ID_LENGTH
-    || /[\u0000-\u001f\u007f]/u.test(record.lookupKey)
-    || lookupKeys.has(record.lookupKey)
-    || !Number.isSafeInteger(record.ordinal)
-    || record.ordinal < 0
-    || record.ordinal >= definition.maximumRecords
-    || record.codec !== codec
-    || typeof record.payload !== 'string'
-    || !Number.isSafeInteger(record.payloadBytes)
-    || record.payloadBytes < 0
-    || record.payloadBytes > remainingBytes
-    || record.payload.length > remainingBytes) {
-    throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} contains an invalid stored record.`);
-  }
-  const actualBytes = byteLength(record.payload);
-  if (record.payloadBytes !== actualBytes || actualBytes > remainingBytes) {
-    throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} contains an invalid stored record.`);
-  }
-  lookupKeys.add(record.lookupKey);
-}
-
-/** Validate the worker transport without repeating domain normalisation or hashing. */
-export function assertPreparedLocalDataContent(
-  definition: AnyLocalDataCollectionDefinition, input: unknown, codec: string,
-): asserts input is PreparedLocalDataContent {
-  const content = input as PreparedLocalDataContent | null;
-  if (!content || !Number.isSafeInteger(content.serializedBytes) || content.serializedBytes < 0
-    || content.serializedBytes > definition.maximumBytes || !isDigest(content.digest)
-    || !Array.isArray(content.records) || content.records.length > definition.maximumRecords) {
-    throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'Browser-local preparation returned an incomplete or unexpected collection.');
-  }
-  const keys = new Set<string>();
-  let bytes = 0;
-  for (const [ordinal, record] of content.records.entries()) {
-    verifyStoredRecord(record, definition, codec, keys, Math.min(definition.maximumBytes, definition.maximumBytes * 2 - bytes));
-    if (record.ordinal !== ordinal) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'Prepared browser-local records have an invalid order.');
-    bytes += record.payloadBytes;
-  }
-}
-
-function readBoundedStoredRecords<T>(
-  index: IDBIndex,
-  definition: LocalDataCollectionDefinition<T>,
-  codec: BrowserLocalDataCodec,
-  timeoutMs: number,
-): Promise<BrowserLocalStoredRecord[]> {
-  const label = `Reading ${definition.label}`;
-  return withDeadline(label, new Promise<BrowserLocalStoredRecord[]>((resolve, reject) => {
-    const records: BrowserLocalStoredRecord[] = [];
-    const lookupKeys = new Set<string>();
-    const maximumEncodedBytes = encodedByteLimit(codec, definition.maximumBytes * 2, definition.maximumRecords);
-    let retainedBytes = 0;
-    const request = index.openCursor(definition.id);
-    request.onerror = () => reject(request.error || new BrowserLocalDataError('LOCAL_DATA_REQUEST_FAILED', `${label} failed.`));
-    request.onsuccess = () => {
-      try {
-        const cursor = request.result;
-        if (!cursor) {
-          resolve(records);
-          return;
-        }
-        if (records.length >= definition.maximumRecords) {
-          throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} exceeds its bounded record count.`);
-        }
-        const record = cursor.value as BrowserLocalStoredRecord;
-        verifyStoredRecord(record, definition, codec.id, lookupKeys, Math.min(encodedByteLimit(codec, definition.maximumBytes, 1), maximumEncodedBytes - retainedBytes));
-        retainedBytes += record.payloadBytes;
-        records.push(record);
-        cursor.continue();
-      } catch (cause) {
-        reject(cause);
-      }
-    };
-  }), timeoutMs);
-}
-
-export function normalizeDefinition<T extends AnyLocalDataCollectionDefinition>(definition: T): T {
-  boundedIdentifier(definition.id, 'Collection identifier', 64);
-  boundedIdentifier(definition.label, 'Collection label', 100);
-  boundedIdentifier(definition.legacyKey, 'Legacy storage key', 160);
-  if (!Number.isSafeInteger(definition.schemaVersion) || definition.schemaVersion < 1) {
-    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid schema version.`);
-  }
-  if (definition.minimumReadableVersion !== undefined
-    && (!Number.isSafeInteger(definition.minimumReadableVersion)
-      || definition.minimumReadableVersion < 1
-      || definition.minimumReadableVersion > definition.schemaVersion)) {
-    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid minimum readable schema version.`);
-  }
-  if (definition.acceptsUnversionedLegacy !== undefined && typeof definition.acceptsUnversionedLegacy !== 'boolean') {
-    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid unversioned-data policy.`);
-  }
-  if (definition.legacyRollback !== undefined && typeof definition.legacyRollback !== 'boolean') {
-    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid legacy rollback policy.`);
-  }
-  if (!Number.isSafeInteger(definition.maximumBytes) || definition.maximumBytes < 1) {
-    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid byte bound.`);
-  }
-  if (!Number.isSafeInteger(definition.maximumRecords) || definition.maximumRecords < 0 || definition.maximumRecords > MAX_LOCAL_DATA_RECORDS_PER_COLLECTION) {
-    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid record bound.`);
-  }
-  if (typeof definition.acceptLegacyRoot !== 'function') {
-    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has no legacy-root validator.`);
-  }
-  if (definition.binaryReferences !== undefined && typeof definition.binaryReferences !== 'function') {
-    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid file-reference projection.`);
-  }
-  return definition;
-}
-
-export function decodeLocalDataJsonRecord(payload: string, maximumBytes: number): DecodedLocalDataRecord {
-  const limits = boundedJsonLimitsForBytes(maximumBytes);
-  assertSerializedBound(payload, maximumBytes, 'Browser-local record');
-  scanBoundedJson(payload, limits);
-  const parsed = JSON.parse(payload) as { id?: unknown; value?: unknown };
-  const id = boundedIdentifier(parsed?.id, 'Decoded record identifier', MAX_LOCAL_DATA_RECORD_ID_LENGTH);
-  return { id, value: parsed.value };
-}
-
-export const plaintextJsonCodec: BrowserLocalDataCodec = Object.freeze<BrowserLocalDataCodec>({
-  id: 'json-v1',
-  binary: plaintextLocalBinaryCodec,
-  async encode(input) {
-    const id = boundedIdentifier(input.id, 'Record identifier', MAX_LOCAL_DATA_RECORD_ID_LENGTH);
-    const document = { id, value: input.value };
-    const limits = boundedJsonLimitsForBytes(input.maximumBytes);
-    assertBoundedJsonStructure(document, 'Browser-local record', limits);
-    const payload = JSON.stringify(document);
-    assertSerializedBound(payload, input.maximumBytes, 'Browser-local record');
-    return { lookupKey: id, payload };
-  },
-  async decode(input) {
-    const record = decodeLocalDataJsonRecord(input.payload, input.maximumBytes);
-    if (record.id !== input.lookupKey) {
-      throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local record lookup key does not match its payload.');
-    }
-    return record;
-  },
-});
-
-export type BrowserLocalDataCommitListener = (collections: readonly string[]) => void;
-
-/** Pure verification after bounded records and manifests leave their transaction. */
-export async function decodeLocalDataSnapshots<T>(
-  definitions: readonly LocalDataCollectionDefinition<T>[],
-  captured: readonly CapturedLocalDataCollection[],
-  codec: BrowserLocalDataCodec,
-): Promise<T[]> {
-  if (captured.length !== definitions.length || captured.length > MAX_LOCAL_DATA_COLLECTIONS) {
-    throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local snapshot is incomplete.');
-  }
-  return Promise.all(captured.map(async ({ manifest, records }, index) => {
-    const definition = definitions[index]!;
-    assertLocalDataManifest(definition, manifest);
-    if (manifest.collection !== definition.id || manifest.codec !== codec.id
-      || records.length !== manifest.recordCount || records.length > definition.maximumRecords) {
-      throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} record count or identity does not match its manifest.`);
-    }
-    const lookupKeys = new Set<string>();
-    let encodedBytes = 0;
-    for (const record of records) {
-      verifyStoredRecord(record, definition, codec.id, lookupKeys, Math.min(encodedByteLimit(codec, definition.maximumBytes, 1), encodedByteLimit(codec, definition.maximumBytes * 2, definition.maximumRecords) - encodedBytes));
-      encodedBytes += record.payloadBytes;
-    }
-    records.sort((left, right) => left.ordinal - right.ordinal || left.lookupKey.localeCompare(right.lookupKey));
-    for (const [ordinal, record] of records.entries()) {
-      if (record.ordinal !== ordinal) {
-        throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} contains an invalid stored record order.`);
-      }
-    }
-    if (await collectionDigest(codec, definition.id, manifest.schemaVersion, manifest.serializedBytes, records) !== manifest.digest) {
-      throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} records do not match their verified manifest.`);
-    }
-    const decoded: LocalDataRecord[] = [];
-    for (const record of records) {
-      try { decoded.push(await codec.decode({ collection: definition.id, lookupKey: record.lookupKey, payload: record.payload, maximumBytes: definition.maximumBytes })); }
-      catch (cause) {
-        throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} contains a record that could not be verified.`, { cause });
-      }
-    }
-    let document: T;
-    try { document = definition.normalize(definition.join(decoded, manifest.schemaVersion)); }
-    catch (cause) {
-      throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} could not be reconstructed.`, { cause });
-    }
-    const serialized = definition.serialize(document);
-    const serializedBytes = assertSerializedBound(serialized, definition.maximumBytes, definition.label);
-    if (manifest.schemaVersion === definition.schemaVersion && serializedBytes !== manifest.serializedBytes) {
-      throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} byte count does not match its verified manifest.`);
-    }
-    return document;
-  }));
-}
-
-function assertLocalDataManifest<T>(
-  definition: LocalDataCollectionDefinition<T>,
-  manifest: BrowserLocalCollectionManifest,
-): void {
-  if (!manifest || typeof manifest !== 'object'
-    || manifest.collection !== definition.id
-    || !Number.isSafeInteger(manifest.schemaVersion)
-    || manifest.schemaVersion < 1
-    || typeof manifest.codec !== 'string'
-    || !manifest.codec
-    || manifest.codec.length > MAX_LOCAL_DATA_CODEC_ID_LENGTH
-    || /[\u0000-\u001f\u007f]/u.test(manifest.codec)
-    || !Number.isSafeInteger(manifest.revision)
-    || manifest.revision < 1
-    || !Number.isSafeInteger(manifest.recordCount)
-    || manifest.recordCount < 0
-    || manifest.recordCount > definition.maximumRecords
-    || !Number.isSafeInteger(manifest.serializedBytes)
-    || manifest.serializedBytes < 0
-    || manifest.serializedBytes > definition.maximumBytes
-    || !isDigest(manifest.digest)
-    || !['empty', 'legacy-localstorage', 'application'].includes(manifest.source)
-    || typeof manifest.updatedAt !== 'string'
-    || manifest.updatedAt.length > 64
-    || !Number.isFinite(Date.parse(manifest.updatedAt))
-    || manifest.legacyKey !== definition.legacyKey
-    || (manifest.legacyDigest !== null && !isDigest(manifest.legacyDigest))) {
-    throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} has an invalid migration manifest.`);
-  }
-  if (manifest.schemaVersion > definition.schemaVersion) {
-    throw new BrowserLocalDataError('LOCAL_DATA_FUTURE_SCHEMA', `${definition.label} schema ${manifest.schemaVersion} was created by a newer app version. Update the app before reading it; no data was changed.`);
-  }
-  if (manifest.schemaVersion < (definition.minimumReadableVersion ?? 1)) {
-    throw new BrowserLocalDataError(
-      'LOCAL_DATA_RETIRED_SCHEMA',
-      `${definition.label} schema ${manifest.schemaVersion} is retired. Restore or export it with the last broad-reader release, or choose an explicit reset; no data was changed.`,
-    );
-  }
-}
-
-/** Pure collection preparation shared by foreground and same-origin worker paths. */
-export async function prepareLocalDataContent(
-  definition: AnyLocalDataCollectionDefinition,
-  input: unknown,
-  codec: BrowserLocalDataCodec,
-  options: Readonly<{ signal?: AbortSignal }> = {},
-): Promise<PreparedLocalDataContent> {
-  requirePendingLocalDataUpdate(options.signal);
-  let document: unknown;
-  try { document = definition.normalize(input); }
-  catch (cause) {
-    throw new BrowserLocalDataError('INVALID_LOCAL_DATA', `${definition.label} could not be normalized.`, { cause });
-  }
-  const serialized = definition.serialize(document);
-  const serializedBytes = assertSerializedBound(serialized, definition.maximumBytes, definition.label);
-  const records = localDataStorageRecords(definition, document);
-  if (!Array.isArray(records) || records.length > definition.maximumRecords || records.length > MAX_LOCAL_DATA_RECORDS_PER_COLLECTION) {
-    throw new BrowserLocalDataError('LOCAL_DATA_RECORD_LIMIT', `${definition.label} exceeds its record limit.`);
-  }
-  const seen = new Set<string>();
-  const storedRecords: BrowserLocalStoredRecord[] = [];
-  let encodedBytes = 0;
-  for (let ordinal = 0; ordinal < records.length; ordinal++) {
-    requirePendingLocalDataUpdate(options.signal);
-    const record = records[ordinal];
-    if (!record) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} contains an incomplete record.`);
-    const id = boundedIdentifier(record.id, `${definition.label} record identifier`, MAX_LOCAL_DATA_RECORD_ID_LENGTH);
-    if (seen.has(id)) throw new BrowserLocalDataError('LOCAL_DATA_DUPLICATE_ID', `${definition.label} contains a duplicate record identifier.`);
-    seen.add(id);
-    let encoded: EncodedLocalDataRecord;
-    try { encoded = await codec.encode({ collection: definition.id, id, value: record.value, maximumBytes: definition.maximumBytes }); }
-    catch (cause) {
-      throw new BrowserLocalDataError('LOCAL_DATA_ENCODING_FAILED', `${definition.label} could not be encoded for browser storage.`, { cause });
-    }
-    const lookupKey = boundedIdentifier(encoded.lookupKey, `${definition.label} lookup key`, MAX_LOCAL_DATA_RECORD_ID_LENGTH);
-    const payloadBytes = assertSerializedBound(encoded.payload, encodedByteLimit(codec, definition.maximumBytes, 1), `${definition.label} record`);
-    encodedBytes += payloadBytes;
-    if (encodedBytes > encodedByteLimit(codec, definition.maximumBytes * 2, definition.maximumRecords)) {
-      throw new BrowserLocalDataError('LOCAL_DATA_QUOTA', `${definition.label} encoded records exceed their application limit.`);
-    }
-    storedRecords.push(Object.freeze({
-      key: [definition.id, lookupKey] as [string, string], collection: definition.id,
-      lookupKey, ordinal, codec: codec.id, payload: encoded.payload, payloadBytes,
-    }));
-  }
-  if (new Set(storedRecords.map((record) => record.lookupKey)).size !== storedRecords.length) {
-    throw new BrowserLocalDataError('LOCAL_DATA_DUPLICATE_ID', `${definition.label} codec produced a duplicate lookup key.`);
-  }
-  const digest = await collectionDigest(codec, definition.id, definition.schemaVersion, serializedBytes, storedRecords);
-  requirePendingLocalDataUpdate(options.signal);
-  return Object.freeze({ records: storedRecords, serializedBytes, digest });
-}
+// Retain the established entry point; the implementations have separate owners.
+export {
+  LOCAL_DATA_DATABASE_NAME, LOCAL_DATA_DATABASE_VERSION,
+  LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE, LOCAL_DATA_BINARY_STORE,
+} from './browser-indexeddb-storage.ts';
+export {
+  BrowserLocalDataError, isExpectedBrowserLocalDataFailure,
+  LOCAL_DATA_OPERATION_TIMEOUT_MS, MAX_LOCAL_DATA_OPERATION_TIMEOUT_MS,
+  MAX_LOCAL_DATA_COLLECTIONS, MAX_LOCAL_DATA_RECORDS_PER_COLLECTION,
+  MAX_LOCAL_DATA_RECORD_ID_LENGTH, MAX_LOCAL_DATA_CODEC_ID_LENGTH,
+  MAX_LOCAL_DATA_UPDATE_ATTEMPTS, localDataStorageRecords,
+  captureBrowserLocalDataUpdateOptions, assertPreparedLocalDataContent,
+  normalizeDefinition, decodeLocalDataJsonRecord, plaintextJsonCodec,
+  decodeLocalDataSnapshots, prepareLocalDataContent,
+  type BrowserLocalStoredRecord, type BrowserLocalCollectionManifest, type CapturedLocalDataCollection,
+  type LocalDataRecord, type BrowserLocalDataInitializationOptions,
+  type LocalDataCollectionDefinition, type AnyLocalDataCollectionDefinition,
+  type EncodedLocalDataRecord, type DecodedLocalDataRecord, type BrowserLocalDataCodec,
+  type PreparedLocalDataContent, type BrowserLocalDataUpdater, type BrowserLocalDataUpdateOptions,
+  type BrowserLocalDataBatchUpdateOptions, type BrowserLocalDataPreparer, type BrowserLocalDataSnapshotDecoder,
+  type BrowserLocalDataInitialization, type LegacyRollbackCopyResult, type BrowserLocalDataCommitListener,
+} from './browser-local-data-content.ts';
 
 export class BrowserLocalDataProvider {
   readonly databaseName: string;
   readonly codec: BrowserLocalDataCodec;
   readonly timeoutMs: number;
 
-  #factory: IDBFactory | undefined;
   #storage: BrowserStorage | undefined;
-  #storageAdapter: LocalDataStorage | undefined;
+  #storageAdapter: LocalDataStorage;
+  #indexedDb: IndexedDbLocalDataStorage | undefined;
   #now: () => Date;
-  #databasePromise: Promise<IDBDatabase> | null = null;
   #initializationPromise: Promise<BrowserLocalDataInitialization> | null = null;
   #definitions = new Map<string, AnyLocalDataCollectionDefinition>();
-  #databaseInvalidated = false;
   #commitState: BrowserLocalCommitState = 'confirmed';
   #oncommit: BrowserLocalDataCommitListener | undefined;
   #decodeSnapshots: BrowserLocalDataSnapshotDecoder;
   #prepareInBackground: BrowserLocalDataPreparer;
   #requireExistingCollections: boolean;
-  #createdDatabase = false;
 
   /** Only initial provisioning may clean up a database created by this provider. */
-  get createdDatabase(): boolean { return this.#createdDatabase; }
+  get createdDatabase(): boolean { return this.#indexedDb?.createdDatabase ?? false; }
 
   constructor(options: Readonly<{
     databaseName?: string;
@@ -687,9 +108,17 @@ export class BrowserLocalDataProvider {
       );
     }
     this.timeoutMs = timeoutMs;
-    this.#factory = factory;
     this.#storage = storage;
-    this.#storageAdapter = options.storageAdapter;
+    this.#indexedDb = options.storageAdapter ? undefined : new IndexedDbLocalDataStorage({
+      databaseName: this.databaseName, timeoutMs, codec: this.codec, factory: factory!,
+      definition: id => {
+        const definition = this.#definitions.get(id);
+        if (!definition) throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', 'The collection is not registered with this provider.');
+        return definition;
+      },
+      assertWritable: () => this.#requireConfirmedCommitState(),
+    });
+    this.#storageAdapter = options.storageAdapter ?? this.#indexedDb!;
     this.#now = options.now || (() => new Date());
     this.#oncommit = options.oncommit;
     this.#decodeSnapshots = options.decodeSnapshots ?? decodeLocalDataSnapshots;
@@ -748,7 +177,7 @@ export class BrowserLocalDataProvider {
     }
     const unique = [...new Map(selected.map(reference => [reference.digestSha256, reference])).values()];
     const keys = await Promise.all(unique.map(reference => codec.lookupKey(definition.id, reference)));
-    const stored = this.#storageAdapter ? await this.#storageAdapter.files(definition.id, keys) : await this.#readStoredFiles(definition.id, keys);
+    const stored = await this.#storageAdapter.files(definition.id, keys);
     if (stored.length !== keys.length) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'The retained-file response is incomplete.');
     const result = new Map<string, Blob | null>();
     for (const [index, reference] of unique.entries()) {
@@ -766,21 +195,6 @@ export class BrowserLocalDataProvider {
       }
     }
     return result;
-  }
-
-  async #readStoredFiles(collection: string, keys: readonly string[]): Promise<(BrowserLocalStoredBinary | undefined)[]> {
-    const database = await this.#database();
-    const transaction = database.transaction(LOCAL_DATA_BINARY_STORE, 'readonly');
-    const done = transactionComplete(transaction, 'Reading retained files', this.timeoutMs);
-    try {
-      const stored = await Promise.all(keys.map(key => requestResult(transaction.objectStore(LOCAL_DATA_BINARY_STORE).get([collection, key]) as IDBRequest<BrowserLocalStoredBinary | undefined>, 'Reading a retained file', this.timeoutMs)));
-      await done;
-      return stored;
-    } catch (cause) {
-      try { transaction.abort(); } catch { /* already terminal */ }
-      await done.catch(() => undefined);
-      throw new BrowserLocalDataError('LOCAL_DATA_READ_FAILED', 'Selected retained files could not be read. No saved data was changed.', { cause });
-    }
   }
 
   #binaryCodec(definition: AnyLocalDataCollectionDefinition): BrowserLocalBinaryCodec {
@@ -961,13 +375,9 @@ export class BrowserLocalDataProvider {
 
   async close(): Promise<void> {
     try {
-      await this.#storageAdapter?.close();
-      if (this.#databasePromise) (await this.#databasePromise).close();
+      await this.#storageAdapter.close();
     } finally {
-      this.#databasePromise = null;
       this.#initializationPromise = null;
-      this.#databaseInvalidated = false;
-      this.#createdDatabase = false;
       this.#commitState = 'confirmed';
     }
   }
@@ -1049,7 +459,7 @@ export class BrowserLocalDataProvider {
   }
 
   async #initialize(definitions: readonly AnyLocalDataCollectionDefinition[], approved: ReadonlySet<string>): Promise<BrowserLocalDataInitialization> {
-    const manifestState = await this.#readManifestState(definitions, 'Reading');
+    const manifestState = await this.#readManifestState(definitions);
     const manifests = definitions.map(definition => manifestState.get(definition.id));
 
     const missing = definitions.filter((_definition, index) => !manifests[index]);
@@ -1180,9 +590,7 @@ export class BrowserLocalDataProvider {
   }
 
   async #readSnapshots<T>(definitions: readonly LocalDataCollectionDefinition<T>[]): Promise<CollectionSnapshot<T>[]> {
-    const captured = this.#storageAdapter
-      ? await this.#storageAdapter.capture(definitions.map(definition => definition.id))
-      : await this.#captureIndexedDbSnapshots(definitions);
+    const captured = await this.#storageAdapter.capture(definitions.map(definition => definition.id));
     const documents = await this.#decodeSnapshots(definitions, captured, this.codec);
     if (documents.length !== captured.length) {
       throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local snapshot is incomplete.');
@@ -1190,163 +598,21 @@ export class BrowserLocalDataProvider {
     return documents.map((document, index) => Object.freeze({ document, manifest: captured[index]!.manifest }));
   }
 
-  async #captureIndexedDbSnapshots<T>(definitions: readonly LocalDataCollectionDefinition<T>[]): Promise<CapturedLocalDataCollection[]> {
-    const database = await this.#database();
-    const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE], 'readonly');
-    const label = definitions.length === 1 ? definitions[0]!.label : 'workspace collections';
-    const done = transactionComplete(transaction, `Reading ${label}`, this.timeoutMs);
-    let captured: CapturedLocalDataCollection[];
-    try {
-      captured = await Promise.all(definitions.map(async (definition) => {
-        const manifest = await requestResult(
-          transaction.objectStore(LOCAL_DATA_MANIFEST_STORE).get(definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
-          `Reading the ${definition.label} manifest`,
-          this.timeoutMs,
-        );
-        if (!manifest) throw new BrowserLocalDataError('LOCAL_DATA_MISSING', `${definition.label} has no migration manifest.`);
-        assertLocalDataManifest(definition, manifest);
-        if (manifest.codec !== this.codec.id) {
-          throw new BrowserLocalDataError('LOCAL_DATA_LOCKED', `${definition.label} uses ${manifest.codec} and cannot be opened with the active local-data codec.`);
-        }
-        const records = await readBoundedStoredRecords(
-          transaction.objectStore(LOCAL_DATA_RECORD_STORE).index(RECORD_COLLECTION_INDEX),
-          definition,
-          this.codec,
-          this.timeoutMs,
-        );
-        return { manifest, records };
-      }));
-      await done;
-    } catch (cause) {
-      try { transaction.abort(); } catch { /* the transaction may already be terminal */ }
-      await done.catch(() => undefined);
-      if (cause instanceof BrowserLocalDataError) throw cause;
-      throw new BrowserLocalDataError(
-        'LOCAL_DATA_READ_FAILED',
-        `${label} could not be read from workspace storage.`,
-        { cause },
-      );
-    }
-    return captured;
-  }
-
   async #commit(
     prepared: readonly PreparedCollection[],
-    expectedManifests: ReadonlyMap<string, ExpectedManifest>,
-    binaryChanges: readonly PreparedBinaryChanges[] = [],
-    createEmptyCollections: ReadonlySet<string> = new Set(),
+    expected: ReadonlyMap<string, ExpectedManifest>,
+    binaries: readonly PreparedBinaryChanges[] = [],
+    createEmpty: ReadonlySet<string> = new Set(),
   ): Promise<void> {
     this.#requireConfirmedCommitState();
-    if (this.#storageAdapter) return this.#commitToAdapter(prepared, expectedManifests, binaryChanges, createEmptyCollections);
-    const database = await this.#database();
-    const changedFiles = binaryChanges.filter(change => change.writes.length || change.remove.length);
-    const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE, ...(changedFiles.length || createEmptyCollections.size ? [LOCAL_DATA_BINARY_STORE] : [])], 'readwrite');
-    const done = transactionComplete(transaction, 'Saving browser-local data', this.timeoutMs);
-    const records = transaction.objectStore(LOCAL_DATA_RECORD_STORE);
-    const manifests = transaction.objectStore(LOCAL_DATA_MANIFEST_STORE);
     const now = this.#now();
     const updatedAt = Number.isFinite(now.getTime()) ? now.toISOString() : new Date().toISOString();
-    const proposedManifests = new Map<string, BrowserLocalCollectionManifest>();
-
-    try {
-      const expected = [...expectedManifests.entries()];
-      for (const item of prepared) {
-        if (!expectedManifests.has(item.definition.id)) {
-          throw new BrowserLocalDataError('INVALID_LOCAL_DATA_UPDATE', `The ${item.definition.label} update has no expected revision.`);
-        }
-      }
-      for (const change of changedFiles) {
-        if (!prepared.some(item => item.definition.id === change.collection)) throw new BrowserLocalDataError('INVALID_LOCAL_DATA_UPDATE', 'A file update has no committed collection revision.');
-      }
-      const current = await Promise.all(expected.map(([collection]) => requestResult(
-        manifests.get(collection) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
-        `Checking the ${this.#definitions.get(collection)?.label ?? collection} revision`,
-        this.timeoutMs,
-      )));
-      const currentByCollection = new Map<string, BrowserLocalCollectionManifest | undefined>();
-      for (let index = 0; index < expected.length; index++) {
-        const entry = expected[index];
-        if (!entry) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'An expected browser-local revision is missing.');
-        const [collection, expectedManifest] = entry;
-        const definition = this.#definitions.get(collection);
-        if (!definition || (expectedManifest !== null && expectedManifest.collection !== collection)) {
-          throw new BrowserLocalDataError('INVALID_LOCAL_DATA_UPDATE', 'A browser-local update contains an invalid expected revision.');
-        }
-        currentByCollection.set(collection, current[index]);
-        if (!manifestMatchesExpected(current[index], expectedManifest)) {
-          transaction.abort();
-          await done.catch(() => undefined);
-          throw new BrowserLocalDataError('LOCAL_DATA_CONFLICT', `${definition.label} changed in another tab.`);
-        }
-      }
-      for (const collection of createEmptyCollections) {
-        if (expectedManifests.get(collection) !== null) continue;
-        const range = IDBKeyRange.bound([collection], [collection, []]);
-        const counts = await Promise.all([
-          requestResult(records.count(range), 'Checking retained records before collection creation', this.timeoutMs),
-          requestResult(transaction.objectStore(LOCAL_DATA_BINARY_STORE).count(range), 'Checking retained files before collection creation', this.timeoutMs),
-        ]);
-        if (counts.some(count => count !== 0)) {
-          throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'The missing collection still has retained records or files. Nothing was replaced; restore from a verified backup or recover its missing metadata.');
-        }
-      }
-      this.#requireConfirmedCommitState();
-      for (const item of prepared) {
-        const currentRevision = currentByCollection.get(item.definition.id)?.revision || 0;
-        proposedManifests.set(item.definition.id, proposedManifest(item, currentRevision, this.codec.id, updatedAt));
-      }
-      for (let index = 0; index < prepared.length; index++) {
-        const item = prepared[index];
-        if (!item) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A prepared workspace collection is missing.');
-        const proposedManifest = proposedManifests.get(item.definition.id);
-        if (!proposedManifest) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A proposed browser-local manifest is missing.');
-        records.delete(IDBKeyRange.bound([item.definition.id], [item.definition.id, []]));
-        for (const record of item.records) records.put(record);
-        manifests.put(proposedManifest);
-      }
-      // Reference changes and content changes share this transaction and its
-      // revision acknowledgement, including repairs of missing file bodies.
-      for (const change of changedFiles) {
-        const files = transaction.objectStore(LOCAL_DATA_BINARY_STORE);
-        for (const lookupKey of change.remove) files.delete([change.collection, lookupKey]);
-        for (const record of change.writes) files.put(record);
-      }
-      await done;
-    } catch (cause) {
-      try { transaction.abort(); } catch { /* the transaction may already be terminal */ }
-      await done.catch(() => undefined);
-      if (cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_TIMEOUT') {
-        this.#commitState = 'recovering';
-        const recovered = await this.#classifyTimedOutCommit(prepared, expectedManifests, proposedManifests);
-        if (recovered === 'committed') {
-          this.#commitState = 'confirmed';
-          return;
-        }
-        if (recovered === 'not_committed') this.#commitState = 'confirmed';
-        if (recovered === 'unknown') {
-          this.#commitState = 'unknown';
-          throw new BrowserLocalDataError(
-            'LOCAL_DATA_COMMIT_UNKNOWN',
-            'Browser-local data may have been saved, but its committed state could not be verified. Reload before retrying this change.',
-            { cause },
-          );
-        }
-      }
-      if (cause instanceof BrowserLocalDataError) throw cause;
-      if (cause instanceof DOMException && cause.name === 'QuotaExceededError') {
-        throw new BrowserLocalDataError('LOCAL_DATA_QUOTA', 'Could not save browser-local data because this origin is out of storage space.', { cause });
-      }
-      throw new BrowserLocalDataError('LOCAL_DATA_WRITE_FAILED', 'Could not save browser-local data. Browser storage may be unavailable.', { cause });
-    }
-  }
-
-  async #commitToAdapter(
-    prepared: readonly PreparedCollection[], expected: ReadonlyMap<string, ExpectedManifest>,
-    binaries: readonly PreparedBinaryChanges[], createEmpty: ReadonlySet<string>,
-  ): Promise<void> {
-    const adapter = this.#storageAdapter!;
-    const updatedAt = this.#now().toISOString();
     binaries = binaries.filter(change => change.writes.length || change.remove.length);
+    for (const [collection, manifest] of expected) {
+      if (!this.#definitions.has(collection) || (manifest !== null && manifest.collection !== collection)) {
+        throw new BrowserLocalDataError('INVALID_LOCAL_DATA_UPDATE', 'A workspace update contains an invalid expected revision.');
+      }
+    }
     for (const item of prepared) if (!expected.has(item.definition.id)) {
       throw new BrowserLocalDataError('INVALID_LOCAL_DATA_UPDATE', 'A workspace update is missing its expected revision.');
     }
@@ -1358,8 +624,16 @@ export class BrowserLocalDataProvider {
       records: item.records,
     }));
     try {
-      await adapter.commit({ expected, collections, binaries, createEmpty });
+      await this.#storageAdapter.commit({ expected, collections, binaries, createEmpty });
     } catch (cause) {
+      if (cause instanceof UnacknowledgedIndexedDbCommit) {
+        this.#commitState = 'recovering';
+        const outcome = await this.#classifyTimedOutCommit(prepared, expected,
+          new Map(collections.map(item => [item.manifest.collection, item.manifest])));
+        this.#commitState = outcome === 'unknown' ? 'unknown' : 'confirmed';
+        if (outcome === 'committed') return;
+        if (outcome === 'not_committed') throw cause;
+      }
       if (!(cause instanceof BrowserLocalDataError) || ['LOCAL_DATA_TIMEOUT', 'LOCAL_DATA_COMMIT_UNKNOWN'].includes(cause.code)) {
         this.#commitState = 'unknown';
         throw new BrowserLocalDataError('LOCAL_DATA_COMMIT_UNKNOWN', 'The workspace write may have succeeded, but its outcome could not be confirmed. Reload and review the saved record before making another change.', { cause });
@@ -1403,108 +677,13 @@ export class BrowserLocalDataProvider {
 
   async #readManifestState(
     definitions: readonly AnyLocalDataCollectionDefinition[],
-    action: 'Reading' | 'Reconciling' = 'Reconciling',
   ): Promise<Map<string, BrowserLocalCollectionManifest | undefined>> {
-    if (this.#storageAdapter) {
-      const manifests = await this.#storageAdapter.manifests(definitions.map(definition => definition.id));
-      if (manifests.length !== definitions.length) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'The workspace manifest response is incomplete.');
-      return new Map(definitions.map((definition, index) => {
-        const manifest = manifests[index];
-        if (manifest !== undefined) assertLocalDataManifest(definition, manifest);
-        return [definition.id, manifest];
-      }));
-    }
-    const database = await this.#database();
-    const transaction = database.transaction(LOCAL_DATA_MANIFEST_STORE, 'readonly');
-    const done = transactionComplete(transaction, 'Reconciling browser-local data', this.timeoutMs);
-    try {
-      const store = transaction.objectStore(LOCAL_DATA_MANIFEST_STORE);
-      const manifests = await Promise.all(definitions.map((definition) => requestResult(
-        store.get(definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
-        `${action} the ${definition.label} manifest`,
-        this.timeoutMs,
-      )));
-      await done;
-      const result = new Map<string, BrowserLocalCollectionManifest | undefined>();
-      for (let index = 0; index < definitions.length; index += 1) {
-        const definition = definitions[index];
-        if (!definition) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local reconciliation definition is missing.');
-        const manifest = manifests[index];
-        if (manifest !== undefined) assertLocalDataManifest(definition, manifest);
-        result.set(definition.id, manifest);
-      }
-      return result;
-    } catch (cause) {
-      try { transaction.abort(); } catch { /* the transaction may already be terminal */ }
-      await done.catch(() => undefined);
-      if (cause instanceof BrowserLocalDataError) throw cause;
-      throw new BrowserLocalDataError('LOCAL_DATA_READ_FAILED', 'Browser-local commit recovery could not read the current manifests.', { cause });
-    }
-  }
-
-  async #database(): Promise<IDBDatabase> {
-    const factory = this.#factory;
-    if (!factory) throw new BrowserLocalDataError('LOCAL_DATA_UNSUPPORTED', 'This workspace does not use IndexedDB.');
-    if (this.#databaseInvalidated) {
-      throw new BrowserLocalDataError('LOCAL_DATA_VERSION_CHANGED', 'Browser-local data changed in another tab. Reload this page before continuing.');
-    }
-    if (this.#databasePromise) return this.#databasePromise;
-    this.#databasePromise = new Promise<IDBDatabase>((resolve, reject) => {
-      const request = factory.open(this.databaseName, LOCAL_DATA_DATABASE_VERSION);
-      let settled = false;
-      const timer = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        reject(new BrowserLocalDataError('LOCAL_DATA_TIMEOUT', 'Opening browser-local data timed out.'));
-      }, this.timeoutMs);
-      const fail = (cause: BrowserLocalDataError) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        reject(cause);
-      };
-      request.onupgradeneeded = event => {
-        if (settled) { request.transaction?.abort(); return; }
-        this.#createdDatabase = event.oldVersion === 0;
-        const database = request.result;
-        if (!database.objectStoreNames.contains(LOCAL_DATA_RECORD_STORE)) {
-          const records = database.createObjectStore(LOCAL_DATA_RECORD_STORE, { keyPath: 'key' });
-          records.createIndex(RECORD_COLLECTION_INDEX, 'collection', { unique: false });
-          records.createIndex(RECORD_ORDER_INDEX, ['collection', 'ordinal'], { unique: true });
-        }
-        if (!database.objectStoreNames.contains(LOCAL_DATA_MANIFEST_STORE)) {
-          database.createObjectStore(LOCAL_DATA_MANIFEST_STORE, { keyPath: 'collection' });
-        }
-        if (!database.objectStoreNames.contains(LOCAL_DATA_BINARY_STORE)) {
-          database.createObjectStore(LOCAL_DATA_BINARY_STORE, { keyPath: 'key' });
-        }
-      };
-      request.onsuccess = () => {
-        if (settled) { request.result.close(); return; }
-        settled = true;
-        clearTimeout(timer);
-        request.result.onversionchange = () => {
-          this.#databaseInvalidated = true;
-          request.result.close();
-          this.#databasePromise = null;
-        };
-        resolve(request.result);
-      };
-      request.onerror = () => {
-        const cause = request.error;
-        if (cause?.name === 'VersionError') {
-          fail(new BrowserLocalDataError('LOCAL_DATA_FUTURE_DATABASE', 'Browser-local data was created by a newer app version.', { cause }));
-          return;
-        }
-        fail(new BrowserLocalDataError('LOCAL_DATA_OPEN_FAILED', 'Could not open browser-local data.', { cause }));
-      };
-      request.onblocked = () => {
-        fail(new BrowserLocalDataError('LOCAL_DATA_BLOCKED', 'Browser-local data is open in another tab that must be reloaded before migration can continue.'));
-      };
-    }).catch((cause) => {
-      this.#databasePromise = null;
-      throw cause;
-    });
-    return this.#databasePromise;
+    const manifests = await this.#storageAdapter.manifests(definitions.map(definition => definition.id));
+    if (manifests.length !== definitions.length) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'The workspace manifest response is incomplete.');
+    return new Map(definitions.map((definition, index) => {
+      const manifest = manifests[index];
+      if (manifest !== undefined) assertLocalDataManifest(definition, manifest);
+      return [definition.id, manifest];
+    }));
   }
 }

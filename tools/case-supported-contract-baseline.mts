@@ -10,7 +10,7 @@ import {
   CASE_SUPPORTED_CONTRACT_BASELINE_VERSION,
   type CaseSupportedContractBaseline,
 } from '../packages/contracts/case-supported-contract-baseline.mts';
-import { parseBoundedJson } from '../lib/bounded-json.mts';
+import { parseBoundedJson } from '../packages/analysis/bounded-json.mts';
 
 export const CASE_SUPPORTED_CONTRACT_BASELINE_PATH = 'docs/case-supported-contract-baseline-v1.json';
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

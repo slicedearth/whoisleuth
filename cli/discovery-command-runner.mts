@@ -1,5 +1,5 @@
 import type { CliArguments } from './arguments.mts';
-import { generateDiscoveryCandidates } from './discovery-workflow.mts';
+import { generateDiscoveryCandidates, type DiscoveryDependencies } from './discovery-workflow.mts';
 import EXIT_CODES from './exit-codes.mts';
 import {
   buildCliDiscoverDocument,
@@ -9,13 +9,13 @@ import {
 } from './formatters/json.mts';
 import { updateDiscoverySnapshot } from './discovery-snapshot.mts';
 import { formatTerminalDiscover } from './formatters/terminal.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext } from './runner-types.mts';
 
 type DiscoveryCommandArguments = Extract<CliArguments, { action: 'discover' }>;
 
 async function runDiscoveryCommand(
   args: DiscoveryCommandArguments,
-  dependencies: CliDependencies,
+  dependencies: DiscoveryDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   const { dictionaryDigestSha256, generator, metadata, result } = await generateDiscoveryCandidates(

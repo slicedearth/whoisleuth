@@ -2,6 +2,7 @@ import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  REGISTRY_CAPABILITIES_VERSION,
   registryCompatibilityMatrix,
   type RegistryCompatibilityRow,
   type RegistryStandardsCoverageSnapshot,
@@ -176,8 +177,8 @@ describe('official registry drift report', () => {
       publication: '2026-01-02T00:00:00.000Z', version: '1.0', serviceGroups: 2,
       httpsServiceGroups: 2, httpOnlyServiceGroups: 0, coveredTlds: 2,
     });
-    assert.equal(report.baseline.catalogueVersion, 29);
-    assert.doesNotMatch(JSON.stringify(report), /must not be retained|AA\nBB/);
+    assert.equal(report.baseline.catalogueVersion, REGISTRY_CAPABILITIES_VERSION);
+    assert.doesNotMatch(JSON.stringify(report), /must not be retained|AA\\nBB/u);
   });
 
   test('keeps routine root-zone publication advances current when TLD membership is unchanged', async () => {

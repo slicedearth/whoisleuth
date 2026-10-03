@@ -5,7 +5,7 @@ import {
   show,
   type JsonRecord,
 } from './lookup-display-shared.ts';
-import { MAX_HTTP_ATTEMPTS, MAX_HTTP_EVIDENCE_REDIRECTS } from '../../../../lib/http-evidence-bounds.mts';
+import { MAX_HTTP_ATTEMPTS, MAX_HTTP_EVIDENCE_REDIRECTS } from '../../../../packages/analysis/http-evidence-bounds.mts';
 import { deliveryMetadataDisplay } from './lookup-homepage-metadata-display.ts';
 
 function httpStatus(value: unknown): number | null {

@@ -104,8 +104,10 @@ describe('domain-control flight-recorder lifecycle', () => {
       [
         [DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, 1, 'input', true, false, 'reject'],
         [DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, 2, 'input', true, false, 'reject'],
+        [DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, 3, 'input', true, false, 'reject'],
         [DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, 1, 'document', true, false, 'reject'],
-        [DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, 2, 'document', true, true, 'reject'],
+        [DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, 2, 'document', true, false, 'reject'],
+        [DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, 3, 'document', true, true, 'reject'],
       ],
     );
     assert.equal(recursivelyFrozen(DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE), true);
@@ -359,7 +361,7 @@ describe('domain-control flight-recorder lifecycle', () => {
     assert.ok(reader, 'A standalone read-only validation path remains declared.');
     assert.equal(reader.requestMode, 'none');
     assert.deepEqual(reader.acceptedContracts.map((contract) => [contract.schema, contract.versions]), [
-      [DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, [1, 2]],
+      [DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, [1, 2, 3]],
     ]);
     const monitorEdge = DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE.metadata.consumerEdges
       .find((edge) => edge.id === 'domain-control-flight-recorder.cli-monitor-embedding');

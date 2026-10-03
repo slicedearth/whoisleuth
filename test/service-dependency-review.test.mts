@@ -149,8 +149,35 @@ describe('service dependency review projection', () => {
     });
 
     assert.ok(review);
-    assert.equal(review.dependencies.length, 20);
+    assert.equal(review.dependencies.length, 14);
     assert.equal(review.dependencies.filter((item) => item.target === 'duplicate.external.test').length, 1);
+    assert.deepEqual(review.unreviewedRecords, { CNAME: 17, HTTPS: 0, NS: 0, MX: 0 });
+    assert.equal(review.complete, false);
+    assert.match(review.label, /review incomplete/u);
+    assert.match(review.limitations.join(' '), /17 input records.*were not examined/u);
+  });
+
+  test('retains every admitted DNS dependency and the final HTTP target without a competing aggregate cap', () => {
+    const review = buildServiceDependencyReview({
+      domain: 'example.test',
+      dnsEvidence: { source: 'dns', complete: true, diagnostics: {
+        cname: { status: 'success' }, https: { status: 'success' }, ns: { status: 'success' }, mx: { status: 'success' },
+      } },
+      dnsRecords: {
+        cname: Array.from({ length: 16 }, (_, index) => `cname-${index}.external.test`),
+        https: Array.from({ length: 16 }, (_, index) => ({ mode: 'alias', target: `https-${index}.external.test` })),
+        ns: Array.from({ length: 16 }, (_, index) => `ns-${index}.external.test`),
+        mx: Array.from({ length: 16 }, (_, index) => ({ exchange: `mx-${index}.external.test` })),
+      },
+      httpEvidence: { source: 'http', finalUrl: 'https://web.external.test/' },
+    });
+    assert.ok(review);
+    assert.equal(review.dependencies.length, 65);
+    assert.deepEqual(Object.fromEntries(['CNAME', 'HTTPS', 'NS', 'MX', 'HTTP'].map((kind) => [kind, review.dependencies.filter((item) => item.recordType === kind).length])),
+      { CNAME: 16, HTTPS: 16, NS: 16, MX: 16, HTTP: 1 });
+    assert.equal(review.complete, true);
+    assert.deepEqual(review.unreviewedRecords, { CNAME: 0, HTTPS: 0, NS: 0, MX: 0 });
+    assert.doesNotMatch(review.label, /incomplete/u);
   });
 
   test('separates active, unresolved, unsupported, and reviewed false-positive states', () => {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { onMount, tick } from 'svelte';
   import BrowserWorkspaceIndicator from '$lib/components/BrowserWorkspaceIndicator.svelte';
@@ -152,10 +153,12 @@
           pruned:sum.pruned+item.pruned,
           brandProfileReferencesOmitted:sum.brandProfileReferencesOmitted+item.brandProfileReferencesOmitted,
           authoredHistoryOmitted:sum.authoredHistoryOmitted+item.authoredHistoryOmitted,
+          evidenceHistoryOmitted:sum.evidenceHistoryOmitted+item.evidenceHistoryOmitted,
         }),
-        {added:0,updated:0,skipped:0,pruned:0,brandProfileReferencesOmitted:0,authoredHistoryOmitted:0},
+        {added:0,updated:0,skipped:0,pruned:0,brandProfileReferencesOmitted:0,authoredHistoryOmitted:0,evidenceHistoryOmitted:0},
       );
-      const resultMessage=`Added backup data from ${result.results.length} sections: ${totals.added} new, ${totals.updated} existing matches, ${totals.skipped} skipped${totals.brandProfileReferencesOmitted?`, ${totals.brandProfileReferencesOmitted} Brand Profile reference${totals.brandProfileReferencesOmitted===1?'':'s'} omitted beyond the retained bounds`:''}${totals.authoredHistoryOmitted?`, ${totals.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${totals.authoredHistoryOmitted===1?'':'s'} omitted`:''}${totals.pruned?`, ${totals.pruned} older evidence snapshot${totals.pruned===1?'':'s'} pruned to fit`:''}.`;
+      const pruning=result.results.filter(item=>item.pruned).map(item=>`${item.pruned} ${item.id==='relationshipObservations'?'relationship group':'evidence snapshot'}${item.pruned===1?'':'s'} pruned to fit`).join(', ');
+      const resultMessage=`Added backup data from ${result.results.length} sections: ${totals.added} new, ${totals.updated} existing matches, ${totals.skipped} skipped${totals.brandProfileReferencesOmitted?`, ${totals.brandProfileReferencesOmitted} Brand Profile reference${totals.brandProfileReferencesOmitted===1?'':'s'} omitted beyond the retained bounds`:''}${totals.authoredHistoryOmitted?`, ${totals.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${totals.authoredHistoryOmitted===1?'':'s'} omitted`:''}${totals.evidenceHistoryOmitted?`, ${totals.evidenceHistoryOmitted} imported evidence snapshot${totals.evidenceHistoryOmitted===1?'':'s'} omitted to preserve local history`:''}${pruning?`, ${pruning}`:''}.`;
       archiveReview=null;preview=null;selectedIds=[];
       message=resultMessage;
       try {
@@ -191,7 +194,7 @@
   </header>
   <BrowserWorkspaceIndicator destination />
   {#if !importOnly && !localApplication}<BrowserStorageHealth {preparedAt} />{/if}
-  {#if localApplication && preparedAt}<p>Backup prepared during this visit: {new Date(preparedAt).toLocaleString()}. Check the downloaded file; a prepared download is not a verified restore.</p>{/if}
+  {#if localApplication && preparedAt}<p>Backup prepared during this visit: {formatEvidenceDate(preparedAt)}. Check the downloaded file; a prepared download is not a verified restore.</p>{/if}
   {#if preparedBackup}{#key preparedBackup}<WorkspaceFileBackup archive={preparedBackup} />{/key}{/if}
 
   {#if showEncryptionForm}
@@ -249,7 +252,7 @@
     <div class="preview" role="group" aria-labelledby="workspace-archive-preview-title">
       <header>
         <div><p class="eyebrow">Backup review</p><h3 id="workspace-archive-preview-title">Choose saved data to add</h3></div>
-        <span>{preview.bytes.toLocaleString()} bytes · {preview.generatedAt?new Date(preview.generatedAt).toLocaleString():'Unknown creation time'}</span>
+        <span>{preview.bytes.toLocaleString()} bytes · {preview.generatedAt?formatEvidenceDate(preview.generatedAt):'Unknown creation time'}</span>
       </header>
       <p>Existing matches use each data type's established merge rules. Records absent from the backup are retained, and nothing is written until you choose Add selected data.</p>
       <ul>
@@ -257,7 +260,7 @@
           <li class:unsupported={section.status==='unsupported'} class:blocked={section.status==='blocked'}>
             <label>
               <input type="checkbox" checked={selected(section.id)} disabled={section.status!=='ready'||busy} onchange={(event)=>void toggle(section.id,(event.currentTarget as HTMLInputElement).checked)}>
-              <span><strong>{section.label}</strong><small>{section.recordCount} in archive · {section.added} new · {section.updated} existing match{section.updated===1?'':'es'} · {section.skipped} skipped{section.brandProfileReferencesOmitted?` · ${section.brandProfileReferencesOmitted} Brand Profile reference${section.brandProfileReferencesOmitted===1?'':'s'} will be omitted`:''}{section.authoredHistoryOmitted?` · ${section.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${section.authoredHistoryOmitted===1?'':'s'} will be omitted`:''}{section.pruned?` · ${section.pruned} older evidence snapshot${section.pruned===1?'':'s'} will be pruned`:''}</small></span>
+              <span><strong>{section.label}</strong><small>{section.recordCount} in archive · {section.added} new · {section.updated} existing match{section.updated===1?'':'es'} · {section.skipped} skipped{section.brandProfileReferencesOmitted?` · ${section.brandProfileReferencesOmitted} Brand Profile reference${section.brandProfileReferencesOmitted===1?'':'s'} will be omitted`:''}{section.authoredHistoryOmitted?` · ${section.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${section.authoredHistoryOmitted===1?'':'s'} will be omitted`:''}{section.evidenceHistoryOmitted?` · ${section.evidenceHistoryOmitted} imported evidence snapshot${section.evidenceHistoryOmitted===1?'':'s'} will be omitted to preserve local history`:''}{section.pruned?` · ${section.pruned} ${section.id==='relationshipObservations'?'relationship group':'evidence snapshot'}${section.pruned===1?'':'s'} will be pruned`:''}</small></span>
             </label>
             <span class="state">{section.status==='ready'?'Ready':section.status==='unsupported'?'Unsupported':'Blocked'}</span>
             {#if section.reason}<p>{section.reason}</p>{/if}

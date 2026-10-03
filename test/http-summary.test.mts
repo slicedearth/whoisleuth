@@ -59,6 +59,18 @@ describe('compact HTTP summary', () => {
     assert.equal(summary.compactHttpObservation({ status: 'success', response: null }), null);
   });
 
+  test('distinguishes unknown metadata from observed zero, false and empty header sets', () => {
+    const response = { httpSummaryVersion: 1, httpEvidenceStatus: 'partial', httpResponseStatus: 206,
+      httpSecurityHeaders: [], httpRedirectCount: 0, httpHttpsDowngrade: false };
+    for (const field of ['httpSecurityHeaders', 'httpRedirectCount', 'httpHttpsDowngrade']) {
+      assert.equal(summary.httpSummaryFieldIsObserved(field, response), true, field);
+      assert.equal(summary.httpSummaryFieldIsObserved(field, { ...response, [field]: null }), false, field);
+      assert.equal(summary.httpSummaryFieldIsObserved(field, { ...response, httpEvidenceStatus: 'error' }), false, field);
+    }
+    assert.equal(summary.httpSummaryFieldIsObserved('httpFinalOrigin', response), false);
+    assert.equal(summary.httpSummaryFieldIsObserved('unexpectedField', response), false);
+  });
+
   test('derives transport from a safe final origin when explicit provenance is absent', async () => {
     const result = requiredValue(summary.compactHttpObservation({
       status: 'success', finalUrl: 'http://example.test/path', response: { status: 204, securityHeaders: {} },

@@ -2,12 +2,13 @@
   import type { CaseEvidencePin } from '$lib/cases';
   import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
-  let { label, pins, value = $bindable(''), emptyLabel = 'No evidence pin', disabled = false, onselect }: {
+  let { label, pins, value = $bindable(''), emptyLabel = 'No evidence pin', disabled = false, required = false, onselect }: {
     label: string;
     pins: readonly CaseEvidencePin[];
     value?: string;
     emptyLabel?: string;
     disabled?: boolean;
+    required?: boolean;
     onselect?: (id: string) => void;
   } = $props();
   const id = $props.id();
@@ -16,7 +17,7 @@
 
 <div class="field evidence-selection">
   <label for={id}>{label}</label>
-  <select {id} {disabled} bind:value onchange={event => onselect?.(event.currentTarget.value)} aria-describedby={selected ? `${id}-fact` : undefined}>
+  <select {id} {disabled} {required} bind:value onchange={event => onselect?.(event.currentTarget.value)} aria-describedby={selected ? `${id}-fact` : undefined}>
     <option value="">{emptyLabel}</option>
     {#each pins as pin, index (pin.id)}<option value={pin.id}>{caseEvidenceChoiceName(pin, index)}</option>{/each}
   </select>

@@ -116,7 +116,7 @@ describe('domain assurance', () => {
     }, NOW);
     assert.equal(document.result.kind, 'retirement');
     assert.equal(document.result.review.state, 'needs_review');
-    assert.match(document.result.review.reasons.join(' '), /expected retirement state.*Auto-renew is intentionally configured.*not confirmed/u);
+    assert.match(document.result.review.reasons.join(' '), /expected retirement state.*Auto-renew is disabled as declared.*not confirmed/u);
     assert.equal(document.result.checks.find((check) => check.id === 'autoRenewDisabled')?.state, 'not_confirmed');
     assert.equal(document.result.checks.find((check) => check.id === 'mailRetired')?.state, 'not_checked');
   });

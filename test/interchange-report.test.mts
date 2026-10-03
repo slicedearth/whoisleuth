@@ -1,3 +1,4 @@
+import '../tools/browser-server-egress-guard.mts';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
@@ -216,6 +217,8 @@ describe('interchange fidelity report', () => {
     assert.equal(current.compatibility.fidelity, 'lossy_by_design');
     assert.equal(current.compatibility.browser?.import, 'supported');
     assert.equal(current.compatibility.cli?.verify, 'supported');
+    assert.match(current.limitations.join(' '), /CLI read support means offline verification and packaging/u);
+    assert.match(current.limitations.join(' '), /require a saved CLI Lookup/u);
     assert.ok(current.compatibility.excludedFieldGroups.includes('raw_payload_rendering_during_replay'));
     assert.doesNotMatch(JSON.stringify(current), /private-target/iu);
 
@@ -472,6 +475,8 @@ describe('interchange fidelity report', () => {
     }), { generatedAt: NOW });
     assert.equal(unknown.recognised, false);
     assert.equal(unknown.artifact.schema, null);
+    assert.match(formatInterchangeFidelityReport(unknown), /Interchange contract not registered/u);
+    assert.match(formatInterchangeFidelityReport(unknown), /Run verify-artifact for independent verification support/u);
     assert.doesNotMatch(JSON.stringify(unknown), /private\.example|private evidence/iu);
   });
 

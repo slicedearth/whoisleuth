@@ -31,7 +31,7 @@
   class="family-summary card"
   class:expanded
   type="button"
-  aria-label={`${expanded ? 'Collapse' : 'Expand'} ${accessibleLabel}`}
+  aria-label={`${expanded ? 'Collapse details' : 'Expand details'}: ${accessibleLabel}`}
   aria-expanded={expanded}
   onpointermove={preloadFromPointerMovement}
   onpointerleave={() => pointerIntentHandled = false}

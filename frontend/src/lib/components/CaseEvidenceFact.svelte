@@ -1,6 +1,9 @@
 <script lang="ts">
   import type { CaseEvidencePin } from '$lib/cases';
-  let { pin }: { pin: CaseEvidencePin } = $props();
+  import CopyButton from './CopyButton.svelte';
+  import { evidenceFactCitation } from '$lib/analysis/evidence-copy.ts';
+  // Opt in only outside labels and other interactive controls.
+  let { pin, copyable = false }: { pin: CaseEvidencePin; copyable?: boolean } = $props();
 </script>
 
 <span class="evidence-fact">
@@ -12,6 +15,7 @@
   <span class="provenance">{#if pin.observedAt}Observed <time datetime={pin.observedAt}>{pin.observedAt}</time>{:else}Observation time unavailable{/if}</span>
   <span class="provenance">Completeness: {pin.completeness}{pin.truncated ? ' · truncated' : ''}{pin.sourceState ? ` · source state: ${pin.sourceState}` : ''}</span>
   {#each pin.limitations as limitation}<span class="provenance">{limitation}</span>{/each}
+  {#if copyable}<CopyButton value={evidenceFactCitation(pin)} label="Copy citation" description={`Copy citation for ${pin.label}`} />{/if}
 </span>
 
 <style>

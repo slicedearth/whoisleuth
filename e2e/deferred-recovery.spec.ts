@@ -1,19 +1,23 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openConsoleView } from './console-navigation';
 import type { Page, Route } from '@playwright/test';
 
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { caseRecord } from './case-test-fixtures';
 import { ALLOWED_ORIGIN, expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
 import { productionChunkPath } from './production-build';
 import {
   beginBrowserInteractionReadiness,
+  beginInteractionTransferProbe,
   installNavigationReadinessMark,
   isBrowserInteractionReadinessMarked,
   isNavigationReadinessMarked,
   readBrowserInteractionReadiness,
   readNavigationReadinessMark,
+  readInteractionRuntimeProbe,
+  resetInteractionRuntimeProbe,
 } from './performance-sampling.ts';
 
 const CASES_KEY = 'whois-rdap-cases-v1';
@@ -42,7 +46,7 @@ test('a failed opening action preserves an already loaded panel and does not rep
     await page.setViewportSize({ width, height: 844 });
     await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
     await expectNoHorizontalOverflow(page);
-    await page.screenshot({ path: testInfo.outputPath(`opening-action-${theme}-${width}.png`), fullPage: true });
+    if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`opening-action-${theme}-${width}.png`), fullPage: true }); }
   }
   expect(await page.evaluate(() => (window as unknown as { __openingActionCalls: number }).__openingActionCalls)).toBe(1);
   await expect(page.locator('body')).not.toContainText('private opening-action sentinel');
@@ -92,6 +96,120 @@ async function waitForAnimationFrames(page: Page, count = 3): Promise<void> {
     requestAnimationFrame(next);
   }), count);
 }
+
+test('interaction observations exclude setup and retain movement before the driver reads readiness', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    const original = PerformanceObserver;
+    const callbacks = new Map<string, PerformanceObserverCallback>();
+    const scope = window as typeof window & {
+      emitInteractionEntries?: (type: string, entries: readonly object[]) => void;
+      restoreInteractionObserver?: () => void;
+    };
+    class ControlledObserver {
+      static supportedEntryTypes = ['longtask', 'layout-shift'];
+      constructor(private callback: PerformanceObserverCallback) {}
+      observe(options: PerformanceObserverInit) { callbacks.set(options.type!, this.callback); }
+      disconnect() {}
+    }
+    Object.defineProperty(window, 'PerformanceObserver', { configurable: true, value: ControlledObserver });
+    scope.emitInteractionEntries = (type, entries) => {
+      const callback = callbacks.get(type);
+      if (!callback) throw new Error(`No observer installed for ${type}.`);
+      callback({ getEntries: () => entries } as unknown as PerformanceObserverEntryList, {} as PerformanceObserver);
+    };
+    scope.restoreInteractionObserver = () => {
+      Object.defineProperty(window, 'PerformanceObserver', { configurable: true, value: original });
+    };
+  });
+  try {
+    await page.evaluate(resetInteractionRuntimeProbe);
+    await page.evaluate(() => {
+      const scope = window as typeof window & {
+        __whoisleuthInteractionReadiness?: { startedAt: number | null; readyAt: number | null };
+        emitInteractionEntries: (type: string, entries: readonly object[]) => void;
+      };
+      // Already-delivered setup and delayed delivery of pre-input records must
+      // both be excluded; the task containing input is clipped at the event.
+      scope.emitInteractionEntries('layout-shift', [{ startTime: 50, value: 0.2 }]);
+      scope.__whoisleuthInteractionReadiness = { startedAt: 100, readyAt: null };
+      scope.emitInteractionEntries('longtask', [{ startTime: 20, duration: 60 }, { startTime: 80, duration: 50 }]);
+      scope.emitInteractionEntries('layout-shift', [{ startTime: 50, value: 0.2 }, { startTime: 110, value: 0.004 }]);
+      scope.__whoisleuthInteractionReadiness.readyAt = 150;
+      scope.emitInteractionEntries('layout-shift', [
+        { startTime: 120, value: 0.002 },
+        { startTime: 130, value: 0.007, hadRecentInput: true },
+        { startTime: 160, value: 0.003, hadRecentInput: true },
+        { startTime: 200, value: 0.005, hadRecentInput: false },
+      ]);
+    });
+    expect(await readInteractionRuntimeProbe(page)).toEqual({
+      longTaskSupported: true, longTaskCount: 1, longTaskTotalMs: 30,
+      layoutShiftSupported: true, layoutShiftCount: 3, layoutShiftScore: 0.011,
+      transitionLayoutShiftCount: 3, transitionLayoutShiftScore: 0.013,
+      residualLayoutShiftCount: 2, residualLayoutShiftScore: 0.008,
+    });
+  } finally {
+    await page.evaluate(() => (window as typeof window & { restoreInteractionObserver: () => void }).restoreInteractionObserver());
+  }
+});
+
+test('interaction transfer excludes earlier requests that finish during activation', async ({ page }) => {
+  let releaseEarlier = () => {};
+  let markRequested = () => {};
+  const earlierHeld = new Promise<void>((resolve) => { releaseEarlier = resolve; });
+  const earlierRequested = new Promise<void>((resolve) => { markRequested = resolve; });
+  const earlierBody = `/*${'x'.repeat(64 * 1024)}*/`;
+  await page.route('**/interaction-transfer-fixture/**', async (route) => {
+    const name = new URL(route.request().url()).pathname.split('/').at(-1);
+    if (name === 'earlier.js') {
+      markRequested();
+      await earlierHeld;
+      await route.fulfill({ contentType: 'text/javascript', body: earlierBody });
+    } else if (name === 'current.js') {
+      await route.fulfill({ contentType: 'text/javascript', body: 'void 0;' });
+    } else if (name === 'current.css') {
+      await route.fulfill({ contentType: 'text/css', body: 'button { min-height: 44px; }' });
+    } else {
+      await route.fulfill({ contentType: 'text/html', body: '<!doctype html><html lang="en"><title>Transfer fixture</title><button>Load interaction assets</button></html>' });
+    }
+  });
+  await page.goto('/interaction-transfer-fixture/');
+  await page.evaluate(() => {
+    const earlier = document.createElement('script');
+    earlier.src = './earlier.js';
+    earlier.onload = () => { document.documentElement.dataset.earlierLoaded = 'true'; };
+    document.head.append(earlier);
+    document.querySelector('button')!.onclick = () => {
+      const script = document.createElement('script');
+      script.src = './current.js';
+      const style = document.createElement('link');
+      style.rel = 'stylesheet';
+      style.href = './current.css';
+      let loaded = 0;
+      const ready = () => { if (++loaded === 2) document.querySelector('button')!.textContent = 'Interaction assets loaded'; };
+      script.onload = ready;
+      style.onload = ready;
+      document.head.append(script, style);
+    };
+  });
+  await earlierRequested;
+  const probe = await beginInteractionTransferProbe(page);
+  try {
+    releaseEarlier();
+    await page.getByRole('button', { name: 'Load interaction assets', exact: true }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-earlier-loaded', 'true');
+    await expect(page.getByRole('button', { name: 'Interaction assets loaded', exact: true })).toBeVisible();
+    const measured = await probe.close();
+    expect(measured.completedAssetRequestCount).toBe(2);
+    expect(measured.assetEncodedTransferBytes).toBeGreaterThan(0);
+    expect(measured.assetEncodedTransferBytes).toBeLessThan(earlierBody.length);
+    expect(await probe.close()).toEqual(measured);
+  } finally {
+    releaseEarlier();
+    await probe.close();
+  }
+});
 
 test('CLI navigation readiness waits for working client-side filtering', async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
@@ -366,14 +484,14 @@ test('a cached CLI module failure recovers only after the accessible reload acti
 });
 
 test('public examples and demo stages terminate failed module activation with reload recovery', async ({ page }) => {
-  const examplesChunk = productionChunkPath('src/lib/generated/public-examples.ts');
+  const examplesChunk = productionChunkPath('src/lib/generated/public-example-outputs/case-handoff.ts');
   await failChunkOnce(page, examplesChunk);
   await page.goto('/examples');
   const example = page.locator('article[data-example="case-handoff"]');
   const exampleButton = example.locator(':scope > button');
   await exampleButton.focus();
   await page.keyboard.press('Enter');
-  const examplesAlert = page.getByRole('alert').filter({ hasText: 'Synthetic output is unavailable.' });
+  const examplesAlert = page.getByRole('alert').filter({ hasText: 'The synthetic example is unavailable.' });
   await expect(examplesAlert).toBeVisible();
   await expect(examplesAlert.getByRole('button', { name: 'Reload page' })).toBeVisible();
   await expect(exampleButton).toBeDisabled();

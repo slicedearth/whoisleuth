@@ -3,4 +3,4 @@ export {
   boundedJsonLimitsForBytes,
   parseBoundedJson,
   scanBoundedJson,
-} from '../../../lib/bounded-json.mts';
+} from '../../../packages/analysis/bounded-json.mts';

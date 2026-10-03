@@ -1,6 +1,6 @@
 import { abortable } from '../lib/abort.mts';
 import { classifyQuery } from '../lib/classify.mts';
-import { runUnifiedLookup } from '../lib/lookup.mts';
+import { runUnifiedLookup, type LookupOptions } from '../lib/lookup.mts';
 import { plannedLookupProgressSources } from '../lib/lookup-source-progress.mts';
 import type { CliArguments } from './arguments.mts';
 import { CliUsageError } from './errors.mts';
@@ -12,7 +12,9 @@ import { formatLookupEvidenceMarkdown } from './formatters/markdown.mts';
 import { formatTerminalLookup } from './formatters/terminal.mts';
 import { buildCliLookupPlan, formatCliLookupPlan } from './lookup-plan.mts';
 import { createCliProgressEvents } from './progress-events.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext, LookupDependency } from './runner-types.mts';
+import type { BoundedTextStream } from './bulk.mts';
+import type { TerminalEnvironment } from './terminal-presentation.mts';
 import { serializeCliLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 import { lookupStrictExitFindings } from './strict-exit.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
@@ -21,11 +23,24 @@ import { browseLookupOperation, canBrowseLookup } from './lookup-browser.mts';
 import { writePrivateFile } from './output-file.mts';
 import { prepareLookupCollectionTarget, prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
 
+export type LookupCommandDependencies = {
+  stdin?: BoundedTextStream;
+  environment?: TerminalEnvironment;
+  now?: () => string;
+  signal?: AbortSignal;
+  classifyQuery?: typeof classifyQuery;
+  runUnifiedLookup?: LookupDependency;
+  canBrowseLookup?: typeof canBrowseLookup;
+  browseLookupOperation?: typeof browseLookupOperation;
+  writePrivateFile?: typeof writePrivateFile;
+  loadEvidenceExport?: () => Promise<typeof import('../lib/evidence-export.mts')>;
+};
+
 type LookupCommandArguments = Extract<CliArguments, { action: 'lookup' }>;
 
 async function runLookupCommand(
   args: LookupCommandArguments,
-  dependencies: CliDependencies,
+  dependencies: LookupCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   const browserInput = dependencies.stdin || process.stdin;
@@ -45,7 +60,7 @@ async function runLookupCommand(
   context.setEventProgress(eventProgress);
   eventProgress.emit({ event: 'started' });
   const input = args.query || await context.readSingleInput();
-  if (!input) throw new CliUsageError('lookup requires one domain, IP address, or ASN as an argument or on stdin.');
+  if (!input) throw new CliUsageError('lookup requires one domain, IP address, or ASN as an argument or on stdin.', 'missing_input');
   const classify = dependencies.classifyQuery || classifyQuery;
   const executeLookup = dependencies.runUnifiedLookup || runUnifiedLookup;
   let classified;
@@ -88,6 +103,21 @@ async function runLookupCommand(
       },
     );
   };
+  const collect = (
+    signal: AbortSignal | undefined,
+    onSourceSettled: NonNullable<LookupOptions['onSourceSettled']>,
+  ) => abortable(() => executeLookup(classified, {
+    fast: !args.deep,
+    compact: false,
+    ...(signal ? { signal } : {}),
+    ...(args.deep ? {
+      ...(selectedUrl ? { selectedUrl } : {}),
+      onSourceSettled: settlement => {
+        onSourceSettled(settlement);
+        eventProgress.emit({ event: 'source_settled', source: settlement.source, state: settlement.state });
+      },
+    } : {}),
+  }), signal);
   let document: UnknownRecord;
   if (args.browse === true) {
     const browse = dependencies.browseLookupOperation || browseLookupOperation;
@@ -102,23 +132,7 @@ async function runLookupCommand(
       plannedSources: args.deep ? plannedLookupProgressSources(classified) : [],
       ...(dependencies.signal ? { signal: dependencies.signal } : {}),
       collect: async ({ signal, onSourceSettled }) => {
-        const result = await abortable(() => executeLookup(classified, args.deep
-          ? {
-              fast: false,
-              compact: false,
-              ...(selectedUrl ? { selectedUrl } : {}),
-              signal,
-              onSourceSettled: (settlement) => {
-                onSourceSettled(settlement);
-                eventProgress.emit({ event: 'source_settled', source: settlement.source, state: settlement.state });
-              },
-            }
-          : {
-              fast: true,
-              compact: false,
-              signal,
-            }), signal);
-        return buildDocument(result);
+        return buildDocument(await collect(signal, onSourceSettled));
       },
     });
     if (args.saveLookup) {
@@ -138,25 +152,12 @@ async function runLookupCommand(
     let settledSources = 0;
     let result: unknown;
     try {
-      result = await abortable(() => executeLookup(classified, args.deep
-        ? {
-            fast: false,
-            compact: false,
-            ...(selectedUrl ? { selectedUrl } : {}),
-            ...(dependencies.signal ? { signal: dependencies.signal } : {}),
-            onSourceSettled: (settlement) => {
-              settledSources += 1;
-              indicator.update(
-                `Collected ${settledSources} source${settledSources === 1 ? '' : 's'} · ${settlement.source.replaceAll('_', ' ')} ${settlement.state}`,
-              );
-              eventProgress.emit({ event: 'source_settled', source: settlement.source, state: settlement.state });
-            },
-          }
-        : {
-            fast: true,
-            compact: false,
-            ...(dependencies.signal ? { signal: dependencies.signal } : {}),
-          }), dependencies.signal);
+      result = await collect(dependencies.signal, settlement => {
+        settledSources += 1;
+        indicator.update(
+          `Collected ${settledSources} source${settledSources === 1 ? '' : 's'} · ${settlement.source.replaceAll('_', ' ')} ${settlement.state}`,
+        );
+      });
     } finally {
       context.endProgress();
     }

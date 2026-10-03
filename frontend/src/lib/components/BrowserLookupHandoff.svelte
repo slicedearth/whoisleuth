@@ -8,7 +8,9 @@
     type BrowserHandoffDisclosureFormat,
     type BrowserLookupHandoff,
   } from '$lib/analysis/browser-lookup-handoff.ts';
-  import { caseStatusIsClosed, editCase, loadCases, type CaseRecord } from '$lib/cases';
+  import { caseStatusIsClosed } from '../../../../packages/cases/case-record-decisions.mts';
+  import { editCase, loadCases, type CaseRecord } from '../cases.ts';
+  import { casePruningNotice } from '$lib/analysis/case-mutation-feedback.ts';
 
   let input = $state('');
   let destinationKind = $state<BrowserHandoffDestinationKind>('lookup');
@@ -87,14 +89,15 @@
       return;
     }
     try {
-      await editCase(record.id, {
+      const result = await editCase(record.id, {
         trailEvent: {
           kind: 'handoff',
           summary: `Prepared ${preview.destinationLabel} handoff for ${preview.domain}.`,
           target: `browser-handoff:${preview.destinationKind}:${preview.domain}`,
         },
       });
-      message = `Recorded the reviewed handoff in the case for ${record.domain}. No external result was saved.`;
+      cases = result.cases;
+      message = `Recorded the reviewed handoff in the case for ${record.domain}. No external result was saved.${casePruningNotice(result.pruned)}`;
     } catch (cause) {
       message = cause instanceof Error ? cause.message : 'Could not record the handoff in the selected case.';
     }

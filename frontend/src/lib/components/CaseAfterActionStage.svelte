@@ -5,6 +5,7 @@
   import { buildCaseAfterActionNote, CASE_AFTER_ACTION_FIELDS } from '../../../../packages/cases/case-after-action.mts';
   import { MAX_NOTE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
+  import CaseLessonTemplateRevision from './CaseLessonTemplateRevision.svelte';
 
   let { record, mutationBusy, persist }: { record: CaseRecord; mutationBusy: boolean; persist: PersistCaseResponse } = $props();
   const draft = createCaseDraft(() => record.id, 'after-action', {
@@ -35,4 +36,5 @@
       <CaseDraftRecovery {draft} />
     </form>
   </details>
+  <CaseLessonTemplateRevision {record} />
 </section>

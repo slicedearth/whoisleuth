@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { onMount } from 'svelte';
   import { readBrowserStorageHealth, requestBrowserPersistence, type BrowserStorageHealth } from '$lib/browser-storage-health.ts';
   let { preparedAt = null }: { preparedAt?: string | null } = $props();
@@ -27,7 +28,7 @@
 <details class="storage-health">
   <summary>Storage and backup health</summary>
   <dl>
-    <div><dt>Backup prepared during this visit</dt><dd>{preparedAt ? new Date(preparedAt).toLocaleString() : 'None recorded'}</dd></div>
+    <div><dt>Backup prepared during this visit</dt><dd>{preparedAt ? formatEvidenceDate(preparedAt) : 'None recorded'}</dd></div>
     <div><dt>Browser retention</dt><dd>{health.persisted === true ? 'Persistent storage granted' : health.persisted === false ? 'Best effort; the browser may evict data' : 'Unavailable'}</dd></div>
     <div><dt>Estimated site usage</dt><dd>{formatBytes(health.usage)}</dd></div>
     <div><dt>Estimated site quota</dt><dd>{formatBytes(health.quota)}</dd></div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -98,9 +99,7 @@
   }
 
   function formatDate(value: string | null): string {
-    if (!value) return 'Unavailable';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? 'Unavailable' : parsed.toLocaleString('en-AU');
+    return formatEvidenceDate(value, 'Unavailable');
   }
 
   async function updateCategoricalFilter(parameter: 'assetClass' | 'assetSource' | 'assetEvidence', value: string) {
@@ -143,7 +142,7 @@
   </header>
 
   {#if projection.state === 'unavailable'}
-    <p class="source-alert" role="alert">The register is unavailable because Brand Profiles or the active-profile preference could not be read. Rows are suppressed and no empty-state conclusion has been drawn.</p>
+    <p class="source-alert" role="alert">The register could not be loaded because saved Brand Profiles or your selected profile are unavailable.</p>
   {:else if projection.state === 'no_active_profile'}
     <div class="empty-state"><h3>No active Brand Profile</h3><p>Set a profile active above to build a transient asset register.</p></div>
   {:else if projection.state === 'unresolved_active_profile'}

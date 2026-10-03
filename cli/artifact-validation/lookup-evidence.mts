@@ -25,7 +25,7 @@ import {
 } from '../../lib/registrar-standing-contract.mts';
 import { compareRegistrySources } from '../../lib/registry-comparison.mts';
 import { buildRegistryInsights } from '../../lib/registry-insights.mts';
-import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../lib/project-metadata.mts';
+import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../packages/analysis/project-metadata.mts';
 import {
   validHttpDeliveryMetadata,
   validPagePublicationMetadata,
@@ -650,7 +650,7 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
     if (!isDeepStrictEqual(
         analysis.availability,
         currentAvailability
-          ? projectLookupEvidenceAvailability(analysis.availability)
+          ? projectLookupEvidenceAvailability(analysis.availability, { legacyUris: version < HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION })
           : projectLookupEvidenceAvailabilityPublic(analysis.availability),
       )) fail('Lookup evidence availability analysis');
   }
@@ -688,6 +688,8 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
       ? projectLookupEvidenceRegistryInsights(rebuiltInsights)
       : rebuiltInsights;
     if (!isDeepStrictEqual(registryInsights, expectedInsights)) fail('Lookup evidence registry insight derivation');
-    try { assertLookupEvidencePrivacySafeTree(root); } catch { fail('Lookup evidence privacy boundary'); }
+    try {
+      assertLookupEvidencePrivacySafeTree(root, { legacyUris: version < HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION });
+    } catch { fail('Lookup evidence privacy boundary'); }
   }
 }

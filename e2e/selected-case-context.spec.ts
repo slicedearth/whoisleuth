@@ -1,5 +1,6 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, test } from './native-tab-fixtures';
 import { TEST_SITE_PASSWORD } from './constants';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { currentActionFixture } from './case-response-fixtures';
@@ -164,7 +165,7 @@ test('selected Case context has compact native controls and readable expanded co
       expect(disclosure!.y - focusExtent).toBeGreaterThanOrEqual(clear!.y + clear!.height);
       await page.evaluate(() => window.scrollTo(0, 0));
       const name = `selected-case-${theme}-${viewport.width}.png`;
-      const path = testInfo.outputPath(name); await page.screenshot({ path }); await testInfo.attach(name, { path, contentType: 'image/png' });
+      const path = testInfo.outputPath(name); if (captureVisualEvidenceEnabled()) { await page.screenshot({ path }); } if (captureVisualEvidenceEnabled()) { await testInfo.attach(name, { path, contentType: 'image/png' }); }
       await summary.focus(); await page.keyboard.press('Enter');
     }
   }

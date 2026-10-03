@@ -3,7 +3,11 @@
   import { pushState, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import CopyableCommand from '$lib/components/CopyableCommand.svelte';
+  import DeferredSurface from './DeferredSurface.svelte';
   import { PUBLIC_CLI_INDEX } from '$lib/generated/public-cli-index';
+  import { PUBLIC_EXAMPLES_INDEX } from '$lib/generated/public-examples-index';
+  import { commandReferenceSections, resolveCommandReferenceHash } from '$lib/public-cli-sections';
+  import { revealDocumentationTarget } from '$lib/documentation-anchors';
   import { preloadOnIdle } from '$lib/idle-preload';
   import { handlesLocalLink } from '$lib/link-activation';
   import {
@@ -28,6 +32,8 @@
   let active = true;
   let urlSyncReady = $state(false);
   let clientReady = $state(false);
+  let builderOpen = $state(false);
+  $effect(() => { expandedId; builderOpen = false; });
   const moduleController = new AbortController();
   const runnableWorkflows = PUBLIC_CLI_INDEX.workflows.filter((recipe) => recipe.runnableByWorkflowRun);
   const planningWorkflows = PUBLIC_CLI_INDEX.workflows.filter((recipe) => !recipe.runnableByWorkflowRun);
@@ -93,7 +99,7 @@
     }
   }
 
-  async function revealCommand(id: string): Promise<void> {
+  async function revealCommand(id: string, anchor = `command-${id}`): Promise<void> {
     const request = ++loadGeneration;
     if (!filtered.some((command) => command.id === id)) {
       resetFilters();
@@ -105,7 +111,8 @@
     await tick();
     requestAnimationFrame(() => {
       if (!currentSelection(request)) return;
-      const target = document.getElementById(`command-${id}`);
+      const target = document.getElementById(anchor);
+      if (target) revealDocumentationTarget(target);
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ block: 'start' });
       requestAnimationFrame(() => {
@@ -120,6 +127,13 @@
   function navigateToCommand(event: MouseEvent, id: string): void {
     if (event.currentTarget instanceof HTMLAnchorElement && !handlesLocalLink(event)) return;
     event.preventDefault();
+    pushState(`#command-${id}`, page.state);
+    void revealCommand(id);
+  }
+
+  function selectCommand(event: Event): void {
+    const id = (event.currentTarget as HTMLSelectElement).value;
+    if (!id) return;
     pushState(`#command-${id}`, page.state);
     void revealCommand(id);
   }
@@ -208,8 +222,8 @@
 
   onMount(() => {
     function openHashCommand() {
-      const id = location.hash.match(/^#command-(.+)$/u)?.[1] ?? '';
-      if (PUBLIC_CLI_INDEX.commands.some((command) => command.id === id)) void revealCommand(id);
+      const selected = resolveCommandReferenceHash(location.hash);
+      if (selected) void revealCommand(selected.id, selected.anchor);
       else clearCommandSelection();
     }
 
@@ -237,26 +251,27 @@
     commonOnly;
     if (urlSyncReady && typeof location !== 'undefined') syncFiltersToLocation();
   });
+
 </script>
 
 <section
   class="catalogue"
-  aria-labelledby="cli-catalogue-title"
+  class:reading-command={Boolean(expandedId)}
+  aria-labelledby={expandedId ? 'selected-command-title' : 'cli-catalogue-title'}
   data-testid="public-cli-catalogue"
   data-client-ready={clientReady ? 'true' : 'false'}
 >
-  <div class="catalogue-heading">
-    <div><p class="eyebrow">Command reference</p><h2 id="cli-catalogue-title">All commands</h2><p>Search {PUBLIC_CLI_INDEX.commandCount} commands generated from the installed registry.</p></div>
-    <span>{filtered.length} shown</span>
+  <div class="catalogue-heading" hidden={Boolean(expandedId)}>
+    <div><p class="eyebrow">Command reference</p><h2 id="cli-catalogue-title">All commands</h2><p>Find a command by name or task, then open its usage, options and examples.</p></div>
   </div>
 
-  <form class="filters" onsubmit={(event) => event.preventDefault()} aria-label="Filter CLI commands">
+  <form class="filters" hidden={Boolean(expandedId)} onsubmit={(event) => event.preventDefault()} aria-label="Filter CLI commands">
     <label class="search"><span>Search commands</span><input type="search" bind:value={query} placeholder="Command or purpose" autocomplete="off"></label>
     <label><span>Group</span><select bind:value={group}><option value="all">All groups</option>{#each PUBLIC_CLI_INDEX.groups as item}<option value={item}>{labelToken(item)}</option>{/each}</select></label>
     <label><span>Mode</span><select bind:value={mode}><option value="all">All modes</option>{#each PUBLIC_CLI_INDEX.modes as item}<option value={item}>{labelToken(item)}</option>{/each}</select></label>
     <label class="check"><input type="checkbox" bind:checked={commonOnly}><span>Common commands only</span></label>
   </form>
-  <p class="filter-status" role="status" aria-live="polite">Showing {filtered.length} of {PUBLIC_CLI_INDEX.commandCount} commands.</p>
+  <p class="filter-status" hidden={Boolean(expandedId)} role="status" aria-live="polite">Showing {filtered.length} of {PUBLIC_CLI_INDEX.commandCount} commands.</p>
   {#if loadError}<div class="load-error" role="alert"><p>{loadError}</p><small>{DEFERRED_MODULE_RECOVERY_DETAIL}</small><button type="button" onclick={reloadDeferredModulePage}>Reload page</button></div>{/if}
 
   {#if expandedId && detailFor(expandedId)}
@@ -265,49 +280,62 @@
     {@const related = relatedCommands(expandedId)}
     {@const previousCommand = adjacentCommand(-1)}
     {@const nextCommand = adjacentCommand(1)}
+    {#key expandedId}
     <article class="command-workspace" id={`command-${command.id}`} data-command-detail={command.id} tabindex="-1">
       <header class="command-detail-heading">
-        <a class="back-to-results" href="#commands" onclick={returnToResults}>← Back to {filtered.length} filtered command{filtered.length === 1 ? '' : 's'}</a>
+        <nav class="command-detail-navigation" aria-label="Command reference navigation">
+          <a class="back-to-results" href="#commands" onclick={returnToResults}>Back to {filtered.length} filtered command{filtered.length === 1 ? '' : 's'}</a>
+          <a href={`#command-${command.id}`} aria-label={`Direct link to ${command.id} command`} onclick={(event) => navigateToCommand(event, command.id)}>Direct link</a>
+        </nav>
+        <label class="command-jump"><span>Jump to command</span><select value={command.id} onchange={selectCommand}>{#each PUBLIC_CLI_INDEX.commands as item}<option value={item.id}>{item.id}</option>{/each}</select></label>
         <p>{labelToken(command.group)} · {labelToken(command.mode)}{command.common ? ' · Common' : ''}</p>
-        <h3><code>{command.id}</code></h3>
+        <h2 id="selected-command-title"><code>{command.id}</code></h2>
         <p class="command-purpose">{command.summary}</p>
+        <nav class="command-contents" aria-label={`${command.id} command sections`}>
+          {#each commandReferenceSections(command.id) as section}<a href={section.href}>{section.label}</a>{/each}
+        </nav>
       </header>
       <div class="command-detail" id={`command-detail-${command.id}`}>
         <p class="command-description">{detail.description}</p>
-        <div class="command-examples">
-          <section><h4>Usage</h4><CopyableCommand command={detail.usage} label={`${command.id} usage`} compact /></section>
-          <section><h4>Example</h4><CopyableCommand command={detail.example} label={`${command.id} example`} compact /></section>
+        <div class="command-examples" id={`command-${command.id}--example`} tabindex="-1">
+          <section><h3>Example</h3><CopyableCommand command={detail.example} label={`${command.id} example`} compact /></section>
+          <details class="compact-disclosure usage"><summary>Full command syntax</summary><CopyableCommand command={detail.usage} label={`${command.id} usage`} compact /></details>
         </div>
-        <dl class="command-facts">
-          <div><dt>Network behaviour</dt><dd><strong>{labelToken(detail.networkEffect)} · {labelToken(detail.capability.networkMode)}</strong>{detail.collection.scope}</dd></div>
-          <div><dt>Authorisation</dt><dd>{labelToken(detail.capability.authorisation)}{detail.explicitAuthorisationRequired ? ' · dedicated acknowledgement required' : ''}</dd></div>
-          <div><dt>Produced artefact</dt><dd>{detail.primaryEvidenceArtefacts.length ? detail.primaryEvidenceArtefacts.join(', ') : 'No evidence artefact is declared.'}</dd></div>
-          <div><dt>Presentation options</dt><dd>{#if detail.presentationOptions.length}<ul>{#each detail.presentationOptions as format}<li><code>{format.option}</code> · {format.format}</li>{/each}</ul>{:else}No alternate presentation flag; the command writes its native output.{/if}</dd></div>
-          <div><dt>Output destination</dt><dd>{#if detail.fileOutput}<code>--output &lt;file&gt;</code> writes a local file atomically. Replacing a file requires <code>--force</code>. The command instructions state when file output is required.{:else}No common <code>--output</code> option. See usage for command-specific files.{/if}</dd></div>
-          <div><dt>Exit behaviour</dt><dd>{exitBehaviour(detail)}</dd></div>
-        </dl>
-        <div class="command-inputs">
+        <p class="network-summary"><strong>{detail.networkEffect === 'offline' ? 'Runs locally.' : detail.networkEffect === 'conditional_network' ? 'Network use depends on the selected options.' : 'Makes network requests.'}</strong> {detail.collection.scope}{#if detail.explicitAuthorisationRequired} Explicit authorisation is required.{/if}</p>
+        <details class="compact-disclosure" bind:open={builderOpen}><summary>Build this command</summary>
+          {#if builderOpen}<DeferredSurface load={() => import('./CliCommandBuilder.svelte')} props={{command:command.id}} loadingLabel="Opening command builder…" unavailableLabel="The command builder is unavailable. The command syntax remains above." />{/if}
+        </details>
+        <div class="command-inputs" id={`command-${command.id}--inputs`} tabindex="-1">
           <section>
-            <h4>Inputs</h4>
+            <h3>Inputs</h3>
             {#if detail.inputs.length}
               <dl>{#each detail.inputs as input}<div><dt><code>{input.name}</code></dt><dd>{inputCardinality(input)} {labelToken(input.valueKind)}{input.inputSource === 'argv_or_stdin' ? ' · argument or standard input' : ''}{input.values.length ? ` · ${input.values.join(', ')}` : ''}</dd></div>{/each}</dl>
             {:else}<p>No positional input.</p>{/if}
+            {#each PUBLIC_EXAMPLES_INDEX.examples.filter(example => example.direction === 'input' && example.command.split(' ')[1] === command.id) as example}<a class="output-example" href={`/examples#example-${example.id}`}><strong>Input example: {example.title}</strong><span>{example.summary}</span></a>{/each}
           </section>
           <section>
-            <h4>Command options</h4>
-            {#if detail.importantOptions.length}<ul class="option-list">{#each detail.importantOptions as option}<li><code>{option}</code></li>{/each}</ul>{:else}<p>No command-specific options.</p>{/if}
-            <p>Run <code>whoisleuth {command.id} --help</code> for option descriptions and common file or presentation controls.</p>
+            <h3>Command options</h3>
+            <dl class="option-descriptions">{#each detail.options.filter(option => option.scope === 'command') as option}<div><dt><code>{option.usage}</code></dt><dd>{option.description}{#if option.defaultDescription}<small>Default: {option.defaultDescription}.</small>{/if}{#if option.repeatable}<small>May be repeated.</small>{/if}{#each option.ranges as range}<small>{range.whenOptionPresent ? `With ${range.whenOptionPresent}: ` : 'Range: '}{range.minimum}–{range.maximum}.</small>{/each}{#if option.values.length && !option.values.every(value => option.usage.includes(value))}<details class="compact-disclosure"><summary>Accepted values</summary><p>{option.values.join(', ')}</p></details>{/if}</dd></div>{/each}</dl>
+            <details class="common-options compact-disclosure"><summary>Common options</summary><dl class="option-descriptions">{#each detail.options.filter(option => option.scope === 'common') as option}<div><dt><code>{option.usage}</code></dt><dd>{option.description}</dd></div>{/each}</dl></details>
+            <p><code>whoisleuth {command.id} --help</code> describes the version installed on your machine.</p>
           </section>
         </div>
+        <section class="command-output" id={`command-${command.id}--output`} tabindex="-1">
+          <h3>Output</h3>
+          <dl class="command-facts">
+            <div><dt>Result</dt><dd>{detail.primaryEvidenceArtefacts.length ? detail.primaryEvidenceArtefacts.join(', ') : 'Terminal command output.'}</dd></div>
+            <div><dt>Formats</dt><dd>{#if detail.presentationOptions.length}<ul>{#each detail.presentationOptions as format}<li><code>{format.option}</code> · {format.format}</li>{/each}</ul>{:else}Native command output.{/if}</dd></div>
+            <div><dt>Destination</dt><dd>{#if detail.fileOutput}<code>--output &lt;file&gt;</code> writes a local file atomically. Replacing a file requires <code>--force</code>. Required file outputs are identified in the command syntax.{:else}See the syntax for command-specific files.{/if}</dd></div>
+            <div><dt>Exit status</dt><dd>{exitBehaviour(detail)}</dd></div>
+          </dl>
+          {#each PUBLIC_EXAMPLES_INDEX.examples.filter(example => example.direction === 'output' && example.command.split(' ')[1] === command.id) as example}<a class="output-example" href={`/examples#example-${example.id}`}><strong>See example output: {example.title}</strong><span>{example.summary} Fictional data.</span></a>{/each}
+        </section>
         {#if related.length}
           <nav class="related-commands" aria-label={`Commands related to ${command.id}`}><strong>Related commands</strong><div>{#each related as item}<a href={`#command-${item.id}`} onclick={(event) => navigateToCommand(event, item.id)}><code>{item.id}</code><span>{item.summary}</span></a>{/each}</div></nav>
         {/if}
-        <details class="boundary compact-disclosure" open={detail.explicitAuthorisationRequired}>
-          <summary>Operational boundary</summary>
-          <p>{detail.boundary}</p>
-        </details>
-        <details class="contract-details compact-disclosure">
-          <summary>Limits and contracts</summary>
+        <details class="contract-details compact-disclosure" id={`command-${command.id}--interpretation`} tabindex="-1">
+          <summary>Interpretation and limits</summary>
+          <section class="boundary" aria-label="Operational boundary"><p>{detail.boundary}</p></section>
           <dl>
             <div><dt>Input limits</dt><dd><ul>{#each detail.inputLimits as item}<li>{item}</li>{/each}</ul></dd></div>
             <div><dt>Output limits</dt><dd><ul>{#each detail.outputLimits as item}<li>{item}</li>{/each}</ul></dd></div>
@@ -323,6 +351,7 @@
         {#if nextCommand}<a class="next" href={`#command-${nextCommand.id}`} onclick={(event) => navigateToCommand(event, nextCommand.id)}><span>Next command</span><strong>{nextCommand.id}</strong></a>{/if}
       </nav>
     </article>
+    {/key}
   {:else}
     <div class="command-list">
       {#each filtered as command (command.id)}
@@ -331,16 +360,20 @@
             <button
               class="command-open"
               type="button"
+              aria-label={`View ${command.id} command`}
+              aria-describedby={`command-summary-${command.id}`}
+              aria-busy={loadingId === command.id}
               disabled={Boolean(loadError)}
               onfocus={preloadCatalogue}
               onpointerenter={preloadCatalogue}
               onclick={(event) => navigateToCommand(event, command.id)}
             >
-              <span><code>{command.id}</code><small>{labelToken(command.group)} · {labelToken(command.mode)}{command.common ? ' · Common' : ''}</small></span>
-              <span class="command-summary">{command.summary}</span>
-              <span aria-hidden="true">{loadingId === command.id ? '…' : '→'}</span>
+              <span class="command-copy">
+                <span class="command-identity"><code>{command.id}</code><small>{labelToken(command.group)} · {labelToken(command.mode)}{command.common ? ' · Common' : ''}</small></span>
+                <span class="command-summary" id={`command-summary-${command.id}`}>{command.summary}</span>
+              </span>
+              <span class="command-action" aria-hidden="true">{loadingId === command.id ? 'Loading…' : 'View command'}</span>
             </button>
-            <a class="command-anchor" href={`#command-${command.id}`} aria-label={`Link to ${command.id} command`} onclick={(event) => navigateToCommand(event, command.id)}>#</a>
           </div>
         </article>
       {:else}
@@ -350,7 +383,7 @@
   {/if}
 
   {#if !expandedId}<section class="recipes" aria-labelledby="command-recipes-title">
-    <div><p class="eyebrow">Command recipes</p><h3 id="command-recipes-title">Multi-step tasks</h3><p>Inspect a fixed sequence offline, then select its inputs and deliberately approve network collection and human-review declarations.</p></div>
+    <div><p class="eyebrow">Command recipes</p><h3 id="command-recipes-title">Multi-step tasks</h3><p>Plan a multi-step task, check its inputs, then choose when to run it.</p></div>
     <div class="recipe-groups">
       <section aria-labelledby="runnable-recipes-title"><header><h4 id="runnable-recipes-title">Runnable workflows</h4><span>{runnableWorkflows.length}</span></header><p>Inspect with <code>workflow-plan --explain &lt;recipe&gt;</code>, then run deliberately with <code>workflow-run</code>.</p><ul>{#each runnableWorkflows as recipe}<li><code>{recipe.id}</code><strong>{recipe.label}</strong><span>{recipe.objective}</span><small>Runnable · {labelToken(recipe.subjectRequirement)}</small></li>{/each}</ul></section>
       {#if planningWorkflows.length}<section aria-labelledby="planning-recipes-title"><header><h4 id="planning-recipes-title">Planning templates</h4><span>{planningWorkflows.length}</span></header><p>These sequences require manual execution.</p><ul>{#each planningWorkflows as recipe}<li><code>{recipe.id}</code><strong>{recipe.label}</strong><span>{recipe.objective}</span><small>Plan only · {labelToken(recipe.subjectRequirement)}</small></li>{/each}</ul></section>{/if}
@@ -360,14 +393,108 @@
 
 <style>
   .command-description{margin:0 0 20px;max-width:75ch;font-size:var(--text-sm);line-height:1.65;overflow-wrap:anywhere}
-  .catalogue-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}.catalogue-heading>div{max-width:720px}.catalogue-heading h2,.recipes h3{margin:.3rem 0 .55rem;font:700 clamp(1.45rem,3vw,2rem) var(--mono);letter-spacing:-.04em}.catalogue-heading p:not(.eyebrow),.recipes p{margin:0;color:var(--muted);line-height:1.6}.catalogue-heading>span{flex:0 0 auto;color:var(--interface-accent);font:700 var(--text-xs) var(--mono)}
+  .catalogue-heading>div{max-width:720px}.catalogue-heading h2,.recipes h3{margin:.3rem 0 .55rem;font:700 clamp(1.45rem,2.5vw,1.9rem)/1.3 var(--font-sans);letter-spacing:-.025em}.catalogue-heading p:not(.eyebrow),.recipes p{margin:0;color:var(--muted);line-height:1.6}
   .filters{display:grid;position:sticky;z-index:6;top:8px;grid-template-columns:minmax(200px,1fr) 145px 130px auto;gap:8px;align-items:end;margin-top:22px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.filters label{display:grid;gap:6px;min-width:0}.filters label>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.filters input[type='search'],.filters select{width:100%;min-width:0;padding:9px 10px}.filters .check{display:flex;min-height:40px;align-items:center;gap:8px;padding:0 5px}.filters .check input{width:18px;height:18px;margin:0}.filters .check span{color:var(--text)}
   .filter-status{margin:10px 0;color:var(--muted);font-size:var(--text-2xs)}.load-error{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:10px;border-left:2px dotted var(--muted);background:var(--panel-raised);color:var(--muted);font-size:var(--text-xs)}.load-error p,.load-error small{margin:0;overflow-wrap:anywhere}.load-error p{color:var(--danger)}.load-error small{flex:1}.load-error button{flex:0 0 auto}
-  .command-list{display:grid;gap:5px}.command-list article{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);overflow:hidden}.command-row{display:grid;grid-template-columns:minmax(0,1fr) 40px}.command-list button{display:grid;width:100%;grid-template-columns:minmax(160px,.4fr) minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 13px;border:0;background:transparent;color:var(--text);text-align:left}.command-list button:hover,.command-list button:focus-visible{background:rgb(var(--accent-rgb) / .06)}.command-list button>span:first-child{display:grid;min-width:0;gap:3px}.command-list button code{color:var(--accent);font-weight:750}.command-list button small{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}.command-summary{min-width:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}.command-anchor{display:grid;place-items:center;border-left:1px solid var(--border);color:var(--muted);font:700 var(--text-xs) var(--mono)}.command-anchor:hover,.command-anchor:focus-visible{color:var(--accent);background:rgb(var(--accent-rgb) / .06)}
-  .command-workspace{min-width:0;scroll-margin-top:104px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);overflow:hidden;outline:none}.command-workspace:focus-visible{box-shadow:0 0 0 2px var(--accent)}.command-detail-heading{padding:20px;border-bottom:1px solid var(--border);background:var(--panel-raised)}.back-to-results{display:inline-flex;margin-bottom:18px;color:var(--accent);font:700 var(--text-xs) var(--mono)}.command-detail-heading>p{margin:0;color:var(--muted);font:650 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}.command-detail-heading h3{margin:6px 0 7px;font:750 clamp(1.55rem,4vw,2.25rem) var(--mono);letter-spacing:-.04em}.command-detail-heading h3 code{color:var(--accent)}.command-detail-heading .command-purpose{max-width:75ch;color:var(--text);font:400 var(--text-sm)/1.6 var(--font-sans);letter-spacing:normal;text-transform:none}
-  .command-detail{padding:20px;background:transparent}.command-examples h4,.command-inputs h4,.related-commands>strong{color:var(--interface-accent);font:700 var(--text-2xs) var(--mono);letter-spacing:.04em;text-transform:uppercase}.command-examples{display:grid;gap:9px}.command-examples section{display:grid;gap:6px}.command-examples h4{margin:0}.command-facts,.contract-details dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 24px;margin:20px 0 0;padding:0}.command-facts>div,.contract-details dl>div{min-width:0;padding:12px 0;border-top:1px solid var(--border)}dt{color:var(--interface-accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}dd{margin:6px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.55;overflow-wrap:anywhere}.command-facts dd>strong{display:block;margin-bottom:4px;color:var(--text);font:700 var(--text-xs) var(--mono)}dd ul{margin:6px 0 0;padding-left:18px}.command-inputs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:9px}.command-inputs>section{min-width:0;padding:16px 0;border-top:1px solid var(--border)}.command-inputs h4{margin:0 0 8px}.command-inputs dl{display:grid;gap:7px;margin:0}.command-inputs dl>div{display:grid;grid-template-columns:minmax(90px,.35fr) minmax(0,.65fr);gap:8px}.command-inputs dt{text-transform:none}.command-inputs dd,.command-inputs p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.command-inputs>section>p:last-child{margin-top:9px}.option-list{display:flex;flex-wrap:wrap;gap:5px;margin:0;padding:0;list-style:none}.option-list li{padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:transparent;font-size:var(--text-xs)}.related-commands{display:grid;gap:8px;margin-top:12px;padding:16px 0;border-top:1px solid var(--border)}.related-commands>div{display:flex;flex-wrap:wrap;gap:6px}.related-commands a{display:grid;gap:2px;min-width:145px;flex:1 1 180px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.related-commands a:hover,.related-commands a:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06)}.related-commands a code{color:var(--accent);font-size:var(--text-xs)}.related-commands a span{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.boundary,.contract-details{margin-top:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.boundary summary,.contract-details summary{padding:12px 13px;font:700 var(--text-xs) var(--mono)}.boundary p{margin:0;padding:0 13px 13px;color:var(--muted);font-size:var(--text-xs);line-height:1.6}.contract-details dl{margin:0;padding:0 13px 13px}.command-pagination{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;border-top:1px solid var(--border);background:var(--border)}.command-pagination a{display:grid;gap:3px;padding:14px 20px;background:var(--panel)}.command-pagination a:hover,.command-pagination a:focus-visible{background:rgb(var(--accent-rgb) / .07)}.command-pagination a.next{text-align:right}.command-pagination span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.command-pagination strong{color:var(--accent);font:700 var(--text-xs) var(--mono);overflow-wrap:anywhere}.empty{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px;border:1px dashed var(--border);color:var(--muted)}.empty p{margin:0}.empty button{padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);font:700 var(--text-xs) var(--mono)}
+  [hidden] { display: none; }
+  .command-jump { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 28px; }
+  .command-jump span { color: var(--muted); font-size: var(--text-xs); }
+  .command-jump select { width: min(100%, 320px); min-height: 44px; padding: 8px 10px; }
+  .command-list { border-block: 1px solid var(--border); }
+  .command-list article { min-width: 0; }
+  .command-list article + article { border-top: 1px solid var(--border); }
+  .command-open {
+    display: grid;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 20px;
+    align-items: center;
+    padding: 18px 12px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+  }
+  .command-open:hover, .command-open:focus-visible { background: var(--control-hover); }
+  .command-copy { display: grid; min-width: 0; gap: 7px; }
+  .command-identity { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 16px; min-width: 0; }
+  .command-identity code { color: var(--accent); font: 750 var(--text-sm) var(--mono); overflow-wrap: anywhere; }
+  .command-identity small { color: var(--muted); font: 550 var(--text-2xs) var(--mono); }
+  .command-summary { color: var(--muted); font: 400 var(--text-sm)/1.5 var(--font-sans); overflow-wrap: anywhere; }
+  .command-action { color: var(--accent); font: 650 var(--text-xs) var(--mono); white-space: nowrap; }
+  .command-workspace { min-width: 0; scroll-margin-top: var(--reference-anchor-offset, 24px); outline: none; }
+  .command-workspace:focus-visible { outline: 2px solid var(--focus); outline-offset: 6px; }
+  .command-detail-heading { padding: 0 0 24px; border-bottom: 1px solid var(--border); }
+  .command-detail-navigation { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; margin-bottom: 22px; }
+  .command-detail-navigation a { display: inline-flex; align-items: center; min-height: 40px; padding-block: 6px; color: var(--accent); font: 650 var(--text-xs) var(--mono); }
+  .command-detail-heading>p { margin: 0; color: var(--muted); font: 650 var(--text-2xs) var(--mono); }
+  .command-detail-heading h2 { margin: 8px 0 10px; font: 750 clamp(1.55rem,4vw,2.25rem) var(--mono); letter-spacing: -.04em; overflow-wrap: anywhere; }
+  .command-detail-heading h2 code { color: var(--accent); }
+  .command-detail-heading .command-purpose { max-width: 75ch; color: var(--text); font: 400 var(--text-sm)/1.6 var(--font-sans); }
+  .command-contents{display:flex;flex-wrap:wrap;gap:4px 20px;margin-top:20px}
+  .command-contents a{display:inline-flex;align-items:center;min-height:36px;color:var(--accent);font:600 var(--text-sm)/1.5 var(--font-sans);text-decoration:underline;text-underline-offset:3px}
+  .command-detail { padding-block: 24px; }
+  .command-examples h3, .command-inputs h3, .command-output h3, .related-commands>strong {
+    color: var(--text);
+    font: 700 var(--text-md)/1.4 var(--font-sans);
+  }
+  .command-examples { display: grid; gap: 18px; }
+  .command-examples section { display: grid; gap: 8px; min-width: 0; }
+  .command-examples h3 { margin: 0; }
+  .command-facts, .contract-details dl { display: grid; margin: 28px 0 0; padding: 0; }
+  .command-facts>div, .contract-details dl>div {
+    display: grid;
+    grid-template-columns: minmax(130px, .3fr) minmax(0, 1fr);
+    gap: 10px 24px;
+    min-width: 0;
+    padding-block: 16px;
+    border-top: 1px solid var(--border);
+  }
+  dt { color: var(--interface-accent); font: 700 var(--text-xs)/1.55 var(--mono); }
+  dd { min-width: 0; margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.55; overflow-wrap: anywhere; }
+  dd ul { margin: 6px 0 0; padding-left: 18px; }
+  .command-inputs { display: grid; gap: 12px; margin-top: 12px; }
+  .command-inputs>section { min-width: 0; padding-block: 20px; border-top: 1px solid var(--border); }
+  .command-inputs h3 { margin: 0 0 12px; }
+  .command-inputs dl { display: grid; gap: 10px; margin: 0; }
+  .command-inputs dl>div { display: grid; grid-template-columns: minmax(90px,.35fr) minmax(0,.65fr); gap: 8px; }
+  .command-inputs dd, .command-inputs p { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.55; }
+  .command-inputs>section>p:last-child { margin-top: 12px; }
+  .network-summary { margin: 24px 0; padding: 14px 16px; background: var(--panel); border-left: 3px solid var(--border-strong); color: var(--muted); line-height: 1.6; }
+  .network-summary strong { color: var(--text); }
+  .command-inputs .option-descriptions>div { grid-template-columns: minmax(120px,.4fr) minmax(0,.6fr); border-top: 1px solid var(--border); padding-block: 14px; }
+  .option-descriptions code { overflow-wrap: anywhere; }
+  .option-descriptions small { display: block; margin-top: 6px; }
+  .common-options { margin-top: 18px; }
+  .common-options summary,.usage summary { min-height: 44px; padding: 12px; }
+  .common-options dl { padding: 0 12px; }
+  .output-example { display: grid; gap: 6px; padding: 16px; margin-top: 20px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .output-example strong { color: var(--accent); }.output-example span { color: var(--muted); line-height: 1.5; }
+  .command-output { padding-block: 20px; }.command-output h3 { margin: 0; }
+  .related-commands { display: grid; gap: 12px; margin-top: 12px; padding-block: 20px; border-top: 1px solid var(--border); }
+  .related-commands>div { display: flex; flex-wrap: wrap; gap: 8px; }
+  .related-commands a { display: grid; gap: 4px; min-width: 145px; flex: 1 1 180px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .related-commands a:hover, .related-commands a:focus-visible { border-color: var(--accent); background: var(--control-hover); }
+  .related-commands a code { color: var(--accent); font-size: var(--text-xs); }
+  .related-commands a span { color: var(--muted); font-size: var(--text-xs); line-height: 1.5; }
+  .contract-details { margin-top: 12px; border: 0; border-block: 1px solid var(--border); border-radius: 0; background: transparent; }
+  .contract-details summary { min-height: 48px; padding: 12px 4px; font: 700 var(--text-xs) var(--mono); }
+  .contract-details summary:hover { background: var(--control-hover); }
+  .boundary p { margin: 0; padding: 0 4px 20px; color: var(--muted); font-size: var(--text-sm); line-height: 1.65; }
+  .contract-details dl { margin: 0; padding: 0 4px; }
+  .command-pagination { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-top: 12px; }
+  .command-pagination a { display: grid; gap: 5px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .command-pagination a:hover, .command-pagination a:focus-visible { background: var(--control-hover); }
+  .command-pagination a.next { text-align: right; }
+  .command-pagination span { color: var(--muted); font: 650 var(--text-2xs) var(--mono); }
+  .command-pagination strong { color: var(--accent); font: 700 var(--text-xs) var(--mono); overflow-wrap: anywhere; }
+  .empty { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px; color: var(--muted); }
+  .empty p { margin: 0; }
+  .empty button { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); font: 700 var(--text-xs) var(--mono); }
   .recipes{display:grid;grid-template-columns:minmax(210px,.45fr) minmax(0,1.55fr);gap:24px;margin-top:40px;padding-top:32px;border-top:1px solid var(--border)}.recipe-groups{display:grid;gap:10px}.recipe-groups>section{display:grid;gap:9px;padding:16px 0;border-top:1px solid var(--border)}.recipe-groups header{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.recipe-groups h4{margin:0;font:700 var(--text-sm) var(--mono)}.recipe-groups header span{color:var(--interface-accent);font:700 var(--text-xs) var(--mono)}.recipe-groups>section>p{font-size:var(--text-xs)}.recipes ul{display:grid;gap:6px;margin:0;padding:0;list-style:none}.recipes li{display:grid;grid-template-columns:minmax(135px,.35fr) minmax(0,.65fr);gap:4px 11px;padding:12px 0;border-top:1px solid var(--border)}.recipes li code{color:var(--accent);font-size:var(--text-xs)}.recipes li strong{font:700 var(--text-xs) var(--mono)}.recipes li span,.recipes li small{grid-column:1/-1;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.recipes li small{color:var(--interface-accent);text-transform:uppercase}
   @media(max-width:560px){.load-error{align-items:stretch;flex-direction:column}.load-error button{width:100%}}
-  @media(max-width:800px){.filters{position:static;grid-template-columns:repeat(2,minmax(0,1fr));box-shadow:none;backdrop-filter:none}.recipes{grid-template-columns:1fr}.command-list button{grid-template-columns:minmax(130px,.42fr) minmax(0,1fr) auto}.command-facts,.contract-details dl,.command-inputs{grid-template-columns:1fr}}
-  @media(max-width:520px){.catalogue-heading{align-items:flex-start;flex-direction:column}.filters{grid-template-columns:1fr}.command-row{grid-template-columns:minmax(0,1fr) 36px}.command-list button{grid-template-columns:minmax(0,1fr) auto}.command-summary{grid-column:1/-1;grid-row:2}.command-detail-heading,.command-detail{padding:15px}.command-pagination{grid-template-columns:1fr}.command-pagination>span{display:none}.command-pagination a.next{text-align:left}.recipes li{grid-template-columns:1fr}.recipes li strong,.recipes li span,.recipes li small{grid-column:1}}
+  @media(max-width:640px){.command-inputs .option-descriptions>div { grid-template-columns: 1fr; gap: 8px; }}
+  @media(max-width:800px){.filters{position:static;grid-template-columns:repeat(2,minmax(0,1fr));box-shadow:none;backdrop-filter:none}.recipes{grid-template-columns:1fr}.command-facts,.contract-details dl,.command-inputs{grid-template-columns:1fr}}
+  @media(max-width:520px){.filters{grid-template-columns:1fr}.command-open{grid-template-columns:minmax(0,1fr);gap:10px;padding:16px 8px}.command-facts>div,.contract-details dl>div{grid-template-columns:1fr;gap:6px}.command-pagination{grid-template-columns:1fr}.command-pagination>span{display:none}.command-pagination a.next{text-align:left}.recipes li{grid-template-columns:1fr}.recipes li strong,.recipes li span,.recipes li small{grid-column:1}}
 </style>

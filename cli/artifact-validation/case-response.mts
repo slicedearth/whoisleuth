@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readCaseEvidenceRequest, readCasePacketAmendment, assertEvidenceRequestEvent, assertEvidenceRequestHistory, assertPacketAmendmentSelection, type CaseEvidenceRequest, type CaseAmendmentAction } from '../../packages/cases/case-requested-evidence.mts';
 
 import { canonicalArtifactJsonV2 } from '../../packages/evidence/artifact-integrity.mts';
 import {
@@ -9,6 +10,8 @@ import {
   PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION,
+  LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
@@ -269,6 +272,7 @@ function validateVersionedCaseResponsePacket(
   version: typeof PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION
     | typeof PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION
     | typeof PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION
+    | typeof LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION
     | typeof CASE_RESPONSE_PACKET_VERSION,
 ): void {
   const hasPlatformRoutes = version >= PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION;
@@ -565,13 +569,14 @@ function validateVersionedCaseResponsePacket(
     applied: boolean;
   }> = [];
   for (const candidate of history) {
-    const action = exact(candidate, [
+    const action = exactOptional(candidate, [
       'actionId', 'type', 'recipient', 'contactSource', 'state', 'reference',
       'providerOutcome', 'outcomeDetail', 'originActionId', 'historyOmitted',
       'historyLimitations', 'transitions', 'createdAt', 'updatedAt',
       ...(hasActionBinding ? ['routeObservedAt'] : []),
       ...(hasPlatformRoutes ? ['routeReviewAfter'] : []),
-    ], 'Case-response escalation action');
+    ], Number(root.schemaVersion) >= 11 ? ['amendment'] : [], 'Case-response escalation action');
+    readCasePacketAmendment(action.amendment);
     const actionId = text(action.actionId, 'Case-response action id', 64);
     if (actionIds.has(actionId)) fail('Case-response action identity');
     actionIds.add(actionId);
@@ -589,6 +594,7 @@ function validateVersionedCaseResponsePacket(
     integer(action.historyOmitted, 'Case-response action omitted history', 0, 1_000_000);
     strings(action.historyLimitations, 'Case-response action history limitations', 8, 240);
     const transitions = array(action.transitions, 'Case-response action transitions', MAX_CASE_ACTION_EVENTS_PER_ACTION, 1);
+    const requestEvents: { id: string; evidenceRequest?: CaseEvidenceRequest }[] = [];
     const eventIds = new Set<string>();
     let projectedState: typeof CASE_ACTION_STATES[number] | null = null;
     let latestReference: string | null = null;
@@ -598,8 +604,11 @@ function validateVersionedCaseResponsePacket(
     let previousTime = Number.NEGATIVE_INFINITY;
     let previousEventId = '';
     for (const eventCandidate of transitions) {
-      const event = exact(eventCandidate, ['id', 'previousState', 'nextState', 'occurredAt', 'sourceClass', 'provenance', 'reference', 'evidencePinId', 'limitations', 'providerOutcome', 'outcomeDetail', 'originActionId', 'applied'], 'Case-response action transition');
+      const event = exactOptional(eventCandidate, ['id', 'previousState', 'nextState', 'occurredAt', 'sourceClass', 'provenance', 'reference', 'evidencePinId', 'limitations', 'providerOutcome', 'outcomeDetail', 'originActionId', 'applied'], Number(root.schemaVersion) >= 11 ? ['evidenceRequest'] : [], 'Case-response action transition');
+      const evidenceRequest = readCaseEvidenceRequest(event.evidenceRequest);
+      assertEvidenceRequestEvent(evidenceRequest, event);
       const eventId = text(event.id, 'Case-response action event id', 64);
+      requestEvents.push({ id: eventId, ...(evidenceRequest ? { evidenceRequest } : {}) });
       if (eventIds.has(eventId)) fail('Case-response action event identity');
       eventIds.add(eventId);
       const previousState = event.previousState === null ? null : enumeration(event.previousState, CASE_ACTION_STATES, 'Case-response previous state');
@@ -655,6 +664,7 @@ function validateVersionedCaseResponsePacket(
         }
       }
     }
+    assertEvidenceRequestHistory(requestEvents, Number(action.historyOmitted) > 0);
     if ((projectedState ?? 'drafting') !== action.state
       || latestReference !== action.reference
       || latestProviderOutcome !== action.providerOutcome
@@ -668,6 +678,10 @@ function validateVersionedCaseResponsePacket(
       || actionIdOrder.some((id, index) => lineageActionIds[index] !== id)) fail('Case-response action lineage');
     if (recipientRoute && !actionIds.has(recipientRoute.actionId as string)) fail('Case-response recipient action');
   }
+  if (version >= 11) assertPacketAmendmentSelection(history.map(candidate => {
+    const action = candidate as UnknownRecord;
+    return { id: action.actionId, history: action.transitions, originActionId: action.originActionId, amendment: action.amendment } as CaseAmendmentAction;
+  }), selectedActionId, evidenceIds);
 
   const lifecycle = exact(root.responseLifecycle, ['providerOutcomeState', 'latestProviderOutcome', 'observedChangeState', 'latestObservedEffect', 'latestObservedChangeAt', 'closure', 'limitations'], 'Case-response lifecycle');
   const providerOutcomeState = enumeration(lifecycle.providerOutcomeState, ['available', 'missing', 'ambiguous'], 'Case-response lifecycle provider state');
@@ -740,6 +754,7 @@ function validateVersionedCaseResponsePacket(
     contract: CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
     version: version === CASE_RESPONSE_PACKET_VERSION
       ? CASE_RESPONSE_REVIEW_INPUTS_VERSION
+      : version === LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION ? LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION
       : hasPlatformRoutes ? PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION
       : hasActionBinding ? PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION : PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
     profile: {
@@ -788,6 +803,7 @@ function validateVersionedCaseResponsePacket(
 }
 
 export function validateCaseResponsePacket(value: UnknownRecord): void {
+  if (value.schemaVersion === LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION) return validateVersionedCaseResponsePacket(value, LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION);
   if (value.schemaVersion === PUBLIC_CASE_RESPONSE_PACKET_VERSION) return validateCaseResponsePacketV6(value);
   if (value.schemaVersion === PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION) {
     return validateVersionedCaseResponsePacket(value, PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION);

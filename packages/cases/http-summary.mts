@@ -4,7 +4,7 @@
 // smaller derived shape: no paths, queries, header values, attempt errors, or
 // redirect inventories.
 
-import { MAX_HTTP_EVIDENCE_REDIRECTS } from '../../lib/http-evidence-bounds.mts';
+import { MAX_HTTP_EVIDENCE_REDIRECTS } from '../analysis/http-evidence-bounds.mts';
 
 export const HTTP_SUMMARY_VERSION = 1;
 export const MAX_HTTP_SUMMARY_ORIGIN_LENGTH = 300;
@@ -177,6 +177,12 @@ export function normalizeHttpSummary(value: unknown): CompactHttpSummary | null 
     httpContentType: contentType(record.httpContentType),
     httpSecurityHeaders: securityHeaderTokens(record.httpSecurityHeaders),
   };
+}
+
+/** A partial body still permits comparison of observed response metadata. */
+export function httpSummaryFieldIsObserved(field: string, value: unknown): boolean {
+  const summary = normalizeHttpSummary(value);
+  return summary !== null && Object.hasOwn(summary, field) && summary[field as keyof CompactHttpSummary] !== null;
 }
 
 export function httpSecurityHeaderLabel(token: string): string {

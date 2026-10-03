@@ -2,6 +2,7 @@ import type { BrandProfile, DesiredPostureBaseline } from './brand-profile-model
 import { certificateSanPatternMatches } from './certificate-policy-review.ts';
 import type { CasePinCompleteness } from './case-response-model.ts';
 import type { CaseRecord } from './case-record-model.ts';
+import { MAX_PROFILE_VALUES } from '../../../../packages/contracts/workspace-portability.mts';
 
 export const BRAND_CERTIFICATE_EVENT_REPLAY_VERSION = 1;
 export const MAX_REPLAY_EVENTS = 300;
@@ -170,7 +171,7 @@ export function buildBrandCertificateEventReplay(
   profile: BrandProfile,
   records: readonly CaseRecord[],
 ): BrandCertificateEventReplay {
-  const officialDomains = new Set(profile.officialDomains.slice(0, 20));
+  const officialDomains = new Set(profile.officialDomains.slice(0, MAX_PROFILE_VALUES));
   const relevantKeys = [...records]
     .slice(0, 500)
     .filter((record) => officialDomains.has(record.domain))

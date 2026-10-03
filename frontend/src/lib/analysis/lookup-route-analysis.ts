@@ -11,6 +11,7 @@ import { buildLookupEvidenceTopologyNodes } from './evidence-topology.ts';
 import { buildLookupEvidenceCoverageLedger } from './evidence-coverage-ledger.ts';
 import { calibrateExternalIntelligenceRisk } from './external-intelligence-risk.ts';
 import { compactHttpObservation } from './http-summary.ts';
+import { webCollectionQualityForCapture } from '../../../../packages/evidence/collection-quality.mts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { buildLookupAssetGraph } from './lookup-asset-graph.ts';
 import { buildLookupClaimReadiness } from './lookup-claim-readiness.ts';
@@ -38,6 +39,7 @@ import {
   buildLookupObservationProjection,
   buildLookupTaskEvidence,
   hasLookupWebEvidence,
+  lookupPageComparisonState,
 } from './lookup-route-projections.ts';
 import type { LookupHttpResponse, LookupViewModel } from './lookup-response.ts';
 import { buildLookupSourceRefreshPlan, type LookupFreshnessPolicyInput } from './lookup-source-refresh.ts';
@@ -59,6 +61,7 @@ import { lookupObservationHostname } from '../../../../packages/evidence/lookup-
 export { latestLookupTimestamp } from './lookup-route-projections.ts';
 
 export interface LookupRouteAnalysisInput {
+  now: string;
   result: LookupHttpResponse | null;
   lookupView: LookupViewModel;
   profile: BrandProfile | null;
@@ -104,35 +107,23 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     sslbl,
     threatIntelligence,
     threatIntelligenceProviders,
+    threatIntelligenceWithheld,
     dnsEvidence,
     dnsRecords,
     httpEvidence,
     httpResponse,
-    httpSecurityHeaders,
-    httpDeliveryMetadata,
     tlsEvidence,
     tlsCertificate,
-    tlsSubject,
     tlsIssuer,
     tlsAltNames,
     tlsPublicKey,
-    tlsCipher,
     tlsAuthorization,
     tlsHostname,
-    tlsValidity,
-    tlsDiagnostics,
     pageIdentity,
-    pagePublicationMetadata,
     pageCanonical,
-    pageMetaRefresh,
-    pageOpenGraph,
     pageOpenGraphUrl,
     pageForms,
     pageResources,
-    pageResourceTypes,
-    pageDownloads,
-    pageFingerprints,
-    credentialSurfaceProfile,
     structuredDataIdentity,
     technologyProfile,
     pageRoleProfile,
@@ -193,28 +184,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
         },
       };
   const lifecycleDates = buildLookupLifecycleDates({ availability, rdapParsed, whoisParsed });
-  const networkDisplay = buildLookupNetworkDisplay({
-    availability,
-    reverseDns,
-    reverseDnsRecords,
-    dnsEvidence,
-    dnsRecords,
-    httpEvidence,
-    httpResponse,
-    httpSecurityHeaders,
-    httpDeliveryMetadata,
-    tlsEvidence,
-    tlsCertificate,
-    tlsSubject,
-    tlsIssuer,
-    tlsAltNames,
-    tlsPublicKey,
-    tlsCipher,
-    tlsAuthorization,
-    tlsHostname,
-    tlsValidity,
-    tlsDiagnostics,
-  });
+  const networkDisplay = buildLookupNetworkDisplay(lookupView);
   const dnsRehearsalEvidence = buildLookupDnsRehearsalEvidence(result, lookupView);
   const registryDisplay = buildLookupRegistryDisplay({
     result,
@@ -259,29 +229,10 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     + comparison.counts.whois_incomplete;
   const observedPageBaseline = createPageBaseline(lookupObservationHostname(availability) ?? caseDomain, availability);
   const pageComparison = comparePageBaselines(profileContextReady ? profile?.pageBaseline : null, observedPageBaseline);
+  const pageComparisonState = lookupPageComparisonState(result, profile, pageComparison);
   const pageDisplay = buildLookupPageDisplay({
-    pageIdentity,
-    pagePublicationMetadata,
-    pageCanonical,
-    pageMetaRefresh,
-    pageOpenGraph,
-    pageOpenGraphUrl,
-    pageForms,
-    pageResources,
-    pageResourceTypes,
-    pageDownloads,
-    pageFingerprints,
-    credentialSurfaceProfile,
-    structuredDataIdentity,
-    technologyProfile,
+    ...lookupView,
     browserLibraryProfile,
-    pageRoleProfile,
-    clientBehaviorProfile,
-    observedNetworkContext,
-    observedNetworkEndpoint,
-    observedNetwork,
-    securityPosture,
-    securityPostureSummary,
     pageComparison,
   });
   const brandMimicryReview = buildBrandMimicryReview({
@@ -292,7 +243,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     hasPasswordField: availability.hasPasswordField,
     phishingLanguageMatch: availability.phishingLanguageMatch,
   });
-  const hasWebEvidence = hasLookupWebEvidence(result, lookupView, profile, pageComparison);
+  const hasWebEvidence = hasLookupWebEvidence(lookupView, pageComparisonState);
   const lookupTaskEvidence = buildLookupTaskEvidence(result, lookupView);
   const hasCaseSection = Boolean(caseDomain) || Boolean(outreach) || abuseRecipientResolution.recipients.length > 0;
   const evidenceTopologyNodes = buildLookupEvidenceTopologyNodes({
@@ -419,6 +370,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     rdapParsed,
     whoisParsed,
     threatIntelligenceProviders,
+    threatIntelligenceWithheld,
   });
   const scoreCoverage = evidenceCoverage.entries
     .filter((entry) => ['rdap', 'whois', 'availability', 'registrar-rdap', 'dns', 'http', 'page-identity'].includes(entry.id)
@@ -448,7 +400,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   const lookupSourceRefreshPlan = buildLookupSourceRefreshPlan(
     evidenceCoverage,
     lookupObservedAt,
-    new Date().toISOString(),
+    input.now,
     {
       task,
       observedAtByEvidence: evidenceObservedAtById,
@@ -567,6 +519,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     hasDmarc: availability.hasDmarc ?? null,
     activityStatus: boundedTechnologyText(availability.activityStatus, 40) || null,
     websiteProbeDetail: boundedTechnologyText(availability.websiteProbeDetail, 500) || null,
+    webCollectionQuality: webCollectionQualityForCapture(availability.webCollectionQuality, lookupEvidenceDepth),
     pageTitle: availability.pageTitle ?? null,
     faviconMatch: profileSignals.faviconMatch ?? null,
     faviconNearMatch: profileSignals.faviconNearMatch ?? null,
@@ -614,6 +567,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     caseDomain,
     observedPageBaseline,
     pageComparison,
+    pageComparisonState,
     pageDisplay,
     brandMimicryReview,
     hasWebEvidence,

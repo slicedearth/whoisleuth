@@ -3,9 +3,15 @@
 // latestCaseEvidence) and produces display-ready derivations and formatted
 // values. No browser globals, no DOM access — Node-testable with node --test.
 
-import { caseEvidenceTimeline, compareCaseEvidence, latestCaseEvidence } from './case-model.ts';
+import {
+  caseEvidenceTimeline,
+  compareCaseEvidence,
+  latestCaseEvidence,
+} from '../../../../packages/cases/case-evidence-model.mts';
 import type { CaseEvidenceSnapshot } from './case-model.ts';
 import { httpSecurityHeaderLabel } from './http-summary.ts';
+import { webCollectionScoreLimitation } from '../../../../packages/evidence/collection-quality.mts';
+import { MAX_RESPONSE_VALUE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -166,7 +172,7 @@ export function formatSnapshotValue(field: string, value: unknown): string {
  * @param {import('./case-model.ts').CaseEvidenceSnapshot} snapshot
  * @returns {Array<{ name: string, rows: Array<{ field: string, label: string, value: unknown }> }>}
  */
-export function snapshotFieldGroups(snapshot: CaseEvidenceSnapshot): SnapshotGroup[] {
+export function snapshotFieldGroups(snapshot: Readonly<Partial<CaseEvidenceSnapshot>>): SnapshotGroup[] {
   const groups: SnapshotGroup[] = [];
   for (const group of FIELD_GROUPS) {
     const rows: SnapshotGroup['rows'] = [];
@@ -203,6 +209,31 @@ export function formatChangeEntry(change: EvidenceChange) {
   const afterText = formatChangeValue(change.field, change.after);
   const kind = classifyChangeKind(change.field, change.before, change.after);
   return { field: change.field, label: change.label, beforeText, afterText, tone: change.tone, kind };
+}
+
+/** Retain whole readable changes, with explicit accounting when a Case pin
+ * cannot hold them all. The on-screen comparison still shows every change. */
+export function recheckComparisonSummary(changes: readonly EvidenceChange[]): {
+  comparisonSummary: string; comparisonTruncated: boolean;
+} {
+  if (!changes.length) return {
+    comparisonSummary: 'No comparable material field change was found between the retained Case observations.',
+    comparisonTruncated: false,
+  };
+  const entries = changes.map(formatChangeEntry).map(change => `${change.label}: ${change.beforeText} to ${change.afterText}`);
+  const complete = entries.join('; ');
+  if (complete.length <= MAX_RESPONSE_VALUE_LENGTH) return { comparisonSummary: complete, comparisonTruncated: false };
+  const retained: string[] = [];
+  const omission = (count: number) => `[${count} change${count === 1 ? '' : 's'} omitted from this summary]`;
+  for (const entry of entries) {
+    const candidate = [...retained, entry, omission(entries.length - retained.length - 1)].join('; ');
+    if (candidate.length > MAX_RESPONSE_VALUE_LENGTH) break;
+    retained.push(entry);
+  }
+  return {
+    comparisonSummary: [...retained, omission(entries.length - retained.length)].join('; '),
+    comparisonTruncated: true,
+  };
 }
 
 function formatChangeValue(field: string, value: unknown): string {
@@ -284,7 +315,6 @@ export function evidenceSourceLabel(source: unknown): string {
  * The uniquely latest snapshot's summary, or null when retained capture times
  * cannot establish one. Used by the compact current-evidence summary.
  * @param {import('./case-model.ts').CaseEvidenceSnapshot[] | null | undefined} evidenceHistory
- * @returns {{ availability: string | null, riskModelVersion: number | null, riskScore: number | null, registrar: string | null, activityStatus: string | null, capturedAt: string | null } | null}
  */
 export function currentEvidenceSummary(evidenceHistory: CaseEvidenceSnapshot[] | null | undefined) {
   const latest = latestCaseEvidence(evidenceHistory ? { evidenceHistory } : {});
@@ -293,6 +323,7 @@ export function currentEvidenceSummary(evidenceHistory: CaseEvidenceSnapshot[] |
     availability: latest.availability,
     riskModelVersion: latest.riskModelVersion,
     riskScore: latest.riskScore,
+    riskCollectionLimitation: latest.riskScore === null ? null : webCollectionScoreLimitation(latest.webCollectionQuality, latest.scanDepth),
     registrar: latest.registrar,
     activityStatus: latest.activityStatus,
     profileContextState: latest.profileContextState ?? null,

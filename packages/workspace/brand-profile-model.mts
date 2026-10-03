@@ -2,7 +2,7 @@
 // persistence and downloads; this module owns schema migration, semantic field
 // bounds, import merging, and exact serialized-byte accounting.
 
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { canonicalDomainControlRecords, normalizeDeclaredDomainControlRecordModes, normalizeDomainControlRecordModes } from '../evidence/domain-control-runtime.mts';
 import { DOMAIN_CONTROL_RECORD_LIST_FIELDS, type DomainControlRecordModes } from '../contracts/domain-control-manifest.mts';
@@ -12,7 +12,7 @@ import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECKS, MAX_POSTURE_CHEC
 import { normalizeOpaqueReferenceId } from '../cases/opaque-reference-id.mts';
 import { normalizePageBaseline } from './page-baseline.mts';
 import type { PageBaseline } from './page-baseline.mts';
-import { isInformativePerceptualHash as isInformativeFaviconHash } from '../../lib/perceptual-hash-comparison.mts';
+import { isInformativePerceptualHash as isInformativeFaviconHash } from '../analysis/perceptual-hash-comparison.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
   BRAND_PROFILE_SCHEMA,

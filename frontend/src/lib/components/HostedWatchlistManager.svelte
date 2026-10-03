@@ -276,6 +276,7 @@
   .hosted h2{margin:0}
   .hosted .section-head p:not(.eyebrow){max-width:760px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .state-row{display:flex;gap:12px;align-items:flex-start;margin-top:18px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-md)}
+  .state-row strong{flex-shrink:0}
   .state-row span{color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .capacity{display:grid;gap:7px;margin-top:18px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .capacity div{font-size:var(--text-xs)}

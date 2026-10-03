@@ -32,6 +32,25 @@ function replay(overrides: Partial<LookupEvidenceReplay> = {}): LookupEvidenceRe
 }
 
 describe('offline Lookup evidence replay diff', () => {
+  test('DNS-family failures and historical unknowns remain collection differences even when both values are present', () => {
+    const before = replay({ facts: [{ id: 'dns.a', label: 'A address result', value: '192.0.2.1', sourceId: 'dns', source: 'DNS', sourceState: 'success', sourceComplete: true }] });
+    const missingFamily = replay({ facts: [] });
+    for (const [left, right] of [[before, missingFamily], [missingFamily, before]] as const) {
+      assert.equal(buildLookupEvidenceReplayDiff(left, right).rows.find(row => row.id === 'fact:dns.a')?.kind, 'collection_quality_difference');
+    }
+    for (const [value, sourceState, sourceComplete, kind] of [
+      ['DNS query timed out', 'error', false, 'collection_quality_difference'],
+      ['Negative DNS outcome not recorded', 'unknown', false, 'collection_quality_difference'],
+      ['DNS answer incomplete', 'partial', false, 'collection_quality_difference'],
+      ['Name not found by resolver', 'not_found', true, 'observed_change'],
+      ['No data for this record type (NODATA)', 'not_found', true, 'observed_change'],
+    ] as const) {
+      const after = replay({ facts: [{ ...before.facts[0]!, value, sourceState, sourceComplete }] });
+      const result = buildLookupEvidenceReplayDiff(before, after);
+      assert.equal(result.rows.find(row => row.id === 'fact:dns.a')?.kind, kind);
+      assert.ok(result.rows.every(row => !/takedown|mitigated/iu.test(row.explanation)));
+    }
+  });
   test('separates observed, collection-quality, and interpretation differences', () => {
     const report = buildLookupEvidenceReplayDiff(replay(), replay({
       generatorVersion: '1.41.0',
@@ -94,6 +113,17 @@ describe('offline Lookup evidence replay diff', () => {
         facts: [],
       }));
       assert.equal(report.rows.find((item) => item.id === 'fact:registration.nameservers')?.kind, 'observed_change');
+    }
+  });
+
+  test('does not treat a completeness flag as a positive source outcome', () => {
+    for (const state of ['skipped', 'disabled', 'rate-limited', 'inconclusive', 'blocked', 'not-reported', 'stale', 'error', 'partial', 'unavailable', 'unsupported', 'not-found', 'unknown']) {
+      const report = buildLookupEvidenceReplayDiff(replay(), replay({
+        sources: [{ id: 'dns', label: 'DNS', state, complete: true, observedAt: OBSERVED_AT, limitations: [] }],
+        facts: [],
+      }));
+      assert.equal(report.rows.find((item) => item.id === 'fact:registration.nameservers')?.kind, 'collection_quality_difference', state);
+      assert.equal(report.counts.observedChanges, 0, state);
     }
   });
 

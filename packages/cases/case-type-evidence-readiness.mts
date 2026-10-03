@@ -3,6 +3,7 @@
 // policy breach, legal claim, maliciousness, attribution, or recipient scope.
 
 import type { CaseRecord } from './case-record-contracts.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { caseIncidentTargets, caseTypeIds, CASE_TYPES, type CaseTypeId } from './case-workflow-metadata.mts';
 
 export const CASE_TYPE_READINESS_CHECK_IDS = [
@@ -74,8 +75,11 @@ const CHECKS: Readonly<Record<CaseTypeReadinessCheckId, CheckDefinition>> = Obje
     id: 'timed_observation', label: 'Timed source observation',
     why: 'Lets a recipient distinguish what was observed from when it was observed.',
     test: (record: CaseRecord) => {
-      const count = qualifiedPins(record).length + record.sightings.filter((sighting) => sighting.source.trim() && !['expired', 'not_reproduced'].includes(sighting.state)).length;
-      return { present: count > 0, evidence: count ? `${count} retained timed observation${count === 1 ? '' : 's'}` : 'No retained evidence pin or sighting' };
+      const count = qualifiedPins(record).filter((pin) => normalizeExplicitIsoTimestamp(pin.observedAt)).length
+        + record.sightings.filter((sighting) => sighting.source.trim()
+          && !['expired', 'not_reproduced'].includes(sighting.state)
+          && normalizeExplicitIsoTimestamp(sighting.observedAt)).length;
+      return { present: count > 0, evidence: count ? `${count} retained timed observation${count === 1 ? '' : 's'}` : 'No retained source observation with a usable time' };
     },
   }),
   observed_behaviour: Object.freeze({
@@ -169,7 +173,7 @@ const TYPE_CHECKS: Readonly<Record<CaseTypeId, Readonly<{ required: readonly Cas
 });
 
 export function buildCaseTypeEvidenceReadiness(record: CaseRecord): CaseTypeReadiness {
-  const selectedTypes = caseTypeIds(record.tags);
+  const selectedTypes = caseTypeIds(record);
   if (!selectedTypes.length) return Object.freeze({
     selectedTypes,
     rows: Object.freeze([]),

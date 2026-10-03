@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { availabilityStatusDisplay } from '$lib/analysis/availability-status-display.ts';
   import { handlesLocalLink } from '$lib/link-activation';
 
@@ -50,7 +51,7 @@
   <div>
     <p class="eyebrow">Result</p>
     <h2>{title}</h2>
-    <p class="result-context"><span>{depth === 'deep' ? 'Deep' : 'Fast'} lookup</span>{#if observationTime}<time datetime={observationTime}>Observed {new Date(observationTime).toLocaleString()}</time>{:else}<span>Observation time unavailable</span>{/if}</p>
+    <p class="result-context"><span>{depth === 'deep' ? 'Deep' : 'Fast'} lookup</span>{#if observationTime}<time datetime={observationTime}>Observed {formatEvidenceDate(observationTime)}</time>{:else}<span>Observation time unavailable</span>{/if}</p>
     {#if isSubdomain}
       <p>Registration: {registrableDomain}.{' '}{#if depth === 'deep' && observationHostname}DNS, TLS and web observation target: {observationHostname}.{:else}Submitted hostname: {inputHostname}.{/if}</p>
     {/if}
@@ -87,7 +88,7 @@
   .result-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
   .result-actions .chip{text-transform:capitalize;font-size:var(--text-xs)}
   .export-menu{position:relative}
-  .export-menu>summary{display:list-item;cursor:pointer;list-style:disclosure-closed inside}
+  .export-menu>summary{display:list-item;align-content:center;cursor:pointer;list-style:disclosure-closed inside}
   .export-menu[open]>summary{list-style-type:disclosure-open}
   .export-menu>summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .export-options{position:absolute;z-index:18;top:calc(100% + 6px);right:0;display:grid;min-width:210px;padding:5px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);box-shadow:0 14px 34px rgb(var(--shadow-rgb) / .24)}

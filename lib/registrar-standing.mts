@@ -17,6 +17,7 @@ import {
 } from './registrar-standing-catalogue-contract.mts';
 import {
   deriveRegistrarStandingAssessment,
+  normalizedRegistrarIanaId,
   MAX_REGISTRAR_COMPLIANCE_ACTIONS,
   REGISTRAR_STANDING_SCHEMA,
   REGISTRAR_STANDING_VERSION,
@@ -97,6 +98,11 @@ function ageDays(value: string, now: Date): number {
 
 function sourceHealth(value: string, now: Date): RegistrarStandingSourceHealthState {
   return ageDays(value, now) <= REGISTRAR_STANDING_MAX_AGE_DAYS ? 'current' : 'stale';
+}
+
+function complianceHealth(catalogue: Catalogue, now: Date): RegistrarStandingSourceHealthState {
+  return catalogue.icann.catalogueYear === now.getUTCFullYear()
+    ? sourceHealth(catalogue.icann.reviewedAt, now) : 'stale';
 }
 
 function validatedCatalogue(value: unknown, now: Date): Catalogue | null {
@@ -205,13 +211,6 @@ function accreditationMap(catalogue: Catalogue): Map<string, RegistrarAccreditat
   return result;
 }
 
-function normalizedIanaId(value: unknown): string | null {
-  if (typeof value === 'number' && Number.isSafeInteger(value)) value = String(value);
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return /^\d{1,8}$/u.test(trimmed) && Number(trimmed) > 0 ? String(Number(trimmed)) : null;
-}
-
 function projectedActions(catalogue: Catalogue, ianaId: string): Readonly<{
   actions: readonly RegistrarComplianceAction[];
   truncated: boolean;
@@ -233,9 +232,9 @@ export function buildRegistrarStanding(options: BuildRegistrarStandingOptions): 
   const now = options.now ?? new Date();
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new TypeError('Registrar standing time must be valid.');
   const catalogue = validatedCatalogue(options.catalogue ?? REGISTRAR_STANDING_CATALOGUE, now);
-  const ianaId = normalizedIanaId(options.registrarIanaId);
+  const ianaId = normalizedRegistrarIanaId(options.registrarIanaId);
   const ianaHealth = catalogue ? sourceHealth(catalogue.iana.observedAt, now) : 'unavailable';
-  const icannHealth = catalogue ? sourceHealth(catalogue.icann.reviewedAt, now) : 'unavailable';
+  const icannHealth = catalogue ? complianceHealth(catalogue, now) : 'unavailable';
   const accreditation = catalogue && ianaId
     ? accreditationMap(catalogue).get(ianaId) ?? 'unknown'
     : 'unknown';
@@ -255,7 +254,7 @@ export function buildRegistrarStanding(options: BuildRegistrarStandingOptions): 
       ? `The reviewed ${catalogue.icann.catalogueYear} ICANN index is not a complete enforcement history and excludes third-party allegations.`
       : 'The checked-in official-source catalogue could not be validated, so registrar standing is unavailable.',
     ...(!ianaId ? ['No single numeric registrar IANA ID was available across the registration evidence, so no registrar match was attempted.'] : []),
-    ...(combinedHealth === 'stale' ? ['The catalogue is past its review-age threshold; current absence and accreditation conclusions require a refresh.'] : []),
+    ...(combinedHealth === 'stale' ? ['The catalogue is outside its current-year coverage or review-age threshold; current absence and accreditation conclusions require a refresh.'] : []),
   ].slice(0, 4);
   const nextActions = hasAction ? [
     'Open the official notice and verify its dates, scope, and current outcome before acting.',
@@ -308,7 +307,7 @@ export function registrarStandingCatalogueHealth(now = new Date(), value: unknow
   });
   const age = Math.max(ageDays(catalogue.iana.observedAt, now), ageDays(catalogue.icann.reviewedAt, now));
   return Object.freeze({
-    state: age <= REGISTRAR_STANDING_MAX_AGE_DAYS ? 'current' as const : 'stale' as const,
+    state: age <= REGISTRAR_STANDING_MAX_AGE_DAYS && complianceHealth(catalogue, now) === 'current' ? 'current' as const : 'stale' as const,
     sourceObservedAt: [catalogue.iana.observedAt, catalogue.icann.reviewedAt]
       .sort((left, right) => Date.parse(left) - Date.parse(right))[0] ?? null,
     ageDays: age,

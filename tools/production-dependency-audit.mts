@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import { requireJsonRecord } from './maintainer-tool-helpers.mts';
 import { productionDependencyInstallPaths } from './third-party-notices.mts';
 import { candidateDependencyAuditInput } from './installed-dependency-evidence.mts';

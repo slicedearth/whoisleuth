@@ -2,7 +2,7 @@ import { canonicalArtifactJsonV2, sha256ArtifactBytes } from '../../../packages/
 import { buildInvestigationCapsule, serializeInvestigationCapsule } from '../../../packages/investigation/investigation-capsule.mts';
 import { buildInvestigationPackage, inspectInvestigationPackage, inspectInvestigationPackageEntries, prepareInvestigationPackageEntries, investigationPackagePath, INVESTIGATION_PACKAGE_MANIFEST_PATH, MAX_INVESTIGATION_PACKAGE_ENTRIES } from '../../../packages/investigation/investigation-package.mts';
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES, type InvestigationManifestArtifactInput } from '../../../packages/investigation/investigation-manifest.mts';
-import { parseBoundedJson } from '../../../lib/bounded-json.mts';
+import { parseBoundedJson } from '../../../packages/analysis/bounded-json.mts';
 import { MAX_WEB_CAPTURE_MANIFEST_BYTES } from '../../../packages/contracts/web-capture.mts';
 import { readWebCaptureManifest, matchCaptureArtifacts, type CaptureArtifactMatch } from '../../../packages/interchange/web-capture-import.mts';
 import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES, hasEncryptedInvestigationPackagePrefix } from '../../../packages/contracts/investigation-package-limits.mts';

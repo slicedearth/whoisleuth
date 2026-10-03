@@ -129,6 +129,19 @@ describe('posture output', () => {
     assert.equal(arrayValue(firstCheck.records).length, MAX_POSTURE_TERMINAL_RECORDS + 2);
   });
 
+  test('reporting output distinguishes same scope from unavailable boundary evidence', () => {
+    const report = postureReport({ dmarcAuthorizations: [
+      { destination: 'reports.example.test', reportType: 'aggregate', recordName: null, state: 'self', error: null },
+      { destination: 'other.example', reportType: 'aggregate', recordName: null, state: 'unavailable', error: 'The organisational boundary is unknown.\nNo requirement inferred.' },
+    ] });
+    const before = structuredClone(report);
+    const output = formatTerminalPosture(report);
+    assert.match(output, /reports\.example\.test · aggregate · same organisational scope/u);
+    assert.match(output, /other\.example · aggregate · unavailable/u);
+    assert.match(output, /Detail +The organisational boundary is unknown\. No requirement inferred\./u);
+    assert.deepEqual(report, before);
+  });
+
   test('terminal output sanitizes upstream control characters and handles an empty check list', () => {
     const output = formatTerminalPosture(postureReport({ domain: 'bad\nvalue.test', checks: [] }));
     assert.match(output, /Domain\s+bad value\.test/);

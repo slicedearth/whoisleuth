@@ -1,6 +1,15 @@
 // Syntax and numeric ordering only; outbound address safety is a separate policy.
 export type AddressValue = Readonly<{ family: 4; value: number } | { family: 6; value: bigint }>;
 
+/** Syntactic identity only: private and reserved addresses remain valid evidence. */
+export function canonicalIpAddress(value: unknown): string | null {
+  const candidate = typeof value === 'string' ? value.trim() : value;
+  const parsed = addressValue(candidate);
+  if (!parsed) return null;
+  if (parsed.family === 4) return [24, 16, 8, 0].map(shift => (parsed.value >>> shift) & 255).join('.');
+  return new URL(`https://[${candidate}]/`).hostname.slice(1, -1);
+}
+
 export function ipv6Groups(value: unknown): string[] {
   const address = addressValue(value);
   if (address?.family !== 6) return [];

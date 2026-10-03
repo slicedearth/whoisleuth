@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCaseClassification, openConsoleView, openInboxReview } from './console-navigation';
 import type { Page } from '@playwright/test';
 
@@ -12,7 +13,7 @@ import {
   requiredValue,
   useTheme,
 } from './helpers';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import type { CaseActionRecord } from '../frontend/src/lib/analysis/case-response-model.ts';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
 
@@ -322,7 +323,7 @@ test('calendar reaches and exports every matching event beyond the former five-h
       await timeline.getByRole('listitem').first().evaluate((item) => item.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
       await expect(timeline.getByRole('listitem').first()).toBeInViewport({ ratio: 1 });
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`complete-calendar-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`complete-calendar-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
   expect(collectionRequests.count()).toBe(0);
@@ -347,7 +348,7 @@ test('platform reporting routes are unavailable before review and become usable 
       await routes.getByRole('article').evaluate((item) => item.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
       await expect(routes.getByRole('article')).toBeInViewport({ ratio: 1 });
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`unavailable-platform-route-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`unavailable-platform-route-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
   await page.clock.setFixedTime('2026-09-04T00:00:00.000Z');
@@ -460,7 +461,7 @@ test('saved reporting routes remain reachable across pages with explicit local f
       await routes.getByRole('article').first().evaluate((card) => card.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
       await expectNoHorizontalOverflow(page);
       await expect(routes.getByRole('article').first()).toBeInViewport({ ratio: 1 });
-      await testInfo.attach(`reporting-routes-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`reporting-routes-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
   expect(collectionRequests.count()).toBe(0);
@@ -496,7 +497,7 @@ test('focused inbox reviews keep separate drafts, exact times and keyboard-safe 
   await expect(form.getByLabel('Rationale', { exact: true })).toHaveValue('Retained draft for the first independent review.');
   await expect(form.getByRole('combobox', { name: 'Review outcome', exact: true })).toHaveValue('open');
 
-  const exact = first.getByRole('button', { name: /^Copy exact observation time for Complete reviewed handoff for first\.inbox\.example:/u });
+  const exact = first.getByRole('button', { name: /Copy exact observation time for Complete reviewed handoff for first\.inbox\.example:/u });
   await expect(exact.locator('time')).toContainText('UTC');
   const timestamp = await exact.getAttribute('title');
   expect(timestamp).toBeTruthy();
@@ -557,10 +558,35 @@ test('focused inbox reviews keep separate drafts, exact times and keyboard-safe 
         expect(control.right).toBeLessThanOrEqual(geometry.width + 1);
         if (width <= 390) expect(control.height).toBeGreaterThanOrEqual(44);
       }
-      await page.screenshot({ path: testInfo.outputPath(`focused-inbox-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`focused-inbox-${theme}-${width}.png`) }); }
     }
   }
   expect(collectionRequests.count()).toBe(0);
+});
+
+test('multiple adjacent Case comparisons render independently across review queues', async ({ page }) => {
+  const domain = 'comparison-review.example';
+  const requests = countCollectionRequests(page);
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord({
+      domain, evidenceHistory: [19, 20, 21, 22].map(day => snapshot({
+        id: `comparison-${day}`, capturedAt: `2026-08-${day}T00:00:00.000Z`,
+        firstCapturedAt: `2026-08-${day}T00:00:00.000Z`, registrar: `Registrar ${day}`,
+      })),
+    })] },
+  }, { destination: '/monitor?view=inbox&queue=all' });
+  const items = page.locator('.review-inbox .items > li').filter({
+    has: page.getByRole('heading', { name: `${domain} · adjacent case snapshots`, exact: true }),
+  });
+  await expect(items).toHaveCount(3);
+  const queues = page.getByRole('group', { name: 'Review queue' });
+  await queues.getByRole('button', { name: /^Changed since review/u }).click();
+  await expect(queues.getByRole('button', { name: /^Changed since review/u })).toHaveAttribute('aria-pressed', 'true');
+  await expect(items).toHaveCount(3);
+  await queues.getByRole('button', { name: /^Everything/u }).click();
+  await expect(items).toHaveCount(3);
+  await expect(items.first()).toBeVisible();
+  expect(requests.count()).toBe(0);
 });
 
 test('one canonical Review Item lifecycle persists independently and recurs after material Case evidence changes', async ({ page }) => {
@@ -692,7 +718,7 @@ test('ambiguous and future certificate observations remain reviewable through th
       await expect(ambiguous.getByRole('heading')).toBeVisible();
       await expect(sourceLink).toBeVisible();
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`certificate-context-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`certificate-context-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
   await sourceLink.focus();

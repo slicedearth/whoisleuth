@@ -4,7 +4,7 @@
 // normalized evidence snapshot. Notes, tags, assertions, actions, contacts,
 // raw source data, scores, and provider payloads are never included.
 
-import { RISK_MUTATION_TYPES } from '../../lib/risk-scoring.mts';
+import { RISK_MUTATION_TYPES } from '../analysis/risk-scoring.mts';
 import {
   MAX_RISK_CALIBRATION_DOMAIN_AGE_DAYS,
   MAX_RISK_CALIBRATION_MUTATIONS,
@@ -19,12 +19,8 @@ import {
   type RiskCalibrationDisposition,
   type RiskCalibrationRecord,
 } from '../contracts/risk-calibration.mts';
-import {
-  currentCaseEvidence,
-  type CaseDisposition,
-  type CaseEvidenceSnapshot,
-  type CaseRecord,
-} from '../cases/case-record-model.mts';
+import { currentCaseEvidence } from '../cases/case-evidence-model.mts';
+import type { CaseDisposition, CaseEvidenceSnapshot, CaseRecord } from '../cases/case-record-model.mts';
 
 export {
   RISK_CALIBRATION_DATASET_SCHEMA,

@@ -5,7 +5,7 @@ import {
   MAX_WORKSPACE_INPUT_OBJECT_KEYS,
   MAX_WORKSPACE_INPUT_STRING_CODE_UNITS,
 } from '../contracts/workspace-portability.mts';
-import { boundedJsonLimitsForBytes } from '../../lib/bounded-json.mts';
+import { boundedJsonLimitsForBytes } from '../analysis/bounded-json.mts';
 
 type UnknownRecord = Record<string, unknown>;
 

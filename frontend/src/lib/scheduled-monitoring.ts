@@ -10,7 +10,7 @@ import {
   SCHEDULED_WATCHLIST_STATUSES,
 } from './analysis/scheduled-monitor-model.ts';
 import { normalizeWatchlistEntry } from './analysis/watchlist-history.ts';
-import { normalizeExplicitIsoTimestamp } from '../../../lib/observation.mts';
+import { normalizeExplicitIsoTimestamp } from '../../../packages/evidence/observation.mts';
 import { recordOrNull } from '../../../lib/json-record.mts';
 import type { WatchlistEntry } from './watchlists.ts';
 import {

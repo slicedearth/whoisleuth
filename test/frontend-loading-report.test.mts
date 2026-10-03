@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -7,14 +6,13 @@ import { describe, test } from 'node:test';
 
 import {
   BROWSER_LOCAL_CHUNK_NAME,
-  FRONTEND_ROUTE_BUDGET_BASIS,
-  FRONTEND_ROUTE_GZIP_BUDGETS,
-  FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES,
   MAX_FRONTEND_ASSET_BYTES,
   buildFrontendLoadingReport,
   formatFrontendLoadingReport,
   measureFrontendAsset,
   parseGeneratedRouteNodes,
+  previousFrontendRouteMeasurements,
+  main,
 } from '../tools/frontend-loading-report.mts';
 
 const routes = parseGeneratedRouteNodes(`
@@ -23,14 +21,6 @@ export const dictionary = {
   "/(console)/dashboard": [5,[2]]
 };
 `);
-const BULK_ROUTE_SOURCE = readFileSync(
-  new URL('../frontend/src/routes/(console)/bulk/+page.svelte', import.meta.url),
-  'utf8',
-);
-const LOOKUP_ROUTE_SOURCE = readFileSync(
-  new URL('../frontend/src/routes/(console)/lookup/+page.svelte', import.meta.url),
-  'utf8',
-);
 
 function fixtureManifest(publicImports: readonly string[] = ['_shared.js']) {
   return {
@@ -69,49 +59,10 @@ function report(publicImports?: readonly string[]) {
     measureAsset(file) {
       return { file, bytes: file.length * 10, gzipBytes: file.length * 4 };
     },
-    routeGzipBudgets: { '/': 1_000, '/dashboard': 1_000 },
   });
 }
 
 describe('frontend loading report', () => {
-  test('keeps optional Bulk serializers behind effective module boundaries', () => {
-    assert.match(
-      BULK_ROUTE_SOURCE,
-      /import \{ buildDefensiveIndicatorExport, prepareDefensiveIndicatorExport \} from '\$lib\/analysis\/defensive-indicator-export\.ts';/u,
-    );
-    assert.doesNotMatch(
-      BULK_ROUTE_SOURCE,
-      /import\('\$lib\/analysis\/defensive-indicator-export\.ts'\)/u,
-    );
-    assert.match(BULK_ROUTE_SOURCE, /import\('\$lib\/analysis\/stix-indicator-export\.ts'\)/u);
-    assert.match(BULK_ROUTE_SOURCE, /import\('\$lib\/analysis\/misp-indicator-export\.ts'\)/u);
-  });
-
-  test('does not defer checkpoint code already included by evidence replay', () => {
-    assert.match(
-      LOOKUP_ROUTE_SOURCE,
-      /import LookupEvidenceCheckpoint from '\$lib\/components\/LookupEvidenceCheckpoint\.svelte';/u,
-    );
-    assert.doesNotMatch(
-      LOOKUP_ROUTE_SOURCE,
-      /import\('\$lib\/components\/LookupEvidenceCheckpoint\.svelte'\)/u,
-    );
-  });
-
-  test('records how route ceilings were calibrated', () => {
-    assert.deepEqual(FRONTEND_ROUTE_BUDGET_BASIS, {
-      measuredBuilds: 3,
-      reviewedOn: '2026-08-24',
-      headroomPercent: 15,
-      roundingKibibytes: 5,
-    });
-    assert.deepEqual(Object.keys(FRONTEND_ROUTE_GZIP_BUDGETS), Object.keys(FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES));
-    for (const [route, observed] of Object.entries(FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES)) {
-      const expectedKibibytes = Math.ceil((observed * 1.15) / 5) * 5;
-      assert.equal(FRONTEND_ROUTE_GZIP_BUDGETS[route], expectedKibibytes * 1024, route);
-    }
-  });
-
   test('parses route groups and keeps the browser-local workspace outside public routes', () => {
     const result = report();
     assert.equal(result.ready, true);
@@ -122,38 +73,53 @@ describe('frontend loading report', () => {
     assert.equal(result.browserLocalWorkspace.file, 'workspace.js');
     assert.equal(result.browserLocalWorkspace.assetCount, 1);
     assert.match(formatFrontendLoadingReport(result), /Public-route exposure: none/);
-    assert.match(formatFrontendLoadingReport(result), /Route budgets: within reviewed ceilings/);
+    assert.match(formatFrontendLoadingReport(result), /current measurements only/);
   });
 
-  test('fails closed for missing and exceeded route budgets', () => {
-    const missing = buildFrontendLoadingReport({
+  test('measures new routes without registration and reports growth without changing correctness', () => {
+    const result = buildFrontendLoadingReport({
       manifest: fixtureManifest(),
-      routeNodes: routes,
-      measureAsset(file) {
-        return { file, bytes: file.length * 10, gzipBytes: file.length * 4 };
-      },
-      routeGzipBudgets: { '/': 1_000 },
+      routeNodes: [...routes, { routeKey: '/(public)/new-guide', pageNode: 4, layoutNodes: [3] }],
+      measureAsset: file => ({ file, bytes: 2_000, gzipBytes: 1_024 }),
+      previousRoutes: { '/': 1_024, '/dashboard': 20_480, '/removed': 1_024 },
     });
-    assert.equal(missing.ready, false);
-    assert.deepEqual(missing.summary.missingBudgetPaths, ['/dashboard']);
-    assert.match(formatFrontendLoadingReport(missing), /Missing route budgets: \/dashboard/);
+    assert.equal(result.ready, true);
+    assert.equal(result.routes.find(route => route.path === '/new-guide')?.gzipBytes, 7_168);
+    assert.equal(result.routes.find(route => route.path === '/new-guide')?.previousGzipBytes, null);
+    assert.equal(result.routes.find(route => route.path === '/')?.changeGzipBytes, 6_144);
+    assert.equal(result.routes.find(route => route.path === '/dashboard')?.changeGzipBytes, -13_312);
+    assert.deepEqual(result.summary.removedRoutes, ['/removed']);
+    const text = formatFrontendLoadingReport(result);
+    assert.match(text, /all changes shown/);
+    assert.match(text, /\+6\.00/);
+    assert.match(text, /-13\.00/);
+    assert.match(text, /\/new-guide\s+public\s+7\.00\s+new/);
+  });
 
-    const exceeded = buildFrontendLoadingReport({
-      manifest: fixtureManifest(),
-      routeNodes: routes,
-      measureAsset(file) {
-        return { file, bytes: file.length * 10, gzipBytes: file.length * 4 };
-      },
-      routeGzipBudgets: { '/': 1, '/dashboard': 1_000 },
-    });
-    assert.equal(exceeded.ready, false);
-    assert.deepEqual(exceeded.summary.overBudgetPaths, ['/']);
-    assert.match(formatFrontendLoadingReport(exceeded), /Exceeded route budget: \/ by \d+ bytes/);
-    const multiple = buildFrontendLoadingReport({ manifest: fixtureManifest(), routeNodes: routes,
-      measureAsset: file => ({ file, bytes: 2_000, gzipBytes: 1_000 }), routeGzipBudgets: { '/': 1, '/dashboard': 1 } });
-    const failures = formatFrontendLoadingReport(multiple).split('\n').filter(line => line.startsWith('Exceeded route budget:'));
-    assert.equal(failures.length, 2);
-    assert.match(failures[0]!, /: \/ by/); assert.match(failures[1]!, /: \/dashboard by/);
+  test('rejects malformed comparison measurements', () => {
+    for (const previousRoutes of [{ '/': -1 }, { '/': Infinity }, { '/': 0.5 }, { 'bad': 1 }]) {
+      assert.throws(() => buildFrontendLoadingReport({ manifest: fixtureManifest(), routeNodes: routes,
+        measureAsset: file => ({ file, bytes: 1, gzipBytes: 1 }), previousRoutes }), /Previous route measurements/);
+    }
+  });
+
+  test('round-trips measured reports and rejects ambiguous or unsupported comparisons', () => {
+    const value = report();
+    assert.deepEqual(previousFrontendRouteMeasurements(JSON.parse(JSON.stringify(value))),
+      Object.fromEntries(value.routes.map(route => [route.path, route.gzipBytes])));
+    for (const invalid of [null, [], {}, { ...value, version: value.version + 1 },
+      { ...value, routes: [...value.routes, value.routes[0]] },
+      { ...value, routes: [{ path: '/', gzipBytes: -1 }] }]) {
+      assert.throws(() => previousFrontendRouteMeasurements(invalid));
+    }
+  });
+
+  test('rejects invalid arguments before requiring a build', () => {
+    for (const args of [['--unknown'], ['--json', '--json'], ['--compare='], ['--compare=a', '--compare=b']]) {
+      let error = '';
+      assert.equal(main({ write() { assert.fail('No report should be emitted.'); } }, { write(value) { error += value; } }, args), 2);
+      assert.match(error, /Usage:/);
+    }
   });
 
   test('fails closed when a public layout imports the workspace chunk', () => {
@@ -179,7 +145,6 @@ describe('frontend loading report', () => {
       manifest: traversal,
       routeNodes: routes,
       measureAsset: (file) => ({ file, bytes: 1, gzipBytes: 1 }),
-      routeGzipBudgets: { '/': 1000, '/dashboard': 1000 },
     }), /safe relative path/iu);
 
     for (const unsafe of ['\u0085', '\u00ad', '\u034f']) {
@@ -189,7 +154,6 @@ describe('frontend loading report', () => {
         manifest: ambiguous,
         routeNodes: routes,
         measureAsset: (file) => ({ file, bytes: 1, gzipBytes: 1 }),
-        routeGzipBudgets: { '/': 1000, '/dashboard': 1000 },
       }), /safe relative path/iu);
 
       const ambiguousKey: Record<string, { file: string; name?: string; imports?: readonly string[]; css?: readonly string[] }> = structuredClone(fixtureManifest());
@@ -199,7 +163,6 @@ describe('frontend loading report', () => {
         manifest: ambiguousKey,
         routeNodes: routes,
         measureAsset: (file) => ({ file, bytes: 1, gzipBytes: 1 }),
-        routeGzipBudgets: { '/': 1000, '/dashboard': 1000 },
       }), /control-free text/iu);
 
       const ambiguousName = structuredClone(fixtureManifest());
@@ -208,7 +171,6 @@ describe('frontend loading report', () => {
         manifest: ambiguousName,
         routeNodes: routes,
         measureAsset: (file) => ({ file, bytes: 1, gzipBytes: 1 }),
-        routeGzipBudgets: { '/': 1000, '/dashboard': 1000 },
       }), /control-free text/iu);
     }
 
@@ -216,7 +178,6 @@ describe('frontend loading report', () => {
       manifest: fixtureManifest(),
       routeNodes: routes,
       measureAsset: (file) => ({ file: `${file}.changed`, bytes: 1, gzipBytes: 1 }),
-      routeGzipBudgets: { '/': 1000, '/dashboard': 1000 },
     }), /measurement/iu);
   });
 
@@ -236,7 +197,6 @@ describe('frontend loading report', () => {
         calls.set(file, (calls.get(file) ?? 0) + 1);
         return { file, bytes: 10, gzipBytes: 5 };
       },
-      routeGzipBudgets: { '/': 1000, '/dashboard': 1000 },
     });
     assert.equal(result.ready, true);
     assert.ok([...calls.values()].every((count) => count === 1));

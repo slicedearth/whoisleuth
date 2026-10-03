@@ -124,6 +124,19 @@ describe('maintained-source duplication report', () => {
     }
   });
 
+  test('ordinary source extraction is limited by processing resources, not the old inventory baseline', async () => {
+    const root = await fixture();
+    try {
+      // More than the former 1,024-source cap, comfortably inside the byte/AST bounds.
+      for (let index = 0; index < 1_030; index++) {
+        await writeFile(path.join(root, 'lib', `part-${index}.mts`), `export const part${index} = ${index};\n`);
+      }
+      const report = await buildMaintainerDuplicationReport({ repositoryRoot: root });
+      assert.equal(report.scope.fileCount, 1_033);
+      assert.ok(report.scope.totalBytes < 100_000);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test('measures the checked-out maintained-source inventory without source values', async () => {
     const report = await buildMaintainerDuplicationReport();
     assert.equal(report.scope.fileCount, report.files.length);

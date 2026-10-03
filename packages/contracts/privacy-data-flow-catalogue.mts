@@ -77,13 +77,15 @@ export const PRIVACY_PROCESSING_CLASSES = Object.freeze([
 
 export type PrivacyProcessingClassId = typeof PRIVACY_PROCESSING_CLASSES[number]['id'];
 
+const GLOBAL_NON_INFERENCE = 'Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.';
+
 export const PRIVACY_CATALOGUE_INVARIANTS = Object.freeze([
   'Browser-profile retention describes the browser deployment. The optional standalone local application instead stores saved collections, recovery drafts and original files in an explicitly selected plaintext filesystem workspace; appearance and tab preferences remain browser-local.',
   'Standalone workspace traffic stays between the browser and its authenticated loopback process. Starting it makes no collection request; explicit collection uses the existing request policy from this machine, and offline mode disables collection. Clearing browser data or signing out does not delete the filesystem workspace. Encrypted portable backups remain separate.',
   'The catalogue contains fixed contract metadata only; it contains no target, evidence value, personal data, raw contact, credential, cookie, authorisation value, runtime secret, complete query-bearing URL, unnecessary path or local filesystem detail.',
   'Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.',
   'Offline operations make no request and do not inherit a capability family\'s possible network disclosure.',
-  'Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.',
+  GLOBAL_NON_INFERENCE,
   'A normalised outcome marked not_declared_for_boundary is outside that boundary\'s current output vocabulary; it is not evidence that the state cannot occur upstream or that evidence is absent.',
   'The catalogue describes current checked-in contracts. It does not enable a capability, make a request, grant authorisation, inspect a deployment or create a legal conclusion.',
 ] as const);
@@ -134,7 +136,7 @@ const CAPABILITY_PRIVACY_DETAILS = Object.freeze({
   registrar_rdap: capabilityPrivacyDetail('Retrieve one eligible sponsoring-registrar RDAP publication as a separate source.', ['registrar_registration_publication', 'source_health']),
   network_context: capabilityPrivacyDetail('Add bounded public allocation context for one observed public endpoint address.', ['public_network_allocation_context', 'source_health']),
   reverse_dns: capabilityPrivacyDetail('Resolve bounded reverse-DNS names for one public address.', ['reverse_dns_publication', 'source_health']),
-  domain_posture: capabilityPrivacyDetail('Review bounded DNS and mail publication posture without changing configuration; a separate opt-in adds inherited DMARC and sampled direct parent referrals.', ['normalised_posture_evidence', 'source_health']),
+  domain_posture: capabilityPrivacyDetail('Review bounded DNS and mail publication posture without changing configuration; a separate opt-in adds inherited DMARC, reporting-destination boundaries and sampled direct parent referrals.', ['normalised_posture_evidence', 'source_health']),
   dnssec_validation: capabilityPrivacyDetail('Validate an explicitly authorised DNSSEC chain against a selected local trust anchor.', ['dnssec_validation_evidence', 'source_health']),
   mail_transport_review: capabilityPrivacyDetail('Review selected explicitly authorised SMTP transport and STARTTLS behaviour.', ['mail_transport_evidence', 'source_health']),
   rendered_web_capture: capabilityPrivacyDetail('Capture one explicitly authorised rendered page within the local-tool budget.', ['bounded_rendered_capture', 'capture_manifest']),
@@ -337,8 +339,6 @@ export type PrivacyDataFlowCatalogueBuildInput = Readonly<{
   schemaLifecycleRegistry: SchemaLifecycleRegistry;
 }>;
 
-const GLOBAL_NON_INFERENCE = PRIVACY_CATALOGUE_INVARIANTS[3];
-
 function unique(values: readonly string[]): readonly string[] {
   return Object.freeze([...new Set(values)]);
 }
@@ -508,10 +508,11 @@ function schemaStorage(kind: string): Readonly<{ storageClass: string; retention
 function schemaProcessingClasses(
   requestMode: string,
   retentionEffect: string,
+  emitsContract: boolean,
 ): readonly PrivacyProcessingClassId[] {
   const classes: PrivacyProcessingClassId[] = ['transient_processing'];
   if (retentionEffect === 'browser_indexeddb') classes.push('browser_local_retention');
-  if (retentionEffect === 'deliberate_local_file' || retentionEffect === 'operator_controlled_output') {
+  if (emitsContract && (retentionEffect === 'deliberate_local_file' || retentionEffect === 'operator_controlled_output')) {
     classes.push('deliberate_local_file_export');
   }
   if (requestMode !== 'none') classes.push('third_party_disclosure');
@@ -703,7 +704,7 @@ function buildUncheckedPrivacyDataFlowCatalogue(
         privacyProfileId: edge.privacyProfileId,
         requestMode: edge.requestMode,
         retentionEffect: edge.retentionEffect,
-        processingClasses: schemaProcessingClasses(edge.requestMode, edge.retentionEffect),
+        processingClasses: schemaProcessingClasses(edge.requestMode, edge.retentionEffect, Boolean(edge.emittedContract)),
         policyState: edge.policyState,
       });
     }

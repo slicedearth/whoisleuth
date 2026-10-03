@@ -1,4 +1,5 @@
 import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from '../evidence/artifact-integrity.mts';
+import { PASSIVE_MAIL_INTERPRETATION, PASSIVE_MAIL_LABELS, type PassiveMailState } from '../contracts/passive-mail.mts';
 import {
   BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION,
   normalizeBulkProfileContext,
@@ -16,13 +17,7 @@ import {
 
 export { BULK_MAIL_EXPOSURE_EXPORT_VERSION, BULK_MAIL_EXPOSURE_SCHEMA, BULK_MAIL_EXPOSURE_VERSION, MAX_BULK_MAIL_EXPOSURE_ROWS };
 
-export type BulkMailExposureState =
-  | 'authenticated_mail'
-  | 'evidence_incomplete'
-  | 'mail_auth_gap'
-  | 'mail_auth_incomplete'
-  | 'no_explicit_mx'
-  | 'null_mx';
+export type BulkMailExposureState = PassiveMailState;
 
 export type BulkMailBaselineProfile = 'defensive_no_mail' | 'parked' | 'standard' | null;
 export type BulkMailBaselineRelation = 'aligned' | 'inconclusive' | 'review';
@@ -57,15 +52,6 @@ export type BulkMailExposureReport = Readonly<{
   profileContextUnevaluatedCount: number;
   limitations: readonly string[];
 }>;
-
-const STATE_LABELS: Readonly<Record<BulkMailExposureState, string>> = {
-  authenticated_mail: 'Receiving mail with SPF and DMARC',
-  evidence_incomplete: 'Mail evidence incomplete',
-  mail_auth_gap: 'Receiving mail with an authentication gap',
-  mail_auth_incomplete: 'Receiving mail with incomplete authentication evidence',
-  no_explicit_mx: 'No explicit MX observed',
-  null_mx: 'Null MX observed',
-};
 
 function timestamp(value: unknown): string | null {
   if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) return null;
@@ -105,16 +91,16 @@ function exposureState(row: BulkSessionResult): BulkMailExposureState {
 
 function stateDetail(state: BulkMailExposureState): string {
   if (state === 'authenticated_mail') {
-    return 'An explicit receiving MX plus SPF and DMARC publications were observed.';
+    return 'Explicit MX, SPF and DMARC publications were observed.';
   }
   if (state === 'null_mx') {
     return 'A null MX explicitly declaring no inbound mail was observed.';
   }
   if (state === 'mail_auth_gap') {
-    return 'A receiving MX was observed while SPF or DMARC was observed absent.';
+    return 'An MX publication was observed while SPF or DMARC was observed absent.';
   }
   if (state === 'mail_auth_incomplete') {
-    return 'A receiving MX was observed, but SPF or DMARC collection was incomplete.';
+    return 'An MX publication was observed, but SPF or DMARC collection was incomplete.';
   }
   if (state === 'no_explicit_mx') {
     return 'DNS collection completed without an explicit MX. This is not proof that SMTP delivery is impossible.';
@@ -252,7 +238,7 @@ export function buildBulkMailExposureReport(
       return {
         domain: item.domain,
         state,
-        label: STATE_LABELS[state],
+        label: PASSIVE_MAIL_LABELS[state],
         detail: stateDetail(state),
         ...relation(state, profile, profileSourceState, profileContextComparable, profileContextLimitation),
         mutationTypes: item.mutationTypes.slice(0, 40),
@@ -295,8 +281,9 @@ export function buildBulkMailExposureReport(
     counts,
     profileContextUnevaluatedCount,
     limitations: [
+      PASSIVE_MAIL_INTERPRETATION,
       'This review uses compact Bulk evidence already collected and makes no additional request.',
-      'Null MX, no explicit MX, receiving mail, authentication gaps, and incomplete evidence remain separate states.',
+      'Null MX, no explicit MX, published mail policies, policy gaps, and incomplete evidence remain separate states.',
       'SMTP delivery, mailbox existence, catch-all behaviour, and message acceptance were not tested.',
     ],
   };

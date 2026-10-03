@@ -7,6 +7,8 @@ import {
 } from './visualization-bounds.ts';
 
 export {
+  FORCE_GRAPH_LABEL_FONT_SIZE,
+  FORCE_GRAPH_LABEL_LINE_HEIGHT,
   FORCE_GRAPH_LINK_KINDS,
   MAX_FORCE_GRAPH_LINKS,
   MAX_FORCE_GRAPH_NODES,
@@ -58,7 +60,7 @@ export type RedirectInput = {
 };
 
 export type WatchlistActivityInput = {
-  checkedAt: string;
+  checkedAt: string | null;
   changeCount: number;
   resultCount?: number;
   conclusiveCount?: number;
@@ -80,7 +82,7 @@ export type ProfileListingBarInput = {
 
 export type MonitorTimelineInput = {
   id: string;
-  checkedAt: string;
+  checkedAt: string | null;
   mode: string;
   groups: Array<{
     key: string;
@@ -173,10 +175,11 @@ function utcWeekLabel(startMilliseconds: number, endMilliseconds: number) {
 }
 
 export function projectWatchlistActivity(rawEvents: WatchlistActivityInput[]) {
+  let undatedChecks = 0;
   const valid = (Array.isArray(rawEvents) ? rawEvents : [])
     .map((event) => {
       const date = validDate(event?.checkedAt);
-      if (!date) return null;
+      if (!date) { undatedChecks += 1; return null; }
       const changeCount = Math.max(0, Math.min(10_000, Math.trunc(Number(event.changeCount) || 0)));
       const resultCount = Math.max(0, Math.min(10_000, Math.trunc(Number(event.resultCount) || 0)));
       const conclusiveCount = Math.max(0, Math.min(resultCount, Math.trunc(Number(event.conclusiveCount) || 0)));
@@ -196,6 +199,7 @@ export function projectWatchlistActivity(rawEvents: WatchlistActivityInput[]) {
       maxChanges: 0,
       totalChecks: 0,
       totalChanges: 0,
+      undatedChecks,
     };
   }
   const latest = Math.max(...valid.map((event) => event.milliseconds));
@@ -267,6 +271,7 @@ export function projectWatchlistActivity(rawEvents: WatchlistActivityInput[]) {
     maxChanges: Math.max(0, ...days.map((day) => day.changes)),
     totalChecks: windowEvents.length,
     totalChanges: windowEvents.reduce((sum, event) => sum + event.changeCount, 0),
+    undatedChecks,
   };
 }
 
@@ -346,11 +351,12 @@ export function projectProfileListingBars(rawGroups: readonly ProfileListingBarI
 }
 
 export function projectMonitorTimeline(rawEvents: readonly MonitorTimelineInput[]) {
+  let undatedEvents = 0;
   const candidates = (Array.isArray(rawEvents) ? rawEvents : [])
     .map((event, index) => {
       const date = validDate(event?.checkedAt);
       const id = boundedId(event?.id) || `event-${index}`;
-      if (!date) return null;
+      if (!date) { undatedEvents += 1; return null; }
       return {
         id,
         checkedAt: date.text,
@@ -384,6 +390,7 @@ export function projectMonitorTimeline(rawEvents: readonly MonitorTimelineInput[
     width: 900,
     height: Math.max(110, 64 + lanes.length * 40),
     maxChanges,
+    undatedEvents,
     events: events.map((event) => ({
       ...event,
       x: x(event.id) ?? 170,

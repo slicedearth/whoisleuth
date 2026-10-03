@@ -1,10 +1,11 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCaseMetadata, openCaseSection, openConsoleView } from './console-navigation';
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, runBulkScan, useTheme } from './helpers';
 import { createCase, openCaseResponseWorkspace, openCasesView } from './case-test-fixtures';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { EXTERNAL_FINDINGS_VERSION } from '../packages/interchange/external-findings-import.mts';
 import { caseWorkspaceActionStatus } from './case-response-fixtures';
 import { caseStoreAtCapacity } from '../test/workspace-backup-capacity-fixture.mts';
@@ -190,7 +191,7 @@ for (const width of [320, 390, 1024, 1280, 1920, 3840]) {
       await page.keyboard.press('PageDown');
       await expect.poll(() => region.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`import-review-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`import-review-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     });
   }
 }
@@ -418,7 +419,7 @@ test('portable WACZ evidence verifies package fixity before using the WARC priva
   await expect(page.locator('.case-head', { hasText: 'package-review.invalid' })).toBeVisible();
 });
 
-test('STIX claims require an existing selected case and remain separate from collected evidence', async ({ page }) => {
+test('STIX claims require an existing selected case and remain separate from collected evidence', async ({ page }, testInfo) => {
   await openCasesView(page);
   await createCase(page, 'intelligence-case.invalid');
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
@@ -445,6 +446,13 @@ test('STIX claims require an existing selected case and remain separate from col
         labels: ['analyst-review'],
         confidence: 60,
       },
+      {
+        type: 'relationship', spec_version: '2.1',
+        id: 'relationship--00000000-0000-4000-8000-000000000104',
+        relationship_type: 'related-to',
+        source_ref: 'indicator--00000000-0000-4000-8000-000000000103',
+        target_ref: 'infrastructure--00000000-0000-4000-8000-000000000105',
+      },
     ],
   });
   await externalImport.locator('input[type="file"]').setInputFiles({
@@ -455,6 +463,20 @@ test('STIX claims require an existing selected case and remain separate from col
 
   await expect(externalImport.getByRole('heading', { name: /bundle--/ })).toBeVisible();
   await expect(externalImport).toContainText('1 accepted');
+  const structure = externalImport.getByLabel('Interchange source structure', { exact: true });
+  await structure.getByText('Source objects, relationships and transformations', { exact: true }).click();
+  await expect(structure).toContainText('Relationships — preview only, not imported');
+  await expect(structure).toContainText('Referenced object not present');
+  await expect(structure).toContainText('related-to');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      await structure.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`source-structure-${theme}-${width}.png`) });
+    }
+  }
   await expect(externalImport.getByRole('button', { name: 'Merge assertions into case' })).toBeDisabled();
   const selectedCase = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records.find(item => item.value.domain === 'intelligence-case.invalid')!;
   const destination = externalImport.getByLabel('Merge into existing case');

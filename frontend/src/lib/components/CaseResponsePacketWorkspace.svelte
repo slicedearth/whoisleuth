@@ -3,13 +3,12 @@
   import { tick } from 'svelte';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CasePacketPrintPreview from './CasePacketPrintPreview.svelte';
+  import CasePacketDisclosure from './CasePacketDisclosure.svelte';
+  import { buildCaseResponseReviewInputs } from '../../../../packages/cases/case-response-packet.mts';
   import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
-  import {
-    caseInvestigationContext,
-    caseResponseIncidentUrls,
-    caseTypeSummary,
-    type CaseRecord,
-  } from '$lib/cases';
+  import { caseInvestigationContext } from '../../../../packages/cases/case-incident-context.mts';
+  import { caseResponseIncidentUrls, caseTypeSummary } from '../../../../packages/cases/case-workflow-metadata.mts';
+  import type { CaseRecord } from '../cases.ts';
   import {
     buildCaseResponsePacket,
     buildCaseResponsePreflight,
@@ -92,9 +91,12 @@
   ] as const);
   let packetWizardStep = $state(1);
   let packetBusy = $state(false);
+  let packetOpen = $state(false);
   let defaultsAppliedRecordId = $state('');
   let packetCategoryEdited = $state(false);
   let packetUrlsEdited = $state(false);
+  let packetActionEdited = $state(false);
+  let packetEvidenceEdited = $state(false);
   let lastPacketExport = $state<(Parameters<typeof onpacketexported>[0] & { materialSignature: string }) | null>(null);
   type PreparedPacket = Readonly<{
     built: Awaited<ReturnType<typeof buildCaseResponsePacket>>;
@@ -114,10 +116,12 @@
   const packetReview = $derived.by(() => {
     const input = packetInput();
     const now = new Date().toISOString();
+    const preflight = buildCaseResponsePreflight(record, input, now);
+    const material = preflight.canExport ? buildCaseResponseReviewInputs(record, input, now) : null;
     return {
       now,
-      preflight: buildCaseResponsePreflight(record, input, now),
-      readiness: buildCaseResponseReadiness(record, input, now),
+      preflight, material,
+      readiness: material?.readiness ?? buildCaseResponseReadiness(record, input, now),
     };
   });
   const packetPreflight = $derived(packetReview.preflight);
@@ -161,20 +165,18 @@
     }
   });
   $effect(() => {
-    if (!visible) return;
+    if (!visible || !packetOpen) return;
     if (defaultsAppliedRecordId !== record.id) {
-      packetCategoryEdited = false;
-      packetUrlsEdited = false;
-    }
-    const latestDecision = [...record.decisions].reverse().find((decision) => decision.evidencePinIds.length);
-    if (!packetSelectedEvidenceIds.length && latestDecision) {
+      // The parent keys this component by Case identity. Its fresh flags must
+      // not erase edits made before the native disclosure event is delivered.
+      const latestDecision = [...record.decisions].reverse().find((decision) => decision.evidencePinIds.length);
       const retainedIds = new Set(record.evidencePins.map((pin) => pin.id));
-      packetSelectedEvidenceIds = latestDecision.evidencePinIds.filter((id) => retainedIds.has(id));
+      if (!packetEvidenceEdited) packetSelectedEvidenceIds = latestDecision?.evidencePinIds.filter((id) => retainedIds.has(id)) ?? [];
+      if (!packetActionEdited) packetActionId = record.actions.length === 1 ? record.actions[0]?.id ?? '' : '';
     }
-    if (!packetActionId && record.actions.length === 1) packetActionId = record.actions[0]?.id ?? '';
     const retainedIncidentUrls = caseResponseIncidentUrls(record);
     if (!packetUrlsEdited) packetUrls = retainedIncidentUrls.join('\n');
-    if (!packetCategoryEdited) packetCategory = caseTypeSummary(record.tags).slice(0, 80);
+    if (!packetCategoryEdited) packetCategory = caseTypeSummary(record).slice(0, 80);
     defaultsAppliedRecordId = record.id;
   });
 
@@ -425,7 +427,7 @@
 </script>
 
 {#if visible}
-  <details id={`case-response-preflight-${record.id}`}>
+  <details id={`case-response-preflight-${record.id}`} bind:open={packetOpen}>
     <summary>Prepare a reviewed abuse evidence packet</summary>
     <form class="response-form packet-form" onsubmit={(event) => event.preventDefault()}>
       <p class="notice">Date and time fields use UTC.</p>
@@ -459,14 +461,17 @@
       {#if packetWizardStep === 1}
         <section id={`packet-wizard-step-${record.id}-2`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-2`}>
           <header><div><p class="eyebrow">Prepare</p><h4 id={`packet-wizard-title-${record.id}-2`}>Evidence selection</h4></div><span>Selected material</span></header>
-          <fieldset class="pin-references"><legend>Evidence selected for this exact packet</legend>{#if record.evidencePins.length}{#each record.evidencePins as pin, index}<label class="choice"><input type="checkbox" aria-label={caseEvidenceChoiceName(pin, index)} checked={packetSelectedEvidenceIds.includes(pin.id)} onchange={(event) => packetSelectedEvidenceIds = event.currentTarget.checked ? [...packetSelectedEvidenceIds, pin.id] : packetSelectedEvidenceIds.filter((id) => id !== pin.id)}><CaseEvidenceFact {pin} /></label>{/each}{:else}<p class="notice">No evidence pins are retained in this Case. The draft will keep this unavailable.</p>{/if}</fieldset>
+          <fieldset class="pin-references"><legend>Evidence selected for this exact packet</legend>{#if record.evidencePins.length}{#each record.evidencePins as pin, index}<label class="choice"><input type="checkbox" aria-label={caseEvidenceChoiceName(pin, index)} checked={packetSelectedEvidenceIds.includes(pin.id)} onchange={(event) => {
+            packetEvidenceEdited = true;
+            packetSelectedEvidenceIds = event.currentTarget.checked ? [...packetSelectedEvidenceIds, pin.id] : packetSelectedEvidenceIds.filter((id) => id !== pin.id);
+          }}><CaseEvidenceFact {pin} /></label>{/each}{:else}<p class="notice">No evidence pins are retained in this Case. The draft will keep this unavailable.</p>{/if}</fieldset>
           <p class="notice">Selection includes only retained Case pins supported by response-packet v{CASE_RESPONSE_PACKET_VERSION}. It does not collect, upload, or infer new evidence.</p>
         </section>
       {/if}
       {#if packetWizardStep === 1}
         <section id={`packet-wizard-step-${record.id}-3`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-3`}>
           <header><div><p class="eyebrow">Prepare</p><h4 id={`packet-wizard-title-${record.id}-3`}>Action and recipient provenance</h4></div><span>Delivery context</span></header>
-          <label class="field">Case action for this packet<select bind:value={packetActionId}><option value="">Select a retained Case action</option>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient} · {action.state.replaceAll('_', ' ')}</option>{/each}</select></label>
+          <label class="field">Case action for this packet<select bind:value={packetActionId} onchange={() => packetActionEdited = true}><option value="">Select a retained Case action</option>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient} · {action.state.replaceAll('_', ' ')}</option>{/each}</select></label>
           {#if selectedPacketAction}<section class="profile-preview"><div><strong>{selectedPacketAction.recipient}</strong><span>{selectedPacketAction.type.replaceAll('_', ' ')}</span></div><p><strong>Source:</strong> {selectedPacketAction.contactSource}</p><p><strong>Route observed:</strong> {selectedPacketAction.routeObservedAt ?? 'Time unavailable'}</p>{#if selectedPacketAction.originActionId}<p><strong>Originating action:</strong> {selectedPacketAction.originActionId}</p>{/if}{#if selectedPacketAction.contactLimitations.length}<p><strong>Limitations:</strong> {selectedPacketAction.contactLimitations.join('; ')}</p>{/if}</section>{:else}<p class="notice">Create and review a Case action first. Browser and blocklist destinations use a manually entered internal-review action; other profiles require the matching typed route.</p>{/if}
           {#if selectedPacketAction}<p class="notice">Route freshness: {responseRouteFreshness(selectedPacketAction.routeObservedAt, selectedPacketAction.routeReviewAfter, packetReview.now)} · review deadline or published expiry: {selectedPacketAction.routeReviewAfter ?? 'not recorded'}. Refresh recipient evidence in the Response decision stage; changing it invalidates this packet review.</p>{/if}
           <p class="notice">Only the selected action, its bounded origin lineage and its route are included. A published or analyst-supplied route does not establish ownership, authority, successful delivery, or recipient action.</p>
@@ -475,6 +480,7 @@
       {#if packetWizardStep === 2}
         <section id={`packet-wizard-step-${record.id}-4`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-4`}>
           <header><div><p class="eyebrow">Review</p><h4 id={`packet-wizard-title-${record.id}-4`}>Privacy, redaction and optional capture</h4></div><span>Phase 2</span></header>
+          {#if packetReview.material}<CasePacketDisclosure material={packetReview.material} retainedPinCount={record.evidencePins.length} />{:else}<p>Complete the blocked incident and recipient inputs to preview the selected copy.</p>{/if}
           <div class="privacy-review"><section><strong>Profile redactions</strong><ul>{#each packetProfilePreview.redactions as item}<li>{item}</li>{/each}</ul></section><section><strong>Profile exclusions</strong><ul>{#each packetProfilePreview.excludedEvidence as item}<li>{item}</li>{/each}</ul></section></div>
           <fieldset class="artefact-reference"><legend>Optional integrity-checked capture reference</legend><p class="notice">Retain metadata and SHA-256 only. Do not paste raw payloads, bodies, credentials, cookies, secrets, complete query-bearing URLs, or unnecessary personal data.</p><div class="two-columns"><label class="field">Label<input bind:value={packetArtefactLabel} maxlength="120"></label><label class="field">Media type<input bind:value={packetArtefactMediaType} maxlength="120"></label><label class="field">Captured at<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={packetArtefactCapturedAt}></label><label class="field">Source<input bind:value={packetArtefactSource} maxlength="120"></label><label class="field">SHA-256 digest<input bind:value={packetArtefactDigest} maxlength="64" pattern="[a-fA-F0-9]{64}"></label><label class="field">Byte length<input type="number" min="0" max="104857600" bind:value={packetArtefactByteLength}></label></div><label class="field">Limitations<textarea bind:value={packetArtefactLimitations} maxlength="2000" rows="2"></textarea></label></fieldset>
         </section>

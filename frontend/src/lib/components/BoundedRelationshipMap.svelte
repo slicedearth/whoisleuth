@@ -1,5 +1,7 @@
 <script lang="ts">
   import {
+    FORCE_GRAPH_LABEL_FONT_SIZE,
+    FORCE_GRAPH_LABEL_LINE_HEIGHT,
     projectBoundedForceGraph,
     type ForceGraphLinkKind,
     type ForceGraphLinkInput,
@@ -12,25 +14,34 @@
     nodes,
     links,
     focusNodeId = '',
+    layout = 'force',
+    directed = false,
+    observedLabel = 'Observed',
+    limitation = 'Lines show observed or explicitly derived relationships in the current bounded dataset. They do not establish common ownership or intent.',
   }: {
     title: string;
     description: string;
     nodes: ForceGraphNodeInput[];
     links: ForceGraphLinkInput[];
     focusNodeId?: string;
+    layout?: 'force' | 'grouped';
+    directed?: boolean;
+    observedLabel?: string;
+    limitation?: string;
   } = $props();
 
-  const graph = $derived(projectBoundedForceGraph(nodes, links, { focusNodeId }));
-  const maximumRenderedWidth = $derived(Math.floor(680 * graph.width / graph.height));
+  const graph = $derived(projectBoundedForceGraph(nodes, links, { focusNodeId, layout }));
+  const componentId = $props.id();
+  const markerId = `${componentId}-direction`;
   let activeGroup = $state('');
   let activeLinkKind = $state<'all' | ForceGraphLinkKind>('all');
-  const linkKindLabels: Readonly<Record<ForceGraphLinkKind, string>> = {
-    observed: 'Observed',
+  const linkKindLabels: Readonly<Record<ForceGraphLinkKind, string>> = $derived({
+    observed: observedLabel,
     partial: 'Partial',
     unknown: 'Unknown',
     derived: 'Derived',
     summary: 'Grouped',
-  };
+  });
   const selectedGroup = $derived(graph.clusters.some((cluster) => cluster.id === activeGroup) ? activeGroup : '');
   const selectedCluster = $derived(graph.clusters.find((cluster) => cluster.id === selectedGroup));
   const graphIdentity = $derived([
@@ -84,7 +95,17 @@
     const curve = Math.min(22, distance * 0.08) * direction;
     const controlX = (link.sourceX + link.targetX) / 2 - deltaY / distance * curve;
     const controlY = (link.sourceY + link.targetY) / 2 + deltaX / distance * curve;
-    return `M ${link.sourceX} ${link.sourceY} Q ${controlX} ${controlY} ${link.targetX} ${link.targetY}`;
+    const targetNode = graph.nodes.find(node => node.id === link.targetId);
+    // Intersect the final curve tangent with the padded node rectangle. Using
+    // label width as a circular radius leaves vertical arrows far from a box.
+    const halfWidth = targetNode?.kind === 'target' ? (targetNode.labelWidth + 20) / 2 + 4 : 22;
+    const halfHeight = targetNode?.kind === 'target'
+      ? (targetNode.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 17) / 2 + 4 : 22;
+    const tangentX = link.targetX - controlX, tangentY = link.targetY - controlY;
+    const inset = directed ? Math.min(0.5, halfWidth / Math.abs(tangentX), halfHeight / Math.abs(tangentY)) : 0;
+    const targetX = link.targetX - tangentX * inset;
+    const targetY = link.targetY - tangentY * inset;
+    return `M ${link.sourceX} ${link.sourceY} Q ${controlX} ${controlY} ${targetX} ${targetY}`;
   };
 </script>
 
@@ -133,11 +154,12 @@
     {/if}
     <div
       class="map-frame"
-      style:max-width={`${maximumRenderedWidth}px`}
+      style:max-width={`${graph.width}px`}
       role="img"
       aria-label={`${title}. ${graph.nodes.length} nodes and ${graph.links.length} relationships.${graph.truncated ? ` ${omittedInputCount} visual inputs omitted after bounded normalization.` : ''} Exact evidence follows the visual.`}
     >
-      <svg viewBox={`0 0 ${graph.width} ${graph.height}`} aria-hidden="true">
+      <svg class="data-chart" width={graph.width} height={graph.height} viewBox={`0 0 ${graph.width} ${graph.height}`} aria-hidden="true">
+        {#if directed}<defs><marker id={markerId} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 4 L0 8 Z" class="direction-marker" /></marker></defs>{/if}
         <rect width={graph.width} height={graph.height} class="background"></rect>
         {#each graph.nodes.filter((node) => node.kind === 'target') as node (node.id)}
           <circle cx={node.x} cy={node.y} r="96" class="focus-halo"></circle>
@@ -151,6 +173,7 @@
               class:derived={link.kind === 'derived'}
               class:summary={link.kind === 'summary'}
               class:muted={linkIsMuted(link)}
+              marker-end={directed ? `url(#${markerId})` : undefined}
             ><title>{link.detail || link.kind}</title></path>
             <circle
               cx={link.targetX}
@@ -175,9 +198,9 @@
                 <rect
                   class="node-shape target-shape"
                   x={-(node.labelWidth + 20) / 2}
-                  y={-(node.labelLines.length * 13 + 17) / 2}
+                  y={-(node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 17) / 2}
                   width={node.labelWidth + 20}
-                  height={node.labelLines.length * 13 + 17}
+                  height={node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 17}
                   rx="9"
                 ></rect>
               {:else if node.kind === 'technology'}
@@ -193,15 +216,16 @@
                   x={-node.labelWidth / 2}
                   y="25"
                   width={node.labelWidth}
-                  height={node.labelLines.length * 13 + 8}
+                  height={node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 8}
                   rx="6"
                 ></rect>
               {/if}
               <text
                 class:target-label={node.kind === 'target'}
-                y={node.kind === 'target' ? -(node.labelLines.length - 1) * 6.5 + 4 : 37}
+                style:font-size={`${FORCE_GRAPH_LABEL_FONT_SIZE}px`}
+                y={node.kind === 'target' ? -(node.labelLines.length - 1) * FORCE_GRAPH_LABEL_LINE_HEIGHT / 2 + 4 : 39}
                 text-anchor="middle"
-              >{#each node.labelLines as line, index}<tspan x="0" dy={index === 0 ? 0 : 13}>{line}</tspan>{/each}</text>
+              >{#each node.labelLines as line, index}<tspan x="0" dy={index === 0 ? 0 : FORCE_GRAPH_LABEL_LINE_HEIGHT}>{line}</tspan>{/each}</text>
               <title>{node.label}{node.detail ? `: ${node.detail}` : ''}</title>
             </g>
           {/each}
@@ -229,12 +253,13 @@
     {#if graph.truncated}
       <p class="visual-limit">The bounded visual omitted {graph.omittedNodeInputs} fact {graph.omittedNodeInputs === 1 ? 'input' : 'inputs'} and {graph.omittedLinkInputs} relationship {graph.omittedLinkInputs === 1 ? 'input' : 'inputs'} after normalisation or display limits. Use the exact evidence below for source detail.</p>
     {/if}
-    <p class="limit">Lines show observed or explicitly derived relationships in the current bounded dataset. They do not establish common ownership or intent.</p>
+    <p class="limit">{limitation}</p>
   </section>
 {/if}
 
 <style>
   .relationship-map{container-type:inline-size;min-width:0;margin:13px 0;padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
+  .direction-marker{fill:var(--muted)}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   h3{margin:2px 0 0;font:700 var(--text-sm) var(--mono)}
   .map-summary{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}
@@ -267,7 +292,6 @@
   .focus-status button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .map-frame{width:100%;margin:11px auto 0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background-color:var(--panel-raised);background-image:radial-gradient(circle,color-mix(in srgb,var(--border) 70%,transparent) 1px,transparent 1px);background-size:24px 24px;overscroll-behavior:auto;touch-action:pan-y pinch-zoom}
   .map-mobile{display:none}
-  svg{display:block;width:100%;height:auto}
   .background{fill:transparent}
   .focus-halo{fill:color-mix(in srgb,var(--accent) 5%,transparent);stroke:color-mix(in srgb,var(--accent) 12%,transparent);stroke-width:1;pointer-events:none}
   .links path{fill:none;stroke:color-mix(in srgb,var(--muted) 46%,transparent);stroke-width:1.35}
@@ -296,6 +320,8 @@
     .focus-status{align-items:flex-start;flex-direction:column}
   }
   @container(max-width:660px){
+    header{flex-direction:column;align-items:stretch}
+    .map-summary{max-width:none;justify-content:flex-start}.map-summary strong{white-space:normal}
     .map-frame{display:none}
     .map-mobile{display:grid;gap:7px;margin-top:11px}
     .map-mobile ul{display:grid;gap:7px;margin:0;padding:0;list-style:none}

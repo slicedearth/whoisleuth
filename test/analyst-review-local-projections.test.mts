@@ -5,7 +5,8 @@ import { buildLocalAnalystReviewProjection } from '../frontend/src/lib/analysis/
 import { normalizeBrandProfile } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import { requiredValue } from './value-assertions.mts';
 import { buildAnalystReviewInbox } from '../frontend/src/lib/analysis/analyst-review-inbox.ts';
-import { emptyAnalystReviewStateStore, setAnalystReviewDecision } from '../frontend/src/lib/analysis/analyst-review-state.ts';
+import { analystReviewSubjectKey, emptyAnalystReviewStateStore, setAnalystReviewDecision } from '../frontend/src/lib/analysis/analyst-review-state.ts';
+import { createCase, updateCase } from '../packages/cases/case-record-operations.mts';
 
 const NOW = '2026-08-23T04:00:00.000Z';
 const WINDOWS = Object.freeze({
@@ -50,6 +51,32 @@ function itemByTitlePart(items: ReturnType<typeof windowItems>, summary: string)
 }
 
 describe('local analyst Review Item projections', () => {
+  test('keeps adjacent Case snapshot reviews distinct and never applies an old ambiguous decision', () => {
+    let record = createCase({ domain: 'comparison.example', evidence: { scanDepth: 'deep', registrar: 'Initial registrar' } }, '2026-08-19T00:00:00.000Z');
+    for (const day of [20, 21, 22]) record = updateCase([record], record.id, {
+      evidence: { scanDepth: 'deep', registrar: `Registrar ${day}` },
+    }, `2026-08-${day}T00:00:00.000Z`).record;
+    const projection = buildLocalAnalystReviewProjection({ cases: [record] }, NOW);
+    const comparisons = projection.items.filter(item => item.kind === 'comparison');
+    assert.equal(comparisons.length, 3);
+    assert.equal(new Set(comparisons.map(item => item.id)).size, 3);
+    assert.equal(new Set(comparisons.map(item => item.subjectKey)).size, 3);
+    assert.ok(comparisons.every(item => item.href.includes(record.id)));
+    const selected = requiredValue(comparisons[0]);
+    const decision = { disposition: 'expected' as const, rationale: 'Reviewed this snapshot pair.', reviewedAt: NOW, expiresAt: '2026-09-01T00:00:00.000Z' };
+    const reviewState = setAnalystReviewDecision(emptyAnalystReviewStateStore(), selected, decision);
+    const inbox = buildAnalystReviewInbox({ projectedItems: projection.items, projectedAdmissions: [projection.admission], reviewState }, NOW);
+    assert.equal(inbox.items.find(item => item.id === selected.id)?.lifecycle.state, 'expected');
+    assert.ok(inbox.items.filter(item => item.kind === 'comparison' && item.id !== selected.id).every(item => item.lifecycle.state === 'open'));
+
+    const historical = setAnalystReviewDecision(emptyAnalystReviewStateStore(), {
+      ...selected, subjectKey: analystReviewSubjectKey('comparison', ['case', record.id, record.domain, 'temporal']),
+    }, decision);
+    const reopened = buildAnalystReviewInbox({ projectedItems: projection.items, projectedAdmissions: [projection.admission], reviewState: historical }, NOW);
+    assert.equal(reopened.items.filter(item => item.kind === 'orphaned_state').length, 1);
+    assert.ok(reopened.items.filter(item => item.kind === 'comparison').every(item => item.lifecycle.state === 'open'));
+  });
+
   test('display admission does not orphan a retained decision whose subject still exists', () => {
     const profiles = Array.from({ length: 4 }, (_, group) => {
       const domains = Array.from({ length: 20 }, (_, index) => `domain-${group}-${index}.example`);

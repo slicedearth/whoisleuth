@@ -318,7 +318,7 @@ function buildRecoveryDependencies(input: UnknownRecord): RecoveryDependencyResu
 }
 
 const RETIREMENT_CHECKS = Object.freeze([
-  ['autoRenewDisabled', 'Auto-renew is intentionally configured', true],
+  ['autoRenewDisabled', 'Auto-renew is disabled as declared', true],
   ['registrarLockMaintained', 'Registrar lock remains enabled', true],
   ['websiteRetired', 'Web service is retired or intentionally redirected', true],
   ['mailRetired', 'Mail service is retired', true],

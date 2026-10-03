@@ -10,6 +10,7 @@ import {
   latestObservationCohort,
 } from '../evidence/latest-observations.mts';
 import { readCaseRecheckAnswerContext } from './case-recheck-model.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   CASE_CLOSURE_REASONS,
   CASE_OBSERVED_EFFECT_SOURCE_CLASSES,
@@ -302,6 +303,31 @@ export function normalizeCaseClosureHistory(
   };
 }
 
+/** New-write policy only. Historical normalisation must not re-adjudicate a closure. */
+export function caseClosureReviewBlocker(
+  reason: CaseClosureReason | null,
+  review: CaseObservedEffectReview | null | undefined,
+  now: string,
+): string | null {
+  if (reason !== 'independently_not_reproduced' && reason !== 'infrastructure_changed') return null;
+  const expected = reason === 'independently_not_reproduced' ? 'not_reproduced' : 'changed';
+  const invalidLink = reason === 'independently_not_reproduced'
+    ? 'This closure reason requires a linked independent not-reproduced review.'
+    : 'This closure reason requires a linked independent changed review.';
+  if (!review || review.state !== expected) return invalidLink;
+  const observedAt = normalizeExplicitIsoTimestamp(review.observedAt);
+  const createdAt = normalizeExplicitIsoTimestamp(review.createdAt);
+  const closedAt = normalizeExplicitIsoTimestamp(now);
+  if (!observedAt || !createdAt || !closedAt
+    || Date.parse(observedAt) > Date.parse(closedAt)
+    || Date.parse(createdAt) > Date.parse(closedAt)) return invalidLink;
+  if (reason === 'independently_not_reproduced') {
+    if (review.completeness !== 'complete') return 'Independent non-reproduction closure requires a complete observation. Keep this limited review and collect or record a complete recheck.';
+    if (review.recheck && review.recheck.conditionsMatch !== 'comparable') return 'Independent non-reproduction closure requires comparable recheck conditions.';
+  }
+  return null;
+}
+
 export function appendCaseClosure(
   current: CaseClosureHistory,
   raw: unknown,
@@ -319,14 +345,8 @@ export function appendCaseClosure(
   const action = typeof item.actionId === 'string'
     ? actions.find((candidate) => candidate.id === item.actionId) ?? null
     : null;
-  if (reason === 'independently_not_reproduced'
-    && (review?.state !== 'not_reproduced' || Date.parse(review.observedAt) > Date.parse(now) || Date.parse(review.createdAt) > Date.parse(now))) {
-    throw new Error('This closure reason requires a linked independent not-reproduced review.');
-  }
-  if (reason === 'infrastructure_changed'
-    && (review?.state !== 'changed' || Date.parse(review.observedAt) > Date.parse(now) || Date.parse(review.createdAt) > Date.parse(now))) {
-    throw new Error('This closure reason requires a linked independent changed review.');
-  }
+  const reviewBlocker = caseClosureReviewBlocker(reason, review, now);
+  if (reviewBlocker) throw new Error(reviewBlocker);
   if (reason === 'provider_reported_resolution_not_independently_checked'
     && (action?.providerOutcome !== 'provider_reports_resolved'
       || !action.history.some((event) => event.applied

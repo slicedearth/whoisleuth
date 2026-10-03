@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   quality:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - name: Check out repository
@@ -41,7 +41,7 @@ jobs:
         run: npm run verification:ci -- --group=quality
 
   unit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Check out repository
@@ -74,7 +74,9 @@ jobs:
         run: npm run verification:artifacts -- --cleanup=unit
 
   browser-build:
-    runs-on: ubuntu-latest
+    outputs:
+      browser-matrix: ${{ steps.browser-plan.outputs.matrix }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Check out repository
@@ -90,6 +92,11 @@ jobs:
         run: npm ci --include=optional --ignore-scripts --audit=false
       - name: Run maintained browser-build group
         run: npm run verification:ci -- --group=browser-build
+      - name: Select the complete browser matrix
+        id: browser-plan
+        run: |
+          matrix=$(node tools/playwright-balanced-shard.mts --matrix)
+          printf 'matrix=%s\n' "$matrix" >> "$GITHUB_OUTPUT"
       - name: Upload verified frontend build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -104,26 +111,11 @@ jobs:
   browser:
     needs:
       - browser-build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - kind: functional
-            shard: 1/4
-            label: 1-of-4
-          - kind: functional
-            shard: 2/4
-            label: 2-of-4
-          - kind: functional
-            shard: 3/4
-            label: 3-of-4
-          - kind: functional
-            shard: 4/4
-            label: 4-of-4
-          - kind: performance
-            label: performance
+      matrix: ${{ fromJSON(needs.browser-build.outputs.browser-matrix) }}
     env:
       WHOISLEUTH_PLAYWRIGHT_RUN_KIND: ${{ matrix.kind }}
     steps:
@@ -189,7 +181,7 @@ jobs:
   browser-health:
     needs:
       - browser
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Check out repository
@@ -204,24 +196,18 @@ jobs:
       - name: Download functional shard results
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: playwright-results-*-of-4
+          pattern: playwright-results-*-of-*
           path: ${{ runner.temp }}/playwright-functional-results
           merge-multiple: true
       - name: Verify exact browser inventory
         run: >-
           npm run --silent test:e2e:aggregate --
-          --report="$RUNNER_TEMP/playwright-functional-results/shard-1-of-4.json"
-          --report="$RUNNER_TEMP/playwright-functional-results/shard-2-of-4.json"
-          --report="$RUNNER_TEMP/playwright-functional-results/shard-3-of-4.json"
-          --report="$RUNNER_TEMP/playwright-functional-results/shard-4-of-4.json"
+          --reports-directory="$RUNNER_TEMP/playwright-functional-results"
           > "$RUNNER_TEMP/playwright-browser-aggregate.json"
       - name: Summarise observed balance
         run: >-
           npm run --silent test:e2e:aggregate -- --summary
-          --report="$RUNNER_TEMP/playwright-functional-results/shard-1-of-4.json"
-          --report="$RUNNER_TEMP/playwright-functional-results/shard-2-of-4.json"
-          --report="$RUNNER_TEMP/playwright-functional-results/shard-3-of-4.json"
-          --report="$RUNNER_TEMP/playwright-functional-results/shard-4-of-4.json"
+          --reports-directory="$RUNNER_TEMP/playwright-functional-results"
           > "$RUNNER_TEMP/playwright-browser-health.md"
       - name: Record browser timing evidence
         run: >-
@@ -230,7 +216,7 @@ jobs:
           --report="$RUNNER_TEMP/playwright-browser-aggregate.json"
           --provenance-id="browser-ci-${{ github.run_id }}-${{ github.run_attempt }}"
           --environment=linux-x64-chromium-node24-ci
-          --sample-basis=complete-four-shard-functional-run
+          --sample-basis=complete-functional-shard-run
           > "$RUNNER_TEMP/verification-timing-browser-candidate.json"
       - name: Present browser health summary
         run: cat "$RUNNER_TEMP/playwright-browser-health.md" >> "$GITHUB_STEP_SUMMARY"
@@ -247,7 +233,7 @@ jobs:
 
   critical-browser:
     needs: browser-build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Check out repository
@@ -293,7 +279,7 @@ jobs:
 
   cli-runtime:
     needs: browser-build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Check out repository
@@ -305,6 +291,14 @@ jobs:
         with:
           node-version: 26
           cache: npm
+      - name: Retain compatibility executable
+        id: compatibility-runtime
+        run: printf 'executable=%s\n' "$(command -v node)" >> "$GITHUB_OUTPUT"
+      - name: Restore primary package compiler runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts --audit=false
       - name: Download verified frontend build
@@ -313,6 +307,8 @@ jobs:
           name: frontend-build-${{ github.sha }}-${{ github.run_attempt }}
           path: frontend
       - name: Run maintained CLI compatibility group
+        env:
+          WHOISLEUTH_CLI_RUNTIME_NODE: ${{ steps.compatibility-runtime.outputs.executable }}
         run: npm run verification:ci -- --group=cli-runtime
 
   verify:
@@ -325,7 +321,7 @@ jobs:
       - browser-health
       - critical-browser
       - cli-runtime
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Require every verification lane to pass

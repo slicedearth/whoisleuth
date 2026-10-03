@@ -4,10 +4,10 @@ import { join } from 'node:path';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { CASE_SCHEMA_VERSION, MAX_EDITABLE_CASE_OUTPUT_BYTES } from '../packages/contracts/case-portability.mts';
 
-type RunInstalled = (args: readonly string[], label: string, expectedExitCode?: number, expectedDiagnostics?: RegExp) => Promise<string>;
+import type { RunInstalledCli } from './installed-cli-check.mts';
 
 /** Exercise the installed command against ordinary private files, not source imports. */
-export async function checkInstalledCaseFiles(temporaryRoot: string, run: RunInstalled): Promise<readonly string[]> {
+export async function checkInstalledCaseFiles(temporaryRoot: string, run: RunInstalledCli): Promise<void> {
   const file = join(temporaryRoot, 'working-cases.json');
   const inputFile = join(temporaryRoot, 'case-operation.json');
   const bytes = () => readBoundedRegularFile(file, { maximumBytes: MAX_EDITABLE_CASE_OUTPUT_BYTES, label: 'Installed Case output' });
@@ -77,8 +77,4 @@ export async function checkInstalledCaseFiles(temporaryRoot: string, run: RunIns
   if (incomplete.state !== 'partial' || incomplete.checks?.contentIntegrity !== 'verified' || incomplete.package?.caseFiles?.[0]?.missing !== 1) {
     throw new TypeError('Installed package verification treated a missing Case original as complete.');
   }
-  return ['offline-case-create', 'offline-case-note', 'offline-case-pin', 'offline-case-assessment', 'offline-case-recheck',
-    'offline-case-json-review', 'offline-case-terminal-review', 'offline-case-stale-refusal', 'offline-case-lossy-input-refusal',
-    'offline-case-structure-verification', 'offline-case-encrypted-handoff-creation', 'offline-case-encrypted-handoff-verification',
-    'offline-case-partial-handoff-creation', 'offline-case-missing-original-refusal'];
 }

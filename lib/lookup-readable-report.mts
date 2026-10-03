@@ -1,11 +1,11 @@
 import { buildLookupEvidence } from './evidence-export.mts';
 import { formatLookupEvidenceMarkdown } from './evidence-report-markdown.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
-import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from './project-metadata.mts';
+import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../packages/analysis/project-metadata.mts';
 import {
   buildPortableGeneratorMetadata,
   portableGeneratorAttribution,
-} from './portable-generator.mts';
+} from '../packages/analysis/portable-generator.mts';
 import {
   createLookupViewModel,
   isJsonObject,

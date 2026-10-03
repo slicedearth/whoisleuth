@@ -32,6 +32,21 @@ function mappingInput() {
 }
 
 describe('external observation mapping and asset bridge', () => {
+  test('selects capped domains and summary ties without locale-sensitive collation', t => {
+    t.mock.method(String.prototype, 'localeCompare', () => assert.fail('Selection must not use host collation'));
+    const base = mappingInput();
+    const names = ['z.example', 'aa.example', ...Array.from({ length: 24 }, (_, i) => `a${String(i).padStart(2, '0')}.example`)];
+    const input = { ...base, records: names.map(domain => ({ ...base.records[0]!, target: { domain } })) };
+    const result = mapExternalObservations(input);
+    assert.deepEqual(result.findings.map(item => item.domain), [...names.slice(2), 'aa.example']);
+    assert.deepEqual(mapExternalObservations({ ...input, records: [...input.records].reverse() }), result);
+    const summaries = ['ä', 'z', ...Array.from({ length: 19 }, (_, i) => `A${String(i).padStart(2, '0')}`)];
+    const ties = mapExternalObservations({ ...base, records: summaries.map(summary => ({
+      ...base.records[0]!, finding: { ...base.records[0]!.finding, summary },
+    })) });
+    assert.deepEqual(ties.findings.map(item => item.summary), [...summaries.slice(2), 'z']);
+  });
+
   test('applies a non-executable dotted-field profile into browser-compatible findings', () => {
     const document = mapExternalObservations(mappingInput());
     assert.equal(parseExternalFindingsDocument(document).findings[0]?.domain, 'portal.example.test');

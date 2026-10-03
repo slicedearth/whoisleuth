@@ -1,4 +1,5 @@
 import type { LifecycleEventInput } from './visualization-models.ts';
+import { PASSIVE_MAIL_LABELS } from '../../../../packages/contracts/passive-mail.mts';
 
 export type ActivationContextInput = Readonly<{
   registryCreated?: unknown;
@@ -72,7 +73,7 @@ function mailObservation(input: ActivationContextInput): ActivationContext['mail
     if (input.hasSpf === true && input.hasDmarc === true) {
       return {
         state: 'authenticated_mail',
-        label: 'Mail and core authentication observed',
+        label: PASSIVE_MAIL_LABELS.authenticated_mail,
         detail: 'MX, SPF, and DMARC records were present in this DNS observation.',
       };
     }
@@ -83,7 +84,7 @@ function mailObservation(input: ActivationContextInput): ActivationContext['mail
       ].filter(Boolean).join(' and ');
       return {
         state: 'mail_auth_gap',
-        label: 'Mail authentication gap',
+        label: PASSIVE_MAIL_LABELS.mail_auth_gap,
         detail: `MX was observed, while ${missing} was not observed in the completed DNS collection.`,
       };
     }

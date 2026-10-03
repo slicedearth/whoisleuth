@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import type { DashboardAttentionSummary } from '$lib/analysis/dashboard-workspace-state.ts';
   import { analystReviewAttentionHref } from '$lib/analysis/analyst-review-attention.ts';
 
@@ -38,7 +39,7 @@
         {#each summary.items as item}
           <li>
             <a href={item.href}>{item.title}</a>
-            <span>{item.source}{#if item.dueAt} · Due {new Date(item.dueAt).toLocaleString()}{/if}</span>
+            <span>{item.source}{#if item.dueAt} · Due {formatEvidenceDate(item.dueAt)}{/if}</span>
             <small>{item.detail}</small>
           </li>
         {/each}

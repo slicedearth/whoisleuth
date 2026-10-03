@@ -26,7 +26,7 @@ import {
 import { extractHtmlSignals } from '../lib/html-signals.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { MAX_HOMEPAGE_BYTES } from '../lib/outbound-request-bounds.mts';
-import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
+import { normalizeBoundedSemanticVersion } from '../packages/analysis/semantic-version.mts';
 import {
   boundedControlFreeText as boundedText,
   canonicalControlFreeTimestamp as timestamp,

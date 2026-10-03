@@ -40,10 +40,10 @@ export const CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA = 'whoisleuth.cli.domain-con
 export const CLI_DOMAIN_CONTROL_REVIEW_SCHEMA = 'whoisleuth.cli.domain-control-review';
 export const PUBLIC_DOMAIN_CONTROL_REVIEW_VERSION = 1;
 export const PUBLIC_CLI_DOMAIN_CONTROL_REVIEW_VERSION = 1;
-export const DOMAIN_CONTROL_REVIEW_VERSION = 2;
-export const CLI_DOMAIN_CONTROL_REVIEW_VERSION = 2;
-export const SUPPORTED_DOMAIN_CONTROL_REVIEW_VERSIONS = [PUBLIC_DOMAIN_CONTROL_REVIEW_VERSION, DOMAIN_CONTROL_REVIEW_VERSION] as const;
-export const SUPPORTED_CLI_DOMAIN_CONTROL_REVIEW_VERSIONS = [PUBLIC_CLI_DOMAIN_CONTROL_REVIEW_VERSION, CLI_DOMAIN_CONTROL_REVIEW_VERSION] as const;
+export const DOMAIN_CONTROL_REVIEW_VERSION = 3;
+export const CLI_DOMAIN_CONTROL_REVIEW_VERSION = 3;
+export const SUPPORTED_DOMAIN_CONTROL_REVIEW_VERSIONS = [PUBLIC_DOMAIN_CONTROL_REVIEW_VERSION, 2, DOMAIN_CONTROL_REVIEW_VERSION] as const;
+export const SUPPORTED_CLI_DOMAIN_CONTROL_REVIEW_VERSIONS = [PUBLIC_CLI_DOMAIN_CONTROL_REVIEW_VERSION, 2, CLI_DOMAIN_CONTROL_REVIEW_VERSION] as const;
 
 export const DOMAIN_CONTROL_REVIEW_OBSERVATION_FACTOR = 2;
 export const MAX_DOMAIN_CONTROL_REVIEW_OBSERVATIONS = MAX_DOMAIN_CONTROL_MANIFEST_ENTRIES
@@ -119,7 +119,8 @@ export const PUBLIC_DOMAIN_CONTROL_REVIEW_COUNT_KEYS = Object.freeze([
   'not_configured',
   'due',
 ] as const);
-export const DOMAIN_CONTROL_REVIEW_COUNT_KEYS = Object.freeze([...PUBLIC_DOMAIN_CONTROL_REVIEW_COUNT_KEYS, 'observed'] as const);
+export const DOMAIN_CONTROL_REVIEW_V2_COUNT_KEYS = Object.freeze([...PUBLIC_DOMAIN_CONTROL_REVIEW_COUNT_KEYS, 'observed'] as const);
+export const DOMAIN_CONTROL_REVIEW_COUNT_KEYS = Object.freeze([...DOMAIN_CONTROL_REVIEW_V2_COUNT_KEYS, 'not_due'] as const);
 export const DOMAIN_CONTROL_REVIEW_DOMAIN_KEYS = Object.freeze([
   'domain',
   'state',
@@ -141,11 +142,24 @@ export const PUBLIC_DOMAIN_CONTROL_REVIEW_LIMITATIONS = Object.freeze([
   'A valid manifest digest or signature establishes file integrity, not the correctness of the desired state or supplied observations.',
 ] as const);
 
-export const DOMAIN_CONTROL_REVIEW_LIMITATIONS = Object.freeze([
+export const DOMAIN_CONTROL_REVIEW_V2_LIMITATIONS = Object.freeze([
   PUBLIC_DOMAIN_CONTROL_REVIEW_LIMITATIONS[0],
   'Only complete observations with valid source times within the current review-age window can establish alignment, drift or expected absence. Observation-only fields do not establish alignment.',
   PUBLIC_DOMAIN_CONTROL_REVIEW_LIMITATIONS[2],
 ] as const);
+
+export const DOMAIN_CONTROL_REVIEW_LIMITATIONS = Object.freeze([
+  ...DOMAIN_CONTROL_REVIEW_V2_LIMITATIONS,
+  'Renewal dates are analyst-authored reminders, not observations of configuration.',
+] as const);
+
+export function domainControlReviewCountKeys(version: number) {
+  return version === 1 ? PUBLIC_DOMAIN_CONTROL_REVIEW_COUNT_KEYS : version === 2 ? DOMAIN_CONTROL_REVIEW_V2_COUNT_KEYS : DOMAIN_CONTROL_REVIEW_COUNT_KEYS;
+}
+
+export function domainControlReviewLimitations(version: number) {
+  return version === 1 ? PUBLIC_DOMAIN_CONTROL_REVIEW_LIMITATIONS : version === 2 ? DOMAIN_CONTROL_REVIEW_V2_LIMITATIONS : DOMAIN_CONTROL_REVIEW_LIMITATIONS;
+}
 
 export const CLI_DOMAIN_CONTROL_REVIEW_INPUT_KEYS = Object.freeze([
   'schema',
@@ -192,6 +206,7 @@ export type DomainControlReviewComparisonState =
   | 'unsupported'
   | 'not_configured'
   | 'observed'
+  | 'not_due'
   | 'due';
 
 export type DomainControlReviewObservationField = Readonly<{
@@ -319,11 +334,11 @@ const CORE_REVIEW_SHAPES = SUPPORTED_DOMAIN_CONTROL_REVIEW_VERSIONS.flatMap((ver
     objects: [
       { path: '$', requiredKeys: DOMAIN_CONTROL_REVIEW_ROOT_KEYS, optionalKeys: [], unknownKeys: 'reject' as const },
       { path: '$.manifest', requiredKeys: DOMAIN_CONTROL_REVIEW_MANIFEST_SUMMARY_KEYS, optionalKeys: [], unknownKeys: 'reject' as const },
-      { path: '$.counts', requiredKeys: version === PUBLIC_DOMAIN_CONTROL_REVIEW_VERSION ? PUBLIC_DOMAIN_CONTROL_REVIEW_COUNT_KEYS : DOMAIN_CONTROL_REVIEW_COUNT_KEYS, optionalKeys: [], unknownKeys: 'reject' as const },
+      { path: '$.counts', requiredKeys: domainControlReviewCountKeys(version), optionalKeys: [], unknownKeys: 'reject' as const },
       { path: '$.domains[]', requiredKeys: DOMAIN_CONTROL_REVIEW_DOMAIN_KEYS, optionalKeys: [], unknownKeys: 'reject' as const },
       { path: '$.domains[].comparisons[]', requiredKeys: version === PUBLIC_DOMAIN_CONTROL_REVIEW_VERSION ? PUBLIC_DOMAIN_CONTROL_REVIEW_COMPARISON_KEYS : DOMAIN_CONTROL_REVIEW_COMPARISON_KEYS, optionalKeys: [], unknownKeys: 'reject' as const },
     ],
-    fixedArrays: [{ path: '$.limitations', values: version === PUBLIC_DOMAIN_CONTROL_REVIEW_VERSION ? PUBLIC_DOMAIN_CONTROL_REVIEW_LIMITATIONS : DOMAIN_CONTROL_REVIEW_LIMITATIONS }],
+    fixedArrays: [{ path: '$.limitations', values: domainControlReviewLimitations(version) }],
     normalisation: 'preserve_document' as const,
     target: null,
   },
@@ -342,6 +357,10 @@ function reviewFixtureShapeId(schema: string, version: number): string {
 }
 
 const CURRENT_REVIEW_FIXTURE_CONTENT: Readonly<Record<string, { bytes: number; sha256: string }>> = {
+  "domain-control-review-input-v3": { "bytes": 1879, "sha256": "747cccb9a0610dd5b77ebd2a01f44dc7bd6a929b09b6e52037596427d0c2275b" },
+  "domain-control-review-v3": { "bytes": 4496, "sha256": "736926cf402ca868ddc832c229b88d3c91b44a4c73563c356633a69c1ec8d06c" },
+  "cli-domain-control-review-input-v3": { "bytes": 4123, "sha256": "0283efe6f78551a8aa5a9449a608fb4f3b46b39a9f11f6ffe93244979b16d30b" },
+  "cli-domain-control-review-v3": { "bytes": 9194, "sha256": "31c263f17cd663be74ab9801970a8800894da4023842137e41f602fde633452e" },
   "domain-control-review-input-v2": {
     "bytes": 1879,
     "sha256": "ac3b5913a44c47bd179cd69e4a8bf4268f10e9f01dd7f59c7d722a8c0d241ad1"
@@ -498,13 +517,19 @@ export const DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamil
       scope: 'repository',
     },
   ] as const).flatMap((fixture) => {
-    const version = fixture.schema.startsWith('whoisleuth.cli.') ? CLI_DOMAIN_CONTROL_REVIEW_VERSION : DOMAIN_CONTROL_REVIEW_VERSION;
-    const id = fixture.id.replace(/v\d+$/u, `v${version}`);
-    const content = CURRENT_REVIEW_FIXTURE_CONTENT[id]!;
-    return [
-      { ...fixture, shapeId: reviewFixtureShapeId(fixture.schema, fixture.version), role: fixture.role === 'input' ? 'input' as const : 'historical' as const, expectation: fixture.schema === CLI_DOMAIN_CONTROL_REVIEW_SCHEMA ? 'historical_output_exact' as const : 'accepted_exact' as const, expectedOutputFixtureId: null },
-      { ...fixture, ...content, id, path: `test/fixtures/${id}.json`, version, shapeId: reviewFixtureShapeId(fixture.schema, version), role: fixture.role as 'input' | 'current', expectation: fixture.expectation as 'normalises_to_current_output' | 'accepted_exact', expectedOutputFixtureId: fixture.expectedOutputFixtureId?.replace(/v\d+$/u, `v${version}`) ?? null },
-    ];
+    const currentVersion = fixture.schema.startsWith('whoisleuth.cli.') ? CLI_DOMAIN_CONTROL_REVIEW_VERSION : DOMAIN_CONTROL_REVIEW_VERSION;
+    const versions = fixture.schema.startsWith('whoisleuth.cli.') ? SUPPORTED_CLI_DOMAIN_CONTROL_REVIEW_VERSIONS : SUPPORTED_DOMAIN_CONTROL_REVIEW_VERSIONS;
+    return versions.map((version) => {
+      const id = fixture.id.replace(/v\d+$/u, `v${version}`);
+      const current = version === currentVersion;
+      return {
+        ...fixture, ...(version === 1 ? {} : CURRENT_REVIEW_FIXTURE_CONTENT[id]), id,
+        path: `test/fixtures/${id}.json`, version, shapeId: reviewFixtureShapeId(fixture.schema, version),
+        role: fixture.role === 'input' ? 'input' as const : current ? 'current' as const : 'historical' as const,
+        expectation: current ? fixture.expectation : fixture.schema === CLI_DOMAIN_CONTROL_REVIEW_SCHEMA ? 'historical_output_exact' as const : 'accepted_exact' as const,
+        expectedOutputFixtureId: current ? fixture.expectedOutputFixtureId?.replace(/v\d+$/u, `v${version}`) ?? null : null,
+      };
+    });
   }),
   metadata: {
     enforcement: 'declarative_only',

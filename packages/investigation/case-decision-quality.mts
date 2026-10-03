@@ -1,8 +1,5 @@
-import {
-  dispositionLabel,
-  isReviewedCaseDisposition,
-  latestCaseEvidence,
-} from '../cases/case-model.mts';
+import { dispositionLabel, isReviewedCaseDisposition } from '../cases/case-record-decisions.mts';
+import { latestCaseEvidence } from '../cases/case-evidence-model.mts';
 import type { CaseRecord } from '../cases/case-record-contracts.mts';
 
 export const CASE_DECISION_QUALITY_VERSION = 1;

@@ -4,7 +4,7 @@ import {
   parseExternalFindingsDocument,
   type ExternalFindingsDocument,
 } from './external-findings-import.ts';
-import { normalizeDomain } from './case-model.ts';
+import { normalizeDomain } from '../../../../packages/evidence/domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 export const MAX_WARC_IMPORT_BYTES = 8 * 1024 * 1024;
@@ -33,6 +33,8 @@ const SHA_HEX_RE = /^[a-f0-9]+$/iu;
 const BASE32_RE = /^[A-Za-z2-7]+$/u;
 const MAX_EXCLUSIONS = 20;
 const MAX_TITLE_LENGTH = 240;
+const MAX_HEADER_BYTES = 64 * 1024;
+const HTTP_SINGLETON_HEADERS = new Set(['content-type', 'content-length', 'content-encoding', 'transfer-encoding', 'content-disposition']);
 const WARC_TRUNCATION_REASONS = new Map([
   ['length', 'the configured length limit was reached'],
   ['time', 'the configured collection time limit was reached'],
@@ -44,17 +46,33 @@ function decodeLatin1(bytes: Uint8Array): string {
   return new TextDecoder('iso-8859-1').decode(bytes);
 }
 
-function headerMap(lines: readonly string[], label: string): HeaderMap {
+function headerMap(lines: readonly string[], kind: 'warc' | 'http', label: string): HeaderMap {
   const headers = new Map<string, string>();
+  const unfolded: string[] = [];
   for (const line of lines) {
+    if (/^[ \t]/u.test(line)) {
+      if (!unfolded.length) throw new Error(`${label} contains an orphaned header continuation.`);
+      unfolded[unfolded.length - 1] += ` ${line.replace(/^[ \t]+/u, '')}`;
+    } else unfolded.push(line);
+  }
+  for (const line of unfolded) {
     const separator = line.indexOf(':');
     if (separator <= 0) throw new Error(`${label} contains a malformed header.`);
-    const name = line.slice(0, separator).trim().toLowerCase();
-    const value = line.slice(separator + 1).trim();
-    if (!/^[a-z0-9-]{1,64}$/u.test(name) || !value || value.length > 4096 || CONTROL_RE.test(value)) {
+    const name = line.slice(0, separator).toLowerCase();
+    const value = line.slice(separator + 1).replace(/^[ \t]+|[ \t]+$/gu, '');
+    // The complete block was byte-admitted before unfolding. Horizontal tabs
+    // are header whitespace, not a reason to reject an otherwise usable record.
+    if (!/^[!#$%&'*+.^_`|~a-z0-9-]+$/u.test(name) || CONTROL_RE.test(value.replace(/\t/gu, ' '))) {
       throw new Error(`${label} contains an invalid header.`);
     }
-    if (headers.has(name)) throw new Error(`${label} repeats the ${name} header.`);
+    if (headers.has(name)) {
+      if (kind === 'warc' ? name !== 'warc-concurrent-to' : HTTP_SINGLETON_HEADERS.has(name)) {
+        throw new Error(`${label} contains an ambiguous repeated header.`);
+      }
+      // Concurrent references and repeatable HTTP fields are not projected.
+      // Sensitive fields are checked by presence, regardless of multiplicity.
+      continue;
+    }
     headers.set(name, value);
   }
   return headers;
@@ -81,14 +99,18 @@ function parseWarcRecords(bytes: Uint8Array): ParsedRecord[] {
       throw new Error(`WARC record ${records.length + 1} does not begin with a supported WARC version.`);
     }
     const separator = recordSeparator(source, offset);
-    if (!separator || separator.index - offset > 64 * 1024) {
+    if (!separator || separator.index - offset > MAX_HEADER_BYTES) {
       throw new Error(`WARC record ${records.length + 1} has no bounded header block.`);
     }
-    const lines = source.slice(offset, separator.index).split(/\r?\n/u);
-    lines.shift();
-    const headers = headerMap(lines, `WARC record ${records.length + 1}`);
-    const contentLength = Number(headers.get('content-length'));
-    if (!Number.isInteger(contentLength) || contentLength < 0 || contentLength > MAX_WARC_RECORD_BYTES) {
+    let headerText: string;
+    try { headerText = new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(offset, separator.index)); }
+    catch { throw new Error(`WARC record ${records.length + 1} has invalid UTF-8 headers.`); }
+    const lines = headerText.split(/\r?\n/u);
+    if (!/^WARC\/1\.[01]$/u.test(lines.shift() ?? '')) throw new Error(`WARC record ${records.length + 1} has an invalid version line.`);
+    const headers = headerMap(lines, 'warc', `WARC record ${records.length + 1}`);
+    const lengthText = headers.get('content-length') ?? '';
+    const contentLength = Number(lengthText);
+    if (!/^\d+$/u.test(lengthText) || !Number.isSafeInteger(contentLength) || contentLength > MAX_WARC_RECORD_BYTES) {
       throw new Error(`WARC record ${records.length + 1} has an invalid or excessive Content-Length.`);
     }
     const blockStart = separator.index + separator.length;
@@ -114,7 +136,7 @@ function parseHttpResponse(block: Uint8Array, recordNumber: number): Readonly<{
 }> {
   const source = decodeLatin1(block);
   const separator = recordSeparator(source, 0);
-  if (!separator || separator.index > 64 * 1024) {
+  if (!separator || separator.index > MAX_HEADER_BYTES) {
     throw new Error(`WARC response ${recordNumber} has no bounded HTTP header block.`);
   }
   const lines = source.slice(0, separator.index).split(/\r?\n/u);
@@ -123,7 +145,7 @@ function parseHttpResponse(block: Uint8Array, recordNumber: number): Readonly<{
   if (!match) throw new Error(`WARC response ${recordNumber} has an invalid HTTP status line.`);
   return Object.freeze({
     status: Number(match[1]),
-    headers: headerMap(lines, `WARC response ${recordNumber}`),
+    headers: headerMap(lines, 'http', `WARC response ${recordNumber}`),
     body: block.slice(separator.index + separator.length),
   });
 }
@@ -263,8 +285,12 @@ export async function parseWarcEvidenceArchive(
       addExclusion(exclusions, 'A response without a valid WARC-Date was excluded.');
       continue;
     }
-    earliestTimestamp = Math.min(earliestTimestamp, Date.parse(observedAt));
-    const http = parseHttpResponse(record.block, index + 1);
+    let http: ReturnType<typeof parseHttpResponse>;
+    try { http = parseHttpResponse(record.block, index + 1); }
+    catch {
+      addExclusion(exclusions, 'A response with malformed, ambiguous or oversized HTTP headers was excluded.');
+      continue;
+    }
     if (
       http.headers.has('set-cookie')
       || http.headers.has('cookie')
@@ -280,6 +306,10 @@ export async function parseWarcEvidenceArchive(
     }
     if (http.headers.has('content-encoding') && http.headers.get('content-encoding') !== 'identity') {
       addExclusion(exclusions, 'A compressed response body was excluded.');
+      continue;
+    }
+    if (http.headers.has('transfer-encoding') && http.headers.get('transfer-encoding') !== 'identity') {
+      addExclusion(exclusions, 'A response with an unsupported transfer encoding was excluded.');
       continue;
     }
     const mediaType = (http.headers.get('content-type') ?? '').split(';', 1)[0]?.trim().toLowerCase();
@@ -308,6 +338,7 @@ export async function parseWarcEvidenceArchive(
       continue;
     }
     const title = cleanTitle(html);
+    earliestTimestamp = Math.min(earliestTimestamp, Date.parse(observedAt));
     findings.push({
       domain,
       category: 'page',

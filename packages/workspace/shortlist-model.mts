@@ -3,8 +3,8 @@
 // import merging, and exact serialized-byte accounting.
 
 import { compactWatchlistResults } from './watchlist-history.mts';
-import { normalizeOpportunityModelVersion } from '../../lib/opportunity-scoring.mts';
-import { normalizeRiskModelVersion } from '../../lib/risk-scoring.mts';
+import { normalizeOpportunityModelVersion } from '../analysis/opportunity-scoring.mts';
+import { normalizeRiskModelVersion } from '../analysis/risk-scoring.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
@@ -243,13 +243,18 @@ export function mergeShortlistStores(localRaw: unknown, importedRaw: unknown) {
   for (const item of input.slice(0, MAX_SHORTLIST_INPUTS)) {
     const record = normalizeShortlistRecord(item);
     if (!record) { skipped++; continue; }
-    if (imported.has(record.domain)) skipped++;
-    imported.set(record.domain, record);
+    const prior = imported.get(record.domain);
+    if (prior) skipped++;
+    if (!prior || Date.parse(record.savedAt) > Date.parse(prior.savedAt)) imported.set(record.domain, record);
   }
   let added = 0;
   let updated = 0;
   for (const record of imported.values()) {
-    if (byDomain.has(record.domain)) updated++;
+    const existing = byDomain.get(record.domain);
+    // A backup must not roll back an observation. Equal-time conflicts retain
+    // the local record rather than choosing whichever file was imported last.
+    if (existing && Date.parse(record.savedAt) <= Date.parse(existing.savedAt)) { skipped++; continue; }
+    if (existing) updated++;
     else if (byDomain.size >= MAX_SHORTLIST_ENTRIES) { skipped++; continue; }
     else added++;
     byDomain.set(record.domain, record);

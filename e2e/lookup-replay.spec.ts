@@ -87,8 +87,8 @@ test('offline replay uses isolated graph identifiers and has no live evidence li
 
   await expect(replay.getByText(/Loaded lookup-evidence-current\.json locally/u)).toBeVisible();
   await expect(replay.getByText('Retained normalised facts', { exact: true })).toBeVisible();
-  await expect(replay.locator('.replay-result > header .chip')).toHaveClass(/factual/u);
-  await expect(replay.locator('.replay-result > header .chip')).toHaveText('Registered');
+  await expect(replay.locator('.lookup-evidence-reading header .chip')).toHaveClass(/factual/u);
+  await expect(replay.locator('.lookup-evidence-reading header .chip')).toHaveText('Registered');
   await expect(replay.locator('.source-grid article', { hasText: 'Registry RDAP' }).locator('.chip')).toHaveClass(/good/u);
   await expect(replay.locator('.source-grid article', { hasText: 'Submitted query' }).locator('.chip')).toHaveClass(/factual/u);
   const unsupported = replay.locator('.source-grid article', { hasText: 'WHOIS' }).locator('.chip');
@@ -126,7 +126,7 @@ test('offline replay uses isolated graph identifiers and has no live evidence li
     buffer: readFileSync(resolve(process.cwd(), 'test/fixtures/lookup-evidence-v27.json')),
   });
   await expect(replay.getByText(/Loaded lookup-evidence-v27\.json locally/u)).toBeVisible();
-  const registrarFact = replay.locator('.replay-result > dl > div', {
+  const registrarFact = replay.locator('.lookup-evidence-reading dl > div', {
     has: page.locator('dt', { hasText: /^Registrar$/u }),
   });
   await expect(registrarFact).toHaveCount(1);

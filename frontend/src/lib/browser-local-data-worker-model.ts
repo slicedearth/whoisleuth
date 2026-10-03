@@ -8,7 +8,7 @@ import {
   type AnyLocalDataCollectionDefinition,
   type CapturedLocalDataCollection,
   type PreparedLocalDataContent,
-} from './browser-local-data.ts';
+} from './browser-local-data-content.ts';
 import { boundedJsonLimitsForBytes, parseBoundedJson } from './bounded-json.ts';
 import { createBrandProfileId, MAX_PROFILE_STORE_BYTES, mergeBrandProfiles, type BrandProfile } from './analysis/brand-profile-model.ts';
 import { MAX_PROFILE_IMPORT_BYTES } from '../../../packages/contracts/workspace-portability.mts';

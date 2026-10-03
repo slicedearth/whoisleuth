@@ -1,7 +1,8 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { openCaseSection } from './console-navigation';
-import { createCase } from '../packages/cases/case-model.mts';
+import { createCase } from '../packages/cases/case-record-operations.mts';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
 
@@ -51,14 +52,14 @@ test('held or failed verification never becomes an empty Case collection and a d
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       await expect(page.locator('.local-collection-state')).toBeInViewport({ ratio: 1 });
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`retained-loading-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`retained-loading-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
     fail();
     await expect(page.locator('.local-collection-state')).toHaveAttribute('aria-busy', 'false');
     await expect(page.getByRole('heading', { name: 'Cases unavailable', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'No cases yet', exact: true })).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
-    await testInfo.attach('retained-verification-unavailable', { body: await page.screenshot(), contentType: 'image/png' });
+    if (captureVisualEvidenceEnabled()) { await testInfo.attach('retained-verification-unavailable', { body: await page.screenshot(), contentType: 'image/png' }); }
     expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(before);
   } finally { fail(); await page.unroute(pattern); }
   await page.reload();

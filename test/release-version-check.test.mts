@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
+import { pathToFileURL } from 'node:url';
 
 import {
   MAX_RELEASE_VERSION_LENGTH,
@@ -16,17 +17,23 @@ import {
   formatReleaseVersionReport,
   inspectReleaseVersionIdentity,
   inspectReleaseVersionDerivedOutputs,
-  selectPrecedingPublicReleaseVersion,
+  inspectPublicCompatibilityVersion,
+  selectPublicCompatibilityVersion,
   main,
   normalizeSemanticVersion,
   parseArguments,
 } from '../tools/release-version-check.mts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
+import { buildCaseSupportedContractBaseline } from '../packages/contracts/case-supported-contract-baseline.mts';
+import { CASE_SUPPORTED_CONTRACT_BASELINE_PATH } from '../tools/case-supported-contract-baseline.mts';
+import { releasePreparationCommands, runReleasePreparation } from '../tools/prepare-release.mts';
+import { npmExecutableName } from '../tools/maintainer-tool-helpers.mts';
+import { checkCliPackage } from '../tools/cli-package.mts';
 
 function capture() {
   let value = '';
-  return { stream: { write(chunk: unknown) { value += String(chunk); } }, value: () => value };
+  return { stream: { write(chunk: unknown) { value += String(chunk); return true; } }, value: () => value };
 }
 
 function manifests(version = '1.5.0') {
@@ -41,14 +48,77 @@ function manifests(version = '1.5.0') {
 }
 
 function git(repositoryRoot: string, ...args: string[]): void {
-  execFileSync('git', args, { cwd: repositoryRoot, stdio: 'ignore' });
+  execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'tag.gpgSign=false', ...args], {
+    cwd: repositoryRoot, stdio: 'ignore', timeout: 10_000,
+  });
 }
 
 describe('release semantic-version validation', () => {
+  test('disposable release commits and tags do not invoke inherited signing configuration', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-release-signing-'));
+    try {
+      git(directory, 'init', '--quiet');
+      git(directory, 'config', 'user.name', 'Release fixture');
+      git(directory, 'config', 'user.email', 'release@example.test');
+      git(directory, 'config', 'commit.gpgsign', 'true');
+      git(directory, 'config', 'tag.gpgSign', 'true');
+      git(directory, 'config', 'gpg.program', path.join(directory, 'must-not-run'));
+      await writeFile(path.join(directory, 'fixture.txt'), 'Release fixture');
+      git(directory, 'add', 'fixture.txt');
+      git(directory, 'commit', '--quiet', '-m', 'Retain fixture');
+      git(directory, 'tag', 'v4.1.0');
+      assert.equal(execFileSync('git', ['cat-file', '-t', 'v4.1.0'], { cwd: directory, encoding: 'utf8' }).trim(), 'commit');
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+  test('prepares approved versions through existing writers without tags or dependency scripts', () => {
+    const commands = releasePreparationCommands('4.1.1', '4.1.0');
+    assert.deepEqual(commands[0], [npmExecutableName(), 'version', '4.1.1', '--no-git-tag-version', '--ignore-scripts']);
+    assert.deepEqual(commands.slice(1), [
+      [process.execPath, 'tools/public-product-catalogue.mts', '--write'],
+      [process.execPath, 'tools/release-version-check.mts'],
+    ]);
+    assert.deepEqual(releasePreparationCommands('4.1.1', '4.1.1'), commands.slice(1));
+    assert.throws(() => releasePreparationCommands('--force', '4.1.0'));
+  });
   test('accepts stable, prerelease, and build semantic versions', () => {
     for (const version of ['0.1.0', '1.5.0', '2.0.0-rc.1', '2.0.0-rc.1+build.42']) {
       assert.equal(normalizeSemanticVersion(version), version);
     }
+  });
+
+  test('stops at a failed preparation phase and resumes an already updated version without another bump', () => {
+    for (const failedPhase of [0, 1, 2]) {
+      const stderr = capture();
+      let current = '4.1.0';
+      const executed: string[][] = [];
+      assert.equal(runReleasePreparation('4.1.1', current, (command, args) => {
+        executed.push([command, ...args]);
+        if (executed.length - 1 === failedPhase) return { status: 1 };
+        if (args[0] === 'version') current = args[1]!;
+        return { status: 0 };
+      }, stderr.stream), 2);
+      assert.equal(executed.length, failedPhase + 1);
+      assert.equal(current, failedPhase === 0 ? '4.1.0' : '4.1.1');
+      assert.match(stderr.value(), /Earlier edits remain/u);
+      assert.match(stderr.value(), /rerun npm run release:prepare -- 4\.1\.1/u);
+      const resumed: string[][] = [];
+      assert.equal(runReleasePreparation('4.1.1', current, (command, args) => {
+        resumed.push([command, ...args]);
+        return { status: 0 };
+      }, stderr.stream), 0);
+      assert.equal(resumed.filter(command => command[1] === 'version').length, failedPhase === 0 ? 1 : 0);
+      assert.deepEqual(resumed.slice(-2).map(command => command.slice(1)), [
+        ['tools/public-product-catalogue.mts', '--write'], ['tools/release-version-check.mts'],
+      ]);
+    }
+    const stderr = capture();
+    let attempts = 0;
+    assert.throws(() => runReleasePreparation('4.1.1', '4.1.0', () => {
+      attempts += 1;
+      return { status: null, error: new Error('fixture execution failed') };
+    }, stderr.stream), /fixture execution failed/u);
+    assert.equal(attempts, 1);
+    assert.match(stderr.value(), /Earlier edits remain/u);
   });
 
   test('rejects prefixes, whitespace, missing components, leading zeroes, and invalid identifiers', () => {
@@ -130,7 +200,7 @@ describe('release manifest lockstep', () => {
   });
 
   test('selects the latest reachable stable tag before the current release', () => {
-    assert.equal(selectPrecedingPublicReleaseVersion('2.2.0', [
+    assert.equal(selectPublicCompatibilityVersion('2.2.0', [
       'v1.47.4',
       'v2.0.1',
       'v2.1.0',
@@ -139,18 +209,27 @@ describe('release manifest lockstep', () => {
       'v2.2.0-rc.1',
       'not-a-release',
     ]), '2.1.0');
-    assert.equal(selectPrecedingPublicReleaseVersion('2.1.1', ['v2.1.0', 'v2.0.10']), '2.1.0');
+    assert.equal(selectPublicCompatibilityVersion('2.1.1', ['v2.1.0', 'v2.0.10']), '2.1.0');
     assert.throws(
-      () => selectPrecedingPublicReleaseVersion('2.0.0', ['v2.0.0', 'v2.1.0']),
+      () => selectPublicCompatibilityVersion('2.0.0', ['v2.0.0', 'v2.1.0']),
       /No preceding public release tag/u,
     );
     assert.throws(
-      () => selectPrecedingPublicReleaseVersion('2.2.0', []),
+      () => selectPublicCompatibilityVersion('2.2.0', []),
       /tag inventory/u,
     );
   });
 
+  test('contributions retain the current public boundary and cannot downgrade it through the manifest', () => {
+    const tags = ['v2.0.10', 'v2.1.0', 'v2.2.0-rc.1'];
+    assert.equal(selectPublicCompatibilityVersion('2.1.0', tags, 'contribution'), '2.1.0');
+    assert.equal(selectPublicCompatibilityVersion('2.2.0', tags, 'contribution'), '2.1.0');
+    assert.throws(() => selectPublicCompatibilityVersion('2.0.10', tags, 'contribution'), /precedes the latest reachable public release/u);
+  });
+
   test('checks generated writer metadata without rewriting a published same-schema fixture', async () => {
+    const fixturePath = new URL('./fixtures/case-lifecycle/cli-case-pack-v2-case-v16-current.json', import.meta.url);
+    const frozenBytes = await readFile(fixturePath);
     const published = JSON.parse(await readFile(new URL('./fixtures/case-lifecycle/cli-case-pack-v2-case-v15.json', import.meta.url), 'utf8'));
     assert.equal(published.packet.reports[0].application.version, '2.3.0');
     assert.deepEqual(await inspectReleaseVersionDerivedOutputs(process.cwd(), WHOISLEUTH_APPLICATION_VERSION), {
@@ -160,6 +239,35 @@ describe('release manifest lockstep', () => {
       inspectReleaseVersionDerivedOutputs(process.cwd(), '0.0.0'),
       /application metadata must match release version/u,
     );
+    assert.deepEqual(await readFile(fixturePath), frozenBytes);
+  });
+
+  test('checks the actual preceding tag without a manually maintained application-release declaration', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-public-boundary-'));
+    try {
+      await mkdir(path.join(directory, 'docs'));
+      const filename = path.join(directory, CASE_SUPPORTED_CONTRACT_BASELINE_PATH);
+      const baseline = buildCaseSupportedContractBaseline();
+      await writeFile(filename, JSON.stringify(baseline));
+      git(directory, 'init', '--quiet');
+      git(directory, 'config', 'user.name', 'Release fixture');
+      git(directory, 'config', 'user.email', 'release@example.test');
+      git(directory, 'add', '.');
+      git(directory, 'commit', '--quiet', '-m', 'Retain published contracts');
+      git(directory, 'tag', 'v4.1.0');
+      assert.equal(inspectPublicCompatibilityVersion(directory, '4.1.1'), '4.1.0');
+      const missingContract = { ...baseline.commitments.contracts[0]!, key: 'browser.cases@999', version: 999 };
+      await writeFile(filename, JSON.stringify({ ...baseline, commitments: {
+        ...baseline.commitments, contracts: [...baseline.commitments.contracts, missingContract],
+      } }));
+      git(directory, 'add', '.');
+      git(directory, 'commit', '--quiet', '-m', 'Add a published contract');
+      git(directory, 'tag', 'v4.1.1');
+      assert.throws(() => inspectPublicCompatibilityVersion(directory, '4.1.2'), /browser\.cases@999 disappeared/u);
+      assert.throws(() => inspectPublicCompatibilityVersion(directory, '4.1.1', 'contribution'), /browser\.cases@999 disappeared/u);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   test('checks repository manifests through the no-argument command', async () => {
@@ -176,12 +284,10 @@ describe('release manifest lockstep', () => {
         stderr: stderr.stream,
         inspectIdentity: () => ({ state: 'unreleased', checkedPaths: RELEASE_IDENTITY_PATHS.length }),
         inspectPublicBoundary: () => '2.1.0',
-        inspectDerivedOutputs: async () => ({ checkedFixtures: 1, checkedReports: 1 }),
       }), 0);
       assert.match(stdout.value(), /Version: 2\.1\.0/);
       assert.match(stdout.value(), /Release identity: untagged version/u);
       assert.match(stdout.value(), /Preceding public compatibility boundary: v2\.1\.0/u);
-      assert.match(stdout.value(), /Version-derived outputs: 1 current fixture\(s\) and 1 embedded report\(s\) match/u);
       assert.equal(stderr.value(), '');
     } finally {
       await rm(directory, { recursive: true, force: true });
@@ -189,7 +295,9 @@ describe('release manifest lockstep', () => {
   });
 
   test('rejects command arguments and malformed manifests without leaking their contents', async () => {
-    assert.equal(parseArguments([]), undefined);
+    assert.equal(parseArguments([]), 'release');
+    assert.equal(parseArguments(['--contribution']), 'contribution');
+    assert.throws(() => parseArguments(['--contribution', '--contribution']), /Usage/u);
     assert.throws(() => parseArguments(['--tag']), /Usage/);
 
     const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-release-check-'));
@@ -209,6 +317,59 @@ describe('release manifest lockstep', () => {
 });
 
 describe('release source identity', () => {
+  test('same-version contributions pass while release checks and direct candidate assembly reject changed inputs', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-contribution-version-'));
+    try {
+      await mkdir(path.join(directory, 'docs'));
+      await mkdir(path.join(directory, 'cli'));
+      const { packageManifest, lockfile } = manifests('4.1.0');
+      await writeFile(path.join(directory, 'package.json'), JSON.stringify(packageManifest));
+      await writeFile(path.join(directory, 'package-lock.json'), JSON.stringify(lockfile));
+      await writeFile(path.join(directory, CASE_SUPPORTED_CONTRACT_BASELINE_PATH), JSON.stringify(buildCaseSupportedContractBaseline()));
+      await writeFile(path.join(directory, 'cli/runtime.mts'), 'export const value = 1;\n');
+      git(directory, 'init', '--quiet');
+      git(directory, 'config', 'user.name', 'Release fixture');
+      git(directory, 'config', 'user.email', 'release@example.test');
+      git(directory, 'add', '.');
+      git(directory, 'commit', '--quiet', '-m', 'Retain release fixture');
+      git(directory, 'tag', 'v4.0.0');
+      git(directory, 'tag', 'v4.1.0');
+
+      for (const [file, contents] of [
+        ['package-lock.json', JSON.stringify({ ...lockfile, packages: {
+          ...lockfile.packages, 'node_modules/example-parser': { version: '1.1.1', dev: true },
+        } })],
+        ['cli/runtime.mts', 'export const value = 2;\n'],
+      ]) {
+        await writeFile(path.join(directory, file!), contents!);
+        const stdout = capture();
+        const stderr = capture();
+        assert.equal(await main(['--contribution'], { repositoryRoot: directory, stdout: stdout.stream, stderr: stderr.stream }), 0);
+        assert.match(stdout.value(), /Public compatibility boundary: v4\.1\.0/u);
+        assert.match(stdout.value(), /Release identity: not assessed/u);
+        assert.doesNotMatch(stdout.value(), /untagged version|existing tag matches/u);
+        assert.equal(stderr.value(), '');
+        assert.equal(await main([], { repositoryRoot: directory, stdout: capture().stream, stderr: stderr.stream }), 2);
+        assert.match(stderr.value(), /already identifies different release inputs/u);
+        await assert.rejects(checkCliPackage(directory, {
+          publicationEnabled: true, expectedTag: 'v4.1.0', artifactDirectory: path.join(directory, 'candidate'),
+        }), /already identifies different release inputs/u);
+        await assert.rejects(readFile(path.join(directory, 'candidate/cli-package-report.json')), { code: 'ENOENT' });
+        git(directory, 'add', file!);
+        git(directory, 'commit', '--quiet', '-m', 'Update contribution fixture');
+      }
+      assert.equal(await main(['--contribution'], { repositoryRoot: directory, stdout: capture().stream, stderr: capture().stream }), 0);
+      await writeFile(path.join(directory, 'package.json'), JSON.stringify({ ...packageManifest, version: '4.2.0' }));
+      const stderr = capture();
+      assert.equal(await main(['--contribution'], { repositoryRoot: directory, stdout: capture().stream, stderr: stderr.stream }), 2);
+      assert.match(stderr.value(), /versions must match/u);
+
+      const shallow = path.join(directory, 'shallow');
+      git(directory, 'clone', '--quiet', '--depth=1', pathToFileURL(directory).href, shallow);
+      assert.throws(() => inspectPublicCompatibilityVersion(shallow, '4.1.0', 'contribution'), /non-shallow Git checkout/u);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
   test('allows a new version and an unchanged tagged source boundary', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-release-identity-'));
     try {
@@ -278,6 +439,7 @@ describe('release source identity', () => {
     try {
       assert.throws(() => inspectReleaseVersionIdentity(directory, '2.1.0'), /exact semantic-version tag/u);
       assert.throws(() => inspectReleaseVersionIdentity(directory, 'v2.1.0'), /Git checkout with complete local tag history/u);
+      assert.throws(() => inspectPublicCompatibilityVersion(directory, '2.1.0', 'contribution'), /Git checkout with complete local tag history/u);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

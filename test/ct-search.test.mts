@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { MAX_CT_QUERY_LENGTH } from '../lib/ct-query.mts';
-import { searchCertificateTransparency, summarizeCtResults } from '../lib/ct-search.mts';
+import { CtCollectionError, searchCertificateTransparency, summarizeCtResults } from '../lib/ct-search.mts';
 import { requiredValue } from './value-assertions.mts';
+import { deferred } from './deferred.mts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -387,6 +388,76 @@ describe('searchCertificateTransparency', () => {
 
     assert.equal(calls, 2);
     assert.equal(result.certCount, 1);
+  });
+
+  test('retries a body-read timeout once and removes the previous timer before retry delays', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const bodyStarted = deferred<void>();
+    let calls = 0;
+    const pending = searchCertificateTransparency('example', {
+      fetcher: async (_url, options) => {
+        calls++;
+        if (calls > 1) return new Response(JSON.stringify([row()]));
+        return new Response(new ReadableStream<Uint8Array>({
+          pull() { bodyStarted.resolve(); },
+          start(controller) { options?.signal?.addEventListener('abort', () => controller.error(new DOMException('body timed out', 'AbortError')), { once: true }); },
+        }));
+      },
+    });
+    await bodyStarted.promise;
+    context.mock.timers.tick(20_000);
+    assert.equal((await pending).certCount, 1);
+    assert.equal(calls, 2);
+
+    let previousSignal: AbortSignal | null | undefined;
+    let statusCalls = 0;
+    await searchCertificateTransparency('example', {
+      fetcher: async (_url, options) => {
+        statusCalls++;
+        if (statusCalls > 1) return new Response('[]');
+        previousSignal = options?.signal;
+        return new Response('', { status: 503 });
+      },
+      delay: async () => {
+        context.mock.timers.tick(20_000);
+        assert.ok(previousSignal);
+        assert.equal(previousSignal.aborted, false, 'the previous attempt timer must already be cleared');
+      },
+    });
+    assert.equal(statusCalls, 2);
+  });
+
+  test('bounds timeout retries and never retries caller cancellation', async () => {
+    let calls = 0;
+    await assert.rejects(searchCertificateTransparency('example', { fetcher: async () => {
+      calls++; throw new DOMException('fixture timeout', 'AbortError');
+    } }), { name: 'CtCollectionError', code: 'CT_TIMEOUT' });
+    assert.equal(calls, 2);
+    const controller = new AbortController();
+    calls = 0;
+    await assert.rejects(searchCertificateTransparency('example', { signal: controller.signal, fetcher: async () => {
+      calls++; controller.abort(); throw controller.signal.reason;
+    } }), { name: 'AbortError' });
+    assert.equal(calls, 1);
+  });
+
+  test('uses bounded, query-free errors for overload, malformed data and oversized results', async () => {
+    for (const [body, status, code, expectedCalls] of [
+      ['', 503, 'CT_OVERLOADED', 3], ['private content', 200, 'CT_INVALID_RESPONSE', 1],
+      [' '.repeat(5 * 1024 * 1024 + 1), 200, 'CT_QUERY_TOO_BROAD', 1],
+      ['[]', 403, 'CT_UPSTREAM_ERROR', 1],
+    ] as const) {
+      let calls = 0;
+      await assert.rejects(searchCertificateTransparency('privatekeyword', {
+        fetcher: async () => { calls++; return new Response(body, { status }); }, delay: async () => {},
+      }), (error: unknown) => {
+        assert.ok(error instanceof CtCollectionError);
+        assert.equal(error.code, code);
+        assert.doesNotMatch(error.message, /private/u);
+        return true;
+      });
+      assert.equal(calls, expectedCalls);
+    }
   });
 });
 

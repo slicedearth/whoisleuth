@@ -1,8 +1,10 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page, Request } from '@playwright/test';
-import { CLI_COMMANDS } from '../cli/command-reference.mts';
+import { CLI_COMMANDS, RUNNABLE_INVESTIGATION_PLAN_RECIPES } from '../cli/command-reference.mts';
 import { PUBLIC_COVERAGE_SUMMARY } from '../frontend/src/lib/generated/public-coverage-summary.ts';
 import { PUBLIC_METHODOLOGY } from '../frontend/src/lib/generated/public-methodology.ts';
-import { expect, test } from './fixtures';
+import { PUBLIC_EXAMPLES_INDEX } from '../frontend/src/lib/generated/public-examples-index.ts';
+import { expect, test } from './native-tab-fixtures';
 import { expectNoHorizontalOverflow, openNativeLinkInNewTab, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
 
@@ -20,7 +22,7 @@ function collectInvestigationRequests(page: Page): string[] {
 test('CLI workflow recipes and review confirmation remain reachable without empty planning groups', async ({ page }, testInfo) => {
   await page.goto('/cli');
   const workflows = page.locator('[aria-labelledby="runnable-recipes-title"]');
-  await expect(workflows.locator('li')).toHaveCount(10);
+  await expect(workflows.locator('li > code')).toHaveText([...RUNNABLE_INVESTIGATION_PLAN_RECIPES]);
   await expect(workflows).toContainText('certificate-anomaly');
   await expect(workflows).toContainText('evidence-handoff');
   await expect(page.getByRole('heading', { name: 'Planning templates', exact: true })).toHaveCount(0);
@@ -37,7 +39,7 @@ test('CLI workflow recipes and review confirmation remain reachable without empt
     for (const width of [320, 390, 1024, 1280, 2560]) {
       await page.setViewportSize({ width, height: 900 });
       await expectNoHorizontalOverflow(page);
-      if (width === 320 || width === 1280) await command.screenshot({ path: testInfo.outputPath(`workflow-review-${theme}-${width}.png`) });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await command.screenshot({ path: testInfo.outputPath(`workflow-review-${theme}-${width}.png`) }); }
     }
   }
 });
@@ -48,9 +50,9 @@ test('offline Case file guidance is reachable from tasks and direct command link
   const command = page.locator('article[data-command-detail="case"]');
   await expect(command.getByRole('heading', { name: 'case', exact: true })).toBeVisible();
   await expect(command).toContainText('Mutations require --output');
-  await command.getByText('Operational boundary', { exact: true }).click();
+  await command.locator('summary').filter({ hasText: /^Interpretation and limits$/u }).click();
+  await expect(command.getByRole('region', { name: 'Operational boundary' })).toBeVisible();
   await expect(command).toContainText('Not reproduced requires an existing saved question');
-  await command.getByText('Limits and contracts', { exact: true }).click();
   await expect(command).toContainText('without pruning');
   await expect(page.getByRole('link', { name: 'Case file inputs and examples' })).toHaveAttribute('href', /docs\/cli\.md#local-case-files$/u);
   for (const theme of ['light', 'dark'] as const) {
@@ -62,8 +64,8 @@ test('offline Case file guidance is reachable from tasks and direct command link
         const skip = page.getByRole('link', { name: 'Skip to main content', exact: true });
         await expect(skip).not.toBeFocused();
         expect(await skip.evaluate(element => element.getBoundingClientRect().bottom)).toBeLessThanOrEqual(0);
-        await command.screenshot({ path: testInfo.outputPath(`case-files-${theme}-${width}.png`) });
-        await page.screenshot({ path: testInfo.outputPath(`case-files-viewport-${theme}-${width}.png`) });
+        if (captureVisualEvidenceEnabled()) { await command.screenshot({ path: testInfo.outputPath(`case-files-${theme}-${width}.png`) }); }
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`case-files-viewport-${theme}-${width}.png`) }); }
       }
     }
   }
@@ -96,7 +98,7 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
     ['/cli', 'WHOISleuth CLI'],
     ['/methodology', 'Evidence methodology'],
     ['/coverage', 'Capability and registry coverage'],
-    ['/examples', 'See the output before running a command'],
+    ['/examples', 'Prepare inputs and understand the output'],
   ] as const) {
     await page.goto(path);
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
@@ -115,23 +117,21 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   await expect(page.locator('.page-sections').getByRole('link', { name: 'Command reference' })).toHaveAttribute('href', '#commands');
   await expect(page.locator('.public-section-navigation')).toHaveCount(0);
   expect((await page.locator('.reference-document').boundingBox())?.width ?? 0).toBeGreaterThan(800);
-  const startNotes = page.locator('.start-notes');
-  await expect(startNotes).toHaveCSS('align-items', 'start');
-  const installedHelpNote = startNotes.locator(':scope > p');
-  const helpNoteHeight = (await installedHelpNote.boundingBox())?.height ?? 0;
-  await startNotes.locator('.update-instructions > summary').click();
-  expect((await installedHelpNote.boundingBox())?.height ?? 0).toBeCloseTo(helpNoteHeight, 0);
-  const behaviourDetails = page.locator('.additional-behaviour > details');
-  await expect(page.locator('.additional-behaviour')).toHaveCSS('align-items', 'start');
-  const closedBehaviourHeight = (await behaviourDetails.nth(1).boundingBox())?.height ?? 0;
-  await behaviourDetails.nth(0).locator(':scope > summary').click();
-  expect((await behaviourDetails.nth(1).boundingBox())?.height ?? 0).toBeCloseTo(closedBehaviourHeight, 0);
+  const configuration = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: /^Configuration profiles$/u }) });
+  const handoffs = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: /^Browser and evidence handoffs$/u }) });
+  await expect(configuration).not.toHaveAttribute('open');
+  await expect(handoffs).not.toHaveAttribute('open');
+  await configuration.locator('summary').click();
+  await expect(configuration).toHaveAttribute('open');
+  await expect(configuration.getByRole('list')).toBeVisible();
+  await expect(handoffs).not.toHaveAttribute('open');
 
   await page.setViewportSize({ width: 1024, height: 768 });
   await expect(page.locator('.reference-tree')).toBeHidden();
   await expect(page.locator('.reference-browser')).toBeVisible();
-  await page.locator('.reference-browser > summary').click();
-  await expect(page.locator('.reference-browser > nav')).toHaveCSS('align-items', 'start');
+  await page.getByRole('button', { name: 'Browse documentation' }).click();
+  await expect(page.getByRole('dialog', { name: 'Documentation', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
   expect((await page.locator('.reference-document').boundingBox())?.width ?? 0).toBeGreaterThan(880);
   await expectNoHorizontalOverflow(page);
 
@@ -153,7 +153,7 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   }
   await expect(mobileNavigation.getByRole('link', { name: 'Overview', exact: true })).toHaveCount(0);
   await siteMenu.getByText('Menu', { exact: true }).click();
-  await page.getByText('Browse documentation', { exact: true }).click();
+  await page.getByRole('button', { name: 'Browse documentation', exact: true }).click();
   documentation = page.getByRole('navigation', { name: 'Documentation' });
   await expect(documentation.getByRole('link', { name: 'Methodology', exact: true })).toBeVisible();
   await expect(documentation.getByRole('link', { name: 'CLI', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -171,40 +171,37 @@ test('long reference labels remain distinct and the mobile navigator works by ke
     ]) {
       await page.setViewportSize(viewport);
       const browser = page.locator('.reference-browser');
-      const summary = browser.locator(':scope > summary');
-      await expect(summary).toHaveCount(1);
+      const trigger = browser.getByRole('button', { name: 'Browse documentation' });
       if (viewport.width > 1080) {
         await expect(browser).toBeHidden();
         await expect(page.locator('.reference-tree').getByRole('link', { name: 'Reporting and takedown guidance', exact: true })).toHaveAttribute('aria-current', 'page');
       } else {
-        await expect(summary).toBeVisible();
-        await expect(summary.locator('span')).toHaveText('Browse documentation');
-        await expect(summary.locator('strong')).toHaveText('Reporting and takedown guidance');
-        const geometry = await summary.evaluate((element) => {
-          const a = element.querySelector('span')!.getBoundingClientRect();
-          const current = element.querySelector('strong')!;
-          const b = current.getBoundingClientRect();
-          const showsCurrent = getComputedStyle(current).display !== 'none';
-          const bounds = element.getBoundingClientRect();
-          return {
-            separated: !showsCurrent || a.right < b.left || a.bottom < b.top,
-            contained: [a, ...(showsCurrent ? [b] : [])].every((box) => box.left >= bounds.left && box.right <= bounds.right && box.bottom <= bounds.bottom),
-          };
-        });
-        expect(geometry.separated).toBe(true);
-        expect(geometry.contained).toBe(true);
-        await summary.focus();
+        await expect(trigger).toBeVisible();
+        await trigger.focus();
         await page.keyboard.press('Enter');
-        await expect(browser).toHaveAttribute('open', '');
-        await expect(browser.getByRole('link', { name: 'Reporting and takedown guidance', exact: true })).toHaveAttribute('aria-current', 'page');
-        await expect(summary).toBeFocused();
-        await page.keyboard.press('Space');
-        await expect(browser).not.toHaveAttribute('open', '');
+        const dialog = page.getByRole('dialog', { name: 'Documentation', exact: true });
+        await expect(dialog).toBeVisible();
+        await expect(dialog.getByRole('link', { name: 'Reporting and takedown guidance', exact: true })).toHaveAttribute('aria-current', 'page');
+        await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+        await page.keyboard.press('Escape');
+        await expect(dialog).toBeHidden();
+        await expect(trigger).toBeFocused();
+        await trigger.click();
+        const contents = page.getByRole('dialog', { name: 'Documentation', exact: true });
+        await expect(contents).toBeVisible();
+        const destination = contents.getByRole('navigation', { name: 'Reporting and takedown guidance sections' }).getByRole('link').first();
+        const href = await destination.getAttribute('href');
+        await destination.focus();
+        await page.keyboard.press('Enter');
+        await expect(contents).toBeHidden();
+        expect(href).toMatch(/^#[a-z]/u);
+        await expect(page.locator(href!)).toBeFocused();
+        await expect(page.locator(href!).getByRole('heading').first()).toBeInViewport({ ratio: 1 });
       }
       await expectNoHorizontalOverflow(page);
       await page.evaluate(() => scrollTo(0, 0));
       if (viewport.width === 320 || viewport.width === 1280) {
-        await page.screenshot({ path: testInfo.outputPath(`reference-labels-${viewport.width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`reference-labels-${viewport.width}-${theme}.png`) }); }
       }
     }
   }
@@ -219,6 +216,7 @@ test('reference pages expose the first recipe on mobile and constrain wide prose
     await expect(firstCommand.getByRole('button', { name: 'Copy run-once help command' })).toBeVisible();
     await expect(firstCommand.locator('code')).toBeInViewport({ ratio: 1 });
     const copy = firstCommand.getByRole('button', { name: 'Copy run-once help command' });
+    await copy.scrollIntoViewIfNeeded();
     await copy.focus();
     await expect(copy).toBeFocused();
     await expect(copy).toBeInViewport({ ratio: 1 });
@@ -248,16 +246,24 @@ test('filters and opens the canonical CLI catalogue entirely by keyboard', async
   await expect(catalogue.getByRole('status')).toHaveText(`Showing 1 of ${CLI_COMMANDS.length} commands.`);
 
   const command = catalogue.locator('article[data-command="workflow-plan"]');
-  const open = command.locator(':scope > .command-row > button');
+  const open = command.getByRole('button', { name: 'View workflow-plan command' });
+  await expect(open).toContainText('View command');
   await open.focus();
   await page.keyboard.press('Enter');
   const workspace = catalogue.locator('article[data-command-detail="workflow-plan"]');
   await expect(workspace).toBeFocused();
-  await expect(workspace.locator('.command-detail')).toContainText('Network behaviour');
+  await expect(workspace.getByRole('link', { name: 'Direct link to workflow-plan command' })).toHaveAttribute('href', '#command-workflow-plan');
+  await expect(workspace.locator('.command-detail')).toContainText('Runs locally.');
   await expect(workspace.locator('.command-detail')).toContainText('Schemas');
   await workspace.getByRole('link', { name: /Back to 1 filtered command/u }).click();
   await expect(catalogue.locator('article[data-command="workflow-plan"] .command-open')).toBeFocused();
   await expect(page).toHaveURL(/\?q=workflow-plan#commands$/u);
+  await open.click();
+  await workspace.getByRole('combobox', { name: 'Jump to command' }).selectOption('lookup');
+  await expect(catalogue.locator('article[data-command-detail="lookup"]')).toBeFocused();
+  await expect(page).toHaveURL(/\/cli#command-lookup$/u);
+  await catalogue.locator('summary').filter({ hasText: /^Interpretation and limits$/u }).click();
+  await expect(catalogue.getByRole('region', { name: 'Operational boundary' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(investigationRequests).toEqual([]);
 });
@@ -290,11 +296,11 @@ test('signer trust guidance is reachable by direct command link at supported wid
       await expect(detail).toContainText('--trust-store-file');
       await expect(detail).toContainText('whoisleuth.evidence-signer-trust-report');
       await expect(detail).toBeFocused();
-      await detail.getByText('Operational boundary', { exact: true }).click();
+      await detail.locator('summary').filter({ hasText: /^Interpretation and limits$/u }).click();
       await expect(detail.locator('.boundary p')).toBeVisible();
       await expect(detail.locator('.boundary p')).toContainText('unknown, retired, revoked or future-reviewed entries exit 4');
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`signer-trust-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`signer-trust-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       await detail.getByRole('link', { name: /Back to 1 filtered command/u }).click();
       await expect(page.locator('article[data-command="verify-signature"] .command-open')).toBeFocused();
     }
@@ -330,15 +336,10 @@ test('opens a directly linked CLI command without loading unrelated command deta
   const catalogue = page.getByTestId('public-cli-catalogue');
   const command = catalogue.locator('article[data-command-detail="workflow-plan"]');
   await expect(command).toBeVisible();
-  await expect(command.locator('.command-detail')).toContainText('Limits and contracts');
+  await expect(command.locator('.command-detail')).toContainText('Interpretation and limits');
   await expect(catalogue.locator('.command-detail')).toHaveCount(1);
-  await expect.poll(async () => {
-    const commandBox = await command.boundingBox();
-    const filtersBox = await catalogue.locator('.filters').boundingBox();
-    return commandBox && filtersBox
-      ? commandBox.y >= filtersBox.y + filtersBox.height
-      : false;
-  }).toBe(true);
+  await expect(command).toBeFocused();
+  await expect(command.getByRole('heading', { name: 'workflow-plan', exact: true })).toBeInViewport({ ratio: 1 });
   await expectNoHorizontalOverflow(page);
   expect(investigationRequests).toEqual([]);
 });
@@ -347,7 +348,7 @@ test('command and return links preserve open-in-new-tab activation @timing-sensi
   await page.goto('/cli#command-lookup');
   const command = page.locator('[data-command-detail="lookup"]');
   await expect(command).toBeVisible();
-  for (const link of [command.locator('.related-commands a').first(), command.locator('.back-to-results')]) {
+  for (const link of [command.locator('.related-commands a').first(), command.locator('.back-to-results'), command.getByRole('link', { name: 'Direct link to lookup command' })]) {
     await page.bringToFront();
     await expect(link).toBeVisible();
     const href = await link.getAttribute('href');
@@ -356,15 +357,11 @@ test('command and return links preserve open-in-new-tab activation @timing-sensi
     const expectedDetail = href!.startsWith('#command-') ? href!.slice('#command-'.length) : null;
     const destination = await openNativeLinkInNewTab(page, link);
     try {
-      // Read the actual document and usable destination together. The string
-      // URL matcher also waits for engine navigation bookkeeping, which can
-      // remain pending after this native modified-click destination is ready.
-      await expect.poll(() => destination.evaluate(() => ({
-        href: location.href,
-        ready: document.readyState,
-        clientReady: document.querySelector('[data-testid="public-cli-catalogue"]')?.getAttribute('data-client-ready'),
-        detail: document.querySelector('[data-command-detail]')?.getAttribute('data-command-detail') ?? null,
-      }))).toEqual({ href: expectedHref, ready: 'complete', clientReady: 'true', detail: expectedDetail });
+      await destination.waitForURL(url => url.href === expectedHref, { waitUntil: 'load' });
+      await expect(destination.getByTestId('public-cli-catalogue')).toHaveAttribute('data-client-ready', 'true');
+      const details = destination.locator('[data-command-detail]');
+      await expect(details).toHaveCount(expectedDetail ? 1 : 0);
+      if (expectedDetail) await expect(details).toHaveAttribute('data-command-detail', expectedDetail);
     } finally {
       await destination.close();
       await page.bringToFront();
@@ -379,12 +376,12 @@ test('command details distinguish an artefact from its presentation and destinat
   const command = page.locator('[data-command-detail="export"]');
   await expect(command).toBeVisible();
   await expect(command.locator('.command-facts')).toContainText('Portable evidence report');
-  const formats = command.locator('dt').filter({ hasText: /^Presentation options$/u }).locator('..');
+  const formats = command.locator('dt').filter({ hasText: /^Formats$/u }).locator('..');
   await expect(formats).toContainText('--markdown');
   await expect(formats).toContainText('--html');
   await expect(formats).not.toContainText('--json');
   await expect(command.locator('.command-facts')).toContainText('--output <file>');
-  await command.getByText('Limits and contracts', { exact: true }).click();
+  await command.locator('summary').filter({ hasText: /^Interpretation and limits$/u }).click();
   await expect(command.locator('.contract-details')).toContainText('Exit 0 reports command completion');
 });
 
@@ -394,10 +391,12 @@ test('distinguishes compact and metadata CSV in responsive command details', asy
     await page.goto(`/cli#command-${commandId}`);
     const command = page.locator(`[data-command-detail="${commandId}"]`);
     await expect(command).toBeVisible();
-    const presentations = command.locator('dt').filter({ hasText: /^Presentation options$/u }).locator('..');
+    const presentations = command.locator('dt').filter({ hasText: /^Formats$/u }).locator('..');
     await expect(presentations.getByText('--csv', { exact: true })).toBeVisible();
     await expect(presentations.getByText('--csv-with-metadata', { exact: true })).toBeVisible();
-    await command.getByText('Operational boundary', { exact: true }).click();
+    await expect(command.locator('.contract-details')).not.toHaveAttribute('open');
+    await command.locator('summary').filter({ hasText: /^Interpretation and limits$/u }).click();
+    await expect(command.getByRole('region', { name: 'Operational boundary' })).toBeVisible();
     const boundary = command.locator('.boundary p');
     await expect(boundary).toContainText('separate observation and report times');
     await expect(boundary).toContainText('--csv retains the compact columns');
@@ -412,9 +411,9 @@ test('distinguishes compact and metadata CSV in responsive command details', asy
         await presentations.scrollIntoViewIfNeeded();
         await expect(presentations).toBeInViewport();
         await expectNoHorizontalOverflow(page);
-        await testInfo.attach(`csv-options-${viewport.width}-${theme}`, {
+        if (captureVisualEvidenceEnabled()) { await testInfo.attach(`csv-options-${viewport.width}-${theme}`, {
           body: await page.screenshot(), contentType: 'image/png',
-        });
+        }); }
         await boundary.scrollIntoViewIfNeeded();
         await expect(boundary).toBeInViewport();
         await expectNoHorizontalOverflow(page);
@@ -441,8 +440,8 @@ test('keeps workflow partial-result and resume guidance readable across referenc
   await page.goto('/cli#command-workflow-run');
   const detail = page.locator('article[data-command-detail="workflow-run"]');
   await expect(detail).toBeVisible();
-  await expect(detail.locator('details.boundary')).toHaveJSProperty('open', true);
-  const boundary = detail.locator('details.boundary > p');
+  await detail.locator('summary').filter({ hasText: /^Interpretation and limits$/u }).click();
+  const boundary = detail.getByRole('region', { name: 'Operational boundary' });
   await expect(boundary).toBeVisible();
   await expect(boundary).toContainText(/Partial collections pause for review.*not recollected.*resume/u);
   await expect(boundary).toContainText('failed validation or export steps remain retryable');
@@ -458,9 +457,9 @@ test('keeps workflow partial-result and resume guidance readable across referenc
       await boundary.scrollIntoViewIfNeeded();
       await expect(boundary).toBeInViewport();
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`workflow-artifact-${viewport.width}-${theme}`, {
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`workflow-artifact-${viewport.width}-${theme}`, {
         body: await page.screenshot(), contentType: 'image/png',
-      });
+      }); }
     }
   }
   expect(requests).toEqual([]);
@@ -478,7 +477,7 @@ test('reveals related CLI commands even when the current filters exclude them', 
   const targetId = (await related.getAttribute('href'))?.replace('#command-', '') ?? '';
   expect(targetId).not.toBe('');
   await related.click();
-  await expect(search).toHaveValue('');
+  await expect(page).toHaveURL(new RegExp(`/cli#command-${targetId}$`, 'u'));
   const target = catalogue.locator(`article[data-command-detail="${targetId}"]`);
   await expect(target).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`#command-${targetId}$`, 'u'));
@@ -512,7 +511,7 @@ test('renders methodology and deferred coverage from fixed metadata without requ
       await expect(authority).toBeVisible();
       await expectNoHorizontalOverflow(page);
       if (viewport.width === 320 || viewport.width === 1280) {
-        await page.screenshot({ path: testInfo.outputPath(`registration-authority-${viewport.width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`registration-authority-${viewport.width}-${theme}.png`) }); }
       }
     }
   }
@@ -525,8 +524,16 @@ test('renders methodology and deferred coverage from fixed metadata without requ
   const catalogue = page.getByTestId('public-coverage-catalogue');
   await expect(catalogue).toBeVisible();
   await expect(catalogue.getByRole('status')).toContainText('implemented capability families');
-  await catalogue.getByRole('checkbox', { name: 'Optional or configuration-dependent only' }).check();
-  await expect(catalogue.getByRole('status')).not.toContainText('Showing 32 of 32');
+  const optional = catalogue.getByRole('heading', { name: 'Optional scheduled monitoring worker', exact: true });
+  const standard = catalogue.getByRole('heading', { name: 'DNS intelligence', exact: true });
+  await expect(optional).toBeVisible();
+  await expect(standard).toBeVisible();
+  const optionalOnly = catalogue.getByRole('checkbox', { name: 'Optional or configuration-dependent only' });
+  await optionalOnly.check();
+  await expect(optional).toBeVisible();
+  await expect(standard).toHaveCount(0);
+  await optionalOnly.uncheck();
+  await expect(standard).toBeVisible();
   expect(investigationRequests).toEqual([]);
 });
 
@@ -553,6 +560,13 @@ test('contains an optional chunk preload failure without a page error', async ({
 
 test('opens, filters and downloads a large synthetic example without workspace access', async ({ page }) => {
   const investigationRequests = collectInvestigationRequests(page);
+  const exampleChunks = new Map(PUBLIC_EXAMPLES_INDEX.examples.map(example =>
+    [productionChunkPath(`src/lib/generated/public-example-outputs/${example.id}.ts`), example.id]));
+  const requestedExamples = new Set<string>();
+  page.on('request', request => {
+    const id = exampleChunks.get(new URL(request.url()).pathname);
+    if (id) requestedExamples.add(id);
+  });
   await page.goto('/examples');
   const before = await page.evaluate(async () => ({
     local: Object.keys(localStorage).sort(),
@@ -560,8 +574,10 @@ test('opens, filters and downloads a large synthetic example without workspace a
     workspace: (await indexedDB.databases()).some((database) => database.name === 'whoisleuth-browser-data-v1'),
   }));
   expect(before.workspace).toBe(false);
+  expect([...requestedExamples]).toEqual([]);
 
   const gallery = page.getByTestId('public-example-gallery');
+  await gallery.getByLabel('Example type').selectOption('output');
   const exampleCards = gallery.locator('article[data-example]');
   await expect(exampleCards).toHaveCount(4);
   await expect(exampleCards.getByRole('button', { name: 'Open synthetic output' })).toHaveCount(4);
@@ -569,10 +585,10 @@ test('opens, filters and downloads a large synthetic example without workspace a
     await expect(button).not.toHaveAttribute('aria-controls');
     await expect(button).toHaveAttribute('aria-expanded', 'false');
   }
-  await expect(gallery.locator('.example-grid')).toHaveCSS('align-items', 'start');
   const unchangedPeerHeight = (await exampleCards.nth(1).boundingBox())?.height ?? 0;
   await exampleCards.nth(0).getByRole('button', { name: 'Open synthetic output' }).click();
   await expect(exampleCards.nth(0).getByRole('textbox')).toBeVisible();
+  expect([...requestedExamples]).toEqual(['lookup-preflight']);
   expect((await exampleCards.nth(1).boundingBox())?.height ?? 0).toBeCloseTo(unchangedPeerHeight, 0);
   await gallery.getByLabel('Format').selectOption('JSON');
   await expect(gallery.locator('article[data-example]')).toHaveCount(1);
@@ -586,6 +602,7 @@ test('opens, filters and downloads a large synthetic example without workspace a
   await expect(output).toHaveValue(/"digestSha256": "sha256:[a-f0-9]{64}"/u);
   await expect(example.getByRole('button', { name: 'Close synthetic output' })).toHaveAttribute('aria-controls', 'example-output-case-handoff');
   await expect(example.locator('#example-output-case-handoff')).toBeVisible();
+  expect([...requestedExamples].sort()).toEqual(['case-handoff', 'lookup-preflight']);
 
   const downloadPromise = page.waitForEvent('download');
   await example.getByRole('button', { name: 'Download example' }).click();
@@ -595,6 +612,16 @@ test('opens, filters and downloads a large synthetic example without workspace a
   await expect(example.locator('#example-output-case-handoff')).toHaveCount(0);
   await expect(example.getByRole('button', { name: 'Open synthetic output' })).not.toHaveAttribute('aria-controls');
 
+  await gallery.getByLabel('Example type').selectOption('input');
+  for (const id of ['case-pin-input', 'case-assess-input', 'case-recheck-input']) {
+    const input = gallery.locator(`article[data-example="${id}"]`);
+    await input.getByRole('button', { name: 'Open synthetic input' }).click();
+    const document = JSON.parse(await input.getByRole('textbox').inputValue());
+    expect(document).not.toHaveProperty('id');
+    await expect(input).toContainText('--input');
+    await input.getByRole('button', { name: 'Close synthetic input' }).click();
+  }
+
   const after = await page.evaluate(async () => ({
     local: Object.keys(localStorage).sort(),
     session: Object.keys(sessionStorage).sort(),
@@ -602,6 +629,7 @@ test('opens, filters and downloads a large synthetic example without workspace a
   }));
   expect(after).toEqual(before);
   expect(investigationRequests).toEqual([]);
+  expect([...requestedExamples].sort()).toEqual(['case-assess-input', 'case-handoff', 'case-pin-input', 'case-recheck-input', 'lookup-preflight']);
 });
 
 test('uses Investigate, Respond and Assure as the only top-level product jobs', async ({ page }) => {

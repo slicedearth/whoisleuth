@@ -5,6 +5,18 @@ import { LOOKUP_TASK_VIEWS, type LookupGuidanceTask as LookupTaskView } from '..
 export { LOOKUP_TASK_VIEWS };
 export type { LookupGuidanceTask as LookupTaskView } from '../../../../packages/investigation/lookup-task-guidance.mts';
 export type LookupDepth = 'fast' | 'deep';
+/** Request options retained only for navigation within the current console session. */
+export function createLookupRequestDraft() {
+  return {
+    query: '',
+    lookupMode: 'fast' as LookupDepth,
+    includeExternalIntelligence: false,
+    includeMalwareHostIntelligence: false,
+    includeMalwareIocIntelligence: false,
+    includeSecurityTxt: false,
+  };
+}
+export type LookupRequestDraft = ReturnType<typeof createLookupRequestDraft>;
 export type LookupSectionLink = Readonly<{ href: `#${string}`; label: string }>;
 export type LookupPresentationState = Readonly<{
   task: LookupTaskView;

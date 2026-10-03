@@ -56,6 +56,13 @@ function eventCase(domain: string, overrides: Record<string, unknown> = {}) {
 }
 
 describe('retained certificate expectation replay', () => {
+  test('retains certificate observations for official domains beyond the first page', () => {
+    const officialDomains = Array.from({ length: 21 }, (_, index) => `d${String(index).padStart(2, '0')}.example`);
+    const replay = buildBrandCertificateEventReplay({ ...profile(), officialDomains }, [eventCase('d20.example')]);
+    assert.equal(replay.domains.length, 21);
+    assert.equal(replay.retainedEventCount, 1);
+    assert.equal(replay.domains.find(item => item.domain === 'd20.example')?.events.length, 1);
+  });
   test('retains an undated certificate event with its source instead of substituting Case save time', () => {
     const record = eventCase('official.example');
     record.evidencePins[0]!.observedAt = null;
@@ -90,6 +97,14 @@ describe('retained certificate expectation replay', () => {
     assert.equal(event.state, 'indeterminate');
     assert.equal(event.clauses.find((item) => item.id === 'san_patterns')?.state, 'indeterminate');
     assert.match(event.limitations.join(' '), /did not retain every certificate name/iu);
+  });
+
+  test('each configured pattern is required, including a wildcard separate from an apex', () => {
+    const apex = eventCase('official.example', { dnsNameCount: 1 });
+    const clause = (patterns: string[]) => buildBrandCertificateEventReplay(profile('Fixture issuer', patterns), [apex]).domains[0]?.events[0]?.clauses.find(item => item.id === 'san_patterns');
+    assert.equal(clause(['official.example'])?.state, 'aligned');
+    assert.equal(clause(['official.example', '*.official.example'])?.state, 'review');
+    assert.equal(clause(['*.official.example'])?.state, 'review');
   });
 
   test('marks complete issuer or SAN differences for review without claiming improper issuance', () => {

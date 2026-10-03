@@ -38,6 +38,8 @@ export type LookupDecisionSupport = Readonly<{
   entries: readonly LookupDecisionEntry[];
   actions: readonly LookupNextAction[];
   counts: Readonly<{ conflicts: number; uncertainties: number }>;
+  /** View-only omissions; counts above reconcile with the retained entries. */
+  omittedCounts?: Readonly<{ conflicts: number; uncertainties: number }>;
 }>;
 
 export type LookupFreshnessPolicy = Readonly<{

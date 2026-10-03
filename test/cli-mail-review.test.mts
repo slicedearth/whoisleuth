@@ -46,6 +46,18 @@ function capture() {
 }
 
 describe('passive mail exposure review', () => {
+  test('selects capped provider relationships independently of host collation', t => {
+    t.mock.method(String.prototype, 'localeCompare', () => assert.fail('Selection must not use host collation'));
+    const providers = ['z.example', 'aa.example', ...Array.from({ length: 100 }, (_, i) => `b${String(i).padStart(3, '0')}.example`)];
+    const rows = providers.flatMap((provider, i) => ['first', 'second'].map(side => bulkItem(`${side}-${i}.example`, {
+      hasMx: true, hasNullMx: false, hasSpf: true, hasDmarc: true, mxHosts: [`mx.${provider}`],
+    })));
+    const review = buildCliMailReview(bulkDocument(rows), ISO);
+    assert.deepEqual(review.providerRelationships.map(item => item.providerDomain), ['aa.example', ...providers.slice(2, 101)]);
+    assert.equal(review.providerCoverage.omittedRelationships, 2);
+    assert.deepEqual(buildCliMailReview(bulkDocument([...rows].reverse()), ISO).providerRelationships, review.providerRelationships);
+  });
+
   test('keeps null MX, authentication gaps, and incomplete evidence distinct', () => {
     const document = buildCliMailReview(bulkDocument([
       bulkItem('alpha.example', { hasMx: true, hasNullMx: false, hasSpf: true, hasDmarc: true, mxHosts: ['10 mx.shared.example.'] }),
@@ -66,6 +78,9 @@ describe('passive mail exposure review', () => {
     }]);
     assert.equal(document.providerCoverage.complete, true);
     assert.match(formatCliMailReview(document), /Passive mail exposure review/u);
+    assert.match(formatCliMailReview(document), /MX, SPF and DMARC observed/u);
+    assert.doesNotMatch(formatCliMailReview(document), /authenticated mail|receiving MX/iu);
+    assert.match(document.limitations.join(' '), /does not establish policy validity, alignment, message authentication or delivery/u);
     assert.doesNotMatch(JSON.stringify(document), /SMTP banner|message acceptance was tested/u);
   });
 
@@ -362,7 +377,7 @@ describe('offline message-header review', () => {
   test('projects domain-only identity, reported authentication, and ordered routing', () => {
     const document = buildCliMailHeaderReview(MESSAGE, ISO);
     assert.equal(document.schema, 'whoisleuth.cli.mail-header-review');
-    assert.equal(document.version, 1);
+    assert.equal(document.version, 2);
     assert.equal(document.generatedAt, ISO);
     assert.deepEqual(document.identity.fromDomains, ['sender.test']);
     assert.deepEqual(document.identity.replyToDomains, ['support.sender.test']);
@@ -395,7 +410,8 @@ describe('offline message-header review', () => {
       'Confidential message body',
       'private-signature',
     ]) assert.doesNotMatch(serialised, new RegExp(omitted, 'u'));
-    assert.match(formatCliMailHeaderReview(document), /Reported authentication/u);
+    assert.match(formatCliMailHeaderReview(document), /Authentication by source header/u);
+    assert.match(formatCliMailHeaderReview(document), /header 3 · authentication-results · mx\.recipient\.test/u);
     assert.match(document.limitations.join(' '), /does not establish spoofing, abuse or maliciousness/u);
   });
 

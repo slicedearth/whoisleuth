@@ -1,13 +1,12 @@
 import { caseWorkspaceHref } from './case-response-stage.ts';
+import { domainTransitionReview } from '../../../../packages/investigation/domain-transition-review.mts';
+import { MAX_CASES, MAX_EVIDENCE_SNAPSHOTS_PER_CASE } from '../../../../packages/contracts/case-portability.mts';
 import {
-  MAX_CASES,
-  MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
   caseEvidenceIncomparableReasons,
   compareCaseEvidence,
-  normalizeCase,
-  type CaseEvidenceSnapshot,
-  type CaseRecord,
-} from './case-model.ts';
+} from '../../../../packages/cases/case-evidence-model.mts';
+import { normalizeCase } from '../../../../packages/cases/case-record-operations.mts';
+import type { CaseEvidenceSnapshot, CaseRecord } from './case-model.ts';
 import {
   comparisonLedgerCollector,
   comparisonLedgerInputArray,
@@ -90,7 +89,7 @@ function buildCaseRows(
       completeness: state === 'incomplete' ? 'partial' : 'not_reported',
       limitations: state === 'incomplete'
         ? ['The later case snapshot does not retain a comparable value, so this is not treated as removal or resolution.']
-        : [],
+        : [domainTransitionReview(change.field, change.before, change.after)].filter((value): value is string => value !== null),
     });
   }
   if (!changedFields.has('availability')
@@ -111,6 +110,15 @@ function buildCaseRows(
     });
   }
   for (const reason of reasons) {
+    if (reason === 'collection-quality') {
+      output.add({ comparisonId, ownerId, entityId, mode: 'temporal', state: 'not_compared',
+        field: 'Web collection quality', family: 'collection',
+        earlier: caseSide(earlier, earlier.webCollectionQuality ?? 'Unknown', 'retained'),
+        later: caseSide(later, later.webCollectionQuality ?? 'Unknown', 'incomplete'), completeness: 'partial',
+        limitations: ['Affected page, favicon and score fields require complete collection at both observations.'],
+      });
+      continue;
+    }
     if (reason === 'observation-context') {
       output.add({
         comparisonId,
@@ -194,14 +202,14 @@ export function buildCaseComparisonCandidates(
       counters.invalidRecords += 1;
       continue;
     }
-    if (cases.has(item.id) || [...cases.values()].some((candidate) => candidate.domain === item.domain)) {
+    if (cases.has(item.id)) {
       counters.duplicateRecords += 1;
       continue;
     }
     cases.set(item.id, item);
   }
   const candidates: ComparisonLedgerCandidate[] = [];
-  for (const item of [...cases.values()].sort((left, right) => left.domain.localeCompare(right.domain))) {
+  for (const item of [...cases.values()].sort((left, right) => left.domain.localeCompare(right.domain) || left.id.localeCompare(right.id))) {
     const history = [...item.evidenceHistory].sort((left, right) => (
       left.capturedAt.localeCompare(right.capturedAt) || left.id.localeCompare(right.id)
     ));

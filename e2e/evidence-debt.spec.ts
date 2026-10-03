@@ -1,6 +1,6 @@
 import { openConsoleView } from './console-navigation';
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, test } from './native-tab-fixtures';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import {
   currentBulkSessionBrowserStore,
@@ -10,7 +10,7 @@ import {
   migrateLegacyBrowserData,
   openNativeLinkInNewTab,
 } from './helpers';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
 const OBSERVED_AT = '2026-08-08T00:00:00.000Z';
 const REVIEWED_AT = '2026-08-14T00:00:00.000Z';
@@ -267,7 +267,7 @@ test('announces loading without presenting a false zero', async ({ page }) => {
   const loading = page.locator('.local-collection-state');
   await expect(loading).toHaveAttribute('aria-busy', 'true');
   await expect(loading.getByRole('heading', { name: 'Loading saved work', exact: true })).toBeVisible();
-  await expect(page.getByRole('tab', { name: /^Inbox/u }).locator('span')).toHaveAccessibleName('count loading');
+  await expect(page.getByRole('tab', { name: /^Inbox/u })).toHaveAccessibleName('Inbox count loading');
   await expect(region).toHaveCount(0);
   await expect(page.getByText('No retained review items', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Review inbox evidence unavailable', exact: true })).toHaveCount(0);

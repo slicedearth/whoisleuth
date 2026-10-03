@@ -7,7 +7,7 @@ import {
   type BrowserLocalDataCodec,
   type CapturedLocalDataCollection,
   type LocalDataCollectionDefinition,
-} from './browser-local-data.ts';
+} from './browser-local-data-content.ts';
 import type { LocalDataDecodeResponse, LocalDataWorkerRequest } from './browser-local-data-worker-model.ts';
 
 // Scheduling hint, not an admission or timing bound. Smaller payloads avoid

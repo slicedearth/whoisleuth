@@ -4,9 +4,9 @@ import type { BulkLookupResult } from './bulk.mts';
 import { availabilityState, bulkDnsSummary } from './bulk-output.mts';
 import { boundedCliInputError, CliUsageError } from './errors.mts';
 import { writePrivateFile } from './output-file.mts';
-import { isValidAsciiDomainName } from '../lib/hostname.mts';
+import { isValidAsciiDomainName } from '../packages/contracts/domain-name.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
-import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 export const CLI_DISCOVERY_OBSERVATION_SCHEMA = 'whoisleuth.cli.discovery-observation-snapshot';

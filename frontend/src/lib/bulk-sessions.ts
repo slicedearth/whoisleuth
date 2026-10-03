@@ -19,9 +19,11 @@ import { assertLocalRecordCurrent, LocalRecordConflictError } from './local-muta
 export type { BulkSessionSavePreview } from './analysis/bulk-session-model.ts';
 
 export class BulkSessionCapacityError extends Error {
-  constructor(readonly preview: BulkSessionSavePreview) {
+  readonly preview: BulkSessionSavePreview;
+  constructor(preview: BulkSessionSavePreview) {
     super('Review the saved sessions that would be removed before saving. Nothing was changed.');
     this.name = 'BulkSessionCapacityError';
+    this.preview = preview;
   }
 }
 
@@ -53,9 +55,12 @@ export async function saveBulkSession(
     if (!options.expected && existing) throw new LocalRecordConflictError('Bulk session');
     assertLocalRecordCurrent(existing, options.expected ?? null, 'Bulk session');
     const result = prepareBulkSessionSave(current, session);
-    if (result.removed.length && (!options.retention
-      || !bulkSessionSavePreviewIsCurrent(current, options.retention)
-      || JSON.stringify(result.session) !== JSON.stringify(options.retention.session))) {
+    if (
+      result.removed.length &&
+      (!options.retention ||
+        !bulkSessionSavePreviewIsCurrent(current, options.retention) ||
+        JSON.stringify(result.session) !== JSON.stringify(options.retention.session))
+    ) {
       throw new BulkSessionCapacityError(result);
     }
     return {
@@ -65,9 +70,14 @@ export async function saveBulkSession(
   });
 }
 
-export async function deleteBulkSession(id: string): Promise<BulkSession[]> {
+export async function deleteBulkSession(expected: BulkSession): Promise<BulkSession[]> {
   return updateBrowserLocalData('bulk_sessions', (current) => {
-    const sessions = boundedSessions(removeBulkSession(current, id));
+    assertLocalRecordCurrent(
+      current.find((session) => session.id === expected.id),
+      expected,
+      'Bulk session',
+    );
+    const sessions = boundedSessions(removeBulkSession(current, expected.id));
     return { document: sessions, result: sessions };
   });
 }
@@ -89,7 +99,9 @@ export async function importBulkSessions(value: unknown) {
 
 export async function exportBulkSessions(generatedAt = new Date().toISOString()) {
   const archive = buildBulkSessionExport(await loadBulkSessions(), generatedAt);
-  const blob = new Blob([serialiseWorkspacePortableJsonLine(archive)], { type: 'application/json;charset=utf-8' });
+  const blob = new Blob([serialiseWorkspacePortableJsonLine(archive)], {
+    type: 'application/json;charset=utf-8',
+  });
   downloadLocalFile(blob, `whoisleuth-bulk-sessions-${generatedAt.slice(0, 10)}.json`);
 }
 

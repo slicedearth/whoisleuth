@@ -3,6 +3,8 @@ import {
   MAX_WATCHLISTS,
   normalizeWatchlistName,
 } from './watchlist-store.ts';
+import { sha256IdentityHex } from '../../../../packages/evidence/record-identity.mts';
+import { domainTransitionReview } from '../../../../packages/investigation/domain-transition-review.mts';
 import {
   normalizeWatchlistEntry,
   watchlistFieldLabel,
@@ -58,6 +60,7 @@ function buildWatchlistRows(
   const sourceOmittedRows = watchlistSourceOmittedRows(event);
   for (const change of event.changes) {
     const state = watchlistChangeState(change);
+    const prompt = state === 'different' ? domainTransitionReview(change.field, change.before, change.after) : null;
     output.add({
       comparisonId: ownerId,
       ownerId,
@@ -88,6 +91,7 @@ function buildWatchlistRows(
         ...(sourceOmittedRows > 0
           ? [`This retained event does not include ${sourceOmittedRows} declared bounded change row${sourceOmittedRows === 1 ? '' : 's'}.`]
           : []),
+        ...(prompt ? [prompt] : []),
       ],
     });
   }
@@ -153,7 +157,8 @@ export function buildWatchlistComparisonCandidates(
     for (let index = 0; index < entry.history.length; index += 1) {
       const event = entry.history[index];
       if (!event || (index === 0 && emptyInitialWatchlistEvent(event))) continue;
-      const eventIdentity = [name.toLowerCase(), event.checkedAt, event.mode] as const;
+      const eventIdentity = [name.toLowerCase(), event.checkedAt, event.mode,
+        ...(!event.checkedAt ? [sha256IdentityHex(new TextEncoder().encode(JSON.stringify(event)))] : [])] as const;
       const ownerId = stableComparisonLedgerId('watchlist-event', eventIdentity);
       if (seenEvents.has(ownerId)) {
         counters.duplicateRecords += 1;

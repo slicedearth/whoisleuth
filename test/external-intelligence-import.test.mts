@@ -14,6 +14,20 @@ const DIGEST = 'a'.repeat(64);
 const NOW = '2026-07-29T02:00:00.000Z';
 const OBSERVED = '2026-07-28T01:00:00.000Z';
 
+test('rejects an over-bound canonical URL instead of retaining a different shortened identity', () => {
+  for (const count of [100, 200]) {
+    const value = `https://example.test/${'ü'.repeat(count)}`;
+    const preview = parseExternalIntelligenceDocument(stixBundle([{
+      type: 'url', spec_version: '2.1', id: 'url--00000000-0000-4000-8000-000000000010', value,
+    }]), DIGEST);
+    if (count === 100) assert.equal(preview.items[0]?.entityValue, new URL(value).toString());
+    else {
+      assert.equal(preview.items.length, 0);
+      assert.ok(preview.limitations.length > 0);
+    }
+  }
+});
+
 test('intelligence retention preview preserves source time and excludes generated save metadata', () => {
   const preview = parseExternalIntelligenceDocument(stixBundle(stixObjects()), DIGEST);
   const item = preview.items.find((value) => value.entityValue === 'candidate.invalid' && value.observedAt === OBSERVED);
@@ -30,6 +44,54 @@ test('intelligence retention preview preserves source time and excludes generate
   const merged = mergeExternalIntelligenceIntoCase([target], target.id, { ...preview, items: [item] }, NOW);
   const { id: _id, createdAt: _created, updatedAt: _updated, ...saved } = merged.record.assertions[0]!;
   assert.deepEqual(saved, content);
+});
+
+test('source relationship inspection preserves references without importing unsupported semantics or descriptions', () => {
+  const domain = { type: 'domain-name', spec_version: '2.1', id: 'domain-name--00000000-0000-4000-8000-000000000004', value: 'candidate.invalid' };
+  const relation = { type: 'relationship', spec_version: '2.1', id: 'relationship--00000000-0000-4000-8000-000000000090',
+    relationship_type: 'related-to', source_ref: domain.id, target_ref: 'infrastructure--00000000-0000-4000-8000-000000000091',
+    created: NOW, modified: NOW, description: 'private-unimported-description', object_marking_refs: ['marking-definition--00000000-0000-4000-8000-000000000003'] };
+  const input = stixBundle([domain, relation]);
+  const before = structuredClone(input);
+  const preview = parseExternalIntelligenceDocument(input, DIGEST);
+  assert.equal(preview.items.length, 1);
+  const row = preview.sourceInspection!.relationships[0]!;
+  assert.equal(row.sourceState, 'Accepted claim');
+  assert.equal(row.targetState, 'Referenced object not present');
+  assert.equal(row.modifiedAt, NOW);
+  assert.equal(row.source, domain.id); assert.equal(row.target, relation.target_ref);
+  assert.equal(row.createdAt, NOW); assert.deepEqual(row.markings, relation.object_marking_refs);
+  const target = createCase({ domain: 'candidate.invalid' }, NOW);
+  const merged = mergeExternalIntelligenceIntoCase([target], target.id, preview, NOW);
+  assert.equal(merged.assertionsAdded, 1);
+  assert.doesNotMatch(JSON.stringify(merged.record), /private-unimported-description|sourceInspection|related-to|infrastructure--/u);
+  assert.deepEqual(input, before);
+  const duplicate = parseExternalIntelligenceDocument(stixBundle([domain, { ...domain, value: 'other.invalid' }, relation]), DIGEST);
+  assert.equal(duplicate.sourceInspection!.relationships[0]!.sourceState, 'Ambiguous repeated source identifier');
+  assert.equal(duplicate.items.length, 0);
+});
+
+test('MISP object references remain inspection-only and report missing objects rather than constructing associations', () => {
+  const input = mispEvent();
+  const objectId = 'AAAAAAAA-0000-4000-8000-000000000091';
+  const enriched = { Event: { ...input.Event, Object: [{ uuid: objectId, name: 'domain-ip', ObjectReference: [{
+    uuid: 'aaaaaaaa-0000-4000-8000-000000000092', relationship_type: 'resolves-to',
+    referenced_uuid: 'aaaaaaaa-0000-4000-8000-000000000093', timestamp: '1785376800', comment: 'private-reference-comment',
+  }] }] } };
+  const preview = parseExternalIntelligenceDocument(enriched, DIGEST);
+  const row = preview.sourceInspection!.relationships[0]!;
+  assert.equal(row.source, objectId.toLowerCase());
+  assert.equal(row.sourceState, 'Source object not imported as a claim');
+  assert.equal(row.targetState, 'Referenced object not present');
+  assert.equal(row.modifiedAt, '2026-07-30T02:00:00.000Z');
+  assert.ok(preview.sourceInspection!.transformations.some(value => value.includes('not imported')));
+  assert.doesNotMatch(JSON.stringify(preview), /private-reference-comment/u);
+  assert.equal(preview.items.length, parseExternalIntelligenceDocument(input, DIGEST).items.length);
+  const invalid = structuredClone(enriched) as { Event: { Object: Array<{ ObjectReference: Array<{ timestamp: unknown }> }> } };
+  invalid.Event.Object[0]!.ObjectReference[0]!.timestamp = 1e20;
+  const invalidTime = parseExternalIntelligenceDocument(invalid, DIGEST);
+  assert.deepEqual(invalidTime.items, preview.items);
+  assert.equal(invalidTime.sourceInspection!.relationships[0]!.modifiedAt, null);
 });
 
 test('current interchange fixtures retain unknown observation times through the browser importer', () => {
@@ -108,6 +170,33 @@ function stixObjects() {
     },
   ];
 }
+
+test('STIX publisher attribution requires an explicit producer and keeps observation time paired with it', () => {
+  const target = { type: 'domain-name', spec_version: '2.1', id: 'domain-name--00000000-0000-4000-8000-000000000004', value: 'candidate.invalid' };
+  const first = { type: 'identity', id: 'identity--00000000-0000-4000-8000-000000000002', name: 'First producer' };
+  const second = { type: 'identity', id: 'identity--00000000-0000-4000-8000-000000000003', name: 'Second producer' };
+  const observation = (time: string, creator: string | null) => ({ type: 'observed-data', id: 'observed-data--00000000-0000-4000-8000-000000000005', last_observed: time, created_by_ref: creator, object_refs: [target.id] });
+  const preview = (objects: unknown[]) => parseExternalIntelligenceDocument(stixBundle(objects), DIGEST);
+  const unbound = preview([first, target]);
+  assert.equal(unbound.publisher, null);
+  assert.equal(unbound.items[0]?.publisher, null);
+  const older = observation(OBSERVED, first.id), later = observation(NOW, second.id);
+  for (const ordered of [[older, later], [later, older]]) {
+    const item = preview([first, second, target, ...ordered]).items[0];
+    assert.equal(item?.observedAt, NOW);
+    assert.equal(item?.publisher, 'Second producer');
+  }
+  for (const ordered of [[first.id, second.id], [second.id, first.id]]) {
+    const item = preview([first, second, target, ...ordered.map(id => observation(NOW, id))]).items[0];
+    assert.equal(item?.observedAt, NOW);
+    assert.equal(item?.publisher, null);
+  }
+  assert.equal(preview([first, target, observation(NOW, second.id)]).items[0]?.publisher, null);
+  assert.equal(preview([first, { ...first, name: 'Conflicting identity' }, target, observation(NOW, first.id)]).items[0]?.publisher, null);
+  const indicator = { type: 'indicator', id: 'indicator--00000000-0000-4000-8000-000000000006', pattern_type: 'stix', pattern: "[domain-name:value = 'candidate.invalid']" };
+  assert.equal(preview([first, indicator]).items[0]?.publisher, null);
+  assert.equal(preview([first, { ...indicator, created_by_ref: first.id }]).items[0]?.publisher, 'First producer');
+});
 
 function mispEvent() {
   return {

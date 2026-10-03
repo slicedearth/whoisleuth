@@ -5,15 +5,12 @@ import {
   UnsupportedOfflineArtifactError,
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
+import { TLP_MARKINGS, RECIPIENT_SCOPES, expectedScope, tlpLabel, scanSharingMetadata as scanArtifact,
+  type TlpMarking, type RecipientScope } from '../packages/interchange/sharing-policy.mts';
 
 const SHARING_REVIEW_SCHEMA = 'whoisleuth.cli.sharing-review';
 const SHARING_REVIEW_VERSION = 2;
 const MAX_SHARING_REVIEW_BYTES = MAX_OFFLINE_ARTIFACT_BYTES;
-const TLP_MARKINGS = ['clear', 'green', 'amber', 'amber-strict', 'red'] as const;
-const RECIPIENT_SCOPES = ['public', 'community', 'organization', 'named-recipients'] as const;
-
-type TlpMarking = typeof TLP_MARKINGS[number];
-type RecipientScope = typeof RECIPIENT_SCOPES[number];
 type FindingState = 'block' | 'caution' | 'pass';
 type UnknownRecord = Record<string, unknown>;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
@@ -58,76 +55,14 @@ type SharingReviewDocument = Readonly<{
   limitations: readonly string[];
 }>;
 
-const RISKY_KEYS = new Set([
-  'authorization', 'cookie', 'cookies', 'credential', 'credentials', 'email', 'emails',
-  'entities', 'password', 'phone', 'raw', 'rawrdap', 'rawwhois', 'registrant', 'session', 'token',
-]);
-const MARKING_KEYS = new Set([
-  'informationmarking', 'marking', 'markings', 'sharingmarking',
-  'tlp', 'tlplabel', 'tlpmarking', 'trafficlightprotocol',
-]);
-
 function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
-}
-
-function normalizedKey(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/gu, '');
 }
 
 function boundedMetadataText(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 120 || CONTROL_RE.test(value)) return null;
   const trimmed = value.trim();
   return trimmed || null;
-}
-
-function markingFromText(value: string): TlpMarking | null {
-  const normalized = value.toUpperCase().replace(/\s+/gu, '').replace('TLP:', '').replace('+STRICT', '-STRICT').toLowerCase();
-  return TLP_MARKINGS.includes(normalized as TlpMarking) ? normalized as TlpMarking : null;
-}
-
-function scanArtifact(root: UnknownRecord): Readonly<{
-  importedMarkings: readonly TlpMarking[];
-  riskyKeyCount: number;
-}> {
-  // The caller has already enforced the JSON byte, node, nesting and container
-  // bounds. Scan that admitted tree in full without a second, smaller prefix.
-  const stack: Array<{ value: unknown; marking: boolean }> = [{ value: root, marking: false }];
-  const markings = new Set<TlpMarking>();
-  let riskyKeyCount = 0;
-  while (stack.length) {
-    const next = stack.pop()!;
-    if (typeof next.value === 'string') {
-      if (next.marking) {
-        const marking = markingFromText(next.value);
-        if (marking) markings.add(marking);
-      }
-      continue;
-    }
-    if (Array.isArray(next.value)) {
-      for (const value of next.value) stack.push({ value, marking: next.marking });
-      continue;
-    }
-    const valueRecord = record(next.value);
-    if (!valueRecord) continue;
-    for (const [key, value] of Object.entries(valueRecord)) {
-      const normalized = normalizedKey(key);
-      if (RISKY_KEYS.has(normalized)) riskyKeyCount += 1;
-      stack.push({ value, marking: MARKING_KEYS.has(normalized) });
-    }
-  }
-  return { importedMarkings: [...markings], riskyKeyCount };
-}
-
-function expectedScope(marking: TlpMarking): RecipientScope {
-  if (marking === 'clear') return 'public';
-  if (marking === 'green') return 'community';
-  if (marking === 'red') return 'named-recipients';
-  return 'organization';
-}
-
-function tlpLabel(marking: TlpMarking): `TLP:${string}` {
-  return `TLP:${marking === 'amber-strict' ? 'AMBER+STRICT' : marking.toUpperCase()}`;
 }
 
 async function buildSharingReview(
@@ -156,8 +91,10 @@ async function buildSharingReview(
   const effective = importedRank > requestedRank ? strictestImported! : options.marking;
 
   let integrity: SharingReviewDocument['artifact']['integrity'] = 'unsupported';
+  let verifiedIdentity: Readonly<{ schema: string | null; version: number | null }> | null = null;
   try {
     const verification = await verifyOfflineArtifact(raw);
+    verifiedIdentity = verification.artifact;
     integrity = verification.state === 'verified' && hasVerifiedWholeArtifactIntegrity(verification)
       ? 'verified'
       : verification.state === 'integrity_valid'
@@ -205,8 +142,8 @@ async function buildSharingReview(
     caution: findings.filter((finding) => finding.state === 'caution').length,
     pass: findings.filter((finding) => finding.state === 'pass').length,
   };
-  const artifactSchema = boundedMetadataText(artifact.schema);
-  const rawArtifactVersion = artifact.version ?? artifact.schemaVersion;
+  const artifactSchema = boundedMetadataText(verifiedIdentity ? verifiedIdentity.schema : artifact.schema);
+  const rawArtifactVersion = verifiedIdentity ? verifiedIdentity.version : artifact.version ?? artifact.schemaVersion;
   const artifactVersion = Number.isSafeInteger(rawArtifactVersion)
     && Number(rawArtifactVersion) >= 1
     && Number(rawArtifactVersion) <= 10_000

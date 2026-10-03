@@ -1,4 +1,8 @@
 // Append-only response actions: transitions, reconciliation and bounded history.
+import { readCaseEvidenceRequest, readCasePacketAmendment, assertEvidenceRequestEvent, assertEvidenceRequestHistory, assertEvidenceRequestTransition, assertPacketAmendment } from './case-requested-evidence.mts';
+import { MAX_INTAKE_LINKS, MAX_MESSAGE_PARTS, type MessageIntakeReport } from '../contracts/message-intake.mts';
+import { emailRecipient } from '../evidence/email-recipient.mts';
+import { responseRouteFreshness } from './response-route-freshness.mts';
 
 import {
   CASE_SCHEMA_VERSION,
@@ -46,6 +50,73 @@ import {
 
 const ACTION_TYPES = new Set<string>(CASE_ACTION_TYPES);
 
+export type CaseNoticeComparison = Readonly<{
+  label: string;
+  state: 'match' | 'mismatch' | 'unknown';
+  explanation: string;
+}>;
+
+/** Advisory page-memory comparison; neither authenticated identity nor a mutation. */
+export function compareCaseIncomingNotice(action: CaseActionRecord | null, report: MessageIntakeReport, input: Readonly<{
+  reference?: string;
+  claimedOrganisation?: string;
+  confirmedOutOfBand?: boolean;
+  now: string;
+}>): Readonly<{
+  comparisons: readonly CaseNoticeComparison[];
+  routeFreshness: 'current' | 'stale' | 'unknown';
+  confirmation: 'analyst_reported_out_of_band' | 'not_reported';
+}> {
+  const bounded = (value: string | undefined, maximum: number): string => {
+    if (value === undefined) return '';
+    if (value.length > maximum || /[\u0000-\u001f\u007f]/u.test(value)) throw new TypeError('Notice comparison fields must be bounded single-line values.');
+    return value.trim();
+  };
+  const reference = bounded(input.reference, MAX_RESPONSE_REFERENCE_LENGTH);
+  const organisation = bounded(input.claimedOrganisation, MAX_RESPONSE_LABEL_LENGTH);
+  const recipient = emailRecipient(action?.recipient);
+  let recipientHostname: string | null = recipient ? recipient.slice(recipient.lastIndexOf('@') + 1).toLowerCase() : null;
+  if (!recipientHostname && action) {
+    try {
+      const url = new URL(action.recipient);
+      if (['https:', 'http:'].includes(url.protocol) && !url.username && !url.password) recipientHostname = url.hostname;
+    } catch { /* A free-text recipient does not establish a route hostname. */ }
+  }
+  const comparisons: CaseNoticeComparison[] = [];
+  let senderDomains = 0, omittedSenderDomains = 0;
+  for (const identity of report.identities) {
+    if (identity.role !== 'from' && identity.role !== 'reply_to') continue;
+    if (senderDomains >= MAX_MESSAGE_PARTS * 5) { omittedSenderDomains += 1; continue; }
+    senderDomains += 1;
+    comparisons.push({
+      label: `Part ${identity.part} ${identity.role.replaceAll('_', ' ')} domain: ${identity.domain}`,
+      state: recipientHostname ? identity.domain.toLowerCase() === recipientHostname ? 'match' : 'mismatch' : 'unknown',
+      explanation: 'Compared only with the selected action recipient hostname. Domain agreement does not authenticate the sender; different domains may require independent clarification.',
+    });
+  }
+  if (!senderDomains) comparisons.push({ label: 'Sender domains', state: 'unknown', explanation: 'No From or Reply-To domain was retained. Exact sender addresses are not retained.' });
+  if (omittedSenderDomains) comparisons.push({ label: 'Additional sender context', state: 'unknown', explanation: `${omittedSenderDomains} additional From or Reply-To claims exceed the local comparison cap. No overall sender conclusion is available.` });
+  if (!report.links.length) comparisons.push({ label: 'Supplied destinations', state: 'unknown', explanation: 'No supported destination was retained. Missing or partial extraction is not proof that no destination exists.' });
+  for (const link of report.links.slice(0, MAX_INTAKE_LINKS)) comparisons.push({
+    label: `Destination hostname: ${link.hostname}`,
+    state: recipientHostname ? link.hostname.toLowerCase() === recipientHostname ? 'match' : 'mismatch' : 'unknown',
+    explanation: 'Hostname context only, not an exact route match or authority check. Supplied destinations have not been opened.',
+  });
+  const deliveryReferences = action?.history.filter(event => event.applied && event.previousState === 'authorised'
+    && event.nextState === 'submitted' && event.sourceClass === 'analyst' && event.reference).map(event => event.reference) ?? [];
+  comparisons.push({ label: 'Delivery reference', state: !reference || !deliveryReferences.length ? 'unknown'
+    : deliveryReferences.includes(reference) ? 'match' : action!.historyOmitted > 0 ? 'unknown' : 'mismatch',
+  explanation: 'Compared with retained, applied submission events only. Acknowledgements and later updates have separate references; missing submission history remains unknown. Matching text does not authenticate a notice.' });
+  comparisons.push({ label: 'Latest action reference', state: reference && action?.reference ? reference === action.reference ? 'match' : 'mismatch' : 'unknown',
+    explanation: 'Compared with the latest retained reference from any applied action event. This may be an acknowledgement or later update, not the delivery reference.' });
+  comparisons.push({ label: 'Claimed organisation', state: 'unknown', explanation: organisation ? 'The entered organisation is an analyst-supplied claim. Retained contact-source text is not a structured authenticated organisation identity.' : 'No organisation claim was supplied; no authenticated organisation identity is inferred.' });
+  return {
+    comparisons,
+    routeFreshness: action ? responseRouteFreshness(action.routeObservedAt, action.routeReviewAfter, input.now) : 'unknown',
+    confirmation: input.confirmedOutOfBand ? 'analyst_reported_out_of_band' : 'not_reported',
+  };
+}
+
 const ACTION_STATES = new Set<string>(CASE_ACTION_STATES);
 
 const PROVIDER_OUTCOMES = new Set<string>(CASE_PROVIDER_OUTCOMES);
@@ -78,6 +149,22 @@ const ACTION_TRANSITIONS: Readonly<Record<CaseActionState, ReadonlySet<CaseActio
   acknowledged: new Set<CaseActionState>(['acknowledged', 'terminal']),
   terminal: new Set<CaseActionState>(),
 });
+
+// Terminal also includes deliberate withdrawal before review. This is stage
+// completion, not proof of authorisation or submission.
+const RESPONSE_DECISION_COMPLETE: Readonly<Record<CaseActionState, boolean>> = Object.freeze({
+  drafting: false,
+  ready_for_review: false,
+  reviewed: true,
+  authorised: true,
+  submitted: true,
+  acknowledged: true,
+  terminal: true,
+});
+
+export function caseActionCompletesResponseDecision(state: CaseActionState): boolean {
+  return RESPONSE_DECISION_COMPLETE[state];
+}
 
 function bytes(value: unknown): number {
   try {
@@ -133,6 +220,9 @@ function normalizeActionEvent(
   if (['ready_for_review', 'reviewed', 'authorised', 'submitted'].includes(nextState)
     && sourceClass !== 'analyst' && !migrationSnapshot) return null;
   const provenance = text(item.provenance, MAX_RESPONSE_LABEL_LENGTH) || `${sourceClass}_record`;
+  if (item.evidenceRequest !== undefined && options.sourceVersion != null && options.sourceVersion < 17) throw new Error('Requested evidence requires Case schema 17.');
+  const evidenceRequest = readCaseEvidenceRequest(item.evidenceRequest);
+  assertEvidenceRequestEvent(evidenceRequest, { previousState, nextState, sourceClass, providerOutcome: item.providerOutcome });
   const providerOutcome = typeof item.providerOutcome === 'string' && PROVIDER_OUTCOMES.has(item.providerOutcome)
     ? item.providerOutcome as CaseProviderOutcome
     : null;
@@ -159,6 +249,7 @@ function normalizeActionEvent(
     : null;
   const eventMaterial = {
     previousState,
+    ...(evidenceRequest ? { evidenceRequest } : {}),
     nextState,
     occurredAt,
     sourceClass,
@@ -361,6 +452,9 @@ function normalizeAction(
   const createdAt = iso(item.createdAt, fallback, options);
   const actionId = safeId(item.id, 'action', { recipient, createdAt });
   const history = normalizeActionHistory(item.history, item, actionId, createdAt, fallback, options);
+  assertEvidenceRequestHistory(history.history, history.omitted > 0);
+  if (item.amendment !== undefined && options.sourceVersion != null && options.sourceVersion < 17) throw new Error('Packet amendments require Case schema 17.');
+  const amendment = readCasePacketAmendment(item.amendment);
   const applied = history.history.filter((event) => event.applied);
   const latestReference = [...applied].reverse().find((event) => event.reference)?.reference ?? null;
   const latestProviderOutcome = [...applied].reverse().find((event) => event.providerOutcome) ?? null;
@@ -375,6 +469,7 @@ function normalizeAction(
     : null;
   return {
     id: actionId,
+    ...(amendment ? { amendment } : {}),
     type: legacyPlatformReview
       ? 'platform_report'
       : typeof item.type === 'string' && ACTION_TYPES.has(item.type)
@@ -565,6 +660,8 @@ export function appendCaseAction(
     ? item.originActionId
     : null;
   if (item.originActionId != null && !originActionId) throw new Error('A follow-on action requires an existing originating action.');
+  const amendment = readCasePacketAmendment(item.amendment);
+  if (amendment) assertPacketAmendment(current, originActionId, amendment);
   const history = [{
     id: freshId('action-event'),
     previousState: null,
@@ -626,6 +723,11 @@ export function appendCaseActionTransition(
     || !SAFE_ID_RE.test(item.evidencePinId) || (validPinIds && !validPinIds.has(item.evidencePinId)))) {
     throw new Error('An action transition evidence pin must reference a retained Case evidence pin.');
   }
+  const evidenceRequest = readCaseEvidenceRequest(item.evidenceRequest);
+  if (evidenceRequest) assertEvidenceRequestTransition(action, evidenceRequest, sourceClass, item.providerOutcome, validPinIds);
+  if (action.amendment && ['ready_for_review', 'reviewed', 'authorised', 'submitted'].includes(nextState)) {
+    assertPacketAmendment(current, action.originActionId, action.amendment);
+  }
   const occurredAt = optionalIso(item.occurredAt) ?? now;
   const event = normalizeActionEvent({
     ...item,
@@ -651,7 +753,7 @@ export function appendCaseActionTransition(
 }
 
 const ACTION_REVIEW_MATERIAL_FIELDS = [
-  'type', 'recipient', 'contactSource', 'routeObservedAt', 'routeReviewAfter', 'contactLimitations', 'originActionId',
+  'type', 'recipient', 'contactSource', 'routeObservedAt', 'routeReviewAfter', 'contactLimitations', 'originActionId', 'amendment',
 ] as const satisfies readonly (keyof CaseActionRecord)[];
 
 export function updateCaseAction(
@@ -684,6 +786,7 @@ export function updateCaseAction(
   if (!updated) throw new Error('An action requires a recipient or internal owner.');
   const materialChanged = ACTION_REVIEW_MATERIAL_FIELDS
     .some((key) => Object.hasOwn(patch, key) && JSON.stringify(record(existing)[key]) !== JSON.stringify(record(updated)[key]));
+  if (materialChanged && updated.amendment) assertPacketAmendment(current, updated.originActionId, updated.amendment);
   if (materialChanged && ['submitted', 'acknowledged', 'terminal'].includes(existing.state)) {
     throw new Error('Submitted or terminal action identity and recipient metadata cannot be rewritten; create a linked follow-on action instead.');
   }

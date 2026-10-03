@@ -5,13 +5,13 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readBoundedRegularFile, readBoundedRegularTextFile, decodeBoundedUtf8 } from '../lib/bounded-file.mts';
-import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
-import { canonicalRegistrableDomain } from '../lib/registrable-domain.mts';
-import { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
+import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
+import { canonicalRegistrableDomain } from '../packages/analysis/registrable-domain.mts';
+import { explainRiskScore, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../packages/analysis/risk-scoring.mts';
 import { extractBoundedZipEntries } from '../packages/interchange/bounded-zip-extraction.mts';
 import { RISK_CALIBRATION_DATASET_SCHEMA, RISK_CALIBRATION_DATASET_VERSION } from '../packages/contracts/risk-calibration.mts';
 import { buildRiskCalibrationReport, parseRiskCalibrationDataset } from '../cli/risk-calibration.mts';
-import { buildRiskCalibrationSummaryReport } from '../lib/risk-calibration-summary.mts';
+import { buildRiskCalibrationSummaryReport } from '../packages/analysis/risk-calibration-summary.mts';
 
 export const EVALUATION_SOURCE = Object.freeze({
   title: 'PhiUSIIL Phishing URL (Website)',

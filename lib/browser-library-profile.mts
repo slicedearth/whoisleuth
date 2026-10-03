@@ -20,6 +20,7 @@ import {
   MAX_INLINE_SCRIPT_CHARS,
   MAX_INLINE_SCRIPT_TOTAL_CHARS,
   MAX_SCRIPT_ELEMENTS,
+  MAX_SCRIPT_REFERENCE_LENGTH,
   MAX_STATIC_HTML_CHARS,
   analyzeStaticHtml,
   type StaticHtmlAnalysis,
@@ -67,7 +68,7 @@ type DetectedComponent = {
 };
 
 // Catalogue expressions are reviewed third-party inputs. Keep every individual
-// regular-expression evaluation and the aggregate inline-signature work small
+// regular-expression evaluation and aggregate reference/inline-signature work small
 // enough that a target-controlled script cannot monopolise the Node event loop.
 // Full-content hashes still use the complete already-capped script body.
 const MAX_INLINE_LIBRARY_SCAN_CHARS = 1_024;
@@ -78,7 +79,6 @@ const MAX_INLINE_LIBRARY_WORKER_BYTES = 64 * 1024;
 const MAX_LIBRARY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
 const MAX_ADVISORY_IDENTIFIERS = 16;
 const MAX_WEAKNESS_CLASSES = 12;
-const MAX_MATCHES_PER_PATTERN = 4;
 const MAX_VERSION_LENGTH = 64;
 const COMPONENT_RE = /^[a-z0-9._-]{1,80}$/i;
 const VERSION_RE = /^[0-9][0-9.a-z_-]{0,63}$/i;
@@ -96,39 +96,62 @@ const KNOWN_EXPLOITED_IDENTIFIERS = new Set<string>(CISA_KEV_CATALOG.identifiers
 const KNOWN_EXPLOITED_RELEASED_AT = normalizeExplicitIsoTimestamp(CISA_KEV_CATALOG.releasedAt);
 if (KNOWN_EXPLOITED_RELEASED_AT === null) throw new Error('Pinned known-exploited catalogue has an invalid release timestamp.');
 
-const INLINE_EXTRACTOR_CATALOGUE = Object.freeze(Object.entries(CATALOG_COMPONENTS).map(([component, value]) => {
+const PATTERN_EXTRACTOR_CATALOGUE = Object.freeze(Object.entries(CATALOG_COMPONENTS).map(([component, value]) => {
   const extractors = record((record(value) as CatalogComponent).extractors);
+  const patterns = (name: string) => Object.freeze((Array.isArray(extractors[name]) ? extractors[name] : [])
+    .filter((pattern): pattern is string => typeof pattern === 'string' && pattern.length > 0 && pattern.length <= 2_048)
+    .slice(0, 64));
   return Object.freeze({
     component,
-    patterns: Object.freeze((Array.isArray(extractors.filecontent) ? extractors.filecontent : [])
-      .filter((pattern): pattern is string => typeof pattern === 'string' && pattern.length > 0 && pattern.length <= 2_048)
-      .slice(0, 64)),
-    replacements: Object.freeze((Array.isArray(extractors.filecontentreplace) ? extractors.filecontentreplace : [])
-      .filter((pattern): pattern is string => typeof pattern === 'string' && pattern.length > 0 && pattern.length <= 2_048)
-      .slice(0, 64)),
+    uri: patterns('uri'), filename: patterns('filename'),
+    patterns: patterns('filecontent'), replacements: patterns('filecontentreplace'),
   });
 }));
 
-const INLINE_REGEX_WORKER_SOURCE = String.raw`
+const LIBRARY_REGEX_WORKER_SOURCE = String.raw`
 const { parentPort, workerData } = require('node:worker_threads');
 const versions = /^[0-9][0-9.a-z_-]{0,63}$/i;
 parentPort.on('message', (job) => {
   const control = new Int32Array(job.control);
   const output = new Uint8Array(job.output);
-  const matches = [];
-  const add = (component, version) => {
+  const matches = new Map();
+  const add = (component, version, method) => {
     const normalized = String(version).replace(/(?:\.|-)?min$/i, '').slice(0, 64);
-    if (versions.test(normalized) && matches.length < 64) matches.push([component, normalized]);
+    const key = component + '\u0000' + normalized;
+    if (!versions.test(normalized)) return;
+    if (!matches.has(key) && matches.size < 64) matches.set(key, [component, normalized, new Set()]);
+    matches.get(key)?.[2].add(method);
   };
   try {
+    const input = JSON.parse(job.value);
+    for (const reference of input.references) {
+      const filename = (reference.replace(/\\/g, '/').split('/').pop() || '').split(/[?#]/, 1)[0];
+      for (const entry of workerData.catalogue) {
+        for (const [patterns, value, method, anchored] of [
+          [entry.uri, reference, 'script URL', false],
+          [entry.filename, filename, 'script filename', true],
+        ]) {
+          if (!value) continue;
+          for (const pattern of patterns) {
+            let expression;
+            try { expression = new RegExp(anchored ? '^(?:' + pattern + ')$' : pattern, 'g'); } catch { continue; }
+            let match, count = 0;
+            while ((match = expression.exec(value)) && count < 4) {
+              if (typeof match[1] === 'string' && versions.test(match[1])) { add(entry.component, match[1], method); count += 1; }
+              if (match[0] === '') expression.lastIndex += 1;
+            }
+          }
+        }
+      }
+    }
     for (const entry of workerData.catalogue) {
       for (const pattern of entry.patterns) {
         let expression;
         try { expression = new RegExp(pattern, 'g'); } catch { continue; }
         let match;
         let count = 0;
-        while ((match = expression.exec(job.value)) && count < 4) {
-          if (typeof match[1] === 'string') add(entry.component, match[1]);
+        while ((match = expression.exec(input.inline)) && count < 4) {
+          if (typeof match[1] === 'string') add(entry.component, match[1], 'inline signature');
           if (match[0] === '') expression.lastIndex += 1;
           count += 1;
         }
@@ -140,16 +163,16 @@ parentPort.on('message', (job) => {
         try { expression = new RegExp(descriptor[1], 'g'); } catch { continue; }
         let match;
         let count = 0;
-        while ((match = expression.exec(job.value)) && count < 4) {
+        while ((match = expression.exec(input.inline)) && count < 4) {
           let replaced = match[0];
           try { replaced = match[0].replace(new RegExp(descriptor[1]), descriptor[2]); } catch { break; }
-          add(entry.component, replaced);
+          add(entry.component, replaced, 'inline signature');
           if (match[0] === '') expression.lastIndex += 1;
           count += 1;
         }
       }
     }
-    const encoded = Buffer.from(JSON.stringify(matches));
+    const encoded = Buffer.from(JSON.stringify([...matches.values()].flatMap(([component, version, methods]) => [...methods].map(method => [component, version, method]))));
     if (encoded.length > output.length) Atomics.store(control, 0, -2);
     else { output.set(encoded); Atomics.store(control, 0, encoded.length); }
   } catch {
@@ -159,10 +182,11 @@ parentPort.on('message', (job) => {
 });
 `;
 
-const scanInlineLibrary = createInlineLibraryScanner(
-  () => new Worker(INLINE_REGEX_WORKER_SOURCE, { eval: true, workerData: { catalogue: INLINE_EXTRACTOR_CATALOGUE } }),
+const scanLibraryPatterns = createInlineLibraryScanner(
+  () => new Worker(LIBRARY_REGEX_WORKER_SOURCE, { eval: true, workerData: { catalogue: PATTERN_EXTRACTOR_CATALOGUE } }),
   {
-    maximumCharacters: MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS + MAX_SCRIPT_ELEMENTS,
+    // JSON can escape each admitted character to six characters; include separators and keys.
+    maximumCharacters: 6 * (MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS + MAX_SCRIPT_ELEMENTS * MAX_SCRIPT_REFERENCE_LENGTH) + MAX_SCRIPT_ELEMENTS * 10 + 128,
     outputBytes: MAX_INLINE_LIBRARY_WORKER_BYTES,
     deadlineMs: MAX_INLINE_LIBRARY_SCAN_MS,
     // One worker/output buffer, with at most sixteen bounded pending inputs.
@@ -225,23 +249,6 @@ function matchingVulnerabilities(component: CatalogComponent, version: string): 
   return matched;
 }
 
-function matchPattern(pattern: unknown, value: string): string[] {
-  if (typeof pattern !== 'string' || pattern.length === 0 || pattern.length > 2_048) return [];
-  let expression: RegExp;
-  try {
-    expression = new RegExp(pattern, 'g');
-  } catch {
-    return [];
-  }
-  const matches: string[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = expression.exec(value)) && matches.length < MAX_MATCHES_PER_PATTERN) {
-    if (typeof match[1] === 'string' && VERSION_RE.test(match[1])) matches.push(match[1]);
-    if (match[0] === '') expression.lastIndex += 1;
-  }
-  return matches;
-}
-
 function addDetected(
   detected: Map<string, DetectedComponent>,
   component: string,
@@ -260,58 +267,25 @@ function addDetected(
   detected.set(key, { component, version: normalizedVersion, detections: new Set([method]) });
 }
 
-function scanExtractor(
-  detected: Map<string, DetectedComponent>,
-  extractorName: 'uri' | 'filename',
-  value: string,
-  method: DetectionMethod,
-): void {
-  for (const [componentName, rawComponent] of Object.entries(CATALOG_COMPONENTS)) {
-    const component = record(rawComponent) as CatalogComponent;
-    const extractors = record(component.extractors);
-    const patterns = Array.isArray(extractors[extractorName]) ? extractors[extractorName] : [];
-    for (const pattern of patterns.slice(0, 64)) {
-      for (const version of matchPattern(pattern, value)) addDetected(detected, componentName, version, method);
-    }
-  }
-}
-
-function scanFilename(
-  detected: Map<string, DetectedComponent>,
-  reference: string,
-): void {
-  const filename = (reference.replace(/\\/g, '/').split('/').pop() || '').split(/[?#]/, 1)[0];
-  if (!filename) return;
-  for (const [componentName, rawComponent] of Object.entries(CATALOG_COMPONENTS)) {
-    const component = record(rawComponent) as CatalogComponent;
-    const extractors = record(component.extractors);
-    const patterns = Array.isArray(extractors.filename) ? extractors.filename : [];
-    for (const pattern of patterns.slice(0, 64)) {
-      if (typeof pattern !== 'string' || pattern.length > 2_048) continue;
-      for (const version of matchPattern(`^(?:${pattern})$`, filename)) {
-        addDetected(detected, componentName, version, 'script filename');
-      }
-    }
-  }
-}
-
-async function scanInlineSignatures(
+async function scanSignatures(
   detected: Map<string, DetectedComponent>,
   value: string,
+  references: readonly string[],
   signal?: AbortSignal,
 ): Promise<Readonly<{ timedOut: boolean; unavailable: boolean }>> {
-  if (!value) return { timedOut: false, unavailable: false };
-  const result = await scanInlineLibrary(value, signal);
+  if (!value && !references.length) return { timedOut: false, unavailable: false };
+  const result = await scanLibraryPatterns(JSON.stringify({ inline: value, references }), signal);
   signal?.throwIfAborted();
   if (result.output === null) return result;
   try {
     const parsed: unknown = JSON.parse(result.output);
     if (!Array.isArray(parsed)) return { timedOut: false, unavailable: true };
-    for (const item of parsed.slice(0, MAX_LIBRARY_FINDINGS * 4)) {
-      if (!Array.isArray(item) || item.length !== 2) continue;
-      const [component, version] = item;
-      if (typeof component === 'string' && typeof version === 'string') {
-        addDetected(detected, component, version, 'inline signature');
+    for (const item of parsed.slice(0, MAX_LIBRARY_FINDINGS * 4 * 3)) {
+      if (!Array.isArray(item) || item.length !== 3) continue;
+      const [component, version, method] = item;
+      if (typeof component === 'string' && typeof version === 'string'
+        && (method === 'inline signature' || method === 'script URL' || method === 'script filename')) {
+        addDetected(detected, component, version, method);
       }
     }
     return { timedOut: false, unavailable: false };
@@ -423,12 +397,12 @@ async function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
   let inlineSignatureCharactersExamined = 0;
   let inlineSignatureLimitReached = false;
   const inlineSignatureSamples: string[] = [];
+  const references: string[] = [];
 
   for (const script of htmlAnalysis.scripts) {
     if (script.reference) {
       referencesExamined += 1;
-      scanExtractor(detected, 'uri', script.reference, 'script URL');
-      scanFilename(detected, script.reference);
+      references.push(script.reference);
     } else if (script.inlineContent && script.mediaType !== 'application/ld+json') {
       inlineScriptsExamined += 1;
       const remaining = Math.max(0, MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS - inlineSignatureCharactersExamined);
@@ -438,7 +412,7 @@ async function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
       if (signatureScan.signatureContent) inlineSignatureSamples.push(signatureScan.signatureContent);
     }
   }
-  const inlineSignatureResult = await scanInlineSignatures(detected, inlineSignatureSamples.join('\u0000'), input.signal);
+  const inlineSignatureResult = await scanSignatures(detected, inlineSignatureSamples.join('\u0000'), references, input.signal);
   input.signal?.throwIfAborted();
   const inlineSignatureUnavailable = inlineSignatureResult.timedOut || inlineSignatureResult.unavailable;
 
@@ -474,8 +448,8 @@ async function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
   if (htmlAnalysis.scriptLimitReached) limitations.push(`Only the first ${MAX_SCRIPT_ELEMENTS} script elements were evaluated.`);
   if (htmlAnalysis.inlineLimitReached) limitations.push(`Inline script evaluation reached its ${MAX_INLINE_SCRIPT_TOTAL_CHARS}-character cumulative boundary.`);
   if (inlineSignatureLimitReached) limitations.push(`Passive library signature matching evaluated a deterministic ${MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS}-character cumulative sample across inline scripts; full-content hashes still used the complete bounded script content.`);
-  if (inlineSignatureResult.timedOut) limitations.push(`Passive library signature matching exceeded its ${MAX_INLINE_LIBRARY_SCAN_MS} ms isolated-worker deadline; hash evidence was still evaluated.`);
-  if (inlineSignatureResult.unavailable) limitations.push('Passive library signature matching was unavailable in its isolated worker; hash evidence was still evaluated.');
+  if (inlineSignatureResult.timedOut) limitations.push(`Passive library URL, filename and inline signature matching exceeded its ${MAX_INLINE_LIBRARY_SCAN_MS} ms isolated-worker deadline; hash evidence was still evaluated.`);
+  if (inlineSignatureResult.unavailable) limitations.push('Passive library URL, filename and inline signature matching was unavailable in its isolated worker; hash evidence was still evaluated.');
   if (findingLimitReached) limitations.push(`Only the first ${MAX_LIBRARY_FINDINGS} library findings were retained.`);
   if (omittedCveIdentifiers) limitations.push(`${omittedCveIdentifiers} supplied CVE identifier ${omittedCveIdentifiers === 1 ? 'entry was' : 'entries were'} omitted from matching catalogue advisories because of invalid syntax or a source limit. Advisory matches are still counted.`);
 
@@ -505,8 +479,10 @@ async function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
         inlineScriptsExamined,
         inlineCharactersExamined: htmlAnalysis.inlineCharactersExamined,
         inlineSignatureCharactersExamined,
-        inlineSignatureTimedOut: inlineSignatureResult.timedOut,
-        inlineSignatureUnavailable: inlineSignatureResult.unavailable,
+        inlineSignatureTimedOut: inlineSignatureSamples.length > 0 && inlineSignatureResult.timedOut,
+        inlineSignatureUnavailable: inlineSignatureSamples.length > 0 && inlineSignatureResult.unavailable,
+        referenceSignatureTimedOut: references.length > 0 && inlineSignatureResult.timedOut,
+        referenceSignatureUnavailable: references.length > 0 && inlineSignatureResult.unavailable,
         catalogComponents: Object.keys(CATALOG_COMPONENTS).length,
         findings: allFindings.length,
         advisoryMatches: allFindings.reduce((sum, finding) => sum + finding.advisoryCount, 0),

@@ -7,20 +7,24 @@ import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { isCveIdentifier } from '../packages/contracts/vulnerability-identifiers.mts';
 
 import * as retire from 'retire';
+import { RETIRE_BROWSER_CATALOG } from '../lib/generated/retire-browser-catalog.mts';
 import {
   jsonRecordOrEmpty as record,
   sha256Text as moduleDigest,
 } from './maintainer-tool-helpers.mts';
 
-const SOURCE_VERSION = '5.4.3';
-const SOURCE_REVISION = 'db79fa77c86e24d91c9ce1934ad9f2a640242774';
-const SOURCE_SHA256 = '574f68690a6f5031ac7602936196a3f4531407bc79fafec0f49278241fda857a';
+// Catalogue identity follows its data revision, independently of the scanner package.
+const SOURCE_VERSION = '2026.10.02';
+const SOURCE_UPDATED_AT = '2026-10-02T11:46:05.000Z';
+const SOURCE_REVISION = '305423aa277cd6aa55c75c37c51090eb98e72e62';
+const SOURCE_SHA256 = '3b444e8cec14dfb4c77f519db559a6c03d626b4c5730cd062b07ca4395c96ad7';
 const SOURCE_URL = `https://github.com/RetireJS/retire.js/blob/${SOURCE_REVISION}/repository/jsrepository.json`;
 const OUTPUT_PATH = 'lib/generated/retire-browser-catalog.mts';
 const OUTPUT_DIGEST_PATH = 'lib/generated/retire-browser-catalog.sha256';
 const MAX_SOURCE_BYTES = 5 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_COMPONENT_ADVISORIES = 256;
+export const MAX_CATALOGUE_COMPONENTS = 100;
 const EXPRESSION_QUALIFICATION_MS = 1_500;
 const EXPRESSION_QUALIFICATION_INPUT_CHARS = 4_096;
 const EXTRACTOR_NAMES = Object.freeze(['uri', 'filename', 'filecontent', 'filecontentreplace', 'hashes']);
@@ -89,8 +93,8 @@ function projectRepository(source: unknown): UnknownRecord {
   const sourceRepository = record(source);
   const projected: UnknownRecord = {};
   const entries = Object.entries(sourceRepository);
-  if (entries.length === 0 || entries.length > 100) {
-    throw new Error(`Expected between 1 and 100 Retire.js catalogue components; received ${entries.length}.`);
+  if (entries.length === 0 || entries.length > MAX_CATALOGUE_COMPONENTS) {
+    throw new Error(`Expected between 1 and ${MAX_CATALOGUE_COMPONENTS} Retire.js catalogue components; received ${entries.length}.`);
   }
 
   for (const [component, rawValue] of entries) {
@@ -191,6 +195,10 @@ function qualifyRepositoryExpressions(
         'a'.repeat(inputChars),
         `${'a'.repeat(inputChars - 1)}!`,
         '0.'.repeat(inputChars / 2),
+        '1'.repeat(inputChars),
+        `/${'1'.repeat(inputChars - 1)}`,
+        `${'1'.repeat(inputChars - 1)}!`,
+        `/${'1'.repeat(inputChars - 2)}!`,
       ],
       control: controlBuffer,
     },
@@ -212,6 +220,7 @@ function renderModule(components: UnknownRecord): string {
     + `const RETIRE_BROWSER_CATALOG = Object.freeze({\n`
     + `  catalogVersion: ${JSON.stringify(`retire.js-${SOURCE_VERSION}`)},\n`
     + `  sourceRevision: ${JSON.stringify(SOURCE_REVISION)},\n`
+    + `  sourceUpdatedAt: ${JSON.stringify(SOURCE_UPDATED_AT)},\n`
     + `  sourceSha256: ${JSON.stringify(SOURCE_SHA256)},\n`
     + `  sourceUrl: ${JSON.stringify(SOURCE_URL)},\n`
     + `  components: ${JSON.stringify(components, null, 2)},\n`
@@ -266,6 +275,24 @@ function buildModule(sourceText: string): string {
   return renderModule(projectSource(sourceText));
 }
 
+export async function browserCatalogueHealth(now = new Date()) {
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const module = await readBoundedText(resolve(root, OUTPUT_PATH), MAX_OUTPUT_BYTES);
+  const digest = (await readBoundedText(resolve(root, OUTPUT_DIGEST_PATH), 80)).trim();
+  const valid = moduleDigest(module) === digest
+    && RETIRE_BROWSER_CATALOG.sourceSha256 === SOURCE_SHA256
+    && RETIRE_BROWSER_CATALOG.sourceRevision === SOURCE_REVISION
+    && RETIRE_BROWSER_CATALOG.sourceUpdatedAt === SOURCE_UPDATED_AT;
+  const age = Math.floor((now.getTime() - Date.parse(SOURCE_UPDATED_AT)) / 86_400_000);
+  return Object.freeze({
+    state: !valid ? 'malformed' as const : !Number.isFinite(age) || age < 0 ? 'unavailable' as const
+      : 'limited' as const,
+    ageDays: Number.isFinite(age) && age >= 0 ? age : null,
+    sourceUpdatedAt: SOURCE_UPDATED_AT,
+    itemCount: Object.keys(RETIRE_BROWSER_CATALOG.components).length,
+  });
+}
+
 async function main(args = process.argv.slice(2), options: MainOptions = {}): Promise<number> {
   const stdout = options.stdout || process.stdout;
   const stderr = options.stderr || process.stderr;
@@ -318,6 +345,7 @@ export {
   SOURCE_SHA256,
   SOURCE_URL,
   SOURCE_VERSION,
+  SOURCE_UPDATED_AT,
   buildModule,
   main,
   moduleDigest,

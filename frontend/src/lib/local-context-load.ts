@@ -1,4 +1,4 @@
-import { isExpectedBrowserLocalDataFailure } from './browser-local-data.ts';
+import { isExpectedBrowserLocalDataFailure } from './browser-local-data-content.ts';
 
 export function unavailableLocalContextLabels(
   results: readonly PromiseSettledResult<unknown>[],

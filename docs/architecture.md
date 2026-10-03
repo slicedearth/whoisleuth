@@ -30,7 +30,7 @@ Express and Netlify adapters call the same request services and evidence rules.
 | Layer | Owns | Does not own |
 | --- | --- | --- |
 | `packages/contracts/` | Schema identity, compatibility descriptors, limits, capability metadata and portable contracts. | DOM, filesystem, network or framework effects. |
-| Domain packages | Pure Case, workspace, investigation, evidence, relationship, comparison and monitoring rules. | Browser storage, terminal presentation or hosted adapters. |
+| Domain packages | Pure analysis, Case, workspace, investigation, evidence, relationship, comparison and monitoring rules. | Node core, browser storage, terminal presentation or runtime adapters. |
 | `lib/` | Shared bounded collection, safe transport, authentication and host-neutral runtime services. | Svelte state or CLI argument handling. |
 | `frontend/` | Routes, components, accessibility, browser state, IndexedDB and downloads. | Canonical cross-runtime contract ownership. |
 | `cli/` and `bin/` | Command grammar, handlers, terminal output, local files and explicit CLI network effects. | Hosted sessions or browser persistence. |
@@ -39,9 +39,65 @@ Express and Netlify adapters call the same request services and evidence rules.
 | `packages/local-application/` | Optional loopback application startup and filesystem workspace package. | A separate evidence model or hosted deployment. |
 | `tools/` | Explicit maintainer checks, deterministic measurements and generated-reference renderers. | Runtime product behaviour. |
 
-Frontend compatibility paths re-export shared modules through
-identity-preserving facades. Non-frontend production code cannot
-import Svelte routes, components or browser adapters.
+`packages/analysis/` owns shared scoring, bounded JSON, target classification
+and evidence vocabularies. Domain directories inherit the same runtime-isolation
+rule. Historical `lib/` and frontend imports remain identity-preserving
+compatibility facades; internal consumers import the domain owner directly.
+Non-frontend production code cannot import Svelte routes, components or browser
+adapters.
+
+Console routes compose view effects around responsibility-specific controllers.
+Domain models own validation; storage adapters own transactions and conflict
+checks. A committed write and a failed subsequent refresh remain distinct.
+The [contributor owner guide](../CONTRIBUTING.md#find-the-owner) locates the
+current components, controllers and adapters. CLI workflow
+recipe definitions supply both the command grammar choices and plan catalogue;
+the command registry independently validates each step's network effect.
+
+Package builders share bounded source discovery, snapshots, compilation and
+emitted-file validation in `tools/package-source.mts`. Each builder owns its
+entry points, runtime dependencies, allowed support files and installed checks.
+CLI installation checks are grouped by discovery, evidence containers, workflow
+resumption, Case exports and signing. Their shared process runner records completed
+invocations directly; package assembly does not maintain a second check inventory.
+The optional packages do not load the CLI builder to compile shared code.
+
+The capture adapter obtains minimised page observations through native accessors
+installed before page scripts. Shared investigation models validate and compare
+them; browser and companion adapters present the same comparison. Case expected
+changes use the existing assertion and save coordinator, not a separate baseline
+store.
+
+The request-boundary owner records a bounded channel ledger through shutdown.
+The shared capture-coverage model separates supplied responses, refusals, failed
+collection, disabled transports and interactions not exercised. Direct-connection
+accounting has no destination attribution. Imported historical manifests retain
+unknown coverage rather than inheriting the current capture policy.
+
+Contextual review models in `packages/investigation` project retained Case
+history or explicitly selected incident, platform, storefront and connector metadata.
+Separate Case forms own temporary drafts; reports and reusable minimised inputs
+use existing attachment retention and mutation coordination. CLI dispatch uses
+the same validators. Connector configuration is never an execution input.
+
+Template revisions use the workspace template model and the existing template
+editor. A selected Case note supplies a content hash; authored instructions,
+completion criteria, applicability and origin metadata belong to the new
+template. The browser adapter checks both the new identity and source-template
+snapshot within the existing collection transaction. Template JSON and the
+restricted manual-playbook adapter retain origin metadata; active guides retain
+the selected guidance snapshot.
+
+Selected-file intake uses shared format adapters for messages, PDF, DOCX, PNG
+and HAR. Browser workers and the disposable CLI worker own cancellation and
+deadlines. PDF decoding uses a nested parser worker; DOCX uses checked ZIP parts
+and streaming XML. Reports retain minimised destinations and source/part hashes,
+not original document text or request credentials.
+
+Schema source discovery inventories literal identities and their canonical
+definitions. References and runtime propagation need no per-file registration.
+Domain validators and independent historical fixtures verify format behaviour;
+source discovery does not substitute for those checks.
 
 The Cases route uses the Case workspace component for its list, filters,
 selection, drafts and collection refresh. Monitor's legacy Cases URL redirects
@@ -62,9 +118,24 @@ The packet component owns one transient manual-handoff preview. Its generator
 supplies text and structured output; input identity and the existing
 freshness-bound review digest govern reuse. No preview is stored in the Case.
 
-Lookup's route coordinates collection and local context. Its export module owns
-portable-output preparation, download status and file delivery; evidence-quality
-and decision-review views share the contributor presentation projection.
+Lookup's request operation token remains
+current through result publication, storage reconciliation and reveal. Request and
+persistence controllers remain separate. Section-owned eligibility and loaders
+serve both rendering and intent preloading; TLS components consume a typed display
+projection rather than source records. Bulk separates scan lifetime and progress
+from saved work and filter state.
+Routes subscribe to those states and derive analysis from record/result identity,
+not from unrelated progress or draft updates.
+
+`lib/availability.mts` composes registration assessment from
+`domain-registration.mts` with eligible DNS, TLS and website observations from
+`website-enrichment.mts`. Target admission precedes both; registration authority
+and website activity remain separate results.
+
+Lookup's export module owns portable-output preparation and file delivery;
+evidence-quality and decision-review views share the contributor presentation
+projection. Pure incident-URL parsing and retention projection live in
+`case-incident-context.mts`, separate from Case mutation and storage.
 
 The shared investigation package owns graph relationships, source clocks and
 input coverage. The browser owns visual grouping, search and pagination.
@@ -218,9 +289,12 @@ exhaustive metadata.
 
 ## Data ownership and persistence
 
-The shared workspace provider owns collection validation, preparation,
-reconciliation and revision checks. Its transaction adapter supplies record and
-file I/O. The browser adapter uses IndexedDB. The optional local application
+`browser-local-data.ts` coordinates migration, updates, reconciliation and
+revision checks through the shared `LocalDataStorage` transaction interface.
+`browser-local-data-content.ts` owns record preparation, codecs and snapshot
+verification; workers use it without importing persistence. The
+`browser-indexeddb-storage.ts` adapter owns database lifetime and bounded
+transaction I/O. The optional local application
 uses an authenticated loopback adapter and a dedicated Node SQLite worker;
 there is no browser-database fallback in that mode. SQLite commits include all
 changed collections, original files and an operation receipt in one transaction.

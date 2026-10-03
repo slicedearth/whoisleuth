@@ -1,10 +1,15 @@
-import { profileSignals, type ActiveBrandProfileSourceState, type BrandProfile } from '../brand-profiles.ts';
+import {
+  profileSignals,
+  type ActiveBrandProfileSourceState,
+  type BrandProfile,
+} from '../brand-profiles.ts';
 import type { Candidate } from '../candidate-handoff-core.ts';
-import { canonicalRegistrableDomain } from '../../../../lib/registrable-domain.mts';
+import { canonicalRegistrableDomain } from '../../../../packages/analysis/registrable-domain.mts';
 import { registryDateIso } from '../../../../packages/evidence/registry-dates.mts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { compactHttpObservation } from './http-summary.ts';
+import { webCollectionQualityForCapture } from '../../../../packages/evidence/collection-quality.mts';
 import { createPageBaseline } from './page-baseline.ts';
 import { comparePageBaselines, hasStrongPageIdentityReviewMatch } from './page-similarity.ts';
 import { entityDisplayName } from './utils.ts';
@@ -60,6 +65,73 @@ export function canonicalBulkTargets(values: readonly string[]): string[] {
   return targets;
 }
 
+/** The failed row has the same evidence boundary as a successful projection;
+ * unavailable profile context cannot become a negative match or favourable score. */
+export function failedBulkScanResult(
+  message: string,
+  context: BulkScanNormalizationContext,
+): ScanResult {
+  const ready = (context.profileSourceState ?? 'ready') === 'ready';
+  const officialDomains = ready ? (context.profile?.officialDomains ?? []) : [];
+  const idn = analyzeDomainIdn(context.targetDomain, officialDomains);
+  const domain = idn?.asciiDomain || context.targetDomain;
+  const mutationTypes = context.candidate?.mutationTypes ?? [];
+  const profileValue = ready ? false : null;
+  return {
+    domain,
+    status: 'error',
+    availability: 'error',
+    confidence: 'unknown',
+    registrar: '—',
+    activity: '—',
+    risk: null,
+    opportunity: null,
+    mutationTypes,
+    trusted: null,
+    error: message,
+    saved: {
+      domain,
+      scanDepth: context.mode,
+      availability: 'error',
+      registrarName: '—',
+      nameservers: [],
+      faviconHash: null,
+      faviconPHash: null,
+      faviconMatch: profileValue,
+      faviconNearMatch: profileValue,
+      reusesOfficialAssets: profileValue,
+      idnReferenceMatch: ready ? Boolean(idn?.referenceMatches.length) : null,
+      pageBaselineMatch: null,
+      hasActiveBrandProfile: ready ? Boolean(context.profile) : null,
+      riskFactors: [],
+      mutationTypes,
+      profileContext: bulkProfileContextProvenance(
+        context.profileSourceState ?? 'ready',
+        context.profile,
+      ),
+      error: message,
+    },
+    nameservers: [],
+    faviconHash: null,
+    faviconPHash: null,
+    faviconMatch: profileValue,
+    faviconNearMatch: profileValue,
+    reusesOfficialAssets: profileValue,
+    hasPasswordField: false,
+    hasExternalFormAction: null,
+    phishingLanguageMatch: null,
+    registrant: null,
+    abuseEvidence: null,
+    ct: context.candidate?.certificateTransparency ?? null,
+    idn,
+    dns: null,
+    dnssec: null,
+    comparisonEvidence: null,
+    relationship: relationshipObservation({}, officialDomains),
+    sourceCoverage: [{ source: 'lookup', state: 'error' }],
+  };
+}
+
 /**
  * Converts the compact HTTP lookup contract into the bounded result retained by
  * Bulk. Raw registration payloads and expanded contacts never cross this
@@ -78,8 +150,11 @@ export function normalizeBulkScanResult(
   const domain = evidenceDomain;
   const mutationTypes = context.candidate?.mutationTypes ?? [];
   const profileContextReady = (context.profileSourceState ?? 'ready') === 'ready';
-  const profileContext = bulkProfileContextProvenance(context.profileSourceState ?? 'ready', context.profile);
-  const officialDomains = profileContextReady ? context.profile?.officialDomains ?? [] : [];
+  const profileContext = bulkProfileContextProvenance(
+    context.profileSourceState ?? 'ready',
+    context.profile,
+  );
+  const officialDomains = profileContextReady ? (context.profile?.officialDomains ?? []) : [];
   const hasActiveBrandProfile = profileContextReady ? Boolean(context.profile) : null;
   const matched = profileContextReady
     ? profileSignals(domain, availability, context.profile)
@@ -90,7 +165,9 @@ export function normalizeBulkScanResult(
   const pageComparison = profileContextReady
     ? comparePageBaselines(context.profile?.pageBaseline, createPageBaseline(domain, availability))
     : null;
-  const pageBaselineMatch = profileContextReady ? hasStrongPageIdentityReviewMatch(pageComparison) : null;
+  const pageBaselineMatch = profileContextReady
+    ? hasStrongPageIdentityReviewMatch(pageComparison)
+    : null;
   const idnReferenceMatch = profileContextReady ? Boolean(idn?.referenceMatches.length) : null;
   const scoring = {
     ...availability,
@@ -121,10 +198,7 @@ export function normalizeBulkScanResult(
   const httpSummary = compactHttpObservation(availability.http) ?? {};
   const hasExternalFormAction = nullableBoolean(availability.hasExternalFormAction);
   const comparisonEvidence = normalizeBulkComparisonEvidence(availability.bulkComparison);
-  const relationship = relationshipObservation(
-    availability,
-    officialDomains,
-  );
+  const relationship = relationshipObservation(availability, officialDomains);
   const saved: SavedScanRecord = {
     domain,
     scanDepth: context.mode,
@@ -132,10 +206,12 @@ export function normalizeBulkScanResult(
     availability: body.availability.state,
     registrarName: entityDisplayName(availability.registrar) || '—',
     nameservers,
-    createdDate: registryDateIso(boundedText(availability.createdDateIso, 64))
-      ?? registryDateIso(boundedText(availability.createdDate, 64)),
-    expiryDate: registryDateIso(boundedText(availability.expiryDateIso, 64))
-      ?? registryDateIso(boundedText(availability.expiryDate, 64)),
+    createdDate:
+      registryDateIso(boundedText(availability.createdDateIso, 64)) ??
+      registryDateIso(boundedText(availability.createdDate, 64)),
+    expiryDate:
+      registryDateIso(boundedText(availability.expiryDateIso, 64)) ??
+      registryDateIso(boundedText(availability.expiryDate, 64)),
     privacyProtected,
     hasMx,
     hasNullMx,
@@ -144,6 +220,10 @@ export function normalizeBulkScanResult(
     activityStatus,
     pageTitle: boundedText(availability.pageTitle, 300),
     ...httpSummary,
+    webCollectionQuality: webCollectionQualityForCapture(
+      availability.webCollectionQuality,
+      context.mode,
+    ),
     faviconHash: boundedText(availability.faviconHash, 64),
     faviconPHash: boundedText(availability.faviconPHash, 64),
     faviconMatch: matched.faviconMatch,
@@ -158,10 +238,11 @@ export function normalizeBulkScanResult(
     riskModelVersion: riskExplanation?.modelVersion ?? null,
     opportunityModelVersion: opportunityExplanation?.modelVersion ?? null,
     riskScore: risk,
-    riskFactors: riskExplanation?.factors.map((factor) => ({
-      label: factor.label,
-      points: factor.delta,
-    })) ?? [],
+    riskFactors:
+      riskExplanation?.factors.map((factor) => ({
+        label: factor.label,
+        points: factor.delta,
+      })) ?? [],
     mutationTypes,
     profileContext,
   };

@@ -97,7 +97,7 @@ test('worker integrity failures remain distinct from empty results and never dis
     assert.equal(result.code, code, name);
     assert.doesNotMatch(JSON.stringify(result), /retained\.example|Independent retained value|private-record-content/u);
   }
-  for (const captured of [[], [original, original], Array(17).fill(original)]) {
+  for (const captured of [[], [original, original], Array(BROWSER_LOCAL_COLLECTIONS.length + 1).fill(original)]) {
     assert.equal((await decodeLocalDataWorkerRequest({ captured })).kind, 'error');
   }
   assert.equal((await decodeLocalDataWorkerRequest(null as unknown as LocalDataDecodeRequest)).kind, 'error');

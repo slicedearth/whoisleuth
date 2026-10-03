@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import type { Route } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -14,22 +15,19 @@ test('minimal decoration exposes measurable contrast on plain reference surfaces
       await page.setViewportSize({ width, height: width === 320 ? 700 : 1080 });
       await page.goto('/resources');
       await expect(page.locator('body')).toHaveCSS('background-image', 'none');
-      const cards = page.locator('.goal-paths article');
-      await expect(cards.first()).toBeVisible();
-      const backgrounds = await cards.evaluateAll(elements => elements.map(element => ({
-        background: getComputedStyle(element).backgroundColor, image: getComputedStyle(element).backgroundImage,
-      })));
-      expect(backgrounds.length).toBeGreaterThan(0);
-      for (const background of backgrounds) {
-        expect(background.image).toBe('none');
-        expect(background.background).toMatch(/^rgb\(/u);
-      }
+      const paths = page.locator('.goal-paths article');
+      await expect(paths.first()).toBeVisible();
+      const images = await paths.evaluateAll(elements => elements.map(element => getComputedStyle(element).backgroundImage));
+      expect(images.length).toBeGreaterThan(0);
+      expect(images.every(image => image === 'none')).toBe(true);
+      // Contrast must be measurable against the rendered surface, including
+      // transparent items that inherit it; an opaque card is not a contract.
       const contrast = await new AxeBuilder({ page }).include('.reference-heading').include('.goal-paths').withRules(['color-contrast']).analyze();
       await testInfo.attach(`plain-contrast-${theme}-${width}.json`, { body: JSON.stringify({ passes: contrast.passes, incomplete: contrast.incomplete, violations: contrast.violations }), contentType: 'application/json' });
       expect(contrast.violations).toEqual([]);
       expect(contrast.incomplete).toEqual([]);
       expect(contrast.passes.length).toBeGreaterThan(0);
-      await page.screenshot({ path: testInfo.outputPath(`plain-reference-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`plain-reference-${theme}-${width}.png`) }); }
     }
   }
 });
@@ -98,9 +96,26 @@ test('appearance controls remain usable at narrow and wide widths in both themes
       await expect(page.getByLabel('Reading density')).toBeInViewport();
       await expect(page.getByLabel('Decorative effects')).toBeInViewport();
       await expectNoHorizontalOverflow(page);
-      if (width === 390 || width === 1920) await page.screenshot({ path: testInfo.outputPath(`appearance-${theme}-${width}.png`) });
+      if (width === 390 || width === 1920) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`appearance-${theme}-${width}.png`) }); }
       await page.getByLabel('Reading density').press('Escape');
       await expect(trigger).toBeFocused();
     }
   }
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`public reading surfaces remain usable from phones to wide desktops in ${theme}`, async ({ page }, testInfo) => {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 768, 1024, 1280, 1920, 2560, 3840]) {
+      await page.setViewportSize({ width, height: width === 320 ? 700 : width === 390 ? 844 : width < 1280 ? 768 : width === 1280 ? 720 : 1080 });
+      for (const path of ['/', '/resources', '/cli#command-lookup', '/resources/lookalike-domain-checker']) {
+        await page.goto(path);
+        await expect(page.locator('main h1')).toHaveCount(1);
+        if (path.includes('#')) await expect(page.locator('[data-command-detail="lookup"]')).toBeInViewport();
+        else await expect(page.locator('main h1')).toBeInViewport();
+        await expectNoHorizontalOverflow(page);
+        if ([320, 1280, 3840].includes(width)) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`reading-${theme}-${width}-${path.replace(/[^a-z]+/gu, '-')}.png`) }); }
+      }
+    }
+  });
+}

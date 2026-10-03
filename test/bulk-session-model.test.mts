@@ -595,6 +595,7 @@ describe('saved Bulk sessions', () => {
       updatedAt: id === 'baseline' ? FIRST : LATER,
       results: [result('priority.invalid', {
         profileContext: context,
+        webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
         risk,
         riskModelVersion,
         hasActiveBrandProfile: true,

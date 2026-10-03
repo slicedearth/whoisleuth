@@ -56,10 +56,16 @@ npm run capture:compare -- ./official/manifest.json ./candidate/manifest.json --
 
 The destination must not already exist. The package writes a fixed-size PNG,
 a sanitised DOM digest containing hashes and element counts rather than page
-text or HTML, and a version 2 `whoisleuth.web-capture-manifest` that can be
+text or HTML, and a version 3 `whoisleuth.web-capture-manifest` that can be
 reviewed before import into Cases. The manifest also retains one
 control-sanitised page title of up to 300 characters. File permissions are
 private where the platform supports POSIX modes.
+If a later refused navigation leaves a browser error page, the partial manifest
+retains request accounting and labels the screenshot as the resulting browser
+state. It claims no final origin, title, DOM digest or page-element observations.
+These partial manifests can be imported into Cases; rendered comparison requires
+DOM evidence and explains its absence instead of comparing the error page as
+target content. A failed initial navigation produces no capture.
 Capture conditions record the browser version, 1024 × 768 viewport, scale 1,
 `en-US` locale, UTC timezone and light colour scheme. Optional `--observer` and
 `--vantage` labels are declarations, not verified identities or locations.
@@ -70,10 +76,30 @@ rendered content and may include page text or a page-reflected path or query
 until the operator deletes the output directory.
 Rendered DOM counts are capped at 20,000 and the body text-node sequence is
 hashed only through a valid UTF-8 boundary within 256 KiB. Reaching either bound marks the
-capture partial so the resulting version-2 artefact remains accepted by the
+capture partial so the resulting artefact remains accepted by the
 offline comparator without implying that the omitted page content was absent.
 
-The offline `compare` command accepts two selected version-2 manifests. Before
+Page observations retain fulfilled navigation, script and frame response origins,
+response status and CSP-header presence; admitted script bodies are SHA-256 hashed.
+The final top-level document contributes at most 500 script, frame and form
+observations, including inline-script hashes, integrity-attribute presence,
+default form destinations and password-field counts. Inline script text is
+hashed only when it fits the 256 KiB aggregate admission; it is never retained.
+Fixed wording matches describe requested actions without retaining commands or
+body text. Clipboard API writes are refused and counted for the final page.
+No form is submitted, and an attribute or policy header is not a verification.
+
+The request-channel ledger records the first 500 attempts, including navigation,
+scripts, frames, stylesheets, images, fonts, media, XHR, fetch, beacons and event
+streams. It separates responses supplied to the page from refusals and failed
+collection, with an explicit collector-started flag. No request body, header,
+path or query enters the ledger. Only public-address-validated origins are
+retained; filling missing destinations never triggers another request. Omitted
+attempts and unattributed direct-connection refusals remain explicit counts.
+Disabled transports and interactions not exercised are recorded separately.
+The existing request, host, transfer and deadline limits still apply.
+
+The offline `compare` command accepts selected version-2 and version-3 manifests. Before
 comparing them it verifies the declared artefact sizes, SHA-256 digests, and
 screenshot perceptual hashes against the local files. It then reports exact
 equality for complete bounded preorder element-tag sequences and body text-node
@@ -87,9 +113,12 @@ technology set relationships are also unavailable because omitted activity can
 change them; retained counts and shared observations remain visible for review.
 The comparator makes no request, prints no input
 paths, reports only the page-title equality state rather than either title,
-emits `whoisleuth.web-capture-comparison` version 3, and produces no combined
-similarity or maliciousness score. Version-2 comparison documents remain
-listed as historical read-only output in the schema inventory.
+emits `whoisleuth.web-capture-comparison` version 4, and produces no combined
+similarity or maliciousness score. Page observations are compared separately:
+script hashes, policy presence, form destinations, navigation order and wording.
+Duplicate observations retain their multiplicity. Historical manifests have no
+page observations; partial capture does not establish an unchanged dependency
+set, and not re-observed never means removed.
 
 The comparison also checks every decoded screenshot pixel on a white background,
 reporting changed counts and a grid of source-pixel coordinates. It never resizes
@@ -105,7 +134,7 @@ Collection executes page JavaScript. Each admitted resource operator receives
 the exact requested URL, including path and query, and ordinary allowlisted
 request headers. Structured manifest and digest fields keep only the target
 hostname, final HTTP(S) origin, one control-sanitised page title of up to 300
-characters, and admitted public resource hostnames. They contain no dedicated
+characters, admitted public resource hostnames and the minimised observations above. They contain no dedicated
 request-path or query fields, but the title may itself reproduce a path or query.
 It accepts at most 100 HTTP(S)
 requests and 30 request hostnames, blocks credentials, non-default ports,

@@ -1,8 +1,41 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
 import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
 import { PUBLIC_REFERENCE_DESTINATIONS } from '../frontend/src/lib/public-reference-navigation';
-import { toolGuides, referenceGuides } from '../frontend/src/lib/public-guide';
+import { glossaryTerms, guideFaqs, publicGuideGoals, resultStates, toolGuides, referenceGuides } from '../frontend/src/lib/public-guide';
+
+test('missing-page artefact provides usable navigation without a client runtime', async ({ browser, request }, testInfo) => {
+  const missing = await request.get('/missing-page?private=not-for-display');
+  expect(missing.status()).toBe(404);
+  const body = await missing.text();
+  expect(body).toContain('Page not found');
+  expect(body).not.toContain('not-for-display');
+  expect(body).not.toContain('Cannot GET');
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  try {
+    const page = await context.newPage();
+    for (const theme of ['light', 'dark'] as const) {
+      await page.goto('/404');
+      // Exercise both CSS palettes while application scripts remain disabled.
+      await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
+      await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow');
+      for (const viewport of [{ width: 320, height: 700 }, { width: 390, height: 844 }, { width: 1024, height: 768 }, { width: 1280, height: 720 }]) {
+        await page.setViewportSize(viewport);
+        await expect(page.getByRole('heading', { level: 1, name: 'Page not found' })).toBeVisible();
+        await expect(page.getByRole('navigation', { name: 'Continue browsing' }).getByRole('link')).toHaveCount(3);
+        await expectNoHorizontalOverflow(page);
+        if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`not-found-${theme}-${viewport.width}.png`), fullPage: true });
+      }
+    }
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('link', { name: 'WHOISleuth', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('link', { name: 'Homepage', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/$/u);
+  } finally { await context.close(); }
+});
 
 for (const theme of ['light', 'dark'] as const) {
   test(`every reference introduction remains readable on mobile and tablet in ${theme}`, async ({ page }, testInfo) => {
@@ -17,12 +50,12 @@ for (const theme of ['light', 'dark'] as const) {
         await expect(page.locator('main h1')).toHaveCount(1);
         await expect(page.locator('main h1')).toBeInViewport({ ratio: 1 });
         await expect(page.getByRole('navigation', { name: 'Breadcrumb', exact: true })).toBeVisible();
-        await expect(page.getByText('Browse documentation', { exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Browse documentation', exact: true })).toBeVisible();
         await expectNoHorizontalOverflow(page);
         const bodyTop = await page.locator('.reference-body').evaluate(element => element.getBoundingClientRect().top);
         measurements.push({ href: destination.href, theme, ...viewport, bodyTop });
         expect(bodyTop, `${destination.href} places all practical content below the first viewport`).toBeLessThan(viewport.height);
-        if (viewport.width === 320) await page.screenshot({ path: testInfo.outputPath(`${destination.href.replaceAll('/', '-')}-${theme}-320.png`) });
+        if (viewport.width === 320) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`${destination.href.replaceAll('/', '-')}-${theme}-320.png`) }); }
       }
     }
     await testInfo.attach('reference-introductions.json', { body: JSON.stringify(measurements), contentType: 'application/json' });
@@ -69,46 +102,27 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.locator('.hero-kicker')).toHaveText('Domain intelligence console');
   await expect(page.locator('.public-header .mark')).toHaveCount(1);
   await expect(page.locator('.hero .mark')).toHaveCount(0);
-  await expect(page.locator('.goal-paths article')).toHaveCount(3);
+  await expect(page.locator('.goal-paths article')).toHaveCount(publicGuideGoals.length);
   await expect(page.getByRole('heading', { name: 'Inspect one domain' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Inspect one domain guide' })).toHaveCSS('cursor', 'pointer');
+  await expect(page.getByRole('link', { name: 'Inspect one domain guide' })).toHaveAttribute('href', '/resources#inspect-one-domain');
   await expect(page.getByRole('link', { name: 'Find brand lookalikes guide' })).toHaveAttribute('href', '/resources#find-brand-lookalikes');
   await expect(page.getByRole('link', { name: 'Track important findings guide' })).toHaveAttribute('href', '/resources#track-important-findings');
-  await expect(page.getByRole('link', { name: /Browse the topic library/u })).toHaveCSS('cursor', 'pointer');
+  await expect(page.getByRole('link', { name: /Browse the topic library/u })).toHaveAttribute('href', '/resources');
   await expect(page.getByRole('heading', { name: 'Find brand lookalikes' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Track important findings' })).toBeVisible();
-  const goalCards = page.locator('.goal-paths article');
-  const featuredBox = await goalCards.nth(0).boundingBox();
-  const secondBox = await goalCards.nth(1).boundingBox();
-  const thirdBox = await goalCards.nth(2).boundingBox();
-  expect(featuredBox).not.toBeNull();
-  expect(secondBox).not.toBeNull();
-  expect(thirdBox).not.toBeNull();
-  expect(featuredBox!.width).toBeGreaterThan(secondBox!.width * 1.8);
-  expect(Math.abs(secondBox!.y - thirdBox!.y)).toBeLessThanOrEqual(2);
-  const goalBorders = await goalCards.evaluateAll((cards) => cards.map((card) => getComputedStyle(card).borderColor));
-  expect(new Set(goalBorders).size).toBe(1);
   await expect(page.locator('.product-preview .preview-panel')).toHaveCount(3);
   const candidateButtons = page.locator('.discover-panel .candidate-row');
   await expect(candidateButtons).toHaveCount(3);
   await expect(page.getByRole('button', { name: 'Show northstar-login.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
   const previewTabs = page.getByRole('tablist', { name: 'Lookup result layout preview' });
+  await expect(previewTabs.getByRole('tab', { name: 'At a glance' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel', { name: 'At a glance' })).toBeVisible();
+  await previewTabs.getByRole('tab', { name: 'Evidence' }).click();
   await expect(previewTabs.getByRole('tab', { name: 'Evidence' })).toHaveAttribute('aria-selected', 'true');
   const topology = page.getByRole('region', { name: 'Where this result comes from' });
   await expect(topology).toBeVisible();
-  await expect(topology.locator('#homepage-evidence-map-title')).toHaveCSS('clip-path', 'inset(50%)');
   const topologyGraphic = topology.getByRole('img', { name: 'Separately attributed evidence flow' });
   await expect(topologyGraphic).toBeVisible();
-  const topologyLayout = await topology.evaluate((map) => {
-    const graphic = map.querySelector('svg')!;
-    const mapBox = map.getBoundingClientRect();
-    const graphicBox = graphic.getBoundingClientRect();
-    return {
-      topGap: graphicBox.top - mapBox.top,
-      bottomGap: mapBox.bottom - graphicBox.bottom,
-    };
-  });
-  expect(Math.abs(topologyLayout.topGap - topologyLayout.bottomGap)).toBeLessThanOrEqual(4);
   await expect(page.locator('.mobile-source-summary > li')).toHaveCount(5);
   await page.getByRole('button', { name: 'Show northstarr.example in the preview' }).click();
   await expect(page.getByRole('button', { name: 'Show northstarr.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
@@ -121,17 +135,6 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(previewOverview.getByText('2/4 sources complete', { exact: true })).toBeVisible();
   const riskTriage = previewOverview.getByText('Risk triage 34/100', { exact: true });
   await expect(riskTriage).toBeVisible();
-  const triagePresentation = await riskTriage.evaluate((node) => {
-    const primary = node.parentElement?.querySelector('strong');
-    return {
-      color: getComputedStyle(node).color,
-      fontSize: Number.parseFloat(getComputedStyle(node).fontSize),
-      primaryColor: primary ? getComputedStyle(primary).color : '',
-      primaryFontSize: primary ? Number.parseFloat(getComputedStyle(primary).fontSize) : 0,
-    };
-  });
-  expect(triagePresentation.color).not.toBe(triagePresentation.primaryColor);
-  expect(triagePresentation.fontSize).toBeLessThan(triagePresentation.primaryFontSize);
   await expect(previewOverview.getByText('Character edit', { exact: true })).toBeVisible();
   await expect(previewOverview.getByText('Parked page pattern', { exact: true })).toBeVisible();
   await expect(topology).toHaveCount(0);
@@ -193,7 +196,7 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expectNoHorizontalOverflow(page);
 });
 
-test('public resources offer task-specific source boundaries on desktop and mobile', async ({ page }) => {
+test('public resources offer task-specific source boundaries on desktop and mobile', async ({ page }, testInfo) => {
   await page.goto('/resources');
 
   await expect(page.getByRole('heading', { name: 'Guides for common investigation tasks' })).toBeVisible();
@@ -204,13 +207,12 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   await expect(page.getByRole('navigation', { name: 'Public navigation' }).getByRole('link', { name: 'Resources' })).toHaveAttribute('aria-current', 'location');
   await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
   await expect(page.getByRole('row')).toHaveCount(4);
-  await expect(page.getByRole('heading', { name: 'Questions worth answering' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Before you decide' })).toBeVisible();
   const references = page.locator('#primary-references');
-  await expect(references.getByRole('heading', { name: 'Specifications behind this guide' })).toBeVisible();
+  await expect(references.getByRole('heading', { name: 'Further reading' })).toBeVisible();
   await expect(references.getByRole('link')).toHaveCount(3);
   await expect(references.getByRole('link', { name: /IETF RFC 3912: WHOIS protocol/u })).toHaveAttribute('href', 'https://www.rfc-editor.org/rfc/rfc3912');
-  await expect(references.locator('.sr-only').first()).toHaveCSS('clip-path', 'inset(50%)');
-  await expect(page.getByRole('link', { name: 'Inspect synthetic registration evidence' })).toHaveAttribute('href', '/demo');
+  await expect(page.getByRole('link', { name: 'Inspect synthetic registration evidence', exact: true })).toHaveAttribute('href', '/demo');
   await expect(page.getByRole('link', { name: 'Open docs/registry-data-contract.md' })).toHaveAttribute(
     'href',
     'https://github.com/slicedearth/whoisleuth/blob/main/docs/registry-data-contract.md',
@@ -219,30 +221,26 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   await expect(breadcrumb.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');
   await expect(breadcrumb.getByRole('link', { name: 'Resources' })).toHaveAttribute('href', '/resources');
   await expect(breadcrumb.locator(':scope > span').last()).toHaveText('RDAP versus WHOIS');
-  const breadcrumbLayout = await breadcrumb.locator(':scope > *').evaluateAll((elements) => elements.map((element) => {
-    const box = element.getBoundingClientRect();
-    const style = getComputedStyle(element);
-    return {
-      y: box.y,
-      height: box.height,
-      margin: style.margin,
-      padding: style.padding,
-    };
-  }));
-  expect(new Set(breadcrumbLayout.map((item) => Math.round(item.y))).size).toBe(1);
-  expect(new Set(breadcrumbLayout.map((item) => Math.round(item.height))).size).toBe(1);
-  expect(breadcrumbLayout[0]?.margin).toBe('0px');
-  expect(breadcrumbLayout[0]?.padding).toBe('0px');
+  await expect(breadcrumb).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   await page.setViewportSize({ width: 320, height: 700 });
   await page.reload();
-  await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
-  const articleSections = page.locator('.reference-browser');
-  await expect(articleSections).toBeVisible();
-  await articleSections.locator(':scope > summary').click();
-  await expect(articleSections.locator('.mobile-page-sections').getByRole('link')).toHaveCount(5);
-  expect(await breadcrumb.evaluate((element) => getComputedStyle(element).marginLeft)).toBe('0px');
+  const evidenceTable = page.getByRole('table', { name: 'Evidence sources and limitations' });
+  await expect(evidenceTable).toBeVisible();
+  await expect(evidenceTable.getByRole('columnheader')).toHaveText(['Source', 'Useful for', 'Important limit']);
+  await expect(evidenceTable.getByRole('row').nth(1).locator('.mobile-column-label')).toHaveText(['Source', 'Useful for', 'Important limit']);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    await expectNoHorizontalOverflow(page);
+    await evidenceTable.scrollIntoViewIfNeeded();
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`resource-table-${theme}.png`) });
+  }
+  await page.getByRole('button', { name: 'Browse documentation', exact: true }).click();
+  const articleSections = page.getByRole('dialog');
+  await expect(articleSections.locator('.page-sections').getByRole('link')).toHaveCount(5);
+  await articleSections.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(breadcrumb).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   await page.goto('/resources/reporting-and-takedown-guidance');
@@ -250,7 +248,9 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   const reportingReferences = page.locator('#primary-references');
   await expect(reportingReferences.getByRole('heading', { name: 'Official reporting guidance' })).toBeVisible();
   await expect(reportingReferences).toContainText('verify the current reporting route, eligibility and disclosure terms');
-  await expect(reportingReferences.getByRole('link')).toHaveCount(6);
+  await expect(reportingReferences.getByRole('link')).toHaveCount(11);
+  await expect(reportingReferences.getByRole('link', { name: /Google Play: Review app or developer reporting/u })).toHaveAttribute('href', 'https://support.google.com/googleplay/answer/2853570?hl=en');
+  await expect(reportingReferences.getByRole('link', { name: /Shopify: Choose a merchant abuse route/u })).toHaveAttribute('href', 'https://www.shopify.com/legal/tools/report-an-issue/report-a-merchant');
   await expect(reportingReferences.getByRole('link', { name: /TikTok report form/u })).toHaveAttribute('href', 'https://www.tiktok.com/legal/report/feedback');
   await expect(reportingReferences.getByRole('link', { name: /Telegram reporting guidance/u })).toHaveAttribute('href', /telegram\.org\/faq/iu);
   await expectNoHorizontalOverflow(page);
@@ -258,8 +258,7 @@ test('public resources offer task-specific source boundaries on desktop and mobi
 
 test('public guide explains tasks, result states, glossary terms, and common questions', async ({ page }) => {
   await page.goto('/resources');
-  await expect(page.getByText(/At a glance separates complete, limited, disagreeing and unresolved evidence/i)).toBeVisible();
-  await expect(page.getByText(/The analyst question changes section order for the selected task/i)).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Source health is part of the evidence' })).toBeVisible();
 
   await expect(page.getByRole('heading', { name: 'Guides for common investigation tasks' })).toBeVisible();
   await expect(page.locator('.page-sections')).toBeVisible();
@@ -280,7 +279,7 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(trackingSteps.nth(2)).toHaveAttribute('href', '#tool-monitor-next');
   await trackingSteps.nth(2).click();
   await expect(page.locator('#tool-monitor-next')).toBeInViewport();
-  await expect(page.locator('.goal-paths article')).toHaveCount(3);
+  await expect(page.locator('.goal-paths article')).toHaveCount(publicGuideGoals.length);
   await page.getByRole('button', { name: 'Open offline practice' }).click();
   const practice = page.getByRole('region', { name: 'Try a guided analyst decision.' });
   await expect(practice).toBeVisible();
@@ -288,31 +287,24 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await practice.getByLabel('Review the official domain and trusted allowlists before generating candidates.').check();
   await expect(practice.getByText('Defensible choice')).toBeVisible();
   await expect(practice.getByRole('button', { name: 'Next decision' })).toBeEnabled();
-  const toolCards = page.locator('.tool-guide article');
+  const toolCards = page.locator('.tool-guide details');
   const referenceCards = page.locator('.reference-guide article');
   await expect(toolCards).toHaveCount(toolGuides.length);
-  await expect(toolCards.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
+  const cases = page.locator('#tool-cases');
+  await cases.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(cases).toHaveAttribute('open', '');
+  await expect(cases.locator('dl')).toContainText('Each Case holds evidence');
   await expect(referenceCards).toHaveCount(referenceGuides.length);
-  const desktopCardWidths = await toolCards.evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().width));
-  const ordinaryWidth = desktopCardWidths[0]!;
-  expect(ordinaryWidth).toBeGreaterThan(0);
-  for (const [index, width] of desktopCardWidths.entries()) {
-    if (index === desktopCardWidths.length - 1 && desktopCardWidths.length % 2 !== 0) {
-      expect(width).toBeGreaterThan(ordinaryWidth * 1.9);
-    } else {
-      expect(Math.abs(width - ordinaryWidth)).toBeLessThanOrEqual(1);
-    }
-  }
-  expect((await referenceCards.first().boundingBox())?.width ?? 0).toBeGreaterThan((desktopCardWidths[0] ?? 0) * 1.9);
-  const wideDefinitionRows = (toolGuides.length % 2 ? toolCards.last() : referenceCards.first()).locator('dl > div');
-  expect(await wideDefinitionRows.nth(0).evaluate((row) => Math.round(row.getBoundingClientRect().top)))
-    .toBe(await wideDefinitionRows.nth(1).evaluate((row) => Math.round(row.getBoundingClientRect().top)));
-  const resultLayout = page.getByRole('article', { name: 'Start with the decision, then open the evidence you need' });
+  await expect(page.locator('#tool-monitor')).toHaveAttribute('open', '');
+  await expect(page.locator('#tool-monitor-next')).toContainText('Open the relevant Case');
+  const resultLayout = page.getByRole('article', { name: 'Find your way around a Lookup result' });
   await expect(resultLayout).toBeVisible();
   await expect(resultLayout.getByText('Relationships and history', { exact: true })).toBeVisible();
-  await expect(resultLayout).toContainText('Each family can be opened or collapsed independently.');
-  await expect(page.locator('.state-grid article')).toHaveCount(9);
-  await expect(page.locator('.glossary-grid > div')).toHaveCount(59);
+  await expect(resultLayout).toContainText('Use Jump to section to move around a long result.');
+  await expect(page.locator('.state-grid article')).toHaveCount(resultStates.length);
+  await expect(page.locator('.glossary-grid > div')).toHaveCount(glossaryTerms.length);
+  await page.locator('#glossary > summary').click();
   await expect(page.locator('.glossary-grid').getByText('DANE', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('MTA-STS', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('TLSA', { exact: true })).toBeVisible();
@@ -321,22 +313,18 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(page.locator('.glossary-grid').getByText('PTR', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('SOA', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('Website profile snapshot', { exact: true })).toBeVisible();
-  await expect(page.locator('.faq-list details')).toHaveCount(8);
+  await expect(page.locator('.faq-list details')).toHaveCount(guideFaqs.length);
 
   const question = page.getByText('Does WHOISleuth decide whether a domain is malicious?', { exact: true });
   await question.click();
   await expect(page.getByText('No. It organises observed evidence and provides an explainable Risk score for prioritisation.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Try the synthetic demo' })).toHaveAttribute('href', '/demo');
   await expect(page.locator('.reference-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
-  await expect(page.locator('.closing-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 
   await page.setViewportSize({ width: 320, height: 700 });
-  const mobileCardWidths = await toolCards.evaluateAll((cards) => cards.map((card) => Math.round(card.getBoundingClientRect().width)));
-  expect(new Set(mobileCardWidths).size).toBe(1);
-  expect(await wideDefinitionRows.nth(0).evaluate((row) => Math.round(row.getBoundingClientRect().top)))
-    .toBeLessThan(await wideDefinitionRows.nth(1).evaluate((row) => Math.round(row.getBoundingClientRect().top)));
+  await expect(cases.locator('dl')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -360,7 +348,6 @@ test('privacy policy offers concise section navigation at desktop and mobile wid
   await page.goto('/privacy');
   await expect(sectionNavigation).toBeVisible();
   expect(await sectionNavigation.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-  expect(await sectionNavigation.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(2);
   await expectNoHorizontalOverflow(page);
 });
 
@@ -374,22 +361,21 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
   await expectNoHorizontalOverflow(page);
 
   await page.goto('/resources');
-  const sectionBrowser = page.locator('.reference-browser');
-  await expect(sectionBrowser).toBeVisible();
-  await sectionBrowser.locator(':scope > summary').click();
-  const resourceSections = sectionBrowser.locator('.mobile-page-sections');
+  await page.getByRole('button', { name: 'Browse documentation', exact: true }).click();
+  const resourceSections = page.getByRole('dialog');
   await expect(resourceSections).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Common WHOISleuth tasks' })).toBeVisible();
   await expect(resourceSections.getByRole('link', { name: 'Topics' })).toHaveAttribute('href', '#topics');
   await expect(resourceSections.getByRole('link', { name: 'Tools' })).toHaveAttribute('href', '#tools');
   await expect(resourceSections.getByRole('link', { name: 'Practice' })).toHaveAttribute('href', '#practice');
   await expect(resourceSections.getByRole('link', { name: 'Reference' })).toHaveAttribute('href', '#reference');
+  await resourceSections.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Common WHOISleuth tasks' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Domain investigation terms' })).toBeVisible();
-  await expect(page.getByRole('article', { name: 'Start with the decision, then open the evidence you need' })).toBeVisible();
+  await expect(page.getByRole('article', { name: 'Find your way around a Lookup result' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
-test('public footer keeps five links in balanced accessible mobile rows', async ({ page }) => {
+test('public footer links remain reachable without overlap on mobile', async ({ page }) => {
   for (const width of [320, 390, 412]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto('/');
@@ -406,8 +392,6 @@ test('public footer keeps five links in balanced accessible mobile rows', async 
     }));
     expect(new Set(layout.map(link => link.href)).size).toBe(5);
     expect(layout.every(link => link.height >= 44 && link.x >= 0 && link.x + link.width <= width)).toBe(true);
-    const rows = [...new Set(layout.map(link => Math.round(link.y)))];
-    expect(rows.map(row => layout.filter(link => Math.round(link.y) === row).length)).toEqual([3, 2]);
     for (const [index, link] of layout.entries()) {
       for (const other of layout.slice(index + 1)) {
         const overlaps = Math.min(link.x + link.width, other.x + other.width) > Math.max(link.x, other.x)

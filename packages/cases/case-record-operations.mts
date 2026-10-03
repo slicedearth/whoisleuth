@@ -1,9 +1,13 @@
 // Pure, framework-neutral analyst-case records, evidence histories, bounded
 // record normalization, and analyst updates.
 
-import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
-import { parseCredentialFreeHttpUrl } from '../evidence/lookup-target.mts';
+import {
+  normalizeCaseObjective,
+  parseIncidentUrlContext,
+} from './case-incident-context.mts';
 import { selectExistingCase, type CaseOpenSelection } from './case-selection.mts';
+import { emptyCaseWorkflowMetadata, updateCaseWorkflowMetadata } from './case-workflow-metadata.mts';
+import { readCaseWorkflowFields } from './case-workflow-migration.mts';
 import {
   appendCaseAction,
   appendCaseAssertion,
@@ -35,8 +39,10 @@ import {
   type CasePatch,
   type CaseRecord,
 } from './case-record-contracts.mts';
-import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION, INCIDENT_CASE_SCHEMA_VERSION, MAX_CASE_OBJECTIVE_LENGTH } from '../contracts/case-portability.mts';
+import { MAX_CASE_OBJECTIVE_LENGTH, MAX_RESPONSE_VALUE_LENGTH } from '../contracts/case-portability.mts';
+import { caseRecordVersionInput } from './case-record-version-input.mts';
 import { readCaseAttachments } from './case-attachment-model.mts';
+import { readCaseEvidenceLinks, appendCaseEvidenceLink, withdrawCaseEvidenceLink } from './case-evidence-links.mts';
 import { assertCurrentRecheckQuestion, assertRecheckNonReproduction, readCaseRecheckAnswerContext } from './case-recheck-model.mts';
 import {
   caseDispositionSupportsDefensiveResponse,
@@ -87,102 +93,7 @@ export {
 export type { ReviewedCaseDisposition };
 
 export { MAX_CASE_OBJECTIVE_LENGTH };
-export const MAX_CASE_INCIDENT_URL_LENGTH = 1_850;
-export const INCIDENT_CONTEXT_STATEMENT_PREFIX = 'Investigate incident URL: ';
-const OBJECTIVE_PREFIX = 'Objective: ';
-const RETENTION_SEPARATOR = ' | URL retained: ';
-
-export type IncidentUrlContext = Readonly<{
-  exactUrl: string;
-  hostname: string;
-  registrableDomain: string;
-  originUrl: string;
-  hasPath: boolean;
-  hasQuery: boolean;
-  hasFragment: boolean;
-}>;
-
-export type CaseInvestigationContext = Readonly<{
-  objective: string;
-  incidentUrl: string;
-  urlRetention: 'exact' | 'origin_only';
-  assertionId: string;
-  updatedAt: string;
-}>;
-
-function boundedContextText(value: unknown, maximum: number): string {
-  return typeof value === 'string'
-    ? value.replace(/[\u0000-\u001f\u007f]/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, maximum)
-    : '';
-}
-
-export function normalizeCaseObjective(value: unknown): string {
-  return boundedContextText(value, MAX_CASE_OBJECTIVE_LENGTH);
-}
-
-export function parseIncidentUrlContext(value: unknown): IncidentUrlContext | null {
-  const parsed = parseCredentialFreeHttpUrl(value, MAX_CASE_INCIDENT_URL_LENGTH);
-  if (!parsed) return null;
-  const hostname = parsed.hostname.toLowerCase().replace(/\.$/u, '');
-  const registrableDomain = canonicalRegistrableDomain(hostname);
-  if (!registrableDomain) return null;
-  const exactUrl = parsed.toString();
-  if (exactUrl.length > MAX_CASE_INCIDENT_URL_LENGTH) return null;
-  return Object.freeze({
-    exactUrl,
-    hostname,
-    registrableDomain,
-    originUrl: parsed.origin,
-    hasPath: parsed.pathname !== '/',
-    hasQuery: Boolean(parsed.search),
-    hasFragment: Boolean(parsed.hash),
-  });
-}
-
-export function caseInvestigationContext(record: CaseRecord | null | undefined): CaseInvestigationContext | null {
-  if (!record) return null;
-  for (const assertion of [...record.assertions].reverse()) {
-    if (assertion.kind !== 'next_step' || assertion.state !== 'open'
-      || !assertion.statement.startsWith(INCIDENT_CONTEXT_STATEMENT_PREFIX)) continue;
-    const incidentUrl = assertion.statement.slice(INCIDENT_CONTEXT_STATEMENT_PREFIX.length);
-    const parsed = parseIncidentUrlContext(incidentUrl);
-    if (!parsed || parsed.registrableDomain !== record.domain) continue;
-    const rationale = assertion.rationale ?? '';
-    const separatorIndex = rationale.lastIndexOf(RETENTION_SEPARATOR);
-    const objective = separatorIndex > OBJECTIVE_PREFIX.length && rationale.startsWith(OBJECTIVE_PREFIX)
-      ? normalizeCaseObjective(rationale.slice(OBJECTIVE_PREFIX.length, separatorIndex))
-      : '';
-    const retention = separatorIndex >= 0 ? rationale.slice(separatorIndex + RETENTION_SEPARATOR.length) : '';
-    if (!objective || (retention !== 'exact' && retention !== 'origin_only')) continue;
-    return Object.freeze({
-      objective,
-      incidentUrl: parsed.exactUrl,
-      urlRetention: retention,
-      assertionId: assertion.id,
-      updatedAt: assertion.updatedAt,
-    });
-  }
-  return null;
-}
-
-export function caseInvestigationContextAssertion(input: Readonly<{
-  objective: unknown;
-  incidentUrl: unknown;
-  retainExactUrl: boolean;
-}>): Readonly<{ statement: string; rationale: string; retainedUrl: string; retention: 'exact' | 'origin_only' }> {
-  const objective = normalizeCaseObjective(input.objective);
-  if (!objective) throw new Error('Enter the investigation objective before retaining Incident context.');
-  const parsed = parseIncidentUrlContext(input.incidentUrl);
-  if (!parsed) throw new Error(`Enter one absolute HTTP(S) Incident URL of at most ${MAX_CASE_INCIDENT_URL_LENGTH} characters without credentials.`);
-  const retention = input.retainExactUrl ? 'exact' : 'origin_only';
-  const retainedUrl = input.retainExactUrl ? parsed.exactUrl : parsed.originUrl;
-  return Object.freeze({
-    statement: `${INCIDENT_CONTEXT_STATEMENT_PREFIX}${retainedUrl}`,
-    rationale: `${OBJECTIVE_PREFIX}${objective}${RETENTION_SEPARATOR}${retention}`,
-    retainedUrl,
-    retention,
-  });
-}
+export * from './case-incident-context.mts';
 
 // ---------------------------------------------------------------------------
 // Case normalization
@@ -236,15 +147,12 @@ export function normalizeCase(
   sourceVersion?: number | null,
 ): CaseRecord | null {
   const now = caseTimestampOrNull(nowIso) || new Date().toISOString();
-  const record = objectRecord(raw);
-  const domain = normalizeDomain(existing ? existing.domain : record.domain);
+  const input = objectRecord(raw);
+  const domain = normalizeDomain(existing ? existing.domain : input.domain);
   if (!domain) return null;
+  const { record, timestampOptions } = caseRecordVersionInput(input, sourceVersion);
   const createdAt = existing ? existing.createdAt : caseTimestampOrNull(record.createdAt, sourceVersion) || now;
   const updatedAt = caseTimestampOrNull(record.updatedAt, sourceVersion) || createdAt;
-  const timestampOptions = {
-    legacyTimestamps: sourceVersion != null && sourceVersion < PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
-    ...(sourceVersion === undefined ? {} : { sourceVersion }),
-  };
   const evidencePins = normalizeCaseEvidencePins(record.evidencePins, updatedAt, timestampOptions);
   const pinIds = new Set(evidencePins.map((item) => item.id));
   const actions = normalizeCaseActions(record.actions, updatedAt, { ...timestampOptions, validEvidencePinIds: pinIds });
@@ -252,14 +160,14 @@ export function normalizeCase(
   const sightings = normalizeCaseSightings(record.sightings, updatedAt, pinIds, timestampOptions);
   const sightingIds = new Set(sightings.map((item) => item.id));
   const observedEffects = normalizeCaseObservedEffectHistory(
-    sourceVersion != null && sourceVersion < 13 ? undefined : record.observedEffects,
+    record.observedEffects,
     updatedAt,
     pinIds,
     sightingIds,
     timestampOptions,
   );
   const closures = normalizeCaseClosureHistory(
-    sourceVersion != null && sourceVersion < 13 ? undefined : record.closures,
+    record.closures,
     updatedAt,
     new Set(observedEffects.reviews.map((item) => item.id)),
     new Set(actions.map((item) => item.id)),
@@ -269,10 +177,11 @@ export function normalizeCase(
   const normalizedStatus = normalizeStatus(record.status);
   const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
   const attachments = readCaseAttachments(record.attachments);
+  const evidenceLinks = readCaseEvidenceLinks(record.evidenceLinks);
   return {
     id: existing ? existing.id : safeId(record.id) || deterministicId(domain),
     domain,
-    title: sourceVersion != null && sourceVersion < INCIDENT_CASE_SCHEMA_VERSION ? '' : normalizeCaseObjective(record.title),
+    title: normalizeCaseObjective(record.title),
     status: caseStatusRequiresClosure(normalizedStatus)
       && closures.records.length === 0 && !closures.preV13HistoryUnavailable
       ? 'reviewing'
@@ -280,7 +189,7 @@ export function normalizeCase(
     disposition: normalizeDisposition(record.disposition),
     reviewReasonCode: normalizeReviewReasonCode(record.reviewReasonCode),
     brandProfileIds: normalizeCaseBrandProfileIds(record.brandProfileIds),
-    tags: normalizeTags(record.tags),
+    ...readCaseWorkflowFields(record, domain, assertions, sourceVersion),
     notes: normalizeNotes(record.notes, now, sourceVersion),
     source: normalizeSource(record.source),
     evidenceHistory: normalizeCaseEvidence(record, domain, createdAt, updatedAt, now, sourceVersion),
@@ -294,6 +203,7 @@ export function normalizeCase(
     closures,
     branches: normalizeCaseInvestigationBranches(record.branches, updatedAt, branchReferences, timestampOptions),
     ...(attachments === undefined ? {} : { attachments }),
+    ...(evidenceLinks === undefined ? {} : { evidenceLinks }),
     createdAt,
     updatedAt,
   };
@@ -356,6 +266,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
     reviewReasonCode: normalizeReviewReasonCode(input.reviewReasonCode),
     brandProfileIds: input.brandProfileIds === undefined ? [] : assertCaseBrandProfileIds(input.brandProfileIds),
     tags: normalizeTags(input.tags),
+    workflowMetadata: updateCaseWorkflowMetadata(emptyCaseWorkflowMetadata(), input, domain, now),
     notes: noteBody ? [{ id: makeId(), body: noteBody, createdAt: now }] : [],
     source,
     evidenceHistory: normalizeEvidenceHistory(input.evidence ? [input.evidence] : [], {
@@ -367,6 +278,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
     decisions: input.decision !== undefined
       ? appendCaseDecision([], input.decision, now)
       : [],
+    ...(input.evidenceLink === undefined ? {} : { evidenceLinks: appendCaseEvidenceLink([], input.evidenceLink, evidencePins, now) }),
     actions,
     assertions,
     manualTrail: input.trailEvent !== undefined
@@ -452,8 +364,19 @@ export function updateCase(
   if (index < 0) throw new Error('That case no longer exists.');
   const current = cases[index];
   if (!current) throw new Error('That case no longer exists.');
+  if (patch.evidenceLink !== undefined && patch.evidenceLinkWithdrawal !== undefined) throw new TypeError('Record or withdraw one evidence relationship at a time.');
   if (patch.title !== undefined && patch.expectedTitle !== undefined && patch.expectedTitle !== (current.title ?? '')) {
     throw new Error('The incident title changed after this draft was started. Reload and review the current title before saving; your draft has not been applied.');
+  }
+  for (const [value, expected, actual, label] of [
+    [patch.status, patch.expectedStatus, current.status, 'status'],
+    [patch.disposition, patch.expectedDisposition, current.disposition, 'disposition'],
+    [patch.reviewReasonCode, patch.expectedReviewReasonCode, current.reviewReasonCode ?? null, 'review reason'],
+    [patch.tags, patch.expectedTags, current.tags, 'tags'],
+  ] as const) {
+    if (value !== undefined && expected !== undefined && JSON.stringify(expected) !== JSON.stringify(actual)) {
+      throw new Error(`The Case ${label} changed after this edit was started. Reopen the Case to review the current value; your edit has not been applied.`);
+    }
   }
   let notes = current.notes;
   if (patch.note !== undefined) {
@@ -552,6 +475,8 @@ export function updateCase(
   }
   const record: CaseRecord = {
     ...current,
+    workflowMetadata: updateCaseWorkflowMetadata(current.workflowMetadata
+      ?? readCaseWorkflowFields(current, current.domain, current.assertions).workflowMetadata, patch, current.domain, now),
     title: patch.title === undefined ? current.title ?? '' : normalizeCaseObjective(patch.title),
     status: patch.closure !== undefined
       ? 'resolved'
@@ -567,6 +492,11 @@ export function updateCase(
     source,
     evidenceHistory,
     evidencePins,
+    ...((patch.evidenceLink !== undefined || patch.evidenceLinkWithdrawal !== undefined) ? {
+      evidenceLinks: patch.evidenceLink !== undefined
+        ? appendCaseEvidenceLink(current.evidenceLinks ?? [], patch.evidenceLink, evidencePins, now)
+        : withdrawCaseEvidenceLink(current.evidenceLinks ?? [], patch.evidenceLinkWithdrawal, now),
+    } : {}),
     decisions,
     actions,
     assertions,
@@ -719,26 +649,7 @@ export function recordCaseInvestigationContext(
   if (!parsed || parsed.registrableDomain !== current.domain) {
     throw new Error(`The Incident URL must belong to the Case domain ${current.domain}.`);
   }
-  const context = caseInvestigationContextAssertion(input);
-  const existing = caseInvestigationContext(current);
-  return updateCase(cases, id, existing
-    ? {
-        assertionUpdate: {
-          id: existing.assertionId,
-          statement: context.statement,
-          rationale: context.rationale,
-          state: 'open',
-        },
-      }
-    : {
-        assertion: {
-          kind: 'next_step',
-          statement: context.statement,
-          rationale: context.rationale,
-          evidenceRelations: [],
-          state: 'open',
-        },
-      }, nowIso);
+  return updateCase(cases, id, { investigationContext: input }, nowIso);
 }
 
 export function recordCaseRecheckOutcome(
@@ -749,6 +660,7 @@ export function recordCaseRecheckOutcome(
     observedAt: unknown;
     completeness: unknown;
     comparisonSummary: unknown;
+    comparisonTruncated?: unknown;
     source: unknown;
     followUpAt?: unknown;
     limitations?: unknown;
@@ -775,7 +687,8 @@ export function recordCaseRecheckOutcome(
       collectionDepth: input.collectionDepth,
       observationHostname: input.observationHostname,
       completeness: input.completeness,
-      truncated: false,
+      truncated: input.comparisonTruncated === true
+        || (typeof input.comparisonSummary === 'string' && input.comparisonSummary.length > MAX_RESPONSE_VALUE_LENGTH),
       limitations: input.limitations,
     },
   }, now);

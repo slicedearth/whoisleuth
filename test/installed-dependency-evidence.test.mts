@@ -44,7 +44,7 @@ test('records the actual installed transitive version and integrity without reta
   assert.equal(packages['node_modules/shared']!.integrity, INTEGRITY);
   assert.deepEqual(packages['node_modules/direct']!.dependencies, { shared: '^2.0.0' });
   assert.equal(Object.keys(evidence.manifestSha256).length, 3);
-  assert.ok(Object.values(evidence.manifestSha256).every(value => /^[a-f0-9]{64}$/u.test(value)));
+  assert.ok(Object.values(evidence.manifestSha256).every(value => typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value)));
   assert.doesNotMatch(JSON.stringify(evidence), /file:|\/private\/|fixture-not-retained/u);
   assert.deepEqual(evidence, await installedDependencyEvidence(directory, PACKAGE, ARCHIVE_SHA));
 });
@@ -77,6 +77,25 @@ test('rejects changed installed identities and symlinked manifests', async conte
   await rm(manifest);
   await symlink(outside, manifest);
   await assert.rejects(installedDependencyEvidence(directory, PACKAGE, ARCHIVE_SHA), /regular|link|symbolic/u);
+});
+
+test('keeps incompatible optional packages in the audit graph without inventing installed manifest hashes', async context => {
+  const { directory, packages, save } = await fixture(context);
+  packages['node_modules/direct']!.optionalDependencies = { native: '1.0.0' };
+  packages['node_modules/native'] = { version: '1.0.0', resolved: 'https://registry.npmjs.org/native/-/native-1.0.0.tgz', integrity: INTEGRITY,
+    optional: true, os: [`!${process.platform}`] };
+  await save();
+  const evidence = await installedDependencyEvidence(directory, PACKAGE, ARCHIVE_SHA);
+  assert.equal(evidence.manifestSha256['node_modules/native'], null);
+  assert.equal(evidence.dependencyCount, 3);
+  assert.deepEqual(candidateDependencyAuditInput(evidence).lockfile, evidence.lockfile);
+  assert.throws(() => candidateDependencyAuditInput({ ...evidence, installationPlatform: undefined }), /incomplete/u);
+  assert.throws(() => candidateDependencyAuditInput({ ...evidence, installationPlatform: { ...evidence.installationPlatform, os: 'different' } }), /incomplete/u);
+  packages['node_modules/native']!.os = [process.platform]; await save();
+  await assert.rejects(installedDependencyEvidence(directory, PACKAGE, ARCHIVE_SHA), { code: 'ENOENT' });
+  packages['node_modules/native']!.os = [`!${process.platform}`];
+  packages['node_modules/shared']!.dependencies = { native: '1.0.0' }; await save();
+  await assert.rejects(installedDependencyEvidence(directory, PACKAGE, ARCHIVE_SHA), { code: 'ENOENT' });
 });
 
 test('rejects unverified integrity, non-registry sources and linked or bundled dependencies', async context => {

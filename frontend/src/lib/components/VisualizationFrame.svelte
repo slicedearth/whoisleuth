@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import DataVisualization from '$lib/components/DataVisualization.svelte';
 
-  type LegendToken =
+  type LegendColour =
     | 'registration'
     | 'certificate'
     | 'observation'
@@ -10,7 +10,7 @@
     | 'activity-checked'
     | 'activity-changed';
   type LegendShape = 'circle' | 'square' | 'diamond';
-  type LegendItem = Readonly<{ token: LegendToken; label: string; shape?: LegendShape; dashed?: boolean }>;
+  type LegendItem = Readonly<{ colour: LegendColour; label: string; shape?: LegendShape; dashed?: boolean }>;
 
   let {
     id,
@@ -53,9 +53,9 @@
     {@render visual()}
   </div>
   <ul class="visual-legend" aria-label={legendLabel}>
-    {#each boundedLegend as item (`${item.token}-${item.label}`)}
+    {#each boundedLegend as item (`${item.colour}-${item.label}`)}
       <li>
-        <span class={`legend-mark token-${item.token} shape-${item.shape ?? 'circle'}`} class:dashed={item.dashed} aria-hidden="true"></span>
+        <span class={`legend-mark token-${item.colour} shape-${item.shape ?? 'circle'}`} class:dashed={item.dashed} aria-hidden="true"></span>
         <span>{item.label}</span>
       </li>
     {/each}

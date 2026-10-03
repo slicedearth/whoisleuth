@@ -38,6 +38,7 @@ import { parseBoundedJsonObject } from './bounded-json.mts';
 import { CliUsageError } from './errors.mts';
 import { buildCliLookupDiff, formatCliLookupDiff, type CliLookupDiffDocument } from './lookup-diff.mts';
 import { SAVED_LOOKUP_SCHEMA } from './saved-lookup.mts';
+import { safeTerminalValue } from './formatters/terminal-shared.mts';
 import {
   CLI_COMPARISON_LEDGER_SCHEMA,
   CLI_COMPARISON_LEDGER_VERSION,
@@ -444,20 +445,20 @@ export function formatCliRetainedArtifactDiff(document: CliRetainedArtifactDiffD
   if (document.schema !== CLI_COMPARISON_LEDGER_SCHEMA) return formatCliLookupDiff(document);
   const lines = [
     'Retained artifact comparison ledger',
-    `Family           ${document.artifactFamily.replaceAll('_', ' ')}`,
-    `Left             ${document.left.label} · ${document.left.id}`,
-    `Right            ${document.right.label} · ${document.right.id}`,
+    `Family           ${safeTerminalValue(document.artifactFamily).replaceAll('_', ' ')}`,
+    `Left             ${safeTerminalValue(document.left.label)} · ${safeTerminalValue(document.left.id)}`,
+    `Right            ${safeTerminalValue(document.right.label)} · ${safeTerminalValue(document.right.id)}`,
     `Candidates       ${document.index.counts.retained}`,
     `Exact rows       ${document.details.rows.length} of ${document.details.totalRows}`,
     '',
   ];
   for (const row of document.details.rows) {
-    lines.push(`${row.entityId} · ${row.field} [${row.state.replaceAll('_', ' ')}]`);
-    lines.push(`  Earlier: ${row.earlier.value ?? 'not retained'} · ${row.earlier.sourceState}`);
-    lines.push(`  Later:   ${row.later.value ?? 'not retained'} · ${row.later.sourceState}`);
+    lines.push(`${safeTerminalValue(row.entityId)} · ${safeTerminalValue(row.field)} [${safeTerminalValue(row.state).replaceAll('_', ' ')}]`);
+    lines.push(`  Earlier: ${safeTerminalValue(row.earlier.value, 'not retained')} · ${safeTerminalValue(row.earlier.sourceState)}`);
+    lines.push(`  Later:   ${safeTerminalValue(row.later.value, 'not retained')} · ${safeTerminalValue(row.later.sourceState)}`);
   }
   if (document.details.omissions.detailRows) lines.push(`Omitted exact rows: ${document.details.omissions.detailRows}`);
   lines.push('', 'Limitations:');
-  for (const limitation of document.limitations) lines.push(`  - ${limitation}`);
+  for (const limitation of document.limitations) lines.push(`  - ${safeTerminalValue(limitation)}`);
   return `${lines.join('\n')}\n`;
 }

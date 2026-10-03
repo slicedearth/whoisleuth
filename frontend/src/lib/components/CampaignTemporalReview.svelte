@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import {
     buildCampaignTemporalExport,
@@ -23,8 +24,7 @@
   ];
 
   function formatDate(value: string | null): string {
-    if (!value) return 'Not retained';
-    return new Intl.DateTimeFormat('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
+    return formatEvidenceDate(value, 'Not retained');
   }
 
   function labelFor(layer: CampaignTemporalLayer): string {
@@ -52,7 +52,7 @@
   </header>
   <p class="qualification">The dates below are first and last retained observations or publication times. They are not global first-seen or service-activation dates.</p>
 
-  <div class="coverage" aria-label="Retained source coverage by evidence family">
+  <div class="coverage"><h4 class="sr-only">Retained source coverage by evidence family</h4>
     {#each layers as layer}
       {@const item = review.layerCoverage[layer.id]}
       <article class={`layer-${layer.id}`} data-layer={layer.id}>

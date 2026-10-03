@@ -62,6 +62,7 @@ describe('DNS delegation health', () => {
     assert.equal(result.status, 'partial');
     assert.equal(result.complete, false);
     assert.deepEqual(result.authorities, []);
+    assert.equal(result.findings.find((finding) => finding.id === 'in_bailiwick_glue')?.state, 'unknown');
     assert.match(result.limitations.join(' '), /no eligible authority/iu);
   });
 
@@ -230,7 +231,7 @@ describe('DNS delegation health', () => {
     assert.equal(result.complete, true);
   });
 
-  test('reports inconsistent, lame, unreachable, missing-glue, and DNSSEC publication states', async () => {
+  test('reports authority failures without treating absent optional registry addresses as missing glue', async () => {
     const result = await collectDnsDelegationHealth('example.test', PARENT, {
       registryEvidence: {
         nameservers: ['ns1.example.test', 'ns3.example.test'],
@@ -274,7 +275,8 @@ describe('DNS delegation health', () => {
     assert.equal(result.findings.find((item) => item.id === 'parent_registry_ns')?.state, 'warning');
     assert.equal(result.findings.find((item) => item.id === 'authority_reachability')?.state, 'danger');
     assert.equal(result.findings.find((item) => item.id === 'authority_ns_consistency')?.state, 'warning');
-    assert.equal(result.findings.find((item) => item.id === 'in_bailiwick_glue')?.state, 'warning');
+    assert.equal(result.findings.find((item) => item.id === 'in_bailiwick_glue')?.state, 'unknown');
+    assert.match(result.findings.find((item) => item.id === 'in_bailiwick_glue')?.detail ?? '', /do not establish that parent-zone glue is absent/u);
     assert.equal(result.findings.find((item) => item.id === 'dnssec_delegation')?.state, 'warning');
   });
 

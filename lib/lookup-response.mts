@@ -1,6 +1,7 @@
 // Lookup result shaping after the source plan has settled. This module starts no
 // collection and preserves compact, diagnostics and enrichment response shapes.
 
+import { withoutHttpDeliveryMetadata } from './http-intelligence.mts';
 import { buildBulkComparisonEvidence } from './bulk-comparison-evidence.mts';
 import {
   failedReverseDnsIntelligence,
@@ -18,7 +19,7 @@ import {
   URLHAUS_PROVIDER,
   URLSCAN_PROVIDER,
 } from './lookup-threat-provider-inventory.mts';
-import { THREAT_INTELLIGENCE_ENVELOPE_VERSION } from './threat-intelligence-types.mts';
+import { THREAT_INTELLIGENCE_ENVELOPE_VERSION } from '../packages/analysis/threat-intelligence-types.mts';
 import { registryAccessDiagnosticFor } from './registry-capabilities.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
 import { buildRegistrarStanding } from './registrar-standing.mts';
@@ -88,17 +89,6 @@ function withoutNestedPublicationMetadata(value: unknown): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
   const output = { ...(value as Record<string, unknown>) };
   delete output.publicationMetadata;
-  return output;
-}
-
-function withoutNestedDeliveryMetadata(value: unknown): unknown {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-  const output = { ...(value as Record<string, unknown>) };
-  if (output.response && typeof output.response === 'object' && !Array.isArray(output.response)) {
-    const response = { ...(output.response as Record<string, unknown>) };
-    delete response.deliveryMetadata;
-    output.response = response;
-  }
   return output;
 }
 
@@ -194,7 +184,7 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
   } else if (skipWhois) {
     whois = { skipped: true, detail: 'WHOIS is omitted in fast RDAP-only mode.' };
   } else if (Array.isArray(whoisChain)) {
-    whois = { chain: whoisChain, parsed: parseWhoisChain(whoisChain) };
+    whois = { chain: whoisChain, parsed: parseWhoisChain(whoisChain, classified.type === 'domain' ? classified.registrableDomain ?? classified.value : undefined) };
   } else {
     whois = {
       error: whoisResult.status === 'rejected'
@@ -247,7 +237,7 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
     ? 'skipped'
     : whoisResult.status === 'rejected'
       ? 'error'
-      : whoisCollectionStatus(whoisChain);
+      : whoisCollectionStatus(whoisChain, classified.type === 'domain' ? classified.registrableDomain ?? classified.value : undefined);
   const availabilityStatus = classified.type !== 'domain'
     ? 'not_applicable'
     : !availabilityEnabled ? 'disabled'
@@ -408,7 +398,7 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
       availability: {
         ...compactAvailability,
         ...(richPageIdentity !== undefined ? { pageIdentity: withoutNestedPublicationMetadata(richPageIdentity) } : {}),
-        ...(richHttp !== undefined ? { http: withoutNestedDeliveryMetadata(richHttp) } : {}),
+        ...(richHttp !== undefined ? { http: withoutHttpDeliveryMetadata(richHttp) } : {}),
         ...(bulkComparison ? { bulkComparison } : {}),
       },
       diagnostics,

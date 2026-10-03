@@ -1,9 +1,34 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
 
 test.use({ storageState: { cookies: [], origins: [] } });
+
+test('practice scenarios require deliberate replacement and keep provider outcomes distinct', async ({ page }) => {
+  const verifyIsolation = await isolateCasePractice(page);
+  await page.goto('/demo#case-practice');
+  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const label = practice.locator('form[data-recovery-form="evidence-pin"]').getByLabel('Label', { exact: true });
+  await label.fill('Keep my practice draft');
+  const scenario = page.getByRole('combobox', { name: 'Practice scenario', exact: true });
+  await scenario.selectOption('contradictory-sources');
+  await expect(label).toHaveValue('Keep my practice draft');
+  await page.getByRole('button', { name: 'Keep current practice', exact: true }).click();
+  await expect(scenario).toHaveValue('credential-form');
+  await scenario.selectOption('contradictory-sources');
+  await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
+  await expect(label).toHaveValue('');
+  await expect(practice.getByRole('heading', { name: 'Practise a Case review', exact: true })).toBeFocused();
+  await expect(practice).toContainText('Separate review reported no credential form');
+  await scenario.selectOption('provider-resolved');
+  await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
+  await expect(practice).toContainText('Provider-reported outcome: provider reports resolved');
+  await practice.getByText('Check your reasoning', { exact: true }).click();
+  await expect(practice.getByRole('list', { name: 'Practice record checks' })).toContainText('Not yet recorded: The incomplete later capture is recorded as unavailable');
+  await verifyIsolation();
+});
 
 async function isolateCasePractice(page: Page) {
   const requests: string[] = [];
@@ -27,6 +52,29 @@ async function isolateCasePractice(page: Page) {
     await expect(practice.locator('a[href], input[type=file]')).toHaveCount(0);
   };
 }
+
+test('requested-evidence practice creates only a drafting amendment without saved-work access', async ({ page }) => {
+  const verifyIsolation = await isolateCasePractice(page);
+  await page.goto('/demo#case-practice');
+  await page.getByRole('combobox', { name: 'Practice scenario', exact: true }).selectOption('requested-amendment');
+  await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
+  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  await practice.getByRole('button', { name: '4. Prepare requested evidence', exact: true }).click();
+  const requested = practice.locator('.requested-evidence');
+  await requested.locator(':scope > summary').click();
+  await requested.getByRole('button', { name: 'Review requested evidence', exact: true }).click();
+  const form = requested.getByRole('form', { name: 'Requested evidence review', exact: true });
+  await expect(form.getByRole('combobox', { name: 'Evidence preparation', exact: true })).toBeFocused();
+  await form.getByRole('checkbox', { name: 'Requested exact-page evidence · Fictional supplied capture', exact: true }).check();
+  await form.getByLabel('Preparation or unavailability reason', { exact: true }).fill('The supplied earlier record is selected; the later capture remains unavailable.');
+  await form.getByRole('button', { name: 'Save evidence preparation', exact: true }).click();
+  await requested.getByRole('button', { name: 'Create drafting amendment', exact: true }).click();
+  await expect(requested.getByRole('button', { name: 'Review amendment · drafting', exact: true })).toBeVisible();
+  await expect(requested.getByText('Delivery recorded', { exact: true })).toHaveCount(0);
+  await requested.getByText('Request source and packet', { exact: true }).click();
+  await expect(requested.locator('code')).toHaveText('a'.repeat(64));
+  await verifyIsolation();
+});
 
 test('real Case forms practise evidence, conclusions and inconclusive rechecks without saved-work access', async ({ page }) => {
   const verifyIsolation = await isolateCasePractice(page);
@@ -73,13 +121,46 @@ test('real Case forms practise evidence, conclusions and inconclusive rechecks w
   await recheck.getByRole('button', { name: 'Record independent outcome', exact: true }).click();
   await expect(practice.getByRole('list', { name: 'Practice recheck records' })).toContainText('unavailable · partial · Fictional later capture');
   await expect(recheck.getByRole('button', { name: 'Record independent outcome', exact: true })).toBeFocused();
+  await practice.getByRole('button', { name: '4. Rehearse separate response scopes', exact: true }).click();
+  await practice.getByRole('button', { name: 'Prepare fictional recipient copies', exact: true }).click();
+  await expect(practice.locator('#practice-response')).toBeFocused();
+  const pageCopy = practice.getByRole('region', { name: 'Page recipient material', exact: true });
+  const adCopy = practice.getByRole('region', { name: 'Advertisement recipient material', exact: true });
+  await expect(pageCopy).toContainText('page-review@example.invalid');
+  await expect(adCopy).toContainText('ad-review@example.invalid');
+  await expect(pageCopy).toContainText('https://case-practice.example/offer');
+  await expect(adCopy).toContainText('https://distribution.example/ad/7');
+  for (const copy of [pageCopy, adCopy]) {
+    await copy.getByText('Inspect exact fictional recipient material', { exact: true }).click();
+    const material = JSON.parse(await copy.locator('pre').innerText()) as { selectedEvidence: Record<string, unknown>[] };
+    expect(material.selectedEvidence.length).toBeGreaterThan(0);
+    expect(material.selectedEvidence.every(pin => !Object.hasOwn(pin, 'value'))).toBe(true);
+  }
+  await expect(practice.getByRole('button', { name: 'Record separate simulated deliveries', exact: true })).toBeDisabled();
+  await practice.getByRole('checkbox', { name: 'I reviewed the fictional page recipient’s exact scope and selected references', exact: true }).check();
+  await practice.getByRole('checkbox', { name: 'I reviewed the separate fictional advertisement recipient’s scope and limitations', exact: true }).check();
+  await practice.getByRole('button', { name: 'Confirm fictional disclosure review', exact: true }).click();
+  await practice.getByRole('button', { name: 'Record separate simulated deliveries', exact: true }).click();
+  const records = practice.getByRole('list', { name: 'Practice response records', exact: true });
+  await expect(records).toContainText('Practice-only page delivery reference');
+  await expect(records).toContainText('Practice-only ad delivery reference');
+  await expect(records).toContainText('Practice-only page acknowledgement');
+  await expect(practice.locator('#practice-response')).toBeFocused();
+  await practice.getByRole('button', { name: 'Record supplied independent review and close only the page scope', exact: true }).click();
+  await expect(records.locator(':scope > li').filter({ hasText: 'page-review@example.invalid' })).toContainText('terminal');
+  await expect(records.locator(':scope > li').filter({ hasText: 'ad-review@example.invalid' })).toContainText('submitted');
+  await expect(practice.locator('.practice-status')).toContainText('advertisement remains unresolved');
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
   await verifyIsolation();
 });
 
 test('Case practice is reachable, responsive and discarded on restart or reload', async ({ page }, testInfo) => {
   const verifyIsolation = await isolateCasePractice(page);
   await page.goto('/resources');
-  await page.getByRole('link', { name: 'practise an evidence-to-recheck workflow with the real Case forms' }).click();
+  const practiceLink = page.getByRole('link').and(page.locator('a[href="/demo#case-practice"]'));
+  await expect(practiceLink).toHaveAccessibleName(/Case/iu);
+  await practiceLink.click();
   await expect(page).toHaveURL(/\/demo#case-practice$/u);
   const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
   const form = practice.locator('form[data-recovery-form="evidence-pin"]');
@@ -106,7 +187,7 @@ test('Case practice is reachable, responsive and discarded on restart or reload'
           if (index === Number(name[0]) - 1) await expect(heading).toBeVisible(); else await expect(heading).toBeHidden();
         }
         await expectNoHorizontalOverflow(page);
-        if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`case-practice-${name[0]}-${theme}-${width}.png`) });
+        if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`case-practice-${name[0]}-${theme}-${width}.png`) }); }
       }
       if (width === 320 || width === 1280) expect((await new AxeBuilder({ page }).include('#case-practice').analyze()).violations).toEqual([]);
     }
@@ -124,13 +205,13 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
     for (const width of [390, 1920]) {
       await page.setViewportSize({ width, height: 1080 });
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`scenario-choices-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`scenario-choices-${theme}-${width}.png`) }); }
     }
   }
   await page.getByRole('button', { name: 'Inspect suspicious domain' }).click();
   await expect(page.getByRole('heading', { name: 'northstar-login.example', exact: true })).toBeFocused();
   await expect(page.getByRole('button', { name: 'Open synthetic Case' })).toBeVisible();
-  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   const evidence = page.getByRole('region', { name: 'Where this result came from', exact: true });
   await expect(evidence).toBeVisible();
   for (const theme of ['light', 'dark'] as const) {
@@ -139,7 +220,7 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
       await page.setViewportSize({ width, height: 1080 });
       await evidence.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`scenario-evidence-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`scenario-evidence-${theme}-${width}.png`) }); }
     }
   }
   await page.getByRole('button', { name: 'Reset demo' }).click();
@@ -230,27 +311,27 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(page.locator('#demo-evidence-registry')).toHaveCount(0);
   await expect(page.locator('.dns-card')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Registration evidence' }).click();
   await expect(page.locator('#demo-evidence-registry')).toBeVisible();
   const authorityTrace = page.getByRole('region', { name: 'Registration authority trace' });
   await expect(authorityTrace).toContainText('primary publication for domain existence');
   await expect(authorityTrace).toContainText('cannot decide domain existence');
 
-  await page.getByRole('button', { name: 'Expand Web, DNS, and TLS evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Web, DNS, and TLS evidence' }).click();
   await expect(page.locator('#demo-evidence-registry')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'DNS evidence' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'HTTP evidence' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'TLS and certificate evidence' })).toBeVisible();
   await expect(page.getByText('Also separated in the signed-in Console')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   await expect(page.locator('.dns-card')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Where this result came from' })).toBeVisible();
   await page.getByRole('link', { name: /^Registry/ }).click();
   await expect(page.locator('#demo-evidence-registry')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Collapse Registration evidence' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('button', { name: 'Collapse details: Registration evidence' })).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('#demo-family-web .family-details')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   const relationshipTabs = page.getByRole('tablist', { name: 'Synthetic relationship and history view' });
   const evidenceTab = relationshipTabs.getByRole('tab', { name: /^Evidence/ });
   await evidenceTab.focus();
@@ -258,7 +339,7 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(relationshipTabs.getByRole('tab', { name: /^Timeline/ })).toBeFocused();
   await expect(page.getByRole('heading', { name: 'Observed lifecycle' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Expand Source quality evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Source quality evidence' }).click();
   await expect(page.getByRole('heading', { name: 'Where this result came from' })).toHaveCount(0);
   await expect(page.getByRole('img', { name: 'Overlapping collection timing for 4 source branches' })).toBeVisible();
   await expect(page.locator('.timing-summary')).toContainText('Network context');
@@ -318,8 +399,8 @@ test('settles long-to-short stage transitions at one stable workspace anchor', a
   await page.getByRole('button', { name: 'Open synthetic Case' }).click();
   await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeFocused();
   await expect(page.locator('#demo-workspace')).toHaveAttribute('aria-busy', 'false');
-  await expect.poll(() => workspaceTop(page), { timeout: 2500 }).toBe(24);
-  await expect(page.locator('#demo-workspace')).toHaveCSS('min-height', '0px');
+  await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => workspaceNeedsScroll(page), { timeout: 2500 }).toBe(false);
   const settledTop = await workspaceTop(page);
   expect(await workspaceTop(page)).toBe(settledTop);
 
@@ -327,8 +408,8 @@ test('settles long-to-short stage transitions at one stable workspace anchor', a
   await page.getByRole('button', { name: 'Review Lookup evidence' }).click();
   await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeFocused();
   await expect(page.locator('#demo-workspace')).toHaveAttribute('aria-busy', 'false');
-  await expect.poll(() => workspaceTop(page), { timeout: 2500 }).toBe(24);
-  await expect(page.locator('#demo-workspace')).toHaveCSS('min-height', '0px');
+  await expect(page.getByRole('heading', { name: 'northstar-login.example', exact: true })).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => workspaceNeedsScroll(page), { timeout: 2500 }).toBe(false);
   const returnTop = await workspaceTop(page);
   expect(await workspaceTop(page)).toBe(returnTop);
 });
@@ -419,10 +500,10 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await expect.poll(activeStageCenterOffset).toBeLessThanOrEqual(3);
 
   await page.setViewportSize({ width: 360, height: 760 });
-  await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Registration evidence' }).click();
   await expect(page.getByRole('region', { name: 'Exact source comparisons' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
-  await page.getByRole('button', { name: 'Expand Web, DNS, and TLS evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Web, DNS, and TLS evidence' }).click();
   await expect(page.getByRole('heading', { name: 'TLS and certificate evidence' })).toBeVisible();
   await page.setViewportSize({ width: 393, height: 852 });
   await expectNoHorizontalOverflow(page);

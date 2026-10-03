@@ -13,7 +13,7 @@ import {
   NETLIFY_REQUEST_ORIGIN_CONTEXT,
   type RequestOriginContext,
 } from '../../lib/auth.mts';
-import { checkLoginRateLimit, getClientIp } from '../../lib/rate-limit.mts';
+import { checkLoginRateLimit, serverlessClientIdentity } from '../../lib/rate-limit.mts';
 import {
   API_REQUEST_ERROR_CODES,
   MAX_API_JSON_BODY_BYTES,
@@ -66,8 +66,9 @@ async function handleLoginRequest(
     return json(403, { error: 'Cross-site request blocked' });
   }
 
-  const ip = getClientIp(headers);
-  const { allowed, retryAfterSeconds } = checkLoginRateLimit(ip);
+  const identity = serverlessClientIdentity(headers ?? {});
+  if (identity.ip === undefined) return json(503, { error: 'Client identity is unavailable. Please try again later.' });
+  const { allowed, retryAfterSeconds } = checkLoginRateLimit(identity.ip);
   if (!allowed) {
     return json(429, { error: 'Too many requests. Please try again later.' }, { 'Retry-After': String(retryAfterSeconds) });
   }

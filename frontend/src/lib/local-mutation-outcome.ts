@@ -1,4 +1,4 @@
-import { BrowserLocalDataError } from './browser-local-data.ts';
+import { BrowserLocalDataError } from './browser-local-data-content.ts';
 
 export class LocalRecordConflictError extends Error {
   constructor(label: string) {

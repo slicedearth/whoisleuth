@@ -1,6 +1,7 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCasePacket, openCaseSection } from './console-navigation';
 import { readFile } from 'node:fs/promises';
-import { expect, test } from './fixtures';
+import { expect, test, isLookupEndpointUrl } from './fixtures';
 import {
   expectNoHorizontalOverflow,
   failNextBrowserLocalCollectionReadAfterWrite,
@@ -15,6 +16,49 @@ import { addFixtureCasePin, caseWorkspaceActionStatus, currentActionFixture, ope
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
 test.use({ timezoneId: 'UTC' });
+
+test('packet suggestions apply once and do not replace deliberately cleared selections', async ({ page }) => {
+  const at = '2026-09-10T10:00:00.000Z';
+  const pin = { id: 'packet-pin', checkpointId: null, field: 'http.status', category: 'http', label: 'Packet observation',
+    value: 'A page was observed', source: 'Fixture review', sourceState: 'complete', sourceSchema: null,
+    observedAt: at, collectionDepth: 'deep', completeness: 'complete', truncated: false,
+    transitionExpectation: null, limitations: [], createdAt: at };
+  const action = currentActionFixture({ id: 'packet-action', type: 'registrar_report', recipient: 'Fixture desk',
+    contactSource: 'Retained route', routeObservedAt: at, contactLimitations: [], dueAt: null,
+    targetState: 'ready_for_review', reference: null, followUpAt: null, outcome: null, createdAt: at, updatedAt: at });
+  const record = caseRecord({ domain: 'packet-selection.example', evidencePins: [pin], actions: [action],
+    decisions: [{ id: 'packet-decision', summary: 'Review this observation', rationale: 'Explicit retained evidence',
+      confidence: 'low', confidenceBasis: 'One source', evidencePinIds: [pin.id], createdAt: at }] });
+  const other = { ...record, id: 'case-2', domain: 'separate-packet.example' };
+  await openSeededTimelineCase(page, record.domain, [record, other], CASE_SCHEMA_VERSION);
+  await openCaseResponseWorkspace(page, '', 'quick', 'Response');
+  const packet = page.locator('details[id^="case-response-preflight-"]');
+  await packet.locator('summary').click();
+  const selectedPin = packet.getByRole('checkbox', { name: /^Pin 1: Packet observation/ });
+  const selectedAction = packet.getByRole('combobox', { name: 'Case action for this packet', exact: true });
+  await expect(selectedPin).toBeChecked();
+  await expect(selectedAction).toHaveValue(action.id);
+  await selectedPin.uncheck();
+  await selectedAction.selectOption('');
+  await packet.getByLabel('Observed harm', { exact: true }).fill('Draft retained while reviewing evidence.');
+  await openCaseSection(page, 'Assessment');
+  await openCaseSection(page, 'Response');
+  await packet.locator('summary').click();
+  await packet.locator('summary').click();
+  await expect(selectedPin).not.toBeChecked();
+  await expect(selectedAction).toHaveValue('');
+  await expect(packet.getByLabel('Observed harm', { exact: true })).toHaveValue('Draft retained while reviewing evidence.');
+  await expect(packet.getByRole('button', { name: 'Review and bind exact inputs', exact: true })).toHaveCount(0);
+  await openPacketWizardStep(packet, 'Review');
+  await expect(packet.getByRole('button', { name: 'Review and bind exact inputs', exact: true })).toBeDisabled();
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+  await page.locator('.case-head', { hasText: other.domain }).click();
+  await openCaseResponseWorkspace(page, '', 'quick', 'Response');
+  await packet.locator('summary').click();
+  await expect(selectedPin).toBeChecked();
+  await expect(selectedAction).toHaveValue(action.id);
+  await expect(packet.getByLabel('Observed harm', { exact: true })).toHaveValue('');
+});
 
 test('an open Case updates due reviews as time advances without changing retained evidence', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-09-10T10:00:00Z') });
@@ -65,8 +109,8 @@ test('the decision overview retains opposing evidence and unknowns across respon
       await expectNoHorizontalOverflow(page);
       await page.evaluate(() => window.scrollTo(0, 0));
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-      await page.screenshot({ path: testInfo.outputPath(`decision-page-${theme}-${width}.png`), fullPage: true });
-      await overview.screenshot({ path: testInfo.outputPath(`decision-overview-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`decision-page-${theme}-${width}.png`), fullPage: true }); }
+      if (captureVisualEvidenceEnabled()) { await overview.screenshot({ path: testInfo.outputPath(`decision-overview-${theme}-${width}.png`) }); }
     }
   }
   await overview.getByRole('button', { name: 'Review assessment', exact: true }).focus();
@@ -122,8 +166,8 @@ test('a recheck uses selected evidence without advancing its clock or discarding
       expect(box && header && box.y >= header.y + header.height).toBe(true);
       expect(await useSource.locator('..').evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
       await expectNoHorizontalOverflow(page);
-      await form.screenshot({ path: testInfo.outputPath(`retained-recheck-${theme}-${width}.png`), animations: 'disabled' });
-      await page.screenshot({ path: testInfo.outputPath(`retained-recheck-viewport-${theme}-${width}.png`), animations: 'disabled' });
+      if (captureVisualEvidenceEnabled()) { await form.screenshot({ path: testInfo.outputPath(`retained-recheck-${theme}-${width}.png`), animations: 'disabled' }); }
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`retained-recheck-viewport-${theme}-${width}.png`), animations: 'disabled' }); }
     }
   }
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -213,7 +257,7 @@ test('undated Case observations persist once and remain usable across viewport a
         await expect(observation.locator('ol.records').first()).toContainText('Observation time unavailable');
         await expect(observation.getByRole('region', { name: 'Observation chronology', exact: true })).toContainText('Time unavailable');
         await expectNoHorizontalOverflow(page);
-        await testInfo.attach(`undated-observations-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+        if (captureVisualEvidenceEnabled()) { await testInfo.attach(`undated-observations-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       });
     }
   }
@@ -275,12 +319,12 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   test.slow();
   await page.clock.setFixedTime('2026-09-10T10:00:00.000Z');
   let collectionRequests = 0;
-  await page.route('**/api/lookup', async (route) => { collectionRequests += 1; await route.abort(); });
+  await page.route(url => isLookupEndpointUrl(url.href), async (route) => { collectionRequests += 1; await route.abort(); });
   await page.setViewportSize({ width: 390, height: 844 });
   await openCasesView(page);
   await createCase(page, 'quick-stages.invalid');
   const workspace = await openCaseResponseWorkspace(page, '', 'quick');
-  await expect(page.getByRole('navigation', { name: 'Case sections' }).getByRole('link')).toHaveCount(5);
+  await expect(page.getByRole('navigation', { name: 'Case sections' }).getByRole('combobox', { name: 'Case section' }).locator('option')).toHaveCount(5);
 
   await openCaseSection(page, 'Evidence');
   const observation = workspace.getByRole('region', { name: 'Case observations', exact: true });
@@ -325,11 +369,26 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   await packet.getByLabel('Abuse category', { exact: true }).fill('Credential phishing');
   await packet.getByLabel('Affected party', { exact: true }).fill('Example organisation');
   await packet.getByLabel('Observed at', { exact: true }).fill('2026-09-10T10:00');
-  await packet.getByLabel(/Exact abusive HTTP/).fill('https://quick-stages.invalid/review');
+  await packet.getByLabel(/Exact abusive HTTP/).fill('https://quick-stages.invalid/review?selected=context');
   await packet.getByLabel('Observed harm', { exact: true }).fill('An observed credential form requires reviewed escalation.');
   await expect(packet.getByRole('checkbox', { name: /Selected page observation/ })).toBeChecked();
   await expect(packet).toContainText('2026-09-20T10:00:00.000Z');
   await openPacketWizardStep(packet, 'Review');
+  const disclosure = packet.getByRole('region', { name: 'Recipient copy review', exact: true });
+  await expect(disclosure).toContainText('https://quick-stages.invalid/review?selected=context');
+  await expect(disclosure).toContainText('Fixture abuse review desk');
+  await expect(disclosure).toContainText('1 selected of 1 retained pins');
+  await expect(disclosure).toContainText('a query or fragment');
+  if (captureVisualEvidenceEnabled()) {
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 1280]) {
+        await page.setViewportSize({ width, height: 844 });
+        await expectNoHorizontalOverflow(page);
+        await testInfo.attach(`packet-disclosure-${width}-${theme}`, { body: await disclosure.screenshot(), contentType: 'image/png' });
+      }
+    }
+  }
   for (const label of ['Infrastructure responsibility', 'Analyst authority', 'Contradiction review', 'Source limitations review']) {
     const section = packet.locator('.readiness-editor section', { hasText: label });
     await section.getByRole('combobox', { name: 'State', exact: true }).selectOption('complete');
@@ -367,7 +426,7 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
       await useTheme(page, theme as 'light' | 'dark');
       await preview.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`quick-packet-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`quick-packet-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
   expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.actions[0]!.state).toBe('authorised');
@@ -408,6 +467,10 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   await outcome.getByRole('combobox', { name: 'Completeness', exact: true }).selectOption('partial');
   await outcome.getByLabel('Limitations', { exact: false }).first().fill('One source failed; this does not establish takedown.');
   await outcome.getByRole('button', { name: 'Record independent outcome', exact: true }).click();
+  await outcome.getByRole('combobox', { name: 'Reason', exact: true }).selectOption('independently_not_reproduced');
+  await expect(outcome.getByRole('status').filter({ hasText: 'No complete not-reproduced review' })).toBeVisible();
+  await expect(outcome.getByRole('combobox', { name: 'Independent review', exact: true }).locator('option')).toHaveCount(1);
+  await expect(outcome.getByRole('list', { name: 'Deliberate case closures' })).toHaveCount(0);
   await outcome.getByRole('combobox', { name: 'Reason', exact: true }).selectOption('unable_to_proceed');
   await outcome.getByLabel('Closure summary', { exact: true }).fill('Closed without asserting removal; independent evidence remains incomplete.');
   await outcome.getByRole('button', { name: 'Close case with reason', exact: true }).click();

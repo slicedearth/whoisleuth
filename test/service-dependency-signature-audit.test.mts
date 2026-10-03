@@ -18,22 +18,27 @@ const SIGNATURE = {
   provenance: 'Fixture review',
   deprovisionPageTitles: ['fixture not found'],
 };
+// Independently hashed fixed JSON fixture, not a value returned by the auditor.
+const SIGNATURE_DIGEST = 'f90ed6c0b97e6090f074b5dcf53ccae5ee9930d3caca9b0d783e336fa3ecd0a8';
 
 describe('service-dependency signature audit', () => {
   test('accepts a fresh digest-backed catalogue', () => {
-    const first = auditServiceDependencySignatures({
-      signatures: [SIGNATURE],
-      expectedDigestSha256: '0'.repeat(64),
-      now: () => new Date('2026-07-30T00:00:00.000Z'),
-    });
     const report = auditServiceDependencySignatures({
       signatures: [SIGNATURE],
-      expectedDigestSha256: first.calculatedDigestSha256,
+      expectedDigestSha256: SIGNATURE_DIGEST,
       now: () => new Date('2026-07-30T00:00:00.000Z'),
     });
     assert.equal(report.schema, SERVICE_DEPENDENCY_SIGNATURE_AUDIT_SCHEMA);
     assert.equal(report.status, 'current');
     assert.equal(report.summary.current, 1);
+    assert.equal(report.calculatedDigestSha256, SIGNATURE_DIGEST);
+    const changed = auditServiceDependencySignatures({
+      signatures: [{ ...SIGNATURE, label: 'Changed fixture service' }],
+      expectedDigestSha256: SIGNATURE_DIGEST,
+      now: () => new Date('2026-07-30T00:00:00.000Z'),
+    });
+    assert.equal(changed.status, 'invalid');
+    assert.equal(changed.digestMatches, false);
   });
 
   test('reports stale and changed-provider metadata without contacting a service', () => {

@@ -10,14 +10,14 @@ import {
 import {
   CURATED_CONNECTOR_ENTITY_VALUES, CURATED_CONNECTOR_TARGET_EXPOSURES,
   THREAT_INTELLIGENCE_TARGET_EXPOSURES,
-} from './threat-intelligence-types.mts';
+} from '../packages/analysis/threat-intelligence-types.mts';
 import type {
   CuratedConnectorEntityType,
   CuratedConnectorTarget,
   ThreatIntelligenceTarget,
   ThreatIntelligenceTargetExposure,
   ThreatIntelligenceTargetType,
-} from './threat-intelligence-types.mts';
+} from '../packages/analysis/threat-intelligence-types.mts';
 
 export const MAX_THREAT_INTELLIGENCE_URL_LENGTH = 2048;
 

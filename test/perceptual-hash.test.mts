@@ -8,7 +8,9 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
+import { createHash } from 'node:crypto';
 import { faviconPerceptualHash, hammingDistanceHex } from '../lib/perceptual-hash.mts';
+import { fetchFaviconHash } from '../lib/favicon.mts';
 import { faviconTransparencyFixtures } from './favicon-image-fixtures.mts';
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -72,6 +74,39 @@ function icoWrapPng(png: Buffer) {
   entry.writeUInt32LE(png.length, 8); // bytes in resource
   entry.writeUInt32LE(6 + 16, 12); // offset
   return Buffer.concat([header, entry, png]);
+}
+
+function icoWithEntries(payloads: Buffer[], entries: { payload: number; size?: number }[]) {
+  const directory = Buffer.alloc(6 + entries.length * 16);
+  directory.writeUInt16LE(1, 2);
+  directory.writeUInt16LE(entries.length, 4);
+  const offsets: number[] = [];
+  let offset = directory.length;
+  for (const payload of payloads) {
+    offsets.push(offset);
+    offset += payload.length;
+  }
+  for (const [index, item] of entries.entries()) {
+    const entry = 6 + index * 16;
+    directory[entry] = 32;
+    directory[entry + 1] = 32;
+    directory.writeUInt16LE(1, entry + 4);
+    directory.writeUInt16LE(32, entry + 6);
+    directory.writeUInt32LE(item.size ?? payloads[item.payload]!.length, entry + 8);
+    directory.writeUInt32LE(offsets[item.payload]!, entry + 12);
+  }
+  return Buffer.concat([directory, ...payloads]);
+}
+
+function malformedLargePng() {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(1024, 0);
+  ihdr.writeUInt32BE(1024, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const raw = Buffer.alloc((1024 * 4 + 1) * 1024);
+  raw[(1024 * 4 + 1) * 1023] = 5; // Failure after processing all earlier rows.
+  return Buffer.concat([PNG_SIGNATURE, pngChunk('IHDR', ihdr), pngChunk('IDAT', zlib.deflateSync(raw)), pngChunk('IEND', Buffer.alloc(0))]);
 }
 
 // A 24-bit uncompressed BMP DIB (bottom-up), height doubled per the ICO
@@ -202,6 +237,43 @@ function icoWrap32bitDib(size: number, alpha: number) {
 }
 
 describe('faviconPerceptualHash', () => {
+  test('decodes each ICO payload range once and still reaches a valid fallback', () => {
+    const valid = patternPng(32, 6, 5);
+    const icon = icoWithEntries([malformedLargePng(), valid], [
+      ...Array.from({ length: 4_000 }, () => ({ payload: 0 })), { payload: 1 },
+    ]);
+    assert.equal(faviconPerceptualHash(icon), faviconPerceptualHash(valid));
+  });
+
+  test('bounds total pixels across distinct malformed ICO entries', () => {
+    const valid = patternPng(32, 6, 5);
+    const malformed = malformedLargePng();
+    const admitted = icoWithEntries([malformed, valid], [{ payload: 0 }, { payload: 1 }]);
+    const exhausted = icoWithEntries([malformed, malformed, valid], [{ payload: 0 }, { payload: 1 }, { payload: 2 }]);
+    assert.equal(faviconPerceptualHash(admitted), faviconPerceptualHash(valid));
+    assert.equal(faviconPerceptualHash(exhausted), null);
+  });
+
+  test('retains exact favicon evidence when aggregate perceptual work is exhausted', async () => {
+    const malformed = malformedLargePng();
+    const icon = icoWithEntries([malformed, malformed, patternPng(32, 6, 5)], [{ payload: 0 }, { payload: 1 }, { payload: 2 }]);
+    const result = await fetchFaviconHash('example.test', {
+      fetcher: async () => new Response(new Uint8Array(icon), { headers: { 'content-type': 'image/x-icon' } }),
+    });
+    assert.deepEqual(result, { hash: createHash('sha256').update(icon).digest('hex'), phash: null });
+  });
+
+  test('bounds repeated overlapping payload bytes independently of pixel work', () => {
+    const valid = patternPng(32, 6, 5);
+    const malformed = Buffer.alloc(8_192);
+    const icon = icoWithEntries([malformed, valid], [
+      ...Array.from({ length: 8 }, (_, index) => ({ payload: 0, size: malformed.length - index })),
+      { payload: 1 },
+    ]);
+    assert.equal(faviconPerceptualHash(icon), null);
+    assert.ok(faviconPerceptualHash(icoWithEntries([malformed, valid], [{ payload: 0 }, { payload: 1 }])));
+  });
+
   test('equivalent alpha, colour-key and masked pixels have the same informative hash', () => {
     for (const fixture of faviconTransparencyFixtures()) {
       assert.equal(faviconPerceptualHash(fixture.bytes), '5432aa315432aa31', fixture.name);

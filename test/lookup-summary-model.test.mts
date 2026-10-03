@@ -2,6 +2,36 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildLookupSummaryModel } from '../frontend/src/lib/analysis/lookup-summary-model.ts';
 import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
+import { compareRegistrySources } from '../lib/registry-comparison.mts';
+
+test('each registration inspector includes conflicts from the real comparison producer', () => {
+  const rdap = { registrar: 'Registry Registrar', statuses: ['ok'],
+    lifecycle: { createdDate: '2020-01-01', expiryDate: '2027-01-01', updatedDate: '2026-01-01' } };
+  const whois = { registrar: 'WHOIS Registrar', statuses: ['clientHold'],
+    createdDate: '2021-01-01', expiryDate: '2028-01-01', updatedDate: '2026-02-01' };
+  const comparison = compareRegistrySources(rdap, whois, { rdapStatus: 'success', whoisStatus: 'success' });
+  const summary = buildLookupSummaryModel({ rdapParsed: rdap, whoisParsed: whois,
+    registryComparison: comparison, availability: { state: 'registered', source: 'rdap' },
+    createdDate: rdap.lifecycle.createdDate, expiresDate: rdap.lifecycle.expiryDate, updatedDate: rdap.lifecycle.updatedDate });
+  for (const [inspector, field] of [['Registration', 'Statuses'], ['Registrar', 'Registrar'],
+    ['Created', 'Created'], ['Expires', 'Expires'], ['Updated', 'Last updated']]) {
+    const conflict = comparison.fields.find(item => item.label === field);
+    assert.equal(conflict?.status, 'conflict', `${field} must actually conflict`);
+    assert.ok(summary.facts.find(fact => fact.label === inspector)?.provenance.conflicts
+      .includes(`${conflict!.rdapDisplay} differs from ${conflict!.whoisDisplay}`), inspector);
+  }
+});
+
+test('website coverage reflects the source outcome rather than enabled Deep capabilities', () => {
+  for (const [http, expected] of [
+    [undefined, 'unknown'], [{ status: 'error', complete: false }, 'unknown'],
+    [{ status: 'skipped', complete: false }, 'unknown'], [{ status: 'partial', complete: false }, 'partial'],
+    [{ status: 'success', complete: true }, 'complete'], [{ status: 'success' }, 'unknown'],
+  ] as const) {
+    const summary = buildLookupSummaryModel({ availability: { deepScanComplete: true, http } });
+    assert.equal(summary.facts.find(fact => fact.label === 'Website')?.provenance.completeness, expected);
+  }
+});
 
 test('builds bounded assessment signals and separately attributed diagnostics', () => {
   const summary = buildLookupSummaryModel({
@@ -40,7 +70,7 @@ test('builds bounded assessment signals and separately attributed diagnostics', 
       parsed: { conformance: ['rdap_level_0'] },
     },
     registrarStanding: buildRegistrarStanding({
-      registrarIanaId: '4318',
+      registrarIanaId: '900003',
       now: new Date('2026-09-03T12:00:00.000Z'),
     }),
     registryComparison: {
@@ -151,7 +181,7 @@ test('attributes each fallback registration fact to the publication that supplie
   for (const label of ['Registrar', 'Created', 'Expires', 'Updated']) {
     const fact = summary.facts.find((candidate) => candidate.label === label);
     assert.deepEqual(fact?.provenance.sources, ['WHOIS']);
-    assert.equal(fact?.provenance.observedAt, new Date(whoisTime).toLocaleString());
+    assert.equal(fact?.provenance.observedAt, '01 Mar 2026, 01:02:03 UTC');
     assert.equal(fact?.provenance.completeness, 'partial');
   }
   assert.deepEqual(summary.facts.find((fact) => fact.label === 'Registration')?.provenance.sources, ['Registry RDAP']);

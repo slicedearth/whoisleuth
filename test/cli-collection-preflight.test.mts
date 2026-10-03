@@ -4,8 +4,67 @@ import { describe, test } from 'node:test';
 import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
+import { buildCollectionPreflight, formatCollectionPreflight } from '../cli/collection-preflight.mts';
 
 describe('multi-target collection preflights', () => {
+  test('human plans disclose output, local persistence and allowlist scope without reading or writing them', () => {
+    const document = buildCollectionPreflight({ command: 'bulk', targetCount: 2, deep: false, concurrency: 1,
+      output: 'json', checkpoint: false, allowlist: true });
+    const text = formatCollectionPreflight(document);
+    assert.match(text, /Output format: json/u);
+    assert.match(text, /No checkpoint is written/u);
+    assert.match(text, /does not exclude targets from collection/u);
+    assert.match(text, /Enforcement: none/u);
+    assert.match(text, /Network requests  none/u);
+    assert.equal(document.networkRequestsMade, false);
+    assert.match(formatCollectionPreflight(buildCollectionPreflight({ command: 'bulk', targetCount: 2,
+      deep: true, concurrency: 1, output: 'csv', checkpoint: true })), /private resumable checkpoint/u);
+  });
+  for (const command of ['bulk', 'discover-scan'] as const) {
+    for (const mode of ['fast', 'deep'] as const) {
+      test(`${command} ${mode} plans report the admitted ceilings without collecting`, async () => {
+        const targetLimit = mode === 'deep' ? 50 : 500;
+        const concurrency = mode === 'deep' ? 3 : 8;
+        const invocation = [command, ...(command === 'discover-scan' ? ['example.test'] : []), `--${mode}`];
+        assert.throws(() => parseCliArguments([...invocation, '--concurrency', String(concurrency + 1)]), CliUsageError);
+        if (command === 'discover-scan') {
+          assert.throws(() => parseCliArguments([...invocation, '--scan-limit', String(targetLimit + 1)]), CliUsageError);
+        }
+        let stdout = '';
+        let stderr = '';
+        let requests = 0;
+        const code = await runCli([
+          ...invocation, '--plan', '--json', '--concurrency', String(concurrency),
+          ...(command === 'discover-scan' ? ['--scan-limit', String(targetLimit)] : []),
+        ], {
+          stdout: { write(value) { stdout += value; } },
+          stderr: { write(value) { stderr += value; } },
+          readBulkInput: () => 'alpha.test\nbeta.test\n',
+          loadTyposquatGenerator: async () => ({
+            MAX_GENERATION_TLDS: 20, MUTATION_FAMILY_IDS: ['character_omission'],
+            MUTATION_LABELS: { character_omission: 'Character omission' },
+            normalizeMutationFamilyIds: () => [],
+            normalizeCustomDictionaryTerms: () => ({ values: [], rejectedCount: 0 }),
+            generateTyposquatCandidateSet: () => ({
+              inputValid: true, version: 1,
+              candidates: ['alpha.test', 'beta.test'].map(domain => ({
+                domain, source: 'example.test', tld: 'test', mutationTypes: ['character_omission'],
+              })),
+            }),
+          }),
+          runUnifiedLookup: async () => { requests += 1; return {}; },
+        });
+        assert.equal(code, EXIT_CODES.SUCCESS, stderr);
+        assert.equal(requests, 0);
+        const document = JSON.parse(stdout);
+        assert.equal(document.scope.selectedTargets, 2);
+        assert.equal(document.scope.commandTargetLimit, targetLimit);
+        assert.equal(document.scope.concurrency, concurrency);
+        assert.equal(document.networkRequestsMade, false);
+      });
+    }
+  }
+
   test('reports an exact Bulk target count without collecting', async () => {
     let stdout = '';
     let collected = false;

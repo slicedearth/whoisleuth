@@ -28,7 +28,7 @@
   <div class="hero-copy">
     <p class="eyebrow hero-kicker">Domain intelligence console</p>
     <h1>Understand a domain.<br><span>Before you act.</span></h1>
-    <p class="lede">Review WHOIS and RDAP registration data, DNS, certificates, websites and network context without losing where each result came from or what could not be collected.</p>
+    <p class="lede">Investigate a domain, compare the evidence and keep a reviewable record. Bring registration, DNS, website and certificate observations together in one workspace.</p>
     <div class="hero-actions"><a class="primary" href="/demo">Try the synthetic demo</a><PublicConsoleCta /></div>
   </div>
   <div class="hero-preview">
@@ -42,12 +42,12 @@
 </section>
 
 <section class="evidence" aria-labelledby="evidence-title">
-  <div class="section-intro"><h2 id="evidence-title">See why the result says what it says</h2><p>Registration status comes from authoritative registry evidence. Other sources add context, and their limits remain visible.</p></div>
+  <div class="section-intro"><h2 id="evidence-title">Follow the evidence behind a finding</h2><p>See the sources, compare observations and save the material that supports your next decision.</p></div>
   <div class="evidence-grid">{#each evidenceSources as source}<article><h3>{source[0]}</h3><p>{source[1]}</p></article>{/each}</div>
 </section>
 
 <section class="learn" aria-labelledby="learn-title">
-  <div class="section-intro"><h2 id="learn-title">Learn how the evidence fits together</h2><p>Focused guides explain what each source can support, where it can fail, and what to review next.</p></div>
+  <div class="section-intro"><h2 id="learn-title">Learn how the evidence fits together</h2><p>Choose a source, follow a worked example and decide what to review next.</p></div>
   <PublicResourceCards resources={PUBLIC_RESOURCES.slice(0,4)} compact />
   <a class="all-resources" href="/resources">Browse the topic library <span aria-hidden="true">→</span></a>
 </section>
@@ -64,7 +64,7 @@
   .hero h1 span{display:block;color:var(--accent)}
   .lede{max-width:56ch;color:var(--muted);font-size:clamp(1rem,1.5vw,1.1rem);line-height:1.7}
   .hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:28px}
-  .hero-actions a{display:inline-flex;min-height:44px;align-items:center;justify-content:center;padding:10px 16px;border-radius:var(--radius-sm);font:750 var(--text-xs) var(--mono)}
+  .hero-actions a{display:inline-flex;min-height:44px;align-items:center;justify-content:center;padding:10px 16px;border-radius:var(--radius-sm);font:750 var(--text-xs) var(--font-sans)}
   .hero-actions .primary{color:var(--primary-text);background:linear-gradient(135deg,var(--primary-start),var(--primary-end))}
   .hero-preview{min-width:0}
   .hero-preview :global(.preview-panel){box-shadow:0 18px 48px rgb(var(--shadow-rgb) / .16)}

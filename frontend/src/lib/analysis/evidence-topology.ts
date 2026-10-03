@@ -71,8 +71,8 @@ export type LookupEvidenceTopologyInput = Readonly<{
 type Point = { x: number; y: number };
 
 const WIDTH = 820;
-const NODE_WIDTH = 180;
-const NODE_HEIGHT = 58;
+const NODE_WIDTH = 210;
+const NODE_HEIGHT = 68;
 const NODE_GAP = 14;
 const COLUMN_PADDING = 42;
 const TARGET_WIDTH = 220;

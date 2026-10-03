@@ -79,7 +79,7 @@
   }
 </script>
 
-<div class="public-shell">
+<div class="public-shell" class:documentation-shell={referenceSectionActive}>
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <header class="public-header">
     <a class="public-brand" href="/" aria-label="WHOISleuth overview"><span class="mark"><BrandMark /></span><span class="brand-copy"><strong>WHOISleuth</strong><small>Domain intelligence</small></span></a>
@@ -116,14 +116,15 @@
 
 <style>
   .public-shell{width:min(1280px,100%);min-height:100vh;margin:auto;padding:0 clamp(20px,4vw,48px)}
+  .public-shell.documentation-shell{width:min(1680px,100%);background:var(--reading-surface)}
   .public-header{display:flex;position:static;inset:auto;z-index:auto;height:auto;align-items:center;justify-content:space-between;gap:12px 24px;padding:18px 0;border-bottom:1px solid var(--border);background:transparent;container:public-header/inline-size;flex-wrap:wrap}
-  .public-brand{display:flex;align-items:center;gap:10px;font-family:var(--mono)}
+  .public-brand{display:flex;min-height:44px;align-items:center;gap:10px;font-family:var(--mono)}
   .public-brand .mark{width:38px;height:38px}
   .public-brand strong,.public-brand small{display:block}
   .public-brand strong{font-size:1rem;letter-spacing:-.02em}
   .public-brand small{margin-top:2px;color:var(--muted);font-size:var(--text-2xs)}
   .public-navigation-desktop{--public-nav-control-h:38px;display:flex;align-items:center;gap:5px;margin:0}
-  .public-navigation-desktop a,.public-navigation-desktop button,.public-navigation-mobile>a,.site-menu>summary{display:inline-flex;position:static;width:auto;height:var(--public-nav-control-h,36px);min-height:var(--public-nav-control-h,36px);align-items:center;justify-content:center;margin:0;padding:0 11px;border:1px solid transparent;border-radius:var(--radius-sm);color:var(--muted);background:transparent;font:700 var(--text-xs) var(--mono);white-space:nowrap}
+  .public-navigation-desktop a,.public-navigation-desktop button,.public-navigation-mobile>a,.site-menu>summary{display:inline-flex;position:static;width:auto;height:var(--public-nav-control-h,44px);min-height:var(--public-nav-control-h,44px);align-items:center;justify-content:center;margin:0;padding:0 11px;border:1px solid transparent;border-radius:var(--radius-sm);color:var(--muted);background:transparent;font:650 var(--text-xs) var(--font-sans);white-space:nowrap}
   .public-navigation-desktop :global(.theme-selector){height:var(--public-nav-control-h);margin:0 5px;font-size:var(--text-xs)}
   .public-navigation-desktop :global(.theme-control),.public-navigation-desktop :global(.theme-trigger){height:100%}
   .public-navigation-desktop :global(.theme-trigger){min-height:100%;font-size:inherit}
@@ -133,13 +134,14 @@
   .console-label-short{display:none}
   .public-navigation-desktop button.sign-out{color:var(--muted)}
   .public-navigation-mobile{display:none}
-  .public-navigation-mobile :global(.theme-selector){height:32px;margin:0;font-size:.68rem}
+  .public-navigation-mobile :global(.theme-selector){height:44px;margin:0;font-size:var(--text-2xs)}
+  .public-navigation-mobile :global(.theme-trigger){height:44px}
   .site-menu{position:static}
   .site-menu>summary{list-style:none}
   .site-menu>summary::-webkit-details-marker{display:none}
   .site-menu[open]>summary{border-color:var(--accent);color:var(--accent);background:rgb(var(--accent-rgb) / .08)}
   .site-menu nav{position:absolute;z-index:30;top:calc(100% + 8px);right:0;display:grid;width:min(250px,calc(100vw - 24px));gap:4px;padding:8px;border:1px solid var(--border-strong);border-radius:var(--radius-md);background:var(--panel);box-shadow:0 16px 42px rgb(var(--shadow-rgb) / .32)}
-  .site-menu nav a,.site-menu nav button{display:flex;min-height:40px;align-items:center;padding:8px 10px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:700 var(--text-xs) var(--mono);text-align:left}
+  .site-menu nav a,.site-menu nav button{display:flex;min-height:44px;align-items:center;padding:8px 10px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:650 var(--text-xs) var(--font-sans);text-align:left}
   .site-menu nav a:hover,.site-menu nav a:focus-visible,.site-menu nav a.active,.site-menu nav button:hover,.site-menu nav button:focus-visible{border-color:var(--border);color:var(--text);background:rgb(var(--accent-rgb) / .07)}
   .site-menu nav button{width:100%}
   .session-error{flex:1 0 100%;max-width:100%;margin:0;padding:8px 10px;border:1px dotted var(--danger);border-radius:var(--radius-sm);color:var(--danger);font:700 var(--text-2xs) var(--mono);line-height:1.45;overflow-wrap:anywhere}
@@ -153,7 +155,7 @@
   }
   @container public-header (max-width:780px){
     .public-navigation-desktop{display:none}
-    .public-navigation-mobile{display:flex;position:relative;flex:1 1 auto;align-items:center;justify-content:flex-end;gap:5px;--public-nav-control-h:32px}
+    .public-navigation-mobile{display:flex;position:relative;flex:1 1 auto;align-items:center;justify-content:flex-end;gap:5px;--public-nav-control-h:44px}
   }
   @media(max-width:720px){
     .public-shell{padding-inline:12px}
@@ -165,21 +167,21 @@
     .public-brand strong{font-size:.78rem}
     .public-brand small{display:none}
     .public-navigation-desktop{display:none}
-    .public-navigation-mobile{display:flex;position:relative;flex:1 1 auto;align-items:center;justify-content:flex-end;gap:5px;--public-nav-control-h:32px}
-    .public-navigation-mobile>a,.site-menu>summary{padding-inline:7px;font-size:.68rem}
+    .public-navigation-mobile{display:flex;position:relative;flex:1 1 auto;align-items:center;justify-content:flex-end;gap:5px;--public-nav-control-h:44px}
+    .public-navigation-mobile>a,.site-menu>summary{min-width:44px;padding-inline:7px;font-size:var(--text-2xs)}
     .public-content{padding-top:38px}
     .public-content.reference-page{padding-top:20px}
   }
   @media(max-width:440px){
-    .public-shell{padding-inline:8px}
+    .public-shell{padding-inline:12px}
     .public-header{gap:4px}
     .public-brand{gap:4px}
-    .public-brand .mark{width:24px;height:24px}
+    .public-brand .mark{width:20px;height:20px}
     .public-brand .brand-copy{display:block}
-    .public-brand strong{font-size:.68rem}
+    .public-brand strong{font-size:.75rem}
     .public-navigation-mobile{gap:3px}
-    .public-navigation-mobile>a,.site-menu>summary{padding-inline:5px;font-size:.625rem;line-height:1}
-    .public-navigation-mobile :global(.theme-selector){font-size:.625rem;line-height:1}
+    .public-navigation-mobile>a,.site-menu>summary{padding-inline:5px;font-size:var(--text-2xs);line-height:1}
+    .public-navigation-mobile :global(.theme-selector){--theme-trigger-width:84px;font-size:var(--text-2xs);line-height:1}
   }
   @media(max-width:360px){
     .public-navigation-mobile>a,.site-menu>summary{padding-inline:3px}

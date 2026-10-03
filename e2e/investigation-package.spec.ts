@@ -1,10 +1,11 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, useTheme } from './helpers';
 import { buildInvestigationPackage, inspectInvestigationPackage } from '../packages/investigation/investigation-package.mts';
 import { buildWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
-import { createCase } from '../packages/cases/case-model.mts';
+import { createCase } from '../packages/cases/case-record-operations.mts';
 import { unzipSync, zipSync } from 'fflate';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { writeInvestigationFolder } from '../cli/investigation-folder.mts';
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES } from '../packages/investigation/investigation-manifest.mts';
@@ -25,6 +26,31 @@ async function openPackages(page: import('@playwright/test').Page) {
   return page.getByRole('region', { name: 'Package and review evidence files' });
 }
 const asFile = (bytes: Uint8Array) => ({ name: 'evidence.zip', mimeType: 'application/zip', buffer: Buffer.from(bytes) });
+
+test('packaged Lookup review is temporary, source-qualified and independent of saved Cases', async ({ page }, testInfo) => {
+  const panel = await openPackages(page), before = await readBrowserLocalCollection(page, 'cases');
+  const artifact = { content: (await readFile('test/fixtures/lookup-evidence-v27.json', 'utf8')).trimEnd(), mediaType: 'application/json' as const, source: { identity: 'Selected export', observedAt: null } };
+  const built = await makePackage([artifact]);
+  await panel.getByLabel('Review evidence package', { exact: true }).setInputFiles(asFile(built.bytes));
+  const trigger = panel.getByRole('button', { name: 'Review Lookup artifact-1', exact: true });
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: 'Temporary Lookup review', exact: true });
+  await expect(dialog).toContainText('Normalised facts');
+  await expect(dialog).toContainText('matched to the package manifest; not source authentication');
+  await expect(dialog.getByRole('button', { name: /Create Case|Add replay|Save|Collect|Import/u })).toHaveCount(0);
+  for (const width of [320, 390, 1024, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await dialog.getByRole('button', { name: 'Return to package', exact: true }).click();
+    await page.setViewportSize({ width, height: width < 700 ? 844 : 768 }); await useTheme(page, theme); await trigger.click();
+    await expect(dialog).toBeVisible(); await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('dialog[open]').analyze()).violations).toEqual([]);
+    if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`lookup-review-${width}-${theme}.png`) }); }
+  }
+  await dialog.getByRole('button', { name: 'Return to package', exact: true }).click();
+  await expect(trigger).toBeFocused();
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  await panel.getByRole('button', { name: 'Close package review', exact: true }).click();
+  await expect(trigger).toHaveCount(0); await expect(dialog).toHaveCount(0);
+});
 
 test('BagIt export and review preserve selected bytes, explicit encryption choices and accessible layouts', async ({ page }, testInfo) => {
   test.slow();
@@ -57,7 +83,7 @@ test('BagIt export and review preserve selected bytes, explicit encryption choic
     expect((await new AxeBuilder({ page }).include('.bagit-review').analyze()).violations).toEqual([]);
     if (width === 320 || width === 1280) {
       await heading.scrollIntoViewIfNeeded();
-      await testInfo.attach(`bagit-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`bagit-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
   const close = panel.getByRole('button', { name: 'Close BagIt review', exact: true });
@@ -139,7 +165,7 @@ test('encrypted package creation and unlock preserve exact files, private state 
     await page.setViewportSize({ width, height: width < 500 ? 844 : 900 }); await useTheme(page, theme);
     await password.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
     expect(await password.evaluate(element => { const parent = element.parentElement!.getBoundingClientRect(), rect = element.getBoundingClientRect(); return rect.width > 0 && rect.left >= parent.left - 1 && rect.right <= parent.right + 1; })).toBe(true);
-    if ([320, 1280, 3840].includes(width)) await testInfo.attach(`encrypted-export-${width}-${theme}`, { body: await panel.locator('.evidence-export').screenshot(), contentType: 'image/png' });
+    if ([320, 1280, 3840].includes(width)) if (captureVisualEvidenceEnabled()) { await testInfo.attach(`encrypted-export-${width}-${theme}`, { body: await panel.locator('.evidence-export').screenshot(), contentType: 'image/png' }); }
   }
   const pending = page.waitForEvent('download'); await download.focus(); await page.keyboard.press('Enter');
   const downloaded = await pending, archive = Buffer.concat(await (await downloaded.createReadStream()).toArray());
@@ -166,7 +192,10 @@ test('encrypted package creation and unlock preserve exact files, private state 
   expect(await page.evaluate(secret => JSON.stringify({ ...localStorage, ...sessionStorage }).includes(secret), passphrase)).toBe(false);
   expect(requests).toEqual([]);
   page.off('request', recordPackageRequest);
-  await page.goto('/cases'); await page.goto('/dashboard'); await openDashboardSecondaryWorkspaces(page);
+  await page.goto('/cases');
+  await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
+  await page.goto('/dashboard');
+  await openDashboardSecondaryWorkspaces(page);
   await expect(page.getByLabel('Unlock package passphrase', { exact: true })).toHaveCount(0);
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
 });
@@ -215,7 +244,7 @@ test('idle search indexing cannot displace a pressed package disclosure', { tag:
       await search.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
       await expect(search.getByRole('searchbox')).toBeVisible();
-      await search.screenshot({ path: testInfo.outputPath(`idle-search-${width}-${theme}.png`) });
+      if (captureVisualEvidenceEnabled()) { await search.screenshot({ path: testInfo.outputPath(`idle-search-${width}-${theme}.png`) }); }
     }
   } finally { release(); await page.mouse.up(); }
 });
@@ -328,7 +357,7 @@ test('inline package review exposes all JSON text and actual PNG pixels without 
     for (const width of [320, 390, 1024, 1280, 2560]) {
       await page.setViewportSize({ width, height: 900 });
       await image.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
-      if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`package-review-${theme}-${width}.png`) });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`package-review-${theme}-${width}.png`) }); }
     }
   }
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
@@ -514,7 +543,7 @@ test('package composition and review retain usable controls at supported widths 
       const control = panel.getByRole('button', { name: 'Download artifact-2', exact: true });
       await control.focus();
       await expect(control).toBeInViewport();
-      await testInfo.attach(`package-review-${theme}-${viewport.width}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`package-review-${theme}-${viewport.width}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       const create = panel.getByText('Create a package from files', { exact: true });
       await create.click();
       await panel.getByLabel('Choose evidence files', { exact: true }).setInputFiles({ name: 'selected-long-evidence-filename.json', mimeType: 'application/json', buffer: Buffer.from('{}') });
@@ -526,7 +555,7 @@ test('package composition and review retain usable controls at supported widths 
       await source.fill('Selected source');
       await expect(source).toBeInViewport();
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`package-create-${theme}-${viewport.width}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`package-create-${theme}-${viewport.width}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       await panel.getByRole('button', { name: /^Remove selected-long-evidence-filename\.json, selection \d+$/u }).click();
       await create.click();
     }

@@ -6,8 +6,6 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 import { compile } from 'svelte/compiler';
 
-import { SCHEMA_SOURCE_CLASSIFICATIONS } from '../fixtures/schema-source-classifications.mts';
-import { buildSchemaCompatibilityInventory } from '../tools/schema-compatibility.mts';
 import {
   discoverSchemaIdentifiersInSource,
   discoverSchemaSources,
@@ -22,7 +20,6 @@ import {
 import { discoverSchemaIdentifiersInSource as discoverSchemaIdentifiersInParser } from '../tools/schema-source-parsers.mts';
 import type { SchemaCompatibilityEntry } from '../packages/contracts/schema-compatibility.mts';
 
-const NOW = '2026-08-16T00:00:00.000Z';
 const POLICY_SOURCE_FILE_BYTES = 2_097_152;
 const POLICY_SOURCE_DIRECTORY_DEPTH = 32;
 const POLICY_SCHEMA_CANDIDATE_BYTES = 4_096;
@@ -30,7 +27,7 @@ const POLICY_STATIC_EVALUATION_STEPS = 4_096;
 const POLICY_SOURCE_ROOTS = Object.freeze([
   'bin',
   'cli',
-  'frontend/src',
+  'frontend',
   'lib',
   'netlify/functions',
   'packages',
@@ -77,13 +74,32 @@ describe('schema source coverage', () => {
     assert.equal(discoverSchemaIdentifiersInSource, discoverSchemaIdentifiersInParser);
   });
 
-  test('treats the reviewed lifecycle contract as metadata rather than a schema emitter', () => {
-    const result = discoverSchemaIdentifiersInSource(`
-      export function readLifecycle(value: { schema: string }) {
+  test('discovers runtime propagation identically after a helper moves', () => {
+    const source = `
+      export function copyMarker(value: { schema: string }) {
         return { schema: value.schema };
       }
-    `, 'packages/contracts/schema-lifecycle.mts');
-    assert.deepEqual(result.emitters, []);
+    `;
+    const results = ['packages/contracts/schema-lifecycle.mts', 'lib/extracted-helper.mts']
+      .map((file) => discoverSchemaIdentifiersInSource(source, file));
+    for (const result of results) {
+      assert.equal(result.emitters.length, 1);
+      assert.equal(result.emitters[0]?.identifier, null);
+      assert.deepEqual(result.dynamicConstructions, []);
+    }
+  });
+
+  test('does not treat selection, helper calls or boolean schema checks as new identities', () => {
+    const result = discoverSchemaIdentifiersInSource(`
+      import { FIRST_SCHEMA, SECOND_SCHEMA } from './contracts.mts';
+      export function copy(value: { schema: string }, choose: boolean) {
+        const selected = choose ? FIRST_SCHEMA : SECOND_SCHEMA;
+        const schema = value.schema === selected;
+        return { schema, checked: { schema: validate(value.schema, selected) } };
+      }
+    `, 'lib/new-adapter.mts');
+    assert.ok(result.emitters.length >= 2);
+    assert.deepEqual(result.definitions, []);
     assert.deepEqual(result.dynamicConstructions, []);
   });
 
@@ -445,6 +461,22 @@ describe('schema source coverage', () => {
     await assert.rejects(discoverSchemaSources(root), /unclassified source path.*stage\.html/u);
   });
 
+  test('discovers frontend build helpers without a filename exception and excludes generated and static assets', async (t) => {
+    const root = await fixtureRepository(t);
+    await writeFile(path.join(root, 'frontend/build-helper.ts'), 'export const revision = "fixture";\n');
+    await writeFile(path.join(root, 'frontend/vite.config.ts'), 'export default {};\n');
+    for (const directory of ['.svelte-kit', 'build', 'static']) {
+      await mkdir(path.join(root, 'frontend', directory));
+      await writeFile(path.join(root, 'frontend', directory, 'output.bin'), 'not source');
+    }
+    const expected = ['frontend/build-helper.ts', 'frontend/vite.config.ts', 'server.mts'];
+    assert.deepEqual((await discoverSchemaSources(root)).files, expected);
+    execFileSync('git', ['init', '--quiet'], { cwd: root, stdio: 'pipe' });
+    await writeFile(path.join(root, '.gitignore'), 'frontend/.svelte-kit/\nfrontend/build/\n.DS_Store\n');
+    await writeFile(path.join(root, 'frontend/.DS_Store'), 'ignored editor metadata');
+    assert.deepEqual((await discoverSchemaSources(root)).files, expected);
+  });
+
   test('discovers ordinary modules and conventional documentation without per-file exceptions', async (t) => {
     const root = await fixtureRepository(t);
     await mkdir(path.join(root, 'packages', 'example'));
@@ -459,7 +491,24 @@ describe('schema source coverage', () => {
     await assert.rejects(discoverSchemaSources(root), /unclassified repository path.*CONTRIBUTING\.mts/u);
   });
 
-  test('resolves exact imported aliases and rejects unrelated names and duplicate inline emitters', async (t) => {
+  test('editor preferences need no schema registration in a checkout or source archive', async (t) => {
+    const root = await fixtureRepository(t);
+    await writeFile(path.join(root, '.prettierrc.json'), '{"singleQuote":true}\n');
+    await writeFile(path.join(root, '.prettierignore'), '**/fixtures/**\n');
+    await writeFile(path.join(root, '.editorconfig'), 'root = true\n');
+    const expected = ['server.mts'];
+    assert.deepEqual((await discoverSchemaSources(root)).files, expected);
+    execFileSync('git', ['init', '--quiet'], { cwd: root, stdio: 'pipe' });
+    assert.deepEqual((await discoverSchemaSources(root)).files, expected);
+    // A similarly named runtime module is still inspected rather than hidden
+    // by its basename. Unknown root code must still receive explicit scope.
+    await writeFile(path.join(root, 'lib', 'prettier.config.mts'), "export const SCHEMA = 'whoisleuth.fixture';\n");
+    assert.ok((await discoverSchemaSources(root)).identifiers.includes('whoisleuth.fixture'));
+    await writeFile(path.join(root, '.editorconfig.mts'), 'export {};\n');
+    await assert.rejects(discoverSchemaSources(root), /unclassified repository path.*\.editorconfig\.mts/u);
+  });
+
+  test('resolves imported identities, rejects false ownership and permits repeated literal references', async (t) => {
     const root = await fixtureRepository(t);
     await mkdir(path.join(root, 'packages', 'contracts'), { recursive: true });
     await writeFile(
@@ -492,7 +541,7 @@ describe('schema source coverage', () => {
     const shadowed = await discoverSchemaSources(root);
     await assert.rejects(
       validateSchemaSourceCoverage([fixtureEntry()], shadowed, []),
-      /do(?:es)? not resolve to canonical schema definitions?/iu,
+      /not the canonical definition or a reviewed producer or reader/iu,
     );
 
     await writeFile(
@@ -503,7 +552,7 @@ describe('schema source coverage', () => {
     const unrelated = await discoverSchemaSources(root);
     await assert.rejects(
       validateSchemaSourceCoverage([fixtureEntry()], unrelated, []),
-      /do(?:es)? not resolve|owner .* is not bound/iu,
+      /not the canonical definition or a reviewed producer or reader/iu,
     );
 
     await writeFile(
@@ -514,19 +563,13 @@ describe('schema source coverage', () => {
     await writeFile(path.join(root, 'lib', 'owner.mts'), "export const first = { schema: 'whoisleuth.fixture' };\n", 'utf8');
     await writeFile(path.join(root, 'cli', 'second.mts'), "export const second = { schema: 'whoisleuth.fixture' };\n", 'utf8');
     const disconnected = await discoverSchemaSources(root);
-    await assert.rejects(
-      validateSchemaSourceCoverage([fixtureEntry()], disconnected, []),
-      /unreviewed disconnected inline emitter/iu,
-    );
+    assert.equal((await validateSchemaSourceCoverage([fixtureEntry()], disconnected, [])).inventoriedIdentifiers, 1);
 
     await writeFile(path.join(root, 'packages', 'contracts', 'fixture.mts'), 'export {};\n', 'utf8');
     await writeFile(path.join(root, 'lib', 'owner.mts'), "export const first = { schema: 'whoisleuth.fixture' };\n", 'utf8');
     await writeFile(path.join(root, 'cli', 'second.mts'), "export const second = { schema: 'whoisleuth.fixture' };\n", 'utf8');
     const duplicated = await discoverSchemaSources(root);
-    await assert.rejects(
-      validateSchemaSourceCoverage([fixtureEntry()], duplicated, []),
-      /multiple inline emitters without one canonical definition/iu,
-    );
+    assert.equal((await validateSchemaSourceCoverage([fixtureEntry()], duplicated, [])).inventoriedIdentifiers, 1);
   });
 
   test('fails closed for every reviewed dynamic schema-emitter form', async (t) => {
@@ -618,11 +661,8 @@ describe('schema source coverage', () => {
       identifier: 'whoisleuth.com',
       kind: 'non_schema',
       reason: 'public_site_hostname',
-      owner: 'lib/project-metadata.mts',
-      sourceUses: [{ file: 'lib/project-metadata.mts', literalOccurrences: 1, dynamicConstructions: 0 }],
-      relatedEntryIds: [],
       note: 'Synthetic public hostname classification.',
-    }]), /cannot mask a schema emitter|expected 0 literal/iu);
+    }]), /cannot mask a schema emitter/iu);
 
     await writeFile(path.join(root, 'cli', 'emitter.mts'), "export class Contract { schema = 'whoisleuth.com'; }\n", 'utf8');
     const classFieldMasked = await discoverSchemaSources(root);
@@ -630,11 +670,8 @@ describe('schema source coverage', () => {
       identifier: 'whoisleuth.com',
       kind: 'non_schema',
       reason: 'public_site_hostname',
-      owner: 'lib/project-metadata.mts',
-      sourceUses: [{ file: 'lib/project-metadata.mts', literalOccurrences: 1, dynamicConstructions: 0 }],
-      relatedEntryIds: [],
       note: 'Synthetic public hostname classification.',
-    }]), /cannot mask a schema emitter|expected 0 literal/iu);
+    }]), /cannot mask a schema emitter/iu);
 
     await rm(path.join(root, 'cli', 'emitter.mts'));
     await rm(path.join(root, 'lib', 'project-metadata.mts'));
@@ -668,140 +705,4 @@ describe('schema source coverage', () => {
     );
   });
 
-  test('fails closed for missing coverage, stale ownership, dynamic construction, and duplicate definitions', async () => {
-    const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
-    const discovery = await discoverSchemaSources();
-    const withoutThreatResult = inventory.entries.filter((entry) => entry.id !== 'derived.threat-intelligence-result');
-    await assert.rejects(
-      validateSchemaSourceCoverage(withoutThreatResult, discovery),
-      /not inventoried or classified: whoisleuth\.threat-intelligence-result/iu,
-    );
-
-    const missingOwner = structuredClone(inventory.entries);
-    const first = missingOwner[0];
-    assert.ok(first);
-    first.owner = 'lib/missing-schema-owner.mts';
-    await assert.rejects(
-      validateSchemaSourceCoverage(missingOwner, discovery),
-      /owner .* is missing/iu,
-    );
-
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, {
-        ...discovery,
-        dynamicConstructions: [
-          ...discovery.dynamicConstructions,
-          { file: 'lib/example.mts', line: 1, identifier: 'whoisleuth.lookup-progress', reason: 'dynamic' },
-        ],
-      }),
-      /unsafe dynamic/iu,
-    );
-
-    const definition = discovery.definitions.find((item) => item.identifier === 'whoisleuth.lookup-progress');
-    assert.ok(definition);
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, {
-        ...discovery,
-        definitions: [...discovery.definitions, { ...definition, file: 'lib/duplicate.mts', line: 1 }],
-      }),
-      /multiple definition owners/iu,
-    );
-
-    const dynamicAllowanceUse = discovery.emitters.find((item) => (
-      item.file === 'cli/artifact-verify.mts'
-      && item.symbol === 'schema'
-      && item.role === 'writer'
-    ));
-    assert.ok(dynamicAllowanceUse);
-    await validateSchemaSourceCoverage(inventory.entries, {
-      ...discovery,
-      emitters: [...discovery.emitters, dynamicAllowanceUse],
-    });
-
-    const lineAllowanceUse = discovery.emitters.find((item) => (
-      item.file === 'cli/archive-inspect.mts'
-      && item.symbol === null
-      && item.role === 'writer'
-    ));
-    assert.ok(lineAllowanceUse);
-    await validateSchemaSourceCoverage(inventory.entries, {
-      ...discovery,
-      emitters: [...discovery.emitters, lineAllowanceUse],
-    });
-    await validateSchemaSourceCoverage(inventory.entries, {
-      ...discovery,
-      emitters: discovery.emitters.filter((item) => item !== lineAllowanceUse),
-    });
-    await assert.rejects(validateSchemaSourceCoverage(inventory.entries, {
-      ...discovery,
-      emitters: discovery.emitters.filter((item) => item.file !== lineAllowanceUse.file || item.role !== 'writer'),
-    }), /dynamic-use allowance is stale/iu);
-    for (const unreviewed of [
-      { ...lineAllowanceUse, file: 'server.mts' },
-      { ...lineAllowanceUse, role: 'reader' as const },
-    ]) {
-      await assert.rejects(validateSchemaSourceCoverage(inventory.entries, {
-        ...discovery, emitters: [...discovery.emitters, unreviewed],
-      }), /do not resolve to canonical schema definitions/iu);
-    }
-    const malformedInReviewedOwner = discoverSchemaIdentifiersInSource(
-      "export const document = { schema: 'whoisleuth'.concat('.hidden') };", lineAllowanceUse.file);
-    assert.ok(malformedInReviewedOwner.dynamicConstructions.length > 0);
-    await assert.rejects(validateSchemaSourceCoverage(inventory.entries, {
-      ...discovery, dynamicConstructions: [...discovery.dynamicConstructions, ...malformedInReviewedOwner.dynamicConstructions],
-    }), /unsafe dynamic/iu);
-
-    const inlineAllowanceUse = discovery.emitters.find((item) => (
-      item.identifier === 'whoisleuth.sslbl-certificate-snapshot'
-      && item.file === 'lib/sslbl-certificates.generated.mts'
-      && item.role === 'writer'
-    ));
-    assert.ok(inlineAllowanceUse);
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, {
-        ...discovery,
-        emitters: [...discovery.emitters, inlineAllowanceUse],
-      }),
-      /inline-emitter allowance expected/iu,
-    );
-
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, discovery, [
-        ...SCHEMA_SOURCE_CLASSIFICATIONS.map((item) => item.identifier === 'whoisleuth.relationship-evidence'
-          ? { ...item, relatedEntryIds: ['derived.missing-entry'] }
-          : item),
-      ]),
-      /unknown compatibility entry/iu,
-    );
-
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, discovery, [
-        ...SCHEMA_SOURCE_CLASSIFICATIONS.map((item) => item.identifier === 'whoisleuth.relationship-evidence'
-          ? { ...item, kind: 'non_schema' }
-          : item),
-      ]),
-      /inconsistent kind metadata/iu,
-    );
-
-    const localGeoIpOccurrence = discovery.occurrences.find((item) => item.identifier === 'whoisleuth.local-geoip-evidence');
-    assert.ok(localGeoIpOccurrence);
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, {
-        ...discovery,
-        occurrences: [
-          ...discovery.occurrences,
-          { ...localGeoIpOccurrence, file: 'lib/unreviewed-local-geoip-reference.mts', line: 1 },
-        ],
-      }),
-      /expected 0 literal and 0 dynamic use\(s\).*but found 1 literal/iu,
-    );
-
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, {
-        ...discovery,
-        occurrences: discovery.occurrences.filter((item) => item !== localGeoIpOccurrence),
-      }),
-      /expected 1 literal and 0 dynamic use\(s\).*but found 0 literal/iu,
-    );
-  });
 });

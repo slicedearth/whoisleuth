@@ -1,4 +1,4 @@
-import { BrowserLocalDataError, type BrowserLocalDataCodec } from './browser-local-data.ts';
+import { BrowserLocalDataError, type BrowserLocalDataCodec } from './browser-local-data-content.ts';
 import { clearProtectedBrowserWorkspaceSession, currentBrowserWorkspaceId } from './browser-workspace-context.ts';
 import { workspaceEncryptionIdentity, type BrowserWorkspaceEncryption } from './browser-workspace-encryption-model.ts';
 

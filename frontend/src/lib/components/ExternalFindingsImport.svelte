@@ -1,18 +1,23 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { casePruningNotice } from '$lib/analysis/case-mutation-feedback.ts';
   import ExternalImportReview, { type ExternalImportPreview } from './ExternalImportReview.svelte';
   import { parseBoundedJson } from '$lib/bounded-json';
   import {
     EXTERNAL_FINDINGS_SCHEMA,
+    MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
+  } from '../../../../packages/contracts/external-observation-interchange.mts';
+  import {
     importExternalFindings,
     importExternalFindingsIntoCase,
     importExternalIntelligence,
-    MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
-    MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES,
-    parseExternalFindingsDocument,
-    parseExternalIntelligenceDocument,
     type CaseRecord,
-  } from '$lib/cases';
+  } from '../cases.ts';
+  import {
+    MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES,
+    parseExternalIntelligenceDocument,
+  } from '../analysis/external-intelligence-import.ts';
+  import { parseExternalFindingsDocument } from '../../../../packages/interchange/external-findings-import.mts';
   import {
     EXTERNAL_FINDING_ROWS_SCHEMA,
     CERTIFICATE_OBSERVATION_ROWS_SCHEMA,
@@ -226,14 +231,14 @@
     try {
       if (selected.kind === 'findings' && targetCaseId) {
         const result = await importExternalFindingsIntoCase(targetCaseId, selected.document);
-        await reconcileCommitted(result.cases, `Imported ${result.findingsAdded} findings into the selected incident Case; ${result.duplicatesSkipped} duplicates skipped.`);
+        await reconcileCommitted(result.cases, `Imported ${result.findingsAdded} findings into the selected incident Case; ${result.duplicatesSkipped} duplicates skipped.${casePruningNotice(result.pruned)}`);
       } else if (selected.kind === 'findings') {
         const result = await importExternalFindings(selected.document);
-        await reconcileCommitted(result.cases, `Imported ${result.findingsAdded} finding${result.findingsAdded === 1 ? '' : 's'} into ${result.casesCreated} new and ${result.casesUpdated} existing case${result.casesCreated + result.casesUpdated === 1 ? '' : 's'}${result.duplicatesSkipped ? `; skipped ${result.duplicatesSkipped} duplicate${result.duplicatesSkipped === 1 ? '' : 's'}` : ''}${result.pruned ? `; pruned ${result.pruned} old evidence snapshot${result.pruned === 1 ? '' : 's'} to stay within storage` : ''}.`);
+        await reconcileCommitted(result.cases, `Imported ${result.findingsAdded} finding${result.findingsAdded === 1 ? '' : 's'} into ${result.casesCreated} new and ${result.casesUpdated} existing case${result.casesCreated + result.casesUpdated === 1 ? '' : 's'}${result.duplicatesSkipped ? `; skipped ${result.duplicatesSkipped} duplicate${result.duplicatesSkipped === 1 ? '' : 's'}` : ''}.${casePruningNotice(result.pruned)}`);
       } else {
         if (!targetCaseId) throw new Error('Select an existing case before merging external intelligence.');
         const result = await importExternalIntelligence(targetCaseId, selected.document);
-        await reconcileCommitted(result.cases, `Merged ${result.assertionsAdded} external assertion${result.assertionsAdded === 1 ? '' : 's'} into ${result.record.domain}${result.duplicatesSkipped ? `; skipped ${result.duplicatesSkipped} existing assertion${result.duplicatesSkipped === 1 ? '' : 's'}` : ''}${result.capacitySkipped ? `; skipped ${result.capacitySkipped} at the case assertion limit` : ''}. No collection, scoring, or case creation was started.`);
+        await reconcileCommitted(result.cases, `Merged ${result.assertionsAdded} external assertion${result.assertionsAdded === 1 ? '' : 's'} into ${result.record.domain}${result.duplicatesSkipped ? `; skipped ${result.duplicatesSkipped} existing assertion${result.duplicatesSkipped === 1 ? '' : 's'}` : ''}${result.capacitySkipped ? `; skipped ${result.capacitySkipped} at the case assertion limit` : ''}. No collection, scoring, or case creation was started.${casePruningNotice(result.pruned)}`);
       }
       preview = null;
       conversionReport = null;

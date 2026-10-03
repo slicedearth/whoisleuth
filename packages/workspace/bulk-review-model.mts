@@ -1,4 +1,4 @@
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { CASE_DISPOSITIONS as CASE_DISPOSITION_OPTIONS } from '../cases/case-record-contracts.mts';
 import { BULK_SORT_KEYS, normalizeBulkPresentationSortKey } from './bulk-sort.mts';
 import type { BulkSortDirection, BulkSortKey } from './bulk-sort.mts';
@@ -301,7 +301,7 @@ export function buildBulkReviewExport(raw: unknown): BulkReviewStore {
 export function mergeBulkReviewStores(
   localRaw: unknown,
   importedRaw: unknown,
-): { store: BulkReviewStore; added: number; updated: number; skipped: number } {
+): { store: BulkReviewStore; added: number; updated: number; skipped: number; reason: string } {
   assertWorkspaceInputGraph(localRaw, 'Local Bulk-review store');
   assertWorkspaceInputGraph(importedRaw, 'Imported Bulk-review document');
   assertWorkspacePortableVersion(importedRaw, BULK_REVIEW_SCHEMA_VERSION, 'Imported Bulk-review document');
@@ -322,35 +322,35 @@ export function mergeBulkReviewStores(
   const rows = new Map(local.rows.map((item) => [item.domain, item]));
   let added = 0;
   let updated = 0;
-  let skipped = 0;
+  const supplied = sourceLists(importedRaw);
+  let skipped = supplied.presets.length + supplied.rows.length - imported.presets.length - imported.rows.length;
+  let capacitySkipped = 0;
+  let bytes = byteLength(JSON.stringify(local));
+  if (bytes > MAX_BULK_REVIEW_STORE_BYTES) throw new Error('Existing Bulk review preferences exceed the workspace storage limit; no imported changes were applied.');
 
-  for (const candidate of imported.presets) {
-    const existing = presets.get(candidate.id);
-    if (!existing) {
-      presets.set(candidate.id, candidate);
-      added += 1;
-    } else if (candidate.updatedAt > existing.updatedAt) {
-      presets.set(candidate.id, candidate);
-      updated += 1;
-    } else {
+  function admit<T extends BulkReviewRecord>(target: Map<string, T>, key: string, candidate: T, maximum: number) {
+    const existing = target.get(key);
+    if (existing && candidate.updatedAt <= existing.updatedAt) {
       skipped += 1;
+      return;
     }
-  }
-  for (const candidate of imported.rows) {
-    const existing = rows.get(candidate.domain);
-    if (!existing) {
-      rows.set(candidate.domain, candidate);
-      added += 1;
-    } else if (candidate.updatedAt > existing.updatedAt) {
-      rows.set(candidate.domain, candidate);
-      updated += 1;
-    } else {
+    const delta = byteLength(JSON.stringify(candidate)) - (existing ? byteLength(JSON.stringify(existing)) : 0)
+      + (!existing && target.size ? 1 : 0);
+    if ((!existing && target.size >= maximum) || bytes + delta > MAX_BULK_REVIEW_STORE_BYTES) {
       skipped += 1;
+      capacitySkipped += 1;
+      return;
     }
+    target.set(key, candidate);
+    bytes += delta;
+    if (existing) updated += 1;
+    else added += 1;
   }
+  for (const candidate of imported.presets) admit(presets, candidate.id, candidate, MAX_BULK_REVIEW_PRESETS);
+  for (const candidate of imported.rows) admit(rows, candidate.domain, candidate, MAX_BULK_REVIEW_ROWS);
 
   return {
-    store: enforceBulkReviewBudget({
+    store: normalizeBulkReviewStore({
       schema: BULK_REVIEW_SCHEMA,
       version: BULK_REVIEW_SCHEMA_VERSION,
       presets: [...presets.values()],
@@ -359,5 +359,6 @@ export function mergeBulkReviewStores(
     added,
     updated,
     skipped,
+    reason: capacitySkipped ? `${capacitySkipped} imported Bulk review records did not fit the remaining storage capacity. Existing local records are preserved.` : '',
   };
 }

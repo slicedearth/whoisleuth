@@ -7,6 +7,9 @@ import { recordValue, requiredValue } from './value-assertions.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
+// Exercise the function's trusted runtime boundary, with independent clients
+// for ordinary cases rather than consuming one shared unidentified bucket.
+process.env.SITE_ID = '01234567-89ab-cdef-0123-456789abcdef';
 
 const loginModule = await import('../netlify/functions/login.mts');
 const {
@@ -15,20 +18,43 @@ const {
   runLoginFunction,
 } = loginModule;
 const testDirectory = dirname(fileURLToPath(import.meta.url));
+let nextClient = 1;
+const clientHeaders = () => ({ 'x-nf-client-connection-ip': `2001:db8::${(nextClient++).toString(16)}` });
 
 function request(headers: Record<string, string>, password = process.env.SITE_PASSWORD) {
-  return runLoginFunction({ httpMethod: 'POST', headers, body: JSON.stringify({ password }) });
+  return runLoginFunction({ httpMethod: 'POST', headers: { ...clientHeaders(), ...headers }, body: JSON.stringify({ password }) });
 }
 
 function rawRequest(body: string) {
   return runLoginFunction({
     httpMethod: 'POST',
-    headers: { origin: 'https://example.com', host: 'example.com' },
+    headers: { ...clientHeaders(), origin: 'https://example.com', host: 'example.com' },
     body,
   });
 }
 
 describe('login handler origin enforcement', () => {
+  test('uses runtime site identity for separate client buckets and fails closed before reading an unidentified body', async () => {
+    const saved = { SITE_ID: process.env.SITE_ID, NETLIFY: process.env.NETLIFY, NODE_ENV: process.env.NODE_ENV };
+    try {
+      delete process.env.NETLIFY;
+      process.env.SITE_ID = '01234567-89ab-cdef-0123-456789abcdef';
+      process.env.NODE_ENV = 'production';
+      const headers = { host: 'example.test', origin: 'https://example.test', 'x-nf-client-connection-ip': '192.0.2.241' };
+      for (let index = 0; index < 10; index += 1) assert.equal((await request(headers, 'incorrect')).statusCode, 401);
+      assert.equal((await request(headers, 'incorrect')).statusCode, 429);
+      assert.equal((await request({ ...headers, 'x-nf-client-connection-ip': '192.0.2.242' }, 'incorrect')).statusCode, 401);
+      for (const client of ['', 'invalid', '192.0.2.241, 192.0.2.242']) {
+        const response = await runLoginFunction({ httpMethod: 'POST', headers: { ...headers, 'x-nf-client-connection-ip': client }, get body(): never { throw new Error('must not read unidentified input'); } });
+        assert.equal(response.statusCode, 503);
+        assert.equal(response.headers['Set-Cookie'], undefined);
+        assert.doesNotMatch(response.body ?? '', /must not read|01234567/u);
+      }
+    } finally {
+      for (const [key, value] of Object.entries(saved)) if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  });
+
   test('exports only a rate-limited modern deployment boundary for the canonical path', () => {
     assert.equal(typeof loginHandler, 'function');
     assert.equal(Object.hasOwn(loginModule, 'handler'), false);
@@ -104,6 +130,7 @@ describe('login handler origin enforcement', () => {
     const response = await loginHandler(new Request('https://example.com/api/login', {
       method: 'POST',
       headers: {
+        ...clientHeaders(),
         'Content-Type': 'application/json',
         host: 'example.com',
         origin: 'https://example.com',
@@ -146,7 +173,7 @@ describe('login handler origin enforcement', () => {
   test('rejects malformed UTF-8 at the modern Request boundary', async () => {
     const response = await loginHandler(new Request('https://example.com/api/login', {
       method: 'POST',
-      headers: { host: 'example.com', origin: 'https://example.com' },
+      headers: { ...clientHeaders(), host: 'example.com', origin: 'https://example.com' },
       body: new Uint8Array([0xc3, 0x28]),
     }));
 

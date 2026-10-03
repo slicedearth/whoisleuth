@@ -1,25 +1,30 @@
 import { downloadLocalFile } from './download-local-file.ts';
-// Browser-local analyst case store. All validation, normalization, bounding,
-// merge, byte-budget, and export shaping live in analysis/case-model.ts (pure +
-// unit tested); this wrapper owns asynchronous provider access and downloads.
-// Cases never leave the browser and hold no raw registry responses - only a
-// bounded, chronological history of evidence snapshots.
+// Local-workspace analyst case store. Pure validation, merge, byte budgets and
+// export shaping live in packages/cases; this adapter owns provider access and
+// downloads. Internal consumers import pure operations from their domain owner.
+// The selected provider uses browser storage or an explicitly selected local
+// filesystem workspace. Records hold no raw registry responses, only a bounded,
+// chronological history of evidence snapshots.
 import {
   buildCaseExport,
-  addCaseBrandProfileId,
   enforceStoreBudget,
   prepareCaseStoreSave,
   caseStoreSavePreviewIsCurrent,
-  mergeCases,
-  casesForDomain,
+} from '../../../packages/cases/case-storage-model.mts';
+import {
+  addCaseBrandProfileId,
+  removeCaseBrandProfileId,
+} from '../../../packages/cases/case-brand-profile-references.mts';
+import { mergeCases } from '../../../packages/cases/case-migration-model.mts';
+import { casesForDomain } from '../../../packages/cases/case-selection.mts';
+import {
   createCaseIncident as createCaseIncidentModel,
   openOrCreateCase,
   recordCaseConclusion as recordCaseConclusionModel,
   recordCaseInvestigationContext as recordCaseInvestigationContextModel,
   recordCaseRecheckOutcome as recordCaseRecheckOutcomeModel,
-  removeCaseBrandProfileId,
   updateCase,
-} from './analysis/case-model.ts';
+} from '../../../packages/cases/case-record-operations.mts';
 import type {
   CaseStoreSavePreview,
   CaseInput,
@@ -31,9 +36,9 @@ import type {
   ReviewedCaseDisposition,
 } from './analysis/case-model.ts';
 
-import { readBrowserLocalData, updateBrowserLocalData, browserLocalDataProvider, browserLocalDataCollection } from './browser-local-data-service.ts';
+import { readBrowserLocalData, updateBrowserLocalData, updateBrowserLocalDataCollections } from './browser-local-data-service.ts';
 import { removeCaseDraft } from '../../../packages/cases/case-drafts.mts';
-import type { CaseDraftReceipt, CaseDraftStore } from '../../../packages/contracts/case-drafts.mts';
+import type { CaseDraftReceipt } from '../../../packages/contracts/case-drafts.mts';
 import { applyCaseReviewReturn, type CaseReviewReturn } from '../../../packages/cases/case-review-return.mts';
 import { LEGACY_CASES_KEY } from './browser-local-data-contract.ts';
 import { assertAnalystUndoCurrent } from './analysis/analyst-undo.ts';
@@ -98,12 +103,9 @@ export {
 } from './analysis/case-model.ts';
 export {
   CASE_TYPES,
-  caseFreeformTags,
-  caseIncidentTargetAssertion,
   caseIncidentTargets,
   caseNumber,
   caseResponseIncidentUrls,
-  caseTagsWithTypes,
   caseTypeIds,
   caseTypeRecords,
   caseTypeSummary,
@@ -204,13 +206,24 @@ export async function loadCases(): Promise<CaseRecord[]> {
   return readBrowserLocalData('cases');
 }
 
-// Persists a clean, bounded, budget-checked store. Enforces the serialized-size
-// budget before writing (pruning oldest evidence snapshots if needed), refuses
-// to downgrade data from a newer schema version, and surfaces a friendly error
-// when storage is full or unavailable. Returns the persisted cases plus how many
-// evidence snapshots were pruned to fit.
+// Prepare a clean, bounded store before the provider writes it. Only evidence
+// snapshots may be pruned to fit; the result reports that count to the caller.
+// The provider retains version admission, transactions and storage errors.
 function boundedCases(cases: CaseRecord[]): { cases: CaseRecord[]; pruned: number } {
   return enforceStoreBudget(cases);
+}
+
+// Only the budget-admitted record can be returned as the saved result. Keep
+// transaction choice and operation-specific metadata at the calling mutation.
+function caseWriteResult(
+  bounded: ReturnType<typeof boundedCases>,
+  id: string,
+  missing = 'The changed Case could not be retained. No data was changed.',
+) {
+  const { cases, pruned } = bounded;
+  const record = cases.find(item => item.id === id);
+  if (!record) throw new Error(missing);
+  return { document: cases, result: { record, cases, pruned } };
 }
 
 export async function getCase(id: string): Promise<CaseRecord | null> {
@@ -236,45 +249,40 @@ export async function openCase(input: CaseInput, selection: CaseOpenSelection = 
       document: current,
       result: { record: result.record, cases: current, created: false as boolean, pruned: 0 },
     };
-    const { cases, pruned } = boundedCases(result.cases);
-    const record = cases.find((item) => item.id === result.record.id) ?? result.record;
-    return { document: cases, result: { record, cases, created: true as boolean, pruned } };
+    const change = caseWriteResult(boundedCases(result.cases), result.record.id);
+    return { ...change, result: { ...change.result, created: true as boolean } };
   });
 }
 
 export async function createCaseIncident(input: CaseIncidentInput) {
   return updateBrowserLocalData('cases', current => {
     const result = createCaseIncidentModel(current, input);
-    const { cases, pruned } = boundedCases(result.cases);
-    const record = cases.find(item => item.id === result.record.id);
-    if (!record) throw new Error('The new incident could not be retained. No data was changed.');
-    return { document: cases, result: { record, cases, created: true, pruned } };
+    const change = caseWriteResult(boundedCases(result.cases), result.record.id,
+      'The new incident could not be retained. No data was changed.');
+    return { ...change, result: { ...change.result, created: true } };
   });
 }
 
 function applyCasePatch(current: CaseRecord[], id: string, patch: CasePatch) {
   const result = updateCase(current, id, patch);
-  const { cases, pruned } = boundedCases(result.cases);
-  const record = cases.find((item) => item.id === id) ?? result.record;
-  return { document: cases, result: { record, cases, pruned } };
+  return caseWriteResult(boundedCases(result.cases), id);
 }
 
 export async function editCase(id: string, patch: CasePatch, draft?: CaseDraftReceipt): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
   if (draft) {
-    const [provider, cases, drafts] = await Promise.all([browserLocalDataProvider(), browserLocalDataCollection('cases'), browserLocalDataCollection('case_drafts')]);
-    return provider.updateMany([cases, drafts], documents => {
-      const remaining = removeCaseDraft(documents.get('case_drafts') as CaseDraftStore, draft, id);
-      const change = applyCasePatch(documents.get('cases') as CaseRecord[], id, patch);
-      return { documents: new Map<string, unknown>([['cases', change.document], ['case_drafts', remaining]]), result: change.result };
+    return updateBrowserLocalDataCollections(['cases', 'case_drafts'], documents => {
+      const remaining = removeCaseDraft(documents.case_drafts, draft, id);
+      const change = applyCasePatch(documents.cases, id, patch);
+      return { documents: { cases: change.document, case_drafts: remaining }, result: change.result };
     });
   }
   return updateBrowserLocalData('cases', (current) => applyCasePatch(current, id, patch));
 }
 
-export async function editCaseTags(id: string, tags: string[]) {
+export async function editCaseTags(id: string, tags: string[], expectedTags: readonly string[]) {
   return updateBrowserLocalData('cases', (current) => {
     const previous = [...(current.find((record) => record.id === id)?.tags ?? [])];
-    const change = applyCasePatch(current, id, { tags });
+    const change = applyCasePatch(current, id, { tags, expectedTags });
     return { ...change, result: { ...change.result, undo: { id, previous, expected: [...change.result.record.tags] } } };
   });
 }
@@ -292,9 +300,7 @@ export async function recordCaseConclusion(
 ): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const result = recordCaseConclusionModel(current, id, input);
-    const { cases, pruned } = boundedCases(result.cases);
-    const record = cases.find((item) => item.id === id) ?? result.record;
-    return { document: cases, result: { record, cases, pruned } };
+    return caseWriteResult(boundedCases(result.cases), id);
   });
 }
 
@@ -304,9 +310,7 @@ export async function recordCaseInvestigationContext(
 ): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const result = recordCaseInvestigationContextModel(current, id, input);
-    const { cases, pruned } = boundedCases(result.cases);
-    const record = cases.find((item) => item.id === id) ?? result.record;
-    return { document: cases, result: { record, cases, pruned } };
+    return caseWriteResult(boundedCases(result.cases), id);
   });
 }
 
@@ -316,9 +320,7 @@ export async function recordCaseRecheckOutcome(
 ): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const result = recordCaseRecheckOutcomeModel(current, id, input);
-    const { cases, pruned } = boundedCases(result.cases);
-    const record = cases.find((item) => item.id === id) ?? result.record;
-    return { document: cases, result: { record, cases, pruned } };
+    return caseWriteResult(boundedCases(result.cases), id);
   });
 }
 
@@ -370,9 +372,7 @@ async function updateCaseBrandProfileAssociation(
       || JSON.stringify(preview.removed) !== JSON.stringify(retention.preview.removed))) {
       throw new CaseAssociationCapacityError({ id, profileId, operation, preview });
     }
-    const { cases, pruned } = preview;
-    const persisted = cases.find((item) => item.id === id) ?? result.record;
-    return { document: cases, result: { record: persisted, cases, pruned } };
+    return caseWriteResult(preview, id);
   });
 }
 
@@ -399,31 +399,26 @@ export async function addCaseNote(id: string, body: string): Promise<{ record: C
 }
 
 export async function deleteCase(id: string): Promise<{ cases: CaseRecord[]; deleted: boolean }> {
-  const [provider, casesDefinition, draftsDefinition] = await Promise.all([browserLocalDataProvider(), browserLocalDataCollection('cases'), browserLocalDataCollection('case_drafts')]);
-  return provider.updateMany([casesDefinition, draftsDefinition], documents => {
-    const current = documents.get('cases') as CaseRecord[];
+  return updateBrowserLocalDataCollections(['cases', 'case_drafts'], documents => {
+    const current = documents.cases;
     const cases = current.filter((item) => item.id !== id);
-    const drafts = documents.get('case_drafts') as CaseDraftStore;
+    const drafts = documents.case_drafts;
     return {
-      documents: new Map<string, unknown>([['cases', cases], ['case_drafts', { ...drafts, records: drafts.records.filter(item => item.caseId !== id) }]]),
+      documents: { cases, case_drafts: { ...drafts, records: drafts.records.filter(item => item.caseId !== id) } },
       result: { cases, deleted: cases.length !== current.length },
     };
   });
 }
 
-export async function importCases(value: unknown): Promise<{ cases: CaseRecord[]; added: number; updated: number; skipped: number; brandProfileReferencesOmitted: number; authoredHistoryOmitted: number; pruned: number }> {
+export async function importCases(value: unknown): Promise<ReturnType<typeof mergeCases> & { pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const result = mergeCases(current, value);
     const { cases, pruned } = boundedCases(result.cases);
     return {
       document: cases,
       result: {
+        ...result,
         cases,
-        added: result.added,
-        updated: result.updated,
-        skipped: result.skipped,
-        brandProfileReferencesOmitted: result.brandProfileReferencesOmitted,
-        authoredHistoryOmitted: result.authoredHistoryOmitted,
         pruned,
       },
     };
@@ -477,16 +472,13 @@ export async function importExternalFindingsIntoCase(
 }> {
   return updateBrowserLocalData('cases', (current) => {
     const merged = mergeExternalFindingsIntoCase(current, caseId, document);
-    const { cases, pruned } = boundedCases(merged.cases);
-    const record = cases.find((item) => item.id === caseId) ?? merged.record;
+    const change = caseWriteResult(boundedCases(merged.cases), caseId);
     return {
-      document: cases,
+      ...change,
       result: {
-        record,
-        cases,
+        ...change.result,
         findingsAdded: merged.findingsAdded,
         duplicatesSkipped: merged.duplicatesSkipped,
-        pruned,
       },
     };
   });
@@ -505,17 +497,14 @@ export async function importExternalIntelligence(
 }> {
   return updateBrowserLocalData('cases', (current) => {
     const merged = mergeExternalIntelligenceIntoCase(current, caseId, preview);
-    const { cases, pruned } = boundedCases(merged.cases);
-    const record = cases.find((item) => item.id === merged.record.id) ?? merged.record;
+    const change = caseWriteResult(boundedCases(merged.cases), merged.record.id);
     return {
-      document: cases,
+      ...change,
       result: {
-        record,
-        cases,
+        ...change.result,
         assertionsAdded: merged.assertionsAdded,
         duplicatesSkipped: merged.duplicatesSkipped,
         capacitySkipped: merged.capacitySkipped,
-        pruned,
       },
     };
   });

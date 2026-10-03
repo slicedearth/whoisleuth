@@ -165,7 +165,7 @@
   {/if}
 
   <div class="topology-frame" role="img" aria-label={`${title} visual overview`}>
-    <svg viewBox={`0 0 ${graph.width} ${graph.height}`} aria-hidden="true">
+    <svg class="data-chart" width={graph.width} height={graph.height} viewBox={`0 0 ${graph.width} ${graph.height}`} aria-hidden="true">
       <defs>
         <pattern id={`${id}-grid`} width="22" height="22" patternUnits="userSpaceOnUse">
           <path d="M 22 0 L 0 0 0 22" class="grid-line" />
@@ -210,7 +210,7 @@
           x={graph.target.x + 16}
           y={graph.target.y + 55}
           width={graph.target.width - 32}
-          height="14"
+          height="18"
           class="node-copy target-detail-copy"
         >
           <div xmlns="http://www.w3.org/1999/xhtml" class="node-detail">{graph.target.detail || graph.target.status}</div>
@@ -257,7 +257,7 @@
                 x={node.x + 42}
                 y={node.y + (wrapsSourceLabel(node.label) ? 6 : 10)}
                 width={node.width - 70}
-                height={wrapsSourceLabel(node.label) ? 30 : 16}
+                height={wrapsSourceLabel(node.label) ? 36 : 18}
                 class:wrapped={wrapsSourceLabel(node.label)}
                 class="node-copy source-title-copy"
               >
@@ -265,9 +265,9 @@
               </foreignObject>
               <foreignObject
                 x={node.x + 42}
-                y={node.y + (wrapsSourceLabel(node.label) ? 39 : 31)}
+                y={node.y + (wrapsSourceLabel(node.label) ? 45 : 35)}
                 width={node.width - 56}
-                height="14"
+                height="18"
                 class="node-copy source-detail-copy"
               >
                 <div xmlns="http://www.w3.org/1999/xhtml" class="node-detail">{node.detail}</div>
@@ -357,7 +357,7 @@
   .key-state{margin-left:auto}
   .key-state i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent2);box-shadow:0 0 5px rgb(var(--accent2-rgb) / .35)}
   .topology-frame{max-width:100%;margin-top:14px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);overscroll-behavior-x:contain}
-  .topology-frame>svg{display:block;width:100%;min-width:680px;height:auto}
+  .topology-frame>svg{min-width:680px}
   .graph-background{fill:var(--panel-raised)}
   .grid-line{fill:none;stroke:color-mix(in srgb,var(--border) 55%,transparent);stroke-width:1}
   .topology-edges path{fill:none;stroke:color-mix(in srgb,var(--accent) 58%,var(--border));stroke-width:2;transition:opacity .16s,stroke-width .16s,filter .16s}
@@ -370,11 +370,11 @@
   .topology-edges path.limited{stroke:color-mix(in srgb,var(--muted) 55%,var(--border));stroke-dasharray:2 6}
   .target-node rect{fill:color-mix(in srgb,var(--accent) 11%,var(--panel));stroke:var(--accent);stroke-width:2}
   .node-kicker,.node-title,.node-detail{font-family:var(--mono)}
-  .node-kicker{fill:var(--accent);font-size:9px;font-weight:750;letter-spacing:.12em}
+  .node-kicker{fill:var(--accent);font-size:12px;font-weight:750;letter-spacing:.04em}
   .node-copy{overflow:hidden}
-  .node-copy div{display:block;min-width:0;overflow:hidden;color:var(--text);font-family:var(--mono);font-size:12px;font-weight:700;line-height:16px;text-overflow:ellipsis;white-space:nowrap}
-  .source-title-copy.wrapped .node-title{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;line-height:14px;text-overflow:clip;white-space:normal}
-  .node-copy .node-detail{color:var(--muted);font-size:9px;font-weight:400;line-height:14px}
+  .node-copy div{display:block;min-width:0;overflow:hidden;color:var(--text);font-family:var(--font-sans);font-size:14px;font-weight:650;line-height:18px;text-overflow:ellipsis;white-space:nowrap}
+  .source-title-copy.wrapped .node-title{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;text-overflow:clip;white-space:normal}
+  .node-copy .node-detail{color:var(--muted);font-size:12px;font-weight:400;line-height:16px}
   .source-node{--source-color:var(--muted);transform-box:fill-box;transform-origin:center;transition:opacity .16s,filter .16s,transform .16s;animation:source-reveal .32s ease-out both}
   .source-nodes>g.linked{cursor:pointer}
   .source-node .node-surface{fill:var(--panel);stroke:color-mix(in srgb,var(--source-color) 72%,var(--border));stroke-width:1.5}
@@ -412,7 +412,7 @@
   .derived-sample{margin-left:8px;border-top-style:dashed}
   .embedded{padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
   .embedded .topology-frame{margin-top:0;border:0;border-radius:0}
-  .compact .topology-frame>svg{min-width:0;max-height:260px}
+  .compact .topology-frame>svg{min-width:680px}
   .compact .source-rail{grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));padding:8px;margin:0;border-top:1px solid var(--border)}
   .compact .source-rail a,.compact .source-rail li>div{display:flex;flex-wrap:wrap;gap:6px;min-height:44px;padding:7px}
   .compact .source-copy small,.compact .source-glyph,.compact .source-family{display:none}

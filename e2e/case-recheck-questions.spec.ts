@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { caseRecord, openSeededTimelineCase, openCaseResponseWorkspace } from './case-test-fixtures';
@@ -68,7 +69,7 @@ test('saved recheck questions preserve drafts and bind later source-qualified an
     for (const width of [320, 390, 1024, 1280, 2560]) {
       await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
       await questions.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`recheck-questions-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`recheck-questions-${theme}-${width}.png`) }); }
     }
   }
   await page.reload(); section = await openReview(page);

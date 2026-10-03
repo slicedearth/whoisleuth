@@ -3,6 +3,7 @@ import type { BulkTriageRow } from './bulk-triage.ts';
 import type { ScanResult } from './bulk-result-model.ts';
 import { RISK_MODEL_VERSION } from './scoring.ts';
 import { outreachAction } from '../drafts.ts';
+import { webCollectionScoreLimitation } from '../../../../packages/evidence/collection-quality.mts';
 
 export type BulkPrimaryFilter =
   | 'all'
@@ -147,6 +148,8 @@ function riskEligibility(row: ScanResult): RiskEligibility {
     reason: `Risk remains inconclusive because source evidence is partial or unavailable (${inconclusiveSources.map((item) => `${item.source} ${item.state}`).join(', ')}).`,
     coverageLabel: coverage,
   };
+  const collectionLimitation = webCollectionScoreLimitation(row.saved.webCollectionQuality, row.saved.scanDepth);
+  if (collectionLimitation) return { signature: null, reason: collectionLimitation, coverageLabel: coverage };
   const sourceSignature = [...row.sourceCoverage]
     .sort((left, right) => left.source.localeCompare(right.source) || left.state.localeCompare(right.state))
     .map((item) => `${item.source}:${item.state}`);

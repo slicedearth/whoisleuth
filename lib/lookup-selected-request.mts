@@ -2,7 +2,7 @@ import { MAX_OUTBOUND_HTTP_URL_CHARACTERS } from '../packages/contracts/http-url
 import { prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
 import type { ClassifiedQuery } from './classify.mts';
 import { featureDecision, type NetworkFeaturePolicy } from './feature-policy.mts';
-import { parseBoundedJsonObject } from './bounded-json.mts';
+import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 
 // JSON escaping can use six bytes per URL character. Check before decoding or parsing.
 export const MAX_LOOKUP_SELECTION_BODY_BYTES = MAX_OUTBOUND_HTTP_URL_CHARACTERS * 6 + 32;

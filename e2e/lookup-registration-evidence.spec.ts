@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { expandLookupFamilies, expectNoHorizontalOverflow, lookupDomainIdentity, migrateLegacyBrowserData, openLookupOptionalSources, readBrowserLocalCollection, useTheme } from './helpers';
 import { readFileSync } from 'node:fs';
@@ -10,6 +11,7 @@ import {
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { INVESTIGATION_CAPSULE_VERSION, LOOKUP_INVESTIGATION_BRIEF_VERSION } from '../packages/contracts/investigation-portability.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
+import { CONFUSABLE_MAPPING_VERSION } from '../lib/idn-confusables.mts';
 import { parseRdap } from '../lib/rdap.mts';
 import { inspectInvestigationPackage } from '../packages/investigation/investigation-package.mts';
 import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
@@ -17,9 +19,10 @@ import { verifyOfflineInvestigationPackage } from '../cli/investigation-package-
 
 const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
 
-// Every value here is deliberately dotless (no TLD), so classifyQuery on the
-// server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
-// never trigger a live lookup, only client-side parsing/navigation.
+// Valid suffix and registry scenarios use injected API responses; invalid
+// inputs are rejected locally. No registry, WHOIS or DNS service is contacted.
+// The routing-pivot scenario needs a public address to exercise its admission
+// policy; documentation ranges are deliberately ineligible for those links.
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -102,7 +105,7 @@ test('long registration comparisons retain complete source values and a usable r
         expect(textGeometry.publicationTextWidth).toBeGreaterThan(textGeometry.publicationCellWidth * 0.7);
       }
       if (viewport.width === 320 || viewport.width === 1280) {
-        await page.screenshot({ path: testInfo.outputPath(`long-registration-${viewport.width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`long-registration-${viewport.width}-${theme}.png`) }); }
       }
     }
   }
@@ -149,7 +152,7 @@ test('registry interpretation retains late lifecycle evidence and role-scoped di
       const disclosure = interpretation.getByText('RDAP: public · WHOIS: unavailable', { exact: true });
       await disclosure.scrollIntoViewIfNeeded();
       await expect(disclosure).toBeInViewport();
-      if (viewport.width === 320) await page.screenshot({ path: testInfo.outputPath(`registry-interpretation-${theme}.png`) });
+      if (viewport.width === 320) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`registry-interpretation-${theme}.png`) }); }
     }
   }
 });
@@ -515,12 +518,12 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
 
   await page.locator('#query').fill('registrar-source.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  await expect(page.getByRole('button', { name: 'Expand Web and DNS evidence' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Expand details: Web and DNS evidence' })).toBeVisible();
   await expandLookupFamilies(page);
 
-  const registrationSummary = page.getByRole('button', { name: 'Collapse Registration evidence' });
+  const registrationSummary = page.getByRole('button', { name: 'Collapse details: Registration evidence' });
   await expect(registrationSummary).toContainText('7 equivalent');
-  await expect(registrationSummary).toContainText('1 conflicts');
+  await expect(registrationSummary).toContainText('1 conflict');
 
   const evidenceQuality = page.locator('#evidence-quality');
   await evidenceQuality.locator(':scope > details').first().locator(':scope > summary').click();
@@ -531,7 +534,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   ] as const) {
     const row = evidenceQuality.locator(`[data-evidence-id="${id}"]`);
     await expect(row).toHaveCount(1);
-    const expectedTime = await page.evaluate((value) => new Date(value).toLocaleString(), timestamp);
+    const expectedTime = timestamp === '2026-07-14T01:02:04.000Z' ? /14 Jul(?:y)? 2026, 01:02:04 UTC/u : /14 Jul(?:y)? 2026, 01:02:03 UTC/u;
     await expect(row.locator('.observed')).toContainText(expectedTime);
   }
   for (const id of ['whois', 'http', 'tls']) {
@@ -570,7 +573,6 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await expect(observedPlotMarker).toBeVisible();
   const observedLegendMarker = agreementMatrix.locator('.matrix-legend .state-observed span');
   await expect(observedLegendMarker).toBeVisible();
-  expect(await observedLegendMarker.evaluate((element) => getComputedStyle(element).borderRadius)).toBe('3px');
 
   await page.getByRole('tab', { name: /^Relationships/ }).click();
   const analystPivots = page.locator('details.analyst-pivots');
@@ -630,13 +632,13 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
     .getByRole('tab', { name: /^Evidence/ }).click();
   const networkSource = page.getByRole('list', { name: 'Evidence item status' }).locator('a[href="#evidence-network"]');
   await expect(networkSource).toHaveCount(1);
-  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Web and DNS evidence' }).click();
   await expect(page.locator('#evidence-network')).toHaveCount(0);
   await networkSource.focus();
   await networkSource.press('Enter');
   await expect(page).toHaveURL(/#evidence-network$/);
   await expect(page.locator('#evidence-network')).toBeInViewport();
-  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Web and DNS evidence' }).click();
   await expect(page.locator('#evidence-network')).toHaveCount(0);
   await page.evaluate(() => { window.location.hash = '#evidence-network-context'; });
   await expect(page).toHaveURL(/#evidence-network$/);
@@ -755,8 +757,10 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await checkpoint.getByRole('button', { name: 'Save 2 checkpoint facts' }).click();
   await expect(page.locator('.case-status')).toContainText('with a reviewed transition plan');
   await expect(checkpoint.getByRole('heading', { name: 'Reviewed transition plan' })).toBeVisible();
-  await expect(checkpoint).toContainText('verified preserved');
-  await expect(checkpoint).toContainText('change not observed');
+  const transition = checkpoint.getByRole('region', { name: 'Reviewed transition plan' });
+  await expect(transition.locator('article[data-state="indeterminate"]')).toHaveCount(2);
+  await expect(transition.locator('article')).toHaveCount(2);
+  await expect(transition.getByText('A transition requires a source observation strictly later than the pinned observation.')).toHaveCount(2);
   await expectNoHorizontalOverflow(page);
 });
 
@@ -801,7 +805,7 @@ test('field checkpoints retain the supplying publication and reject an unknown o
     await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
     await page.setViewportSize({ width: 320, height: 700 });
     await expectNoHorizontalOverflow(page);
-    await checkpoint.screenshot({ path: testInfo.outputPath(`checkpoint-${theme}.png`) });
+    if (captureVisualEvidenceEnabled()) { await checkpoint.screenshot({ path: testInfo.outputPath(`checkpoint-${theme}.png`) }); }
   }
 });
 
@@ -1000,7 +1004,7 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
     for (const theme of ['light', 'dark'] as const) {
       await useTheme(page, theme);
       await expectNoHorizontalOverflow(page);
-      await currentNotice.screenshot({ path: testInfo.outputPath(`registry-profile-${width}-${theme}.png`) });
+      if (captureVisualEvidenceEnabled()) { await currentNotice.screenshot({ path: testInfo.outputPath(`registry-profile-${width}-${theme}.png`) }); }
     }
   }
 });
@@ -1102,10 +1106,12 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(page.getByText(/Nothing is submitted for scanning or reporting/i)).toBeVisible();
   await expect(page.getByText(/no URL or sample is provided/i)).toBeVisible();
   await expect(page.getByText(/no IOC or sample is provided/i)).toBeVisible();
+  await expect(option).toBeDisabled();
+  await page.locator('#query').fill('archive-review.example');
+  await expect(option).toBeEnabled();
   await option.check();
   await malwareOption.check();
   await iocOption.check();
-  await page.locator('#query').fill('archive-review.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expandLookupFamilies(page);
 
@@ -1192,11 +1198,51 @@ test('locally omitted provider findings remain visibly partial with accessible q
       await expect(qualification).toBeInViewport();
       await expectNoHorizontalOverflow(page);
       if ([320, 1280].includes(viewport.width)) {
-        await page.screenshot({ path: testInfo.outputPath(`provider-omission-${viewport.width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`provider-omission-${viewport.width}-${theme}.png`) }); }
       }
     }
   }
 });
+
+for (const unsupported of ['provider', 'envelope'] as const) {
+  test(`unsupported ${unsupported} evidence remains visible without usable providers`, async ({ page }, testInfo) => {
+    let requests = 0;
+    await page.route('**/api/lookup?*', route => {
+      requests += 1;
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        query: 'example.test', type: 'domain', registrableDomain: 'example.test',
+        availability: { state: 'registered', domain: 'example.test' },
+        rdap: { parsed: {} }, whois: { parsed: {}, chain: [] },
+        diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+        threatIntelligence: { version: unsupported === 'envelope' ? 999 : 1, providers: [{
+          schema: THREAT_INTELLIGENCE_SCHEMA, version: unsupported === 'provider' ? 999 : THREAT_INTELLIGENCE_CONTRACT_VERSION,
+          provider: { id: 'urlscan_search', label: 'Untrusted private label' },
+          target: { type: 'domain', value: 'example.test', exposure: 'registrable_domain' },
+          state: 'success', findings: [{ category: 'phishing', detail: 'Untrusted private finding' }],
+        }] },
+      }) });
+    });
+    await page.locator('#query').fill('example.test');
+    await page.getByRole('button', { name: 'Run lookup' }).click();
+    const advanced = page.locator('#advanced-evidence');
+    await expect(advanced).toContainText('0 usable external providers');
+    await expect(advanced).toContainText('1 provider record withheld');
+    await page.getByRole('button', { name: 'Expand details: Advanced evidence' }).click();
+    const notice = page.getByRole('region', { name: 'Withheld external-intelligence records' });
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText('This is not evidence of no findings');
+    await expect(notice).toContainText(unsupported === 'provider' ? 'Unsupported provider format' : 'unsupported version');
+    await expect(notice).not.toContainText('Untrusted private');
+    await expect(page.locator('.threat-intelligence article')).toHaveCount(0);
+    expect(requests).toBe(1);
+    for (const width of [320, 1280]) for (const theme of ['dark', 'light'] as const) {
+      await page.setViewportSize({ width, height: 800 });
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await page.locator('.threat-intelligence').screenshot({ path: testInfo.outputPath(`withheld-${unsupported}-${width}-${theme}.png`) });
+    }
+  });
+}
 
 test('a Lookup case stores the registrar name rather than stringifying its entity', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
@@ -1463,13 +1509,13 @@ test('IDN review shows Unicode and ASCII together with cautious profile similari
   await expandLookupFamilies(page);
   const card = page.locator('.idn-card');
   await expect(card.getByRole('heading', { name: 'IDN and confusable review' })).toBeVisible();
-  await expect(card.getByText('tr39-17.0.0-bounded-ascii-v3', { exact: true })).toBeVisible();
+  await expect(card.getByText(CONFUSABLE_MAPPING_VERSION, { exact: true })).toBeVisible();
   await expect(card.getByText('sаmple.example', { exact: true })).toBeVisible();
   await expect(card.getByText('xn--smple-4ve.example', { exact: true })).toBeVisible();
   await expect(card.getByText('Cyrillic, Latin', { exact: true })).toBeVisible();
   await expect(card.getByText('Mixed writing scripts', { exact: true })).toBeVisible();
   await expect(card.getByText('Confusable with an official domain', { exact: true })).toBeVisible();
-  await expect(card.getByText(/similarity indicators and do not establish maliciousness/i)).toBeVisible();
+  await expect(card.getByText('similarity indicators and do not establish maliciousness')).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

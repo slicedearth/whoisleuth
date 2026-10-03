@@ -8,7 +8,7 @@ import { domainToUnicode, fileURLToPath } from 'node:url';
 import whoisFixtures from '../fixtures/whois-registry-fixtures.mts';
 import {
   REGISTRY_CAPABILITIES_VERSION,
-  VERSION_26_NO_RDAP_SUFFIXES,
+  REVIEWED_NO_RDAP_SUFFIXES,
   VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
   registryAccessDiagnosticFor,
   registryCapabilityFor,
@@ -96,7 +96,7 @@ const VERSION_16_ACCESS_SUFFIXES = [
 ];
 const VERSION_18_FIXTURE_SUFFIXES = [
   { id: 'andorra-rdds-colon', suffixes: ['ad'], rdapAccessProfile: 'iana-bootstrap' },
-  { id: 'nic-bh-icann-colon', suffixes: ['bh'], rdapAccessProfile: 'no-iana-service' },
+  { id: 'nic-bh-icann-colon', suffixes: ['bh'], rdapAccessProfile: 'iana-bootstrap' },
   { id: 'cc-registry-colon', suffixes: ['cc'], rdapAccessProfile: 'iana-bootstrap' },
   { id: 'nic-cr-contact-indirection', suffixes: ['cr'], rdapAccessProfile: 'iana-bootstrap' },
   { id: 'nic-dz-colon', suffixes: ['dz'], rdapAccessProfile: 'no-iana-service' },
@@ -108,7 +108,7 @@ const VERSION_18_FIXTURE_SUFFIXES = [
 ];
 const VERSION_19_NO_MACHINE_SUFFIXES = [
   'xn--mgbai9azgqp6j', 'xn--mgbayh7gpa', 'xn--mgbc0a9azcg',
-  'xn--mgbcpq6gpa1a', 'xn--mgbpl2fh', 'xn--wgbh1c',
+  'xn--mgbpl2fh', 'xn--wgbh1c',
 ];
 const VERSION_19_RDAP_ONLY_SUFFIXES = ['na', 'pn'];
 const VERSION_19_SHARED_FIXTURE_SUFFIXES = [
@@ -148,7 +148,7 @@ const VERSION_24_PROMOTED_SUFFIXES = new Set(['xn--90ae', 'xn--l1acc', 'xn--wgbl
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 29);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 31);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
@@ -393,7 +393,7 @@ describe('registry capability metadata', () => {
     assert.equal(covered, 11);
   });
 
-  test('records the version nineteen 20-suffix service and fixture batch', () => {
+  test('retains the earlier service and fixture identities with current access metadata', () => {
     const allProfiles = listRegistryCapabilities();
     const profiles = new Map(allProfiles.map((entry) => [entry.id, entry]));
 
@@ -443,14 +443,19 @@ describe('registry capability metadata', () => {
       assert.equal(diagnostic.whoisAccessProfile, 'no-iana-service', suffix);
       assert.equal(diagnostic.rdapAccessProfile, 'iana-bootstrap', suffix);
     }
+  });
 
-    assert.equal(
-      VERSION_19_SHARED_FIXTURE_SUFFIXES.length
-        + omProfile.suffixes.length
-        + VERSION_19_NO_MACHINE_SUFFIXES.length
-        + VERSION_19_RDAP_ONLY_SUFFIXES.length,
-      20,
-    );
+  test('retains catalogue identities while reflecting newly published registration services', () => {
+    const profiles = new Map(listRegistryCapabilities().map((entry) => [entry.id, entry]));
+    const latin = required(profiles.get('nic-bh-icann-colon'));
+    const international = required(profiles.get('no-iana-machine-service-xn--mgbcpq6gpa1a'));
+    assert.equal(latin.rdapAccessProfile, 'iana-bootstrap');
+    assert.equal(latin.whoisAccessProfile, 'iana-referral');
+    assert.deepEqual(latin.fixtureScenarios, ['registered', 'not_found']);
+    assert.equal(international.rdapAccessProfile, 'iana-bootstrap');
+    assert.equal(international.whoisAccessProfile, 'no-iana-service');
+    assert.deepEqual(international.fixtureScenarios, []);
+    assert.match(international.limitation, /RDAP bootstrap service but no domain WHOIS referral/u);
   });
 
   test('records the version twenty 25-suffix fixture-backed service batch', () => {
@@ -647,14 +652,14 @@ describe('registry capability metadata', () => {
     }
   });
 
-  test('records the version twenty-six official RDAP access reconciliation', () => {
+  test('records reviewed RDAP exclusions and newly bootstrapped Korean suffixes', () => {
     const expectedNoRdapSuffixes = [
       'ac', 'ae', 'af', 'am', 'at', 'be', 'bg', 'by', 'cl', 'cn',
       'co', 'de', 'dk', 'ee', 'eu', 'gf', 'gi', 'gt', 'hk', 'hr',
-      'hu', 'ie', 'il', 'io', 'ir', 'it', 'jp', 'kr', 'kz', 'la',
+      'hu', 'ie', 'il', 'io', 'ir', 'it', 'jp', 'kz', 'la',
       'lt', 'lu', 'lv', 'md', 'me', 'mk', 'mo', 'mq', 'mx', 'my',
       'nz', 'pk', 'pt', 'ro', 'rs', 'ru', 'sa', 'se', 'sk', 'su',
-      'tn', 'tr', 'us', 'vc', 'xn--2scrj9c', 'xn--3e0b707e',
+      'tn', 'tr', 'us', 'vc', 'xn--2scrj9c',
       'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--80ao21a',
       'xn--90a3ac', 'xn--90ais', 'xn--d1alf', 'xn--e1a4c',
       'xn--fiqs8s', 'xn--fiqz9s', 'xn--fpcrj9c3d', 'xn--gecrj9c',
@@ -664,9 +669,13 @@ describe('registry capability metadata', () => {
       'xn--xkc2dl3a5ee0h', 'xn--y9a3aq',
     ];
 
-    assert.deepEqual(VERSION_26_NO_RDAP_SUFFIXES, expectedNoRdapSuffixes);
-    assert.equal(expectedNoRdapSuffixes.length, 81);
-    assert.equal(new Set(expectedNoRdapSuffixes).size, 81);
+    assert.deepEqual(REVIEWED_NO_RDAP_SUFFIXES, expectedNoRdapSuffixes);
+    assert.equal(new Set(expectedNoRdapSuffixes).size, expectedNoRdapSuffixes.length);
+    for (const suffix of ['kr', 'xn--3e0b707e']) {
+      const capability = required(registryCapabilityFor(`example.${suffix}`));
+      assert.equal(capability.rdapAccessProfile, 'iana-bootstrap');
+      assert.equal(capability.whoisParserProfile, 'dot-leader');
+    }
     for (const suffix of expectedNoRdapSuffixes) {
       const capability = required(registryCapabilityFor(`example.${suffix}`));
       assert.equal(capability.rdapAccessProfile, 'no-iana-service', suffix);

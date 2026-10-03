@@ -23,7 +23,8 @@ const GENERATED_AT = '2026-07-28T00:00:00.000Z';
 function retainedIp() {
   return createRelationshipObservation({
     type: 'ip_address',
-    normalizedValue: '192.0.2.24',
+    // Synthetic, never queried; current infrastructure admission requires public scope.
+    normalizedValue: '11.12.13.14',
     domains: ['second.invalid', 'first.invalid'],
     sourceEvidence: ['first.invalid', 'second.invalid'].map((domain) => ({ domain, source: 'dns', status: 'success', observedAt: OBSERVED_AT, complete: true, truncated: false })),
   }, {

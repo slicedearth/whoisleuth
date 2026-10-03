@@ -1,16 +1,22 @@
 <script lang="ts">
   import { tick, type ComponentProps, type Snippet } from 'svelte';
-  import { caseInvestigationContext, caseTypeSummary, dispositionLabel, editCase, importCaseReviewReturn, type CaseRecord } from '$lib/cases';
+  import { caseInvestigationContext } from '../../../../packages/cases/case-incident-context.mts';
+  import { caseTypeSummary } from '../../../../packages/cases/case-workflow-metadata.mts';
+  import { dispositionLabel } from '../../../../packages/cases/case-record-decisions.mts';
+  import { editCase, importCaseReviewReturn, type CaseRecord } from '../cases.ts';
   import { handlesLocalLink } from '$lib/link-activation';
   import { failedLocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { reviewClock } from '$lib/review-clock.ts';
-  import { buildCaseActionOutcomeSummary } from '$lib/analysis/case-response-model.ts';
+  import { buildCaseResponseProgress } from '$lib/analysis/case-response-progress.ts';
   import CaseObservationStage from '$lib/components/CaseObservationStage.svelte';
   import CaseAssessmentStage from '$lib/components/CaseAssessmentStage.svelte';
   import CaseHistoryStage from '$lib/components/CaseHistoryStage.svelte';
   import CaseActionStage from '$lib/components/CaseActionStage.svelte';
   import CaseOutcomeStage from '$lib/components/CaseOutcomeStage.svelte';
   import CaseRenderedCapture from '$lib/components/CaseRenderedCapture.svelte';
+  import CaseMessageIntake from './CaseMessageIntake.svelte';
+  import CaseIdentityReview from './CaseIdentityReview.svelte';
+  import CaseContextReviewEntry from './CaseContextReviewEntry.svelte';
   import CaseAttachments from '$lib/components/CaseAttachments.svelte';
   import CaseWorkflowDetails from '$lib/components/CaseWorkflowDetails.svelte';
   import CaseTitleForm from '$lib/components/CaseTitleForm.svelte';
@@ -66,8 +72,6 @@
   let actionStage = $state<ReturnType<typeof CaseActionStage>>();
   let outcomeStage = $state<ReturnType<typeof CaseOutcomeStage>>();
   const investigationContext = $derived(caseInvestigationContext(record));
-  const evidenceLinkedDecisionCount = $derived(record.decisions.filter((decision) =>
-    decision.evidencePinIds.some((evidencePinId) => record.evidencePins.some((pin) => pin.id === evidencePinId))).length);
   const reviewNow = $derived(new Date($reviewClock).toISOString());
   let evidenceHandoffStage = $state<CaseResponseStage>({
     id: 'evidence_handoff',
@@ -76,42 +80,10 @@
     summary: 'Packet review has not started.',
     nextRequirement: 'Open the evidence handoff to review recipient, evidence, privacy, readiness, and authorisation inputs.',
   });
-  const actionSummary = $derived(buildCaseActionOutcomeSummary(record.actions, reviewNow));
-
-  const responseStages = $derived<CaseResponseStage[]>([
-    {
-      id: 'observation', ...CASE_RESPONSE_STAGE_DEFINITIONS.observation,
-      status: record.evidencePins.length || record.sightings.length ? 'complete' : 'not_started',
-      summary: `${countLabel(record.evidencePins.length, 'retained evidence pin')} and ${countLabel(record.sightings.length, 'source-qualified sighting')}.`,
-      nextRequirement: record.evidencePins.length || record.sightings.length
-        ? 'Review the retained observation, its source, completeness, and limitations before assessment.'
-        : 'Pin an observed fact or record a source-qualified sighting with completeness and limitations.',
-    },
-    {
-      id: 'assessment', ...CASE_RESPONSE_STAGE_DEFINITIONS.assessment,
-      status: evidenceLinkedDecisionCount ? 'complete' : record.decisions.length || record.assertions.length || record.manualTrail.length ? 'in_progress' : 'not_started',
-      summary: `${countLabel(record.decisions.length, 'decision')} (${evidenceLinkedDecisionCount} linked to retained evidence), ${countLabel(record.assertions.length, 'optional assertion')}, and ${countLabel(record.branches?.length ?? 0, 'investigation branch', 'investigation branches')}.`,
-      nextRequirement: !record.decisions.length
-        ? 'Record a bounded analyst decision and rationale linked to retained evidence.'
-        : !evidenceLinkedDecisionCount
-          ? 'Link at least one analyst decision to a retained evidence pin.'
-          : 'Review the decision rationale and any unresolved assertions or branches.',
-    },
-    {
-      id: 'response_decision', ...CASE_RESPONSE_STAGE_DEFINITIONS.response_decision,
-      status: record.actions.some((action) => ['reviewed', 'authorised', 'submitted', 'acknowledged', 'terminal'].includes(action.state)) ? 'complete' : record.actions.length ? 'in_progress' : 'not_started',
-      summary: `${countLabel(record.actions.length, 'append-only response action')}; ${actionSummary.overdue} overdue and ${actionSummary.followUpDue} follow-up due.`,
-      nextRequirement: !record.actions.length ? 'Create a drafting action with recipient provenance and due dates.' : 'Review the next legal action transition without rewriting earlier events.',
-    },
-    evidenceHandoffStage,
-    {
-      id: 'outcome_tracking', ...CASE_RESPONSE_STAGE_DEFINITIONS.outcome_tracking,
-      status: record.closures.records.length ? 'complete' : record.observedEffects.reviews.length || record.actions.some((action) => ['submitted', 'acknowledged', 'terminal'].includes(action.state)) ? 'in_progress' : 'not_started',
-      summary: `${countLabel(record.observedEffects.reviews.length, 'independent effect review')} and ${countLabel(record.closures.records.length, 'deliberate closure')}.`,
-      nextRequirement: !record.observedEffects.reviews.length ? 'Keep provider outcomes separate and record an independently observed effect when reviewed.' : !record.closures.records.length ? 'Review follow-up and, when justified, record a deliberate closure reason.' : 'Review whether follow-up remains due.',
-    },
-  ]);
-  const currentResponseStage = $derived(responseStages.find((stage) => stage.status !== 'complete') ?? responseStages.at(-1));
+  const progress = $derived(buildCaseResponseProgress(record, evidenceHandoffStage, reviewNow));
+  const actionSummary = $derived(progress.actionSummary);
+  const evidenceLinkedDecisionCount = $derived(progress.evidenceLinkedDecisionCount);
+  const currentResponseStage = $derived(progress.currentStage);
 
   function updateEvidenceHandoffStage(stage: CaseResponseStage): void {
     evidenceHandoffStage = stage;
@@ -235,6 +207,12 @@
       ?.querySelector<HTMLElement>('form[data-recovery-form="observed-effect"] select')?.focus();
   }
 
+  async function openRequestedEvidence(actionId: string, requestId: string) {
+    presentationMode = 'quick';
+    await openStage('response_decision');
+    if (activeSection === 'response') await actionStage?.selectEvidenceRequest(actionId, requestId);
+  }
+
   async function preparePacketDeliveryRecord(exported: Parameters<ComponentProps<typeof CaseResponsePacketWorkspace>['onpacketexported']>[0]) {
     const action = record.actions.find((item) => item.id === exported.actionId);
     if (record.id !== exported.caseId || !action || !actionStage || JSON.stringify(action) !== exported.actionSignature) {
@@ -275,7 +253,7 @@
       <div><dt>Next action</dt><dd>{currentResponseStage?.label ?? 'Review Case'}</dd></div>
     </dl>
   {/if}
-  <CaseDecisionOverview {record} {selectSection} />
+  <CaseDecisionOverview {record} {selectSection} onrequest={openRequestedEvidence} />
   {#if actionSummary.total}
     <div class="action-summary" role="group" aria-label="Case action outcome summary">
       <span><strong>{actionSummary.active}</strong> active</span>
@@ -312,7 +290,7 @@
       {/each}
     </div>
     <details class="summary-editor">
-      <summary>Classification and incident links <span>{caseTypeSummary(record.tags)}</span></summary>
+      <summary>Classification and incident links <span>{caseTypeSummary(record)}</span></summary>
       <CaseWorkflowDetails {record} {onsaved} {oncommitted} {onmessage} />
     </details>
     <CaseTitleForm {record} {mutationBusy} {persist} />
@@ -325,8 +303,11 @@
       {@render evidence()}
       <CaseObservationStage {record} {mutationBusy} {persist} mode={presentationMode} />
       <CaseAttachments {record} {mutationBusy} {persistOperation} {onmessage} />
+      <CaseMessageIntake {record} {mutationBusy} {persistOperation} />
+      <CaseContextReviewEntry {record} {mutationBusy} {persistOperation} />
       <CaseRenderedCapture
         {record}
+        {persist}
         exactIncidentUrl={investigationContext?.urlRetention === 'exact' ? investigationContext.incidentUrl : null}
         {persistOperation}
         {mutationBusy}
@@ -337,7 +318,8 @@
         <CaseAssessmentStage {record} {mutationBusy} {persist} {onmessage} mode={presentationMode} />
       </div>
       <div class="case-section" role="group" hidden={activeSection !== 'response'} aria-label="Case response workspace">
-      <CaseResponseQueue {record} {mutationBusy} onaction={openQueuedAction} onrecheck={openQueuedRecheck} />
+      <CaseResponseQueue {record} {mutationBusy} onaction={openQueuedAction} onrecheck={openQueuedRecheck} onrequest={openRequestedEvidence} />
+      <CaseIdentityReview {record} {mutationBusy} {persist} />
       <CaseActionStage bind:this={actionStage} {record} {mutationBusy} {persist} mode={presentationMode} onadvanced={() => void openAdvancedStage('response_decision')} />
       <CaseResponsePacketWorkspace
         {record}

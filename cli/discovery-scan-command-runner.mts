@@ -21,13 +21,23 @@ import { formatJsonDocument } from './formatters/json.mts';
 import { createCliProgressEvents } from './progress-events.mts';
 import { buildCollectionPreflight, formatCollectionPreflight } from './collection-preflight.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext, LookupDependency } from './runner-types.mts';
+import type { DiscoveryDependencies } from './discovery-workflow.mts';
+
+export type DiscoveryScanCommandDependencies = DiscoveryDependencies & {
+  now?: () => string;
+  signal?: AbortSignal;
+  readDiscoveryAllowlist?: (source: string) => string | Promise<string>;
+  classifyQuery?: typeof classifyQuery;
+  runUnifiedLookup?: LookupDependency;
+  createBulkCheckpointWriter?: typeof createBulkCheckpointWriter;
+};
 
 type DiscoveryScanArguments = Extract<CliArguments, { action: 'discover-scan' }>;
 
 async function readAllowlist(
   source: string | null,
-  dependencies: CliDependencies,
+  dependencies: DiscoveryScanCommandDependencies,
   context: CliCommandContext,
   classify: typeof classifyQuery,
 ): Promise<Set<string>> {
@@ -39,13 +49,13 @@ async function readAllowlist(
     return parseDiscoveryScanAllowlist(text, classify);
   } catch (error) {
     if (error instanceof CliUsageError) throw error;
-    throw new CliUsageError(`Could not read discovery scan allowlist: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+    throw new CliUsageError(`Could not read discovery scan allowlist: ${boundedCliErrorMessage(error, 'Input could not be read')}`, 'input_unavailable');
   }
 }
 
 async function runDiscoveryScanCommand(
   args: DiscoveryScanArguments,
-  dependencies: CliDependencies,
+  dependencies: DiscoveryScanCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   const eventProgress = createCliProgressEvents(context.stderr, {
@@ -73,7 +83,7 @@ async function runDiscoveryScanCommand(
   const queries = candidates.map((candidate) => String(candidate.domain));
   if (args.plan) {
     const document = buildCollectionPreflight({
-      command: 'discover-scan', targetCount: queries.length, targetLimit: args.deep ? 50 : 500,
+      command: 'discover-scan', targetCount: queries.length,
       deep: args.deep, concurrency: args.concurrency, output: args.output, checkpoint: false,
       customResolvers: Boolean(args.resolverText), allowlist: Boolean(args.allowlistSource),
     });
@@ -107,7 +117,7 @@ async function runDiscoveryScanCommand(
       throw new CliUsageError('Bulk checkpoint collection context does not match the current DNS resolver selection.');
     }
     if (item.observedAt === null || item.observedAt === undefined) {
-      throw new CliUsageError('Discovery resume requires an observation time for every retained checkpoint result.');
+      throw new CliUsageError('Discovery resume requires an observation time for every retained checkpoint result.', 'missing_input');
     }
   }
   const indicator = context.beginProgress(`Collecting 0 of ${queries.length} generated candidates`);

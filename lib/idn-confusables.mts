@@ -9,7 +9,7 @@ import {
   GENERATED_CONFUSABLE_GROUPS,
   GENERATED_CONFUSABLE_MAPPING_VERSION,
   GENERATED_GENERATION_CONFUSABLE_GROUPS,
-} from './generated/unicode-confusables-17.mts';
+} from './generated/unicode-confusables.mts';
 import {
   MAX_GENERATION_CONFUSABLES_PER_ASCII,
   REVIEWED_GENERATION_CONFUSABLES,

@@ -20,15 +20,31 @@ unsupported future versions, and document migration or comparison behaviour.
 
 ## Prepare a release
 
-Work on a focused branch and update the root manifest and lockfile together:
+Work on a focused branch and prepare the approved explicit version:
 
 ```bash
-npm version minor --no-git-tag-version
-npm run release:check
+npm run release:prepare -- <version>
 ```
 
-Use `patch`, `minor`, `major`, or an explicit valid semantic version as
-appropriate. `release:check` is offline and read-only. It verifies that:
+Replace `<version>` with the chosen semantic version. This updates the root
+manifest and lockfile, regenerates version-derived public examples through their
+owner, then runs `release:check`. Review the complete diff before committing.
+Existing release tags are refused; no tag or publication is created. See
+[local verification](getting-started.md#verification) for the shared check path.
+
+If a step fails, earlier edits remain in the working tree. Inspect the diff and
+the failed command's output, correct the cause, then rerun the same
+`release:prepare -- <version>` command. When the manifest already has that version,
+the command skips the version change and reruns generation and validation.
+It never rolls back or discards other local work.
+
+Ordinary contribution checks use `npm run version:check`: manifest versions must
+agree, and compatibility is checked against the latest reachable public release,
+including a tag matching the current version. Dependency and application changes
+can be reviewed together before choosing the next release number. This does not
+permit republishing changed bytes under an existing version.
+
+`release:check` is the stricter, offline, read-only release gate. It verifies that:
 
 - `package.json`, `package-lock.json`, and the lockfile root package agree;
 - the version is a valid semantic version without an in-manifest `v` prefix;
@@ -43,7 +59,10 @@ the application or CLI do not force a version change. Changes to a packaged CLI
 guide do, because republishing different package bytes under an existing version
 is not permitted.
 
-The command does not create a tag, commit, release, deployment, or package.
+Neither check creates a tag, commit, release, deployment, or package. Publishable
+CLI candidate assembly enforces strict source identity directly, even when called
+without the release workflow. Private package checks remain available during
+contribution work.
 
 The separately assembled CLI candidate follows the same application version but
 does not make the root application package publishable. Before any CLI release,
@@ -85,7 +104,9 @@ software](https://docs.npmjs.com/policies/dual-use/). The tagged release workflo
 may submit only the exact reviewed archive through trusted publishing to npm
 staging. Before assembly it requires a successful completed push run of the
 full `ci.yml` workflow for the exact tagged commit; an ancestor commit's result
-does not satisfy that release-provenance gate. The workflow must not use either token-based direct publication or a
+does not satisfy that release-provenance gate. `tools/release-provenance.mts`
+owns the tag, manifest, ancestry and CI-run checks; its tests use injected responses
+without credentials or live requests. The workflow must not use either token-based direct publication or a
 direct OIDC publish path. A maintainer must inspect and approve the staged
 version with interactive two-factor authentication before it becomes
 available. Local assembly commands do not publish, configure credentials, or

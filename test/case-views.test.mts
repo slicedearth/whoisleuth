@@ -80,7 +80,7 @@ test('view merges keep omitted and equal-time conflicting definitions and reject
 });
 
 test('temporary and saved filters retain existing title, domain, ID, type, tag and sort behaviour', () => {
-  const first = { ...createCase({ domain: 'zeta.example', source: 'manual', tags: ['case-type:phishing', 'urgent'], title: 'First review' }, now), id: '00000000-0000-4000-8000-000000000001', status: 'monitoring' as const, disposition: 'suspicious' as const };
+  const first = { ...createCase({ domain: 'zeta.example', source: 'manual', tags: ['urgent'], caseTypes: ['phishing'], title: 'First review' }, now), id: '00000000-0000-4000-8000-000000000001', status: 'monitoring' as const, disposition: 'suspicious' as const };
   const second = { ...createCase({ domain: 'alpha.example', source: 'manual' }, later), status: 'reviewing' as const };
   const input = [first, second];
   for (const search of ['FIRST REVIEW', 'zeta.example', 'URGENT', 'phishing', caseNumber(first.id)]) {

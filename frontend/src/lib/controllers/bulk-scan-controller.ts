@@ -8,10 +8,7 @@ import {
 } from '../analysis/bulk-result-model.ts';
 import { preservePriorBulkResult } from '../analysis/bulk-retry-plan.ts';
 import type { CompactLookupHttpResponse } from '../analysis/lookup-response.ts';
-import type {
-  ActiveBrandProfileSourceState,
-  BrandProfile,
-} from '../brand-profiles.ts';
+import type { ActiveBrandProfileSourceState, BrandProfile } from '../brand-profiles.ts';
 import type { BulkProfileContextProvenance } from '../analysis/bulk-session-model.ts';
 
 const RESULT_PUBLISH_MS = 100;
@@ -39,20 +36,13 @@ type BulkScanExecutionOptions = {
     response: CompactLookupHttpResponse,
     profile: BulkScanProfileSnapshot,
   ) => ScanResult;
-  failedResult: (
-    domain: string,
-    message: string,
-    profile: BulkScanProfileSnapshot,
-  ) => ScanResult;
+  failedResult: (domain: string, message: string, profile: BulkScanProfileSnapshot) => ScanResult;
   onSnapshot: (snapshot: (() => ScanResult[]) | null) => void;
   onPublish: (results: ScanResult[]) => void;
   onProgress: (completed: number, elapsedMs: number) => void;
   now?: () => number;
   publishIntervalMs?: number;
-  reconcilePrior?: (
-    result: ScanResult,
-    provenance: BulkProfileContextProvenance,
-  ) => ScanResult;
+  reconcilePrior?: (result: ScanResult, provenance: BulkProfileContextProvenance) => ScanResult;
   chooseResult?: (
     prior: ScanResult,
     next: ScanResult,
@@ -70,10 +60,7 @@ function defaultResultChoice(
   prior: ScanResult,
   next: ScanResult,
 ): Readonly<{ preserve: boolean; reason: string }> {
-  return preservePriorBulkResult(
-    toBulkSessionResult(prior),
-    toBulkSessionResult(next),
-  );
+  return preservePriorBulkResult(toBulkSessionResult(prior), toBulkSessionResult(next));
 }
 
 async function executeBulkScan(
@@ -101,12 +88,12 @@ async function executeBulkScan(
     waitWhilePaused,
   } = options;
   const targetDomains = new Set(domains);
-  const priorByDomain = new Map(currentResults
-    .filter((row) => targetDomains.has(row.domain))
-    .map((row) => [row.domain, reconcilePrior(row, profile.provenance)]));
-  const baseResults = replace
-    ? []
-    : currentResults.filter((row) => !targetDomains.has(row.domain));
+  const priorByDomain = new Map(
+    currentResults
+      .filter((row) => targetDomains.has(row.domain))
+      .map((row) => [row.domain, reconcilePrior(row, profile.provenance)]),
+  );
+  const baseResults = replace ? [] : currentResults.filter((row) => !targetDomains.has(row.domain));
   const pendingResults: Array<ScanResult | undefined> = preservePrior
     ? domains.map((domain) => priorByDomain.get(domain))
     : new Array(domains.length);
@@ -144,19 +131,20 @@ async function executeBulkScan(
       let next: ScanResult;
       try {
         const response = await fetchLookup(domain, controller.signal);
+        if (controller.signal.aborted || !ownsScan()) break;
         next = normalizeResult(domain, response, profile);
         if (profile.mode === 'deep' && response.availability?.deepScanComplete === false) {
           next.saved.scanDepth = 'fast';
         }
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') break;
+        if (controller.signal.aborted || !ownsScan()) break;
         next = failedResult(
           domain,
           cause instanceof Error ? cause.message : 'Lookup failed',
           profile,
         );
       }
-      if (!ownsScan()) break;
+      if (controller.signal.aborted || !ownsScan()) break;
       const prior = priorByDomain.get(domain);
       if (preservePrior && prior) {
         const decision = chooseResult(prior, next);
@@ -175,35 +163,198 @@ async function executeBulkScan(
     }
   };
 
-  await Promise.all(Array.from(
-    { length: Math.min(Math.max(1, concurrency), domains.length) },
-    worker,
-  ));
-  if (!ownsScan()) {
-    if (publishTimer) clearTimeout(publishTimer);
+  try {
+    const settled = await Promise.allSettled(
+      Array.from({ length: Math.min(Math.max(1, concurrency), domains.length) }, () =>
+        worker().catch((cause) => {
+          controller.abort();
+          throw cause;
+        }),
+      ),
+    );
+    const failure = settled.find((result) => result.status === 'rejected');
+    if (failure?.status === 'rejected') throw failure.reason;
     return Object.freeze({
       preservedReasons: Object.freeze([...preservedReasons]),
       completed,
-      owned: false,
+      owned: ownsScan(),
       aborted: controller.signal.aborted,
     });
+  } finally {
+    if (publishTimer) clearTimeout(publishTimer);
+    // A failed projection must not leave a queued publication or lose rows
+    // that settled earlier. A replaced run must not clear its successor's state.
+    if (ownsScan()) {
+      try {
+        onPublish(snapshot());
+      } finally {
+        onSnapshot(null);
+      }
+    }
   }
-  publish();
-  onSnapshot(null);
-  return Object.freeze({
-    preservedReasons: Object.freeze([...preservedReasons]),
-    completed,
-    owned: true,
-    aborted: controller.signal.aborted,
-  });
 }
 
-export {
-  RESULT_PUBLISH_MS,
-  executeBulkScan,
-};
+type BulkScanState = Readonly<{
+  running: boolean;
+  paused: boolean;
+  cancelled: boolean;
+  completed: number;
+  total: number;
+  elapsedMs: number;
+  revision: number;
+  results: ScanResult[];
+}>;
+
+type BulkScanRunOptions = Omit<
+  BulkScanExecutionOptions,
+  | 'controller'
+  | 'currentResults'
+  | 'ownsScan'
+  | 'waitWhilePaused'
+  | 'onSnapshot'
+  | 'onPublish'
+  | 'onProgress'
+>;
+
+function emptyScanState(revision = 0): BulkScanState {
+  return {
+    running: false,
+    paused: false,
+    cancelled: false,
+    completed: 0,
+    total: 0,
+    elapsedMs: 0,
+    revision,
+    results: [],
+  };
+}
+
+/** Owns a page's run lifetime; collection and evidence policies remain injected. */
+class BulkScanController {
+  readonly #publish: (state: BulkScanState) => void;
+  #state = emptyScanState();
+  #controller: AbortController | null = null;
+  #snapshot: (() => ScanResult[]) | null = null;
+  #pauseResolvers: Array<() => void> = [];
+  #disposed = false;
+
+  constructor(publish: (state: BulkScanState) => void) {
+    this.#publish = publish;
+  }
+  get state(): BulkScanState {
+    return this.#state;
+  }
+  get results(): ScanResult[] {
+    return this.#snapshot?.() ?? this.#state.results;
+  }
+
+  #update(patch: Partial<BulkScanState>): void {
+    this.#state = { ...this.#state, ...patch };
+    this.#publish(this.#state);
+  }
+
+  #resume(): void {
+    for (const resolve of this.#pauseResolvers.splice(0)) resolve();
+  }
+
+  #invalidate(): void {
+    this.#controller?.abort();
+    this.#resume();
+    this.#controller = null;
+    this.#snapshot = null;
+  }
+
+  restore(
+    results: readonly ScanResult[],
+    total: number,
+    options: Readonly<{ completed?: number; cancelled?: boolean }> = {},
+  ): void {
+    if (this.#disposed) return;
+    this.#invalidate();
+    this.#update({
+      ...emptyScanState(this.#state.revision + 1),
+      results: [...results],
+      total,
+      completed: Math.min(options.completed ?? results.length, results.length),
+      cancelled: options.cancelled === true,
+    });
+  }
+
+  togglePause(): void {
+    if (!this.#state.running || this.#controller?.signal.aborted || this.#disposed) return;
+    this.#update({ paused: !this.#state.paused });
+    if (!this.#state.paused) this.#resume();
+  }
+
+  cancel(): void {
+    if (this.#disposed || !this.#state.running) return;
+    this.#update({ paused: false, cancelled: true });
+    this.#controller?.abort();
+    this.#resume();
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
+    const results = this.results;
+    this.#disposed = true;
+    this.#invalidate();
+    // No publication after unmount; the caller may retain this settled snapshot.
+    this.#state = { ...this.#state, running: false, paused: false, results };
+  }
+
+  async run(options: BulkScanRunOptions): Promise<BulkScanExecutionResult> {
+    if (this.#disposed) return { preservedReasons: [], completed: 0, owned: false, aborted: true };
+    const currentResults = this.results;
+    this.#invalidate();
+    const controller = new AbortController();
+    this.#controller = controller;
+    const ownsScan = () => !this.#disposed && this.#controller === controller;
+    const resume = () => this.#resume();
+    controller.signal.addEventListener('abort', resume, { once: true });
+    this.#update({
+      ...emptyScanState(this.#state.revision + 1),
+      running: true,
+      results: options.replace ? [] : currentResults,
+      total: options.domains.length,
+    });
+    try {
+      return await executeBulkScan({
+        ...options,
+        currentResults,
+        controller,
+        ownsScan,
+        waitWhilePaused: async () => {
+          if (this.#state.paused && ownsScan() && !controller.signal.aborted) {
+            await new Promise<void>((resolve) => this.#pauseResolvers.push(resolve));
+          }
+        },
+        onSnapshot: (snapshot) => {
+          if (ownsScan()) this.#snapshot = snapshot;
+        },
+        onPublish: (results) => {
+          if (ownsScan()) this.#update({ results });
+        },
+        onProgress: (completed, elapsedMs) => {
+          if (ownsScan()) this.#update({ completed, elapsedMs });
+        },
+      });
+    } finally {
+      controller.signal.removeEventListener('abort', resume);
+      if (ownsScan()) {
+        this.#resume();
+        this.#controller = null;
+        this.#snapshot = null;
+        this.#update({ running: false, paused: false });
+      }
+    }
+  }
+}
+
+export { RESULT_PUBLISH_MS, executeBulkScan, BulkScanController };
 export type {
   BulkScanExecutionOptions,
   BulkScanExecutionResult,
   BulkScanProfileSnapshot,
+  BulkScanState,
+  BulkScanRunOptions,
 };

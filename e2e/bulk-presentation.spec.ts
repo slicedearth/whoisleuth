@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import { boundingBox, currentBrandProfileBrowserStore, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
@@ -11,6 +12,36 @@ test.use({ allowExpectedBulkLookup400Noise: true });
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/bulk');
+});
+
+test('non-public DNS matches stay disclosed when no public relationship group exists', async ({ page }, testInfo) => {
+  let requests = 0;
+  await page.route('**/api/lookup?*', route => {
+    requests += 1;
+    const domain = new URL(route.request().url()).searchParams.get('q');
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      availability: { applicable: true, domain, state: 'registered', confidence: 'high',
+        dns: { records: { a: ['127.0.0.1'], aaaa: [] } } },
+      diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+    }) });
+  });
+  await page.getByLabel('Scan mode').selectOption('deep');
+  await runBulkScan(page, ['one.example', 'two.example']);
+  await selectBulkResultView(page, 'Analysis');
+  await page.getByRole('button', { name: /^Relationships\b/u }).click();
+  const section = page.getByRole('region', { name: '0 observed relationships', exact: true });
+  await expect(section).toBeVisible();
+  await expect(section).toContainText('2 non-public address observations were excluded');
+  await expect(section.locator('article')).toHaveCount(0);
+  await expect(section.getByRole('button', { name: 'Preview retention' })).toHaveCount(0);
+  expect(requests).toBe(2);
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: 800 });
+    await useTheme(page, theme);
+    await expect(section).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await section.screenshot({ path: testInfo.outputPath(`address-scope-${width}-${theme}.png`) });
+  }
 });
 
 test('partial contributing TLS stays qualified through saved Bulk restore and explicit relationship retention', async ({ page }, testInfo) => {
@@ -65,7 +96,7 @@ test('partial contributing TLS stays qualified through saved Bulk restore and ex
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     await expectNoHorizontalOverflow(page);
     await preview.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath(`relationship-preview-${width}-${theme}.png`) });
+    if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`relationship-preview-${width}-${theme}.png`) }); }
   }
   await preview.getByRole('button', { name: 'Retain reviewed observation' }).click();
   await expect(section.getByRole('button', { name: 'Retained in Monitor' })).toBeDisabled();
@@ -84,7 +115,7 @@ test('partial contributing TLS stays qualified through saved Bulk restore and ex
   await expect(retained.locator('.relationship-sources li').filter({ hasText: 'second-source.example' })).toContainText('tls · partial');
   await expectNoHorizontalOverflow(page);
   await retained.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath('retained-sources-mobile-light.png') });
+  if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath('retained-sources-mobile-light.png') }); }
   expect(requests).toEqual(['first-source.example', 'second-source.example']);
 });
 
@@ -337,6 +368,20 @@ test('risk model v8 exposes capped cross-family corroboration in Bulk triage', a
   expect(event.Attribute[0].first_seen).toBe('2026-07-13T01:00:00.000Z');
   expect(event.Attribute[0].last_seen).toBe('2026-07-13T01:00:00.000Z');
   expect(JSON.stringify(event)).not.toContain('official.example');
+
+  await openBulkWorkspaceTools(page, 'indicators');
+  const revisions = page.getByRole('region', { name: 'Indicator revisions', exact: true });
+  await revisions.getByLabel(/^Add eligible shortlisted domains/).check();
+  await revisions.getByLabel('Review basis', { exact: true }).fill('Reviewed the selected candidate evidence.');
+  await revisions.getByRole('button', { name: 'Prepare revision preview' }).click();
+  const revisionPreview = revisions.getByRole('region', { name: 'Prepared indicator revision' });
+  await expect(revisionPreview).toContainText('candidate.example · added');
+  const [revisionDownload] = await captureDownloads(page, () => revisionPreview.getByRole('button', { name: 'Download revision manifest' }).click(), 1);
+  const managed = JSON.parse(await readFile((await revisionDownload!.path())!, 'utf8'));
+  expect(managed).toMatchObject({ schema: 'whoisleuth.managed-indicator-set', revision: 1 });
+  expect(managed.entries).toHaveLength(1);
+  expect(managed.entries[0]).toMatchObject({ domain: 'candidate.example', withdrawal: null,
+    observation: { observedAt: '2026-07-13T01:00:00.000Z', riskScore: 79 } });
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
 });
@@ -427,7 +472,7 @@ test('deep results present bounded relationship evidence including exact native 
           nameservers: shared ? ['ns2.shared.example', 'ns1.shared.example'] : ['ns.third.example'],
           faviconHash: shared ? 'a'.repeat(64) : 'b'.repeat(64),
           externalAssetHosts: domain === 'third.example' ? ['static.official.example'] : [],
-          dns: { status: 'complete', records: { a: [shared ? '203.0.113.9' : '203.0.113.10'], aaaa: [], ns: [] } },
+          dns: { status: 'complete', records: { a: [shared ? '11.12.13.9' : '11.12.13.10', '127.0.0.1'], aaaa: [], ns: [] } },
           pageIdentity: {
             fingerprints: {
               identifiers: { values: trackingIdentifiers },
@@ -467,18 +512,19 @@ test('deep results present bounded relationship evidence including exact native 
   const section = page.getByRole('region', { name: '6 observed relationships' });
   await expect(section).toBeVisible();
   await expect(section.getByRole('img', { name: /Shared evidence relationships/u })).toBeVisible();
+  await expect(section).toContainText('3 non-public address observations were excluded');
   const relationshipList = section.locator('.relationship-list');
   await expect(relationshipList.getByText('Shared nameserver set', { exact: true })).toBeVisible();
   await expect(relationshipList.getByText('Shared IP address', { exact: true })).toBeVisible();
   await expect(relationshipList.getByText('Shared TLS certificate', { exact: true })).toBeVisible();
   await expect(relationshipList.getByText('Exact leaf-certificate SHA-256', { exact: true })).toBeVisible();
   await expect(relationshipList.getByText('Shared tracking identifier', { exact: true })).toBeVisible();
-  await expect(relationshipList.getByText('Similar favicon', { exact: true })).toBeVisible();
+  await expect(relationshipList.getByText('Connected favicon matches', { exact: true })).toBeVisible();
   await expect(relationshipList.getByText('Official asset host match', { exact: true })).toBeVisible();
   await expect(section.locator('.relationship-glyph svg')).toHaveCount(6);
   await expect(section.locator('article', { hasText: 'Shared nameserver set' }).locator('.relationship-glyph svg')).toHaveAttribute('data-icon', 'nameserver');
   await expect(section.locator('article', { hasText: 'Shared TLS certificate' }).locator('.relationship-glyph svg')).toHaveAttribute('data-icon', 'tls');
-  await expect(section.locator('article', { hasText: 'Similar favicon' }).locator('.relationship-glyph svg')).toHaveAttribute('data-icon', 'favicon');
+  await expect(section.locator('article', { hasText: 'Connected favicon matches' }).locator('.relationship-glyph svg')).toHaveAttribute('data-icon', 'favicon');
   await expect(section).toContainText('not ownership or maliciousness conclusions');
   await section.getByText('Interpretation limits').click();
   await expect(section).toContainText('does not establish common control');

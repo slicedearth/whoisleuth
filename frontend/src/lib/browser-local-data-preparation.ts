@@ -2,7 +2,7 @@ import { runBrowserWorkerOperation } from './browser-worker-operation.ts';
 import {
   BrowserLocalDataError, prepareLocalDataContent, plaintextJsonCodec, assertPreparedLocalDataContent,
   type AnyLocalDataCollectionDefinition, type BrowserLocalDataCodec, type PreparedLocalDataContent,
-} from './browser-local-data.ts';
+} from './browser-local-data-content.ts';
 import type { BrandProfileFileMerge, LocalDataWorkerRequest, LocalDataWorkerResponse } from './browser-local-data-worker-model.ts';
 import type { BrandProfile } from './analysis/brand-profile-model.ts';
 import { MAX_PROFILE_IMPORT_BYTES } from '../../../packages/contracts/workspace-portability.mts';

@@ -16,6 +16,8 @@ import {
   formatInvestigationRun,
   investigationRunExitCode,
   runInvestigationRecipe,
+  previewInvestigationRecipe,
+  formatInvestigationPreview,
 } from './investigation-run.mts';
 import { MAX_OFFLINE_EVIDENCE_INPUT_BYTES } from './offline-evidence-review.mts';
 import { MAX_OFFLINE_ARTIFACT_BYTES } from './artifact-verify.mts';
@@ -27,15 +29,31 @@ import { MAX_SHARING_REVIEW_BYTES } from './sharing-review.mts';
 import type { WorkflowStepInputs } from './investigation-artifacts.mts';
 import type { CliCommand } from './command-reference.mts';
 import { createBufferedOutput } from './output-file.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliWorkflowContext, LookupDependency, CliDependencies } from './runner-types.mts';
+import type { BoundedTextStream } from './bulk.mts';
+import type { TerminalEnvironment } from './terminal-presentation.mts';
 import { boundedInteractiveAnswer, canReadInteractiveLine, readBoundedInteractiveLine } from './terminal-input.mts';
 import { WORKFLOW_INLINE_COMMANDS } from './inline-command-families.mts';
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
 
+export type WorkflowCommandDependencies = {
+  stdin?: BoundedTextStream;
+  environment?: TerminalEnvironment;
+  signal?: AbortSignal;
+  workflowResumeInput?: string;
+  workflowQuestion?: (prompt: string) => Promise<string>;
+  runUnifiedLookup?: LookupDependency;
+  readExportInput?: (source?: string | null) => string | Promise<string>;
+  readArtifactInput?: (source?: string | null) => string | Promise<string>;
+  readCompareInput?: (source?: string | null) => string | Promise<string>;
+  readSourceReliabilityInput?: (source?: string | null) => string | Promise<string>;
+  readDiffInput?: (source: string) => string | Promise<string>;
+};
+
 type WorkflowInlineCommand = typeof WORKFLOW_INLINE_COMMANDS[number];
 type WorkflowCommandArguments = Extract<CliArguments, { action: WorkflowInlineCommand }>;
 
-function boundWorkflowInputs(command: CliCommand, inputs: WorkflowStepInputs, dependencies: CliDependencies, context: CliCommandContext): Partial<CliDependencies> {
+function boundWorkflowInputs(command: CliCommand, inputs: WorkflowStepInputs, dependencies: WorkflowCommandDependencies, context: CliWorkflowContext): Partial<CliDependencies> {
   if (!inputs.size) return {};
   const read = <Source extends string | null | undefined>(
     source: Source,
@@ -66,8 +84,8 @@ function boundWorkflowInputs(command: CliCommand, inputs: WorkflowStepInputs, de
 
 async function runMonitorOnceCommand(
   args: Extract<WorkflowCommandArguments, { action: 'monitor-once' }>,
-  dependencies: CliDependencies,
-  context: CliCommandContext,
+  dependencies: WorkflowCommandDependencies,
+  context: CliWorkflowContext,
 ): Promise<number> {
   context.setFailureLabel('One-shot domain control review');
   let manifestInput: string;
@@ -117,8 +135,8 @@ async function runMonitorOnceCommand(
 
 async function runWorkflowPlanCommand(
   args: Extract<WorkflowCommandArguments, { action: 'workflow-plan' }>,
-  dependencies: CliDependencies,
-  context: CliCommandContext,
+  dependencies: WorkflowCommandDependencies,
+  context: CliWorkflowContext,
 ): Promise<number> {
   context.setFailureLabel('Investigation plan');
   if ('discovery' in args) {
@@ -141,8 +159,8 @@ async function runWorkflowPlanCommand(
 
 async function runWorkflowRecipeCommand(
   args: Extract<WorkflowCommandArguments, { action: 'workflow-run' }>,
-  dependencies: CliDependencies,
-  context: CliCommandContext,
+  dependencies: WorkflowCommandDependencies,
+  context: CliWorkflowContext,
 ): Promise<number> {
   context.setFailureLabel('Investigation workflow');
   const input = (dependencies.stdin ?? process.stdin) as Parameters<typeof canReadInteractiveLine>[0];
@@ -161,6 +179,13 @@ async function runWorkflowRecipeCommand(
       if (error instanceof CliUsageError) throw error;
       throw new CliUsageError(`Could not read investigation resume state: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
     }
+  }
+  if (args.preview) {
+    const preview = previewInvestigationRecipe(args.recipe, args.subject, {
+      resumeInput, selections: args.selections, artifactBindings: args.artifactBindings, generatedAt: context.now(),
+    });
+    context.writeStdout(args.output === 'json' ? formatJsonDocument(preview) : context.terminal(formatInvestigationPreview(preview), args.color));
+    return EXIT_CODES.SUCCESS;
   }
   const document = await runInvestigationRecipe(args.recipe, args.subject, {
     approveNetwork: args.approveNetwork,
@@ -214,14 +239,14 @@ const WORKFLOW_COMMAND_HANDLERS = Object.freeze({
   'workflow-run': runWorkflowRecipeCommand,
 } satisfies DiscriminatedCommandHandlerMap<
   WorkflowCommandArguments,
-  [CliDependencies, CliCommandContext],
+  [WorkflowCommandDependencies, CliWorkflowContext],
   number
 >);
 
 function runWorkflowCommand(
   args: WorkflowCommandArguments,
-  dependencies: CliDependencies,
-  context: CliCommandContext,
+  dependencies: WorkflowCommandDependencies,
+  context: CliWorkflowContext,
 ): Promise<number> {
   return runDiscriminatedCommandHandler(WORKFLOW_COMMAND_HANDLERS, args, dependencies, context);
 }

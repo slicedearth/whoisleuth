@@ -114,14 +114,14 @@ for (const theme of ['dark', 'light'] as const) {
       await page.setViewportSize(viewport);
       await page.goto('/resources');
       await expect(page.getByRole('heading', { name: 'Evidence guides', exact: true }).last()).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Evidence guides', exact: true })).toHaveCount(1);
       if (viewport.width < 1080) {
-        const navigator = page.getByText('Browse documentation', { exact: true });
+        const navigator = page.getByRole('button', { name: 'Browse documentation', exact: true });
         await navigator.click();
-        await expect(page.locator('.reference-browser')).toHaveAttribute('open', '');
+        await expect(page.getByRole('dialog', { name: 'Documentation', exact: true })).toBeVisible();
       }
       const navigation = page.getByRole('navigation', { name: 'Documentation', exact: true });
       await expect(navigation).toBeVisible();
-      await expect(page.getByRole('region', { name: 'Evidence guides', exact: true })).toHaveCount(1);
       // This is a best-practice rule, not part of the WCAG-only scans above.
       const landmarks = await new AxeBuilder({ page }).withRules(['landmark-unique']).analyze();
       expect(landmarks.violations).toEqual([]);
@@ -141,7 +141,7 @@ for (const theme of ['dark', 'light'] as const) {
       });
       expect(await hasVisibleOutline()).toBe(true);
       // A negative control proves that the focus check cannot always pass.
-      const hiddenOutline = await page.addStyleTag({ content: '.reference-sidebar a { outline: none !important; }' });
+      const hiddenOutline = await page.addStyleTag({ content: 'a:focus-visible { outline: none !important; }' });
       expect(await hasVisibleOutline()).toBe(false);
       await hiddenOutline.evaluate((element) => element.parentNode?.removeChild(element));
       expect(await hasVisibleOutline()).toBe(true);
@@ -201,20 +201,15 @@ async function installLookupFixture(page: Page) {
   });
 }
 
-test('public and dashboard support content exposes semantic labels and link cues', async ({ page }) => {
+test('public and dashboard support content exposes semantic labels and keyboard-accessible attribution', async ({ page }) => {
   await page.goto('/');
   await expect(
     page.getByRole('region', { name: 'Synthetic WHOISleuth console preview' }),
   ).toBeVisible();
   const attribution = page.getByRole('link', { name: 'slicedearth' });
-  const attributionCue = await attribution.evaluate((element) => {
-    const style = getComputedStyle(element);
-    const footerStyle = getComputedStyle(element.closest('footer') as HTMLElement);
-    return { color: style.color, footerColor: footerStyle.color, fontWeight: style.fontWeight, decoration: style.textDecorationLine };
-  });
-  expect(attributionCue.color).not.toBe(attributionCue.footerColor);
-  expect(Number(attributionCue.fontWeight)).toBeGreaterThanOrEqual(700);
-  expect(attributionCue.decoration).toBe('none');
+  await expect(attribution).toBeVisible();
+  await attribution.focus();
+  await expect(attribution).toBeFocused();
   await expect(attribution).toHaveAccessibleName(/opens in a new tab/);
 
   await page.goto('/dashboard');
@@ -250,7 +245,7 @@ test('scans representative public initial, error, populated, and expanded states
   await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
   await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
   await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
-  await page.getByRole('button', { name: 'Expand Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Registration evidence' }).click();
   const mobileComparison = page.locator('.lane-card').first();
   await expect(mobileComparison).toBeVisible();
   await mobileComparison.locator('summary').click();

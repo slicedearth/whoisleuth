@@ -108,7 +108,7 @@
     {id:'network',label:'Network',detail:lookupView.network.status,status:lookupView.network.status,href:'#demo-family-web',side:'left' as const,glyph:'N',family:'network' as const},
     {id:'http',label:'HTTP',detail:lookupView.http.status,status:lookupView.http.status,href:'#demo-family-web',side:'right' as const,glyph:'H',family:'web' as const},
     {id:'tls',label:'TLS',detail:lookupView.tls.status,status:lookupView.tls.status,href:'#demo-family-web',side:'right' as const,glyph:'T',family:'web' as const},
-    {id:'sslbl',label:'Certificate warning data',detail:demoSslbl.verdict,status:demoSslbl.status,href:'#demo-family-web',side:'right' as const,glyph:'C',family:'web' as const},
+    {id:'sslbl',label:'Certificate warning data',detail:demoSslbl.verdict.replaceAll('_',' '),status:demoSslbl.status,href:'#demo-family-web',side:'right' as const,glyph:'C',family:'web' as const},
     {id:'structured-identity',label:'Structured identity',detail:lookupView.structuredIdentity.status,status:lookupView.structuredIdentity.status,href:'#demo-family-web',side:'right' as const,glyph:'SI',family:'web' as const},
     {id:'technology',label:'Technology',detail:lookupView.technology.status,status:lookupView.technology.status,href:'#demo-family-web',side:'right' as const,glyph:'W',provenance:'derived' as const},
     {id:'assessment',label:'Assessment',detail:selectedRiskBand,status:'warning',href:'#demo-assessment',side:'right' as const,glyph:'A',provenance:'derived' as const},

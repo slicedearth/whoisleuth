@@ -1,4 +1,7 @@
 import type { CliArguments } from './arguments.mts';
+import { runIntakeCommand } from './intake-command.mts';
+import { runIndicatorSetCommand } from './indicator-set-command.mts';
+import { CONTEXT_REVIEW_KINDS } from '../packages/contracts/context-review.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../packages/contracts/investigation-package-limits.mts';
 import { verifyOfflineInvestigationFolder, verifyOfflineInvestigationPackage } from './investigation-package-review.mts';
@@ -19,6 +22,7 @@ import {
   parseCliLookupDocument,
 } from './compare.mts';
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
+import { LOCAL_MMDB_REVIEW_SCHEMA, LOCAL_MMDB_REVIEW_VERSION } from './local-mmdb-review.mts';
 import EXIT_CODES from './exit-codes.mts';
 import {
   MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
@@ -53,17 +57,60 @@ import {
   formatJsonDocument,
 } from './formatters/json.mts';
 import { formatTerminalCompare } from './formatters/terminal.mts';
-import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import type { CliCommandContext } from './runner-types.mts';
+import type { CaseCommandDependencies } from './case-command.mts';
+import type { IntakeCommandDependencies } from './intake-command.mts';
+import type { IndicatorSetCommandDependencies } from './indicator-set-command.mts';
 import { MAX_SAVED_LOOKUP_INPUT_BYTES } from './saved-lookup.mts';
 import { REVIEW_INLINE_COMMANDS } from './inline-command-families.mts';
 
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
+
+export type ReviewCommandDependencies = CaseCommandDependencies & IntakeCommandDependencies & IndicatorSetCommandDependencies & {
+  readArtifactInput?: (source?: string | null) => string | Promise<string>;
+  readBinaryArtifactInput?: (source: string) => Uint8Array | Promise<Uint8Array>;
+  readSourceReliabilityInput?: (source?: string | null) => string | Promise<string>;
+  readCompareInput?: (source?: string | null) => string | Promise<string>;
+  loadRegistryComparison?: () => Promise<typeof import('../lib/registry-comparison.mts')>;
+  readDiffInput?: (source: string) => string | Promise<string>;
+  readMailReviewInput?: (source?: string | null) => string | Promise<string>;
+  readMailHeaderInput?: (source?: string | null) => string | Promise<string>;
+};
+
 type ReviewInlineCommand = typeof REVIEW_INLINE_COMMANDS[number];
 type ReviewCommandArguments = Extract<CliArguments, { action: ReviewInlineCommand }>;
 
+/** Readers retain their command-specific bounds and injection points. Only
+ * usage-error presentation and empty-input handling are shared. */
+async function readReviewInput(
+  read: () => Promise<string>,
+  label: string,
+  emptyMessage?: string,
+): Promise<string> {
+  let input: string;
+  try { input = await read(); }
+  catch (error) {
+    if (error instanceof CliUsageError) throw error;
+    throw new CliUsageError(`Could not read ${label}: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+  }
+  if (emptyMessage && !input.trim()) throw new CliUsageError(emptyMessage);
+  return input;
+}
+
+function writeReviewReport<T>(
+  context: CliCommandContext,
+  args: Readonly<{ quiet: boolean; output: string; color: boolean }>,
+  report: T,
+  format: (report: T) => string,
+): void {
+  if (!args.quiet) context.writeStdout(args.output === 'json'
+    ? formatJsonDocument(report)
+    : context.terminal(format(report), args.color));
+}
+
 async function runVerifyArtifactCommand(
   args: Extract<ReviewCommandArguments, { action: 'verify-artifact' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Artefact verification');
@@ -77,7 +124,7 @@ async function runVerifyArtifactCommand(
     }
     const report = await (args.bagit ? verifyOfflineBagIt : verifyOfflineInvestigationFolder)(files);
     dependencies.signal?.throwIfAborted();
-    if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report) : context.terminal(formatOfflineArtifactVerification(report), args.color));
+    writeReviewReport(context, args, report, formatOfflineArtifactVerification);
     return args.strictExit && !isCompleteOfflineArtifactVerification(report) ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
   }
   if (args.package) {
@@ -93,19 +140,16 @@ async function runVerifyArtifactCommand(
     const passphrase = args.passphraseSource ? await context.readPassphraseSource(args.passphraseSource) : undefined;
     const report = args.bagit ? await verifyOfflineBagIt(bytes) : await verifyOfflineInvestigationPackage(bytes, passphrase);
     dependencies.signal?.throwIfAborted();
-    if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report) : context.terminal(formatOfflineArtifactVerification(report), args.color));
+    writeReviewReport(context, args, report, formatOfflineArtifactVerification);
     return args.strictExit && !isCompleteOfflineArtifactVerification(report) ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
   }
-  let input: string;
-  try {
-    input = dependencies.readArtifactInput
+  const input = await readReviewInput(
+    async () => dependencies.readArtifactInput
       ? await dependencies.readArtifactInput(args.source)
-      : await context.readInput(args.source, MAX_OFFLINE_ARTIFACT_BYTES, 'Artefact input');
-  } catch (error) {
-    if (error instanceof CliUsageError) throw error;
-    throw new CliUsageError(`Could not read artifact input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
-  }
-  if (!input.trim()) throw new CliUsageError('verify-artifact requires one JSON file or an artefact on stdin.');
+      : await context.readInput(args.source, MAX_OFFLINE_ARTIFACT_BYTES, 'Artefact input'),
+    'artifact input',
+    'verify-artifact requires one JSON file or an artefact on stdin.',
+  );
 
   const passphrase = args.passphraseSource ? await context.readPassphraseSource(args.passphraseSource) : null;
   let manifest: Readonly<{ raw: string; entryId: string }> | null = null;
@@ -124,11 +168,7 @@ async function runVerifyArtifactCommand(
   }
 
   const report = await verifyOfflineArtifact(input, { passphrase, manifest });
-  if (!args.quiet) {
-    context.writeStdout(args.output === 'json'
-      ? formatJsonDocument(report)
-      : context.terminal(formatOfflineArtifactVerification(report), args.color));
-  }
+  writeReviewReport(context, args, report, formatOfflineArtifactVerification);
   return args.strictExit && !isCompleteOfflineArtifactVerification(report)
     ? EXIT_CODES.PARTIAL_FAILURE
     : EXIT_CODES.SUCCESS;
@@ -136,74 +176,57 @@ async function runVerifyArtifactCommand(
 
 async function runInterchangeReportCommand(
   args: Extract<ReviewCommandArguments, { action: 'interchange-report' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Interchange fidelity report');
-  let input: string;
-  try {
-    input = dependencies.readArtifactInput
+  const input = await readReviewInput(
+    async () => dependencies.readArtifactInput
       ? await dependencies.readArtifactInput(args.source)
-      : await context.readInput(args.source, MAX_OFFLINE_ARTIFACT_BYTES, 'Interchange input');
-  } catch (error) {
-    if (error instanceof CliUsageError) throw error;
-    throw new CliUsageError(`Could not read interchange input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
-  }
-  if (!input.trim()) throw new CliUsageError('interchange-report requires one JSON file or an artefact on stdin.');
+      : await context.readInput(args.source, MAX_OFFLINE_ARTIFACT_BYTES, 'Interchange input'),
+    'interchange input',
+    'interchange-report requires one JSON file or an artefact on stdin.',
+  );
   const passphrase = args.passphraseSource ? await context.readPassphraseSource(args.passphraseSource) : null;
   const report = await buildInterchangeFidelityReport(input, {
     generatedAt: context.now(),
     passphrase,
   });
-  if (!args.quiet) {
-    context.writeStdout(args.output === 'json'
-      ? formatJsonDocument(report)
-      : context.terminal(formatInterchangeFidelityReport(report), args.color));
-  }
+  writeReviewReport(context, args, report, formatInterchangeFidelityReport);
   return EXIT_CODES.SUCCESS;
 }
 
 async function runSourceReportCommand(
   args: Extract<ReviewCommandArguments, { action: 'source-report' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Source reliability report');
-  let input: string;
-  try {
-    input = dependencies.readSourceReliabilityInput
+  const input = await readReviewInput(
+    async () => dependencies.readSourceReliabilityInput
       ? await dependencies.readSourceReliabilityInput(args.source)
-      : await context.readInput(args.source, MAX_SOURCE_RELIABILITY_INPUT_BYTES, 'Source reliability input');
-  } catch (error) {
-    if (error instanceof CliUsageError) throw error;
-    throw new CliUsageError(`Could not read source reliability input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
-  }
-  if (!input.trim()) throw new CliUsageError('source-report requires one JSON file or lookup documents on stdin.');
+      : await context.readInput(args.source, MAX_SOURCE_RELIABILITY_INPUT_BYTES, 'Source reliability input'),
+    'source reliability input',
+    'source-report requires one JSON file or lookup documents on stdin.',
+  );
   const report = buildSourceReliabilityReport(input, context.now());
-  if (!args.quiet) {
-    context.writeStdout(args.output === 'json'
-      ? formatJsonDocument(report)
-      : context.terminal(formatSourceReliabilityReport(report), args.color));
-  }
+  writeReviewReport(context, args, report, formatSourceReliabilityReport);
   return EXIT_CODES.SUCCESS;
 }
 
 async function runCompareCommand(
   args: Extract<ReviewCommandArguments, { action: 'compare' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Registry comparison');
-  let input: string;
-  try {
-    input = dependencies.readCompareInput
+  const input = await readReviewInput(
+    async () => dependencies.readCompareInput
       ? await dependencies.readCompareInput(args.source)
-      : await context.readInput(args.source, MAX_COMPARE_INPUT_BYTES, 'Comparison input');
-  } catch (error) {
-    if (error instanceof CliUsageError) throw error;
-    throw new CliUsageError(`Could not read comparison input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
-  }
-  if (!input.trim()) throw new CliUsageError('compare requires one lookup JSON file or a lookup document on stdin.');
+      : await context.readInput(args.source, MAX_COMPARE_INPUT_BYTES, 'Comparison input'),
+    'comparison input',
+    'compare requires one lookup JSON file or a lookup document on stdin.',
+  );
   const parsed = parseCliLookupDocument(input);
   const loadComparison = dependencies.loadRegistryComparison || (() => import('../lib/registry-comparison.mts'));
   const comparisonModule = await loadComparison();
@@ -213,17 +236,13 @@ async function runCompareCommand(
     comparisonModule.compareRdapPublications,
   );
   const document = buildCliCompareDocument(result, context.now());
-  if (!args.quiet) {
-    context.writeStdout(args.output === 'json'
-      ? formatJsonDocument(document)
-      : context.terminal(formatTerminalCompare(document), args.color));
-  }
+  writeReviewReport(context, args, document, formatTerminalCompare);
   return EXIT_CODES.SUCCESS;
 }
 
 async function runPageCompareCommand(
   args: Extract<ReviewCommandArguments, { action: 'page-compare' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Static page comparison');
@@ -241,87 +260,62 @@ async function runPageCompareCommand(
     throw new CliUsageError(`Could not read page comparison input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
   }
   const document = buildCliPageComparison(leftInput, rightInput, context.now());
-  if (!args.quiet) {
-    context.writeStdout(args.output === 'json'
-      ? formatJsonDocument(document)
-      : context.terminal(formatCliPageComparison(document), args.color));
-  }
+  writeReviewReport(context, args, document, formatCliPageComparison);
   return EXIT_CODES.SUCCESS;
 }
 
 async function runMailReviewCommand(
   args: Extract<ReviewCommandArguments, { action: 'mail-review' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Passive mail review');
-  let input: string;
-  try {
-    input = dependencies.readMailReviewInput
+  const input = await readReviewInput(
+    async () => dependencies.readMailReviewInput
       ? await dependencies.readMailReviewInput(args.source)
-      : await context.readInput(args.source, MAX_MAIL_REVIEW_INPUT_BYTES, 'Mail review input');
-  } catch (error) {
-    if (error instanceof CliUsageError) throw error;
-    throw new CliUsageError(`Could not read mail review input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
-  }
+      : await context.readInput(args.source, MAX_MAIL_REVIEW_INPUT_BYTES, 'Mail review input'),
+    'mail review input',
+  );
   const document = buildCliMailReview(input, context.now());
-  if (!args.quiet) {
-    context.writeStdout(args.output === 'json'
-      ? formatJsonDocument(document)
-      : context.terminal(formatCliMailReview(document), args.color));
-  }
+  writeReviewReport(context, args, document, formatCliMailReview);
   return EXIT_CODES.SUCCESS;
 }
 
 async function runMailHeadersCommand(
   args: Extract<ReviewCommandArguments, { action: 'mail-headers' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Mail-header review');
-  let input: string;
-  try {
-    input = dependencies.readMailHeaderInput
+  const input = await readReviewInput(
+    async () => dependencies.readMailHeaderInput
       ? await dependencies.readMailHeaderInput(args.source)
-      : await context.readHeaderInput(args.source, MAX_MAIL_HEADER_INPUT_BYTES, 'Mail-header input');
-  } catch (error) {
-    if (error instanceof CliUsageError) throw error;
-    throw new CliUsageError(`Could not read mail-header input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
-  }
-  if (!input.trim()) throw new CliUsageError('mail-headers requires one message or header file, or headers on stdin.');
-  const document = buildCliMailHeaderReview(input, context.now());
-  if (!args.quiet) {
-    context.writeStdout(args.output === 'json'
-      ? formatJsonDocument(document)
-      : context.terminal(formatCliMailHeaderReview(document), args.color));
-  }
+      : await context.readHeaderInput(args.source, MAX_MAIL_HEADER_INPUT_BYTES, 'Mail-header input'),
+    'mail-header input',
+    'mail-headers requires one message or header file, or headers on stdin.',
+  );
+  const document = buildCliMailHeaderReview(input, context.now(), args.trustedAuthHeaders);
+  writeReviewReport(context, args, document, formatCliMailHeaderReview);
   return EXIT_CODES.SUCCESS;
 }
 
 async function runOfflineEvidenceReviewCommand(
   args: Extract<ReviewCommandArguments, { action: 'review-evidence' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Offline evidence review');
-  let input: string;
-  try {
-    input = dependencies.readArtifactInput
+  const input = await readReviewInput(
+    async () => dependencies.readArtifactInput
       ? await dependencies.readArtifactInput(args.source)
-      : await context.readInput(args.source, MAX_OFFLINE_EVIDENCE_INPUT_BYTES, 'Offline evidence input');
-  } catch (error) {
-    if (error instanceof CliUsageError) throw error;
-    throw new CliUsageError(`Could not read offline evidence input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
-  }
-  if (!input.trim()) throw new CliUsageError('review-evidence requires one JSON file or a document on stdin.');
+      : await context.readInput(args.source, MAX_OFFLINE_EVIDENCE_INPUT_BYTES, 'Offline evidence input'),
+    'offline evidence input',
+    'review-evidence requires one JSON file or a document on stdin.',
+  );
   const document = args.mmdbSource
     ? await buildOfflineEvidenceReviewWithLocalResources(input, context.now(), { mmdbPath: args.mmdbSource })
     : buildOfflineEvidenceReview(input, context.now());
-  if (!args.quiet) {
-    context.writeStdout(args.output === 'json'
-      ? formatJsonDocument(document)
-      : context.terminal(formatOfflineEvidenceReview(document), args.color));
-  }
+  writeReviewReport(context, args, document, formatOfflineEvidenceReview);
   if (args.strictExit) {
     const result = document.result && typeof document.result === 'object' && !Array.isArray(document.result)
       ? document.result as Record<string, unknown>
@@ -334,46 +328,37 @@ async function runOfflineEvidenceReviewCommand(
       || (result.counts && typeof result.counts === 'object' && !Array.isArray(result.counts)
         && ['different', 'missing', 'unexpected', 'incomplete'].some((key) => Number((result.counts as Record<string, unknown>)[key]) > 0))
     );
-    if (gate?.pass === false || zoneMismatch) return EXIT_CODES.PARTIAL_FAILURE;
+    const contextPartial = (CONTEXT_REVIEW_KINDS as readonly string[]).includes(document.kind) && result.state === 'partial';
+    const mmdbIncomplete = result.schema === LOCAL_MMDB_REVIEW_SCHEMA && result.version === LOCAL_MMDB_REVIEW_VERSION && result.completeness !== 'complete';
+    if (gate?.pass === false || zoneMismatch || contextPartial || mmdbIncomplete) return EXIT_CODES.PARTIAL_FAILURE;
   }
   return EXIT_CODES.SUCCESS;
 }
 
 async function runBriefOrCasePackCommand(
   args: Extract<ReviewCommandArguments, { action: 'brief' | 'case-pack' }>,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   const isBrief = args.action === 'brief';
   context.setFailureLabel(isBrief ? 'Lookup brief' : 'Case pack');
-  let input: string;
-  try {
-    input = dependencies.readArtifactInput
+  const input = await readReviewInput(
+    async () => dependencies.readArtifactInput
       ? await dependencies.readArtifactInput(args.source)
       : await context.readInput(
         args.source,
         isBrief ? MAX_SAVED_LOOKUP_INPUT_BYTES : MAX_CASE_PACK_INPUT_BYTES,
         isBrief ? 'Lookup brief input' : 'Case-pack input',
-      );
-  } catch (error) {
-    if (error instanceof CliUsageError) throw error;
-    throw new CliUsageError(`Could not read ${isBrief ? 'Lookup brief' : 'case-pack'} input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
-  }
-  if (!input.trim()) throw new CliUsageError(`${args.action} requires one JSON file or a document on stdin.`);
+      ),
+    `${isBrief ? 'Lookup brief' : 'case-pack'} input`,
+    `${args.action} requires one JSON file or a document on stdin.`,
+  );
   if (args.action === 'brief') {
     const document = buildCliLookupBrief(input, context.now());
-    if (!args.quiet) {
-      context.writeStdout(args.output === 'json'
-        ? formatJsonDocument(document)
-        : context.terminal(formatCliLookupBrief(document), args.color));
-    }
+    writeReviewReport(context, args, document, formatCliLookupBrief);
   } else {
     const document = buildCliCasePack(input, { audience: args.audience, reviewed: args.reviewed }, context.now());
-    if (!args.quiet) {
-      context.writeStdout(args.output === 'json'
-        ? formatJsonDocument(document)
-        : context.terminal(formatCliCasePack(document), args.color));
-    }
+    writeReviewReport(context, args, document, formatCliCasePack);
   }
   return EXIT_CODES.SUCCESS;
 }
@@ -386,19 +371,21 @@ const REVIEW_COMMAND_HANDLERS = Object.freeze({
   'page-compare': runPageCompareCommand,
   'mail-review': runMailReviewCommand,
   'mail-headers': runMailHeadersCommand,
+  intake: runIntakeCommand,
   'review-evidence': runOfflineEvidenceReviewCommand,
   'brief': runBriefOrCasePackCommand,
   'case': runCaseCommand,
   'case-pack': runBriefOrCasePackCommand,
+  'indicator-set': runIndicatorSetCommand,
 } satisfies DiscriminatedCommandHandlerMap<
   ReviewCommandArguments,
-  [CliDependencies, CliCommandContext],
+  [ReviewCommandDependencies, CliCommandContext],
   number
 >);
 
 function runReviewCommand(
   args: ReviewCommandArguments,
-  dependencies: CliDependencies,
+  dependencies: ReviewCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
   return runDiscriminatedCommandHandler(REVIEW_COMMAND_HANDLERS, args, dependencies, context);

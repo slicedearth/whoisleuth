@@ -19,9 +19,10 @@ import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from '../packages/evidence/art
 export const DOMAIN_CHANGE_PACKET_INPUT_SCHEMA = 'whoisleuth.domain-change-packet.input';
 export const DOMAIN_CHANGE_PACKET_SCHEMA = 'whoisleuth.domain-change-packet';
 export const DOMAIN_CHANGE_PACKET_INPUT_VERSION = 1;
-export const DOMAIN_CHANGE_PACKET_VERSION = 3;
+export const DOMAIN_CHANGE_PACKET_VERSION = 4;
 export const DOMAIN_CHANGE_PACKET_REVIEW_VERSIONS: Readonly<Record<number, number>> = Object.freeze({
   2: 1,
+  3: 2,
   [DOMAIN_CHANGE_PACKET_VERSION]: DOMAIN_CHANGE_REVIEW_VERSION,
 });
 export const SUPPORTED_DOMAIN_CHANGE_PACKET_VERSIONS = Object.freeze(Object.keys(DOMAIN_CHANGE_PACKET_REVIEW_VERSIONS).map(Number));
@@ -69,18 +70,11 @@ function changeSummary(
   const beforeRows = rows(before);
   const afterRows = rows(after);
   const keys = [...new Set([...beforeRows.keys(), ...afterRows.keys()])].sort();
-  const authorityCollectionComplete = (review: ReturnType<typeof reviewDomainChange>): boolean => {
-    const representative = review.authoritativeRecordMatrix[0];
-    return Boolean(representative
-      && representative.observations.length >= 2
-      && representative.observations.every((item) => item.state === 'observed'));
-  };
   const rowEvidence = (
-    review: ReturnType<typeof reviewDomainChange>,
     row: ReturnType<typeof reviewDomainChange>['authoritativeRecordMatrix'][number] | undefined,
   ): Readonly<{ state: 'complete' | 'partial' | 'unavailable' | 'inconsistent' | 'insufficient'; values: readonly string[] }> => {
     if (!row) return Object.freeze({
-      state: authorityCollectionComplete(review) ? 'complete' : 'unavailable',
+      state: 'unavailable',
       values: Object.freeze([]),
     });
     if (row.observations.some((item) => item.state !== 'observed')) {
@@ -94,13 +88,15 @@ function changeSummary(
     });
   };
   const changed: Array<Readonly<{ owner: string; type: string; beforeValues: readonly string[]; afterValues: readonly string[] }>> = [];
+  const reasons: string[] = keys.length > 500 ? ['The comparison exceeds 500 owner and record-type pairs.'] : [];
   for (const key of keys.slice(0, 500)) {
     const left = beforeRows.get(key);
     const right = afterRows.get(key);
     const [owner, type] = key.split('\u0000');
-    const beforeEvidence = rowEvidence(before, left);
-    const afterEvidence = rowEvidence(after, right);
+    const beforeEvidence = rowEvidence(left);
+    const afterEvidence = rowEvidence(right);
     if (beforeEvidence.state !== 'complete' || afterEvidence.state !== 'complete') {
+      reasons.push(`Comparison evidence is incomplete for ${owner} ${type}.`);
       continue;
     }
     if (JSON.stringify(beforeEvidence.values) === JSON.stringify(afterEvidence.values)) continue;
@@ -111,7 +107,7 @@ function changeSummary(
       afterValues: afterEvidence.values,
     }));
   }
-  return Object.freeze(changed);
+  return Object.freeze({ changed: Object.freeze(changed), reasons: Object.freeze(reasons) });
 }
 
 export async function buildDomainChangePacket(
@@ -136,11 +132,13 @@ export async function buildDomainChangePacket(
   const preChange = reviewDomainChange(input.preChange, generatedAt);
   const postChange = reviewDomainChange(input.postChange, generatedAt);
   const assurance = buildDomainAssurance(input.assurance, generatedAt);
+  const comparison = changeSummary(preChange, postChange);
   const assuranceReasons = assurance.result.review.reasons;
   const gateReasons = Object.freeze([
     ...preChange.gate.reasons.map((reason) => `Pre-change evidence: ${reason}`),
     ...postChange.gate.reasons.map((reason) => `Post-change evidence: ${reason}`),
     ...assuranceReasons.map((reason) => `Change plan: ${reason}`),
+    ...comparison.reasons,
   ].slice(0, 100));
   const unsigned = Object.freeze({
     schema: DOMAIN_CHANGE_PACKET_SCHEMA,
@@ -151,7 +149,7 @@ export async function buildDomainChangePacket(
     state: gateReasons.length ? 'review' as const : 'ready' as const,
     gate: Object.freeze({ pass: gateReasons.length === 0, reasons: gateReasons }),
     summary: Object.freeze({
-      changedAuthoritativeRecordSets: changeSummary(preChange, postChange),
+      changedAuthoritativeRecordSets: comparison.changed,
       preChangeState: preChange.state,
       postChangeState: postChange.state,
       assuranceState: assurance.result.review.state,

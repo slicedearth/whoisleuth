@@ -4,10 +4,25 @@ import {
   type LookupTaskView,
 } from './lookup-presentation.ts';
 import { prepareLookupCollectionTarget } from '../../../../packages/evidence/lookup-target.mts';
+import { canonicalRegistrableDomain } from '../../../../packages/analysis/registrable-domain.mts';
 
 export { prepareLookupCollectionTarget };
 
 type LookupMode = 'fast' | 'deep';
+export type LookupTargetType = 'domain' | 'ipv4' | 'ipv6' | 'asn' | 'unknown';
+
+/** Offline presentation eligibility only; the collection classifier and
+ * public-address validation still own final admission. */
+export function lookupTargetType(entries: readonly string[]): LookupTargetType {
+  if (entries.length !== 1 || !entries[0]) return 'unknown';
+  try {
+    const target = prepareLookupCollectionTarget(entries[0]);
+    if (/^(?:AS)?\d+$/iu.test(target)) return Number(target.replace(/^AS/iu, '')) <= 4294967295 ? 'asn' : 'unknown';
+    if (/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(target)) return 'ipv4';
+    if (target.includes(':')) return 'ipv6';
+    return canonicalRegistrableDomain(target) ? 'domain' : 'unknown';
+  } catch { return 'unknown'; }
+}
 export type LookupEvidenceFamilyId =
   | 'overview'
   | 'registry'
@@ -52,9 +67,31 @@ type LookupRequestSelection = Readonly<{
   includeMalwareIocIntelligence: boolean;
   malwareIocIntelligenceSupported: boolean;
   includeSecurityTxt: boolean;
-  securityTxtSupported: boolean;
+  websiteObservationSupported: boolean;
   securityTxtEligible: boolean;
 }>;
+
+/** UI eligibility uses collection admission; address safety remains server-owned. */
+export function lookupSecurityTxtEligible(entries: readonly string[]): boolean {
+  if (entries.length !== 1 || !entries[0]) return false;
+  try {
+    const host = prepareLookupCollectionTarget(entries[0]);
+    return host.includes('.') && !host.includes(':') && !/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(host);
+  } catch {
+    return false;
+  }
+}
+
+/** Retain the analyst's draft, but disclose and request only eligible selections. */
+export function eligibleLookupOptionalSources(selection: Omit<LookupRequestSelection, 'mode'>, targetType: LookupTargetType = 'domain') {
+  const domainEligible = targetType === 'domain';
+  return {
+    includeExternalIntelligence: domainEligible && selection.includeExternalIntelligence && selection.externalIntelligenceSupported,
+    includeMalwareHostIntelligence: domainEligible && selection.includeMalwareHostIntelligence && selection.malwareHostIntelligenceSupported,
+    includeMalwareIocIntelligence: domainEligible && selection.includeMalwareIocIntelligence && selection.malwareIocIntelligenceSupported,
+    includeSecurityTxt: domainEligible && selection.includeSecurityTxt && selection.websiteObservationSupported && selection.securityTxtEligible,
+  };
+}
 
 export function buildLookupRequestUrl(
   target: string,
@@ -62,34 +99,12 @@ export function buildLookupRequestUrl(
 ): string {
   const params = new URLSearchParams({ q: prepareLookupCollectionTarget(target) });
   if (selection.mode === 'fast') params.set('fast', '1');
-  if (
-    selection.mode === 'deep' &&
-    selection.includeExternalIntelligence &&
-    selection.externalIntelligenceSupported
-  ) {
-    params.set('intelligence', '1');
-  }
-  if (
-    selection.mode === 'deep' &&
-    selection.includeMalwareHostIntelligence &&
-    selection.malwareHostIntelligenceSupported
-  ) {
-    params.set('malware', '1');
-  }
-  if (
-    selection.mode === 'deep' &&
-    selection.includeMalwareIocIntelligence &&
-    selection.malwareIocIntelligenceSupported
-  ) {
-    params.set('ioc', '1');
-  }
-  if (
-    selection.mode === 'deep' &&
-    selection.includeSecurityTxt &&
-    selection.securityTxtSupported &&
-    selection.securityTxtEligible
-  ) {
-    params.set('security_txt', '1');
+  if (selection.mode === 'deep') {
+    const eligible = eligibleLookupOptionalSources(selection, lookupTargetType([target]));
+    if (eligible.includeExternalIntelligence) params.set('intelligence', '1');
+    if (eligible.includeMalwareHostIntelligence) params.set('malware', '1');
+    if (eligible.includeMalwareIocIntelligence) params.set('ioc', '1');
+    if (eligible.includeSecurityTxt) params.set('security_txt', '1');
   }
   return `/api/lookup?${params}`;
 }

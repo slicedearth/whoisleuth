@@ -1,6 +1,6 @@
 {
   "profileVersion": 1,
-  "inventoryFingerprint": "237b89c942d796e3c628c0fe345624cd1e9d949379c6de3e4ceb39ba9b7a76f6",
+  "inventoryFingerprint": "1e796c8c52d9995835f77be33a2ccf821ae52f308ae881560b58afe8f915f99b",
   "provenance": [
     {
       "id": "browser-local-start-60400ba9",
@@ -17,160 +17,328 @@
       "sampleCount": 1
     },
     {
-      "id": "browser-local-repair-20260905",
-      "lane": "browser",
-      "environmentClass": "local-darwin-arm64-chromium-node24-one-worker-no-retry-production-build",
-      "sampleBasis": "complete-balanced-production-build-four-shards",
-      "sampleCount": 4
-    },
-    {
       "id": "unit-local-structural-ownership-20260906",
       "lane": "unit",
       "environmentClass": "local-darwin-arm64-node26",
       "sampleBasis": "median-of-three-complete-unit-runs",
       "sampleCount": 3
+    },
+    {
+      "id": "browser-ci-35503813573-1",
+      "lane": "browser",
+      "environmentClass": "linux-x64-chromium-node24-ci",
+      "sampleBasis": "complete-four-shard-functional-run",
+      "sampleCount": 4
     }
   ],
   "files": [
     {
       "file": "e2e/accessibility.spec.ts",
       "lane": "browser",
-      "weightMs": 20918,
+      "weightMs": 152772,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/analyst-context.spec.ts",
       "lane": "browser",
-      "weightMs": 2680,
+      "weightMs": 13181,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/analyst-operations.spec.ts",
       "lane": "browser",
-      "weightMs": 3277,
+      "weightMs": 46603,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/analyst-undo-conflicts.spec.ts",
+      "lane": "browser",
+      "weightMs": 12447,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/appearance.spec.ts",
+      "lane": "browser",
+      "weightMs": 10791,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/auth.setup.ts",
       "lane": "browser_setup",
-      "weightMs": 46,
+      "weightMs": 48,
       "sampleCount": 4,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/auth.spec.ts",
       "lane": "browser",
-      "weightMs": 4767,
+      "weightMs": 13561,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/brand-asset-register.spec.ts",
       "lane": "browser",
-      "weightMs": 4748,
+      "weightMs": 9000,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/brand-baseline.spec.ts",
       "lane": "browser",
-      "weightMs": 22045,
+      "weightMs": 83463,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/brand-profile-capacity.spec.ts",
+      "lane": "browser",
+      "weightMs": 40638,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/browser-local-data-worker.spec.ts",
+      "lane": "browser",
+      "weightMs": 11695,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/browser-workspaces.spec.ts",
+      "lane": "browser",
+      "weightMs": 41479,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/bulk-analysis.spec.ts",
       "lane": "browser",
-      "weightMs": 19648,
+      "weightMs": 46241,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/bulk-columns.spec.ts",
+      "lane": "browser",
+      "weightMs": 8501,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/bulk-presentation.spec.ts",
       "lane": "browser",
-      "weightMs": 9084,
+      "weightMs": 23896,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/bulk-session-workflows.spec.ts",
       "lane": "browser",
-      "weightMs": 6547,
+      "weightMs": 15800,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/candidate-handoff.spec.ts",
       "lane": "browser",
-      "weightMs": 929,
+      "weightMs": 2123,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/capabilities.spec.ts",
       "lane": "browser",
-      "weightMs": 892,
+      "weightMs": 1944,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/capture-attachment-review.spec.ts",
+      "lane": "browser",
+      "weightMs": 13942,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/capture-network-boundary.spec.ts",
+      "lane": "browser",
+      "weightMs": 3058,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-after-action.spec.ts",
+      "lane": "browser",
+      "weightMs": 3391,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-assessment-comparison.spec.ts",
+      "lane": "browser",
+      "weightMs": 6044,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-attachments.spec.ts",
+      "lane": "browser",
+      "weightMs": 15789,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/case-brand-association.spec.ts",
       "lane": "browser",
-      "weightMs": 34431,
+      "weightMs": 61220,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-draft-recovery.spec.ts",
+      "lane": "browser",
+      "weightMs": 25133,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-evidence-selection.spec.ts",
+      "lane": "browser",
+      "weightMs": 6996,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/case-evidence-workflows.spec.ts",
       "lane": "browser",
-      "weightMs": 13665,
+      "weightMs": 36908,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-file-export.spec.ts",
+      "lane": "browser",
+      "weightMs": 6002,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-images.spec.ts",
+      "lane": "browser",
+      "weightMs": 36607,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/case-import-workflows.spec.ts",
       "lane": "browser",
-      "weightMs": 7997,
+      "weightMs": 45881,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-incidents.spec.ts",
+      "lane": "browser",
+      "weightMs": 19626,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-packet-print.spec.ts",
+      "lane": "browser",
+      "weightMs": 7130,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-recheck-questions.spec.ts",
+      "lane": "browser",
+      "weightMs": 10528,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/case-relationship-workflows.spec.ts",
       "lane": "browser",
-      "weightMs": 26287,
+      "weightMs": 48574,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/case-response-lifecycle.spec.ts",
       "lane": "browser",
-      "weightMs": 21649,
+      "weightMs": 80824,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-response-queue.spec.ts",
+      "lane": "browser",
+      "weightMs": 9755,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-response-stages.spec.ts",
+      "lane": "browser",
+      "weightMs": 49243,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-review-return.spec.ts",
+      "lane": "browser",
+      "weightMs": 41370,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-views.spec.ts",
+      "lane": "browser",
+      "weightMs": 13430,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/case-workspace-navigation.spec.ts",
+      "lane": "browser",
+      "weightMs": 32101,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/cases-route.spec.ts",
+      "lane": "browser",
+      "weightMs": 53278,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/cases.spec.ts",
       "lane": "browser",
-      "weightMs": 26836,
+      "weightMs": 61863,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/collection-pagination.spec.ts",
       "lane": "browser",
-      "weightMs": 4413,
+      "weightMs": 9893,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/comparison-ledger.spec.ts",
       "lane": "browser",
-      "weightMs": 2363,
+      "weightMs": 6658,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/console-loading.spec.ts",
@@ -180,11 +348,32 @@
       "provenanceId": "browser-local-start-60400ba9"
     },
     {
+      "file": "e2e/console-presentation.spec.ts",
+      "lane": "browser",
+      "weightMs": 47873,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/console-workflow-navigation.spec.ts",
+      "lane": "browser",
+      "weightMs": 19713,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/console-workspace-layout.spec.ts",
+      "lane": "browser",
+      "weightMs": 31672,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
       "file": "e2e/dashboard.spec.ts",
       "lane": "browser",
-      "weightMs": 27350,
+      "weightMs": 96943,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/deferred-interactions.spec.ts",
@@ -196,240 +385,373 @@
     {
       "file": "e2e/deferred-recovery.spec.ts",
       "lane": "browser",
-      "weightMs": 8369,
+      "weightMs": 16117,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/deletion-focus.spec.ts",
       "lane": "browser",
-      "weightMs": 10215,
+      "weightMs": 18302,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/demo.spec.ts",
       "lane": "browser",
-      "weightMs": 8853,
+      "weightMs": 27955,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/design-system.spec.ts",
       "lane": "browser",
-      "weightMs": 16859,
+      "weightMs": 62468,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/discover.spec.ts",
       "lane": "browser",
-      "weightMs": 30348,
+      "weightMs": 54764,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/encrypted-workspaces.spec.ts",
+      "lane": "browser",
+      "weightMs": 104108,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/evidence-debt.spec.ts",
       "lane": "browser",
-      "weightMs": 7120,
+      "weightMs": 13341,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/first-use-workflow.spec.ts",
+      "lane": "browser",
+      "weightMs": 58518,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/hosted-monitoring.spec.ts",
       "lane": "browser",
-      "weightMs": 7228,
+      "weightMs": 11912,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/investigation-guide.spec.ts",
       "lane": "browser",
-      "weightMs": 24381,
+      "weightMs": 61578,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/investigation-package.spec.ts",
+      "lane": "browser",
+      "weightMs": 57847,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/investigation-search.spec.ts",
       "lane": "browser",
-      "weightMs": 10530,
+      "weightMs": 32651,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/local-application.spec.ts",
+      "lane": "browser",
+      "weightMs": 53577,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/local-data-platform.spec.ts",
       "lane": "browser",
-      "weightMs": 5604,
+      "weightMs": 11907,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/lookup-anchor-navigation.spec.ts",
       "lane": "browser",
-      "weightMs": 18785,
+      "weightMs": 16576,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/lookup-case-monitoring.spec.ts",
       "lane": "browser",
-      "weightMs": 5186,
+      "weightMs": 18315,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/lookup-evidence-design.spec.ts",
       "lane": "browser",
-      "weightMs": 11958,
+      "weightMs": 23081,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/lookup-graph-coverage.spec.ts",
+      "lane": "browser",
+      "weightMs": 37063,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/lookup-input.spec.ts",
       "lane": "browser",
-      "weightMs": 25817,
+      "weightMs": 49822,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/lookup-interaction-design.spec.ts",
       "lane": "browser",
-      "weightMs": 18095,
+      "weightMs": 18476,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/lookup-network-evidence.spec.ts",
       "lane": "browser",
-      "weightMs": 23139,
+      "weightMs": 57048,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/lookup-registration-evidence.spec.ts",
       "lane": "browser",
-      "weightMs": 35204,
+      "weightMs": 52478,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/lookup-replay.spec.ts",
       "lane": "browser",
-      "weightMs": 1546,
+      "weightMs": 2802,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/lookup-source-checkpoints.spec.ts",
+      "lane": "browser",
+      "weightMs": 15278,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/lookup-source-progress.spec.ts",
+      "lane": "browser",
+      "weightMs": 20608,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/lookup-source-refresh.spec.ts",
+      "lane": "browser",
+      "weightMs": 8368,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/lookup-storage-state.spec.ts",
+      "lane": "browser",
+      "weightMs": 3040,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/lookup-workspace-navigation.spec.ts",
+      "lane": "browser",
+      "weightMs": 15973,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/mail-report-workbench.spec.ts",
       "lane": "browser",
-      "weightMs": 2282,
+      "weightMs": 32300,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/mobile-nav.spec.ts",
       "lane": "browser",
-      "weightMs": 3864,
+      "weightMs": 6691,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/network-controls.spec.ts",
       "lane": "browser",
-      "weightMs": 3393,
+      "weightMs": 6035,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/origin-guard.spec.ts",
       "lane": "browser",
-      "weightMs": 102,
+      "weightMs": 469,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/parent-domain-campaign-scope.spec.ts",
       "lane": "browser",
-      "weightMs": 5986,
+      "weightMs": 10275,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/privacy-data-flow-catalogue.spec.ts",
       "lane": "browser",
-      "weightMs": 910,
+      "weightMs": 10339,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/public-contact.spec.ts",
       "lane": "browser",
-      "weightMs": 562,
+      "weightMs": 2046,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/public-guide.spec.ts",
       "lane": "browser",
-      "weightMs": 4160,
+      "weightMs": 20248,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/public-product-batch3.spec.ts",
       "lane": "browser",
-      "weightMs": 5849,
+      "weightMs": 33200,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/registry-support.spec.ts",
       "lane": "browser",
-      "weightMs": 7293,
+      "weightMs": 14486,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/retained-evidence-capacity.spec.ts",
+      "lane": "browser",
+      "weightMs": 43852,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/retained-review-worker.spec.ts",
+      "lane": "browser",
+      "weightMs": 35000,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/review-session.spec.ts",
+      "lane": "browser",
+      "weightMs": 13490,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/risk-calibration-dashboard.spec.ts",
       "lane": "browser",
-      "weightMs": 1754,
+      "weightMs": 9089,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/selected-case-context.spec.ts",
+      "lane": "browser",
+      "weightMs": 18403,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/seo.spec.ts",
       "lane": "browser",
-      "weightMs": 378,
+      "weightMs": 267,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/shortlist-storage.spec.ts",
       "lane": "browser",
-      "weightMs": 881,
+      "weightMs": 1850,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/skip-navigation.spec.ts",
       "lane": "browser",
-      "weightMs": 1111,
+      "weightMs": 1956,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/static-html-evidence.spec.ts",
+      "lane": "browser",
+      "weightMs": 1333,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/submitted-drafts.spec.ts",
+      "lane": "browser",
+      "weightMs": 19558,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/theme.spec.ts",
       "lane": "browser",
-      "weightMs": 12211,
+      "weightMs": 24506,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "e2e/watchlist-storage.spec.ts",
       "lane": "browser",
-      "weightMs": 2447,
+      "weightMs": 5605,
       "sampleCount": 1,
-      "provenanceId": "browser-local-repair-20260905"
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/website-profile-clusters.spec.ts",
+      "lane": "browser",
+      "weightMs": 24135,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/workspace-backup-capacity.spec.ts",
+      "lane": "browser",
+      "weightMs": 25892,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
+    },
+    {
+      "file": "e2e/workspace-recovery.spec.ts",
+      "lane": "browser",
+      "weightMs": 28719,
+      "sampleCount": 1,
+      "provenanceId": "browser-ci-35503813573-1"
     },
     {
       "file": "test/abort.test.mts",
@@ -610,13 +932,6 @@
       "file": "test/bounded-json.test.mts",
       "lane": "unit",
       "weightMs": 272,
-      "sampleCount": 3,
-      "provenanceId": "unit-local-structural-ownership-20260906"
-    },
-    {
-      "file": "test/bounded-local-search.test.mts",
-      "lane": "unit",
-      "weightMs": 4,
       "sampleCount": 3,
       "provenanceId": "unit-local-structural-ownership-20260906"
     },
@@ -904,13 +1219,6 @@
       "file": "test/case-decision-quality.test.mts",
       "lane": "unit",
       "weightMs": 31,
-      "sampleCount": 3,
-      "provenanceId": "unit-local-structural-ownership-20260906"
-    },
-    {
-      "file": "test/case-domain-facades.test.mts",
-      "lane": "unit",
-      "weightMs": 32,
       "sampleCount": 3,
       "provenanceId": "unit-local-structural-ownership-20260906"
     },
@@ -1429,13 +1737,6 @@
       "file": "test/common-infrastructure.test.mts",
       "lane": "unit",
       "weightMs": 81,
-      "sampleCount": 3,
-      "provenanceId": "unit-local-structural-ownership-20260906"
-    },
-    {
-      "file": "test/comparison-ledger-architecture.test.mts",
-      "lane": "unit",
-      "weightMs": 27,
       "sampleCount": 3,
       "provenanceId": "unit-local-structural-ownership-20260906"
     },
@@ -2035,27 +2336,6 @@
       "provenanceId": "unit-local-structural-ownership-20260906"
     },
     {
-      "file": "test/incremental-lookup-qualification.test.mts",
-      "lane": "unit",
-      "weightMs": 65,
-      "sampleCount": 3,
-      "provenanceId": "unit-local-structural-ownership-20260906"
-    },
-    {
-      "file": "test/incremental-lookup-staging-evidence.test.mts",
-      "lane": "unit",
-      "weightMs": 16,
-      "sampleCount": 3,
-      "provenanceId": "unit-local-structural-ownership-20260906"
-    },
-    {
-      "file": "test/incremental-lookup-transport-spike.test.mts",
-      "lane": "unit",
-      "weightMs": 7,
-      "sampleCount": 3,
-      "provenanceId": "unit-local-structural-ownership-20260906"
-    },
-    {
       "file": "test/interchange-report.test.mts",
       "lane": "unit",
       "weightMs": 1013,
@@ -2276,13 +2556,6 @@
       "file": "test/lookup-claim-readiness.test.mts",
       "lane": "unit",
       "weightMs": 5,
-      "sampleCount": 3,
-      "provenanceId": "unit-local-structural-ownership-20260906"
-    },
-    {
-      "file": "test/lookup-decision-review-model.test.mts",
-      "lane": "unit",
-      "weightMs": 23,
       "sampleCount": 3,
       "provenanceId": "unit-local-structural-ownership-20260906"
     },
@@ -2668,13 +2941,6 @@
       "file": "test/playwright-run-artifacts.test.mts",
       "lane": "unit",
       "weightMs": 3,
-      "sampleCount": 3,
-      "provenanceId": "unit-local-structural-ownership-20260906"
-    },
-    {
-      "file": "test/portable-domain-facades.test.mts",
-      "lane": "unit",
-      "weightMs": 210,
       "sampleCount": 3,
       "provenanceId": "unit-local-structural-ownership-20260906"
     },
@@ -3165,20 +3431,6 @@
       "file": "test/schema-lifecycle-repository.test.mts",
       "lane": "unit",
       "weightMs": 16619,
-      "sampleCount": 3,
-      "provenanceId": "unit-local-structural-ownership-20260906"
-    },
-    {
-      "file": "test/schema-lifecycle-v3.test.mts",
-      "lane": "unit",
-      "weightMs": 17,
-      "sampleCount": 3,
-      "provenanceId": "unit-local-structural-ownership-20260906"
-    },
-    {
-      "file": "test/schema-lifecycle-v4.test.mts",
-      "lane": "unit",
-      "weightMs": 48,
       "sampleCount": 3,
       "provenanceId": "unit-local-structural-ownership-20260906"
     },
@@ -3690,13 +3942,6 @@
       "file": "test/workspace-archive.test.mts",
       "lane": "unit",
       "weightMs": 367,
-      "sampleCount": 3,
-      "provenanceId": "unit-local-structural-ownership-20260906"
-    },
-    {
-      "file": "test/workspace-domain-facades.test.mts",
-      "lane": "unit",
-      "weightMs": 110,
       "sampleCount": 3,
       "provenanceId": "unit-local-structural-ownership-20260906"
     },

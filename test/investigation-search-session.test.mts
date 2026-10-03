@@ -6,8 +6,9 @@ import {
   type InvestigationSearchSummary, type SearchWorkerRequest, type SearchWorkerResponse,
 } from '../frontend/src/lib/investigation-search-worker-model.ts';
 import { buildInvestigationProjection } from '../frontend/src/lib/analysis/investigation-projection.ts';
-import { buildInvestigationSearchIndex, searchInvestigationIndex } from '../frontend/src/lib/analysis/investigation-search.ts';
+import { buildInvestigationSearchIndex, investigationHistory, searchInvestigationIndex } from '../frontend/src/lib/analysis/investigation-search.ts';
 import { projectInvestigationContextPreview } from '../frontend/src/lib/analysis/investigation-context-preview.ts';
+import { investigationInfrastructure, investigationInfrastructureRelationships } from '../packages/investigation/investigation-infrastructure.mts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.ts';
 
 const collections = {
@@ -69,7 +70,67 @@ test('worker queries match the pure owner while transferring only summary and re
     handle({ id: page + 2000, kind: 'preview', query: 'target', page });
     assert.deepEqual(replies.shift(), { id: page + 2000, kind: 'preview', result: projectInvestigationContextPreview(index, 'target', page) });
   }
+  const entityId = index.entries[0]!.entityId;
+  handle({ id: 5000, kind: 'history', entityId });
+  const history = replies.shift();
+  assert.ok(history?.kind === 'history');
+  assert.deepEqual(history.result.entries, investigationHistory(buildInvestigationProjection(collections), entityId).entries);
+  assert.ok(history.result.total > 0);
+  assert.equal('cases' in history.result, false);
   assert.deepEqual(collections, before);
+});
+
+test('session routes paged history through the same cancellable worker', async () => {
+  const { worker, session } = await prepared();
+  const pending = session.history('entity-1', 3);
+  assert.deepEqual(worker.messages.at(-1), { id: 2, kind: 'history', entityId: 'entity-1', page: 3 });
+  const result = investigationHistory(null, 'entity-1');
+  worker.reply({ id: 2, kind: 'history', result });
+  assert.deepEqual(await pending, result);
+  session.dispose();
+  await assert.rejects(session.history('entity-1'), { name: 'AbortError' });
+  assert.equal(worker.terminated, 1);
+});
+
+test('worker infrastructure filters before paging and transfers only selected relationship sources', () => {
+  const replies: SearchWorkerResponse[] = [];
+  const handle = createInvestigationSearchWorkerHandler(response => replies.push(response));
+  const projection = buildInvestigationProjection(collections), index = buildInvestigationSearchIndex(projection);
+  handle({ id: 1, kind: 'build', collections, unavailableStores: [] });
+  replies.shift();
+  const options = { query: 'target', type: 'domain' as const, page: 3 };
+  handle({ id: 2, kind: 'infrastructure', options });
+  const result = replies.shift();
+  assert.ok(result?.kind === 'infrastructure');
+  assert.deepEqual(result.result, investigationInfrastructure(projection, index, options));
+  assert.equal(result.result.total, 124);
+  assert.equal(result.result.rows.length, 24);
+  assert.equal('observations' in result.result, false);
+  const entityId = result.result.rows[0]!.entityId;
+  handle({ id: 3, kind: 'infrastructure_relationships', entityId });
+  const related = replies.shift();
+  assert.ok(related?.kind === 'infrastructure_relationships');
+  assert.deepEqual(related.result.rows, investigationInfrastructureRelationships(projection, entityId).rows);
+  assert.equal('entities' in related.result, false);
+});
+
+test('session routes infrastructure and one-hop sources through its cancellable queue', async () => {
+  const { worker, session } = await prepared();
+  const options = { type: 'ip_address' as const, store: 'cases' as const, page: 2 };
+  const pending = session.infrastructure(options);
+  assert.deepEqual(worker.messages.at(-1), { id: 2, kind: 'infrastructure', options });
+  const index = buildInvestigationSearchIndex(buildInvestigationProjection({}));
+  const result = investigationInfrastructure(buildInvestigationProjection({}), index);
+  worker.reply({ id: 2, kind: 'infrastructure', result });
+  assert.deepEqual(await pending, result);
+  const sources = session.infrastructureRelationships('selected', 3);
+  assert.deepEqual(worker.messages.at(-1), { id: 3, kind: 'infrastructure_relationships', entityId: 'selected', page: 3 });
+  const relationships = investigationInfrastructureRelationships(null, 'selected');
+  worker.reply({ id: 3, kind: 'infrastructure_relationships', result: relationships });
+  assert.deepEqual(await sources, relationships);
+  session.dispose();
+  await assert.rejects(session.infrastructure(), { name: 'AbortError' });
+  await assert.rejects(session.infrastructureRelationships('selected'), { name: 'AbortError' });
 });
 
 test('worker preserves explicit unavailable-source coverage rather than treating it as empty', () => {
@@ -183,12 +244,35 @@ test('session transports preview operations without rerunning a main-thread inde
   } finally { session.dispose(); }
 });
 
+test('independent views cannot replace a queued search and repeated filters retain only their latest request', async () => {
+  const { worker, session } = await prepared();
+  try {
+    const history = session.history('selected');
+    const search = session.search('target');
+    const stale = assert.rejects(session.infrastructure({ query: 'old' }), { name: 'AbortError' });
+    const inventory = session.infrastructure({ query: 'latest' });
+    await stale;
+    assert.equal(worker.messages.length, 2);
+    worker.reply({ id: 2, kind: 'history', result: investigationHistory(null, 'selected') });
+    await history;
+    assert.deepEqual(worker.messages.at(-1), { id: 3, kind: 'search', query: 'target' });
+    worker.reply({ id: 3, kind: 'search', result: { ...idle, query: 'target' } });
+    assert.equal((await search).query, 'target');
+    assert.deepEqual(worker.messages.at(-1), { id: 5, kind: 'infrastructure', options: { query: 'latest' } });
+    const projection = buildInvestigationProjection({});
+    const result = investigationInfrastructure(projection, buildInvestigationSearchIndex(projection));
+    worker.reply({ id: 5, kind: 'infrastructure', result });
+    assert.deepEqual(await inventory, result);
+  } finally { session.dispose(); }
+});
+
 test('disposal rejects active and queued requests and refuses new work', async () => {
   const { worker, session } = await prepared();
   const active = assert.rejects(session.search('active'), { name: 'AbortError' });
   const queued = assert.rejects(session.search('queued'), { name: 'AbortError' });
+  const inventory = assert.rejects(session.infrastructure(), { name: 'AbortError' });
   session.dispose();
-  await Promise.all([active, queued, assert.rejects(session.preview('later'), { name: 'AbortError' })]);
+  await Promise.all([active, queued, inventory, assert.rejects(session.preview('later'), { name: 'AbortError' })]);
   assert.equal(worker.terminated, 1);
   assert.equal(worker.messages.length, 2);
 });

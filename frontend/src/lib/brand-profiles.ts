@@ -9,6 +9,7 @@ import {
   serializeBrandProfileStore,
   MAX_PROFILES,
   normalizeBrandProfileId,
+  normalizeProfileDomains,
   type BrandProfileFieldPatch,
 } from './analysis/brand-profile-model.ts';
 import {
@@ -20,7 +21,7 @@ import type { BrandProfile } from './analysis/brand-profile-model.ts';
 export type { BrandProfile } from './analysis/brand-profile-model.ts';
 import { normalizePageBaseline } from './analysis/page-baseline.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
-import { BrowserLocalDataError } from './browser-local-data.ts';
+import { BrowserLocalDataError } from './browser-local-data-content.ts';
 import { loadBrowserLocalDataPreparation } from './browser-local-data-worker.ts';
 import { assertLocalRecordCurrent, LocalRecordConflictError } from './local-mutation-outcome.ts';
 import { LEGACY_PROFILES_KEY } from './browser-local-data-contract.ts';
@@ -114,7 +115,14 @@ export async function upsertProfile(raw: Partial<BrandProfile>, editingId = '', 
     const index = editingId ? profiles.findIndex((item) => item.id === editingId) : -1;
     const existing = index >= 0 ? profiles[index] : undefined;
     if (editingId && !existing) throw new LocalRecordConflictError('Brand Profile');
-    assertLocalRecordCurrent(existing, expected, 'Brand Profile', Object.keys(raw) as (keyof BrandProfile)[]);
+    const fields = Object.keys(raw) as (keyof BrandProfile)[];
+    const officialDomains = raw.officialDomains === undefined ? null : new Set(normalizeProfileDomains(raw.officialDomains));
+    // Removing an official domain also removes its expected settings. A
+    // confirmation based on an older baseline must not delete a newer one.
+    if (officialDomains && existing?.officialDomains.some(domain => !officialDomains.has(domain))) {
+      fields.push('desiredPostureBaselines');
+    }
+    assertLocalRecordCurrent(existing, expected, 'Brand Profile', fields);
     const normalized = normalizeProfile({ ...existing, ...raw }, existing, true);
     if (!editingId && profiles.some((profile) => profile.id === normalized.id)) throw new LocalRecordConflictError('Brand Profile');
     if (!normalized.name) throw new Error('Enter a brand name.');

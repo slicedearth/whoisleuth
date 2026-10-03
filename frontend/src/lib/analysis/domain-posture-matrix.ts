@@ -16,8 +16,9 @@ import {
 } from './owned-domain-posture-review.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import { MAX_POSTURE_CHECKS, MAX_POSTURE_CHECK_RECORDS } from '../../../../packages/evidence/domain-posture-context.mts';
+import { MAX_PROFILE_VALUES } from '../../../../packages/contracts/workspace-portability.mts';
 
-export const DOMAIN_POSTURE_MATRIX_VERSION = 1;
+export const DOMAIN_POSTURE_MATRIX_VERSION = 2;
 
 export type DomainPostureMatrixState = DesiredPostureComparison['state'];
 
@@ -66,6 +67,8 @@ const STATES: readonly DomainPostureMatrixState[] = Object.freeze([
   'aligned',
   'approved_window',
   'drift',
+  'due',
+  'not_due',
   'not_configured',
   'observed',
   'review',
@@ -122,7 +125,7 @@ export function buildDomainPostureMatrix(
       .slice(0, MAX_DESIRED_POSTURE_BASELINES)
       .map((baseline) => [baseline.domain, baseline]),
   );
-  const domains = [...new Set(profile.officialDomains.slice(0, MAX_DESIRED_POSTURE_BASELINES))].sort();
+  const domains = [...new Set(profile.officialDomains.slice(0, MAX_PROFILE_VALUES))].sort();
   const rows = domains.map((domain): DomainPostureMatrixRow => {
     const baseline = baselines.get(domain) ?? null;
     if (!baseline) {

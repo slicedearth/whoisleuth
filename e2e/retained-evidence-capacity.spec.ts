@@ -1,7 +1,9 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
-import { createCase, serializeCaseStore } from '../packages/cases/case-model.mts';
+import { createCase } from '../packages/cases/case-record-operations.mts';
+import { serializeCaseStore } from '../packages/cases/case-storage-model.mts';
 import { createRelationshipObservation } from '../packages/workspace/relationship-observation-model.mts';
 
 const NOW = '2026-09-10T00:00:00.000Z';
@@ -29,7 +31,7 @@ for (const viewport of [
     await migrateLegacyBrowserData(page, {
       'whois-rdap-cases-v1': JSON.parse(serializeCaseStore(retainedCases())),
       'whoisleuth-relationship-observations-v1': currentBrowserLocalDocument('relationship_observations', {
-        observations: [createRelationshipObservation({ type: 'ip_address', value: '192.0.2.10', domains: members }, { retainedAt: NOW })],
+        observations: [createRelationshipObservation({ type: 'ip_address', value: '11.12.13.14', domains: members }, { retainedAt: NOW })],
       }),
     }, { clearStorage: true, destination: '/monitor?view=timeline' });
     await useTheme(page, theme);
@@ -56,9 +58,9 @@ for (const viewport of [
     await expect(timeline).toContainText('Observation time unavailable');
     await expectNoHorizontalOverflow(page);
     await timeline.getByRole('heading', { name: 'Investigation timeline', exact: true }).scrollIntoViewIfNeeded();
-    await testInfo.attach(`retained-timeline-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    if (captureVisualEvidenceEnabled()) { await testInfo.attach(`retained-timeline-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     await memberPages.scrollIntoViewIfNeeded();
-    await testInfo.attach(`retained-timeline-members-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    if (captureVisualEvidenceEnabled()) { await testInfo.attach(`retained-timeline-members-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
 
     await openConsoleView(page, 'inbox');
     const debt = page.getByRole('region', { name: 'Evidence gaps', exact: true });
@@ -79,7 +81,7 @@ for (const viewport of [
     const source = viewport.width <= 800 ? debt.locator('.mobile-matrix') : debt.locator('.desktop-matrix');
     await expect(source).toContainText('source-74');
     await matrixPages.scrollIntoViewIfNeeded();
-    await testInfo.attach(`retained-gaps-matrix-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    if (captureVisualEvidenceEnabled()) { await testInfo.attach(`retained-gaps-matrix-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     await debt.locator('.matrix > summary').press('Enter');
     await expect(debt.locator('.matrix')).not.toHaveAttribute('open');
     await debt.getByRole('searchbox', { name: 'Source', exact: true }).fill('source-74');
@@ -88,6 +90,6 @@ for (const viewport of [
     await expect(debt.locator('.queue > li').first()).toContainText('retained-74.example');
     await expectNoHorizontalOverflow(page);
     await debt.getByRole('heading', { name: 'Evidence gaps', exact: true }).scrollIntoViewIfNeeded();
-    await testInfo.attach(`retained-gaps-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    if (captureVisualEvidenceEnabled()) { await testInfo.attach(`retained-gaps-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
   });
 }

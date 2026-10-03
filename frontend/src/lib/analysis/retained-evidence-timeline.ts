@@ -1,4 +1,5 @@
-import { caseLookupTarget, type CaseRecord } from './case-model.ts';
+import { caseLookupTarget } from '../../../../packages/cases/case-evidence-model.mts';
+import type { CaseRecord } from './case-model.ts';
 import { caseWorkspaceHref } from './case-response-stage.ts';
 import type { BulkSession } from './bulk-session-model.ts';
 import type { RelationshipObservation } from './relationship-observation-model.ts';

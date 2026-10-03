@@ -1,7 +1,7 @@
 <script lang="ts">
-  import {
-    CASE_CLOSURE_REASONS, caseLookupTarget, type CaseRecord,
-  } from '$lib/cases';
+  import { CASE_CLOSURE_REASONS } from '../../../../packages/cases/case-response-records.mts';
+  import { caseLookupTarget } from '../../../../packages/cases/case-evidence-model.mts';
+  import type { CaseRecord } from '../cases.ts';
   import { buildCaseResponseLifecycleSummary } from '$lib/analysis/case-response-model.ts';
   import { list } from '$lib/analysis/case-response-form-values.ts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
@@ -11,6 +11,7 @@
   import CaseRecheckQuestions from './CaseRecheckQuestions.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   import { CASE_RECHECK_CONDITIONS } from '../../../../packages/cases/case-recheck-model.mts';
+  import { caseClosureReviewBlocker } from '../../../../packages/cases/case-response-outcomes.mts';
 
   let { record, mode, mutationBusy, persist }: {
     record: CaseRecord;
@@ -27,7 +28,7 @@
   }
 
   const closureDraft = createCaseDraft(() => record.id, 'closure', {
-    closureReason: 'unable_to_proceed',
+    closureReason: 'unable_to_proceed' as typeof CASE_CLOSURE_REASONS[number],
     closureSummary: '',
     closureReviewId: '',
     closureActionId: '',
@@ -37,9 +38,7 @@
   const closureNeedsReview = $derived(closureDraft.value.closureReason === 'independently_not_reproduced' || closureDraft.value.closureReason === 'infrastructure_changed');
   const closureNeedsAction = $derived(closureDraft.value.closureReason === 'provider_reported_resolution_not_independently_checked');
   const eligibleClosureReviews = $derived(record.observedEffects.reviews.filter((review) =>
-    closureDraft.value.closureReason === 'independently_not_reproduced'
-      ? review.state === 'not_reproduced'
-      : closureDraft.value.closureReason === 'infrastructure_changed' ? review.state === 'changed' : true));
+    caseClosureReviewBlocker(closureDraft.value.closureReason, review, new Date().toISOString()) === null));
   const eligibleClosureActions = $derived(record.actions.filter((action) =>
     closureNeedsAction ? action.providerOutcome === 'provider_reports_resolved' : true));
 
@@ -93,6 +92,9 @@
       <form class="stack closure-form" data-recovery-form={closureDraft.form} aria-labelledby={`closure-title-${record.id}`} oninput={closureDraft.changed} onsubmit={(event) => { event.preventDefault(); void closeCaseDeliberately(); }}>
         <strong id={`closure-title-${record.id}`}>Deliberate analyst closure</strong>
         <p class="notice">Select the reason that the retained evidence supports. A timeout or failure to reproduce does not establish removal.</p>
+        {#if closureDraft.value.closureReason === 'independently_not_reproduced' && !eligibleClosureReviews.length}
+          <p role="status">No complete not-reproduced review is available for this closure. Limited reviews remain in the history; record a complete recheck or choose another reason.</p>
+        {/if}
         <div class="two-columns">
           <label class="field">{mode === 'quick' ? 'Reason' : 'Closure reason'}<select bind:value={closureDraft.value.closureReason}>{#each CASE_CLOSURE_REASONS as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
           <label class="field">Independent review<select bind:value={closureDraft.value.closureReviewId} required={closureNeedsReview}><option value="">{closureNeedsReview ? 'Select the required typed review' : 'No linked review'}</option>{#each eligibleClosureReviews as review}<option value={review.id}>{review.state.replaceAll('_', ' ')} · {review.observedAt}</option>{/each}</select></label>

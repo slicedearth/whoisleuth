@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 import {
   MAX_WEBSITE_SNAPSHOTS,
+  MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN,
   WEBSITE_SNAPSHOT_SCHEMA,
   WEBSITE_SNAPSHOT_SCHEMA_VERSION,
   buildWebsiteSnapshotExport,
@@ -77,6 +78,29 @@ function snapshot(
 }
 
 describe('website profile snapshots', () => {
+  test('snapshot imports never evict local records at per-domain or total capacity', () => {
+    for (const globalCapacity of [false, true]) {
+      const local = normalizeWebsiteSnapshotStore(Array.from({ length: globalCapacity ? MAX_WEBSITE_SNAPSHOTS : MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN }, (_, index) =>
+        snapshot(`local-${index}`, EARLIER, globalCapacity ? { domain: `site-${index}.example` } : {}))).snapshots;
+      const before = structuredClone(local);
+      const incoming = buildWebsiteSnapshotExport([
+        snapshot('new', LATER, globalCapacity ? { domain: 'new.example' } : {}),
+        { ...local[0]!, savedAt: LATER },
+      ], LATER);
+      const result = mergeWebsiteSnapshots(local, incoming);
+      assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 0, updated: 1, skipped: 1 });
+      assert.deepEqual(new Set(result.snapshots.map(item => item.id)), new Set(local.map(item => item.id)));
+      assert.equal(result.snapshots.find(item => item.id === local[0]!.id)!.savedAt, LATER);
+      assert.match(result.reason, /1 imported.*capacity.*preserved/u);
+      assert.deepEqual(local, before);
+    }
+    const oneDomain = Array.from({ length: MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN }, (_, index) => snapshot(`local-${index}`));
+    const control = mergeWebsiteSnapshots(oneDomain, buildWebsiteSnapshotExport([snapshot('other', LATER, { domain: 'other.example' })]));
+    assert.equal(control.added, 1);
+    assert.equal(control.skipped, 0);
+    assert.equal(control.snapshots.length, MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN + 1);
+  });
+
   test('parser changes and unknown versions cannot become page changes or absence', () => {
     const old = snapshot('old');
     for (const version of [2, null, 999]) {

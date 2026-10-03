@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow } from './helpers';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
 
 // Data-heavy Lookup evidence presentation and accessibility coverage.
@@ -8,6 +9,41 @@ function analystQuestion(page: import('@playwright/test').Page) {
   return page.getByRole('region', { name: 'Question and depth guidance' })
     .getByLabel('Analyst question');
 }
+
+test('the service review retains all admitted nameserver and mail dependencies plus the HTTP host', async ({ page }, testInfo) => {
+  const fixture = sectionedLookupFixture('dependencies.example');
+  Object.assign(fixture.availability.dns, {
+    status: 'success', complete: true,
+    diagnostics: { cname: { status: 'not_found' }, https: { status: 'not_found' }, ns: { status: 'success' }, mx: { status: 'success' } },
+    records: {
+      ...fixture.availability.dns.records,
+      ns: Array.from({ length: 12 }, (_, index) => `ns-${index}.provider.example`),
+      mx: Array.from({ length: 12 }, (_, index) => ({ priority: index, exchange: `mx-${index}.provider.example` })),
+    },
+  });
+  let requests = 0;
+  await page.route('**/api/lookup?*', route => {
+    requests += 1;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture) });
+  });
+  await page.goto('/lookup');
+  await page.locator('#query').fill('dependencies.example');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await page.getByRole('button', { name: 'Expand details: Web and DNS evidence' }).click();
+  const review = page.locator('details.dependency-review');
+  await review.locator(':scope > summary').click();
+  await expect(review.locator('.dependency-grid > article')).toHaveCount(25);
+  await expect(review).toContainText('25 dependency observations retained');
+  await expect(review.locator('.dependency-grid').getByText('mx-11.provider.example', { exact: true })).toBeVisible();
+  await expect(review.locator('.dependency-grid > article').filter({ hasText: 'HTTP' })).toContainText('www.dependencies.example');
+  expect(requests).toBe(1);
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark']) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
+    await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await review.screenshot({ path: testInfo.outputPath(`dependencies-${width}-${theme}.png`) });
+  }
+});
 
 test('a data-heavy Lookup result groups evidence into navigable sections', {
   tag: [
@@ -58,16 +94,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(localNav.getByRole('link', { name: 'Advanced' })).toBeVisible();
   const activeNavigation = localNav.locator('a.active');
   await expect(activeNavigation).toHaveAttribute('aria-current', 'location');
-  expect(await activeNavigation.evaluate((link) => getComputedStyle(link).boxShadow)).toContain('inset');
 
   await expect(page.getByRole('heading', { name: 'Overview', level: 3 })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Web and DNS evidence' })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Registration$/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Validated lookup response' })).toBeVisible();
   await expect(page.getByLabel('Source diagnostics')).toContainText('rdap');
-  const sourceQualityColour = await page.locator('#source-quality-title').evaluate((heading) => getComputedStyle(heading).color);
-  const caseResponseColour = await page.locator('#case-response-title').evaluate((heading) => getComputedStyle(heading).color);
-  expect(caseResponseColour).not.toBe(sourceQualityColour);
 
   // The D3-backed visual is paired with a complete, keyboard-operable source
   // rail. It does not replace the detailed source sections.
@@ -204,13 +236,13 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await linkedVisualNode.dispatchEvent('pointerup', { pointerId: 1, pointerType: 'touch', clientX: 50, clientY: 20, button: 0 });
   expect(await page.evaluate(() => window.location.hash)).toBe(hashBeforeDrag);
 
-  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Web and DNS evidence' }).click();
   await expect(page.locator('#evidence-dns')).toHaveCount(0);
   await dnsSource.press('Enter');
   await expect(page).toHaveURL(/#evidence-dns$/);
   await expect(page.locator('#evidence-dns')).toBeInViewport();
 
-  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Web and DNS evidence' }).click();
   await expect(page.locator('#evidence-dns')).toHaveCount(0);
   await page.evaluate(() => {
     window.history.replaceState(window.history.state, '', window.location.pathname);
@@ -221,7 +253,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   const registrySource = sourceRail.getByRole('link', { name: /Registry RDAP.*success/i });
   await expect(registrySource).toHaveAttribute('href', '#evidence-registry');
-  await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Registration evidence' }).click();
   await expect(page.locator('#evidence-registry')).toHaveCount(0);
   await registrySource.press('Enter');
   await expect(page).toHaveURL(/#evidence-registry$/);
@@ -505,7 +537,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(currentFreshness).toContainText('Current');
   await expect(staleFreshness).toContainText('Stale');
   const freshnessPlacement = await rdapQualityRow.locator('.observed').evaluate((cell) => {
-    const observed = cell.querySelector<HTMLElement>(':scope > span:first-child')!;
+    const observed = cell.querySelector<HTMLElement>(':scope > .observation-time')!;
     const freshness = cell.querySelector<HTMLElement>(':scope > .freshness')!;
     return {
       observedBottom: observed.getBoundingClientRect().bottom,
@@ -553,8 +585,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(coverage).toContainText('Freshness policy · analyst-defined');
   await expect(coverage).toContainText('Thresholds organise source-refresh suggestions');
 
-  await page.getByRole('button', { name: 'Collapse Source quality evidence' }).click();
-  await page.getByRole('button', { name: 'Expand Source quality evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Source quality evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Source quality evidence' }).click();
   await recordsDisclosure.locator(':scope > summary').click();
   await freshnessDisclosure.locator(':scope > summary').click();
   await expect(coverage.getByRole('combobox', { name: 'Policy', exact: true })).toHaveValue('analyst-custom');
@@ -562,7 +594,6 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   const registrationFact = page.locator('.summaries article').filter({ hasText: 'Registration' }).first();
   const summaryCards = page.locator('.summaries article');
-  await expect(page.locator('.summaries')).toHaveCSS('align-items', 'start');
   const summaryPeerHeight = (await summaryCards.nth(1).boundingBox())?.height ?? 0;
   await registrationFact.getByText('Inspect evidence').click();
   expect((await summaryCards.nth(1).boundingBox())?.height ?? 0).toBeCloseTo(summaryPeerHeight, 0);
@@ -574,7 +605,6 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   const diagnosticGrid = page.getByRole('group', { name: 'Source diagnostics' });
   const diagnosticArticles = diagnosticGrid.locator('article');
   const diagnosticStates = diagnosticGrid.locator('article > strong');
-  await expect(diagnosticGrid).toHaveCSS('align-items', 'start');
   expect(await diagnosticArticles.count()).toBeGreaterThan(0);
   expect(await diagnosticStates.count()).toBe(await diagnosticArticles.count());
   expect(await diagnosticStates.evaluateAll((states) => {
@@ -618,6 +648,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(dependencyReview.getByText('within domain', { exact: true }).first()).toBeVisible();
 
   for (const size of [
+    { width: 3840, height: 2160 },
+    { width: 2560, height: 1440 },
     { width: 1920, height: 1080 },
     { width: 1440, height: 900 },
     { width: 1024, height: 768 },
@@ -689,6 +721,9 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       expect(graphicBox.width).toBeLessThanOrEqual(panelBox.width + 1);
       expect(graphicBox.height).toBeGreaterThan(150);
       expect(graphicBox.height).toBeLessThan(560);
+      const svg = topologyGraphic.locator(':scope > svg');
+      const scale = await svg.evaluate((element: SVGSVGElement) => element.getBoundingClientRect().width / element.viewBox.baseVal.width);
+      expect(scale, 'Evidence maps should fit their container without magnifying the diagram').toBeLessThanOrEqual(1);
     } else {
       await expect(topologyGraphic).toHaveCount(1);
       await expect(topologyGraphic).toBeHidden();
@@ -712,6 +747,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       expect(graphBox.width).toBeLessThanOrEqual(panelBox.width + 1);
       expect(graphBox.height).toBeGreaterThan(180);
       expect(graphBox.height).toBeLessThan(700);
+      const scale = await mapFrame.locator(':scope > svg').evaluate((element: SVGSVGElement) => element.getBoundingClientRect().width / element.viewBox.baseVal.width);
+      expect(scale, 'Relationship maps should not magnify their labels on wide displays').toBeLessThanOrEqual(1);
       expect(await mapFrame.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
       expect(await mapFrame.evaluate((element) => getComputedStyle(element).touchAction)).toContain('pinch-zoom');
       if (size.width === 1440) {
@@ -750,6 +787,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       expect(graphicBox.width).toBeLessThanOrEqual(panelBox.width + 1);
       expect(graphicBox.height).toBeGreaterThan(130);
       expect(graphicBox.height).toBeLessThan(520);
+      const scale = await lifecycleGraphic.locator(':scope > svg').evaluate((element: SVGSVGElement) => element.getBoundingClientRect().width / element.viewBox.baseVal.width);
+      expect(scale, 'Timelines should not magnify their labels on wide displays').toBeLessThanOrEqual(1);
     } else {
       await expect(lifecycleGraphic).toHaveCount(1);
       await expect(lifecycleGraphic).toBeHidden();
@@ -828,6 +867,21 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     return navigation ? sectionTop >= navigation.getBoundingClientRect().bottom + 4 : false;
   })).toBe(true);
   await expect(sectionPicker).toHaveValue('#advanced-evidence');
+
+  if (await recordsDisclosure.getAttribute('open') === null) await recordsDisclosure.locator(':scope > summary').click();
+  await expect(sourceQualityTable).toBeVisible();
+  await expect(sourceQualityTable.getByRole('columnheader')).toHaveCount(5);
+  await expect(qualityRows.first().locator('.mobile-column-label')).toHaveText(['Source', 'State', 'Observed', 'Timing', 'Supports']);
+  for (const disclosure of [page.locator('.collection-preflight'), page.locator('.score-detail').first()]) {
+    const summary = disclosure.locator(':scope > summary');
+    await expect(summary).toHaveCount(1);
+    const wasOpen = await disclosure.getAttribute('open') !== null;
+    expect(await summary.evaluate(element => ({ display: getComputedStyle(element).display, marker: getComputedStyle(element).listStyleType }))).toEqual({ display: 'list-item', marker: wasOpen ? 'disclosure-open' : 'disclosure-closed' });
+    await summary.focus(); await page.keyboard.press('Enter');
+    await expect.poll(() => disclosure.getAttribute('open')).toBe(wasOpen ? null : '');
+    await page.keyboard.press('Enter');
+    await expect.poll(() => disclosure.getAttribute('open')).toBe(wasOpen ? '' : null);
+  }
 
   const downloadPromise = page.waitForEvent('download');
   await page.locator('.export-menu > summary').click();

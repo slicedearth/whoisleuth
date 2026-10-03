@@ -8,6 +8,7 @@ import { relationshipObservation } from '../packages/comparison/relationship-evi
 import { CliUsageError } from './errors.mts';
 import { parseSavedLookupDocument, type SavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 import { lookupObservationHostname } from '../packages/evidence/lookup-target.mts';
+import { safeTerminalValue } from './formatters/terminal-shared.mts';
 
 export const CLI_LOOKUP_DIFF_SCHEMA = 'whoisleuth.cli.lookup-diff';
 export const CLI_LOOKUP_DIFF_VERSION = 1;
@@ -224,10 +225,10 @@ function formatCliLookupDiff(document: CliLookupDiffDocument): string {
   const rows = document.comparison.rows.filter((row) => row.state !== 'equal');
   const output = [
     'Domain evidence diff',
-    `Left             ${document.left.domain}`,
-    `Left observed    ${document.left.generatedAt}`,
-    `Right            ${document.right.domain}`,
-    `Right observed   ${document.right.generatedAt}`,
+    `Left             ${safeTerminalValue(document.left.domain)}`,
+    `Left observed    ${safeTerminalValue(document.left.generatedAt)}`,
+    `Right            ${safeTerminalValue(document.right.domain)}`,
+    `Right observed   ${safeTerminalValue(document.right.generatedAt)}`,
     `Changed          ${document.comparison.counts.different + document.comparison.counts.conflicting}`,
     `One-sided        ${document.comparison.counts.missing}`,
     `Unavailable      ${document.comparison.counts.unavailable + document.comparison.counts.not_recorded}`,
@@ -235,13 +236,13 @@ function formatCliLookupDiff(document: CliLookupDiffDocument): string {
   ];
   if (!rows.length) output.push('No bounded differences were observed in the comparable fields.');
   for (const row of rows) {
-    output.push(`${row.label} [${row.state.replaceAll('_', ' ')}]`);
-    output.push(`  Left:  ${row.left}`);
-    output.push(`  Right: ${row.right}`);
-    output.push(`  Source: ${row.source}`);
+    output.push(`${safeTerminalValue(row.label)} [${safeTerminalValue(row.state).replaceAll('_', ' ')}]`);
+    output.push(`  Left:  ${safeTerminalValue(row.left)}`);
+    output.push(`  Right: ${safeTerminalValue(row.right)}`);
+    output.push(`  Source: ${safeTerminalValue(row.source)}`);
   }
   output.push('', 'Limitations:');
-  for (const limitation of document.limitations) output.push(`  - ${limitation}`);
+  for (const limitation of document.limitations) output.push(`  - ${safeTerminalValue(limitation)}`);
   return `${output.join('\n')}\n`;
 }
 

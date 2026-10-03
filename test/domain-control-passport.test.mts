@@ -8,6 +8,7 @@ import {
   buildDomainControlPassport,
   MAX_DOMAIN_CONTROL_PASSPORT_BYTES,
   passportConfiguredFields,
+  passportImportCapacityIssue,
   serializeDomainControlManifest,
   verifyDomainControlPassport,
 } from '../frontend/src/lib/analysis/domain-control-passport.ts';
@@ -16,6 +17,7 @@ import {
   domainControlPassportSerialisedBytes,
 } from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
 import type { BrandProfile, DesiredPostureBaseline } from '../frontend/src/lib/analysis/brand-profile-model.ts';
+import { MAX_DESIRED_POSTURE_BASELINES, MAX_PROFILE_VALUES } from '../packages/workspace/brand-profile-model.mts';
 import { buildDomainControlManifest, verifyDomainControlManifest } from '../lib/domain-control-manifest.mts';
 import { DOMAIN_CONTROL_MANIFEST_INPUT_VERSION, DOMAIN_CONTROL_MANIFEST_VERSION } from '../packages/contracts/domain-control-manifest.mts';
 
@@ -329,5 +331,46 @@ describe('browser domain-control passports', () => {
     const added = applyDomainControlPassport(profile(), passport, [{ domain: 'new.example.test', addOfficialDomain: true, fields: ['mx'] }], generatedAt);
     assert.equal(added.officialDomains.includes('new.example.test'), true);
     assert.deepEqual(added.desiredPostureBaselines.find((item) => item.domain === 'new.example.test')?.mx, ['10 mail.example.test']);
+  });
+
+  it('uses separate official-domain and baseline capacities, preserving edits at capacity', async () => {
+    const source = profile();
+    source.officialDomains = ['new.example.test', 'example.test'];
+    source.desiredPostureBaselines = source.officialDomains.map((domain) => ({ ...baseline(domain), mx: ['20 new-mail.example.test'] }));
+    const passport = await buildDomainControlPassport(buildBrandProfilePassportInput(source, source.officialDomains, expiresAt), generatedAt);
+    const choice = { domain: 'new.example.test', addOfficialDomain: true, fields: ['mx'] as const };
+    const manyDomains = { ...profile(), officialDomains: ['example.test', ...Array.from({ length: 21 }, (_, index) => `d${index}.example.test`)] };
+    const added = applyDomainControlPassport(manyDomains, passport, [choice], generatedAt);
+    assert.equal(added.officialDomains.length, 23);
+    assert.equal(added.desiredPostureBaselines.length, 2);
+    assert.deepEqual(added.desiredPostureBaselines.find((item) => item.domain === choice.domain)?.mx, ['20 new-mail.example.test']);
+
+    const fullDomains = { ...profile(), officialDomains: Array.from({ length: MAX_PROFILE_VALUES }, (_, index) => `d${index}.example.test`), desiredPostureBaselines: [] };
+    assert.match(passportImportCapacityIssue(fullDomains, choice.domain)!, /official domains/u);
+    assert.throws(() => applyDomainControlPassport(fullDomains, passport, [choice], generatedAt), /official domains.*Nothing was imported/u);
+
+    const domains = ['example.test', ...Array.from({ length: MAX_DESIRED_POSTURE_BASELINES - 1 }, (_, index) => `d${index}.example.test`)];
+    const fullBaselines = { ...profile(), officialDomains: domains, desiredPostureBaselines: domains.map((domain) => baseline(domain)) };
+    const before = structuredClone(fullBaselines);
+    const edit = { domain: 'example.test', addOfficialDomain: false, fields: ['mx'] as const };
+    assert.throws(() => applyDomainControlPassport(fullBaselines, passport, [edit, choice], generatedAt), /configured baselines.*Nothing was imported/u);
+    assert.deepEqual(fullBaselines, before);
+    assert.equal(passportImportCapacityIssue(fullBaselines, edit.domain), null);
+    const updated = applyDomainControlPassport(fullBaselines, passport, [edit], generatedAt);
+    assert.equal(updated.desiredPostureBaselines.length, MAX_DESIRED_POSTURE_BASELINES);
+    assert.deepEqual(updated.desiredPostureBaselines.find((item) => item.domain === edit.domain)?.mx, ['20 new-mail.example.test']);
+    assert.deepEqual(fullBaselines, before);
+  });
+
+  it('rejects ambiguous or excessive choices and does not add a domain without selected configured fields', async () => {
+    const passport = await buildDomainControlPassport(buildBrandProfilePassportInput(profile(), ['example.test'], expiresAt), generatedAt);
+    const choice = { domain: 'example.test', addOfficialDomain: true, fields: ['mx'] as const };
+    assert.throws(() => applyDomainControlPassport(profile(), passport, [choice, choice], generatedAt), /exactly once/u);
+    assert.throws(() => applyDomainControlPassport(profile(), passport, [{ ...choice, domain: 'unknown.example.test' }], generatedAt), /exactly once/u);
+    assert.throws(() => applyDomainControlPassport(profile(), passport, Array.from({ length: MAX_DESIRED_POSTURE_BASELINES + 1 }, () => choice), generatedAt), /at most.*Nothing was imported/u);
+    const destination = { ...profile(), officialDomains: [], desiredPostureBaselines: [] };
+    const result = applyDomainControlPassport(destination, passport, [{ ...choice, fields: [] }], generatedAt);
+    assert.deepEqual(result.officialDomains, []);
+    assert.deepEqual(result.desiredPostureBaselines, []);
   });
 });

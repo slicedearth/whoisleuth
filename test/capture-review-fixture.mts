@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { faviconTransparencyFixtures, ICON_SIZE } from './favicon-image-fixtures.mts';
 import { WEB_CAPTURE_MANIFEST_SCHEMA, WEB_CAPTURE_MANIFEST_VERSION, WEB_CAPTURE_DOM_DIGEST_SCHEMA, WEB_CAPTURE_DOM_DIGEST_VERSION } from '../packages/contracts/web-capture.mts';
+import { emptyCaptureCoverage } from '../packages/investigation/capture-coverage.mts';
 
 const WHEN = '2026-09-01T00:00:00.000Z';
 const digest = (value: Uint8Array) => createHash('sha256').update(value).digest('hex');
@@ -16,6 +17,7 @@ export function captureReviewFixture() {
   const manifest = { schema: WEB_CAPTURE_MANIFEST_SCHEMA, schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
     source: { name: 'Synthetic capture', reference: null, collectedAt: WHEN },
     captures: [{ domain: 'capture.example', capturedAt: WHEN, completeness: 'partial', limitations: ['Synthetic capture.'],
+      pageBehaviour: { version: 1, state: 'partial', requests: [], elements: [], actionHints: [], clipboardWriteAttempts: 0, coverage: emptyCaptureCoverage() },
       page: { title: 'Example page', finalOrigin: 'https://capture.example' }, technologies: [], requestDomains: [],
       artifacts: [
         { kind: 'screenshot', fileName: 'screenshot.png', mimeType: 'image/png', sha256: digest(screenshot), bytes: screenshot.length, width: ICON_SIZE, height: ICON_SIZE },

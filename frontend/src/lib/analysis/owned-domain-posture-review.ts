@@ -17,6 +17,12 @@ import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECKS, MAX_POSTURE_CHEC
 
 export type DomainPostureAuditResult = { domain: string; report: DomainPostureHttpResponse | null; error: string; context?: DomainPostureProfileContext };
 
+export const OFFICIAL_DOMAIN_REVIEW_BATCH_SIZE = 20;
+export function officialDomainReviewBatch(profile: BrandProfile, batchIndex: number): string[] {
+  if (!Number.isSafeInteger(batchIndex) || batchIndex < 0) return [];
+  return profile.officialDomains.slice(batchIndex * OFFICIAL_DOMAIN_REVIEW_BATCH_SIZE, (batchIndex + 1) * OFFICIAL_DOMAIN_REVIEW_BATCH_SIZE);
+}
+
 export type DesiredPostureGroup = Readonly<{
   id: string;
   label: string;
@@ -56,7 +62,7 @@ export type OwnedDomainPostureReview = Readonly<{
 export type DesiredPostureComparison = Readonly<{
   field: DesiredPostureComparisonField;
   label: string;
-  state: 'aligned' | 'approved_window' | 'drift' | 'not_configured' | 'observed' | 'review' | 'suppressed' | 'unavailable' | 'unknown' | 'unsupported';
+  state: 'aligned' | 'approved_window' | 'drift' | 'due' | 'not_due' | 'not_configured' | 'observed' | 'review' | 'suppressed' | 'unavailable' | 'unknown' | 'unsupported';
   desired: readonly string[];
   observed: readonly string[];
   explanation: string;
@@ -225,7 +231,7 @@ function withSuppression(
       Date.parse(window.startsAt) <= observationMs && observationMs <= Date.parse(window.endsAt)
     ))
     : undefined;
-  const state = comparison.state === 'drift' && suppressionReason
+  const state = (comparison.state === 'drift' || comparison.state === 'due') && suppressionReason
     ? 'suppressed'
     : comparison.state === 'drift' && approvedWindow
       ? 'approved_window'
@@ -384,7 +390,7 @@ function renewalComparison(
   return withSuppression({
     field: 'renewalReviewAt',
     label: DESIRED_POSTURE_FIELD_LABELS.renewalReviewAt,
-    state: !Number.isFinite(nowMs) ? 'unknown' : due ? 'drift' : 'aligned',
+    state: !Number.isFinite(nowMs) ? 'unknown' : due ? 'due' : 'not_due',
     desired,
     observed: [],
     explanation: !Number.isFinite(nowMs) ? 'The renewal review clock is unavailable.' : due ? 'The planned renewal review date is due.' : 'The planned renewal review date is still in the future.',

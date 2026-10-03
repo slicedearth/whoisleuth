@@ -8,6 +8,7 @@ import {
   failedHttpObservation,
   normalizeProvenanceUrl,
   skippedHttpObservation,
+  withoutHttpDeliveryMetadata,
 } from '../lib/http-intelligence.mts';
 import {
   HTTP_DELIVERY_LIMITATIONS,
@@ -16,6 +17,16 @@ import {
 import { requiredValue } from './value-assertions.mts';
 
 const OBSERVED_AT = '2026-07-13T00:00:00.000Z';
+
+test('nested HTTP projection removes only delivery metadata without mutating its source', () => {
+  const value = { response: { status: 200, deliveryMetadata: { retained: true } }, observedAt: OBSERVED_AT };
+  const before = structuredClone(value);
+  assert.deepEqual(withoutHttpDeliveryMetadata(value), { response: { status: 200 }, observedAt: OBSERVED_AT });
+  assert.deepEqual(value, before);
+  for (const other of [null, undefined, 'unavailable', [], { response: null }]) {
+    assert.deepEqual(withoutHttpDeliveryMetadata(other), other);
+  }
+});
 
 describe('HTTP provenance URL normalization', () => {
   test('retains origin and path while omitting query strings and fragments', () => {

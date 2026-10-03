@@ -145,7 +145,7 @@ describe('DNS change rehearsal', () => {
       'ns1.example.test :::',
       'ns1.example.test 127.0.0.1',
       'ns1.example.test 93.184.216.34 127.0.0.1',
-      'ns1.example.test 93.184.216.34 93.184.216.35 93.184.216.36',
+      `ns1.example.test ${Array.from({ length: 33 }, (_, index) => `93.184.216.${index + 1}`).join(' ')}`,
     ]) {
       const result = buildDnsChangeRehearsal({
         ...BASE,
@@ -162,6 +162,32 @@ describe('DNS change rehearsal', () => {
     });
     assert.equal(mixedNameservers.ready, false);
     assert.match(mixedNameservers.findings.find((item) => item.id === 'intended_input')?.detail ?? '', /1 invalid/u);
+  });
+
+  test('compares all admitted addresses and never equates an omitted or invalid observed set', () => {
+    const addresses = ['93.184.216.34', '93.184.216.35', '93.184.216.36'];
+    const currentCriticalAddresses = [{ hostname: 'www.example.test', addresses }];
+    const complete = buildDnsChangeRehearsal({ ...BASE, currentCriticalAddresses,
+      proposedCriticalAddresses: `www.example.test ${addresses.join(' ')}`,
+      currentGlue: [{ name: 'ns1.example.test', addresses }],
+    });
+    assert.deepEqual(complete.observed.criticalAddresses[0]?.addresses, addresses);
+    assert.deepEqual(complete.observed.glue[0]?.addresses, addresses);
+    assert.equal(complete.findings.find(item => item.id === 'critical_addresses')?.state, 'ready');
+    const changed = buildDnsChangeRehearsal({ ...BASE, currentCriticalAddresses,
+      proposedCriticalAddresses: `www.example.test ${addresses.slice(0, 2).join(' ')}`,
+    });
+    assert.equal(changed.findings.find(item => item.id === 'critical_addresses')?.state, 'review');
+    for (const incomplete of [
+      [...addresses, 'invalid'],
+      Array.from({ length: 33 }, (_, index) => `93.184.216.${index + 1}`),
+    ]) {
+      const result = buildDnsChangeRehearsal({ ...BASE,
+        currentCriticalAddresses: [{ hostname: 'www.example.test', addresses: incomplete }],
+      });
+      assert.equal(result.observed.complete, false);
+      assert.equal(result.findings.find(item => item.id === 'critical_addresses')?.state, 'unknown');
+    }
   });
 
   test('blocks rather than approving a silently shortened nameserver set', () => {

@@ -28,17 +28,15 @@ const evidenceGuides = Object.freeze(PUBLIC_RESOURCES.map((resource) => Object.f
 })));
 
 export const PUBLIC_REFERENCE_GROUPS: readonly PublicReferenceGroup[] = Object.freeze([
-  Object.freeze({ label: 'Start', items: Object.freeze([destination('/resources')]) }),
-  Object.freeze({ label: 'Command line', items: Object.freeze([destination('/cli')]) }),
+  Object.freeze({ label: 'Get started', items: Object.freeze([destination('/resources'), destination('/cli'), destination('/examples')]) }),
+  Object.freeze({ label: 'Investigation guides', items: evidenceGuides }),
   Object.freeze({
-    label: 'Product reference',
+    label: 'Reference',
     items: Object.freeze([
       destination('/methodology'),
       destination('/coverage'),
-      destination('/examples'),
     ]),
   }),
-  Object.freeze({ label: 'Evidence guides', items: evidenceGuides }),
 ]);
 
 export const PUBLIC_REFERENCE_DESTINATIONS: readonly PublicReferenceDestination[] = Object.freeze(
@@ -56,4 +54,16 @@ export const publicReferenceCommandNavigation: readonly NavigationItem[] = Objec
 
 export function publicReferenceDestination(pathname: string): PublicReferenceDestination | null {
   return PUBLIC_REFERENCE_DESTINATIONS.find((item) => item.href === pathname) ?? null;
+}
+
+export function relatedPublicReferences(pathname: string): readonly PublicReferenceDestination[] {
+  const resource = PUBLIC_RESOURCES.find(item => `/resources/${item.slug}` === pathname);
+  if (resource) return [
+    { href: resource.guideHref, label: resource.guideLabel, detail: 'Continue this task in the application guide.' },
+    { href: resource.demoHref, label: resource.demoLabel, detail: 'Apply the guide to fictional evidence.' },
+  ];
+  const group = PUBLIC_REFERENCE_GROUPS.find(item => item.items.some(page => page.href === pathname));
+  return (group?.items.length && group.items.length > 1
+    ? group.items.filter(item => item.href !== pathname)
+    : PUBLIC_REFERENCE_DESTINATIONS.filter(item => ['/cli', '/examples', '/methodology'].includes(item.href) && item.href !== pathname));
 }

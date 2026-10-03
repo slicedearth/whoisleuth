@@ -1,12 +1,18 @@
 // Only the source metadata needed to qualify an observed relationship crosses
 // this boundary. Collection and retention times are never source-time fallbacks.
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
+import { canonicalPublicIpAddress } from '../evidence/public-address-policy.mts';
 import { normalizeExplicitIsoTimestamp, readObservationEnvelope, type ObservationStatus } from '../evidence/observation.mts';
 
 export const RELATIONSHIP_TYPES = Object.freeze([
   'nameserver_set', 'ip_address', 'certificate', 'tracking_identifier', 'favicon', 'official_asset',
 ] as const);
 export type RelationshipType = typeof RELATIONSHIP_TYPES[number];
+export const NON_PUBLIC_RELATIONSHIP_LIMITATION = 'This is an equal non-public DNS answer, not evidence of shared public hosting. Private, loopback, reserved and sinkhole-style answers can recur independently.';
+export const FAVICON_RELATIONSHIP_DESCRIPTION = 'Each domain is connected by exact or bounded perceptual favicon matches, directly or through another member. Not every pair necessarily matches.';
+export function isNonPublicAddressRelationship(type: string, value: unknown): boolean {
+  return type === 'ip_address' && !canonicalPublicIpAddress(value);
+}
 const SOURCES = ['dns', 'tls', 'http', 'page_identity', 'favicon', 'registration_or_dns', 'unknown'] as const;
 type RelationshipSource = typeof SOURCES[number];
 const SOURCES_BY_TYPE: Readonly<Record<RelationshipType, readonly RelationshipSource[]>> = {

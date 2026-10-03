@@ -1,5 +1,14 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect } from './fixtures';
+import type { BrowserReadinessTarget } from './performance-sampling';
+
+// An editable loading shell is not usable navigation. The list and its first
+// destination must have reached the same rendered frame as the active input.
+export const COMMAND_NAVIGATION_READINESS: readonly BrowserReadinessTarget[] = [
+  { selector: '[role="dialog"][aria-labelledby="command-palette-title"]' },
+  { selector: '#command-search[aria-expanded="true"]', requireEnabled: true },
+  { selector: '#command-results [role="option"]', requireEnabled: true },
+];
 
 type ConsoleView = 'cases' | 'inbox' | 'campaigns' | 'relationships' | 'timeline' | 'certificates' | 'watchlists' | 'rules';
 const monitoringViews = new Set<ConsoleView>(['timeline', 'certificates', 'watchlists', 'rules']);
@@ -33,7 +42,15 @@ export async function openConsoleView(page: Page, view: ConsoleView) {
 }
 
 export async function openCaseSection(page: Page, section: 'Summary' | 'Evidence' | 'Assessment' | 'Response' | 'History') {
-  const link = page.getByRole('navigation', { name: 'Case sections', exact: true }).getByRole('link', { name: section, exact: true });
+  const navigation = page.getByRole('navigation', { name: 'Case sections', exact: true });
+  const selector = navigation.getByRole('combobox', { name: 'Case section', exact: true, includeHidden: true });
+  await expect(selector).toBeAttached();
+  if (await selector.isVisible()) {
+    await selector.selectOption({ label: section });
+    await expect(selector.locator('option:checked')).toHaveText(section);
+    return;
+  }
+  const link = navigation.getByRole('link', { name: section, exact: true });
   await expect(link).toBeVisible();
   if (await link.getAttribute('aria-current') !== 'page') await link.click();
   await expect(link).toHaveAttribute('aria-current', 'page');
@@ -45,6 +62,7 @@ export async function openCaseMetadata(page: Page) {
   const summary = page.getByText('Edit status, tags and Brand associations', { exact: true });
   await expect(summary).toBeVisible();
   if (await details.getAttribute('open') === null) await summary.click();
+  return details;
 }
 
 export async function openCaseClassification(page: Page) {

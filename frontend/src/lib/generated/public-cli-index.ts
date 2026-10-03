@@ -1,6 +1,6 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_INDEX = {
-  "commandCount": 49,
+  "commandCount": 51,
   "groups": [
     "investigate",
     "respond",
@@ -251,6 +251,13 @@ export const PUBLIC_CLI_INDEX = {
       "mode": "offline"
     },
     {
+      "id": "intake",
+      "summary": "Review selected files and identity events offline",
+      "group": "investigate",
+      "common": true,
+      "mode": "offline"
+    },
+    {
       "id": "review-evidence",
       "summary": "Review supplied evidence offline",
       "group": "investigate",
@@ -269,6 +276,13 @@ export const PUBLIC_CLI_INDEX = {
       "summary": "Review and update ordinary local Case files",
       "group": "respond",
       "common": true,
+      "mode": "offline"
+    },
+    {
+      "id": "indicator-set",
+      "summary": "Manage reviewed indicator revisions offline",
+      "group": "respond",
+      "common": false,
       "mode": "offline"
     },
     {

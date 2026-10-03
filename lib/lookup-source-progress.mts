@@ -10,11 +10,12 @@ import {
   THREAT_INTELLIGENCE_RESULT_STATES,
   THREAT_INTELLIGENCE_SCHEMA,
   type ThreatIntelligenceResultState,
-} from './threat-intelligence-types.mts';
+} from '../packages/analysis/threat-intelligence-types.mts';
 import type {
   LookupProgressSource,
   LookupProgressState,
 } from './lookup-progress.mts';
+import { plannedLookupSources } from './lookup-progress.mts';
 
 type LookupSourceSettlement = Readonly<{
   source: LookupProgressSource;
@@ -77,26 +78,18 @@ function plannedLookupProgressSources(
   classified: ClassifiedQuery,
   options: PlannedLookupProgressOptions = {},
 ): readonly LookupProgressSource[] {
-  const sources: LookupProgressSource[] = ['rdap', 'whois'];
-  if (classified.type === 'domain') {
-    sources.push('domain_evidence', 'registrar_rdap', 'network_context');
-    if (options.securityTxt) sources.push('security_txt');
-    if (options.externalIntelligence) sources.push('external_intelligence');
-    if (options.malwareHostIntelligence) sources.push('malware_host_intelligence');
-    if (options.malwareIocIntelligence) sources.push('malware_ioc_intelligence');
-  } else if (classified.type === 'ipv4' || classified.type === 'ipv6') {
-    sources.push('reverse_dns');
-  }
-  return Object.freeze(sources);
+  return plannedLookupSources(classified.type, 'deep', options);
 }
 
 function normalizedState(
   source: LookupProgressSource,
   outcome: 'fulfilled' | 'rejected',
   value: unknown,
+  requestedDomain?: string,
+  requested = true,
 ): LookupProgressState {
   if (outcome === 'rejected') return 'error';
-  if (value === null || value === undefined) return 'skipped';
+  if (value === null || value === undefined) return source === 'rdap' && requested ? 'unsupported' : 'skipped';
 
   if (source === 'rdap') {
     const rdap = record(value);
@@ -105,7 +98,7 @@ function normalizedState(
     return sourceTruncated(rdap) ? 'partial' : 'success';
   }
   if (source === 'whois') {
-    const status = whoisCollectionStatus(value);
+    const status = whoisCollectionStatus(value, requestedDomain);
     return status === 'complete' ? 'success' : status;
   }
   if (source === 'domain_evidence') {
@@ -134,8 +127,10 @@ function normalizeLookupSourceSettlement(
   source: LookupProgressSource,
   outcome: 'fulfilled' | 'rejected',
   value: unknown,
+  requestedDomain?: string,
+  requested = true,
 ): LookupSourceSettlement {
-  const state = normalizedState(source, outcome, value);
+  const state = normalizedState(source, outcome, value, requestedDomain, requested);
   const sourceRecord = record(value);
   const threatObservation = THREAT_INTELLIGENCE_SOURCES.has(source)
     ? record(sourceRecord.observation)

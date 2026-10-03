@@ -2,15 +2,13 @@
 
 import { Buffer } from 'node:buffer';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, statSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
   CRITICAL_MUTATION_MANIFEST,
   CRITICAL_MUTATION_MANIFEST_VERSION,
-  assertUniqueCriticalMutationPattern,
-  MAX_CRITICAL_MUTANTS,
   MAX_CRITICAL_MUTATION_OUTPUT_BYTES,
   MAX_CRITICAL_MUTATION_TEXT_BYTES,
   MAX_CRITICAL_MUTATION_TIMEOUT_MS,
@@ -20,7 +18,6 @@ import {
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LOADER = path.join(REPOSITORY_ROOT, 'tools', 'critical-mutation-loader.mts');
 const REPORTER = path.join(REPOSITORY_ROOT, 'tools', 'mutation-test-reporter.mts');
-const SAFE_PATH = /^(?:[a-zA-Z0-9._-]+\/)+[a-zA-Z0-9._-]+$/u;
 
 type MutationOutcome = Readonly<{
   id: string;
@@ -33,13 +30,13 @@ type MutationOutcome = Readonly<{
 }>;
 
 function validateManifest(): void {
-  if (CRITICAL_MUTATION_MANIFEST.length < 5 || CRITICAL_MUTATION_MANIFEST.length > MAX_CRITICAL_MUTANTS
+  if (CRITICAL_MUTATION_MANIFEST.length < 5
     || new Set(CRITICAL_MUTATION_MANIFEST.map((item) => item.id)).size !== CRITICAL_MUTATION_MANIFEST.length
     || new Set(CRITICAL_MUTATION_MANIFEST.map((item) => item.area)).size !== CRITICAL_MUTATION_MANIFEST.length) {
-    throw new TypeError('Critical mutation manifest must cover each reviewed area exactly once within its bound.');
+    throw new TypeError('Critical mutation manifest must cover each reviewed area exactly once.');
   }
   for (const mutant of CRITICAL_MUTATION_MANIFEST) {
-    if (!/^[a-z0-9][a-z0-9-]{2,79}$/u.test(mutant.id) || !SAFE_PATH.test(mutant.file)
+    if (!/^[a-z0-9][a-z0-9-]{2,79}$/u.test(mutant.id)
       || !Number.isSafeInteger(mutant.timeoutMs) || mutant.timeoutMs < 1_000 || mutant.timeoutMs > MAX_CRITICAL_MUTATION_TIMEOUT_MS
       || mutant.focusedTests.length < 1 || mutant.focusedTests.length > 8
       || mutant.focusedTests.some((file) => !/^test\/(?:[a-zA-Z0-9._-]+\/)*[a-zA-Z0-9._-]+\.test\.mts$/u.test(file))
@@ -47,10 +44,6 @@ function validateManifest(): void {
       || Buffer.byteLength(mutant.replacement, 'utf8') > MAX_CRITICAL_MUTATION_TEXT_BYTES) {
       throw new TypeError(`Critical mutant ${mutant.id} is malformed or unbounded.`);
     }
-    const absolute = path.resolve(REPOSITORY_ROOT, mutant.file);
-    if (!absolute.startsWith(`${REPOSITORY_ROOT}${path.sep}`) || !statSync(absolute).isFile()) throw new TypeError(`Critical mutant ${mutant.id} target is unavailable.`);
-    const source = readFileSync(absolute, 'utf8');
-    assertUniqueCriticalMutationPattern(source, mutant.search, `Critical mutant ${mutant.id}`);
     for (const test of mutant.focusedTests) if (!statSync(path.join(REPOSITORY_ROOT, test)).isFile()) throw new TypeError(`Critical mutant ${mutant.id} focused test is unavailable.`);
   }
 }

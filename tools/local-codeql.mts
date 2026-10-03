@@ -8,6 +8,7 @@ import { homedir, tmpdir, totalmem } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sanitizedMaintainerText as boundedText } from './maintainer-tool-helpers.mts';
+import { forceStopOwnedTree, waitForOwnedTreeExit } from './owned-process.mts';
 
 type ProcessResult = Readonly<{
   exitCode: number;
@@ -56,11 +57,12 @@ type CodeqlFindings = Readonly<{
 type LocalCodeqlReport = Readonly<{
   status: 'pass' | 'findings' | 'baseline_drift';
   codeqlVersion: string;
-  language: 'javascript-typescript';
-  querySuite: typeof CODEQL_QUERY_SUITE;
+  language: typeof CODEQL_ANALYSES[number]['language'];
+  querySuite: typeof CODEQL_ANALYSES[number]['querySuite'];
   findings: CodeqlFindings;
 }>;
 type LocalCodeqlOptions = Readonly<{
+  language?: typeof CODEQL_ANALYSES[number]['language'];
   repositoryRoot?: string;
   codeqlCommand?: string;
   runProcess?: ProcessRunner;
@@ -88,7 +90,13 @@ type StaleCodeqlCleanupOptions = Readonly<{
 
 const CODEQL_QUERY_SUITE = 'javascript-code-scanning.qls';
 const CODEQL_LANGUAGE = 'javascript-typescript' as const;
-const CODEQL_PROCESS_TIMEOUT_MS = 15 * 60 * 1000;
+export const CODEQL_ANALYSES = Object.freeze([
+  Object.freeze({ language: CODEQL_LANGUAGE, querySuite: CODEQL_QUERY_SUITE }),
+  Object.freeze({ language: 'actions' as const, querySuite: 'actions-code-scanning.qls' as const }),
+]);
+// Operational cancellation bound, not a performance target. Complete analysis
+// also runs on memory-constrained and emulated developer environments.
+const CODEQL_PROCESS_TIMEOUT_MS = 60 * 60 * 1000;
 const MAX_CODEQL_OUTPUT_BYTES = 4 * 1024 * 1024;
 const MAX_CODEQL_SARIF_BYTES = 16 * 1024 * 1024;
 const MAX_CODEQL_FINDINGS = 1000;
@@ -96,8 +104,7 @@ const MAX_DISPLAYED_FINDINGS = 100;
 const MAX_FINDING_TEXT_LENGTH = 500;
 const MAX_FINDING_PATH_LENGTH = 1000;
 const MAX_CODEQL_COMMAND_LENGTH = 4096;
-const MIN_CODEQL_RAM_MB = 1024;
-const MAX_CODEQL_RAM_MB = 4096;
+const MIN_CODEQL_RAM_MB = 2048;
 const CODEQL_THREADS = 2;
 const CODEQL_TEMP_DIRECTORY_PREFIX = 'whoisleuth-codeql-';
 const CODEQL_STALE_DIRECTORY_AGE_MS = 24 * 60 * 60 * 1000;
@@ -134,6 +141,12 @@ const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
   // now has its own bounded request middleware. CodeQL does not recognize the
   // project-local limiter, so retain only this exact reviewed fingerprint.
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c95b56b6acb3e65b:1', primaryLocationStartColumnFingerprint: '23', reason: 'false_positive' as const }),
+  // Missing-page file responses use that same HTML limiter before the handler.
+  // An actual HTTP regression checks admitted 404, saturated 429/Retry-After
+  // and the independent session path. The analyser does not model this custom
+  // middleware factory. The isolated fixture only tests fixed-file semantics.
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '44571d1430ac2cda:1', primaryLocationStartColumnFingerprint: '34', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'test/server-routing.test.mts', primaryLocationLineHash: '36dabe8dfbdc8902:1', primaryLocationStartColumnFingerprint: '34', reason: 'used_in_tests' as const }),
   // Contact-route verification is preceded by its own bounded per-identity
   // limiter. CodeQL models the token verification as authorization but does
   // not follow the project-local Express middleware factory.
@@ -429,9 +442,11 @@ async function runProcessBounded(
   command: string,
   args: readonly string[],
   options: ProcessOptions,
+  spawnProcess: typeof spawn = spawn,
+  stopProcessTree = forceStopOwnedTree,
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, [...args], {
+    const child = spawnProcess(command, [...args], {
       cwd: options.cwd,
       env: process.env,
       shell: false,
@@ -445,20 +460,23 @@ async function runProcessBounded(
     let exceededOutput = false;
     let terminationReason: 'deadline' | 'output' | null = null;
     let processError: Error | null = null;
-    let forceTimer: NodeJS.Timeout | null = null;
+    let stoppedProcesses: readonly number[] = [];
+    let terminationRequested = false;
 
     const finish = (callback: () => void): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      if (forceTimer) clearTimeout(forceTimer);
       callback();
     };
     const terminate = (): void => {
-      child.kill('SIGTERM');
-      if (!forceTimer) {
-        forceTimer = setTimeout(() => child.kill('SIGKILL'), 2000);
-        forceTimer.unref();
+      if (terminationRequested) return;
+      terminationRequested = true;
+      try {
+        stoppedProcesses = stopProcessTree(child);
+      } catch (error) {
+        processError = error instanceof Error ? error : new Error('Could not terminate the owned analyser process tree.');
+        child.kill('SIGKILL');
       }
     };
     const timeout = setTimeout(() => {
@@ -485,25 +503,29 @@ async function runProcessBounded(
     child.once('error', (error) => {
       processError = error;
     });
-    child.once('close', (code) => finish(() => {
-      if (processError) {
-        reject(processError);
-        return;
-      }
-      if (exceededOutput) {
-        reject(new Error(`CodeQL process output exceeded ${options.maxOutputBytes} bytes.`));
-        return;
-      }
-      if (terminationReason === 'deadline') {
-        reject(new Error(`CodeQL exceeded its ${options.timeoutMs} ms process deadline.`));
-        return;
-      }
-      resolve({
-        exitCode: Number.isInteger(code) ? Number(code) : 2,
-        stdout: Buffer.concat(stdout).toString('utf8'),
-        stderr: Buffer.concat(stderr).toString('utf8'),
+    child.once('close', async (code) => {
+      try { await waitForOwnedTreeExit(stoppedProcesses); }
+      catch (error) { processError ??= error instanceof Error ? error : new Error('Could not observe analyser termination.'); }
+      finish(() => {
+        if (processError) {
+          reject(processError);
+          return;
+        }
+        if (exceededOutput) {
+          reject(new Error(`CodeQL process output exceeded ${options.maxOutputBytes} bytes.`));
+          return;
+        }
+        if (terminationReason === 'deadline') {
+          reject(new Error(`CodeQL exceeded its ${options.timeoutMs} ms process deadline.`));
+          return;
+        }
+        resolve({
+          exitCode: Number.isInteger(code) ? Number(code) : 2,
+          stdout: Buffer.concat(stdout).toString('utf8'),
+          stderr: Buffer.concat(stderr).toString('utf8'),
+        });
       });
-    }));
+    });
   });
 }
 
@@ -520,9 +542,32 @@ function parseCodeqlVersion(stdout: string): string {
   return boundedText(stdout.split(/\r?\n/u)[0], 'unknown', 100);
 }
 
-function codeqlRamMegabytes(systemMemoryBytes = totalmem()): number {
-  const halfSystemMemory = Math.floor(systemMemoryBytes / (2 * 1024 * 1024));
-  return Math.max(MIN_CODEQL_RAM_MB, Math.min(MAX_CODEQL_RAM_MB, halfSystemMemory));
+function codeqlRamMegabytes(
+  systemMemoryBytes = totalmem(),
+  constrainedMemoryBytes = process.constrainedMemory(),
+  platform: NodeJS.Platform = process.platform,
+): number {
+  if (!Number.isSafeInteger(systemMemoryBytes) || systemMemoryBytes <= 0
+    || !Number.isInteger(constrainedMemoryBytes) || constrainedMemoryBytes < 0) {
+    throw new TypeError('CodeQL requires a valid environment memory limit.');
+  }
+  // Some runtimes report the cgroup's unsigned "unlimited" sentinel rather
+  // than zero. It may exceed safe integer precision, but physical RAM still
+  // bounds the calculation before any memory arithmetic is performed.
+  const memoryBytes = constrainedMemoryBytes > 0
+    ? Math.min(systemMemoryBytes, constrainedMemoryBytes)
+    : systemMemoryBytes;
+  const memoryMiB = Math.floor(memoryBytes / (1024 * 1024));
+  // Match the hosted analyser's OS reserve: 1 GiB (1.5 on Windows), plus
+  // 5% above 8 GiB for page tables. Do not halve RAM or cap larger runners.
+  // https://github.com/github/codeql-action/blob/main/src/util.ts
+  const reserveMiB = (platform === 'win32' ? 1536 : 1024)
+    + Math.max(0, memoryMiB - 8192) * 0.05;
+  const ramMiB = Math.floor(memoryMiB - reserveMiB);
+  if (ramMiB < MIN_CODEQL_RAM_MB) {
+    throw new RangeError(`CodeQL needs at least ${MIN_CODEQL_RAM_MB} MiB after the operating-system reserve; this environment permits ${Math.max(0, ramMiB)} MiB. Increase the environment memory allocation before running analysis.`);
+  }
+  return ramMiB;
 }
 
 function boundedDiagnostic(value: unknown, maximum = 1000): string {
@@ -677,6 +722,9 @@ function processFailure(command: string, result: ProcessResult): Error {
 }
 
 async function runLocalCodeql(options: LocalCodeqlOptions = {}): Promise<LocalCodeqlReport> {
+  const analysis = CODEQL_ANALYSES.find(item => item.language === (options.language ?? CODEQL_LANGUAGE));
+  if (!analysis) throw new TypeError('Unsupported local CodeQL language.');
+  const ramMiB = codeqlRamMegabytes();
   const repositoryRoot = path.resolve(options.repositoryRoot ?? PROJECT_ROOT);
   const codeqlCommand = await findCodeqlCommand(options.codeqlCommand);
   const runProcess = options.runProcess ?? runProcessBounded;
@@ -705,19 +753,21 @@ async function runLocalCodeql(options: LocalCodeqlOptions = {}): Promise<LocalCo
 
     const createResult = await runProcess(codeqlCommand, [
       'database', 'create', databasePath,
-      `--language=${CODEQL_LANGUAGE}`,
+      `--language=${analysis.language}`,
       `--source-root=${repositoryRoot}`,
+      `--threads=${CODEQL_THREADS}`,
+      `--ram=${ramMiB}`,
     ], processOptions);
     if (createResult.exitCode !== 0) throw processFailure('CodeQL database creation', createResult);
 
     const analyzeResult = await runProcess(codeqlCommand, [
       'database', 'analyze', databasePath,
-      CODEQL_QUERY_SUITE,
+      analysis.querySuite,
       '--format=sarif-latest',
-      '--sarif-category=javascript-typescript',
+      `--sarif-category=${analysis.language}`,
       `--output=${sarifPath}`,
       `--threads=${CODEQL_THREADS}`,
-      `--ram=${codeqlRamMegabytes()}`,
+      `--ram=${ramMiB}`,
     ], processOptions);
     if (analyzeResult.exitCode !== 0) throw processFailure('CodeQL analysis', analyzeResult);
 
@@ -728,7 +778,7 @@ async function runLocalCodeql(options: LocalCodeqlOptions = {}): Promise<LocalCo
     }
     const findings = classifyCodeqlFindings(
       parseCodeqlSarif(await readFile(sarifPath)),
-      options.knownFindings ?? KNOWN_CODEQL_FINDINGS,
+      options.knownFindings ?? (analysis.language === CODEQL_LANGUAGE ? KNOWN_CODEQL_FINDINGS : []),
     );
     const status = findings.new > 0
       ? 'findings'
@@ -738,8 +788,8 @@ async function runLocalCodeql(options: LocalCodeqlOptions = {}): Promise<LocalCo
     return Object.freeze({
       status,
       codeqlVersion: parseCodeqlVersion(versionResult.stdout),
-      language: CODEQL_LANGUAGE,
-      querySuite: CODEQL_QUERY_SUITE,
+      language: analysis.language,
+      querySuite: analysis.querySuite,
       findings,
     });
   } catch (error) {
@@ -763,6 +813,7 @@ function formatLocalCodeqlReport(report: LocalCodeqlReport): string {
   const lines = [
     'WHOISleuth local CodeQL check',
     `CodeQL: ${report.codeqlVersion}`,
+    `Language: ${report.language}`,
     `Suite: ${report.querySuite}`,
     `Result: ${report.status === 'pass' ? 'PASS' : report.status === 'findings' ? 'NEW FINDINGS' : 'BASELINE DRIFT'}`,
     `Findings: ${report.findings.total} total, ${report.findings.known} reviewed, ${report.findings.new} new`,
@@ -790,9 +841,13 @@ function parseArguments(args: readonly string[]): void {
 async function main(args = process.argv.slice(2)): Promise<number> {
   try {
     parseArguments(args);
-    const report = await runLocalCodeql();
-    process.stdout.write(formatLocalCodeqlReport(report));
-    return report.status === 'pass' ? 0 : 1;
+    let status = 0;
+    for (const analysis of CODEQL_ANALYSES) {
+      const report = await runLocalCodeql({ language: analysis.language });
+      process.stdout.write(formatLocalCodeqlReport(report));
+      if (report.status !== 'pass') status = 1;
+    }
+    return status;
   } catch (error) {
     process.stderr.write(`${boundedText(error instanceof Error ? error.message : error, 'Local CodeQL check failed.', 1200)}\n`);
     return 2;
@@ -815,7 +870,6 @@ export {
   MAX_CODEQL_TEMP_ROOT_ENTRIES,
   MAX_CODEQL_TEMP_MARKER_BYTES,
   MAX_STALE_CODEQL_DIRECTORY_REMOVALS,
-  MAX_CODEQL_RAM_MB,
   MAX_CODEQL_FINDINGS,
   MAX_CODEQL_OUTPUT_BYTES,
   MAX_CODEQL_SARIF_BYTES,

@@ -12,8 +12,10 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createRequire, isBuiltin } from 'node:module';
+import type { CompilerOptions } from 'typescript';
 
-import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import {
   boundedSafeRelativePath,
   compareCodeUnits,
@@ -47,7 +49,6 @@ const SOURCE_DIRECTORIES = Object.freeze([
   'frontend/static',
   'lib',
   'packages',
-  'tools',
 ] as const);
 const SOURCE_FILES = Object.freeze([
   '.nvmrc',
@@ -245,6 +246,50 @@ function inventoryDirectory(
   return Object.freeze(files);
 }
 
+/** Discover local build helpers from the real configuration imports. Unrelated
+ * verification tools do not contribute bytes to the application. The compiler
+ * resolves imports; lockfiles cover external packages. No helper registry. */
+function buildConfigurationFiles(repositoryRoot: string, known: ReadonlySet<string>, budget: InventoryBudget): PlannedFile[] {
+  // Build inspection runs after installation. Bootstrap commands also import
+  // this module's artefact paths and must remain usable without node_modules.
+  const ts = createRequire(path.join(DEFAULT_REPOSITORY_ROOT, 'package.json'))('typescript') as typeof import('typescript');
+  const pending = ['frontend/vite.config.ts', 'frontend/svelte.config.ts'];
+  const visited = new Set<string>();
+  const additional: PlannedFile[] = [];
+  const resolution: CompilerOptions = {
+    moduleResolution: ts.ModuleResolutionKind.Bundler, module: ts.ModuleKind.ESNext,
+    allowJs: true, resolveJsonModule: true,
+  };
+  for (let index = 0; index < pending.length; index++) {
+    const relative = pending[index]!;
+    if (visited.has(relative)) continue;
+    visited.add(relative);
+    if (visited.size > MAX_FILES) throw new TypeError('Frontend build helper graph exceeds its file limit.');
+    const filename = path.join(repositoryRoot, relative);
+    for (let directory = path.dirname(relative); directory !== '.'; directory = path.dirname(directory)) {
+      const stat = lstatSync(path.join(repositoryRoot, directory));
+      if (stat.isSymbolicLink() || !stat.isDirectory()) throw new TypeError(`Frontend build helper rejects linked or non-directory traversal: ${directory}.`);
+    }
+    // Apply the same file/path admission before parsing a discovered helper.
+    const planned = planFile(filename, relative, known.has(relative) ? inventoryBudget() : budget);
+    if (!known.has(relative)) additional.push(planned);
+    if (!/\.[cm]?[jt]sx?$/u.test(relative)) continue;
+    const source = readBoundedStableRegularFileSync(filename, MAX_FILE_BYTES, `Frontend build helper ${relative}`).toString('utf8');
+    for (const reference of ts.preProcessFile(source, true, true).importedFiles) {
+      if (isBuiltin(reference.fileName)) continue;
+      const resolved = ts.resolveModuleName(reference.fileName, filename, resolution, ts.sys).resolvedModule;
+      if (!resolved) {
+        throw new TypeError(`Frontend build helper import is unresolved: ${relative} → ${reference.fileName}.`);
+      }
+      if (resolved.isExternalLibraryImport) continue;
+      const target = path.relative(repositoryRoot, resolved.resolvedFileName).split(path.sep).join('/');
+      pending.push(boundedSafeRelativePath(target, 'Frontend build helper', MAX_PATH_LENGTH));
+      if (pending.length > MAX_INVENTORY_ENTRIES) throw new TypeError('Frontend build helper graph exceeds its import limit.');
+    }
+  }
+  return additional;
+}
+
 function sourceIdentity(repositoryRoot: string): TreeIdentity {
   const budget = inventoryBudget();
   const planned: PlannedFile[] = SOURCE_DIRECTORIES.flatMap((directory) => (
@@ -253,6 +298,7 @@ function sourceIdentity(repositoryRoot: string): TreeIdentity {
   for (const relative of SOURCE_FILES) {
     planned.push(planFile(path.join(repositoryRoot, relative), relative, budget));
   }
+  planned.push(...buildConfigurationFiles(repositoryRoot, new Set(planned.map(file => file.path)), budget));
   return treeIdentity(planned.map(fileIdentity));
 }
 

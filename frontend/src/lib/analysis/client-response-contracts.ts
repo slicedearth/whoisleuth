@@ -1,4 +1,4 @@
-import { normalizeDomain } from './case-model.ts';
+import { normalizeDomain } from '../../../../packages/evidence/domain-name.mts';
 import { PAGE_FINGERPRINT_PARSERS, PAGE_IDENTITY_VERSION } from './page-baseline.ts';
 import { validPagePublicationMetadata } from '../../../../lib/homepage-metadata-contract.mts';
 import { isRecord as isUnknownRecord } from '../../../../lib/json-record.mts';

@@ -5,6 +5,7 @@ import {
   buildLookupNetworkDisplay,
   buildLookupPageDisplay,
 } from '../frontend/src/lib/analysis/lookup-display-model.ts';
+import { lookupTlsProps } from '../frontend/src/lib/analysis/lookup-tls-display.ts';
 
 test('DNS presentation retains null MX and withheld family evidence without claiming absence', () => {
   const display = buildLookupNetworkDisplay({
@@ -80,54 +81,37 @@ function emptyPageInput() {
   };
 }
 
-test('keeps the decomposed display contracts and property order stable', () => {
-  assert.deepEqual(Object.keys(buildLookupNetworkDisplay(emptyNetworkInput())), [
-    'dnsRows',
-    'dnsDelegation',
-    'dnsQueryFailures',
-    'reverseDnsRows',
-    'reverseDnsFailure',
-    'httpRows',
-    'httpRedirects',
-    'httpAttempts',
-    'httpMetadata',
-    'httpDeliveryMetadata',
-    'tlsRows',
-    'tlsFindings',
-    'leafCertificate',
-    'alternativeNames',
-    'tlsChain',
-    'tlsValidation',
-  ]);
-  assert.deepEqual(Object.keys(buildLookupPageDisplay(emptyPageInput())), [
-    'pagePublicationMetadata',
-    'pageIdentityFacts',
-    'resourceSummary',
-    'downloadSummary',
-    'trackingIdentifiers',
-    'fingerprints',
-    'credentialSurface',
-    'credentialSurfaceLimitations',
-    'structuredIdentities',
-    'structuredIdentityLimitations',
-    'technologyFindings',
-    'technologyLimitations',
-    'pageRoles',
-    'primaryPageRole',
-    'pageRoleLimitations',
-    'clientScriptSummary',
-    'clientBehaviorIndicators',
-    'clientBehaviorLimitations',
-    'browserLibraries',
-    'browserLibraryLimitations',
-    'observedNetworkSourceLabel',
-    'observedNetworkRows',
-    'observedNetworkLimitations',
-    'securityPostureSummary',
-    'securityPostureFindings',
-    'securityPostureLimitations',
-    'pageComparison',
-  ]);
+test('projects a typed TLS presentation without trusting malformed source values', () => {
+  const display = buildLookupNetworkDisplay({ ...emptyNetworkInput(),
+    tlsEvidence: { status: 'partial', complete: false, chainTruncated: true, limitations: ['A source limitation'] },
+    tlsCertificate: { validFrom: { private: 'not a date' }, validTo: '2026-10-01T00:00:00.000Z' },
+    tlsAltNames: { truncated: true },
+  });
+  assert.equal(display.tlsPresentation.complete, false);
+  assert.equal(display.tlsPresentation.validFrom, null);
+  assert.equal(display.tlsPresentation.validTo, '2026-10-01T00:00:00.000Z');
+  assert.equal(display.tlsPresentation.chainTruncated, true);
+  assert.equal(display.tlsPresentation.alternativeNamesTruncated, true);
+  assert.deepEqual(display.tlsPresentation.limitations, ['A source limitation']);
+  const props = lookupTlsProps(display);
+  assert.equal(props.status, 'partial');
+  assert.equal(props.complete, false);
+  assert.deepEqual(props.limitations, ['A source limitation']);
+  assert.equal(props.rows, display.tlsRows);
+  assert.equal(props.validationDetails, display.tlsValidation);
+  assert.equal(props.validFrom, null);
+});
+
+test('empty page evidence supplies no fingerprints, identities or inferred page role', () => {
+  const display = buildLookupPageDisplay(emptyPageInput());
+  assert.deepEqual(display.fingerprints, []);
+  assert.deepEqual(display.trackingIdentifiers, []);
+  assert.deepEqual(display.structuredIdentities, []);
+  assert.deepEqual(display.technologyFindings, []);
+  assert.deepEqual(display.pageRoles, []);
+  assert.equal(display.primaryPageRole, 'Unclassified');
+  assert.equal(display.pageIdentityFacts.find(row => row.label === 'Document language')?.value, '—');
+  assert.equal(display.pageComparison, null);
 });
 
 test('projects complete bounded DNS families and delegation evidence', () => {

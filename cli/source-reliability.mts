@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 
 import { canonicalArtifactJson } from '../packages/evidence/artifact-integrity.mts';
-import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 import { LOOKUP_SOURCE_STATES, lookupDiagnosticStates, type LookupSourceState as SourceState } from '../lib/lookup-diagnostics.mts';
 import {
   normalizeExplicitIsoTimestamp,
@@ -15,7 +15,7 @@ import { normalizeCliLookupDocument } from './saved-lookup.mts';
 import { CLI_BULK_SCHEMA, CLI_BULK_ITEM_SCHEMA, CLI_BULK_SCHEMA_VERSION } from './formatters/json.mts';
 import { LOOKUP_THREAT_INTELLIGENCE_PROVIDERS } from '../lib/lookup-threat-provider-inventory.mts';
 import { MAX_THREAT_INTELLIGENCE_PROVIDERS } from '../lib/lookup-response-contract.mts';
-import { THREAT_INTELLIGENCE_SCHEMA, THREAT_INTELLIGENCE_CONTRACT_VERSION } from '../lib/threat-intelligence-types.mts';
+import { THREAT_INTELLIGENCE_SCHEMA, THREAT_INTELLIGENCE_CONTRACT_VERSION } from '../packages/analysis/threat-intelligence-types.mts';
 
 export const SOURCE_RELIABILITY_REPORT_SCHEMA = 'whoisleuth.source-reliability-report';
 export const SOURCE_RELIABILITY_REPORT_VERSION = 1;

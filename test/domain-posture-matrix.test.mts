@@ -85,7 +85,8 @@ describe('cross-domain posture matrix', () => {
     assert.equal(review.cells.find((cell) => cell.field === 'mx')?.state, 'suppressed');
     assert.equal(review.cells.find((cell) => cell.field === 'caa')?.state, 'review');
     assert.equal(review.cells.find((cell) => cell.field === 'ds')?.state, 'unsupported');
-    assert.equal(review.cells.find((cell) => cell.field === 'renewalReviewAt')?.state, 'drift');
+    assert.equal(review.cells.find((cell) => cell.field === 'renewalReviewAt')?.state, 'due');
+    assert.equal(matrix.stateCounts.due, 1);
     assert.equal(aligned.cells.find((cell) => cell.field === 'nameservers')?.state, 'aligned');
     assert.equal(aligned.cells.find((cell) => cell.field === 'mx')?.state, 'unknown');
     assert.equal(unavailable.cells.find((cell) => cell.field === 'nameservers')?.state, 'unavailable');
@@ -113,8 +114,15 @@ describe('cross-domain posture matrix', () => {
       ...raw,
       officialDomains: Array.from({ length: 30 }, (_, index) => `d${String(29 - index).padStart(2, '0')}.example`),
     }, NOW);
-    assert.equal(matrix.rows.length, 20);
-    assert.equal(matrix.rows[0]?.domain, 'd10.example');
+    assert.equal(matrix.rows.length, 30);
+    assert.equal(matrix.rows[0]?.domain, 'd00.example');
     assert.equal(matrix.rows.at(-1)?.domain, 'd29.example');
+  });
+
+  test('projects the full admitted official-domain inventory, including the final domain', () => {
+    const officialDomains = Array.from({ length: 200 }, (_, index) => `d${String(index).padStart(3, '0')}.example`);
+    const matrix = buildDomainPostureMatrix({ ...profile(), officialDomains }, NOW);
+    assert.deepEqual(matrix.rows.map(row => row.domain), officialDomains);
+    assert.ok(matrix.rows.every(row => row.cells.length > 0));
   });
 });

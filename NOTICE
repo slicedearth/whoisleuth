@@ -44,8 +44,8 @@ Shalini Chandra (2024), licensed under CC BY 4.0 without warranties. The source
 and licence links, modifications and reproduction instructions are in that
 directory's README.md. This dataset is not included in the website or CLI.
 
-The generated Unicode confusable projection is derived from Unicode UTS #39
-data file confusables.txt, Unicode version 17.0.0.
+The generated Unicode confusable projection is derived from the Unicode UTS #39
+data file confusables.txt. Its source version and digest accompany the projection.
 
 UNICODE LICENSE V3 COPYRIGHT AND PERMISSION NOTICE
 Copyright © 1991-2026 Unicode, Inc.

@@ -14,6 +14,7 @@ import { classifyQuery } from '../lib/classify.mts';
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { summarizeBulkProfileContexts, unavailableBulkProfileContext } from '../packages/workspace/bulk-session-model.mts';
+import { ALLOWED_ORIGIN } from './constants';
 
 // A few px of tolerance for subpixel layout rounding across engines.
 const OVERFLOW_TOLERANCE_PX = 1;
@@ -43,11 +44,19 @@ export async function openNativeLinkInNewTab(page: Page, link: Locator): Promise
   await link.click({ modifiers: ['ControlOrMeta'] });
   await expect(link).toHaveAttribute('data-native-click', JSON.stringify({ intercepted: false, modified: true, shift: false }));
   await expect(page).toHaveURL(originalUrl);
+  const target = await link.evaluate(element => {
+    if (!(element instanceof HTMLAnchorElement)) throw new Error('Native navigation requires an anchor.');
+    return element.href;
+  });
+  expect(new URL(target).origin, 'native test destinations must stay on the fixture origin').toBe(ALLOWED_ORIGIN);
   const [destination] = await Promise.all([
     page.context().waitForEvent('page'),
     link.click({ modifiers: ['ControlOrMeta', 'Shift'] }),
   ]);
   await destination.bringToFront();
+  // A new Page can still own its initial empty document. Wait for the actual
+  // fixture navigation before consumers inspect its DOM or execution context.
+  await destination.waitForURL(url => url.href === target, { waitUntil: 'domcontentloaded' });
   return destination;
 }
 
@@ -223,6 +232,7 @@ export async function expectNoHorizontalOverflow(page: Page) {
         };
       })
       .filter((item) => item.right > doc.clientWidth + tolerance || item.left < -tolerance)
+      .sort((left, right) => right.right - left.right)
       .slice(0, 8);
     return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth, offenders };
   }, OVERFLOW_TOLERANCE_PX), { message: 'horizontal overflow: rendered content must fit the viewport' }).toBeNull();
@@ -301,7 +311,7 @@ export async function openBrandWorkbench(
 
 export async function openBulkWorkspaceTools(
   page: Page,
-  tool: 'review' | 'sessions' = 'sessions',
+  tool: 'review' | 'sessions' | 'indicators' = 'sessions',
 ): Promise<void> {
   const trigger = page.getByRole('button', { name: /^Workspace tools\b/u });
   await expect(trigger).toBeVisible();
@@ -309,7 +319,7 @@ export async function openBulkWorkspaceTools(
   await expect(trigger).toHaveAttribute('aria-expanded', 'true');
   const switcher = page.getByRole('group', { name: 'Bulk workspace tool' });
   const option = switcher.getByRole('button', {
-    name: tool === 'sessions' ? 'Saved sessions' : 'Saved review views',
+    name: tool === 'sessions' ? 'Saved sessions' : tool === 'review' ? 'Saved review views' : 'Indicator revisions',
   });
   if (await option.getAttribute('aria-pressed') !== 'true') await option.click();
   await expect(option).toHaveAttribute('aria-pressed', 'true');
@@ -486,9 +496,9 @@ export async function migrateLegacyBrowserData(
   entries: Record<string, LegacyStorageValue>,
   options: Readonly<{ clearStorage?: boolean; destination?: string }> = {},
 ) {
-  const current = options.destination ? null : new URL(page.url());
+  const current = new URL(page.url());
   const destination = options.destination
-    ?? `${current?.pathname ?? '/'}${current?.search ?? ''}${current?.hash ?? ''}`;
+    ?? `${current.pathname}${current.search}${current.hash}`;
   // Use a static same-origin document before deleting the database. That
   // closes any live IndexedDB connection without starting another application
   // session or storage load that the fixture would immediately abort.

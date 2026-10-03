@@ -3,9 +3,9 @@ import { buildExtractedLifecycleFamily } from './extracted-domain-lifecycle.mts'
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 export const ANALYST_INTERCHANGE_CONTRACT_OWNER = 'packages/contracts/analyst-interchange.mts';
 export const INVESTIGATION_CACAO_SPEC_VERSION = 'cacao-2.0';
-export const INVESTIGATION_CACAO_PROFILE_VERSION = 2;
-export const INVESTIGATION_CACAO_PROFILE_SEMVER = '2.0.0';
-export const INVESTIGATION_CACAO_SUPPORTED_PROFILE_VERSIONS = [INVESTIGATION_CACAO_PROFILE_VERSION] as const;
+export const INVESTIGATION_CACAO_PROFILE_VERSION = 3;
+export const INVESTIGATION_CACAO_PROFILE_SEMVER = '3.0.0';
+export const INVESTIGATION_CACAO_SUPPORTED_PROFILE_VERSIONS = [2, INVESTIGATION_CACAO_PROFILE_VERSION] as const;
 export const MAX_INVESTIGATION_CACAO_IMPORT_BYTES = 384 * 1024;
 export const BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA = 'whoisleuth.brand-protection-operations-report';
 export const BRAND_PROTECTION_OPERATIONS_REPORT_VERSION = 2;
@@ -18,6 +18,10 @@ export const STIX_INDICATOR_LIFECYCLE_SCHEMA = 'whoisleuth.internal.stix-indicat
 export const STIX_INDICATOR_EXPORT_VERSION = 2;
 export const MISP_INDICATOR_LIFECYCLE_SCHEMA = 'whoisleuth.internal.misp-indicators';
 export const MISP_INDICATOR_EXPORT_VERSION = 2;
+export const MANAGED_INDICATOR_SET_SCHEMA = 'whoisleuth.managed-indicator-set';
+export const MANAGED_INDICATOR_SET_VERSION = 1;
+export const MAX_MANAGED_INDICATOR_SET_BYTES = 4 * 1024 * 1024;
+export const MAX_MANAGED_INDICATOR_PLAN_BYTES = 16 * 1024 * 1024;
 export const DNS_CHANGE_REHEARSAL_VERSION = 2;
 export const DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA = 'whoisleuth.dns-change-rehearsal';
 export const MAIL_REPORT_SCHEMA = 'whoisleuth.mail-report-review';
@@ -34,16 +38,17 @@ export const MAX_STATIC_PAGE_PATTERN_PACK_BYTES = 256 * 1024;
 export const WEB_CAPTURE_SUMMARY_SCHEMA = 'whoisleuth.web-capture-summary';
 export const WEB_CAPTURE_SUMMARY_VERSION = 1;
 export const WEB_CAPTURE_MANIFEST_SCHEMA = 'whoisleuth.web-capture-manifest';
-export const WEB_CAPTURE_MANIFEST_VERSION = 2;
+export const WEB_CAPTURE_MANIFEST_VERSION = 3;
+export const WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS: readonly number[] = [2, WEB_CAPTURE_MANIFEST_VERSION];
 export const MAX_WEB_CAPTURE_MANIFEST_BYTES = 1024 * 1024;
 
 const CACAO_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.investigation-cacao-profile', kind: 'export', schema: INVESTIGATION_CACAO_SPEC_VERSION,
   currentVersion: INVESTIGATION_CACAO_PROFILE_VERSION, supportedVersions: INVESTIGATION_CACAO_SUPPORTED_PROFILE_VERSIONS,
-  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only',
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current',
   writeSemantics: 'non_destructive_merge', byteBudget: MAX_INVESTIGATION_CACAO_IMPORT_BYTES,
   owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
-  note: 'Restricted CACAO 2.0 profile with a connected linear sequence of manual analyst steps; version 2 adds fixed response recipe identifiers while executable commands, branches, targets, credentials, and arbitrary operations remain rejected.',
+  note: 'Restricted CACAO 2.0 manual profile. Version 3 retains optional lesson-revision provenance; public profile 2 remains readable. Executable commands, branches, targets and credentials remain rejected.',
 });
 const OPERATIONS_REPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.brand-protection-operations-report', kind: 'export', schema: BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA,
@@ -73,6 +78,13 @@ const MISP_INDICATORS_COMPATIBILITY = defineSchemaCompatibility({
   writeSemantics: 'read_only', byteBudget: null, owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
   note: 'Unpublished, non-IDS, non-correlating event for reviewed import. Version 2 omits optional seen times when the source observation time is unknown.',
 });
+export const MANAGED_INDICATOR_SET_COMPATIBILITY = defineSchemaCompatibility({
+  id: 'export.managed-indicator-set', kind: 'export', schema: MANAGED_INDICATOR_SET_SCHEMA,
+  currentVersion: MANAGED_INDICATOR_SET_VERSION, supportedVersions: [MANAGED_INDICATOR_SET_VERSION],
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only',
+  writeSemantics: 'read_only', byteBudget: MAX_MANAGED_INDICATOR_SET_BYTES, owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
+  note: 'File-backed managed indicator revisions retain original observations, stable identities, explicit renewals and permanent withdrawals. Known predecessors prevent history replacement; content digests do not authenticate authorship or an unavailable earlier chain.',
+});
 const WEB_CAPTURE_SUMMARY_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.web-capture-summary', kind: 'export', schema: WEB_CAPTURE_SUMMARY_SCHEMA,
   currentVersion: WEB_CAPTURE_SUMMARY_VERSION, supportedVersions: [WEB_CAPTURE_SUMMARY_VERSION],
@@ -82,11 +94,11 @@ const WEB_CAPTURE_SUMMARY_COMPATIBILITY = defineSchemaCompatibility({
 });
 const WEB_CAPTURE_MANIFEST_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.web-capture-manifest', kind: 'export', schema: WEB_CAPTURE_MANIFEST_SCHEMA,
-  currentVersion: WEB_CAPTURE_MANIFEST_VERSION, supportedVersions: [WEB_CAPTURE_MANIFEST_VERSION],
+  currentVersion: WEB_CAPTURE_MANIFEST_VERSION, supportedVersions: WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS,
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only',
   writeSemantics: 'read_only', byteBudget: MAX_WEB_CAPTURE_MANIFEST_BYTES,
   owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
-  note: 'Metadata-only capture manifest; the browser and offline artefact comparison accept the v1.47.4 current-writer version 2.',
+  note: 'Metadata-only capture manifest. Version 3 adds bounded page and dependency observations; version 2 remains readable with those observations unavailable.',
 });
 const DEFENSIVE_MANIFEST_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.defensive-indicator-manifest', kind: 'export', schema: DEFENSIVE_INDICATOR_MANIFEST_SCHEMA,
@@ -144,12 +156,17 @@ export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(
   includedCategories: ['reviewed-indicators', 'source-identity', 'provenance', 'completeness', 'omitted-counts', 'limitations'],
   excludedCategories: ['credentials', 'cookies', 'message-content', 'raw-upstream-responses', 'expanded-contacts'],
   formats: [
+    { descriptor: MANAGED_INDICATOR_SET_COMPATIBILITY, lifecycleSchema: MANAGED_INDICATOR_SET_SCHEMA,
+      requiredKeys: ['schema', 'version', 'id', 'producerId', 'revisionId', 'name', 'revision', 'createdAt', 'modifiedAt', 'previous', 'entries', 'integrity'], optionalKeys: [],
+      hook: { module: 'packages/interchange/managed-indicator-set.mts', exportName: 'validateManagedIndicatorSet', role: 'structure_validator', runtime: 'shared' },
+      fixtures: [{ id: 'managed-indicator-set-v1', path: `${F}managed-indicator-set-v1.json`, bytes: 1_193, sha256: '3a4ffb7256e696d1f1b3bae14743bb8c03ddeb0922186868e935f5a489ba3985', version: MANAGED_INDICATOR_SET_VERSION }] },
     { descriptor: CACAO_COMPATIBILITY, lifecycleSchema: INVESTIGATION_CACAO_SPEC_VERSION,
       requiredKeys: ['type', 'spec_version', 'id', 'name', 'created', 'modified', 'workflow_start', 'workflow', 'extension_definitions'],
       optionalKeys: ['description', 'playbook_types', 'playbook_activities', 'created_by', 'playbook_extensions', 'agent_definitions', 'x_whoisleuth_profile_version'],
       hook: { module: 'packages/interchange/investigation-playbook-interchange.mts', exportName: 'parseCacaoInvestigationPlaybook', role: 'normaliser', runtime: 'shared' },
       fixtures: [
-        { id: 'investigation-cacao-profile-v2', path: `${F}investigation-cacao-profile-v2.json`, bytes: 4_091, sha256: '7e9a3de6e12b83477690c0c58e03e6efbbb8b0c11fd98dc8470bdb6784d42358', version: INVESTIGATION_CACAO_PROFILE_VERSION },
+        { id: 'investigation-cacao-profile-v2', path: `${F}investigation-cacao-profile-v2.json`, bytes: 4_091, sha256: '7e9a3de6e12b83477690c0c58e03e6efbbb8b0c11fd98dc8470bdb6784d42358', version: 2 },
+        { id: 'investigation-cacao-profile-v3', path: `${F}investigation-cacao-profile-v3.json`, bytes: 4_067, sha256: '608cbb7875c3448ca11f6f8cb2f96ae098e18316532a8f651bbe540ca7f25a2d', version: INVESTIGATION_CACAO_PROFILE_VERSION },
       ] },
     { descriptor: OPERATIONS_REPORT_COMPATIBILITY, lifecycleSchema: BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA,
       requiredKeys: ['schema', 'version', 'generatedAt', 'window', 'limitations'], optionalKeys: ['sourceState', 'summary', 'counts', 'states', 'actionTypes', 'durations', 'denominators', 'omissions'],
@@ -185,7 +202,8 @@ export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(
       requiredKeys: ['schema', 'schemaVersion', 'source', 'captures'], optionalKeys: [],
       hook: { module: 'packages/interchange/web-capture-import.mts', exportName: 'parseWebCaptureManifest', role: 'normaliser', runtime: 'shared' },
       fixtures: [
-        { id: 'web-capture-manifest-v2', path: `${F}web-capture-manifest-v2.json`, bytes: 494, sha256: 'a2208dc956a832d70e37cd9a5929db81d29148856c485e4fd6ce5b123de5b8e6', version: WEB_CAPTURE_MANIFEST_VERSION },
+        { id: 'web-capture-manifest-v2', path: `${F}web-capture-manifest-v2.json`, bytes: 494, sha256: 'a2208dc956a832d70e37cd9a5929db81d29148856c485e4fd6ce5b123de5b8e6', version: 2 },
+        { id: 'web-capture-manifest-v3', path: `${F}web-capture-manifest-v3.json`, bytes: 868, sha256: 'bca4e8cb539ac6035dd44586fa7e27774766a14dadbc4fc73cad2b71dace2ac8', version: WEB_CAPTURE_MANIFEST_VERSION },
       ] },
     { descriptor: DEFENSIVE_MANIFEST_COMPATIBILITY, lifecycleSchema: DEFENSIVE_INDICATOR_MANIFEST_SCHEMA,
       requiredKeys: ['schema', 'version', 'generatedAt'], optionalKeys: ['expiresAt', 'reviewRequired', 'explicitSelection', 'includeWildcards', 'entries', 'indicators', 'exclusions', 'limitations'],

@@ -1,4 +1,5 @@
 import { DOMAIN_CONTROL_MANIFEST_COMPATIBILITY } from '../packages/contracts/domain-control-manifest.mts';
+import { MANAGED_INDICATOR_SET_COMPATIBILITY } from '../packages/contracts/analyst-interchange.mts';
 import {
   CLI_CASE_PACK_COMPATIBILITY,
   ENCRYPTED_WORKSPACE_ARCHIVE_COMPATIBILITY,
@@ -20,7 +21,7 @@ export type InterchangeFidelity =
 export type InterchangeAssuranceRequirement = 'applicable_integrity' | 'authenticated_whole_integrity' | 'structure' | 'unsupported' | 'whole_integrity';
 
 export type InterchangeArtifactContract = Readonly<{
-  id: 'brand_profiles' | 'case_pack' | 'domain_control_passport' | 'encrypted_workspace' | 'legacy_desired_baseline' | 'lookup_claim_passport' | 'lookup_evidence' | 'workspace';
+  id: 'brand_profiles' | 'case_pack' | 'domain_control_passport' | 'encrypted_workspace' | 'legacy_desired_baseline' | 'lookup_claim_passport' | 'lookup_evidence' | 'workspace' | 'managed_indicators';
   compatibilityEntryId: string | null;
   schema: string;
   versions: readonly number[];
@@ -50,6 +51,15 @@ function compatibilityReference(descriptor: SchemaCompatibilityDescriptor) {
 }
 
 export const INTERCHANGE_ARTIFACT_CONTRACTS: readonly InterchangeArtifactContract[] = Object.freeze([
+  Object.freeze({
+    id: 'managed_indicators', ...compatibilityReference(MANAGED_INDICATOR_SET_COMPATIBILITY),
+    versionField: 'version', nestedSchemaPath: Object.freeze([]),
+    browser: Object.freeze({ import: 'supported', export: 'supported' }),
+    cli: Object.freeze({ read: 'supported', write: 'supported', verify: 'supported' }),
+    fidelity: 'semantic_exact_after_normalisation', requiredAssurance: 'whole_integrity',
+    preservedFieldGroups: Object.freeze(['stable_indicator_identities', 'original_observations', 'review_windows', 'withdrawal_records', 'preceding_revision_digest']),
+    excludedFieldGroups: Object.freeze(['raw_responses', 'browser_local_records', 'credentials', 'remote_publication', 'author_authentication', 'unavailable_revision_history']),
+  }),
   Object.freeze({
     id: 'lookup_claim_passport',
     ...compatibilityReference(LOOKUP_CLAIM_PASSPORT_COMPATIBILITY),

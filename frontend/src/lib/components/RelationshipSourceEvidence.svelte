@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import type { RelationshipContribution } from '../../../../packages/comparison/relationship-provenance.mts';
 
   let { sources }: { sources: readonly RelationshipContribution[] } = $props();
@@ -10,7 +11,7 @@
     {#each sources as source}
       <li>
         <strong>{source.domain}</strong> · {source.source.replaceAll('_', ' ')} · {source.status.replaceAll('_', ' ')}
-        <small>{source.observedAt ? new Date(source.observedAt).toLocaleString() : 'Source time not recorded'} · {source.complete ? 'Complete source' : 'Incomplete or unknown source'}{source.truncated === true ? ' · truncated' : source.truncated === null ? ' · truncation unknown' : ''}</small>
+        <small>{source.observedAt ? formatEvidenceDate(source.observedAt) : 'Source time not recorded'} · {source.complete ? 'Complete source' : 'Incomplete or unknown source'}{source.truncated === true ? ' · truncated' : source.truncated === null ? ' · truncation unknown' : ''}</small>
       </li>
     {/each}
   </ul>

@@ -18,7 +18,7 @@ import {
   THREAT_INTELLIGENCE_RESULT_STATES,
   THREAT_INTELLIGENCE_SCHEMA,
   THREAT_INTELLIGENCE_SEVERITIES,
-} from './threat-intelligence-types.mts';
+} from '../packages/analysis/threat-intelligence-types.mts';
 import {
   assertCuratedConnectorDefinition,
   assertThreatIntelligenceProvider,
@@ -70,7 +70,7 @@ import type {
   ThreatIntelligenceTarget,
   ThreatIntelligenceTargetExposure,
   ThreatIntelligenceTargetType,
-} from './threat-intelligence-types.mts';
+} from '../packages/analysis/threat-intelligence-types.mts';
 
 const CURATED_CONNECTOR_CONTRACT_VERSION = 1;
 const CURATED_CONNECTOR_RESULT_SCHEMA = 'whoisleuth.curated-connector-result';

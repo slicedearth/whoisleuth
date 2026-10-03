@@ -9,8 +9,9 @@ import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoH
 
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { COMMON_INFRASTRUCTURE_SNAPSHOT } from '../frontend/src/lib/analysis/common-infrastructure.ts';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 
 const COHORT_PROFILE_ID = 'cohort_profile_exact';
 const COHORT_OTHER_PROFILE_ID = 'cohort_profile_other';
@@ -647,7 +648,7 @@ test.describe('accessible cross-case relationship table', () => {
     const graph = graphRegion.locator('.graph-scroll > svg');
     const viewControls = graphRegion.getByRole('group', { name: 'Relationship graph view controls' });
     for (let index = 1; index <= 8; index += 1) {
-      await graph.getByRole('button', { name: `Shared IP address: 192.0.2.${index}`, exact: true }).click();
+      await graph.getByRole('button', { name: `Shared non-public DNS answer: 192.0.2.${index}`, exact: true }).click();
       await viewControls.getByRole('button', { name: 'Pin selected' }).click();
     }
     await expect(viewControls).toContainText('8 pinned');
@@ -657,10 +658,36 @@ test.describe('accessible cross-case relationship table', () => {
     await retained.getByRole('button', { name: 'Delete retained observation' }).click();
     await expect(viewControls).toContainText('7 pinned');
 
-    await graph.getByRole('button', { name: 'Shared IP address: 192.0.2.9', exact: true }).click();
+    await graph.getByRole('button', { name: 'Shared non-public DNS answer: 192.0.2.9', exact: true }).click();
     await expect(viewControls.getByRole('button', { name: 'Pin selected' })).toBeEnabled();
     await viewControls.getByRole('button', { name: 'Pin selected' }).click();
     await expect(viewControls).toContainText('8 pinned');
+  });
+
+  test('long graph labels fit their nodes while full evidence remains accessible', async ({ page }, testInfo) => {
+    const first = `${'long-first-label-'.repeat(3)}a.invalid`, second = `${'long-second-label-'.repeat(3)}b.invalid`;
+    const nameserver = `ns.${'shared-nameserver-label-'.repeat(2)}a.invalid`;
+    await openRelationshipTable(page, [
+      caseRecord({ id: 'long-graph-a', domain: first, evidenceHistory: [snapshot({ nameservers: [nameserver] })] }),
+      caseRecord({ id: 'long-graph-b', domain: second, evidenceHistory: [snapshot({ nameservers: [nameserver] })] }),
+    ]);
+    const graph = page.locator('.graph-scroll > svg');
+    await expect(graph.getByRole('button', { name: `Case ${first}`, exact: true })).toBeVisible();
+    const relationship = graph.getByRole('button', { name: `Shared nameserver set: ${nameserver}`, exact: true });
+    await expect(relationship).toBeVisible();
+    await relationship.click();
+    await expect(page.locator('.relationship-graph .inspector')).toContainText(nameserver);
+    for (const theme of ['light', 'dark']) for (const width of [320, 390, 1280, 2560]) {
+      await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
+      await page.setViewportSize({ width, height: 900 });
+      expect(await graph.locator('.node').evaluateAll(nodes => nodes.every(node => {
+        const text = node.querySelector<SVGTextElement>('text')!, box = node.querySelector<SVGRectElement>('rect')!;
+        const label = text.getBBox(), boundary = box.getBBox();
+        return label.width > 0 && label.x >= boundary.x + 30 && label.x + label.width <= boundary.x + boundary.width - 8;
+      }))).toBe(true);
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled() && (width === 320 || width === 1280)) { await graph.scrollIntoViewIfNeeded(); await page.screenshot({ path: testInfo.outputPath(`graph-labels-${theme}-${width}.png`) }); }
+    }
   });
 
   test('inspects evidence-backed graph nodes with keyboard case pivots', async ({ page }) => {

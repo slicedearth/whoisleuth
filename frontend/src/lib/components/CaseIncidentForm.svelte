@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { untrack } from 'svelte';
-  import { casesForDomain, type CaseRecord, type CaseIncidentInput } from '$lib/analysis/case-model.ts';
+  import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
+  import type { CaseRecord, CaseIncidentInput } from '../analysis/case-model.ts';
   import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { MAX_CASE_OBJECTIVE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
 
@@ -57,7 +59,7 @@
         </select></label>
         {#if source}
           <label>Observation<select bind:value={snapshotId} required><option value="">Select an observation</option>
-            {#each source.evidenceHistory as snapshot (snapshot.id)}<option value={snapshot.id}>{new Date(snapshot.capturedAt).toLocaleString()} · {snapshot.scanDepth} · {snapshot.id}</option>{/each}
+            {#each source.evidenceHistory as snapshot (snapshot.id)}<option value={snapshot.id}>{formatEvidenceDate(snapshot.capturedAt)} · {snapshot.scanDepth} · {snapshot.id}</option>{/each}
           </select></label>
           <small>Only this observation is copied, with its original timestamps. Notes and decisions stay with the source Case.</small>
         {/if}

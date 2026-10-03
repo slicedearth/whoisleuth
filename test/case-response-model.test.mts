@@ -17,6 +17,7 @@ import {
   buildCaseClosureLinkContext,
   buildCaseInvestigationTrail,
   buildCaseResponseLifecycleSummary,
+  countEvidenceLinkedCaseDecisions,
   isLegalCaseActionTransition,
   MAX_CASE_ACTION_BYTES,
   MAX_CASE_ACTION_EVENTS_PER_ACTION,
@@ -40,11 +41,58 @@ import {
 import { CASE_RESPONSE_STAGE_DEFINITIONS } from '../frontend/src/lib/analysis/case-response-stage.ts';
 import * as caseModel from '../frontend/src/lib/analysis/case-model.ts';
 import { requiredValue } from './value-assertions.mts';
+import { caseClosureReviewBlocker } from '../packages/cases/case-response-outcomes.mts';
+import { MAX_CASE_CHECKPOINT_FACTS } from '../packages/contracts/case-portability.mts';
+import { readEditableCaseExport } from '../packages/cases/case-export-input.mts';
 
 const NOW = '2026-07-28T01:00:00.000Z';
 const LATER = '2026-07-29T01:00:00.000Z';
 const NEXT = '2026-07-30T01:00:00.000Z';
 const LATEST = '2026-07-31T01:00:00.000Z';
+
+test('new independent non-reproduction closures require complete evidence without rewriting historical closures', () => {
+  const original = { id: 'historical-review', state: 'not_reproduced', observedAt: NOW, createdAt: LATER,
+    sourceClass: 'analyst', source: 'Manual observation', completeness: 'partial', limitations: ['One source unavailable.'] };
+  const effects = normalizeCaseObservedEffectHistory({ reviews: [original] }, NEXT);
+  const rawClosure = { id: 'historical-closure', reason: 'independently_not_reproduced', summary: 'Historical analyst decision.',
+    observedEffectReviewId: original.id, actionId: null, limitations: [], createdAt: NEXT };
+  const historical = normalizeCaseClosureHistory({ records: [rawClosure] }, NEXT, new Set([original.id]), new Set(), {}, buildCaseClosureLinkContext(effects, []));
+  assert.equal(historical.records.length, 1);
+  assert.equal(historical.records[0]?.id, rawClosure.id);
+  assert.equal(effects.reviews[0]?.completeness, 'partial');
+  const retained = { ...caseModel.createCase({ domain: 'example.test' }, NOW), observedEffects: effects, closures: historical };
+  const payload = caseModel.buildCaseExport([retained], NEXT);
+  const imported = caseModel.mergeCases([], payload).cases[0]!;
+  assert.equal(imported.closures.records[0]?.id, rawClosure.id);
+  assert.equal(imported.observedEffects.reviews[0]?.completeness, 'partial');
+  assert.equal(readEditableCaseExport(JSON.stringify(payload))[0]?.closures.records[0]?.id, rawClosure.id);
+  assert.throws(() => appendCaseClosure(historical, rawClosure, LATEST, effects, []), /requires a complete observation/u);
+  assert.equal(historical.records.length, 1);
+  for (const completeness of ['unknown', 'partial', 'inconclusive', 'complete']) {
+    const reviews = normalizeCaseObservedEffectHistory({ reviews: [{ ...original, completeness }] }, NEXT);
+    const review = reviews.reviews[0]!;
+    assert.equal(caseClosureReviewBlocker('independently_not_reproduced', review, LATEST) === null, completeness === 'complete');
+    if (completeness === 'complete') {
+      assert.equal(appendCaseClosure(historical, rawClosure, LATEST, reviews, []).records.length, 2);
+      for (const [field, value] of [['observedAt', 'invalid'], ['createdAt', 'invalid'], ['observedAt', '2030-01-01T00:00:00Z'], ['createdAt', '2030-01-01T00:00:00Z']]) {
+        assert.notEqual(caseClosureReviewBlocker('independently_not_reproduced', { ...review, [field!]: value }, LATEST), null);
+      }
+      assert.notEqual(caseClosureReviewBlocker('independently_not_reproduced', review, 'invalid'), null);
+      const recheck = { targetHostname: 'example.test', baselinePinId: null, conditions: 'Same hostname and source',
+        questionId: 'question', question: 'Is the selected content still observed?', conditionsMatch: 'comparable' as const };
+      assert.equal(caseClosureReviewBlocker('independently_not_reproduced', { ...review, recheck }, LATEST), null);
+      assert.notEqual(caseClosureReviewBlocker('independently_not_reproduced', { ...review, recheck: { ...recheck, conditionsMatch: 'unknown' } }, LATEST), null);
+      assert.notEqual(caseClosureReviewBlocker('independently_not_reproduced', { ...review, recheck: { ...recheck, conditionsMatch: 'different' } }, LATEST), null);
+    }
+  }
+  assert.equal(appendCaseClosure(historical, { reason: 'unable_to_proceed', summary: 'Evidence is incomplete.' }, LATEST, effects, []).records.length, 2);
+});
+
+test('oversized checkpoint writes reject the whole selection rather than silently dropping evidence', () => {
+  const selected = Array.from({ length: MAX_CASE_CHECKPOINT_FACTS + 1 }, (_, index) => ({ label: `Fact ${index}`, value: 'Retained value' }));
+  assert.throws(() => appendCaseEvidencePins([], selected, NOW), /No evidence was saved/u);
+  assert.equal(selected.length, MAX_CASE_CHECKPOINT_FACTS + 1);
+});
 
 test('the response workflow retains one ordered canonical stage vocabulary', () => {
   assert.deepEqual(Object.entries(CASE_RESPONSE_STAGE_DEFINITIONS), [
@@ -122,6 +170,22 @@ describe('case response record normalization', () => {
       evidencePinIds: [pin.id, 'missing-pin'],
     }, NOW, new Set([pin.id]));
     assert.deepEqual(requiredValue(decisions[0]).evidencePinIds, [pin.id]);
+  });
+
+  test('decision support counts each linked decision once and excludes missing pins', () => {
+    const decisions = [
+      { evidencePinIds: [] },
+      { evidencePinIds: ['pin-retired'] },
+      { evidencePinIds: ['pin-kept', 'pin-kept'] },
+      { evidencePinIds: ['pin-retired', 'pin-kept'] },
+    ];
+    const original = structuredClone(decisions);
+    assert.equal(countEvidenceLinkedCaseDecisions([], [{ id: 'pin-kept' }]), 0);
+    assert.equal(countEvidenceLinkedCaseDecisions(decisions, []), 0);
+    assert.equal(countEvidenceLinkedCaseDecisions(decisions, [{ id: 'pin-other' }]), 0);
+    assert.equal(countEvidenceLinkedCaseDecisions(decisions, [{ id: 'pin-kept' }]), 2);
+    assert.equal(countEvidenceLinkedCaseDecisions(decisions, [{ id: 'pin-kept' }, { id: 'pin-retired' }]), 3);
+    assert.deepEqual(decisions, original);
   });
 
   test('current decisions retain bounded confidence while older schemas migrate without inventing it', () => {

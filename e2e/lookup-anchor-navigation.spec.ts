@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { expectLookupTargetAligned, sectionedLookupFixture } from './lookup-design-fixtures';
 import { productionChunkPath } from './production-build';
@@ -30,7 +31,7 @@ test('evidence cards and source labels remain separated across map and mobile la
     await page.locator('#query').fill(domain);
     await page.getByRole('button', { name: 'Run lookup' }).click();
     await expect(page.getByText('1 published route', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+    await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
     const topology = page.getByRole('region', { name: 'Where this result came from' });
     const sources = topology.getByRole('list', { name: 'Evidence item status' });
     await expect(sources.getByRole('listitem').first()).toBeVisible();
@@ -72,9 +73,9 @@ test('evidence cards and source labels remain separated across map and mobile la
       await expectNoHorizontalOverflow(page);
       if ([2560, 1280, 320].includes(viewport.width)) {
         if (viewport.width === 320) await mappedCount.scrollIntoViewIfNeeded();
-        await page.screenshot({ path: testInfo.outputPath(`evidence-map-${viewport.width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`evidence-map-${viewport.width}-${theme}.png`) }); }
         await sources.getByRole('listitem').last().scrollIntoViewIfNeeded();
-        await page.screenshot({ path: testInfo.outputPath(`evidence-map-end-${viewport.width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`evidence-map-end-${viewport.width}-${theme}.png`) }); }
       }
     }
   }
@@ -94,8 +95,8 @@ test('Lookup section and mapped-evidence navigation settle at the requested anch
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.locator('#result')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Expand Web and DNS evidence' }).click();
-  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   const topology = page.getByRole('region', { name: 'Where this result came from' });
   const sourceRail = topology.getByRole('list', { name: 'Evidence item status' });
   const dnsSource = sourceRail.getByRole('link', { name: /DNS.*partial/iu });
@@ -107,7 +108,7 @@ test('Lookup section and mapped-evidence navigation settle at the requested anch
   await registryNode.dispatchEvent('pointerup', { pointerId: 1, pointerType: 'mouse', clientX: 20, clientY: 20, button: 0 });
   await expect(page).toHaveURL(/#evidence-registry$/u);
   await expectLookupTargetAligned(page, '#evidence-registry');
-  await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Registration evidence' }).click();
   await expectLookupTargetAligned(page, '#registry');
 
   await resultNavigation.getByRole('link', { name: 'Relationships & history' }).click();
@@ -123,31 +124,31 @@ test('Lookup section and mapped-evidence navigation settle at the requested anch
     ['Case and response', '#case-response'],
     ['Advanced', '#advanced-evidence'],
   ] as const) {
-    await page.getByRole('button', { name: `Expand ${label} evidence` }).click();
-    await expect(page.getByRole('button', { name: `Collapse ${label} evidence` })).toBeVisible();
+    await page.getByRole('button', { name: `Expand details: ${label} evidence` }).click();
+    await expect(page.getByRole('button', { name: `Collapse details: ${label} evidence` })).toBeVisible();
     await expectLookupTargetAligned(page, selector);
-    await page.getByRole('button', { name: `Collapse ${label} evidence` }).click();
+    await page.getByRole('button', { name: `Collapse details: ${label} evidence` }).click();
     await expectLookupTargetAligned(page, selector);
-    await page.getByRole('button', { name: `Expand ${label} evidence` }).click();
+    await page.getByRole('button', { name: `Expand details: ${label} evidence` }).click();
     await expectLookupTargetAligned(page, selector);
   }
 
-  await page.getByRole('button', { name: 'Collapse Relationships and history evidence' }).click();
-  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Relationships and history evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   await expect(topology).toBeVisible();
   await expectLookupTargetAligned(page, '#relationships-history');
 
   // Visual nodes, keyboard-operable rail links, delegated evidence links,
   // local navigation, and direct hashes share the same destination contract.
-  await page.getByRole('button', { name: 'Collapse Registration evidence' }).click();
-  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Registration evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Web and DNS evidence' }).click();
   await resultNavigation.getByRole('link', { name: 'Relationships & history' }).click();
   await dnsSource.focus();
   await dnsSource.press('Enter');
   await expect(page).toHaveURL(/#evidence-dns$/u);
   await expectLookupTargetAligned(page, '#evidence-dns');
 
-  await page.getByRole('button', { name: 'Collapse Source quality evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Source quality evidence' }).click();
   await resultNavigation.getByRole('link', { name: 'Source quality' }).click();
   await expect(page).toHaveURL(/#source-quality$/u);
   await expectLookupTargetAligned(page, '#source-quality');
@@ -157,16 +158,16 @@ test('Lookup section and mapped-evidence navigation settle at the requested anch
     window.location.hash = '#evidence-registry';
   });
   await expect(page).toHaveURL(/#evidence-registry$/u);
-  await expect(page.getByRole('button', { name: 'Collapse Registration evidence' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Collapse details: Registration evidence' })).toBeVisible();
   await expectLookupTargetAligned(page, '#evidence-registry');
 
   const delegatedQualityLink = page.getByRole('link', { name: /^Review limited or stale sources/u }).first();
   await expect(delegatedQualityLink).toBeVisible();
   await expect(delegatedQualityLink).toHaveAttribute('href', '#evidence-quality');
-  await page.getByRole('button', { name: 'Collapse Source quality evidence' }).click();
+  await page.getByRole('button', { name: 'Collapse details: Source quality evidence' }).click();
   await delegatedQualityLink.click();
   await expect(page).toHaveURL(/#evidence-quality$/u);
-  await expect(page.getByRole('button', { name: 'Collapse Source quality evidence' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Collapse details: Source quality evidence' })).toBeVisible();
   await expectLookupTargetAligned(page, '#evidence-quality');
 
   for (const eventName of ['wheel', 'pointerdown', 'touchstart', 'keydown'] as const) {
@@ -223,7 +224,7 @@ test('Lookup keeps a deferred mapped-evidence hash aligned through post-release 
   await page.goto('/lookup');
   await page.locator('#query').fill('deferred-anchor.invalid');
   await page.getByRole('button', { name: 'Run lookup' }).click();
-  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   const topology = page.getByRole('region', { name: 'Where this result came from' });
   const dnsSource = topology.getByRole('list', { name: 'Evidence item status' })
     .getByRole('link', { name: /DNS.*partial/iu });

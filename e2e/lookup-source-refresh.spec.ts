@@ -1,8 +1,11 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import fs from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
+import { holdFixtureResponse } from './held-response';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, useTheme } from './helpers';
+import { formatEvidenceDate } from '../frontend/src/lib/analysis/evidence-time';
 
 const EARLIER = '2026-07-13T00:00:00.000Z';
 const LATER = '2026-07-14T00:00:00.000Z';
@@ -21,10 +24,26 @@ async function start(page: Page, selected = false) {
   await page.locator('#query').fill(DOMAIN);
   await page.getByRole('radio', { name: /Deep/u }).check();
   await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
-  await page.getByRole('button', { name: 'Expand Source quality evidence', exact: true }).click();
+  await page.getByRole('button', { name: 'Expand details: Source quality evidence', exact: true }).click();
   await page.locator('#source-quality .records-disclosure > summary').click();
   await expect(page.locator('.source-refresh')).toBeVisible();
 }
+
+test('completed source-plan review stays bound to its original target, mode and observations while the draft changes', async ({ page }) => {
+  await start(page);
+  const review = page.locator('#evidence-quality .collection-outcomes');
+  await review.locator('summary').click();
+  await expect(review).toContainText(DOMAIN);
+  const rdap = review.locator('[data-planned-source="rdap"]');
+  await expect(rdap).toContainText(formatEvidenceDate(EARLIER));
+  const before = await review.innerText();
+  await page.locator('#query').fill('AS64496');
+  await page.getByRole('radio', { name: /Fast/u }).check();
+  await expect.poll(() => review.innerText()).toBe(before);
+  await expect(review.locator('[data-planned-source="domain_evidence"]')).toBeVisible();
+  await expect(review).not.toContainText('AS64496');
+  await expect(page.locator('.source-refresh .refresh-results > li')).toHaveCount(0);
+});
 
 test('refreshed facts survive section navigation and save through the existing Case checkpoint without replacing its observation', async ({ page }, testInfo) => {
   let requests = 0;
@@ -45,8 +64,8 @@ test('refreshed facts survive section navigation and save through the existing C
   await expect(comparison).toContainText('Original registrar');
   await expect(comparison).toContainText('Updated registrar');
   await expect(comparison).toContainText(LATER);
-  await page.getByRole('button', { name: 'Collapse Source quality evidence', exact: true }).click();
-  await page.getByRole('button', { name: 'Expand Source quality evidence', exact: true }).click();
+  await page.getByRole('button', { name: 'Collapse details: Source quality evidence', exact: true }).click();
+  await page.getByRole('button', { name: 'Expand details: Source quality evidence', exact: true }).click();
   await page.locator('#source-quality .records-disclosure > summary').click();
   await expect(refresh.locator('.refresh-results > li')).toHaveCount(1);
   expect(requests).toBe(1);
@@ -83,7 +102,7 @@ test('refreshed facts survive section navigation and save through the existing C
       await page.setViewportSize({ width, height: 900 });
       await refresh.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`source-refresh-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`source-refresh-${theme}-${width}.png`) }); }
     }
   }
   await refresh.getByRole('button', { name: 'Refresh Registry RDAP', exact: true }).click();
@@ -97,19 +116,20 @@ test('refreshed facts survive section navigation and save through the existing C
 });
 
 test('cancelling a held source response does not retain late evidence', async ({ page }) => {
-  let release: (() => void) | undefined;
-  await page.route('**/api/rdap?*', async route => {
-    await new Promise<void>(resolve => { release = resolve; });
-    await route.fulfill({ json: { query: DOMAIN, type: 'domain', upstreamStatus: 200, fetchedAt: LATER,
-      parsed: { domain: DOMAIN, registrar: { name: 'Late registrar' } } } });
+  const held = await holdFixtureResponse(page, url => url.pathname === '/api/rdap', {
+    json: { query: DOMAIN, type: 'domain', upstreamStatus: 200, fetchedAt: LATER,
+      parsed: { domain: DOMAIN, registrar: { name: 'Late registrar' } } },
   });
   await start(page);
   const refresh = page.locator('.source-refresh');
   await refresh.getByRole('button', { name: 'Refresh Registry RDAP', exact: true }).click();
-  await expect.poll(() => Boolean(release)).toBe(true);
+  const request = await held.received;
+  const failed = page.waitForEvent('requestfailed', candidate => candidate === request);
   await refresh.getByRole('button', { name: 'Cancel source refresh' }).click();
   await expect(refresh.getByRole('status')).toContainText('cancelled');
-  release!();
+  await held.release();
+  await failed;
+  expect(request.failure()).not.toBeNull();
   await expect(refresh.getByRole('button', { name: 'Refresh Registry RDAP', exact: true })).toBeEnabled();
   await expect(refresh.getByRole('button', { name: 'Refresh Registry RDAP', exact: true })).toBeFocused();
   await expect(refresh.locator('.refresh-results > li')).toHaveCount(0);

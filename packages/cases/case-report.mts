@@ -9,21 +9,26 @@
 // registry/web responses, contacts, cookies, screenshots, and authentication
 // data. Reports contain only the normalized case record.
 
-import { caseEvidenceTimeline, compareCaseEvidence, currentCaseEvidence } from './case-model.mts';
+import { caseEvidenceTimeline, compareCaseEvidence, currentCaseEvidence, publishedCaseEvidenceTimelineForVerification } from './case-evidence-model.mts';
 import type { CaseEvidenceSnapshot, CaseRecord, EvidenceFactor } from './case-model.mts';
 import { httpSecurityHeaderLabel } from './http-summary.mts';
-import { analystInteroperabilityTags } from '../../lib/analyst-taxonomy.mts';
+import { webCollectionScoreLimitation } from '../evidence/collection-quality.mts';
+import { analystInteroperabilityTags } from '../analysis/analyst-taxonomy.mts';
+import { caseEvidenceLinkIssues } from './case-evidence-links.mts';
+import { caseTypeSummary } from './case-workflow-metadata.mts';
 import {
   buildPortableGeneratorMetadata,
   portableGeneratorAttribution,
   type PortableGeneratorMetadata,
-} from '../../lib/portable-generator.mts';
+} from '../analysis/portable-generator.mts';
 import { buildCaseResponseLifecycleSummary, CASE_EVIDENCE_RELATION_STANCES } from './case-response-model.mts';
 import { normalizeCaseBrandProfileIds } from './case-brand-profile-references.mts';
 import { CASE_RECHECK_CONDITIONS } from './case-recheck-model.mts';
+import { escapeCaseMarkdownInline as escapeMarkdownInline } from './case-markdown.mts';
 import {
   CASE_REPORT_SCHEMA,
   CASE_REPORT_SCHEMA_VERSION,
+  LATEST_PUBLIC_CASE_REPORT_SCHEMA_VERSION,
   PUBLISHED_V2_3_CASE_REPORT_SCHEMA_VERSION,
 } from '../contracts/case-portability.mts';
 
@@ -67,7 +72,7 @@ type ReportOptions = {
   includeAttribution?: boolean;
   includeNotes?: boolean;
 };
-type ReportReason = 'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'other';
+type ReportReason = 'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'collection-quality' | 'other';
 type ReportChange = ReturnType<typeof compareCaseEvidence>[number];
 type ReportSnapshot = Omit<CaseEvidenceSnapshot, 'inputHostname' | 'observationHostname'>;
 type ReportTimelineEntry = {
@@ -102,7 +107,9 @@ type CaseReportJson = {
   currentAssessment: ReportSnapshot | null;
   evidenceTimeline: ReportTimelineEntry[];
   analystResponse: {
+    workflowMetadata?: CaseRecord['workflowMetadata'];
     evidencePins: CaseRecord['evidencePins'];
+    evidenceLinks?: CaseRecord['evidenceLinks'];
     decisions: CaseRecord['decisions'];
     actions: CaseRecord['actions'];
     assertions: CaseRecord['assertions'];
@@ -115,17 +122,6 @@ type CaseReportJson = {
   responseLifecycle: ReturnType<typeof buildCaseResponseLifecycleSummary>;
   limitations: string;
 };
-
-function escapeMarkdownInline(text: unknown): string {
-  return String(text)
-    .replace(/[\r\n\u2028\u2029]+/g, ' ')
-    .replace(/([\\`*_{}\[\]<>()#+!|~])/g, '\\$1')
-    // GFM autolinks bare URLs independently of ordinary link syntax. Break
-    // the scheme or the first `www.` separator without making normal domains,
-    // dates, and prose noisy in the report source.
-    .replace(/\b([a-z][a-z0-9+.-]{1,31}):(?=\/\/)/gi, '$1\\:')
-    .replace(/\bwww\.(?=\S)/gi, 'www\\.');
-}
 
 /**
  * Escapes a multiline note body for safe inclusion in a Markdown blockquote.
@@ -171,6 +167,13 @@ function formatReportValue(value: unknown, field?: string): string {
   return String(value);
 }
 
+function readableRiskScore(snapshot: ReportSnapshot): string {
+  const value = escapeMarkdownInline(formatReportValue(snapshot.riskScore));
+  const limitation = snapshot.riskScore === null ? null
+    : webCollectionScoreLimitation(snapshot.webCollectionQuality, snapshot.scanDepth);
+  return limitation ? `${value} — ${escapeMarkdownInline(limitation)}` : value;
+}
+
 /**
  * Returns a shallow clone of a snapshot containing only known schema fields.
  * Unknown/imported keys are never included.
@@ -192,6 +195,7 @@ function pickKnownSnapshotFields(snapshot: CaseEvidenceSnapshot): ReportSnapshot
     capturedAt: snapshot.capturedAt,
     source: snapshot.source,
     scanDepth: snapshot.scanDepth,
+    ...(snapshot.webCollectionQuality ? { webCollectionQuality: { ...snapshot.webCollectionQuality } } : {}),
     availability: snapshot.availability,
     confidence: snapshot.confidence,
     riskModelVersion: snapshot.riskModelVersion,
@@ -261,14 +265,7 @@ export function buildCaseReport(
   // --- Build JSON report ---
 
   const timeline = caseEvidenceTimeline(caseRecord.evidenceHistory);
-  const timelineEntries: ReportTimelineEntry[] = timeline.map((entry) => ({
-    snapshot: pickKnownSnapshotFields(entry.snapshot),
-    isBaseline: entry.isBaseline,
-    hasRepeatedObservation: entry.hasRepeatedObservation,
-    changes: entry.changes?.map(({ field, label, before, after, tone }) => ({ field, label, before, after, tone })) ?? null,
-    hasIncomparableChange: entry.hasIncomparableChange,
-    incomparableReasons: [...entry.incomparableReasons],
-  }));
+  const timelineEntries = projectReportTimeline(timeline);
   const selection = currentCaseEvidence(caseRecord);
   const latest = selection.snapshot;
   const currentAssessment = latest ? pickKnownSnapshotFields(latest) : null;
@@ -310,7 +307,9 @@ export function buildCaseReport(
     currentAssessment,
     evidenceTimeline: timelineEntries,
     analystResponse: {
+      ...(caseRecord.workflowMetadata === undefined ? {} : { workflowMetadata: structuredClone(caseRecord.workflowMetadata) }),
       evidencePins: caseRecord.evidencePins.map((item) => ({ ...item, limitations: [...item.limitations] })),
+      ...(caseRecord.evidenceLinks === undefined ? {} : { evidenceLinks: structuredClone(caseRecord.evidenceLinks) }),
       decisions: caseRecord.decisions.map((item) => ({ ...item, evidencePinIds: [...item.evidencePinIds] })),
       actions: caseRecord.actions.map((item) => ({
         ...item,
@@ -363,14 +362,28 @@ export function buildCaseReport(
   return { json, markdown: md };
 }
 
+function projectReportTimeline(timeline: ReturnType<typeof caseEvidenceTimeline>): ReportTimelineEntry[] {
+  return timeline.map(entry => ({
+    snapshot: pickKnownSnapshotFields(entry.snapshot), isBaseline: entry.isBaseline,
+    hasRepeatedObservation: entry.hasRepeatedObservation,
+    changes: entry.changes?.map(({ field, label, before, after, tone }) => ({ field, label, before, after, tone })) ?? null,
+    hasIncomparableChange: entry.hasIncomparableChange, incomparableReasons: [...entry.incomparableReasons],
+  }));
+}
+
 /** Expected strict reader projection; historical disclosure wording is immutable. */
 export function buildCaseReportVerificationProjection(
   caseRecord: CaseRecord,
   options: ReportOptions,
   schemaVersion: number,
 ) {
-  const current = buildCaseReport(caseRecord, options).json;
-  if (schemaVersion === CASE_REPORT_SCHEMA_VERSION) return current;
+  const generated = buildCaseReport(caseRecord, options).json;
+  if (schemaVersion === CASE_REPORT_SCHEMA_VERSION) return generated;
+  if (caseRecord.evidenceHistory.some(snapshot => snapshot.webCollectionQuality !== undefined)) {
+    throw new TypeError('Published report formats cannot declare newer collection-quality fields.');
+  }
+  const current = { ...generated, evidenceTimeline: projectReportTimeline(publishedCaseEvidenceTimelineForVerification(caseRecord.evidenceHistory)) };
+  if (schemaVersion === LATEST_PUBLIC_CASE_REPORT_SCHEMA_VERSION) return { ...current, schemaVersion };
   if (schemaVersion !== PUBLISHED_V2_3_CASE_REPORT_SCHEMA_VERSION) {
     throw new TypeError('No strict Case report projection is defined for this version.');
   }
@@ -422,6 +435,16 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   if (report.case.tags.length > 0) {
     lines.push(`| Tags | ${escapeMarkdownInline(report.case.tags.join(', '))} |`);
   }
+  const caseTypes = caseTypeSummary(report.analystResponse.workflowMetadata ? { workflowMetadata: report.analystResponse.workflowMetadata } : {});
+  if (caseTypes) lines.push(`| Case types | ${escapeMarkdownInline(caseTypes)} |`);
+  const context = report.analystResponse.workflowMetadata?.investigationContext;
+  if (context) {
+    lines.push(`| Investigation objective | ${escapeMarkdownInline(context.objective)} |`);
+    lines.push(`| Incident URL (${context.urlRetention === 'exact' ? 'exact' : 'origin only'}) | ${escapeMarkdownInline(context.incidentUrl)} |`);
+  }
+  for (const target of report.analystResponse.workflowMetadata?.incidentTargets ?? []) {
+    lines.push(`| Incident link (${target.state}) | ${escapeMarkdownInline(target.url)} |`);
+  }
   lines.push(`| Notes included | ${report.case.notesIncluded ? 'Yes' : 'No'} |`);
   lines.push('');
 
@@ -431,7 +454,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   if (report.currentAssessment) {
     const a = report.currentAssessment;
     lines.push(`- **Availability:** ${escapeMarkdownInline(formatReportValue(a.availability))}`);
-    lines.push(`- **Risk score:** ${escapeMarkdownInline(formatReportValue(a.riskScore))}`);
+    lines.push(`- **Risk score:** ${readableRiskScore(a)}`);
     lines.push(`- **Risk model:** ${a.riskModelVersion === null ? 'Unversioned' : `v${escapeMarkdownInline(formatReportValue(a.riskModelVersion))}`}`);
     lines.push(`- **Brand Profile context:** ${escapeMarkdownInline(formatReportValue(a.profileContextState))}`);
     if (a.profileContextLimitation) lines.push(`- **Profile-context limitation:** ${escapeMarkdownInline(a.profileContextLimitation)}`);
@@ -486,7 +509,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
       lines.push('**Key evidence:**');
       lines.push('');
       lines.push(`- Availability: ${escapeMarkdownInline(formatReportValue(snap.availability))}`);
-      lines.push(`- Risk score: ${escapeMarkdownInline(formatReportValue(snap.riskScore))}`);
+      lines.push(`- Risk score: ${readableRiskScore(snap)}`);
       lines.push(`- Risk model: ${snap.riskModelVersion === null ? 'Unversioned' : `v${escapeMarkdownInline(formatReportValue(snap.riskModelVersion))}`}`);
       lines.push(`- Brand Profile context: ${escapeMarkdownInline(formatReportValue(snap.profileContextState))}`);
       if (snap.profileContextLimitation) lines.push(`- Profile-context limitation: ${escapeMarkdownInline(snap.profileContextLimitation)}`);
@@ -544,6 +567,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
         if (reasons.includes('risk-model')) lines.push('> Risk scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
         if (reasons.includes('opportunity-model')) lines.push('> Opportunity scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
         if (reasons.includes('scan-depth')) lines.push('> Capture depths differ, so unevaluated deep signals are not treated as additions or removals.');
+        if (reasons.includes('collection-quality')) lines.push('> Missing or incomplete observations prevent comparison of affected registration, page, favicon or score fields.');
         if (reasons.length === 0 || reasons.includes('other')) lines.push('> The observations differ materially, but no reliable field-level comparison is available.');
         lines.push('');
       }
@@ -553,7 +577,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   lines.push('## Analyst Decision Packet');
   lines.push('');
   const response = report.analystResponse;
-  if (!response.evidencePins.length && !response.sightings.length && !response.decisions.length && !response.actions.length && !response.assertions.length && !response.manualTrail.length && !response.observedEffects.reviews.length && !response.closures.records.length && !response.branches.length) {
+  if (!response.evidencePins.length && !response.evidenceLinks?.length && !response.sightings.length && !response.decisions.length && !response.actions.length && !response.assertions.length && !response.manualTrail.length && !response.observedEffects.reviews.length && !response.closures.records.length && !response.branches.length) {
     lines.push('No evidence pins, source-qualified sightings, structured assertions, decision records, response actions, independent effect reviews, closures, or manual investigation steps recorded.');
     lines.push('');
   } else {
@@ -612,6 +636,17 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
       }
       lines.push('');
     }
+    if (response.evidenceLinks?.length) {
+      lines.push('### Analyst-declared evidence relationships', '');
+      for (const { link, missingPinIds, cyclic } of caseEvidenceLinkIssues(response.evidenceLinks, response.evidencePins)) lines.push(
+        `- ${escapeMarkdownInline(link.fromPinId)} ${link.kind === 'derived_from' ? 'derived from' : 'shares a source with'} ${escapeMarkdownInline(link.toPinId)} · recorded ${link.createdAt}`,
+        `  Basis: ${escapeMarkdownInline(link.basis)}`,
+        ...(link.withdrawal ? [`  Withdrawn ${link.withdrawal.at}: ${escapeMarkdownInline(link.withdrawal.reason)}`] : []),
+        ...(missingPinIds.length ? [`  Referenced pins not retained: ${missingPinIds.map(escapeMarkdownInline).join(', ')}`] : []),
+        ...(cyclic ? ['  Conflicting imported derivation cycle; no order is inferred.'] : []),
+      );
+      lines.push('These relationships record analyst attribution, not independent corroboration or added confidence.', '');
+    }
     lines.push('### Decisions');
     lines.push('');
     if (!response.decisions.length) lines.push('No decision records recorded.');
@@ -631,6 +666,12 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
       if (action.routeObservedAt) lines.push(`  Route reviewed: ${escapeMarkdownInline(action.routeObservedAt)}`);
       if (action.routeReviewAfter) lines.push(`  Route review due: ${escapeMarkdownInline(action.routeReviewAfter)}`);
       if (action.originActionId) lines.push(`  Originating action: ${escapeMarkdownInline(action.originActionId)}`);
+      if (action.amendment) lines.push(`  Amendment of submitted packet SHA-256: ${action.amendment.packetDigestSha256}; request events: ${action.amendment.requestEventIds.map(escapeMarkdownInline).join(', ')}`);
+      for (const event of action.history) if (event.evidenceRequest) {
+        const request = event.evidenceRequest;
+        lines.push(`  Requested evidence [${request.state}]: ${escapeMarkdownInline(request.summary)}; deadline: ${request.dueAt ?? 'not stated'}; original packet: ${request.packetDigestSha256}${event.applied ? '' : ' (retained conflict)'}`,
+          `  Prepared pins: ${request.evidencePinIds.map(escapeMarkdownInline).join(', ') || 'none'}${request.rationale ? `; ${escapeMarkdownInline(request.rationale)}` : ''}`);
+      }
       if (action.dueAt) lines.push(`  Due: ${escapeMarkdownInline(action.dueAt)}`);
       if (action.followUpAt) lines.push(`  Follow-up: ${escapeMarkdownInline(action.followUpAt)}`);
       if (action.reference) lines.push(`  Reference: ${escapeMarkdownInline(action.reference)}`);

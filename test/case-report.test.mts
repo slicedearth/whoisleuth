@@ -21,6 +21,7 @@ function snapshot(overrides: Record<string, unknown> = {}) {
     capturedAt: ISO,
     source: 'lookup',
     scanDepth: 'deep',
+    webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
     availability: 'registered',
     confidence: null,
     riskModelVersion: 1,

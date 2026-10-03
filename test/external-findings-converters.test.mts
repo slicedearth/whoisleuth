@@ -13,6 +13,22 @@ import {
 const observedAt = '2026-07-01T00:00:00.000Z';
 
 describe('external findings converters', () => {
+  test('supported rows disclose per-domain omissions without discarding other valid domains', () => {
+    for (const count of [20, 21, 30]) {
+      const report = convertSupportedExternalFindings({ schema: DNS_OBSERVATION_ROWS_SCHEMA, schemaVersion: 1,
+        source: { name: 'Local DNS inventory' }, observations: [
+          ...Array.from({ length: count }, (_, i) => ({ domain: 'zone.example', type: 'TXT', value: `value-${i}`, observedAt, completeness: 'complete' })),
+          { domain: 'another.example', type: 'TXT', value: 'retained', observedAt, completeness: 'complete' },
+        ],
+      }, 'dns-observations-v1');
+      assert.equal(report.accepted, 21);
+      assert.equal(report.rejected, count - 20);
+      assert.equal(report.truncated, count > 20);
+      assert.equal(report.document.findings.filter(item => item.domain === 'zone.example').length, 20);
+      assert.equal(report.document.findings.some(item => item.domain === 'another.example'), true);
+    }
+  });
+
   test('converts a bounded generic JSON row document through the strict findings parser', () => {
     const document = convertExternalFindingRows({
       schema: EXTERNAL_FINDING_ROWS_SCHEMA,

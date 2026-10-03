@@ -1,6 +1,6 @@
 // Source-only admission and minimised projection. The temporary validation
 // envelope is never displayed, exported or merged into a collected Lookup.
-import { canonicalRegistrableDomain } from '../../../../lib/registrable-domain.mts';
+import { canonicalRegistrableDomain } from '../../../../packages/analysis/registrable-domain.mts';
 import { MAX_WHOIS_QUERY_HOPS } from '../../../../lib/whois-contracts.mts';
 import { addressValue } from '../../../../packages/contracts/ip-address.mts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';

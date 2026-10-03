@@ -120,7 +120,7 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/u;
 const NOTICE_ID_RE = /^notice-[1-9]\d{0,7}$/u;
 const IANA_ID_RE = /^[1-9]\d{0,7}$/u;
 
-function normalizedRegistrarIanaId(value: unknown): string | null {
+export function normalizedRegistrarIanaId(value: unknown): string | null {
   if (typeof value === 'number' && Number.isSafeInteger(value)) value = String(value);
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();

@@ -1,4 +1,5 @@
 import type { JsonObject } from './lookup-response.ts';
+import { evidenceDate } from './evidence-time.ts';
 import {
   isRecord as isUnknownRecord,
   recordOrEmpty,
@@ -139,8 +140,7 @@ export const boundedTechnologyText = (value: unknown, maxLength = 240): string =
 export function formatDate(value: unknown): string {
   if ((typeof value !== 'string' && typeof value !== 'number') || value === '') return '—';
   const source = String(value).slice(0, 128);
-  const parsed = new Date(source);
-  return Number.isNaN(parsed.getTime()) ? boundedDisplayText(source, 128) : parsed.toLocaleString();
+  return evidenceDate(source)?.readable ?? boundedDisplayText(source, 128);
 }
 
 export function textOrNull(value: unknown): string | null {
@@ -153,8 +153,7 @@ export function firstText(...values: unknown[]): string | null {
 
 export function dateTimeAttribute(value: unknown): string | undefined {
   if ((typeof value !== 'string' && typeof value !== 'number') || value === '') return undefined;
-  const parsed = new Date(String(value).slice(0, 128));
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+  return evidenceDate(String(value).slice(0, 128))?.datetime;
 }
 
 export function datedRow(label: string, value: unknown) {

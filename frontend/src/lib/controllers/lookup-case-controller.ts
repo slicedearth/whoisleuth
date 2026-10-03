@@ -1,9 +1,7 @@
 import {
   addCaseNote,
-  dispositionLabel,
   editCase,
   getCasesByDomain,
-  isReviewedCaseDisposition,
   openCase,
   recordCaseConclusion,
   recordCaseInvestigationContext,
@@ -11,6 +9,7 @@ import {
   type CaseConclusionInput,
   type CaseRecord,
 } from '../cases.ts';
+import { dispositionLabel, isReviewedCaseDisposition } from '../../../../packages/cases/case-record-decisions.mts';
 import type { CaseOpenSelection } from '../analysis/case-model.ts';
 import type { EvidenceChange } from '../cases.ts';
 import type { CaseRecheckAnswerContext } from '../../../../packages/cases/case-recheck-model.mts';
@@ -75,7 +74,7 @@ export type LookupConclusionEvidenceSelection = Readonly<{
 export type LookupRecheckComparison = Readonly<{ available: boolean; changes: EvidenceChange[]; observedAt: string; detail: string }>;
 export type LookupRecheckOutcomeInput = Readonly<{
   state: string; completeness: string; source: string; followUpAt: string | null;
-  limitations: readonly string[]; comparisonSummary: string; recheck?: CaseRecheckAnswerContext;
+  limitations: readonly string[]; comparisonSummary: string; comparisonTruncated?: boolean; recheck?: CaseRecheckAnswerContext;
 }>;
 
 function pruneSuffix(pruned: number): string {
@@ -290,16 +289,16 @@ export class LookupCaseController {
     if (selectionByField.size !== selections.length) {
       return { record, status: 'Each conclusion fact can be selected only once.', mutationOutcome: 'rejected' };
     }
-    const pins = checkpointPinInputs(facts, selections.map((item) => item.field));
-    if (pins.length !== selections.length) {
-      return { record, status: 'One or more selected facts are no longer available in this observation.', mutationOutcome: 'rejected' };
-    }
-    const evidence: CaseConclusionInput['evidence'] = pins.map((pin) => ({
-      pin,
-      stance: selectionByField.get(pin.field ?? '') ?? 'unresolved',
-    }));
-    const summary = `Analyst conclusion: ${dispositionLabel(disposition)}`;
     try {
+      const pins = checkpointPinInputs(facts, selections.map((item) => item.field));
+      if (pins.length !== selections.length) {
+        return { record, status: 'One or more selected facts are no longer available in this observation.', mutationOutcome: 'rejected' };
+      }
+      const evidence: CaseConclusionInput['evidence'] = pins.map((pin) => ({
+        pin,
+        stance: selectionByField.get(pin.field ?? '') ?? 'unresolved',
+      }));
+      const summary = `Analyst conclusion: ${dispositionLabel(disposition)}`;
       const conclude = this.#api.conclude ?? recordCaseConclusion;
       const updated = await conclude(record.id, {
         disposition,
@@ -434,18 +433,18 @@ export class LookupCaseController {
         mutationOutcome: 'rejected',
       };
     }
-    const evidencePins = checkpointPinInputs(facts, selectedFields, { transitionExpectations });
-    if (evidencePins.length !== new Set(selectedFields).size) {
-      return { record, status: 'A selected fact or its source observation time is unavailable. Review the current selection before saving a checkpoint.', mutationOutcome: 'rejected' };
-    }
-    if (!evidencePins.length) {
-      return {
-        record,
-        status: 'Select at least one currently observed fact before saving a checkpoint.',
-        mutationOutcome: 'rejected',
-      };
-    }
     try {
+      const evidencePins = checkpointPinInputs(facts, selectedFields, { transitionExpectations });
+      if (evidencePins.length !== new Set(selectedFields).size) {
+        return { record, status: 'A selected fact or its source observation time is unavailable. Review the current selection before saving a checkpoint.', mutationOutcome: 'rejected' };
+      }
+      if (!evidencePins.length) {
+        return {
+          record,
+          status: 'Select at least one currently observed fact before saving a checkpoint.',
+          mutationOutcome: 'rejected',
+        };
+      }
       const updated = await this.#api.edit(record.id, { evidencePins });
       return {
         record: updated.record,

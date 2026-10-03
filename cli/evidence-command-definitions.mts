@@ -1,0 +1,70 @@
+import { WORKSPACE_ARCHIVE_VERSION } from '../packages/contracts/case-portability.mts';
+import { LEGACY_WORKSPACE_ARCHIVE_DESCRIPTION, LEGACY_WORKSPACE_ARCHIVE_SCOPE, OPTIONAL_FILE_POSITIONAL, constraint, EMPTY_CONSTRAINTS, commandSeed } from './command-definition.mts';
+
+export const EVIDENCE_COMMAND_DEFINITIONS = Object.freeze({
+  "inspect-archive": commandSeed({
+    reference: {
+      description: `Summarise or search one current version-${WORKSPACE_ARCHIVE_VERSION} workspace archive, with exact ${LEGACY_WORKSPACE_ARCHIVE_DESCRIPTION} support and redacted output by default.`,
+      example: 'whoisleuth inspect-archive workspace.json --search example.test --json',
+      boundary: 'Exact values require --reveal. New content comparisons use the reported sorted-json-v2:sha256 identity with --expect-content-digest; bare sha256 hashes retain their legacy locale-sensitive meaning. Retired and future archives are rejected. The archive is read locally and is never uploaded.',
+    },
+    collection: { scope: `Reads one selected bounded workspace archive v${WORKSPACE_ARCHIVE_VERSION}, retains exact ${LEGACY_WORKSPACE_ARCHIVE_SCOPE} compatibility, and redacts output by default.` },
+    summary: 'Inspect an archive locally',
+    options: ['--passphrase-file', '--search', '--require-match', '--reveal', '--expect-content-digest', '--json', '--quiet', '--no-color'],
+    positionals: OPTIONAL_FILE_POSITIONAL,
+    constraints: Object.freeze([
+    constraint({ kind: 'requires_all', option: '--reveal', requiredOptions: ['--search'] }),
+    constraint({ kind: 'requires_all', option: '--require-match', requiredOptions: ['--search'] }),
+  ]),
+    handlerOwner: 'evidence',
+    networkEffect: 'offline',
+    common: false,
+    schemaIdentifiers: Object.freeze(['whoisleuth.workspace-archive-inspection']),
+    primaryArtefacts: Object.freeze([]),
+    planSupport: false,
+    additionalOutputFormats: Object.freeze([]),
+    bootstrapProfile: 'allowed',
+  }),
+  "sign-artifact": commandSeed({
+    reference: {
+      description: 'Sign one reviewed response packet or supported manifest with a local private key.',
+      example: 'whoisleuth sign-artifact packet.json --private-key-file analyst-private.pem',
+      boundary: 'The command never creates, stores, or transmits keys. Key custody and signer identity remain the operator\'s responsibility.',
+    },
+    collection: { scope: 'Reads one selected artefact and one local private key without transmitting either.' },
+    summary: 'Sign a reviewed artefact locally',
+    options: ['--private-key-file'],
+    positionals: OPTIONAL_FILE_POSITIONAL,
+    constraints: Object.freeze([
+    constraint({ kind: 'required', options: ['--private-key-file'] }),
+  ]),
+    handlerOwner: 'evidence',
+    networkEffect: 'offline',
+    common: false,
+    schemaIdentifiers: Object.freeze(['whoisleuth.signed-evidence-package']),
+    primaryArtefacts: Object.freeze([]),
+    planSupport: false,
+    additionalOutputFormats: Object.freeze([]),
+    bootstrapProfile: 'allowed',
+  }),
+  "verify-signature": commandSeed({
+    reference: {
+      description: 'Verify one signed package and report embedded-artefact assurance separately. --trust-store-file also checks an explicit local fingerprint policy and emits a signer-trust report; unknown, retired, revoked or future-reviewed entries exit 4.',
+      example: 'whoisleuth verify-signature packet.signed.json --trust-store-file trust.json --json',
+      boundary: 'A valid signature proves package consistency for the embedded key, not identity, authority or evidence accuracy. With --trust-store-file, unknown, retired, revoked or future-reviewed entries exit 4 even if --public-key-file matches. Replacement fingerprints need their own trusted entry; no signing date overrides current revocation.',
+    },
+    collection: { scope: 'Reads one selected signed package, optional local public key and explicit fingerprint trust file. No automatic trust discovery or network requests.' },
+    summary: 'Verify a signed evidence package',
+    options: ['--public-key-file', '--trust-store-file', '--json', '--quiet', '--no-color'],
+    positionals: OPTIONAL_FILE_POSITIONAL,
+    constraints: EMPTY_CONSTRAINTS,
+    handlerOwner: 'evidence',
+    networkEffect: 'offline',
+    common: false,
+    schemaIdentifiers: Object.freeze(['whoisleuth.evidence-signature-verification', 'whoisleuth.evidence-signer-trust-store', 'whoisleuth.evidence-signer-trust-report']),
+    primaryArtefacts: Object.freeze([]),
+    planSupport: false,
+    additionalOutputFormats: Object.freeze([]),
+    bootstrapProfile: 'allowed',
+  }),
+});

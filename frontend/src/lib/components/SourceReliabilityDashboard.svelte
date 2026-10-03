@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import {
     parseSourceReliabilityDashboard,
     reliabilityDurationLabel,
@@ -75,7 +76,7 @@
       <span><strong>{dashboard.summary.stateSamples}</strong> state samples</span>
       <span><strong>{dashboard.summary.attention}</strong> attention</span>
       <span><strong>{dashboard.summary.measuredDuration}</strong> timed</span>
-      <span class="report-file">{fileName} · generated {new Date(dashboard.generatedAt).toLocaleString('en-AU')}</span>
+      <span class="report-file">{fileName} · generated {formatEvidenceDate(dashboard.generatedAt)}</span>
       <button class="clear-report" type="button" onclick={clearReport}>Clear report</button>
     </div>
 

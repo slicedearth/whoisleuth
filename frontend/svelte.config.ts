@@ -1,10 +1,12 @@
 import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import type { Config } from '@sveltejs/kit';
+import { frontendBuildIdentity } from './build-identity.ts';
 
 const config = {
   preprocess: vitePreprocess(),
   kit: {
+    version: { name: frontendBuildIdentity().updateVersion },
     adapter: adapter({ pages: 'build', assets: 'build', strict: true }),
     csp: {
       mode: 'hash',

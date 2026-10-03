@@ -6,12 +6,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 
-import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
+import { normalizeBoundedSemanticVersion } from '../packages/analysis/semantic-version.mts';
 import {
   WHOISLEUTH_PROJECT_URL,
   WHOISLEUTH_SOURCE_ISSUES_URL,
   WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
-} from '../lib/project-metadata.mts';
+} from '../packages/analysis/project-metadata.mts';
 import {
   CLI_PACKAGE_REPORT_SCHEMA,
   CLI_PACKAGE_REPORT_VERSION,

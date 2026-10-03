@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { RELATIONSHIP_EVIDENCE_VERSION } from '../packages/contracts/offline-comparison.mts';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { buildScanRelationships, relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
@@ -7,6 +8,7 @@ import { normalizeRelationshipSourceProjection, qualifyRelationshipSources, rela
 import { buildRelationshipAdmissionPreview, relationshipAdmissionMatchesCurrent, snapshotRelationshipAdmission } from '../packages/relationships/relationship-admission-preview.mts';
 import { buildRelationshipObservationExport, createRelationshipObservation, mergeRelationshipObservations, normalizeRelationshipObservationStore } from '../packages/workspace/relationship-observation-model.mts';
 import { buildBulkSessionExport, mergeBulkSessions, normalizeBulkSessionStore, serializeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
+import { BULK_SESSION_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { fromBulkSessionResult, toBulkSessionResult } from '../frontend/src/lib/analysis/bulk-result-model.ts';
 import { richBulkSessionStore } from './bulk-session-fixture.mts';
 import { requiredValue } from './value-assertions.mts';
@@ -72,7 +74,7 @@ test('future or malformed source envelopes cannot acquire completeness or a gues
   assert.equal(unknown.observedAt, null);
   assert.equal(unknown.complete, false);
   assert.ok(unknown.sourceEvidence.every((entry) => entry.observedAt === null));
-  for (const sourceVersion of [4, 1001, Number.MAX_SAFE_INTEGER, '3', 0]) {
+  for (const sourceVersion of [RELATIONSHIP_EVIDENCE_VERSION + 1, 1001, Number.MAX_SAFE_INTEGER, '3', 0]) {
     assert.throws(() => normalizeRelationshipObservationStore([{ ...unknown, sourceVersion }]), /(?:newer|unsupported) source-evidence version/u);
   }
   const legacy = createRelationshipObservation(group, { sourceVersion: 2, retainedAt: RETAINED });
@@ -153,21 +155,21 @@ test('provenance caps, missing members and inconsistent success flags stay parti
 
 test('source matching respects the same per-row bounds as the relationship projection', () => {
   const observation = relationshipObservation({ dns: { version: 1, source: 'dns', status: 'success', observedAt: FIRST,
-    complete: true, truncated: false, records: { a: ['192.0.2.20'] } } });
-  const addresses = Array.from({ length: 51 }, (_, index) => `192.0.2.${index + 1}`);
+    complete: true, truncated: false, records: { a: ['11.12.13.20'] } } });
+  const addresses = Array.from({ length: 51 }, (_, index) => `11.12.13.${index + 1}`);
   const oversized = { ...observation, ipAddresses: addresses };
   const summary = buildScanRelationships([
     { domain: 'one.example', relationship: oversized },
     { domain: 'two.example', relationship: observation },
   ]);
-  const group = requiredValue(summary.groups.find((entry) => entry.type === 'ip_address' && entry.normalizedValue === '192.0.2.20'));
+  const group = requiredValue(summary.groups.find((entry) => entry.type === 'ip_address' && entry.normalizedValue === '11.12.13.20'));
   assert.equal(group.complete, false);
   assert.equal(group.truncated, true);
   const excluded = buildScanRelationships([
-    { domain: 'one.example', relationship: { ...oversized, ipAddresses: [...Array.from({ length: 50 }, () => '192.0.2.21'), '192.0.2.20'] } },
+    { domain: 'one.example', relationship: { ...oversized, ipAddresses: [...Array.from({ length: 50 }, () => '11.12.13.21'), '11.12.13.20'] } },
     { domain: 'two.example', relationship: observation },
   ]);
-  assert.equal(excluded.groups.some((entry) => entry.normalizedValue === '192.0.2.20'), false);
+  assert.equal(excluded.groups.some((entry) => entry.normalizedValue === '11.12.13.20'), false);
 });
 
 test('saved Bulk round trips preserve source times, while public rows remain explicitly undated', async () => {
@@ -190,7 +192,7 @@ test('saved Bulk round trips preserve source times, while public rows remain exp
   const imported = mergeBulkSessions([], buildBulkSessionExport(restored, RETAINED));
   assert.equal(requiredValue(requiredValue(imported.sessions[0]).results[0]).observedAt, LAST);
   const publicEmpty = JSON.parse(await readFile(new URL('./fixtures/workspace-lifecycle/browser-bulk-v4.json', import.meta.url), 'utf8'));
-  assert.equal(normalizeBulkSessionStore(publicEmpty).version, 5);
+  assert.equal(normalizeBulkSessionStore(publicEmpty).version, BULK_SESSION_SCHEMA_VERSION);
   assert.equal(requiredValue(normalizeBulkSessionStore(raw).sessions[0])?.results[0]?.observedAt, null);
 });
 

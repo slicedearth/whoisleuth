@@ -1,14 +1,33 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { dependencyCruiserExecutable } from '../tools/maintainer-tool-helpers.mts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const EXECUTABLE = join(ROOT, 'node_modules', 'dependency-cruiser', 'bin', 'dependency-cruise.mjs');
+const EXECUTABLE = dependencyCruiserExecutable(ROOT);
 const FIXTURE_ROOT = join(ROOT, 'test', 'fixtures', 'architecture');
 
 describe('architecture boundaries', () => {
+  test('uses the declared analyser command across internal file moves and rejects invalid declarations', () => {
+    const root = mkdtempSync(join(tmpdir(), 'architecture-command-'));
+    const packageRoot = join(root, 'node_modules', 'dependency-cruiser');
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      for (const target of ['bin/original.mjs', 'commands/renamed.mjs']) {
+        writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({ bin: { depcruise: target } }));
+        assert.equal(dependencyCruiserExecutable(root), join(packageRoot, target));
+      }
+      for (const manifest of [{}, { bin: {} }, { bin: { depcruise: '../outside.mjs' } }, { bin: { depcruise: '/outside.mjs' } }]) {
+        writeFileSync(join(packageRoot, 'package.json'), JSON.stringify(manifest));
+        assert.throws(() => dependencyCruiserExecutable(root), TypeError);
+      }
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
   test('resolves supported package subpaths without hiding invalid imports', () => {
     const result = spawnSync(process.execPath, [EXECUTABLE, '--config', join(ROOT, '.dependency-cruiser.json'),
       // Include resolved external nodes in this diagnostic; the application
@@ -32,15 +51,7 @@ describe('architecture boundaries', () => {
       join(ROOT, '.dependency-cruiser.json'),
       '--output-type',
       'json',
-      join(FIXTURE_ROOT, 'packages', 'contracts'),
-      join(FIXTURE_ROOT, 'packages', 'evidence'),
-      join(FIXTURE_ROOT, 'packages', 'cases'),
-      join(FIXTURE_ROOT, 'packages', 'workspace'),
-      join(FIXTURE_ROOT, 'packages', 'monitoring'),
-      join(FIXTURE_ROOT, 'packages', 'investigation'),
-      join(FIXTURE_ROOT, 'packages', 'interchange'),
-      join(FIXTURE_ROOT, 'packages', 'relationships'),
-      join(FIXTURE_ROOT, 'packages', 'comparison'),
+      join(FIXTURE_ROOT, 'packages'),
       join(FIXTURE_ROOT, 'cli'),
       join(FIXTURE_ROOT, 'lib'),
       join(FIXTURE_ROOT, 'tools'),
@@ -62,15 +73,26 @@ describe('architecture boundaries', () => {
     for (const name of [
       'shared-contracts-stay-independent-of-domain-and-adapters',
       'domain-packages-stay-independent-of-runtime-adapters',
-      'case-domain-stays-independent-of-runtime-adapters',
-      'case-domain-no-node-core',
-      'workspace-domain-stays-independent-of-runtime-adapters',
-      'workspace-domain-no-node-core',
-      'portable-domain-packages-stay-independent-of-runtime-adapters',
-      'portable-domain-packages-no-node-core',
+      'domain-packages-no-node-core',
       'non-frontend-production-stays-out-of-frontend',
       'observation-consumers-use-domain-owner',
+      'frontend-no-server-only',
+      'verification-policy-does-not-load-builders',
     ]) assert.ok(violatedRules.has(name), `${name} must report an actual forbidden dependency`);
+    const newDomainViolations = report.summary.violations.filter(violation =>
+      violation.from.endsWith('packages/new-domain/forbidden-dependencies.mts'));
+    assert.ok(newDomainViolations.some(violation => violation.to === 'fs'
+      && violation.rule.name === 'domain-packages-no-node-core'));
+    assert.ok(newDomainViolations.some(violation => violation.to.endsWith('lib/runtime.mts')
+      && violation.rule.name === 'domain-packages-stay-independent-of-runtime-adapters'));
+    assert.ok(report.summary.violations.some(violation =>
+      violation.from.endsWith('frontend/src/lib/forbidden-server-runtime.mts')
+      && violation.to.endsWith('lib/server/new-service.mts')
+      && violation.rule.name === 'frontend-no-server-only'));
+    assert.ok(report.summary.violations.some(violation =>
+      violation.from.endsWith('tools/verification-policy.mts')
+      && violation.to.endsWith('tools/cli-package.mts')
+      && violation.rule.name === 'verification-policy-does-not-load-builders'));
     const blockedTargets = new Set(report.summary.violations
       .filter((violation) => violation.rule.name === 'non-frontend-production-stays-out-of-frontend')
       .map((violation) => violation.to.replace('test/fixtures/architecture/frontend/src/lib/', '')));

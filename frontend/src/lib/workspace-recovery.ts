@@ -7,7 +7,7 @@ export { WorkspaceDestinationStartError as WorkspaceRecoveryStartError } from '.
 import { currentBrowserWorkspaceId } from './browser-workspace-context.ts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../packages/contracts/selected-file-limits.mts';
 import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../../../packages/contracts/investigation-package-limits.mts';
-import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
+import type { AnyLocalDataCollectionDefinition } from './browser-local-data-content.ts';
 import type { CaseRecord } from '../../../packages/cases/case-model.mts';
 
 export type WorkspaceRecoveryReport = ReturnType<typeof compareRecoveredWorkspace> & Readonly<{
@@ -38,7 +38,7 @@ export async function openWorkspaceRecovery(input: ReviewedWorkspaceArchive, opt
     documents.set(owner[1], result.document);
   }
   const omissions = merged.reduce((total, result) => total + result.skipped + (result.pruned ?? 0)
-    + (result.brandProfileReferencesOmitted ?? 0) + (result.authoredHistoryOmitted ?? 0), 0);
+    + (result.brandProfileReferencesOmitted ?? 0) + (result.authoredHistoryOmitted ?? 0) + (result.evidenceHistoryOmitted ?? 0), 0);
   const destination = await openBrowserWorkspaceDestination(options);
   const { workspace, provider } = destination;
   options = { name: options.name, requireEncryption: options.requireEncryption };

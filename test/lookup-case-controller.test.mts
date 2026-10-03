@@ -9,6 +9,7 @@ import { createCase, openOrCreateCase, updateCase } from '../frontend/src/lib/an
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export.ts';
 import type { ResolvedAbuseRecipient } from '../frontend/src/lib/analysis/abuse-recipient-resolver.ts';
 import type { CheckpointFact } from '../frontend/src/lib/analysis/case-evidence-checkpoint.ts';
+import { MAX_CASE_CHECKPOINT_FACTS } from '../packages/contracts/case-portability.mts';
 
 function unused(): Promise<never> {
   throw new Error('Unused test dependency');
@@ -47,6 +48,24 @@ function fixtureApi(overrides: Partial<LookupCaseApi> = {}): LookupCaseApi {
 }
 
 describe('Lookup case controller', () => {
+  test('oversized checkpoint and conclusion selections report failure without writing or rejecting their handler', async () => {
+    let writes = 0;
+    const failIfWritten = async () => { writes += 1; throw new Error('Must not write an oversized selection.'); };
+    const controller = new LookupCaseController(fixtureApi({ edit: failIfWritten, conclude: failIfWritten }));
+    const record = createCase({ domain: 'example.test' }, '2026-07-29T01:00:00.000Z');
+    const facts = Array.from({ length: MAX_CASE_CHECKPOINT_FACTS + 1 }, (_, index) => fixtureFact(`dns.fact-${index}`));
+    const results = [
+      await controller.recordCheckpoint(record, facts, facts.map(fact => fact.field)),
+      await controller.recordConclusion(record, facts, 'suspicious', '', 'Review the retained observations.',
+        facts.map(fact => ({ field: fact.field, stance: 'supports' as const }))),
+    ];
+    for (const result of results) {
+      assert.equal(result.mutationOutcome, 'rejected');
+      assert.match(result.status, /No selection was saved/u);
+      assert.equal(result.record, record);
+    }
+    assert.equal(writes, 0);
+  });
   test('reads and writes only an explicitly selected same-domain incident without granting selection from domain membership', async () => {
     const domain = 'incident.example';
     const first = createCase({ domain, title: 'First incident' }, '2026-08-20T00:00:00.000Z');

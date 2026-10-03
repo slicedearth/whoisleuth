@@ -1,6 +1,6 @@
 import type { InvestigationProjection } from './investigation-projection.ts';
 import type { CaseRecord } from './case-record-model.ts';
-import { canonicalRegistrableDomain } from '../../../../lib/registrable-domain.mts';
+import { canonicalRegistrableDomain } from '../../../../packages/analysis/registrable-domain.mts';
 import { latestObservationCohort } from '../../../../packages/evidence/latest-observations.mts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 

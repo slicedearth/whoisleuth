@@ -37,7 +37,7 @@ import {
   CURATED_CONNECTOR_ENTITY_VALUES, CURATED_CONNECTOR_RELATIONSHIP_TYPES,
   CURATED_CONNECTOR_TARGET_EXPOSURES,
   CURATED_CONNECTOR_RELATIONSHIP_ENDPOINTS as CONNECTOR_RELATIONSHIP_ENDPOINTS,
-} from './threat-intelligence-types.mts';
+} from '../packages/analysis/threat-intelligence-types.mts';
 import { normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 
 const MAX_PROVIDER_ID_LENGTH = 40;

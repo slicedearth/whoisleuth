@@ -79,13 +79,29 @@ describe('registry fixture freshness tooling', () => {
       coverageState: 'fixture_verified' as const,
       verificationFiles: ['fixtures/example.mts'],
     };
-    const stale = await buildRegistryFixtureFreshnessReport({
+    const changed = await buildRegistryFixtureFreshnessReport({
       now: () => new Date('2026-07-29T00:00:00.000Z'),
       provenance,
       capabilities: [capability as never],
       readFixture: async () => Buffer.alloc(0),
     });
-    assert.equal(stale.files[0]?.state, 'changed');
+    assert.equal(changed.files[0]?.state, 'changed');
+
+    const staleOptions = {
+      now: () => new Date('2026-07-29T00:00:00.000Z'),
+      provenance: [{ ...provenance[0]!, sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' }],
+      capabilities: [capability as never],
+      readFixture: async () => Buffer.alloc(0),
+    };
+    const stale = await buildRegistryFixtureFreshnessReport(staleOptions);
+    assert.equal(stale.files[0]?.state, 'stale');
+    assert.equal(stale.profiles[0]?.state, 'stale');
+    const stdout = writable();
+    const stderr = writable();
+    assert.equal(await freshnessMain(['--json'], { ...staleOptions, stdout: stdout.stream, stderr: stderr.stream }), 1);
+    assert.equal(stderr.value(), '');
+    const currentOptions = { ...staleOptions, now: () => new Date('2025-01-02T00:00:00.000Z') };
+    assert.equal(await freshnessMain(['--json'], { ...currentOptions, stdout: stdout.stream, stderr: stderr.stream }), 0);
 
     const missing = await buildRegistryFixtureFreshnessReport({
       now: () => new Date('2026-07-29T00:00:00.000Z'),

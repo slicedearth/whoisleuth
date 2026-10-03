@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
@@ -8,16 +8,22 @@ import { fileURLToPath } from 'node:url';
 import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 
 import { buildAnalystJourneyAssurance, parseAnalystJourneySource } from '../tools/analyst-journey-assurance.mts';
-import { selectBalancedBrowserShard } from '../tools/playwright-balanced-shard.mts';
+import { browserVerificationMatrix, selectBalancedBrowserShard } from '../tools/playwright-balanced-shard.mts';
+import { reportPaths } from '../tools/playwright-shard-aggregate.mts';
 import {
   isPlaywrightFunctionalSpec,
   isPlaywrightPerformanceAuthoritySpec,
   PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS,
 } from '../tools/playwright-execution-contract.mts';
 import { createTestDurationReport } from '../tools/test-duration-reporter.mts';
+import { inspectVerificationArtifacts } from '../tools/verification-artifact-status.mts';
 import {
   buildFocusedVerificationExecution,
+  assertFocusedBrowserCoverage,
+  focusedBrowserLanes,
+  discoverFocusedVerificationPaths,
   parseFocusedVerificationOptions,
+  renderExecutionPlan,
 } from '../tools/focused-verification.mts';
 import {
   buildBalancedBrowserShardPlan,
@@ -27,6 +33,7 @@ import {
   readVerificationTestInventory,
   readVerificationTimingProfile,
   VERIFICATION_TIMING_PROFILE_PATH,
+  VERIFICATION_BROWSER_SHARD_COUNT,
   verificationTestInventoryFingerprint,
 } from '../tools/verification-timing-profile.mts';
 import {
@@ -35,8 +42,10 @@ import {
   browserSpecsForPrefixes,
   checkVerificationOwnershipMap,
   createVerificationOwnershipPlan,
+  dependencyAnalysisFailure,
   importedTestConsumers,
-  FULL_BATCH_RELEASE_GATES,
+  leafComponentContracts,
+  readVerificationSourceInventory,
 } from '../tools/verification-ownership.mts';
 
 function rawProfile(): Record<string, unknown> {
@@ -46,6 +55,36 @@ function rawProfile(): Record<string, unknown> {
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 describe('verification architecture contracts', () => {
+  test('focused cleanup preserves pre-existing artefacts while explicit cleanup still removes its selected group', async () => {
+    const repositoryRoot = mkdtempSync(path.join(tmpdir(), 'verification-cleanup-'));
+    const options = { repositoryRoot };
+    try {
+      mkdirSync(path.join(repositoryRoot, 'frontend/.svelte-kit'), { recursive: true });
+      mkdirSync(path.join(repositoryRoot, 'coverage'));
+      const existing = await inspectVerificationArtifacts('none', false, options);
+      assert.deepEqual([...existing.remaining].sort(), ['coverage', 'frontend/.svelte-kit']);
+      mkdirSync(path.join(repositoryRoot, 'frontend/build'));
+      const focused = await inspectVerificationArtifacts('browser', false, { ...options, preserve: existing.remaining });
+      assert.deepEqual(focused.removed, ['frontend/build']);
+      assert.deepEqual(focused.remaining, existing.remaining);
+      assert.equal(existsSync(path.join(repositoryRoot, 'frontend/.svelte-kit')), true);
+      const explicit = await inspectVerificationArtifacts('browser', false, options);
+      assert.deepEqual(explicit.removed, ['frontend/.svelte-kit']);
+      assert.deepEqual(explicit.remaining, ['coverage']);
+      assert.equal(existsSync(path.join(repositoryRoot, 'coverage')), true);
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('explains dependency fallback without exposing arbitrary failure details', () => {
+    const failure = Object.assign(new Error('private transport detail'), { code: 'ENOENT' });
+    assert.equal(dependencyAnalysisFailure('reading dependency configuration', failure),
+      'Dependency analysis failed while reading dependency configuration (ENOENT): the focused plan falls back to the complete unit and functional browser inventories.');
+    for (const error of [new SyntaxError('private transport detail'), new TypeError('private transport detail'), { code: 'private transport detail' }, null]) {
+      assert.doesNotMatch(dependencyAnalysisFailure('mapping source dependents', error), /private transport detail/u);
+    }
+  });
   test('uses discovered tests for a deterministic exact browser plan and retains honest timing history', () => {
     const inventory = readVerificationTestInventory();
     const profile = readVerificationTimingProfile();
@@ -58,7 +97,7 @@ describe('verification architecture contracts', () => {
     assert.equal(inventory.includes('tools/test-duration-reporter.mts'), false);
     assert.equal(inventory.some((file) => file.startsWith('test/support/')), false);
     assert.equal(first.setupFiles.length, 1);
-    assert.equal(first.shards.length, 4);
+    assert.equal(first.shards.length, VERIFICATION_BROWSER_SHARD_COUNT);
     const browserInventory = inventory.filter((file) => file.endsWith('.spec.ts')).sort();
     const eligible = browserInventory.filter(isPlaywrightFunctionalSpec);
     const performanceAuthority = browserInventory.filter(isPlaywrightPerformanceAuthoritySpec);
@@ -69,21 +108,29 @@ describe('verification architecture contracts', () => {
     assert.equal(new Set(assigned).size, assigned.length);
     assert.equal(first.shards.reduce((sum, item) => sum + item.plannedWeightMs, 0), first.totalPlannedWeightMs);
     assert.ok(first.unavoidableImbalanceMs >= 0);
-    assert.deepEqual(selectBalancedBrowserShard('1/4').shard, first.shards[0]);
-    assert.throws(() => selectBalancedBrowserShard('5/4'), /must select/u);
+    assert.deepEqual(selectBalancedBrowserShard(`1/${first.shardCount}`).shard, first.shards[0]);
+    assert.throws(() => selectBalancedBrowserShard(`${first.shardCount + 1}/${first.shardCount}`), /must select/u);
+    const matrix = browserVerificationMatrix(first);
+    assert.deepEqual(matrix.include.filter(row => row.kind === 'functional').map(row => row.shard), first.shards.map(shard => `${shard.shard}/${first.shardCount}`));
+    assert.deepEqual(matrix.include.filter(row => row.kind === 'performance'), [{ kind: 'performance', label: 'performance' }]);
   });
 
   test('rejects missing, duplicate, unknown, malformed, and unmeasured timing identities', () => {
     const retained = rawProfile();
     const inventory = (retained.files as Array<{ file: string }>).map((item) => item.file);
     assert.doesNotThrow(() => parseVerificationTimingProfile(JSON.stringify(retained), inventory));
-    const variants: Array<readonly [string, (value: Record<string, unknown>) => void]> = [
-      ['missing', (value) => { (value.files as unknown[]).pop(); }],
-      ['duplicate', (value) => { (value.files as unknown[]).push(structuredClone((value.files as unknown[])[0])); }],
-      ['unknown', (value) => { ((value.files as Array<Record<string, unknown>>)[0]!).file = 'test/unknown.test.mts'; }],
-      ['malformed', (value) => { ((value.files as Array<Record<string, unknown>>)[0]!).file = '../outside.test.mts'; }],
-      ['unmeasured', (value) => { ((value.files as Array<Record<string, unknown>>)[0]!).weightMs = 0; }],
-      ['excess provenance', (value) => {
+    const variants: Array<readonly [string, RegExp, (value: Record<string, unknown>) => void]> = [
+      ['missing', /inventory mismatch: 1 missing and 0 unknown/u, (value) => { (value.files as unknown[]).pop(); }],
+      ['duplicate', /test identities must not repeat/u, (value) => { (value.files as unknown[]).push(structuredClone((value.files as unknown[])[0])); }],
+      ['unknown', /inventory mismatch: 0 missing and 1 unknown/u, (value) => {
+        const files = value.files as Array<Record<string, unknown>>;
+        const unit = files.find((item) => item.lane === 'unit');
+        assert.ok(unit);
+        files.push({ ...unit, file: 'test/unknown.test.mts' });
+      }],
+      ['malformed', /repository-relative maintained test identity/u, (value) => { ((value.files as Array<Record<string, unknown>>)[0]!).file = '../outside.test.mts'; }],
+      ['unmeasured', /Timing weight .* must be an integer between 1 and/u, (value) => { ((value.files as Array<Record<string, unknown>>)[0]!).weightMs = 0; }],
+      ['excess provenance', /must retain 1 to \d+ provenance records/u, (value) => {
         const provenance = value.provenance as Array<Record<string, unknown>>;
         while (provenance.length <= MAX_TIMING_PROVENANCE) {
           provenance.push({
@@ -96,10 +143,10 @@ describe('verification architecture contracts', () => {
         }
       }],
     ];
-    for (const [label, mutate] of variants) {
+    for (const [label, expected, mutate] of variants) {
       const value = rawProfile();
       mutate(value);
-      assert.throws(() => parseVerificationTimingProfile(JSON.stringify(value), inventory), label);
+      assert.throws(() => parseVerificationTimingProfile(JSON.stringify(value), inventory), expected, label);
     }
   });
 
@@ -257,7 +304,7 @@ describe('verification architecture contracts', () => {
     const cleanEnvironment = environmentWithoutV8Coverage();
     try {
       const reports = plan.shards.map((shard) => {
-        const report = path.join(directory, `shard-${shard.shard}.json`);
+        const report = path.join(directory, `shard-${shard.shard}-of-${plan.shardCount}.json`);
         const files = [...plan.setupFiles, ...shard.files];
         writeFileSync(report, JSON.stringify({
           stats: { expected: files.length, unexpected: 0, flaky: 0, skipped: 0, duration: files.length },
@@ -272,9 +319,16 @@ describe('verification architecture contracts', () => {
         return report;
       });
       const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+      assert.deepEqual([...reportPaths([`--reports-directory=${directory}`]).paths].sort(), [...reports].sort());
+      assert.throws(() => reportPaths([`--reports-directory=${directory}`, `--report=${reports[0]}`]), /Usage/u);
+      assert.throws(() => reportPaths([`--reports-directory=${directory}`, '--summary', '--summary']), /Usage/u);
+      const unexpected = path.join(directory, 'unexpected.json');
+      writeFileSync(unexpected, '{}');
+      assert.throws(() => reportPaths([`--reports-directory=${directory}`]), /exactly/u);
+      rmSync(unexpected);
       const aggregateRun = spawnSync(npm, [
         'run', '--silent', 'test:e2e:aggregate', '--',
-        ...reports.map((report) => `--report=${report}`),
+        `--reports-directory=${directory}`,
       ], {
         cwd: REPOSITORY_ROOT,
         env: cleanEnvironment,
@@ -329,9 +383,13 @@ describe('verification architecture contracts', () => {
       '.github/workflows/ci.yml',
     ];
     const plan = buildVerificationOwnershipPlan(paths);
-    assert.equal(plan.mapVersion, 2);
+    assert.equal(plan.mapVersion, 3);
     assert.equal(plan.assignments.length, paths.length);
-    assert.deepEqual(plan.fullBatchReleaseGates, FULL_BATCH_RELEASE_GATES);
+    assert.equal(plan.fullVerificationScript, 'verification:ci');
+    const explanation = renderExecutionPlan(plan, buildFocusedVerificationExecution(plan));
+    assert.match(explanation, /npm run verification:ci -- --list/u);
+    assert.match(explanation, /npm run test:e2e:stress/u);
+    assert.match(explanation, /production dependency audit.*docs\/releasing\.md/u);
     assert.ok(plan.focusedUnitChecks.length > 0);
     assert.ok(plan.focusedBrowserChecks.includes('e2e/dashboard.spec.ts'));
     assert.equal(plan.userFacingBrowserRequired, true);
@@ -340,8 +398,8 @@ describe('verification architecture contracts', () => {
     assert.ok(plan.focusedBrowserChecks.every(isPlaywrightFunctionalSpec));
 
     const closure = checkVerificationOwnershipMap();
-    assert.equal(closure.assignedFiles, closure.maintainedFiles);
-    assert.equal(closure.fullBatchReleaseGates, FULL_BATCH_RELEASE_GATES.length);
+    assert.equal(closure.assignedFiles + closure.conservativeFallbackPaths.length, closure.maintainedFiles);
+    assert.equal(closure.maintainedFiles, readVerificationSourceInventory().length);
     assert.ok(closure.schemaFamilies > 0 && closure.capabilities > 0 && closure.cliOperations > 0);
     assert.ok(closure.privacyProfiles > 0 && closure.privacyConsumerFlows > 0);
     assert.ok(closure.browserRequiredSupportPaths > 0);
@@ -349,7 +407,17 @@ describe('verification architecture contracts', () => {
     assert.throws(() => buildVerificationOwnershipPlan(['lib/helper;touch.mts']), /repository-relative/u);
     assert.throws(() => buildVerificationOwnershipPlan(['lib/$(id).mts']), /repository-relative/u);
     assert.throws(() => buildVerificationOwnershipPlan(['lib/safe-fetch.mts', 'lib/safe-fetch.mts']), /must not repeat/u);
-    assert.throws(() => buildVerificationOwnershipPlan(['unowned-root.cfg']), /Unknown maintained ownership area/u);
+    const unknown = buildVerificationOwnershipPlan(['unowned-root.cfg']);
+    assert.deepEqual(unknown.conservativeFallbackPaths, ['unowned-root.cfg']);
+    assert.deepEqual(unknown.focusedUnitChecks, readVerificationTestInventory().filter(file => file.startsWith('test/')).sort());
+    assert.deepEqual(unknown.focusedBrowserChecks, readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
+    assert.match(unknown.assignments[0]!.selectionNotes.join(' '), /No unique classified owner/u);
+    const fallbackCommands = buildFocusedVerificationExecution(unknown).commands.map(command => command.id);
+    assert.ok(fallbackCommands.includes('check') && fallbackCommands.includes('typecheck'));
+    assert.ok(fallbackCommands.includes('schema:inventory') && fallbackCommands.includes('privacy:check'));
+    const notices = buildVerificationOwnershipPlan(['frontend/static/third-party-notices.txt']);
+    assert.ok(notices.mandatorySpecialisedChecks.includes('licences'));
+    assert.deepEqual(notices.conservativeFallbackPaths, []);
     assert.throws(
       () => assertDeclaredVerificationTest('test/absent.test.mts', 'unit'),
       /does not exist/u,
@@ -362,6 +430,36 @@ describe('verification architecture contracts', () => {
       () => assertDeclaredVerificationTest('e2e/accessibility.setup.ts', 'browser'),
       /invalid test-file identity/u,
     );
+  });
+
+  test('source inventory follows Git across root files, assets, additions, deletions and ignored output', () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'verification-source-inventory-'));
+    const git = (...args: string[]) => {
+      const child = spawnSync('git', args, { cwd: directory, encoding: 'utf8' });
+      assert.ifError(child.error);
+      assert.equal(child.status, 0, child.stderr);
+    };
+    try {
+      git('init', '--quiet');
+      mkdirSync(path.join(directory, 'frontend/static'), { recursive: true });
+      mkdirSync(path.join(directory, 'fixtures'), { recursive: true });
+      writeFileSync(path.join(directory, '.gitignore'), 'frontend/build/\nlocal-only.txt\n');
+      const tracked = ['.gitignore', 'server.mts', 'netlify.toml', 'fixtures/data.json', 'frontend/static/icon.png', 'deleted.txt'];
+      for (const file of tracked.filter(file => file !== '.gitignore')) writeFileSync(path.join(directory, file), 'fixture');
+      git('add', '--', ...tracked);
+      rmSync(path.join(directory, 'deleted.txt'));
+      writeFileSync(path.join(directory, 'new-module.mts'), 'export const value = 1;');
+      writeFileSync(path.join(directory, 'local-only.txt'), 'not source');
+      mkdirSync(path.join(directory, 'frontend/build'), { recursive: true });
+      writeFileSync(path.join(directory, 'frontend/build/index.html'), 'generated');
+      assert.deepEqual(readVerificationSourceInventory(directory), [...tracked, 'new-module.mts'].sort());
+      const actual = readVerificationSourceInventory();
+      for (const file of ['server.mts', 'netlify.toml', 'fixtures/rdap-registry-fixtures.mts', 'frontend/static/favicon.ico']) {
+        assert.ok(actual.includes(file), file);
+      }
+      assert.ok(actual.every(file => !file.startsWith('frontend/build/') && !file.startsWith('frontend/.svelte-kit/')));
+      assert.throws(() => readVerificationSourceInventory(path.join(directory, 'absent')));
+    } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
   test('selects derived coverage for each structural change owner', () => {
@@ -483,6 +581,51 @@ describe('verification architecture contracts', () => {
     assert.equal(family.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
   });
 
+  test('test-only edits select their assertions without inheriting similarly named production work', async () => {
+    for (const file of ['test/deferred-module.test.mts', 'test/privacy-data-flow-catalogue.test.mts']) {
+      const plan = await createVerificationOwnershipPlan([file]);
+      assert.deepEqual(plan.focusedUnitChecks, [file]);
+      assert.deepEqual(plan.focusedBrowserChecks, []);
+      assert.deepEqual(plan.mandatorySpecialisedChecks, []);
+      assert.equal(buildFocusedVerificationExecution(plan).commands.some(command => command.id === 'build'), false);
+    }
+  });
+
+  test('public routes include their own discovered behaviour specifications', () => {
+    const demo = buildVerificationOwnershipPlan(['frontend/src/routes/(public)/demo/+page.svelte']);
+    assert.ok(demo.focusedBrowserChecks.includes('e2e/demo.spec.ts'));
+    assert.ok(demo.focusedBrowserChecks.includes('e2e/accessibility.spec.ts'));
+    const article = 'frontend/src/routes/(public)/resources/[slug]/+page.svelte';
+    assert.deepEqual(buildVerificationOwnershipPlan([article]).changedPaths, [article]);
+  });
+
+  test('leaf component contracts narrow iteration but not stateful, unresolved or unowned components', () => {
+    const file = 'frontend/src/lib/components/CopyButton.svelte';
+    const spec = 'e2e/copy-button.component.spec.ts';
+    const graph = { modules: [{ source: file, dependencies: [{ module: 'svelte', resolved: 'node_modules/svelte/src/index.js' }] }] } as Parameters<typeof leafComponentContracts>[1];
+    const contracts = leafComponentContracts([file], graph, [spec]);
+    assert.deepEqual(contracts.get(file), [spec]);
+    const plan = buildVerificationOwnershipPlan([file], new Map(), new Map(), new Map(), contracts);
+    assert.deepEqual(plan.focusedBrowserChecks, [spec]);
+    assert.equal(plan.fullVerificationScript, 'verification:ci');
+    assert.equal(leafComponentContracts([file], graph, []).size, 0);
+    graph.modules[0]!.dependencies[0]!.couldNotResolve = true;
+    assert.equal(leafComponentContracts([file], graph, [spec]).size, 0);
+    graph.modules[0]!.dependencies[0] = { module: '../browser-local-data', resolved: 'frontend/src/lib/browser-local-data.ts' } as typeof graph.modules[0]['dependencies'][number];
+    assert.equal(leafComponentContracts([file], graph, [spec]).size, 0);
+  });
+
+  test('an extracted frontend helper inherits its persistence owner without a filename registration', () => {
+    const file = 'frontend/src/lib/ordinary-transaction-helper.ts';
+    const plan = buildVerificationOwnershipPlan([file], new Map(), new Map(), new Map([
+      [file, ['frontend/src/lib/browser-local-data.ts', 'frontend/src/routes/(console)/bulk/+page.svelte']],
+    ]));
+    assert.ok(plan.impactAreas.includes('browser-local persistence and migration behaviour'));
+    assert.ok(plan.focusedUnitChecks.includes('test/workspace-rollback.test.mts'));
+    assert.ok(plan.focusedBrowserChecks.includes('e2e/watchlist-storage.spec.ts'));
+    assert.ok(plan.mandatorySpecialisedChecks.includes('schema-inventory'));
+  });
+
   test('keeps document-only checks offline and avoids application compilation and browser work', async () => {
     for (const file of ['README.md', 'docs/getting-started.md', 'packages/cases/README.md', 'docs/cli.md', 'SECURITY.md', 'TRADEMARKS.md', 'PRIVACY.md', 'docs/capability-manifest.md']) {
       const plan = await createVerificationOwnershipPlan([file]);
@@ -503,6 +646,7 @@ describe('verification architecture contracts', () => {
     const inventory = ['test/consumer.test.mts', 'test/unrelated.test.mts'];
     const graph = { modules: [
       { source: 'test/consumer.test.mts', dependencies: [{ resolved: 'packages/example/owner.mts', module: '../packages/example/owner.mts' }] },
+      { source: 'test/unrelated.test.mts', dependencies: [] },
       { source: 'packages/example/owner.mts', dependencies: [{ resolved: 'packages/example/helper.mts', module: './helper.mts' }] },
       { source: 'packages/example/helper.mts', dependencies: [{ resolved: 'packages/example/owner.mts', module: './owner.mts' }] },
     ] } as Parameters<typeof importedTestConsumers>[1];
@@ -532,17 +676,7 @@ describe('verification architecture contracts', () => {
     assert.equal(execution.commands.some(command => command.id.startsWith('typecheck (')), false);
   });
 
-  test('resolves ordinary components to existing route coverage without registering component names', async () => {
-    const component = 'frontend/src/lib/components/PublicGoalPaths.svelte';
-    const plan = await createVerificationOwnershipPlan([component]);
-    assert.ok(plan.focusedBrowserChecks.includes('e2e/public-guide.spec.ts'));
-    assert.ok(plan.focusedBrowserChecks.includes('e2e/accessibility.spec.ts'));
-    assert.equal(plan.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
-    assert.equal(plan.focusedBrowserChecks.includes('e2e/case-import-workflows.spec.ts'), false);
-    assert.ok(plan.focusedUnitChecks.includes('test/public-guide.test.mts'));
-    assert.equal(plan.focusedUnitChecks.includes('test/cli.test.mts'), false);
-    assert.ok(buildFocusedVerificationExecution(plan).commands.some(command => command.id === 'check'));
-
+  test('resolves ordinary components to existing route coverage without registering component names', () => {
     const ordinary = 'frontend/src/lib/components/NewOrdinaryPanel.svelte';
     const discovered = buildVerificationOwnershipPlan([ordinary], new Map(), new Map(),
       new Map([[ordinary, ['frontend/src/routes/(public)/resources/+page.svelte']]]));
@@ -551,26 +685,46 @@ describe('verification architecture contracts', () => {
     const unexplained = buildVerificationOwnershipPlan([ordinary], new Map(), new Map(),
       new Map([[ordinary, ['frontend/src/routes/(console)/unclassified/+page.svelte']]]));
     assert.deepEqual(unexplained.focusedBrowserChecks, readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
+    assert.deepEqual(unexplained.assignments[0]!.selectionNotes, [
+      'Full browser coverage: no classified route owner for frontend/src/routes/(console)/unclassified/+page.svelte.',
+    ]);
+    const explanation = renderExecutionPlan(unexplained, buildFocusedVerificationExecution(unexplained));
+    assert.ok(explanation.includes('frontend/src/routes/(console)/unclassified/+page.svelte'));
+    assert.ok(explanation.includes('Full browser coverage: no classified route owner'));
+    assert.deepEqual(discovered.assignments[0]!.selectionNotes, []);
     const stage = 'frontend/src/lib/components/CaseHistoryStage.svelte';
     const known = buildVerificationOwnershipPlan([stage], new Map(), new Map(),
       new Map([[stage, ['frontend/src/routes/(console)/cases/+page.svelte']]]));
     assert.deepEqual(known.focusedBrowserChecks, buildVerificationOwnershipPlan([stage]).focusedBrowserChecks);
   });
 
-  test('uses the existing resolver to find a real helper through its consumers', async () => {
-    const plan = await createVerificationOwnershipPlan(['packages/comparison/favicon-similarity.mts']);
-    assert.ok(plan.focusedUnitChecks.includes('test/utils.test.mts'));
-    assert.ok(plan.interpretation.some((line) => line.includes('current imports')));
-    assert.ok(plan.focusedUnitChecks.length < readVerificationTestInventory().filter((file) => file.startsWith('test/')).length);
+  test('discovers frontend controller coverage through consumers rather than unrelated default workflows', () => {
+    const helper = 'frontend/src/lib/controllers/ordinary-reference-filter.ts';
+    const unit = 'test/ordinary-reference-filter.test.mts';
+    const route = 'frontend/src/routes/(public)/resources/+page.svelte';
+    const plan = buildVerificationOwnershipPlan([helper], new Map([[helper, [unit]]]), new Map(),
+      new Map([[helper, [route]]]));
+    assert.ok(plan.focusedUnitChecks.includes(unit));
+    assert.ok(plan.focusedBrowserChecks.includes('e2e/public-guide.spec.ts'));
+    assert.ok(plan.focusedBrowserChecks.includes('e2e/accessibility.spec.ts'));
+    assert.equal(plan.focusedUnitChecks.includes('test/lookup-request-controller.test.mts'), false);
+    assert.equal(plan.focusedBrowserChecks.includes('e2e/dashboard.spec.ts'), false);
+    assert.equal(plan.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
+    const missing = buildVerificationOwnershipPlan([helper]);
+    assert.deepEqual(missing.assignments[0]!.selectionNotes, [
+      'Full browser coverage: no consuming route could be established for this interface.',
+    ]);
+    assert.deepEqual(missing.focusedBrowserChecks, readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
+    const unknown = buildVerificationOwnershipPlan([helper], new Map(), new Map(),
+      new Map([[helper, ['frontend/src/routes/(console)/new-workflow/+page.svelte']]]));
+    assert.deepEqual(unknown.focusedBrowserChecks, missing.focusedBrowserChecks);
   });
 
-  test('follows imported release metadata into generated examples without another test registration', async () => {
-    const plan = await createVerificationOwnershipPlan(['package.json']);
-    assert.ok(plan.focusedUnitChecks.includes('test/public-product-catalogue.test.mts'));
-    assert.ok(plan.interpretation.some((line) => line.includes('current imports')));
-    assert.ok(plan.focusedUnitChecks.length < readVerificationTestInventory().filter((file) => file.startsWith('test/')).length);
-    assert.ok(plan.focusedBrowserChecks.includes('e2e/dashboard.spec.ts'));
-    assert.equal(plan.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
+  test('does not assign frontend workflow ownership to a similarly named CLI helper', () => {
+    const assignment = buildVerificationOwnershipPlan(['cli/lookup-report.mts']).assignments[0]!;
+    assert.equal(assignment.ownershipArea, 'CLI command and installed-package surface');
+    assert.deepEqual(assignment.focusedBrowserChecks, []);
+    assert.ok(assignment.mandatorySpecialisedChecks.includes('cli-package'));
   });
 
   test('selects one owner while aggregating every matching verification impact', () => {
@@ -628,7 +782,7 @@ describe('verification architecture contracts', () => {
 
     assert.equal(ids[0], 'browser-discovery');
     assert.equal(execution.commands[0]!.args.includes('--list'), true);
-    assert.deepEqual(execution.commands[0]!.environment, { CI: '', WHOISLEUTH_E2E_USE_BUILD: '0' });
+    assert.deepEqual(execution.commands[0]!.environment, { CI: '', WHOISLEUTH_E2E_USE_BUILD: '0', WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1', PLAYWRIGHT_JSON_OUTPUT_FILE: '' });
     assert.ok(execution.commands.slice(1).every(command => command.environment === undefined));
 
     assert.equal(ids.filter((id) => id === 'typecheck (e2e/tsconfig.json)').length, 1);
@@ -676,30 +830,146 @@ describe('verification architecture contracts', () => {
       const valid = run();
       assert.ifError(valid.error);
       assert.equal(valid.status, 0, valid.stdout + valid.stderr);
-      assert.match(valid.stdout, /Total: 1 test in 1 file/u);
+      assert.equal(JSON.parse(valid.stdout).suites[0].specs.length, 1);
       assert.doesNotMatch(valid.stdout + valid.stderr, /Error: (setup|test) must not run/u);
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
+  test('iteration defers integration execution explicitly without changing its selection or defaults', () => {
+    const paths = ['packages/cases/case-record-projection.mts', 'frontend/src/lib/components/LookupAtAGlance.svelte'];
+    const plan = buildVerificationOwnershipPlan(paths);
+    const integration = buildFocusedVerificationExecution(plan);
+    const iteration = buildFocusedVerificationExecution(plan, { iteration: true });
+    assert.equal(integration.scope, 'integration');
+    assert.equal(iteration.scope, 'iteration');
+    assert.deepEqual(iteration.browserSpecs, []);
+    assert.deepEqual(iteration.deferredBrowserSpecs, plan.focusedBrowserChecks);
+    assert.deepEqual(iteration.deferredSpecialisedChecks, [...plan.mandatorySpecialisedChecks].sort());
+    assert.deepEqual(iteration.commands.map(command => command.id), ['browser-discovery', 'focused-unit', 'check', 'typecheck', 'diff-whitespace']);
+    assert.deepEqual(iteration.commands.find(command => command.id === 'focused-unit')?.args,
+      integration.commands.find(command => command.id === 'focused-unit')?.args);
+    assert.deepEqual(iteration.commands.find(command => command.id === 'check')?.selectedBy, [paths[1]]);
+    assert.deepEqual(iteration.commands.find(command => command.id === 'typecheck')?.selectedBy, [paths[0]]);
+    assert.ok(integration.commands.some(command => command.id === 'schema:inventory'));
+    for (const command of integration.commands) {
+      assert.ok(command.selectedBy.length, command.id);
+      assert.ok(command.selectedBy.every(file => paths.includes(file)), command.id);
+    }
+    const rendered = renderExecutionPlan(plan, iteration);
+    assert.match(rendered, /Iteration is not integration acceptance/u);
+    assert.match(rendered, /Browser execution deferred:/u);
+    assert.match(rendered, /Run: check — selected by frontend\/src\/lib\/components\/LookupAtAGlance.svelte/u);
+  });
+
+  test('focused native integration checks use the shared preflight and stay out of iteration', async () => {
+    const shell = 'test/cli-shell-completion.integration.test.mts';
+    const unit = 'test/cli-doctor-completion.test.mts';
+    const plan = await createVerificationOwnershipPlan([shell, unit]);
+    assert.ok(plan.focusedUnitChecks.includes(shell));
+    assert.ok(plan.focusedUnitChecks.includes(unit));
+    const integration = buildFocusedVerificationExecution(plan);
+    const iteration = buildFocusedVerificationExecution(plan, { iteration: true });
+    const command = integration.commands.find(command => command.id === 'focused-integration');
+    assert.ok(command);
+    assert.equal(command.executable, process.execPath);
+    assert.deepEqual(command.args, [
+      path.join(REPOSITORY_ROOT, 'tools/toolchain-compatibility.mts'),
+      '--unit-tests', '--test', '--test-concurrency=1', shell,
+    ]);
+    assert.deepEqual(command.selectedBy, [shell]);
+    for (const execution of [integration, iteration]) {
+      const selectedUnit = execution.commands.find(command => command.id === 'focused-unit');
+      assert.ok(selectedUnit);
+      assert.ok(selectedUnit.args.includes(unit));
+      assert.equal(selectedUnit.args.includes(shell), false);
+    }
+    assert.equal(iteration.commands.some(command => command.id === 'focused-integration'), false);
+    assert.deepEqual(iteration.deferredIntegrationChecks, [shell]);
+    assert.deepEqual(integration.deferredIntegrationChecks, []);
+    assert.match(renderExecutionPlan(plan, iteration), /Integration execution deferred: test\/cli-shell-completion.integration.test.mts/u);
+    assert.match(renderExecutionPlan(plan, integration), /Focused integration files: 1/u);
+    for (const execution of [integration, iteration]) {
+      const rendered = renderExecutionPlan(plan, execution);
+      assert.ok(rendered.includes(`Selected unit test: ${unit} — selected by ${unit}.`));
+      assert.ok(rendered.includes(`Selected integration test: ${shell} — selected by ${shell}.`));
+    }
+  });
+
+  test('workflow edits select executable shell contracts, with an explicit iteration deferral', async () => {
+    const plan = await createVerificationOwnershipPlan(['.github/workflows/test-health.yml']);
+    const shell = 'test/workflow-shells.integration.test.mts';
+    assert.ok(plan.focusedUnitChecks.includes(shell));
+    assert.ok(buildFocusedVerificationExecution(plan).commands.some(command => command.id === 'focused-integration' && command.args.includes(shell)));
+    assert.ok(buildFocusedVerificationExecution(plan, { iteration: true }).deferredIntegrationChecks.includes(shell));
+  });
+
+  test('optional editor configuration does not select application or release checks', async () => {
+    for (const file of ['.prettierrc.json', '.prettierignore', '.editorconfig', 'prettier.config.mjs']) {
+      const plan = await createVerificationOwnershipPlan([file]);
+      const execution = buildFocusedVerificationExecution(plan);
+      assert.equal(plan.assignments[0]!.ownershipArea, 'optional editor formatting');
+      assert.deepEqual(plan.focusedUnitChecks, []);
+      assert.deepEqual(plan.focusedBrowserChecks, []);
+      assert.deepEqual(execution.commands.map(command => command.id), ['diff-whitespace']);
+      assert.deepEqual(execution.deferredSpecialisedChecks, ['staged-security']);
+    }
+    // Executable application, compiler and package configuration is not an
+    // editor preference and must keep its independent verification boundaries.
+    for (const file of ['package.json', 'tsconfig.json', 'frontend/vite.config.ts']) {
+      const plan = buildVerificationOwnershipPlan([file]);
+      assert.notEqual(plan.assignments[0]!.ownershipArea, 'optional editor formatting');
+      assert.ok(buildFocusedVerificationExecution(plan).commands.length > 1);
+    }
+  });
+
+  test('new frontend configuration inherits build verification without a filename registration', () => {
+    const functional = readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort();
+    for (const file of ['frontend/vite.config.ts', 'frontend/new-build-helper.ts', 'frontend/static/example.svg']) {
+      const plan = buildVerificationOwnershipPlan([file]);
+      assert.equal(plan.assignments[0]!.ownershipArea, 'frontend build configuration and assets');
+      assert.deepEqual(plan.focusedBrowserChecks, functional);
+      assert.ok(plan.focusedUnitChecks.includes('test/frontend-build-integrity.test.mts'));
+      assert.ok(plan.mandatorySpecialisedChecks.includes('browser-build'));
+      assert.ok(plan.mandatorySpecialisedChecks.includes('browser-loading-report'));
+    }
+  });
+
   test('documentation-only plans do not acquire browser discovery or build work', () => {
-    const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan(['CONTRIBUTING.md']));
-    assert.equal(execution.browserSpecs.length, 0);
-    assert.equal(execution.commands.some(command => ['browser-discovery', 'build'].includes(command.id)), false);
+    for (const document of ['CONTRIBUTING.md', 'CODE_OF_CONDUCT.md', '.github/pull_request_template.md', '.github/ISSUE_TEMPLATE/question.md']) {
+      const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan([document]));
+      assert.equal(execution.browserSpecs.length, 0, document);
+      assert.equal(execution.commands.some(command => ['browser-discovery', 'build', 'workflow:check', 'typecheck'].includes(command.id)), false, document);
+      assert.equal(execution.commands.some(command => command.args.includes('test/documentation-links.test.mts')), true, document);
+    }
+  });
+
+  test('focused discovery includes both execution owners and rejects missing or unexpected specifications', () => {
+    const specs = ['e2e/dashboard.spec.ts', 'e2e/console-loading.spec.ts'];
+    assert.deepEqual(focusedBrowserLanes(specs), [
+      { kind: 'performance', project: 'performance-measurement', specs: ['e2e/console-loading.spec.ts'] },
+      { kind: 'functional', project: 'chromium', specs: ['e2e/dashboard.spec.ts'] },
+    ]);
+    assert.throws(() => focusedBrowserLanes([...specs, specs[0]!]), /unique/u);
+    assert.throws(() => focusedBrowserLanes(['e2e/not-a-spec.ts']), /maintained/u);
+    const execution = buildFocusedVerificationExecution({ ...buildVerificationOwnershipPlan(['e2e/dashboard.spec.ts']), focusedBrowserChecks: specs });
+    const command = execution.commands[0]!;
+    const run = spawnSync(command.executable, command.args, {
+      cwd: REPOSITORY_ROOT, env: { ...environmentWithoutV8Coverage(), ...command.environment },
+      encoding: 'utf8', timeout: 30_000, maxBuffer: 4 * 1024 * 1024,
+    });
+    assert.ifError(run.error);
+    assert.equal(run.status, 0, run.stdout + run.stderr);
+    const report = JSON.parse(run.stdout);
+    assert.doesNotThrow(() => assertFocusedBrowserCoverage(specs, report));
+    assert.throws(() => assertFocusedBrowserCoverage([...specs, 'e2e/missing.spec.ts'], report), /Missing: e2e\/missing/u);
+    assert.throws(() => assertFocusedBrowserCoverage([specs[0]!], report), /unexpected: e2e\/console-loading/u);
+    assert.throws(() => assertFocusedBrowserCoverage(specs, { suites: [] }), /Missing:/u);
   });
 
   test('workflow edits run the native workflow validator once without deferring syntax validation', () => {
     const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan(['.github/workflows/ci.yml']));
     assert.equal(execution.commands.filter(command => command.id === 'workflow:check').length, 1);
     assert.equal(execution.deferredSpecialisedChecks.includes('workflow-closure'), false);
-  });
-
-  test('a current fixture discovers both unit and browser consumers without another ownership declaration', async () => {
-    const plan = await createVerificationOwnershipPlan(['test/support/current-case.mts']);
-    assert.ok(plan.focusedUnitChecks.includes('test/current-case.test.mts'));
-    assert.ok(plan.focusedBrowserChecks.includes('e2e/review-session.spec.ts'));
-    assert.equal(plan.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
-    assert.equal(plan.userFacingBrowserRequired, true);
-    assert.equal(buildFocusedVerificationExecution(plan).commands[0]!.id, 'browser-discovery');
   });
 
   test('binds lowercase workflow facades and shared browser storage to their dedicated suites', () => {
@@ -774,7 +1044,7 @@ describe('verification architecture contracts', () => {
       assert.equal(unitChecks.has(testFile), true, `${testFile} must own application-version changes`);
     }
     for (const command of [
-      'release:check',
+      'version:check',
       'schema:inventory',
       'cli:package:check',
       'licenses:check',
@@ -806,6 +1076,70 @@ describe('verification architecture contracts', () => {
       /Usage/u,
     );
     assert.throws(() => parseFocusedVerificationOptions(['--unknown']), /Usage/u);
+    assert.deepEqual(parseFocusedVerificationOptions(['--iteration', '--list', '--since=HEAD~2']), {
+      list: true, changed: true, iteration: true, paths: [], since: 'HEAD~2',
+    });
+    assert.throws(() => parseFocusedVerificationOptions(['--iteration', '--iteration']), /Usage/u);
+    assert.deepEqual(parseFocusedVerificationOptions(['--since=HEAD~2', '--list']), {
+      list: true, changed: true, paths: [], since: 'HEAD~2',
+    });
+    for (const args of [['--since='], ['--since=HEAD', '--changed'], ['--since=HEAD', 'README.md'], ['--since=HEAD', '--since=HEAD~1'], ['--since=--help']]) {
+      assert.throws(() => parseFocusedVerificationOptions(args), /Usage/u);
+    }
+  });
+
+  test('accepts an optional path separator without interpreting following paths as options', () => {
+    const paths = ['cli/doctor.mts', 'frontend/src/routes/(console)/lookup/+page.svelte'];
+    const options = ['--list', '--iteration'];
+    assert.deepEqual(parseFocusedVerificationOptions([...options, '--', ...paths]), {
+      list: true, changed: false, iteration: true, paths,
+    });
+    assert.deepEqual(
+      parseFocusedVerificationOptions([...options, ...paths]),
+      parseFocusedVerificationOptions([...options, '--', ...paths]),
+    );
+    assert.deepEqual(parseFocusedVerificationOptions(['--']), parseFocusedVerificationOptions([]));
+    for (const args of [
+      ['--changed', '--', ...paths],
+      ['--since=HEAD', '--', ...paths],
+      ['--', '--list'],
+      ['--', '--iteration'],
+      ['--', '--since=HEAD'],
+      ['--', '--', ...paths],
+    ]) {
+      assert.throws(() => parseFocusedVerificationOptions(args), /Usage/u);
+    }
+  });
+
+  test('a focused batch includes committed, staged, working and new files from its explicit baseline', () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-focused-history-'));
+    const git = (...args: string[]) => {
+      const result = spawnSync('git', args, { cwd: directory, encoding: 'utf8' });
+      assert.ifError(result.error);
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout.trim();
+    };
+    try {
+      git('init', '--quiet');
+      git('config', 'user.name', 'Fixture Maintainer');
+      git('config', 'user.email', 'maintainer@example.invalid');
+      for (const file of ['committed.ts', 'staged.ts', 'working.ts', 'deleted.ts']) writeFileSync(path.join(directory, file), 'export const value = 1;\n');
+      git('add', '.'); git('-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'Initial fixture');
+      const base = git('rev-parse', 'HEAD');
+      writeFileSync(path.join(directory, 'committed.ts'), 'export const value = 2;\n');
+      git('add', 'committed.ts'); git('-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'Change fixture');
+      writeFileSync(path.join(directory, 'staged.ts'), 'export const value = 2;\n'); git('add', 'staged.ts');
+      writeFileSync(path.join(directory, 'working.ts'), 'export const value = 2;\n');
+      writeFileSync(path.join(directory, 'new.ts'), 'export const value = 2;\n');
+      rmSync(path.join(directory, 'deleted.ts'));
+      assert.deepEqual(discoverFocusedVerificationPaths(base, directory), ['committed.ts', 'deleted.ts', 'new.ts', 'staged.ts', 'working.ts']);
+      assert.deepEqual(discoverFocusedVerificationPaths('HEAD', directory), ['deleted.ts', 'new.ts', 'staged.ts', 'working.ts']);
+      // Git normally collapses this into one rename destination. Both owners
+      // must be checked even when moving unchanged bytes to another subsystem.
+      git('mv', 'committed.ts', 'renamed.ts');
+      assert.deepEqual(discoverFocusedVerificationPaths('HEAD', directory), ['committed.ts', 'deleted.ts', 'new.ts', 'renamed.ts', 'staged.ts', 'working.ts']);
+      assert.throws(() => discoverFocusedVerificationPaths('absent-revision', directory), /Git changed-path discovery failed/u);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
   test('binds every declared analyst journey to enabled tests without claiming rendered outcomes', () => {

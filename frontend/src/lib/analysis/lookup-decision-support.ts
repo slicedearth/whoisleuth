@@ -479,12 +479,17 @@ export function buildLookupDecisionSupport(input: Readonly<{
   hasCaseSection?: boolean;
 }>): LookupDecisionSupport {
   const availableEvidence = normalizedTaskEvidenceKinds(input.availableEvidence);
-  const entries = prioritizeEntries([
+  const candidates = [
     ...comparisonEntries(input.registryComparison, 'registry-whois'),
     ...comparisonEntries(input.registrarPublicationComparison, 'registry-registrar'),
     ...identityEntries(input),
     ...certificatePolicyEntries(input.certificatePolicyReview),
-  ], input.task);
+  ];
+  const entries = prioritizeEntries(candidates, input.task);
+  const counts = {
+    conflicts: entries.filter(entry => entry.state === 'conflict').length,
+    uncertainties: entries.filter(entry => entry.state === 'uncertain').length,
+  };
   const actions: LookupNextAction[] = [];
   const firstConflict = entries.find((entry) => entry.state === 'conflict'
     && supportsDecisionDestination(entry.href, availableEvidence));
@@ -564,9 +569,10 @@ export function buildLookupDecisionSupport(input: Readonly<{
     guidance: taskGuidance(input.task),
     entries,
     actions: uniqueActions,
-    counts: {
-      conflicts: entries.filter((entry) => entry.state === 'conflict').length,
-      uncertainties: entries.filter((entry) => entry.state === 'uncertain').length,
+    counts,
+    omittedCounts: {
+      conflicts: candidates.filter(entry => entry.state === 'conflict').length - counts.conflicts,
+      uncertainties: candidates.filter(entry => entry.state === 'uncertain').length - counts.uncertainties,
     },
   };
 }

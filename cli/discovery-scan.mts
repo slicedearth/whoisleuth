@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
-import { MAX_DISCOVERY_SUFFIX_LENGTH } from '../lib/registrable-domain.mts';
+import { MAX_DISCOVERY_SUFFIX_LENGTH } from '../packages/analysis/registrable-domain.mts';
 
 import type { BulkLookupResult, BulkLookupOptions } from './bulk.mts';
 import { runBulkLookups } from './bulk.mts';

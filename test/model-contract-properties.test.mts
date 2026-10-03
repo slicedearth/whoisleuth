@@ -25,7 +25,7 @@ const GENERATED_AT = '2026-08-03T00:00:00.000Z';
 describe('saved-data and CLI contract properties', () => {
   test('keeps arbitrary CLI argument parsing bounded, pure, and explicitly rejected', () => {
     fc.assert(fc.property(
-      fc.array(fc.string({ maxLength: MAX_CLI_ARGUMENT_LENGTH + 4 }), {
+      fc.array(fc.string({ unit: 'binary', maxLength: MAX_CLI_ARGUMENT_LENGTH + 4 }), {
         maxLength: MAX_CLI_ARGUMENTS + 4,
       }),
       (argv) => {
@@ -56,7 +56,7 @@ describe('saved-data and CLI contract properties', () => {
   test('round-trips bounded workspace settings through every declared archive section', async () => {
     await fc.assert(fc.asyncProperty(
       fc.constantFrom('dark', 'light', 'system'),
-      fc.string({ maxLength: 140 }),
+      fc.string({ unit: 'binary', maxLength: 140 }),
       async (theme, activeProfileId) => {
         const archive = await buildWorkspaceArchive({
           settings: { theme, activeProfileId },

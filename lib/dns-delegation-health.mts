@@ -8,7 +8,7 @@ import * as net from 'node:net';
 
 import { createObservation } from '../packages/evidence/observation.mts';
 import { normalizeResolverMxRecord } from '../packages/evidence/domain-control-runtime.mts';
-import { isValidAsciiHostname } from './hostname.mts';
+import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
 import { isPrivateAddress } from './safe-fetch.mts';
 
 type UnknownRecord = Record<string, unknown>;
@@ -558,10 +558,12 @@ async function collectDnsDelegationHealth(
     .filter((primary): primary is string => primary !== null))];
   const soaSerialConflict = soaSerials.length > 1;
   const soaPrimaryConflict = soaPrimaries.length > 1;
-  const inBailiwick = candidates.filter((nameserver) => (
+  const glueInventoryComplete = (parentStatus === 'success' && parentNameservers.length > 0 && parentQuery.truncated !== true)
+    || (registry.nameservers.length > 0 && !registry.truncated);
+  const inBailiwick = eligibleAuthorities.filter((nameserver) => (
     nameserver === domain || nameserver.endsWith(`.${domain}`)
   ));
-  const missingGlue = inBailiwick.filter((nameserver) => (
+  const unobservedGlue = inBailiwick.filter((nameserver) => (
     !(registry.nameserverDetails.find((item) => item.name === nameserver)?.addresses.length)
   ));
   const dnssecMismatch = (
@@ -642,14 +644,16 @@ async function collectDnsDelegationHealth(
     finding(
       'in_bailiwick_glue',
       'In-bailiwick glue',
-      !inBailiwick.length ? 'healthy' : missingGlue.length ? 'warning' : 'healthy',
-      !inBailiwick.length
+      !glueInventoryComplete || unobservedGlue.length ? 'unknown' : 'healthy',
+      !glueInventoryComplete
+        ? 'The delegated nameserver inventory is unavailable or incomplete'
+        : !inBailiwick.length
         ? 'No in-bailiwick nameserver requires registry glue'
-        : missingGlue.length
-          ? 'Registry glue was not observed for every in-bailiwick nameserver'
+        : unobservedGlue.length
+          ? 'Registry address publication does not establish glue for every in-bailiwick nameserver'
           : 'Registry publication includes observed glue for each in-bailiwick nameserver',
-      missingGlue.length ? `Missing observed glue: ${missingGlue.join(', ')}.` : `In-bailiwick nameservers: ${inBailiwick.join(', ') || 'none'}.`,
-      'Publish current A and AAAA glue at the registry for every in-bailiwick nameserver.',
+      unobservedGlue.length ? `No address publication retained for: ${unobservedGlue.join(', ')}. Optional RDAP address fields and recursive NS answers do not establish that parent-zone glue is absent.` : `In-bailiwick nameservers: ${inBailiwick.join(', ') || 'none'}.`,
+      'Verify parent-zone glue with the registry or DNS operator before deciding whether an update is needed.',
     ),
     finding(
       'dnssec_delegation',

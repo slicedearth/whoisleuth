@@ -15,14 +15,14 @@ export {
 } from './evidence-export-privacy.mts';
 import { compareRdapPublications, compareRegistrySources } from './registry-comparison.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
-import { buildPortableGeneratorMetadata } from './portable-generator.mts';
-import { assertBoundedJsonStructure } from './bounded-json.mts';
+import { buildPortableGeneratorMetadata } from '../packages/analysis/portable-generator.mts';
+import { assertBoundedJsonStructure } from '../packages/analysis/bounded-json.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import {
   LOOKUP_EVIDENCE_SCHEMA, LOOKUP_EVIDENCE_SCHEMA_VERSION,
 } from '../packages/contracts/lookup-evidence.mts';
 export * from '../packages/contracts/lookup-evidence.mts';
-import { isValidAsciiHostname } from './hostname.mts';
+import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
 import { validLookupObservationScope } from '../packages/evidence/lookup-target.mts';
 import {
   REGISTRAR_STANDING_SCHEMA,

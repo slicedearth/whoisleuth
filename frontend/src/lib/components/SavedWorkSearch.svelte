@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import InvestigationSearch from './InvestigationSearch.svelte';
+  import RetainedInfrastructure from './RetainedInfrastructure.svelte';
   import { readBrowserLocalData, subscribeBrowserLocalData } from '$lib/browser-local-data-service.ts';
   import { createInvestigationSearchSession, type InvestigationSearchSession } from '$lib/investigation-search-session.ts';
   import type { InvestigationStoreName } from '$lib/analysis/investigation-projection.ts';
@@ -8,6 +9,7 @@
   let { compact = false, onopen }: { compact?: boolean; onopen?: (href: string) => void | Promise<void> } = $props();
   let session = $state.raw<InvestigationSearchSession | null>(null);
   let loadError = $state('');
+  let infrastructureOpen = $state(false);
   let controller: AbortController | undefined;
   const collections = ['cases', 'campaigns', 'brand_profiles', 'relationship_observations'] as const;
 
@@ -24,7 +26,7 @@
     ]);
     if (request.signal.aborted) return;
     if (results.every(result => result.status === 'rejected')) {
-      loadError = 'Saved work could not be read. No empty-workspace conclusion has been drawn.';
+      loadError = 'Saved work could not be loaded. Try searching again.';
       return;
     }
     const [cases, campaigns, profiles, relationships] = results;
@@ -55,3 +57,15 @@
 </script>
 
 <InvestigationSearch {session} {loadError} {compact} {...(onopen ? {onopen} : {})} />
+{#if !compact}
+  <details class="infrastructure-disclosure card" ontoggle={event => { if (event.currentTarget.isConnected) infrastructureOpen = event.currentTarget.open; }}>
+    <summary>Browse retained infrastructure</summary>
+    {#if infrastructureOpen && session}<RetainedInfrastructure {session} {...(onopen ? {onopen} : {})} />
+    {:else if infrastructureOpen}<p role="status">{loadError || 'Preparing retained infrastructure.'}</p>{/if}
+  </details>
+{/if}
+
+<style>
+  .infrastructure-disclosure{min-width:0;padding:var(--card-pad);margin-top:14px}
+  summary{cursor:pointer;overflow-wrap:anywhere}p{overflow-wrap:anywhere}
+</style>

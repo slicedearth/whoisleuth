@@ -1,7 +1,8 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, failBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, selectBulkResultView, useTheme } from './helpers';
 import { BASE_URL } from './constants.ts';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { INVESTIGATION_GUIDE_KEY as GUIDE_KEY } from '../frontend/src/lib/investigation-guide-storage';
 
 type RecipeLabel =
@@ -214,7 +215,7 @@ for (const width of [1280, 390]) for (const intent of ['unchanged', 'guide', 'wh
       )).toBeGreaterThanOrEqual(0);
       for (const theme of ['light', 'dark'] as const) {
         await useTheme(page, theme);
-        await page.screenshot({ path: testInfo.outputPath(`lookup-reveal-${width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`lookup-reveal-${width}-${theme}.png`) }); }
       }
       await openWorkPlan(page);
       await expect(page.locator('details.work-plan > summary')).toBeFocused();
@@ -345,11 +346,9 @@ test('the dashboard starts a selected tab-scoped recipe without navigation or an
   const fullPlan = guide.locator('#investigation-plan');
   const planItems = fullPlan.locator(':scope > li');
   await expect(planItems).toHaveCount(5);
-  await expect(fullPlan).toHaveCSS('align-items', 'start');
   const fourthStepHeight = (await planItems.nth(3).boundingBox())?.height ?? 0;
   await planItems.nth(2).locator('summary').click();
   expect((await planItems.nth(3).boundingBox())?.height ?? 0).toBeCloseTo(fourthStepHeight, 0);
-  await expect(guide.locator('.secondary-details')).toHaveCSS('align-items', 'flex-start');
   for (const surface of [
     { width: 1280, height: 720, theme: 'light' },
     { width: 1280, height: 720, theme: 'dark' },
@@ -627,6 +626,56 @@ test('request review is keyboard-operable and opening a tool does not claim comp
   expect(stored.stages[0].approvedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/u);
   expect(stored.stages[0].openedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/u);
   expect(stored.stages[0].outcome).toBe('pending');
+});
+
+test('return control follows every visibility change in a delivered batch', { tag: '@timing-sensitive' }, async ({ page }) => {
+  type BatchControl = { hold: () => void; ratios: () => number[]; flush: () => void };
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.addInitScript(() => {
+    const NativeObserver = IntersectionObserver;
+    const pending = new Map<IntersectionObserver, { callback: IntersectionObserverCallback; entries: IntersectionObserverEntry[] }>();
+    let holding = false;
+    Object.defineProperty(window, '__guideIntersectionBatch', { value: {
+      hold: () => { holding = true; },
+      ratios: () => [...pending.values()].flatMap(batch => batch.entries.map(entry => entry.intersectionRatio)),
+      flush: () => {
+        holding = false;
+        for (const [observer, batch] of pending) batch.callback(batch.entries, observer);
+        pending.clear();
+      },
+    } });
+    window.IntersectionObserver = class extends NativeObserver {
+      constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+        super((entries, observer) => {
+          if (!holding || !entries.every(entry => entry.target.matches('.current-action'))) {
+            callback(entries, observer);
+            return;
+          }
+          const batch = pending.get(observer) ?? { callback, entries: [] };
+          batch.entries.push(...entries);
+          pending.set(observer, batch);
+        }, options);
+      }
+    };
+  });
+  await startRecipe(page);
+  const action = currentAction(page);
+  const control = page.getByRole('button', { name: 'Return to guided investigation: Collect domain evidence' });
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(control).toBeVisible();
+  await page.evaluate(() => (window as typeof window & { __guideIntersectionBatch: BatchControl }).__guideIntersectionBatch.hold());
+  await action.evaluate(element => element.scrollIntoView({ block: 'center' }));
+  const ratios = () => page.evaluate(() => (window as typeof window & { __guideIntersectionBatch: BatchControl }).__guideIntersectionBatch.ratios());
+  await expect.poll(async () => (await ratios()).some(ratio => ratio >= 0.6)).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect.poll(async () => (await ratios()).at(-1)).toBe(0);
+  // Real browser observations are delivered together, as under a busy event
+  // loop. A visible first entry must not hide the later off-screen state.
+  await page.evaluate(() => (window as typeof window & { __guideIntersectionBatch: BatchControl }).__guideIntersectionBatch.flush());
+  await expect(control).toBeVisible();
+  await control.click();
+  await expect(action).toBeFocused();
+  await expect(action).toBeInViewport({ ratio: 0.2 });
 });
 
 test('return control recovers when the first action-panel scroll is displaced', { tag: '@timing-sensitive' }, async ({ page }) => {

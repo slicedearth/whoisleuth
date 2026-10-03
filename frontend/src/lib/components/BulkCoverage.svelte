@@ -94,10 +94,10 @@
   {#if chart.groups.length}
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -- scrollable chart must be keyboard reachable -->
     <div class="coverage-chart" role="img" tabindex="0" aria-label={`${label}. Registration outcomes form each stacked bar; the overlapping profile-listed count is shown separately. Exact counts are in the following table.`}>
-      <svg viewBox={`0 0 ${chart.width} ${chart.height}`} aria-hidden="true">
+      <svg class="data-chart" width={chart.width} height={chart.height} viewBox={`0 0 ${chart.width} ${chart.height}`} aria-hidden="true">
         {#each chart.groups as group}
           <text x="8" y={group.y + 13}>{group.label}</text>
-          <text x="8" y={group.y + 29} class="profile-listed-label">Profile-listed: {group.profileListed} · overlaps outcomes</text>
+          <text x="8" y={group.y + 29} class="profile-listed-label">Profile-listed: {group.profileListed}</text>
           <rect x="193" y={group.y + 19} width="8" height="8" rx="1" class="profile-listing-marker"><title>{group.label}: {group.profileListed} profile-listed, overlapping the registration outcomes</title></rect>
           {#each group.segments as segment}
             <rect x={segment.x} y={group.y} width={segment.width} height="18" rx="2" class={`state-${segment.state}`}>
@@ -125,10 +125,10 @@
   .coverage-tables h3{font:700 var(--text-sm) var(--mono)}
   .coverage-chart{max-width:100%;margin:8px 0 11px;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .coverage-chart:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-  .coverage-chart svg{display:block;width:100%;min-width:560px;height:auto}
-  .coverage-chart text{fill:var(--text);font:600 9px var(--mono)}
+  .coverage-chart svg{min-width:560px}
+  .coverage-chart text{fill:var(--text);font:600 12px var(--mono)}
   .coverage-chart rect{stroke-width:1}
-  .coverage-chart .profile-listed-label{fill:var(--source-registry-text);font-size:8px}
+  .coverage-chart .profile-listed-label{fill:var(--source-registry-text);font-size:12px}
   .coverage-chart .profile-listing-marker{fill:var(--panel);stroke:var(--visual-registration-stroke);stroke-width:2}
   .coverage-chart .state-registered{fill:color-mix(in srgb,var(--source-network-stroke) 22%,var(--panel));stroke:var(--source-network-stroke)}
   .coverage-chart .state-available{fill:color-mix(in srgb,var(--visual-dns-stroke) 20%,var(--panel));stroke:var(--visual-dns-stroke)}

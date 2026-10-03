@@ -245,10 +245,10 @@ test('replay retains separately attributed registrar accreditation and complianc
   const document = evidence();
   document.generatedAt = '2026-09-03T12:00:00.000Z';
   const sources = document.sources as Record<string, Record<string, unknown>>;
-  (sources.rdap!.parsed as Record<string, unknown>).registrarIanaId = '4318';
-  (sources.whois!.parsed as Record<string, unknown>).registrarIanaId = '04318';
+  (sources.rdap!.parsed as Record<string, unknown>).registrarIanaId = '900003';
+  (sources.whois!.parsed as Record<string, unknown>).registrarIanaId = '0900003';
   (document.analysis as Record<string, unknown>).registrarStanding = buildRegistrarStanding({
-    registrarIanaId: '4318',
+    registrarIanaId: '900003',
     now: new Date('2026-09-03T12:00:00.000Z'),
   });
   const replay = await parseLookupEvidenceReplay(JSON.stringify(document));
@@ -267,7 +267,7 @@ test('replay retains separately attributed registrar accreditation and complianc
   );
 
   (document.analysis as Record<string, unknown>).registrarStanding = buildRegistrarStanding({
-    registrarIanaId: '4318',
+    registrarIanaId: '900003',
     now: new Date('2026-09-03T12:00:00.000Z'),
   });
   document.generatedAt = '2026-09-03T08:00:00.000Z';
@@ -297,26 +297,39 @@ test('replay sanitises terminal controls from exact public evidence without rewr
 });
 
 test('replay rejects current documents that carry excluded or arbitrary publication fields', async () => {
-  const mutations: Array<(document: Record<string, unknown>) => void> = [
-    (document) => { (document.sources as Record<string, Record<string, unknown>>).rdap!.raw = { entities: [] }; },
-    (document) => {
+  const base = buildLookupEvidence({
+    query: 'example.test', type: 'domain', inputHostname: 'example.test', registrableDomain: 'example.test',
+    rdap: { parsed: { domain: 'example.test', registrar: { name: 'Example Registrar' } } },
+    whois: { parsed: { domainName: 'example.test', registrar: 'Example Registrar' }, chain: [] },
+    diagnostics: {
+      rdap: { status: 'success', fetchedAt: '2026-08-15T00:00:00.000Z' },
+      whois: { status: 'complete', queriedAt: '2026-08-15T00:00:00.000Z' },
+    },
+    availability: { applicable: true, state: 'registered', confidence: 'medium' },
+  }, { generatedAt: '2026-08-15T00:00:00.000Z' });
+  const original = JSON.stringify(base);
+  assert.equal((await parseLookupEvidenceReplay(original)).target, 'example.test');
+  assert.equal((await verifyOfflineArtifact(original)).state, 'structure_valid');
+  const mutations: Array<[string, (document: Record<string, unknown>) => void]> = [
+    ['RDAP source', (document) => { (document.sources as Record<string, Record<string, unknown>>).rdap!.raw = { entities: [] }; }],
+    ['RDAP portable publication', (document) => {
       const rdap = (document.sources as Record<string, Record<string, Record<string, unknown>>>).rdap!;
       rdap.parsed!.registrant = { email: 'private@example.test' };
-    },
-    (document) => {
+    }],
+    ['RDAP portable publication', (document) => {
       const rdap = (document.sources as Record<string, Record<string, Record<string, unknown>>>).rdap!;
       delete rdap.parsed!.contactsExcluded;
-    },
-    (document) => {
+    }],
+    ['RDAP portable publication', (document) => {
       const rdap = (document.sources as Record<string, Record<string, Record<string, unknown>>>).rdap!;
       rdap.parsed!.contactsExcluded = false;
-    },
-    (document) => { (document.sources as Record<string, Record<string, unknown>>).rdap!.unexpected = true; },
-    (document) => {
+    }],
+    ['RDAP source', (document) => { (document.sources as Record<string, Record<string, unknown>>).rdap!.unexpected = true; }],
+    ['RDAP endpoint', (document) => {
       const rdap = (document.sources as Record<string, Record<string, unknown>>).rdap!;
       rdap.endpoint = 'https://user:secret@rdap.example.test/path?query=private#fragment';
-    },
-    (document) => {
+    }],
+    ['RDAP attempt 1', (document) => {
       const rdap = (document.sources as Record<string, Record<string, unknown>>).rdap!;
       rdap.attempts = [{
         endpoint: 'https://rdap.example.test/',
@@ -327,8 +340,8 @@ test('replay rejects current documents that carry excluded or arbitrary publicat
         selected: true,
         authorization: 'not-retained',
       }];
-    },
-    (document) => {
+    }],
+    ['RDAP attempt 1 transport', (document) => {
       const rdap = (document.sources as Record<string, Record<string, unknown>>).rdap!;
       rdap.attempts = [{
         endpoint: 'https://rdap.example.test/',
@@ -338,8 +351,8 @@ test('replay rejects current documents that carry excluded or arbitrary publicat
         detail: null,
         selected: 'yes',
       }];
-    },
-    (document) => {
+    }],
+    ['WHOIS chain item 1', (document) => {
       const whois = (document.sources as Record<string, Record<string, unknown>>).whois!;
       whois.chain = [{
         server: 'whois.example.test',
@@ -352,8 +365,8 @@ test('replay rejects current documents that carry excluded or arbitrary publicat
         response: 'Registrant: Private Person',
         unexpected: true,
       }];
-    },
-    (document) => {
+    }],
+    ['WHOIS chain item 1 queriedAt', (document) => {
       const whois = (document.sources as Record<string, Record<string, unknown>>).whois!;
       whois.chain = [{
         server: 'whois.example.test',
@@ -364,12 +377,12 @@ test('replay rejects current documents that carry excluded or arbitrary publicat
         status: 'invented',
         detail: null,
       }];
-    },
-    (document) => {
+    }],
+    ['availability analysis', (document) => {
       const availability = (document.analysis as Record<string, Record<string, unknown>>).availability!;
       availability.registrant = { name: 'Private registrant' };
-    },
-    (document) => {
+    }],
+    ['availability analysis', (document) => {
       const availability = (document.analysis as Record<string, Record<string, unknown>>).availability!;
       availability.structuredDataIdentity = {
         status: 'success',
@@ -381,18 +394,18 @@ test('replay rejects current documents that carry excluded or arbitrary publicat
           value: 'https://example.test/path?session=private#fragment',
         }],
       };
-    },
-    (document) => {
+    }],
+    ['availability analysis', (document) => {
       const availability = (document.analysis as Record<string, Record<string, unknown>>).availability!;
       delete availability.registryContactsExcluded;
-    },
-    (document) => {
+    }],
+    ['registry insight derivation', (document) => {
       const insights = (document.analysis as Record<string, Record<string, unknown>>).registryInsights!;
       insights.abuseRouting = { email: 'abuse@example.test' };
-    },
+    }],
   ];
-  for (const mutate of mutations) {
-    const document = evidence();
+  for (const [area, mutate] of mutations) {
+    const document = structuredClone(base) as Record<string, unknown>;
     mutate(document);
     const serialized = JSON.stringify(document);
     await assert.rejects(
@@ -401,9 +414,11 @@ test('replay rejects current documents that carry excluded or arbitrary publicat
     );
     await assert.rejects(
       () => verifyOfflineArtifact(serialized),
-      /unsupported|malformed|portable|credential|URL/iu,
+      { message: `Lookup evidence ${area} has an unsupported or malformed structure.` },
+      area,
     );
   }
+  assert.equal(JSON.stringify(base), original);
 });
 
 test('current replay retains reviewed credential-category counts at their exact model path', async () => {

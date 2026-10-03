@@ -1,4 +1,4 @@
-import { normalizeDomain } from './case-model.ts';
+import { normalizeDomain } from '../../../../packages/evidence/domain-name.mts';
 
 export const BROWSER_HANDOFF_DESTINATION_KINDS = ['lookup', 'local_companion', 'external_https'] as const;
 export type BrowserHandoffDestinationKind = typeof BROWSER_HANDOFF_DESTINATION_KINDS[number];

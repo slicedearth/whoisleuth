@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { CASE_MANUAL_TRAIL_KINDS, type CaseRecord } from '$lib/cases';
+  import { CASE_MANUAL_TRAIL_KINDS } from '../../../../packages/cases/case-response-records.mts';
+  import type { CaseRecord } from '../cases.ts';
   import { buildCaseInvestigationTrail } from '$lib/analysis/case-response-model.ts';
   import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
@@ -12,7 +13,7 @@
     persist: PersistCaseResponse;
   } = $props();
   const trailDraft = createCaseDraft(() => record.id, 'manual-step', {
-    trailKind: 'pivot',
+    trailKind: 'pivot' as typeof CASE_MANUAL_TRAIL_KINDS[number],
     trailSummary: '',
     trailTarget: ''
   });

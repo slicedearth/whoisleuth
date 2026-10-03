@@ -12,10 +12,53 @@ import {
   type LookupContributorPresentation,
 } from './lookup-fact-presentation.ts';
 import type { EvidenceCoverageState } from './evidence-coverage-ledger.ts';
+import { MAX_EVIDENCE_COVERAGE_ENTRIES } from './evidence-coverage-ledger.ts';
 import type { LookupEvidenceQualityMatrix } from './lookup-decision-support.ts';
 import type { LookupFreshnessPolicy } from './lookup-source-refresh.ts';
+import { createLookupViewModel, type LookupHttpResponse } from './lookup-response.ts';
+import { plannedLookupSources, lookupDiagnosticStates } from '../../../../lib/lookup-progress.mts';
+import { LOOKUP_SOURCE_LABELS } from './lookup-source-labels.ts';
+import { rec } from './lookup-display-shared.ts';
 
 export const LOOKUP_EVIDENCE_QUALITY_MODEL_VERSION = 1 as const;
+
+/** Reconstruct only the supported recipe for the request that completed.
+ * Original optional consent and deployment configuration are not retained. */
+export function buildLookupCollectionOutcomeReview(
+  original: LookupHttpResponse | null,
+  completedMode: 'fast' | 'deep' | null,
+  entries: readonly LookupEvidenceQualityPresentationEntry[],
+) {
+  const empty = { target: original?.query ?? '', mode: completedMode, groups: [] as Array<{
+    id: string; label: string; expectation: 'included' | 'conditional' | 'selection_unknown';
+    diagnosticState: string | null; records: readonly (LookupEvidenceQualityPresentationEntry & { sourceState: string | null })[];
+  }> };
+  if (!original || !completedMode) return empty;
+  const diagnostics = lookupDiagnosticStates(original.diagnostics);
+  const providerStates = new Map(createLookupViewModel(original).threatIntelligenceProviders.map(provider => [
+    `external-${rec(provider.provider).id}`, String(provider.state),
+  ]));
+  const sourceRecords = entries.slice(0, MAX_EVIDENCE_COVERAGE_ENTRIES).map(entry => ({
+    ...entry, sourceState: providerStates.get(entry.id) ?? null,
+  }));
+  const domainRecords = new Set(['availability', 'dns', 'http', 'tls', 'page-identity', 'page-role', 'client-behavior', 'technology', 'security-posture']);
+  for (const source of plannedLookupSources(original.type, completedMode)) {
+    empty.groups.push({ id: source, label: LOOKUP_SOURCE_LABELS[source],
+      expectation: ['registrar_rdap', 'network_context', 'reverse_dns'].includes(source) || source === 'domain_evidence' && completedMode === 'fast' ? 'conditional' : 'included',
+      diagnosticState: diagnostics[source === 'domain_evidence' ? 'availability' : source] ?? null,
+      records: sourceRecords.filter(entry => source === 'domain_evidence'
+        ? domainRecords.has(entry.id) && (completedMode === 'deep' || entry.id === 'availability')
+        : entry.id === source.replaceAll('_', '-')) });
+  }
+  if (original.type === 'domain' && completedMode === 'deep') {
+    empty.groups.push({ id: 'security_txt', label: LOOKUP_SOURCE_LABELS.security_txt, expectation: 'selection_unknown',
+      diagnosticState: diagnostics.security_txt ?? null,
+      records: sourceRecords.filter(entry => entry.id === 'security-txt') });
+    empty.groups.push({ id: 'optional-intelligence', label: 'Optional third-party intelligence', expectation: 'selection_unknown', diagnosticState: null,
+      records: sourceRecords.filter(entry => entry.category === 'external' && entry.id.startsWith('external-')) });
+  }
+  return empty;
+}
 
 export type LookupEvidenceQualityContributorPresentation = LookupContributorPresentation;
 

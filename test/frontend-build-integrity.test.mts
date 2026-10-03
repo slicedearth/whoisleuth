@@ -29,7 +29,6 @@ import {
 import {
   createHostedBrowserWorkspace,
   HOSTED_BROWSER_DIAGNOSTIC_LIMITS,
-  retainFocusedBrowserDiagnostics,
   runHostedBrowserWorkspace,
 } from '../tools/hosted-browser-workspace.mts';
 import { playwrightRunArtifacts } from '../tools/playwright-run-artifacts.mts';
@@ -135,26 +134,27 @@ function writeDiagnosticFixture(root: string, environment: NodeJS.ProcessEnv) {
 }
 
 describe('hosted browser workspace diagnostics', () => {
-  test('copies focused failure and interruption diagnostics privately without changing the contributor checkout', (context) => {
+  test('keeps focused failure and interruption diagnostics private without changing the contributor checkout', (context) => {
     for (const outcome of ['failed', 'interrupted'] as const) {
-      const root = fixtureRepository(context);
+      const { repository, workspace } = diagnosticWorkspace(context);
+      const root = workspace.root;
       const { files, artifacts } = writeDiagnosticFixture(root, {});
-      const before = readFileSync(path.join(root, 'package.json'));
+      const before = readFileSync(path.join(repository, 'package.json'));
       symlinkSync(path.join(root, 'package.json'), path.join(root, artifacts.testResults, 'source-link'));
       const excessive = path.join(root, artifacts.testResults, 'excessive.bin');
       writeFileSync(excessive, '');
       truncateSync(excessive, HOSTED_BROWSER_DIAGNOSTIC_LIMITS.fileBytes + 1);
-      const retained = retainFocusedBrowserDiagnostics(root, REVISION, outcome);
+      const retained = workspace.retainDiagnostics(outcome);
       context.after(() => rmSync(retained.directory, { recursive: true, force: true }));
-      assert.notEqual(retained.directory, root);
+      assert.notEqual(retained.directory, repository);
       assert.equal(lstatSync(retained.directory).mode & 0o777, 0o700);
       for (const [relative, expected] of files) {
         assert.equal(readFileSync(path.join(root, relative), 'utf8'), expected);
         assert.equal(readFileSync(path.join(retained.directory, relative), 'utf8'), expected);
         assert.equal(lstatSync(path.join(retained.directory, relative)).mode & 0o777, 0o600);
       }
-      assert.deepEqual(readFileSync(path.join(root, 'package.json')), before);
-      assert.equal(existsSync(path.join(root, artifacts.authFile)), true);
+      assert.deepEqual(readFileSync(path.join(repository, 'package.json')), before);
+      assert.equal(existsSync(path.join(repository, 'node_modules')), true);
       for (const relative of ['package.json', 'node_modules', 'frontend', artifacts.authFile,
         `${artifacts.testResults}/source-link`, `${artifacts.testResults}/excessive.bin`]) {
         assert.equal(existsSync(path.join(retained.directory, relative)), false, relative);
@@ -436,11 +436,45 @@ describe('frontend build integrity', () => {
 
   test('discovers build-tool helpers without a separate source-file declaration', (context) => {
     const root = fixtureRepository(context);
-    write(root, 'tools/ordinary-build-helper.mts', 'export const value = 1;\n');
+    write(root, 'frontend/vite.config.ts', 'import { value } from "../tools/ordinary-build-helper.mts"; export default { value };\n');
+    write(root, 'tools/ordinary-build-helper.mts', 'export { value } from "./nested-helper.mts";\n');
+    write(root, 'tools/nested-helper.mts', 'export const value = 1;\n');
     const snapshot = recordFrontendBuildIntegrity(root, ENVIRONMENT);
     assert.ok(snapshot.source.files.some((file) => file.path === 'tools/ordinary-build-helper.mts'));
-    write(root, 'tools/ordinary-build-helper.mts', 'export const value = 2;\n');
+    assert.ok(snapshot.source.files.some((file) => file.path === 'tools/nested-helper.mts'));
+    write(root, 'tools/nested-helper.mts', 'export const value = 2;\n');
     assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /stale or mixed/u);
+  });
+
+  test('unrelated maintainer tools do not invalidate an otherwise identical build', (context) => {
+    const root = fixtureRepository(context);
+    const snapshot = recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    write(root, 'tools/ordinary-test-helper.mts', 'export const label = "changed test helper";\n');
+    assert.deepEqual(assertFrontendBuildIntegrity(root, ENVIRONMENT), snapshot);
+    assert.equal(snapshot.source.files.some(file => file.path.startsWith('tools/')), false);
+  });
+
+  test('new configuration dependencies are discovered and unresolved or linked helpers fail closed', (context) => {
+    const root = fixtureRepository(context);
+    recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    write(root, 'frontend/svelte.config.ts', 'import "../tools/new-helper.mts";\n');
+    assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /import is unresolved/u);
+    write(root, 'tools/new-helper.mts', 'export const value = true;\n');
+    assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /stale or mixed/u);
+    const snapshot = recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    assert.ok(snapshot.source.files.some(file => file.path === 'tools/new-helper.mts'));
+    rmSync(path.join(root, 'tools/new-helper.mts'));
+    symlinkSync(path.join(root, 'frontend/src/app.ts'), path.join(root, 'tools/new-helper.mts'));
+    assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /symbolic links/u);
+  });
+
+  test('built-in imports need no file identity but unresolved aliases cannot hide a build input', (context) => {
+    const root = fixtureRepository(context);
+    write(root, 'frontend/vite.config.ts', 'import { readFileSync } from "node:fs"; import path from "path"; export default {};\n');
+    recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    assert.doesNotThrow(() => assertFrontendBuildIntegrity(root, ENVIRONMENT));
+    write(root, 'frontend/vite.config.ts', 'import "#unresolved-build-helper";\n');
+    assert.throws(() => recordFrontendBuildIntegrity(root, ENVIRONMENT), /import is unresolved/u);
   });
 
   test('rejects malformed, future, oversized, and impossible markers', (context) => {

@@ -1,10 +1,11 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { DEFAULT_DATABASE, directoryRows, indicator, namedDatabase, openArchive, openManager, SELECTION } from './browser-workspace-fixtures';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, useTheme } from './helpers';
 import { downloadEncryptedWorkspaceArchive } from './workspace-backup';
-import { createCase } from '../packages/cases/case-model.mts';
+import { createCase } from '../packages/cases/case-record-operations.mts';
 import { buildWorkspaceArchive, readWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
 import { decryptWorkspaceArchive, encryptWorkspaceArchive } from '../packages/workspace/workspace-archive-crypto.mts';
 import { createCase as createCaseThroughForm, openCaseResponseWorkspace } from './case-test-fixtures';
@@ -164,7 +165,7 @@ for (const encryptedSource of [false, true]) {
           expect(await controls.evaluateAll(elements => elements.every(element => {
             const box = element.getBoundingClientRect(); return box.width > 0 && box.left >= 0 && box.right <= innerWidth + 1;
           }))).toBe(true);
-          await copy.screenshot({ path: testInfo.outputPath(`replacement-${theme}-${width}.png`) });
+          if (captureVisualEvidenceEnabled()) { await copy.screenshot({ path: testInfo.outputPath(`replacement-${theme}-${width}.png`) }); }
         }
         expect((await new AxeBuilder({ page }).include('.workspace-copy').analyze()).violations).toEqual([]);
       }
@@ -455,7 +456,7 @@ for (const condition of ['empty', 'retained-record', 'retained-file', 'other-mis
         expect(bounds.left).toBeGreaterThanOrEqual(0);
         expect(bounds.right).toBeLessThanOrEqual(bounds.width);
         if (width < 500) expect(bounds.height).toBeGreaterThanOrEqual(44);
-        await page.screenshot({ path: testInfo.outputPath(`saved-view-storage-${theme}-${width}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`saved-view-storage-${theme}-${width}.png`) }); }
       }
       expect((await new AxeBuilder({ page }).include('.workspace-error').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
       await page.setViewportSize({ width: 1280, height: 720 });
@@ -542,7 +543,7 @@ test('workspace creation and unlock are usable at supported widths in both theme
       await page.setViewportSize({ width, height: width < 500 ? 844 : 768 });
       await expectNoHorizontalOverflow(page);
       await expect(page.getByLabel('Workspace passphrase', { exact: true })).toBeVisible();
-      if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`unlock-${theme}-${width}.png`) });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`unlock-${theme}-${width}.png`) }); }
     }
     expect((await new AxeBuilder({ page }).include('.workspace-unlock').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()).violations).toEqual([]);
   }

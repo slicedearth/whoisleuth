@@ -2,7 +2,7 @@
 // presentation-only; only a validated final ordinary Lookup result may cross
 // the persistence boundary.
 
-import { scanBoundedJson, MAX_BOUNDED_JSON_DEPTH, MAX_BOUNDED_JSON_KEYS, MAX_BOUNDED_JSON_VALUES } from './bounded-json.mts';
+import { scanBoundedJson, MAX_BOUNDED_JSON_DEPTH, MAX_BOUNDED_JSON_KEYS, MAX_BOUNDED_JSON_VALUES } from '../packages/analysis/bounded-json.mts';
 
 export const LOOKUP_PROGRESS_SCHEMA = 'whoisleuth.lookup-progress';
 export const LOOKUP_PROGRESS_VERSION = 1;
@@ -35,9 +35,63 @@ const SOURCE_STATES = new Set([
   'unavailable',
   'rate_limited',
 ]);
+// Final diagnostic states are distinct from the provisional progress subset.
+export const LOOKUP_SOURCE_STATES = Object.freeze([
+  'success', 'partial', 'not_found', 'skipped', 'error', 'unsupported',
+  'not_applicable', 'unavailable', 'rate_limited', 'complete', 'disabled', 'stale',
+] as const);
+const FINAL_SOURCE_STATES: ReadonlySet<string> = new Set(LOOKUP_SOURCE_STATES);
+
+export function lookupDiagnosticStates(value: unknown): Readonly<Record<string, typeof LOOKUP_SOURCE_STATES[number] | null>> {
+  const record = (input: unknown): Record<string, unknown> => input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown> : {};
+  const diagnostics = record(value);
+  const candidates = {
+    rdap: record(diagnostics.rdap).status,
+    registrar_rdap: record(record(diagnostics.rdap).registrar).status,
+    whois: record(diagnostics.whois).status,
+    availability: record(diagnostics.availability).status,
+    reverse_dns: record(diagnostics.reverseDns).status,
+    network_context: record(diagnostics.network).status,
+    security_txt: record(diagnostics.securityTxt).status,
+    sslbl: record(diagnostics.sslbl).status,
+  };
+  return Object.freeze(Object.fromEntries(Object.entries(candidates).map(([source, state]) => [
+    source, typeof state === 'string' && FINAL_SOURCE_STATES.has(state) ? state as typeof LOOKUP_SOURCE_STATES[number] : null,
+  ])));
+}
 const SOURCE_ID_RE = /^[a-z][a-z0-9_]{0,39}$/u;
 
 type LookupProgressSource = typeof SOURCE_IDS[number];
+type LookupSourceSelection = Readonly<{
+  externalIntelligence?: boolean;
+  malwareHostIntelligence?: boolean;
+  malwareIocIntelligence?: boolean;
+  securityTxt?: boolean;
+}>;
+
+/** The existing Lookup recipe, shared by offline plans and source progress.
+ * This describes admitted families, not provider health or request counts. */
+export function plannedLookupSources(
+  targetType: 'domain' | 'ipv4' | 'ipv6' | 'asn',
+  mode: 'fast' | 'deep',
+  options: LookupSourceSelection = {},
+): readonly LookupProgressSource[] {
+  const sources: LookupProgressSource[] = ['rdap'];
+  if (mode === 'fast') {
+    if (targetType === 'domain') sources.push('domain_evidence');
+    return Object.freeze(sources);
+  }
+  sources.push('whois');
+  if (targetType === 'domain') {
+    sources.push('domain_evidence', 'registrar_rdap', 'network_context');
+    if (options.securityTxt) sources.push('security_txt');
+    if (options.externalIntelligence) sources.push('external_intelligence');
+    if (options.malwareHostIntelligence) sources.push('malware_host_intelligence');
+    if (options.malwareIocIntelligence) sources.push('malware_ioc_intelligence');
+  } else if (targetType === 'ipv4' || targetType === 'ipv6') sources.push('reverse_dns');
+  return Object.freeze(sources);
+}
 type LookupProgressState =
   | 'success'
   | 'partial'

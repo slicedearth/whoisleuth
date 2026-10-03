@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { onMount, tick } from 'svelte';
   import type { ReviewSessionPosition, ReviewSessionRecord } from '../../../../packages/contracts/review-session-contract.mts';
   import { discardReviewSession, loadReviewSession, saveReviewSession } from '../review-session.ts';
@@ -47,7 +48,7 @@
 <details class="review-session" bind:open={expanded}>
   <summary>Review position{saved ? ' · saved' : ''}</summary>
   <p class="notice">Keep the current filters, selected item and unfinished review forms for a later visit. Case drafts recover separately; no collection or decision is replayed.</p>
-  {#if saved}<p class="notice">Saved <time datetime={saved.updatedAt}>{new Date(saved.updatedAt).toLocaleString()}</time>.</p>{/if}
+  {#if saved}<p class="notice">Saved <time datetime={saved.updatedAt}>{formatEvidenceDate(saved.updatedAt)}</time>.</p>{/if}
   <div class="toolbar">
     <button class="btn" type="button" bind:this={saveButton} disabled={!ready || busy} onclick={() => void save()}>Save current position</button>
     {#if saved}

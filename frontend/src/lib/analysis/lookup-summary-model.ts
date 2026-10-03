@@ -1,3 +1,4 @@
+import { formatDate } from './lookup-display-shared.ts';
 import {
   fmtAge,
   fmtExpiresIn,
@@ -139,12 +140,6 @@ function textList(value: unknown, maximum = MAX_PROVENANCE_ITEMS): string[] {
     if (output.length >= maximum) break;
   }
   return output;
-}
-
-function formatDate(value: unknown): string {
-  if (!value) return '—';
-  const parsed = new Date(String(value));
-  return Number.isNaN(parsed.getTime()) ? boundedText(value) || '—' : parsed.toLocaleString();
 }
 
 function statusLabel(value: unknown): string {
@@ -492,7 +487,7 @@ export function buildLookupSummaryModel(input: LookupSummaryInput): LookupSummar
           fields: ['RDAP object state', 'WHOIS registration status', 'authoritative DNS delegation'],
           normalization: 'Authority-aware registration evidence is normalised into a stable availability state while inconclusive sources remain unknown.',
           limitations,
-          conflicts: comparisonConflicts(registryComparison, ['Registration status']),
+          conflicts: comparisonConflicts(registryComparison, ['Statuses']),
           decisionImpact: 'This is the authority-aware input to the availability result. This inspector does not recalculate or override that decision.',
         }),
       },
@@ -559,7 +554,7 @@ export function buildLookupSummaryModel(input: LookupSummaryInput): LookupSummar
           fields: ['RDAP last-changed event or lifecycle', 'WHOIS updated-date family'],
           normalization: 'Recognised update dates are parsed into an ISO-compatible instant when possible and remain a source-reported lifecycle observation.',
           limitations,
-          conflicts: comparisonConflicts(registryComparison, ['Updated']),
+          conflicts: comparisonConflicts(registryComparison, ['Last updated']),
           decisionImpact: 'The update date is contextual evidence only and does not establish what changed or whether a website is active.',
         }),
       },
@@ -572,7 +567,9 @@ export function buildLookupSummaryModel(input: LookupSummaryInput): LookupSummar
           observedAt: formatDate(input.resultObservedAt),
           fieldFamilies: ['HTTP response', 'redirect chain', 'bounded homepage body', 'favicon response'],
           normalization: 'Observed responses are classified into active, parked, inactive, or unknown context without executing page scripts.',
-          completeness: availability.deepScanComplete === false ? 'partial' : 'complete',
+          completeness: record(availability.http).status === 'success' && record(availability.http).complete === true
+            ? 'complete'
+            : record(availability.http).status === 'partial' ? 'partial' : 'unknown',
           limitations: textList(record(availability.http).limitations),
           conflicts: [],
           decisionImpact: 'Website activity can inform explainable analysis. A failed or missing response never implies inactivity, safety, or domain availability.',
