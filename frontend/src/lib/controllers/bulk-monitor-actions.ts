@@ -8,12 +8,16 @@ export type BulkMonitorRequest = Readonly<{
   profileReady: boolean;
   scope: BulkMonitorScope;
 }>;
+type MonitorStorage = Readonly<{
+  saveSnapshot: typeof import('../watchlists.ts')['saveWatchlist'];
+  saveSingle: typeof import('../watchlists.ts')['saveSingleDomainWatchlist'];
+}>;
 
 /** All three entry points share one atomic eligibility check and one write. */
 export class BulkMonitorActions {
   #busy = false;
-  private readonly save: typeof import('../watchlists.ts')['saveWatchlist'];
-  constructor(save: typeof import('../watchlists.ts')['saveWatchlist']) { this.save = save; }
+  private readonly storage: MonitorStorage;
+  constructor(storage: MonitorStorage) { this.storage = storage; }
 
   async submit(request: BulkMonitorRequest): Promise<Readonly<{ status: string; clearName: boolean }> | null> {
     if (this.#busy) return null;
@@ -33,7 +37,9 @@ export class BulkMonitorActions {
       : 'Select at least one non-trusted result before saving to Monitor.');
     this.#busy = true;
     try {
-      const changes = await this.save(name, findings.map(row => row.saved), mode);
+      const changes = scope === 'row'
+        ? (await this.storage.saveSingle(name, findings[0]!.saved, mode)).changes
+        : await this.storage.saveSnapshot(name, findings.map(row => row.saved), mode);
       const excluded = rows.length - findings.length;
       const suffix = excluded ? `; excluded ${excluded} trusted domain${excluded === 1 ? '' : 's'}` : '';
       let status: string;

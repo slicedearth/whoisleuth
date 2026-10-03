@@ -16,6 +16,40 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/bulk');
 });
 
+test('single-row Monitor saves preserve another domain and its baseline when a name is reused', async ({ page }) => {
+  const requests: string[] = [];
+  await page.route('**/api/lookup?*', async route => {
+    const domain = new URL(route.request().url()).searchParams.get('q')!;
+    requests.push(domain);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      availability: { applicable: true, domain, state: 'registered', confidence: 'high', registrarName: 'Fixture registrar' },
+      diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+    }) });
+  });
+  await runBulkScan(page, ['first-review.example', 'second-review.example']);
+  await selectBulkResultView(page, 'Review');
+  const cockpit = page.getByRole('region', { name: 'Review one result' });
+  await expect(cockpit.getByRole('heading', { name: 'first-review.example', exact: true })).toBeVisible();
+  const name = cockpit.getByLabel('Monitor list for the current row');
+  const save = cockpit.getByRole('button', { name: 'Save current to Monitor' });
+  await name.fill('Shared review');
+  await save.click();
+  await expect(cockpit.getByRole('status')).toContainText('Saved first-review.example to Shared review');
+  const before = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
+  expect(before.records).toHaveLength(1);
+  expect(before.records[0]!.value.results.map((row: { domain: string }) => row.domain)).toEqual(['first-review.example']);
+  expect(before.records[0]!.value.baseline.map((row: { domain: string }) => row.domain)).toEqual(['first-review.example']);
+  await cockpit.getByRole('button', { name: 'Next unresolved' }).click();
+  await expect(cockpit.getByRole('heading', { name: 'second-review.example', exact: true })).toBeVisible();
+  await name.fill('shared REVIEW');
+  await save.click();
+  await expect(cockpit.getByRole('status')).toContainText('That name belongs to a different or multi-domain watchlist');
+  expect(await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 })).toEqual(before);
+  await page.reload();
+  expect(await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 })).toEqual(before);
+  expect(requests).toEqual(['first-review.example', 'second-review.example']);
+});
+
 test('creating selected Cases appends current Bulk evidence to the existing incident', async ({ page }) => {
   const record = createCase({ domain: 'existing-incident.example' }, '2026-08-01T00:00:00.000Z');
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [record] }) });

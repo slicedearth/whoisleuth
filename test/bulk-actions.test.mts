@@ -149,8 +149,16 @@ test('unavailable Case context and cancelled confirmation perform no mutation', 
 
 for (const scope of ['all', 'selected', 'row'] as const) test(`Monitor ${scope} saves apply the same admission and exclusion rules`, async () => {
   let writes = 0;
-  const actions = new BulkMonitorActions(async (_name, rows, mode) => {
-    writes++; assert.equal(rows.length, 1); assert.equal(mode, 'fast'); return [];
+  const actions = new BulkMonitorActions({
+    saveSnapshot: async (_name, rows, mode) => {
+      assert.notEqual(scope, 'row');
+      writes++; assert.equal(rows.length, 1); assert.equal(mode, 'fast'); return [];
+    },
+    saveSingle: async (name, result, mode) => {
+      assert.equal(scope, 'row');
+      writes++; assert.equal(result.domain, 'candidate.example'); assert.equal(mode, 'fast');
+      return { changes: [], created: true, name };
+    },
   });
   const candidate = row();
   const request = { name: ' Review ', mode: 'fast' as const, profileReady: true, scope, rows: [candidate] };
@@ -170,8 +178,11 @@ for (const scope of ['all', 'selected', 'row'] as const) test(`Monitor ${scope} 
 
 test('Monitor writes reject overlap and retain the draft after a failed write', async () => {
   let finish!: () => void, writes = 0;
-  const actions = new BulkMonitorActions(async () => {
-    writes++; await new Promise<void>(resolve => { finish = resolve; }); throw new Error('Storage unavailable');
+  const actions = new BulkMonitorActions({
+    saveSnapshot: async () => {
+      writes++; await new Promise<void>(resolve => { finish = resolve; }); throw new Error('Storage unavailable');
+    },
+    saveSingle: async () => assert.fail('A selected snapshot must not use the single-domain operation'),
   });
   const request = { rows: [row()], name: 'Review', mode: 'fast' as const, profileReady: true, scope: 'selected' as const };
   const first = actions.submit(request);

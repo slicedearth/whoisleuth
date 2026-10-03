@@ -166,7 +166,7 @@
             value={watchlistName}
             oninput={(event) => setWatchlistName(event.currentTarget.value)}
           >
-          <small>Saves only the current settled row. No scan is started.</small>
+          <small>Creates or refreshes a single-domain watchlist. No scan is started.</small>
         </label>
         <button class="btn" type="button" disabled={!watchlistName.trim() || !current.profileContextReady || Boolean(current.trusted)} onclick={() => saveToWatchlist(current.resultIndex)}>
           Save current to Monitor

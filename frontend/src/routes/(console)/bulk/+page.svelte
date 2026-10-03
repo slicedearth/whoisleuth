@@ -23,7 +23,7 @@
   } from '$lib/candidate-handoff';
   import { BulkShortlistWorkspace, type BulkShortlistState } from '$lib/controllers/bulk-shortlist-workspace.ts';
   import type { CaseRecord } from '$lib/cases';
-  import { saveWatchlist } from '$lib/watchlists';
+  import { saveWatchlist, saveSingleDomainWatchlist } from '$lib/watchlists';
   import {
     failedLocalMutationOutcome,
     type LocalMutationOutcome,
@@ -856,7 +856,7 @@
     },
     confirm: (message) => confirm(message),
   });
-  const monitorActions = new BulkMonitorActions(saveWatchlist);
+  const monitorActions = new BulkMonitorActions({ saveSnapshot: saveWatchlist, saveSingle: saveSingleDomainWatchlist });
   const trackCase = (row: ScanResult) => caseActions.open(row);
   const setRowDisposition = (row: ScanResult, value: string) =>
     caseActions.setDisposition(row, value);
