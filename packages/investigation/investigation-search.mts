@@ -130,7 +130,7 @@ export interface InvestigationHistory {
 
 type UnknownRecord = Record<string, unknown>;
 
-interface IndexedObservation {
+export interface IndexedObservation {
   id: string;
   kind: InvestigationObservationKind;
   store: InvestigationStoreName;
@@ -140,9 +140,11 @@ interface IndexedObservation {
   complete: boolean | null;
   truncated: boolean | null;
   limitations: string[];
+  entityIds: string[];
+  entityReferencesTruncated: boolean;
 }
 
-interface IndexedEntity {
+export interface IndexedEntity {
   id: string;
   type: InvestigationEntityType;
   canonical: string;
@@ -327,7 +329,44 @@ function normalizeObservation(value: unknown): IndexedObservation | null {
     complete: triState(observation.complete),
     truncated: triState(observation.truncated),
     limitations: boundedStrings(observation.limitations, MAX_INVESTIGATION_SEARCH_LIMITATIONS),
+    entityIds: [...new Set((Array.isArray(observation.entityIds) ? observation.entityIds : [])
+      .slice(0, MAX_PROJECTION_REFERENCES).map(exactIdentity).filter(Boolean))],
+    entityReferencesTruncated: observation.entityReferencesTruncated === true
+      || (Array.isArray(observation.entityIds) && (observation.entityIds.length > MAX_PROJECTION_REFERENCES
+        || observation.entityIds.slice(0, MAX_PROJECTION_REFERENCES).some(value => !exactIdentity(value)))),
   };
+}
+
+/** Shared admission for disposable search/history views, not another index. */
+export function readInvestigationSearchRecords(rawProjection: unknown) {
+  const projection = readBoundedInvestigationProjection(rawProjection);
+  const entities = new Map<string, IndexedEntity>();
+  const observations = new Map<string, IndexedObservation>();
+  const membership = new Map<string, Set<string>>();
+  let invalidEntities = 0, duplicateEntities = 0, invalidObservations = 0, duplicateObservations = 0;
+  const ambiguousEntities = duplicateIdentities(projection.entities);
+  const ambiguousObservations = duplicateIdentities(projection.observations);
+  if (projection.state === 'ready') {
+    for (const value of projection.entities) {
+      if (ambiguousEntities.has(exactIdentity(record(value)?.id))) { duplicateEntities++; continue; }
+      const entity = normalizeEntity(value);
+      if (!entity) { invalidEntities++; continue; }
+      entities.set(entity.id, entity);
+      membership.set(entity.id, new Set());
+    }
+    for (const value of projection.observations) {
+      if (ambiguousObservations.has(exactIdentity(record(value)?.id))) { duplicateObservations++; continue; }
+      const observation = normalizeObservation(value);
+      if (!observation) { invalidObservations++; continue; }
+      observations.set(observation.id, observation);
+      for (const id of observation.entityIds) membership.get(id)?.add(observation.id);
+    }
+    for (const entity of entities.values()) {
+      for (const id of entity.observationIds) if (observations.has(id)) membership.get(entity.id)!.add(id);
+    }
+  }
+  return { projection, entities, observations, membership,
+    invalidEntities, duplicateEntities, invalidObservations, duplicateObservations };
 }
 
 function normalizeEntity(value: unknown): IndexedEntity | null {
@@ -420,6 +459,14 @@ function pivotFor(entity: IndexedEntity, observation: IndexedObservation): { hre
 }
 
 function sourcePivotFor(entity: IndexedEntity, observation: IndexedObservation): { href: string; action: string } {
+  const local = retainedInvestigationSourcePivot(observation);
+  if (local.href) return local;
+  const lookupTarget = entity.type === 'domain' ? entity.canonical : observation.recordId;
+  return { href: `/lookup?q=${encodeURIComponent(lookupTarget)}`, action: 'Open Lookup' };
+}
+
+/** Never falls back from a retained-source pivot to networked Lookup. */
+export function retainedInvestigationSourcePivot(observation: Pick<IndexedObservation, 'store' | 'recordId'>): { href: string; action: string } {
   if (observation.store === 'cases') {
     return { href: `/monitor?case=${encodeURIComponent(observation.recordId)}`, action: 'Open source case' };
   }
@@ -432,8 +479,14 @@ function sourcePivotFor(entity: IndexedEntity, observation: IndexedObservation):
   if (observation.store === 'relationshipObservations') {
     return { href: `/monitor?view=relationships&observation=${encodeURIComponent(observation.recordId)}`, action: 'Open retained observation' };
   }
-  const lookupTarget = entity.type === 'domain' ? entity.canonical : observation.recordId;
-  return { href: `/lookup?q=${encodeURIComponent(lookupTarget)}`, action: 'Open Lookup' };
+  return { href: '', action: 'Source navigation unavailable' };
+}
+
+export function investigationHistoryEntry(observation: IndexedObservation): InvestigationHistoryEntry {
+  return { id: observation.id, sourceStore: observation.store, recordId: observation.recordId,
+    source: observation.source, observedAt: observation.observedAt, kind: observation.kind,
+    complete: observation.complete, truncated: observation.truncated, limitations: observation.limitations,
+    ...retainedInvestigationSourcePivot(observation) };
 }
 
 function evidenceClassification(observation: IndexedObservation): 'derived' | 'normalized' | null {
@@ -492,7 +545,7 @@ export function investigationHistory(
         complete: observation.complete, truncated: observation.truncated, limitations: observation.limitations,
         // For an indicator, every row must open its own source, not a selected
         // representative Case or a fresh network collection.
-        ...sourcePivotFor(entity, observation),
+        ...retainedInvestigationSourcePivot(observation),
       })),
     total: observations.length, page, pageCount,
     firstObservedAt: observations.at(-1)?.observedAt ?? null,
@@ -572,27 +625,8 @@ export function buildInvestigationSearchIndex(rawProjection: unknown): Investiga
   }
 
   const sources = normalizeSources(projection.sources);
-  const observations = new Map<string, IndexedObservation>();
-  const ambiguousObservationIds = duplicateIdentities(projection.observations);
-  let invalidObservations = 0;
-  let duplicateObservations = 0;
-  for (const rawObservation of projection.observations) {
-    if (ambiguousObservationIds.has(exactIdentity(record(rawObservation)?.id))) { duplicateObservations += 1; continue; }
-    const observation = normalizeObservation(rawObservation);
-    if (!observation) { invalidObservations += 1; continue; }
-    observations.set(observation.id, observation);
-  }
-
-  const ambiguousEntityIds = duplicateIdentities(projection.entities);
-  const entities = new Map<string, IndexedEntity>();
-  let invalidEntities = 0;
-  let duplicateEntities = 0;
-  for (const rawEntity of projection.entities.slice(0, MAX_INVESTIGATION_SEARCH_ENTITIES)) {
-    if (ambiguousEntityIds.has(exactIdentity(record(rawEntity)?.id))) { duplicateEntities += 1; continue; }
-    const entity = normalizeEntity(rawEntity);
-    if (!entity) { invalidEntities += 1; continue; }
-    entities.set(entity.id, entity);
-  }
+  const { observations, entities, membership, invalidObservations, duplicateObservations,
+    invalidEntities, duplicateEntities } = readInvestigationSearchRecords(rawProjection);
   const encoder = new TextEncoder();
   const candidates: Array<{
     entity: IndexedEntity; observation: IndexedObservation;
@@ -601,7 +635,7 @@ export function buildInvestigationSearchIndex(rawProjection: unknown): Investiga
   let missingObservations = 0;
   let referenceLimited = 0;
   for (const entity of entities.values()) {
-    const observation = selectObservation(entity, observations);
+    const observation = selectObservation({ ...entity, observationIds: [...membership.get(entity.id)!] }, observations);
     if (!observation) { missingObservations += 1; continue; }
     const searchable = searchableTerms(entity);
     if (entity.observationsTruncated) referenceLimited += 1;

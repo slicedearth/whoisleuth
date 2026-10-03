@@ -5,10 +5,11 @@
   import type { InvestigationSearchSession } from '$lib/investigation-search-session.ts';
   import Pagination from './Pagination.svelte';
 
-  let { session, entityId, onopen }: {
+  let { session, entityId, onopen, onsettled }: {
     session: InvestigationSearchSession | null;
     entityId: string;
     onopen: (event: MouseEvent, href: string) => void;
+    onsettled?: () => void;
   } = $props();
   let page = $state(1);
   let response = $state.raw<InvestigationHistory | null>(null);
@@ -30,6 +31,7 @@
       if (!active) return;
       response = value;
       pending = false;
+      onsettled?.();
       if (focusPage) {
         focusPage = false;
         await tick();
@@ -39,6 +41,7 @@
       if (!active) return;
       pending = false;
       error = 'Saved history could not be read. Close and reopen this section to retry.';
+      onsettled?.();
     });
     return () => { active = false; };
   });
@@ -57,7 +60,8 @@
         <li>
           <div class="entry-heading"><time datetime={entry.observedAt}>{formatEvidenceDate(entry.observedAt)}</time><span>{entry.complete === true && entry.truncated !== true ? 'Complete' : entry.complete === null && entry.truncated !== true ? 'Completeness unknown' : 'Partial'}</span></div>
           <p>{entry.source} · {entry.recordId}</p>
-          <a href={entry.href} onclick={event => onopen(event, entry.href)}>{entry.action}</a>
+          {#if entry.href}<a href={entry.href} onclick={event => onopen(event, entry.href)}>{entry.action}</a>
+          {:else}<p>{entry.action}; the retained observation is shown here without starting a new check.</p>{/if}
           {#if entry.limitations.length}<details><summary>Source limitations</summary><ul>{#each entry.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>{/if}
         </li>
       {/each}

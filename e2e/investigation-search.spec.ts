@@ -65,6 +65,64 @@ async function seedInvestigationStores(page: import('@playwright/test').Page) {
   await openDashboardSecondaryWorkspaces(page);
 }
 
+test('retained infrastructure exposes exact independent sources and keyboard return without collection', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) requests.push(new URL(request.url()).pathname); });
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [
+    caseRecord('inventory-first', 'shared.example'),
+    { ...caseRecord('inventory-second', 'shared.example'), updatedAt: '2026-07-20T00:00:00.000Z' },
+  ] } });
+  await openDashboardSecondaryWorkspaces(page);
+  await page.getByText('Browse retained infrastructure', { exact: true }).click();
+  const inventory = page.getByRole('region', { name: 'Retained infrastructure inventory', exact: true });
+  const rows = inventory.getByRole('list', { name: 'Retained infrastructure identities', exact: true });
+  await expect(rows.getByRole('listitem')).toHaveCount(1);
+  await expect(rows.getByText('2 observations · 2 one-hop relationships', { exact: true })).toBeVisible();
+  const inspect = rows.getByRole('button', { name: 'Inspect retained evidence for shared.example', exact: true });
+  await inspect.focus(); await inspect.press('Enter');
+  const detail = inventory.getByRole('region', { name: 'Selected retained infrastructure evidence', exact: true });
+  await expect(detail.getByRole('heading', { name: 'Retained evidence for shared.example', exact: true })).toBeFocused();
+  await expect(detail.getByRole('heading', { name: '2 retained observations', exact: true })).toBeVisible();
+  await expect(detail.getByRole('heading', { name: '2 one-hop relationships', exact: true })).toBeVisible();
+  await expect(detail.getByRole('list', { name: 'Retained relationship sources', exact: true }).getByRole('listitem')).toHaveCount(2);
+  for (const href of await detail.locator('a').evaluateAll(elements => elements.map(element => element.getAttribute('href')))) expect(href).toMatch(/^\/monitor\?case=/u);
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      await expect(detail.getByRole('heading', { name: '2 one-hop relationships', exact: true })).toBeVisible();
+    }
+  }
+  await detail.getByRole('button', { name: 'Return to inventory results', exact: true }).click();
+  await expect(inspect).toBeFocused();
+  expect(requests).toEqual([]);
+});
+
+test('retained infrastructure filters before pagination and exposes every admitted match', async ({ page }) => {
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION,
+    cases: Array.from({ length: 123 }, (_, index) => caseRecord(`inventory-${index}`, `target-${index}.example`)),
+  } });
+  await openDashboardSecondaryWorkspaces(page);
+  await page.getByText('Browse retained infrastructure', { exact: true }).click();
+  const inventory = page.getByRole('region', { name: 'Retained infrastructure inventory', exact: true });
+  await inventory.getByLabel('Infrastructure type', { exact: true }).selectOption('domain');
+  await inventory.getByRole('searchbox', { name: 'Search retained infrastructure', exact: true }).fill('target-');
+  const rows = inventory.getByRole('list', { name: 'Retained infrastructure identities', exact: true });
+  const pages = inventory.getByRole('navigation', { name: 'Retained infrastructure pages', exact: true });
+  await expect(rows.getByRole('listitem')).toHaveCount(50);
+  await expect(pages.getByText('Page 1 of 3', { exact: true })).toBeVisible();
+  await pages.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(pages.getByText('Page 2 of 3', { exact: true })).toBeVisible();
+  await expect(rows.getByRole('listitem')).toHaveCount(50);
+  await pages.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(pages.getByText('Page 3 of 3', { exact: true })).toBeVisible();
+  await expect(rows.getByRole('listitem')).toHaveCount(23);
+  await expect(inventory.getByRole('heading', { name: 'Retained infrastructure inventory', exact: true })).toBeFocused();
+});
+
 test('dashboard local search pivots to exact cases, campaigns, and brand profiles without scanning', async ({ page }) => {
   const lookupRequests: string[] = [];
   page.on('request', (request) => {

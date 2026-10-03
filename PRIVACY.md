@@ -111,6 +111,11 @@ trusted CLI Case packs exclude these references. JSON backups contain references
 only, not original bytes. Removing a reference deletes its bytes only when no
 other Case in the workspace references them. No file is uploaded automatically.
 
+Saved-work infrastructure inventory and source-linked history are disposable
+views of the current workspace's bounded retained records. Filters, selections
+and relationship inspection remain in memory; viewing them makes no collection
+request, creates no parallel evidence store and does not enrol monitoring.
+
 Image comparison and region editing run in page memory. Explicitly retained
 edits are separate PNG files with their own digests, source-file fingerprints
 and region instructions. They keep the source observation time; originals are

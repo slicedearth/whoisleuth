@@ -62,6 +62,22 @@ records. Every admitted observation is pageable, including separate Cases for th
 same indicator. The first and last dates describe saved evidence, not an
 indicator's creation or disappearance.
 
+Open **Browse retained infrastructure** to filter admitted domains/hostnames,
+addresses, certificates, nameserver sets and HTTP origins by indexed text,
+source collection or retained observation date. Filters run before pagination;
+every admitted match remains reachable. Inspect an identity to see its separate
+dated sources and explicitly supported one-hop relationships. Source links open
+retained Cases, campaigns, Brand Profiles or relationship records, never an
+automatic Lookup. The inventory and its selections stay disposable in page
+memory; no second evidence store is created.
+
+Counts are not organisation-wide coverage, and retained address or certificate
+relationships do not establish current resolution, origin, ownership or common
+control. Imported DNS observations can be linked to a Case domain when their
+exact queried owner was not retained. Missing provider roles, routing ASN,
+wildcard patterns, precise collection scope and comparable infrastructure
+snapshots stay unknown; this view does not infer removals or enrol monitoring.
+
 Campaign and investigation-template editors keep later typing when an earlier
 save completes. If another tab changes the fields being edited, the save is rejected
 and the draft remains open. Refresh the saved records, then reopen the record to

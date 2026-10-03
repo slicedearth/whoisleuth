@@ -8,6 +8,7 @@ import {
 import { buildInvestigationProjection } from '../frontend/src/lib/analysis/investigation-projection.ts';
 import { buildInvestigationSearchIndex, investigationHistory, searchInvestigationIndex } from '../frontend/src/lib/analysis/investigation-search.ts';
 import { projectInvestigationContextPreview } from '../frontend/src/lib/analysis/investigation-context-preview.ts';
+import { investigationInfrastructure, investigationInfrastructureRelationships } from '../packages/investigation/investigation-infrastructure.mts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.ts';
 
 const collections = {
@@ -89,6 +90,47 @@ test('session routes paged history through the same cancellable worker', async (
   session.dispose();
   await assert.rejects(session.history('entity-1'), { name: 'AbortError' });
   assert.equal(worker.terminated, 1);
+});
+
+test('worker infrastructure filters before paging and transfers only selected relationship sources', () => {
+  const replies: SearchWorkerResponse[] = [];
+  const handle = createInvestigationSearchWorkerHandler(response => replies.push(response));
+  const projection = buildInvestigationProjection(collections), index = buildInvestigationSearchIndex(projection);
+  handle({ id: 1, kind: 'build', collections, unavailableStores: [] });
+  replies.shift();
+  const options = { query: 'target', type: 'domain' as const, page: 3 };
+  handle({ id: 2, kind: 'infrastructure', options });
+  const result = replies.shift();
+  assert.ok(result?.kind === 'infrastructure');
+  assert.deepEqual(result.result, investigationInfrastructure(projection, index, options));
+  assert.equal(result.result.total, 124);
+  assert.equal(result.result.rows.length, 24);
+  assert.equal('observations' in result.result, false);
+  const entityId = result.result.rows[0]!.entityId;
+  handle({ id: 3, kind: 'infrastructure_relationships', entityId });
+  const related = replies.shift();
+  assert.ok(related?.kind === 'infrastructure_relationships');
+  assert.deepEqual(related.result.rows, investigationInfrastructureRelationships(projection, entityId).rows);
+  assert.equal('entities' in related.result, false);
+});
+
+test('session routes infrastructure and one-hop sources through its cancellable queue', async () => {
+  const { worker, session } = await prepared();
+  const options = { type: 'ip_address' as const, store: 'cases' as const, page: 2 };
+  const pending = session.infrastructure(options);
+  assert.deepEqual(worker.messages.at(-1), { id: 2, kind: 'infrastructure', options });
+  const index = buildInvestigationSearchIndex(buildInvestigationProjection({}));
+  const result = investigationInfrastructure(buildInvestigationProjection({}), index);
+  worker.reply({ id: 2, kind: 'infrastructure', result });
+  assert.deepEqual(await pending, result);
+  const sources = session.infrastructureRelationships('selected', 3);
+  assert.deepEqual(worker.messages.at(-1), { id: 3, kind: 'infrastructure_relationships', entityId: 'selected', page: 3 });
+  const relationships = investigationInfrastructureRelationships(null, 'selected');
+  worker.reply({ id: 3, kind: 'infrastructure_relationships', result: relationships });
+  assert.deepEqual(await sources, relationships);
+  session.dispose();
+  await assert.rejects(session.infrastructure(), { name: 'AbortError' });
+  await assert.rejects(session.infrastructureRelationships('selected'), { name: 'AbortError' });
 });
 
 test('worker preserves explicit unavailable-source coverage rather than treating it as empty', () => {
