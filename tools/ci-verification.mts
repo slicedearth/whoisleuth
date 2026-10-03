@@ -35,7 +35,7 @@ export const CI_QUALITY_SCRIPTS = Object.freeze([
 ] as const);
 
 export const CI_PREFLIGHT_SCRIPTS = Object.freeze([
-  'release:check',
+  'version:check',
 ] as const);
 
 export const CI_UNIT_SCRIPTS = Object.freeze([

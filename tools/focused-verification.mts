@@ -67,7 +67,7 @@ const SPECIALISED_EXECUTION: Readonly<Record<SpecialisedCheck, SpecialisedExecut
   'cli-package': { script: 'cli:package:check' },
   'capture-package': { script: 'capture:package:check' },
   'local-package': { script: 'local:package:check' },
-  'release-contract': { script: 'release:check' },
+  'release-contract': { script: 'version:check' },
   licences: { script: 'licenses:check' },
   'production-dependency-audit': { script: 'dependencies:audit' },
   'browser-build': { script: 'build' },

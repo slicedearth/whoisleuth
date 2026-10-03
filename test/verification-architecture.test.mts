@@ -1045,7 +1045,7 @@ describe('verification architecture contracts', () => {
       assert.equal(unitChecks.has(testFile), true, `${testFile} must own application-version changes`);
     }
     for (const command of [
-      'release:check',
+      'version:check',
       'schema:inventory',
       'cli:package:check',
       'licenses:check',

@@ -72,6 +72,13 @@ describe('scoped CLI release workflow', () => {
     assert.ok(auditIndex > 0 && installIndex > auditIndex && installIndex < uploadIndex);
     const installedAuditIndex = commandIndex(prepare, 'npm run dependencies:audit -- --installed-candidate');
     const assemblyIndex = commandIndex(prepare, 'npm run cli:package:release');
+    const releaseIndex = commandIndex(prepare, 'npm run release:check');
+    const releaseStep = requiredValue(prepare[releaseIndex]);
+    assert.ok(releaseIndex < assemblyIndex);
+    assert.equal(releaseStep.if, undefined);
+    assert.equal(releaseStep['continue-on-error'], undefined);
+    assert.match(requiredValue(releaseStep.run), /^npm run release:check\s*$/mu);
+    assert.doesNotMatch(requiredValue(releaseStep.run), /--contribution|version:check|\|\||continue-on-error/u);
     assert.ok(assemblyIndex > installIndex && installedAuditIndex > assemblyIndex && installedAuditIndex < uploadIndex);
     assert.match(requiredValue(prepare[installedAuditIndex]?.run), /"\$RELEASE_DIRECTORY\/installed-dependencies\.json"/u);
     assert.equal((WORKFLOW.match(/npm run dependencies:audit/gu) ?? []).length, 2);

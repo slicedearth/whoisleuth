@@ -30,7 +30,7 @@ import {
   readBoundedRegularFile,
   readBoundedRegularFileWithin,
 } from '../lib/bounded-file.mts';
-import { normalizeSemanticVersion } from './release-version-check.mts';
+import { inspectReleaseVersionIdentity, normalizeSemanticVersion } from './release-version-check.mts';
 import { buildThirdPartyNotices } from './third-party-notices.mts';
 import { checkInstalledSigningTrust } from './cli-signing-package-check.mts';
 import { checkInstalledCaseFiles } from './cli-case-package-check.mts';
@@ -586,6 +586,9 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
   if (!publicationEnabled && (options.artifactDirectory || options.expectedTag)) {
     throw new TypeError('Artefact output and tag validation are available only for release-candidate assembly.');
   }
+  // Private contribution checks can assemble changed sources at the current
+  // version. A publishable candidate cannot reuse an existing release identity.
+  if (publicationEnabled) inspectReleaseVersionIdentity(repositoryRoot, options.expectedTag!);
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'whoisleuth-cli-package-'));
   const stagingRoot = path.join(temporaryRoot, 'staging');
   const sourceRoot = path.join(temporaryRoot, 'source');
@@ -757,6 +760,9 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     let archiveSha256: string | null = null;
     const candidateDigest = createHash('sha256').update(await readFile(tarball)).digest('hex');
     if (publicationEnabled) {
+      // Recheck after assembly and installed tests, before emitting artefacts;
+      // source snapshots above and immutable tag identity protect separate seams.
+      inspectReleaseVersionIdentity(repositoryRoot, `v${packageVersion}`);
       const artifactDirectory = path.resolve(options.artifactDirectory as string);
       await mkdir(artifactDirectory, { recursive: true });
       archiveFilename = `whoisleuth-cli-${packageVersion}.tgz`;

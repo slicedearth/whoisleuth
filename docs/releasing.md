@@ -38,7 +38,13 @@ the failed command's output, correct the cause, then rerun the same
 the command skips the version change and reruns generation and validation.
 It never rolls back or discards other local work.
 
-`release:check` alone is offline and read-only. It verifies that:
+Ordinary contribution checks use `npm run version:check`: manifest versions must
+agree, and compatibility is checked against the latest reachable public release,
+including a tag matching the current version. Dependency and application changes
+can be reviewed together before choosing the next release number. This does not
+permit republishing changed bytes under an existing version.
+
+`release:check` is the stricter, offline, read-only release gate. It verifies that:
 
 - `package.json`, `package-lock.json`, and the lockfile root package agree;
 - the version is a valid semantic version without an in-manifest `v` prefix;
@@ -53,7 +59,10 @@ the application or CLI do not force a version change. Changes to a packaged CLI
 guide do, because republishing different package bytes under an existing version
 is not permitted.
 
-The command does not create a tag, commit, release, deployment, or package.
+Neither check creates a tag, commit, release, deployment, or package. Publishable
+CLI candidate assembly enforces strict source identity directly, even when called
+without the release workflow. Private package checks remain available during
+contribution work.
 
 The separately assembled CLI candidate follows the same application version but
 does not make the root application package publishable. Before any CLI release,

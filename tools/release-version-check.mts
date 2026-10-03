@@ -26,8 +26,10 @@ type MainOptions = Readonly<{
   stdout?: WritableLike;
   stderr?: WritableLike;
   inspectIdentity?: typeof inspectReleaseVersionIdentity;
-  inspectPublicBoundary?: typeof inspectPrecedingPublicReleaseVersion;
+  inspectPublicBoundary?: typeof inspectPublicCompatibilityVersion;
 }>;
+
+export type ReleaseCheckMode = 'release' | 'contribution';
 
 export type ReleaseVersionIdentity = Readonly<{
   state: 'unreleased' | 'tagged_current_sources';
@@ -137,13 +139,7 @@ function requireSuccessfulGit(
   return result.stdout.trim();
 }
 
-export function inspectReleaseVersionIdentity(
-  repositoryRoot: string,
-  expectedTag: string,
-): ReleaseVersionIdentity {
-  if (!/^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(expectedTag)) {
-    throw new TypeError('Release identity requires the exact semantic-version tag.');
-  }
+function assertCompleteReleaseHistory(repositoryRoot: string): void {
   const shallow = requireSuccessfulGit(
     git(repositoryRoot, ['rev-parse', '--is-shallow-repository']),
     'Release identity requires a Git checkout with complete local tag history.',
@@ -151,6 +147,16 @@ export function inspectReleaseVersionIdentity(
   if (shallow !== 'false') {
     throw new Error('Release identity requires a non-shallow Git checkout with complete local tag history.');
   }
+}
+
+export function inspectReleaseVersionIdentity(
+  repositoryRoot: string,
+  expectedTag: string,
+): ReleaseVersionIdentity {
+  if (!/^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(expectedTag)) {
+    throw new TypeError('Release identity requires the exact semantic-version tag.');
+  }
+  assertCompleteReleaseHistory(repositoryRoot);
 
   const tag = git(repositoryRoot, ['rev-parse', '--verify', '--quiet', `refs/tags/${expectedTag}^{commit}`]);
   if (tag.status === 1) {
@@ -194,9 +200,10 @@ function compareStableVersions(left: string, right: string): number {
   return 0;
 }
 
-export function selectPrecedingPublicReleaseVersion(
+export function selectPublicCompatibilityVersion(
   currentVersion: string,
   tagNames: readonly string[],
+  mode: ReleaseCheckMode = 'release',
 ): string {
   const current = normalizeBoundedStableSemanticVersion(currentVersion, 'Current release');
   if (!Array.isArray(tagNames) || tagNames.length < 1 || tagNames.length > MAX_RELEASE_TAGS) {
@@ -206,7 +213,7 @@ export function selectPrecedingPublicReleaseVersion(
     if (typeof tagName !== 'string' || !/^v\d+\.\d+\.\d+$/u.test(tagName)) return [];
     try {
       const version = normalizeBoundedStableSemanticVersion(tagName.slice(1), 'Release tag');
-      return compareStableVersions(version, current) < 0 ? [version] : [];
+      return mode === 'contribution' || compareStableVersions(version, current) < 0 ? [version] : [];
     } catch {
       return [];
     }
@@ -214,19 +221,24 @@ export function selectPrecedingPublicReleaseVersion(
   candidates.sort(compareStableVersions);
   const selected = candidates.at(-1);
   if (!selected) throw new TypeError(`No preceding public release tag is reachable before version ${current}.`);
+  if (mode === 'contribution' && compareStableVersions(selected, current) > 0) {
+    throw new TypeError(`Contribution version ${current} precedes the latest reachable public release ${selected}.`);
+  }
   return selected;
 }
 
-export function inspectPrecedingPublicReleaseVersion(
+export function inspectPublicCompatibilityVersion(
   repositoryRoot: string,
   currentVersion: string,
+  mode: ReleaseCheckMode = 'release',
 ): string {
+  assertCompleteReleaseHistory(repositoryRoot);
   const output = requireSuccessfulGit(
     git(repositoryRoot, ['tag', '--merged', 'HEAD', '--list', 'v*']),
     'Release identity could not inspect reachable semantic-version tags.',
   );
   const tags = output.split('\n').filter(Boolean);
-  const actual = selectPrecedingPublicReleaseVersion(currentVersion, tags);
+  const actual = selectPublicCompatibilityVersion(currentVersion, tags, mode);
   const baseline = requireSuccessfulGit(
     git(repositoryRoot, ['show', `refs/tags/v${actual}:${CASE_SUPPORTED_CONTRACT_BASELINE_PATH}`]),
     `Release identity could not read durable commitments from preceding tag v${actual}.`,
@@ -314,31 +326,43 @@ export function formatReleaseVersionReport(report: ReturnType<typeof buildReleas
   ].join('\n');
 }
 
-export function parseArguments(args: readonly string[]): void {
-  if (args.length > 0) throw new TypeError('Usage: npm run release:check');
+export function parseArguments(args: readonly string[]): ReleaseCheckMode {
+  if (args.length === 0) return 'release';
+  if (args.length === 1 && args[0] === '--contribution') return 'contribution';
+  throw new TypeError('Usage: npm run release:check [-- --contribution]');
 }
 
 export async function main(args = process.argv.slice(2), options: MainOptions = {}): Promise<number> {
   const stdout = options.stdout || process.stdout;
   const stderr = options.stderr || process.stderr;
   try {
-    parseArguments(args);
+    const mode = parseArguments(args);
     const repositoryRoot = path.resolve(options.repositoryRoot || process.cwd());
     const [packageManifest, lockfile] = await Promise.all([
       readBoundedJson(path.join(repositoryRoot, 'package.json')),
       readBoundedJson(path.join(repositoryRoot, 'package-lock.json')),
     ]);
     const manifestReport = buildReleaseVersionReport(packageManifest, lockfile);
-    const identity = (options.inspectIdentity || inspectReleaseVersionIdentity)(
-      repositoryRoot,
-      manifestReport.expectedTag,
-    );
-    const publicBoundary = (options.inspectPublicBoundary || inspectPrecedingPublicReleaseVersion)(
+    const publicBoundary = (options.inspectPublicBoundary || inspectPublicCompatibilityVersion)(
       repositoryRoot,
       manifestReport.releaseVersion,
+      mode,
     );
-    stdout.write(`${formatReleaseVersionReport(buildReleaseVersionReport(packageManifest, lockfile, identity))}\n`);
-    stdout.write(`Preceding public compatibility boundary: v${publicBoundary}\n`);
+    if (mode === 'contribution') {
+      stdout.write([
+        'WHOISleuth contribution version check',
+        `Version: ${manifestReport.releaseVersion}`,
+        'Manifest lockstep: pass',
+        `Public compatibility boundary: v${publicBoundary}`,
+        'Release identity: not assessed; run npm run release:check before release assembly',
+        'Package publishing: disabled',
+        '',
+      ].join('\n'));
+    } else {
+      const identity = (options.inspectIdentity || inspectReleaseVersionIdentity)(repositoryRoot, manifestReport.expectedTag);
+      stdout.write(`${formatReleaseVersionReport(buildReleaseVersionReport(packageManifest, lockfile, identity))}\n`);
+      stdout.write(`Preceding public compatibility boundary: v${publicBoundary}\n`);
+    }
     return 0;
   } catch (error) {
     stderr.write(`${error instanceof Error ? error.message : 'Release version check failed.'}\n`);

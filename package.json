@@ -112,6 +112,7 @@
     "public-product:check": "node tools/public-product-catalogue.mts --check",
     "privacy:check": "node tools/privacy-data-flow-catalogue.mts --check",
     "release:check": "node tools/release-version-check.mts",
+    "version:check": "node tools/release-version-check.mts --contribution",
     "release:prepare": "node tools/prepare-release.mts",
     "toolchain:check": "node tools/toolchain-compatibility.mts",
     "dependencies:audit": "node tools/production-dependency-audit.mts",

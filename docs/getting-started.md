@@ -211,9 +211,14 @@ than the minimum; see the [analyser hardware guidance](https://docs.github.com/e
 
 For an approved version change, `npm run release:prepare -- <version>` updates
 the two application manifests and regenerates public examples through their
-existing owner. It creates no commit, tag or publication. `npm run release:check`
-checks their lockstep, immutable tag identity and the preceding public tag's
-durable commitments before dependencies are installed. Installed package tests
+existing owner. It creates no commit, tag or publication. Ordinary local and
+hosted CI use `npm run version:check` before dependencies are installed: manifests
+must agree and retain the latest reachable public tag's durable commitments,
+including when the application version is unchanged. Contribution checks do not
+certify a release or require a version bump for each dependency update.
+`npm run release:check` additionally enforces immutable release-input identity;
+release preparation and publishable package assembly keep that strict boundary.
+Installed package tests
 then check fresh writer metadata. Published fixtures are not rewritten merely
 to change a patch number.
 

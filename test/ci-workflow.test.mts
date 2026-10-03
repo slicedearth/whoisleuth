@@ -354,7 +354,7 @@ describe('continuous integration workflow', () => {
       if (main(['--list']) !== 0) process.exit(2);
       const scripts = [];
       runCiCommandGroup('preflight', (script) => scripts.push(script));
-      if (!scripts.includes('release:check')) process.exit(3);
+      if (!scripts.includes('version:check') || scripts.includes('release:check')) process.exit(3);
     `], { cwd: path.join(__dirname, '..'), encoding: 'utf8', timeout: 5000 });
     assert.equal(child.status, 0, child.stderr);
   });
@@ -430,8 +430,8 @@ describe('continuous integration workflow', () => {
     assert.match(localPlan, /^verification:artifacts cleanup=all$/mu);
     assert.match(localPlan, /^test:e2e:critical:install$/mu);
     assert.doesNotMatch(localPlan, /^test:e2e:install$/mu);
-    assert.ok(localPlan.indexOf('changed-line secret scan') < localPlan.indexOf('release:check'));
-    assert.ok(localPlan.indexOf('release:check') < localPlan.indexOf('locked install'));
+    assert.ok(localPlan.indexOf('changed-line secret scan') < localPlan.indexOf('version:check'));
+    assert.ok(localPlan.indexOf('version:check') < localPlan.indexOf('locked install'));
     assert.ok(localPlan.indexOf('locked install') < localPlan.indexOf('toolchain:check'));
     assert.match(localPlan, /locked install \(install-time audit disabled; scheduled and release audits are separate\)/u);
     assert.deepEqual(CI_HOSTED_ONLY_BROWSER_SCRIPTS, [
