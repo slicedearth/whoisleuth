@@ -16,6 +16,7 @@ import {
 } from '../lib/threat-intelligence-types.mts';
 import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
 import { LOOKUP_INVESTIGATION_BRIEF_VERSION } from '../packages/contracts/investigation-portability.mts';
+import { RISK_MODEL_VERSION } from '../packages/analysis/risk-scoring.mts';
 
 function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpResponse {
   return {
@@ -127,7 +128,7 @@ describe('Lookup route analysis', () => {
     assert.equal(analysis.evidenceTopologyTarget.label, 'example.test');
     assert.equal(analysis.evidenceTopologyTarget.detail, 'domain · fast lookup');
     assert.equal(analysis.caseEvidence.availability, 'registered');
-    assert.equal(analysis.risk?.modelVersion, 8);
+    assert.equal(analysis.risk?.modelVersion, RISK_MODEL_VERSION);
     assert.equal(analysis.opportunity?.modelVersion, 2);
     assert.equal(analysis.risk?.evidenceQuality.scanDepth, 'fast');
     assert.equal(analysis.risk?.evidenceQuality.state, 'partial');
