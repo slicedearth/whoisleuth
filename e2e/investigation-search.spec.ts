@@ -6,6 +6,10 @@ import { productionChunkPath } from './production-build';
 import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
 import { serializeCaseStore } from '../packages/cases/case-storage-model.mts';
 import { MAX_CASE_STORE_BYTES } from '../packages/contracts/case-portability.mts';
+import { readFile } from 'node:fs/promises';
+import { parseInfrastructureObservation } from '../packages/investigation/infrastructure-observation.mts';
+import { convertInfrastructureObservation } from '../packages/interchange/external-findings-converters.mts';
+import { externalFindingCaseProjection } from '../packages/interchange/external-findings-import.mts';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
@@ -64,6 +68,33 @@ async function seedInvestigationStores(page: import('@playwright/test').Page) {
   });
   await openDashboardSecondaryWorkspaces(page);
 }
+
+test('multi-host snapshot review exposes exact outcomes, wildcards and history without automatic collection', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('request', request => { const path = new URL(request.url()).pathname; if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) requests.push(path); });
+  const early = parseInfrastructureObservation(await readFile(new URL('../test/fixtures/infrastructure-observations/infrastructure-observation-v1.json', import.meta.url), 'utf8'));
+  const later = structuredClone(early); later.id = 'selected-example-later'; later.observedAt = '2026-10-02T12:00:00.000Z'; later.coverage.state = 'partial'; later.dns[2] = { ...later.dns[2]!, values: [], outcome: 'failed', complete: false };
+  const pins = [early, later].map((snapshot, index) => { const document = convertInfrastructureObservation(snapshot); return { ...externalFindingCaseProjection(document.findings[0]!, document.source).evidencePin, id: `snapshot-pin-${index}` }; });
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [{ ...caseRecord('snapshot-case', 'example.test'), evidencePins: pins }] } });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  await openDashboardSecondaryWorkspaces(page);
+  await page.getByText('Browse retained infrastructure', { exact: true }).click();
+  const snapshots = page.getByRole('region', { name: 'Source-qualified infrastructure snapshots', exact: true });
+  await expect(snapshots).toContainText('2 admitted source-qualified snapshots');
+  await snapshots.getByRole('checkbox', { name: /^selected-example-early/u }).check();
+  const exact = snapshots.getByRole('region', { name: 'Exact snapshot selected-example-early', exact: true });
+  await expect(exact.getByRole('link', { name: 'Prepare Lookup for www.example.test', exact: true })).toHaveAttribute('href', '/lookup?q=www.example.test#query');
+  await exact.getByText('1 certificate observations, exact names and wildcard patterns', { exact: true }).click();
+  await expect(exact).toContainText('*.example.test · Wildcard pattern, not an enumerated host');
+  await expect(exact.getByRole('checkbox', { name: '*.example.test', exact: true })).toHaveCount(0);
+  await snapshots.getByRole('checkbox', { name: /^selected-example-later/u }).check();
+  const comparison = snapshots.getByRole('region', { name: 'Infrastructure snapshot comparison', exact: true });
+  await expect(comparison).toContainText('Comparison · partial'); await expect(comparison).toContainText('unknown'); await expect(comparison).toContainText('failed');
+  for (const width of [1280, 390, 320]) { await page.setViewportSize({ width, height: 844 }); for (const theme of ['light', 'dark'] as const) { await useTheme(page, theme); await expectNoHorizontalOverflow(page); } }
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(before);
+  expect(requests).toEqual([]);
+});
 
 test('retained infrastructure exposes exact independent sources and keyboard return without collection', async ({ page }) => {
   const requests: string[] = [];
@@ -135,11 +166,11 @@ test('optional retained topology preserves full source list, long identity pivot
   await expect(toggle).toBeFocused(); await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await expect(relationships.getByRole('region', { name: 'Retained one-hop topology', exact: true })).toBeVisible();
   await expect(sourceList.getByRole('listitem')).toHaveCount(3);
-  await relationships.getByRole('searchbox', { name: 'Search diagram on this source page', exact: true }).fill('no-diagram-match');
-  await expect(relationships).toContainText('No current-page source rows match this diagram search');
+  await relationships.getByRole('searchbox', { name: 'Search complete retained topology', exact: true }).fill('no-diagram-match');
+  await expect(relationships).toContainText('No admitted relationships match this diagram search');
   await expect(sourceList.getByRole('listitem')).toHaveCount(3);
   await expect(sourceList.getByRole('link')).toHaveCount(3);
-  await relationships.getByRole('searchbox', { name: 'Search diagram on this source page', exact: true }).fill('');
+  await relationships.getByRole('searchbox', { name: 'Search complete retained topology', exact: true }).fill('');
   const initialFocus = relationships.getByRole('combobox', { name: 'Focus diagram identity', exact: true });
   const campaignOption = (await initialFocus.locator('option').allTextContents()).find(value => value.includes('topology-campaign · campaign'));
   expect(campaignOption).toBeDefined();
@@ -220,19 +251,22 @@ test('retained topology keeps dense source pages complete and resets diagram sea
       }
     }
   }
-  const search = relationships.getByRole('searchbox', { name: 'Search diagram on this source page', exact: true });
+  const search = relationships.getByRole('searchbox', { name: 'Search complete retained topology', exact: true });
   await search.fill('no-current-page-diagram-match');
-  await expect(relationships).toContainText('No current-page source rows match this diagram search');
+  await expect(relationships).toContainText('No admitted relationships match this diagram search');
   await expect(sources.getByRole('listitem')).toHaveCount(50);
+  await search.fill('dense-case-052');
+  await expect(relationships.getByRole('region', { name: 'Retained one-hop topology', exact: true })).toBeVisible();
+  await expect(relationships.getByRole('region', { name: 'Retained one-hop topology', exact: true }).locator('path[marker-end]')).toHaveCount(1);
   const pages = relationships.getByRole('navigation', { name: 'Retained relationship pages', exact: true });
   await pages.getByRole('button', { name: 'Next', exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(pages.getByText('Page 2 of 2', { exact: true })).toBeVisible();
   await expect(relationships.getByRole('heading', { name: '53 one-hop relationships', exact: true })).toBeFocused();
-  await expect(search).toHaveValue('');
+  await expect(search).toHaveValue('dense-case-052');
   await expect(sources.getByRole('listitem')).toHaveCount(3);
   const map = relationships.getByRole('region', { name: 'Retained one-hop topology', exact: true });
-  await expect(map.locator('path[marker-end]')).toHaveCount(3);
+  await expect(map.locator('path[marker-end]')).toHaveCount(1);
   await expect(relationships).toContainText('Source page 2 of 2 · 3 rows shown');
   await expect(sources.getByRole('link')).toHaveCount(3);
 });

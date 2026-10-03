@@ -1,4 +1,5 @@
 import { normalizeDomain } from '../evidence/domain-name.mts';
+import { projectInfrastructureObservation } from './infrastructure-collection-projection.mts';
 import { canonicalIpAddress } from '../contracts/ip-address.mts';
 import {
   MAX_NAMESERVERS_PER_ROW,
@@ -120,6 +121,7 @@ function projectExternalObservation(
   domainEntity: InvestigationEntity,
   caseEntity: InvestigationEntity,
 ): void {
+  if (projectInfrastructureObservation(context, pin, caseRecord, caseEntity)) return;
   const sourceSchema = pin.sourceSchema;
   const observedAt = timestamp(pin.observedAt);
   if (

@@ -1,5 +1,7 @@
 # WHOISleuth CLI guide
 
+`review-evidence` also reviews bounded source-qualified infrastructure snapshots and explicit earlier/later comparison inputs entirely offline. See [infrastructure observations](infrastructure-observations.md) for the exact schemas, outcome semantics and retained-evidence limitations.
+
 The first-party CLI runs on the operator's machine and does not call the hosted
 WHOISleuth deployment. Use this guide for installation, common commands,
 collection boundaries and output. Installed `whoisleuth --help`, focused

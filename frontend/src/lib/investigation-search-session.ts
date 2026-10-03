@@ -1,6 +1,7 @@
 import type { InvestigationProjectionInput, InvestigationStoreName } from './analysis/investigation-projection.ts';
 import type { InvestigationHistory, InvestigationSearchResponse } from './analysis/investigation-search.ts';
 import type { InvestigationContextPreview } from './analysis/investigation-context-preview.ts';
+import type { RetainedInfrastructureSnapshotReview } from '../../../packages/investigation/retained-infrastructure-snapshots.mts';
 import type { InvestigationInfrastructure, InvestigationInfrastructureOptions,
   InvestigationInfrastructureRelationships } from './analysis/investigation-infrastructure.ts';
 import type { InvestigationSearchSummary, SearchWorkerOperation, SearchWorkerRequest, SearchWorkerResponse } from './investigation-search-worker-model.ts';
@@ -11,7 +12,8 @@ export type InvestigationSearchSession = Readonly<{
   preview: (query: string, page?: number) => Promise<InvestigationContextPreview>;
   history: (entityId: string, page?: number) => Promise<InvestigationHistory>;
   infrastructure: (options?: InvestigationInfrastructureOptions) => Promise<InvestigationInfrastructure>;
-  infrastructureRelationships: (entityId: string, page?: number) => Promise<InvestigationInfrastructureRelationships>;
+  infrastructureSnapshots: (selectedIds?: string[], page?: number) => Promise<RetainedInfrastructureSnapshotReview>;
+  infrastructureRelationships: (entityId: string, page?: number, topologyQuery?: string) => Promise<InvestigationInfrastructureRelationships>;
   dispose: () => void;
 }>;
 type Pending = {
@@ -113,9 +115,14 @@ export async function createInvestigationSearchSession(
         if (reply.kind !== 'infrastructure') throw new Error('Retained infrastructure could not return results.');
         return reply.result;
       },
-      async infrastructureRelationships(entityId: string, page?: number) {
-        const reply = await request({ kind: 'infrastructure_relationships', entityId, ...(page === undefined ? {} : { page }) });
+      async infrastructureRelationships(entityId: string, page?: number, topologyQuery = '') {
+        const reply = await request({ kind: 'infrastructure_relationships', entityId, ...(topologyQuery ? { topologyQuery } : {}), ...(page === undefined ? {} : { page }) });
         if (reply.kind !== 'infrastructure_relationships') throw new Error('Retained relationships could not return results.');
+        return reply.result;
+      },
+      async infrastructureSnapshots(selectedIds: string[] = [], page = 1) {
+        const reply = await request({ kind: 'infrastructure_snapshots', selectedIds, page });
+        if (reply.kind !== 'infrastructure_snapshots') throw new Error('Retained infrastructure snapshots could not return results.');
         return reply.result;
       },
       dispose: abort,

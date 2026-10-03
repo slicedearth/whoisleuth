@@ -15,6 +15,7 @@ import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 
 export const INFRASTRUCTURE_ENTITY_TYPES = Object.freeze([
   'domain', 'ip_address', 'certificate', 'nameserver_set', 'http_origin',
+  'certificate_pattern', 'provider', 'routing_asn',
 ] as const satisfies readonly InvestigationEntityType[]);
 export type InfrastructureEntityType = typeof INFRASTRUCTURE_ENTITY_TYPES[number];
 export interface InvestigationInfrastructureOptions {
@@ -60,6 +61,7 @@ export interface InvestigationInfrastructureRelationship {
   to: Pick<IndexedEntity, 'id' | 'type' | 'label' | 'canonical'>;
   source: InvestigationHistoryEntry | null;
   sourceCount: number;
+  sourcePage?: number;
   partial: boolean;
   limitations: string[];
 }
@@ -73,6 +75,8 @@ export interface InvestigationInfrastructureRelationships {
   pageCount: number;
   partial: boolean;
   limitations: string[];
+  topologyRows?: InvestigationInfrastructureRelationship[];
+  topologyTotal?: number;
 }
 
 const TYPES = new Set<string>(INFRASTRUCTURE_ENTITY_TYPES);
@@ -146,9 +150,9 @@ function admissionLimitations(records: Records, withheld: number, extra: readonl
   return limitations([
     'Counts describe admitted retained evidence, not organisation-wide coverage or current resolution.',
     'Retained dates do not establish creation, disappearance or contemporaneous co-location. Shared infrastructure is not common control.',
-    'Provider roles, routing ASN and an independently observed origin are not available from this retained projection.',
+    'Provider roles, routing ASN and independently observed origins are present only when a source-qualified snapshot explicitly retains them; legacy sources do not acquire them.',
     'Imported DNS relationships can use the Case domain when the queried owner was not retained; no more precise hostname is inferred.',
-    'Certificate wildcard patterns and complete collection snapshots are not retained here. No wildcard hosts or removal findings are inferred.',
+    'Certificate wildcard patterns are separate pattern identities, not enumerated hosts. Legacy observations do not acquire complete collection snapshots or removal findings.',
     ...(records.invalidEntities || records.duplicateEntities || records.invalidObservations || records.duplicateObservations || withheld
       ? [`Admission withheld ${records.invalidEntities} malformed and ${records.duplicateEntities} ambiguous entity rows, ${records.invalidObservations} malformed or undated and ${records.duplicateObservations} ambiguous observation rows, and ${withheld} unsupported, malformed or ambiguous relationships.`] : []),
     ...(records.entities.size && [...records.entities.values()].some(value => value.observationsTruncated)
@@ -220,13 +224,26 @@ export function investigationInfrastructure(
 }
 
 /** Pages edge/source pairs without accumulating a potentially large cross-product. */
-export function investigationInfrastructureRelationships(rawProjection: unknown, entityId: unknown, requestedPage = 1): InvestigationInfrastructureRelationships {
+export function investigationInfrastructureRelationships(rawProjection: unknown, entityId: unknown, requestedPage = 1, topologyQuery = ''): InvestigationInfrastructureRelationships {
   const records = readInvestigationSearchRecords(rawProjection), id = identity(entityId);
   const empty: InvestigationInfrastructureRelationships = { state: 'unavailable', entityId: '', rows: [], relationshipCount: 0,
     total: 0, page: 1, pageCount: 1, partial: true, limitations: ['The selected retained identity is unavailable or ambiguous.'] };
   if (records.projection.state !== 'ready' || !records.entities.has(id)) return empty;
   const admitted = admittedEdges(records);
   const edges = admitted.edges.filter(edge => edge.from.id === id || edge.to.id === id);
+  const sourcePages = new Map<string, number>();
+  let sourceOffset = 0;
+  for (const edge of edges) {
+    sourcePages.set(edge.relationshipId, Math.floor(sourceOffset / MAX_INVESTIGATION_SEARCH_RESULTS) + 1);
+    sourceOffset += edge.observations.length + (edge.missingSources || !edge.observations.length ? 1 : 0);
+  }
+  const query = text(topologyQuery, 200).toLowerCase();
+  const topologyEdges = edges.filter(edge => !query || [edge.from.canonical, edge.to.canonical, edge.type, edge.method,
+    ...edge.observations.map(observation => `${observation.source} ${observation.observedAt}`)].some(value => value.toLowerCase().includes(query)));
+  const topologyRows = topologyEdges.slice(0, MAX_INVESTIGATION_SEARCH_RESULTS).map(edge => {
+    const { observations, missingSources: _missing, ...value } = edge;
+    return { ...value, id: edge.relationshipId, source: observations[0] ? investigationHistoryEntry(observations[0]) : null, sourceCount: observations.length, sourcePage: sourcePages.get(edge.relationshipId)! };
+  });
   const total = edges.reduce((count, edge) => count + edge.observations.length + (edge.missingSources || !edge.observations.length ? 1 : 0), 0);
   const { page, pageCount, start } = paging(total, requestedPage);
   const rows: InvestigationInfrastructureRelationship[] = [];
@@ -245,5 +262,5 @@ export function investigationInfrastructureRelationships(rawProjection: unknown,
   }
   return { state: 'ready', entityId: id, rows, relationshipCount: edges.length, total, page, pageCount,
     partial: incomplete(records, admitted.withheld) || edges.some(edge => edge.partial),
-    limitations: admissionLimitations(records, admitted.withheld) };
+    limitations: admissionLimitations(records, admitted.withheld), topologyRows, topologyTotal: topologyEdges.length };
 }

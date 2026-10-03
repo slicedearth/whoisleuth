@@ -33,6 +33,8 @@ import { compareTrustStoreEvidence } from '../lib/trust-store-comparison.mts';
 import { CliUsageError } from './errors.mts';
 import { safeTerminalValue } from './formatters/terminal.mts';
 import { LOCAL_MMDB_QUERY_SCHEMA, LOCAL_MMDB_QUERY_VERSION, LOCAL_MMDB_REVIEW_SCHEMA, LOCAL_MMDB_REVIEW_VERSION, reviewLocalMmdb } from './local-mmdb-review.mts';
+import { INFRASTRUCTURE_OBSERVATION_SCHEMA, infrastructureObservationFacts, compareInfrastructureObservations } from '../packages/investigation/infrastructure-observation.mts';
+import { exact } from '../packages/evidence/artifact-structure.mts';
 
 const OFFLINE_EVIDENCE_REVIEW_SCHEMA = 'whoisleuth.cli.offline-evidence-review';
 const OFFLINE_EVIDENCE_REVIEW_VERSION = 1;
@@ -74,9 +76,17 @@ function parseInput(value: unknown): UnknownRecord {
 function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toISOString()) {
   const input = parseInput(value);
   if (input.schema === LOCAL_MMDB_QUERY_SCHEMA) throw new CliUsageError('Local MMDB review requires --mmdb <database-file>.');
-  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store' | ContextReviewKind;
+  let kind: 'infrastructure' | 'infrastructure_comparison' | 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store' | ContextReviewKind;
   let result: unknown;
-  if ((CONTEXT_INPUT_SCHEMAS as readonly string[]).includes(input.schema as string)) {
+  if (input.schema === INFRASTRUCTURE_OBSERVATION_SCHEMA) {
+    kind = 'infrastructure';
+    const retained = infrastructureObservationFacts(input);
+    result = { ...retained, state: retained.snapshot.coverage.state === 'complete' && !retained.snapshot.coverage.truncated ? 'complete' : 'partial' };
+  } else if (input.schema === 'whoisleuth.infrastructure-comparison.input') {
+    const pair = exact(input, ['schema', 'version', 'earlier', 'later'], 'Infrastructure comparison input');
+    kind = 'infrastructure_comparison';
+    result = compareInfrastructureObservations(pair.earlier, pair.later);
+  } else if ((CONTEXT_INPUT_SCHEMAS as readonly string[]).includes(input.schema as string)) {
     const review = reviewContextInput(input, generatedAt);
     kind = review.kind;
     result = review;
@@ -216,7 +226,22 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
     `Kind   ${document.kind.replaceAll('_', ' ')}`,
     `State  ${state.replaceAll('_', ' ')}`,
   ];
-  if ((CONTEXT_REVIEW_KINDS as readonly string[]).includes(document.kind)) {
+  if (document.kind === 'infrastructure') {
+    const snapshot = record(result.snapshot), scope = record(snapshot.scope), coverage = record(snapshot.coverage);
+    lines.push(`Snapshot ${safeTerminalValue(snapshot.id, '')} · ${safeTerminalValue(snapshot.target, '')} · ${safeTerminalValue(snapshot.observedAt, '')}`,
+      `Coverage ${safeTerminalValue(coverage.state, 'unknown')} · ${safeTerminalValue(coverage.detail, '')}`, `Selected hosts ${listLength(scope.hostnames)}`);
+    for (const item of Array.isArray(result.facts) ? result.facts : []) {
+      const row = record(item), source = record(row.source);
+      lines.push(`${safeTerminalValue(row.hostname, '')} · ${safeTerminalValue(row.family, '')}: ${safeTerminalValue(row.value, '')} · ${safeTerminalValue(source.name, '')} (${safeTerminalValue(source.evidenceClass, '')}) · ${safeTerminalValue(row.observedAt, '')}`);
+    }
+    lines.push('Wildcard patterns are not enumerated hosts. DNS failure, missing values and history do not establish current absence. No requests or watchlist changes were made.');
+  } else if (document.kind === 'infrastructure_comparison') {
+    for (const item of Array.isArray(result.rows) ? result.rows : []) {
+      const row = record(item), source = record(row.source);
+      lines.push(`${safeTerminalValue(row.hostname, '')} · ${safeTerminalValue(row.family, '')} · ${safeTerminalValue(source.name, '')} (${safeTerminalValue(source.evidenceClass, '')}) · ${safeTerminalValue(row.state, '')}`,
+        `  ${safeTerminalValue(JSON.stringify(row.before), '')} → ${safeTerminalValue(JSON.stringify(row.after), '')}`, `  ${safeTerminalValue(row.detail, '')}`);
+    }
+  } else if ((CONTEXT_REVIEW_KINDS as readonly string[]).includes(document.kind)) {
     lines.push(safeTerminalValue(result.summary, ''));
     for (const item of Array.isArray(result.observations) ? result.observations : []) {
       const row = record(item);

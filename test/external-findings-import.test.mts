@@ -149,7 +149,8 @@ describe('strict external findings import', () => {
   });
 
   test('rejects future schemas, additional fields, controls, and unsupported categories', () => {
-    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 5 })), /schema version 4/u);
+    assert.equal(parseExternalFindingsDocument(document({ schemaVersion: 5 })).schemaVersion, 5);
+    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 6 })), /schema version/u);
     assert.throws(() => parseExternalFindingsDocument({ ...document(), executable: 'no' }), /additional top-level/u);
     assert.throws(() => parseExternalFindingsDocument(document({
       findings: [{ ...document().findings[0], summary: 'bad\u0000value' }],

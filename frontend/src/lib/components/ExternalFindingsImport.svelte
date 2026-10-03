@@ -18,6 +18,8 @@
     parseExternalIntelligenceDocument,
   } from '../analysis/external-intelligence-import.ts';
   import { parseExternalFindingsDocument } from '../../../../packages/interchange/external-findings-import.mts';
+  import { INFRASTRUCTURE_OBSERVATION_SCHEMA } from '../../../../packages/investigation/infrastructure-observation.mts';
+  import { convertInfrastructureObservation } from '../../../../packages/interchange/external-findings-converters.mts';
   import {
     EXTERNAL_FINDING_ROWS_SCHEMA,
     CERTIFICATE_OBSERVATION_ROWS_SCHEMA,
@@ -132,7 +134,11 @@
           throw new Error('The selected file is not valid UTF-8 JSON.');
         }
       }
-      if (value && typeof value === 'object' && !Array.isArray(value) && (value as Record<string, unknown>).schema === EXTERNAL_FINDINGS_SCHEMA) {
+      if (value && typeof value === 'object' && !Array.isArray(value) && (value as Record<string, unknown>).schema === INFRASTRUCTURE_OBSERVATION_SCHEMA) {
+        const document = convertInfrastructureObservation(value);
+        preview = { kind: 'findings', document };
+        onmessage('Validated one source-qualified infrastructure snapshot. Review before retaining it as Case evidence. No host will be resolved or enrolled in monitoring automatically.');
+      } else if (value && typeof value === 'object' && !Array.isArray(value) && (value as Record<string, unknown>).schema === EXTERNAL_FINDINGS_SCHEMA) {
         if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
           throw new Error('External finding imports are limited to 384 KiB.');
         }
@@ -270,11 +276,16 @@
   <div class="import-body">
     <p>Review local evidence before adding it to Cases. Imports do not collect data, change analyst dispositions or submit reports.</p>
     <details class="formats"><summary>Supported files and limits</summary>
-      <p>Findings, sanitised capture manifests, observation rows and fixed-column CSV/JSON: 384 KiB. STIX 2.1 bundles and MISP events: 512 KiB. WARC/WACZ archives: 8 MiB.</p>
+      <p>Source-qualified infrastructure snapshots: 128 KiB. Findings, sanitised capture manifests, observation rows and fixed-column CSV/JSON: 384 KiB. STIX 2.1 bundles and MISP events: 512 KiB. WARC/WACZ archives: 8 MiB.</p>
       <p>Archive import retains sanitised response evidence, not raw requests, sensitive headers or unsupported content. WACZ resources must pass their declared integrity checks. References are never fetched. See the <a href="/cli">CLI reference</a> for the supported interchange formats.</p>
     </details>
     <label class="btn file-btn">{parsing ? 'Reading selected file…' : 'Choose JSON, CSV, WARC, or WACZ'}<input bind:this={fileInput} type="file" accept="application/json,text/csv,application/warc,application/wacz,.json,.csv,.warc,.wacz" onchange={selectFile} disabled={parsing || applying}></label>
     {#if preview && !parsing}
+      {#if preview.kind === 'findings'}
+        {#each preview.document.findings.filter(finding => finding.infrastructureObservation) as finding, index (index)}
+          <details class="snapshot-preview"><summary>Exact infrastructure evidence for {finding.domain}</summary><p>Review all selected hosts, owners, outcomes, independent source roles and completeness before retaining this snapshot. Supplied source identities are not authenticated.</p><pre>{JSON.stringify(finding.infrastructureObservation, null, 2)}</pre></details>
+        {/each}
+      {/if}
       {#key preview}
         <ExternalImportReview {preview} {conversionReport} {cases} {applying} onimport={applyImport} oncancel={() => { void cancelReview(); }} />
       {/key}
@@ -292,4 +303,5 @@
   .formats summary{padding:4px 0;min-height:30px}
   .formats p{max-width:75ch;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .file-btn{justify-self:start}
+  .snapshot-preview{min-width:0}.snapshot-preview pre{max-height:30rem;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--text-xs)}
 </style>

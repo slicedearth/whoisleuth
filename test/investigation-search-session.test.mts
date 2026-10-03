@@ -128,6 +128,15 @@ test('session routes infrastructure and one-hop sources through its cancellable 
   const relationships = investigationInfrastructureRelationships(null, 'selected');
   worker.reply({ id: 3, kind: 'infrastructure_relationships', result: relationships });
   assert.deepEqual(await sources, relationships);
+  const filtered = session.infrastructureRelationships('selected', 1, 'edge.example');
+  assert.deepEqual(worker.messages.at(-1), { id: 4, kind: 'infrastructure_relationships', entityId: 'selected', page: 1, topologyQuery: 'edge.example' });
+  worker.reply({ id: 4, kind: 'infrastructure_relationships', result: relationships });
+  await filtered;
+  const snapshots = session.infrastructureSnapshots(['one', 'two'], 2);
+  assert.deepEqual(worker.messages.at(-1), { id: 5, kind: 'infrastructure_snapshots', selectedIds: ['one', 'two'], page: 2 });
+  const reviewed = { summaries: [], selected: [], comparison: null, total: 0, page: 1, pageCount: 1, partial: false };
+  worker.reply({ id: 5, kind: 'infrastructure_snapshots', result: reviewed });
+  assert.deepEqual(await snapshots, reviewed);
   session.dispose();
   await assert.rejects(session.infrastructure(), { name: 'AbortError' });
   await assert.rejects(session.infrastructureRelationships('selected'), { name: 'AbortError' });

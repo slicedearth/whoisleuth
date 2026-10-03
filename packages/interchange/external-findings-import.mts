@@ -23,6 +23,7 @@ import {
   MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
 } from '../contracts/external-observation-interchange.mts';
 import { hasUnsafeRetainedText } from './retained-text.mts';
+import { readInfrastructureObservation, type InfrastructureObservation } from '../investigation/infrastructure-observation.mts';
 
 export {
   EXTERNAL_FINDINGS_SCHEMA,
@@ -75,11 +76,12 @@ export type ExternalFinding = Readonly<{
   limitations: readonly string[];
   reference: string | null;
   structuredObservation: ExternalFindingStructuredObservation | null;
+  infrastructureObservation?: InfrastructureObservation;
 }>;
 
 export type ExternalFindingsDocument = Readonly<{
   schema: typeof EXTERNAL_FINDINGS_SCHEMA;
-  schemaVersion: typeof EXTERNAL_FINDINGS_VERSION;
+  schemaVersion: 4 | 5;
   source: Readonly<{
     name: string;
     reference: string | null;
@@ -117,6 +119,7 @@ const FINDING_KEYS = new Set([
   'limitations',
   'reference',
   'structuredObservation',
+  'infrastructureObservation',
 ]);
 const STRUCTURED_OBSERVATION_KEYS = new Set([
   'sourceSchema',
@@ -283,7 +286,7 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
   }
   if (
     root.schema !== EXTERNAL_FINDINGS_SCHEMA
-    || root.schemaVersion !== EXTERNAL_FINDINGS_VERSION
+    || (root.schemaVersion !== 4 && root.schemaVersion !== 5)
   ) {
     throw new Error(`External findings must use ${EXTERNAL_FINDINGS_SCHEMA} schema version ${EXTERNAL_FINDINGS_VERSION}.`);
   }
@@ -301,6 +304,7 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
   }
 
   const normalized: ExternalFinding[] = [];
+  let retainedBytes = new TextEncoder().encode(JSON.stringify({ schema: root.schema, schemaVersion: root.schemaVersion, source, findings: [] })).byteLength + 1;
   const seen = new Set<string>();
   const domainCounts = new Map<string, number>();
   for (const [index, raw] of root.findings.entries()) {
@@ -321,7 +325,7 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
     if (evidenceClass !== 'deployment_observation' && evidenceClass !== 'provider_report') {
       throw new Error(`Finding ${index + 1} evidence class is unsupported.`);
     }
-    const finding: ExternalFinding = {
+    let finding: ExternalFinding = {
       domain,
       category: item.category as ExternalFindingCategory,
       evidenceClass,
@@ -332,6 +336,17 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
       reference: optionalText(item.reference, 500, `Finding ${index + 1} reference`),
       structuredObservation: structuredObservation(item.structuredObservation, index),
     };
+    if (Object.hasOwn(item, 'infrastructureObservation')) {
+      if (root.schemaVersion !== 5) throw new TypeError('Infrastructure observations require external-findings version 5.');
+      const infrastructureObservation = readInfrastructureObservation(item.infrastructureObservation);
+      if (infrastructureObservation.target !== domain || infrastructureObservation.observedAt !== finding.observedAt) throw new TypeError('Infrastructure snapshot must match its finding target and observation time.');
+      if (finding.structuredObservation) throw new TypeError('Infrastructure snapshots cannot also declare a single structured observation.');
+      finding = { ...finding, infrastructureObservation };
+    }
+    if (root.schemaVersion === 5) {
+      retainedBytes += new TextEncoder().encode(JSON.stringify(finding)).byteLength + 1;
+      if (retainedBytes > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) throw new TypeError('External findings exceed the retained aggregate byte bound.');
+    }
     const key = findingKey(finding, source.name);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -349,13 +364,14 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
 
   return {
     schema: EXTERNAL_FINDINGS_SCHEMA,
-    schemaVersion: EXTERNAL_FINDINGS_VERSION,
+    schemaVersion: root.schemaVersion as 4 | 5,
     source,
     findings: normalized,
   };
 }
 
 export function serializeExternalFindingsDocument(value: unknown): string {
+  if (record(value)?.schemaVersion === 5) return `${JSON.stringify(parseExternalFindingsDocument(value))}\n`;
   const serialised = JSON.stringify(value, null, 2);
   if (typeof serialised !== 'string') {
     throw new TypeError('External findings must be JSON-serialisable.');
@@ -389,6 +405,11 @@ function alreadyRetained(recordValue: CaseRecord, projection: ReturnType<typeof 
 }
 
 function structuredPinFields(finding: ExternalFinding): Record<string, unknown> {
+  if (finding.infrastructureObservation) return {
+    field: 'infrastructure.snapshot', category: 'infrastructure',
+    sourceSchema: { collection: 'external_observations', schema: finding.infrastructureObservation.schema, version: finding.infrastructureObservation.version },
+    infrastructureObservation: finding.infrastructureObservation,
+  };
   const observation = finding.structuredObservation;
   if (!observation) return {};
   const certificateObservation = observation.eventId

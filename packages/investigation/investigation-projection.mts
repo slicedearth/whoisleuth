@@ -5,6 +5,7 @@
 import { CASE_SCHEMA_VERSION, MAX_CASES } from '../contracts/case-portability.mts';
 import { normalizeCaseStore } from '../cases/case-migration-model.mts';
 import type { CaseRecord, CaseEvidenceSnapshot } from '../cases/case-model.mts';
+import type { InfrastructureObservation } from './infrastructure-observation.mts';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
   MAX_PROFILES,
@@ -52,6 +53,9 @@ export type InvestigationEntityType =
   | 'http_origin'
   | 'favicon'
   | 'certificate'
+  | 'certificate_pattern'
+  | 'provider'
+  | 'routing_asn'
   | 'ip_address'
   | 'tracking_identifier'
   | 'favicon_cluster'
@@ -59,6 +63,7 @@ export type InvestigationEntityType =
   | 'brand'
   | 'case'
   | 'campaign';
+// Patterns, providers and routing assertions are distinct from enumerated hosts.
 
 export type InvestigationScanDepth = 'fast' | 'deep' | 'unknown';
 export type InvestigationSourceState = 'absent' | 'invalid' | 'unsupported' | 'supported';
@@ -81,6 +86,7 @@ export const INVESTIGATION_RELATIONSHIP_TYPES = Object.freeze([
   'campaign_contains_domain', 'campaign_contains_case', 'domain_presented_certificate',
   'domain_resolved_to_ip', 'domain_aliases_to_domain', 'domain_uses_mail_server',
   'domain_exposed_tracking_identifier', 'domain_related_by_favicon', 'domain_loaded_official_asset',
+  'certificate_contains_name', 'certificate_contains_pattern', 'subject_observed_provider_role', 'ip_observed_routing_origin',
 ] as const);
 export type InvestigationRelationshipType = typeof INVESTIGATION_RELATIONSHIP_TYPES[number];
 export type InvestigationRelationshipClassification = 'direct' | 'normalized' | 'derived';
@@ -151,6 +157,7 @@ export interface InvestigationObservation {
   truncated: boolean | null;
   schemaVersions: InvestigationSchemaVersions;
   limitations: string[];
+  infrastructureObservation?: InfrastructureObservation;
 }
 
 export interface InvestigationRelationship {
@@ -264,6 +271,7 @@ const ENTITY_TYPES = new Set<InvestigationEntityType>([
   'http_origin',
   'favicon',
   'certificate',
+  'certificate_pattern', 'provider', 'routing_asn',
   'ip_address',
   'tracking_identifier',
   'favicon_cluster',
@@ -288,6 +296,7 @@ const RELATIONSHIP_TYPES = new Set<InvestigationRelationshipType>([
   'domain_exposed_tracking_identifier',
   'domain_related_by_favicon',
   'domain_loaded_official_asset',
+  'certificate_contains_name', 'certificate_contains_pattern', 'subject_observed_provider_role', 'ip_observed_routing_origin',
 ]);
 
 const BASE_LIMITATIONS = Object.freeze([

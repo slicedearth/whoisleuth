@@ -1,6 +1,8 @@
 <p align="center"><img src="frontend/static/favicon.svg" width="64" height="64" alt="WHOISleuth mark" /></p>
 <h1 align="center">WHOISleuth</h1>
 
+Retained multi-host infrastructure evidence supports exact hostname and alias owners, distinct certificate wildcard patterns, independently sourced provider roles, and qualified historical comparison. See [infrastructure observations](docs/infrastructure-observations.md) for local import, deliberate pivots, limits, and compatibility.
+
 <p align="center">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg" alt="License: AGPL-3.0-only" />
   <img src="https://img.shields.io/badge/node-%3E%3D24-brightgreen" alt="Node >= 24" />

@@ -18,6 +18,7 @@ import {
   SUPPORTED_OBSERVATION_ROWS_VERSION,
 } from '../contracts/external-observation-interchange.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { readInfrastructureObservation } from '../investigation/infrastructure-observation.mts';
 
 export {
   CERTIFICATE_OBSERVATION_ROWS_SCHEMA,
@@ -47,6 +48,19 @@ export type ExternalFindingConversionFormat =
   | 'certificate-observations-v1'
   | 'dns-observations-v1'
   | 'domain-observations-v1';
+
+/** One exact snapshot becomes one Case pin; no per-host truncation or automatic lookup. */
+export function convertInfrastructureObservation(value: unknown): ExternalFindingsDocument {
+  const snapshot = readInfrastructureObservation(value);
+  return parseExternalFindingsDocument({ schema: EXTERNAL_FINDINGS_SCHEMA, schemaVersion: 5,
+    source: { name: 'Supplied infrastructure snapshot', reference: null, collectedAt: snapshot.observedAt },
+    findings: [{ domain: snapshot.target, category: 'dns', evidenceClass: 'provider_report',
+      summary: `Source-qualified infrastructure snapshot ${snapshot.id}: ${snapshot.scope.hostnames.length} selected hosts, ${snapshot.dns.length} DNS observations, ${snapshot.certificates.length} certificates and ${snapshot.roles.length} independently attributed roles.`,
+      observedAt: snapshot.observedAt, completeness: snapshot.coverage.state === 'complete' ? 'complete' : 'partial',
+      limitations: ['Supplied source descriptions are not authenticated or independently verified by the importing session.', 'Snapshot scope describes selected evidence, not an organisation-wide inventory.'],
+      reference: null, structuredObservation: null, infrastructureObservation: snapshot }],
+  });
+}
 
 export type ExternalFindingConversionReport = Readonly<{
   format: ExternalFindingConversionFormat;

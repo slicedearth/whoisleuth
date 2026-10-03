@@ -116,6 +116,19 @@ views of the current workspace's bounded retained records. Filters, selections
 and relationship inspection remain in memory; viewing them makes no collection
 request, creates no parallel evidence store and does not enrol monitoring.
 
+Deliberately imported source-qualified infrastructure snapshots are retained as
+bounded Case evidence pins, not a new collection. They can include exact
+selected hostnames, DNS queried names and record owners, independent source
+identities and times, certificate names and wildcard patterns, and separately
+labelled provider/routing roles. Source descriptions are supplied provenance,
+not authenticated identities. Snapshot review and comparison stay local; exact
+Case/workspace backups and deliberate snapshot exports can disclose those
+fields. Source references exclude URL queries, fragments and credentials.
+Selecting hosts for a one-use Bulk handoff does not collect evidence, recursively
+expand targets, change a watchlist or enrol monitoring. Historical absence of
+these fields stays unknown; failed or incomplete snapshots do not replace
+stronger retained baselines or establish disappearance.
+
 Brand domain-exclusion previews use entered examples and optionally selected
 Case domains already retained in the current workspace. Inputs and preview
 results stay in page memory. Discover's excluded-candidate disclosure reuses its

@@ -330,7 +330,9 @@ async function runOfflineEvidenceReviewCommand(
     );
     const contextPartial = (CONTEXT_REVIEW_KINDS as readonly string[]).includes(document.kind) && result.state === 'partial';
     const mmdbIncomplete = result.schema === LOCAL_MMDB_REVIEW_SCHEMA && result.version === LOCAL_MMDB_REVIEW_VERSION && result.completeness !== 'complete';
-    if (gate?.pass === false || zoneMismatch || contextPartial || mmdbIncomplete) return EXIT_CODES.PARTIAL_FAILURE;
+    const infrastructureIncomplete = document.kind === 'infrastructure' ? result.state !== 'complete'
+      : document.kind === 'infrastructure_comparison' && result.state !== 'compared';
+    if (gate?.pass === false || zoneMismatch || contextPartial || mmdbIncomplete || infrastructureIncomplete) return EXIT_CODES.PARTIAL_FAILURE;
   }
   return EXIT_CODES.SUCCESS;
 }

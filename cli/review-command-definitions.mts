@@ -169,7 +169,7 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
   }),
   "review-evidence": commandSeed({
     reference: {
-      description: 'Review versioned protocol evidence, incident sequences, domain history, platform objects, storefronts or connector configuration offline.',
+      description: 'Review versioned protocol evidence, source-qualified infrastructure snapshots/comparisons, incident sequences, domain history, platform objects, storefronts or connector configuration offline.',
       example: 'whoisleuth review-evidence domain-change.json --json --strict-exit',
       boundary: 'The command reads only the supplied document and, with --mmdb, one explicitly selected local database up to 512 MiB. MMDB parsing and lookup run in one disposable worker with a ten-second processing deadline and an 8 KiB result limit. Version-2 MMDB queries require a justified age policy; unavailable or partial current reviews return 4 under --strict-exit. Historical version-1 MMDB queries preserve their output without freshness admission. No database is bundled, downloaded, updated or transmitted. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.',
     },
@@ -193,6 +193,8 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
     'whoisleuth.local-mmdb-query',
     'whoisleuth.local-mmdb-review',
     'whoisleuth.encrypted-dns-plan-input',
+    'whoisleuth.infrastructure-observation',
+    'whoisleuth.infrastructure-comparison.input',
   ]),
     primaryArtefacts: Object.freeze([]),
     planSupport: false,

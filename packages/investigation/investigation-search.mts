@@ -161,6 +161,7 @@ const ENTITY_TYPES = new Set<InvestigationEntityType>([
   'http_origin',
   'favicon',
   'certificate',
+  'certificate_pattern', 'provider', 'routing_asn',
   'ip_address',
   'tracking_identifier',
   'favicon_cluster',
@@ -197,6 +198,7 @@ const TYPE_PRIORITY: Record<InvestigationEntityType, number> = {
   tracking_identifier: 9,
   favicon_cluster: 10,
   official_asset_host: 11,
+  certificate_pattern: 12, provider: 13, routing_asn: 14,
 };
 function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
