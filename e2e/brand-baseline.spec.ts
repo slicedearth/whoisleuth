@@ -547,6 +547,7 @@ test('expected-setting drafts follow the selected profile even for a shared doma
 test('a rejected profile write keeps optional drafts for a deliberate retry and returns focus after success', async ({ page }) => {
   await cleanBrandStorage(page);
   await openProfileForm(page, 'Matching and mail settings');
+  await expect(page.getByLabel('Product names', { exact: true })).toHaveAccessibleDescription(/Discovery defaults/u);
   await page.getByLabel('Product names', { exact: true }).fill('Retained product draft');
   await page.getByText('Matching and mail settings', { exact: true }).click();
   await page.getByText('Rights and official channels', { exact: true }).click();
@@ -1050,7 +1051,9 @@ test('defensive mail settings, retired selectors, and expiring reviewed controls
   await openProfileForm(page, 'Matching and mail settings');
   await page.getByLabel('Mail posture profile').selectOption('defensive_no_mail');
   await page.getByLabel('Active DKIM selectors').fill('active');
-  await page.getByLabel('Retired DKIM selectors').fill('retired, active');
+  const retiredSelectors = page.getByLabel('Retired DKIM selectors', { exact: true });
+  await expect(retiredSelectors).toHaveAccessibleDescription(/continued publication/u);
+  await retiredSelectors.fill('retired, active');
   await page.getByRole('button', { name: 'Save profile' }).click();
   await openBrandWorkbench(page, 'attestations');
 

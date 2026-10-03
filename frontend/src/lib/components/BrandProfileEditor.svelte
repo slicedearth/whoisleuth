@@ -3,6 +3,8 @@
   import type { BrandEditorField, BrandEditorValues } from '$lib/controllers/brand-profile-editor.ts';
   import BrandIdentityReferencesEditor from './BrandIdentityReferencesEditor.svelte';
 
+  const id = $props.id();
+
   let { editing, values, setValue, officialChannels, rightsReferences, setOfficialChannels, setRightsReferences, pageBaseline, capturingIdentity, busy, saveDisabled=false, orphaned=false, disabledReason, captureSiteIdentity, save, close, formatDate }: {
     editing: boolean;
     values: BrandEditorValues;
@@ -42,7 +44,11 @@
     <summary>Matching and mail settings</summary>
     <div class="form-grid">
       <label class="field">Preferred TLDs<input value={values.tlds} oninput={(event) => setValue('tlds', event.currentTarget.value)}></label>
-      <label class="field">Product names<input value={values.products} oninput={(event) => setValue('products', event.currentTarget.value)}><small>Discovery defaults, not automatic matching rules or time-bounded campaigns.</small></label>
+      <div class="field">
+        <label for={`${id}-products`}>Product names</label>
+        <input id={`${id}-products`} aria-describedby={`${id}-products-help`} value={values.products} oninput={(event) => setValue('products', event.currentTarget.value)}>
+        <small id={`${id}-products-help`}>Discovery defaults, not automatic matching rules or time-bounded campaigns.</small>
+      </div>
       <label class="field wide">Approved partner domains<textarea value={values.partners} oninput={(event) => setValue('partners', event.currentTarget.value)}></textarea></label>
       <label class="field">Mail posture profile
         <select value={values.mailProtectionProfile} onchange={(event) => setValue('mailProtectionProfile', event.currentTarget.value)}>
@@ -50,10 +56,11 @@
         </select>
       </label>
       <label class="field">Active DKIM selectors<input value={values.selectors} oninput={(event) => setValue('selectors', event.currentTarget.value)}></label>
-      <label class="field">Retired DKIM selectors
-        <input value={values.retiredSelectors} oninput={(event) => setValue('retiredSelectors', event.currentTarget.value)}>
-        <small>Checked for continued publication, not treated as active keys.</small>
-      </label>
+      <div class="field">
+        <label for={`${id}-retired-selectors`}>Retired DKIM selectors</label>
+        <input id={`${id}-retired-selectors`} aria-describedby={`${id}-retired-selectors-help`} value={values.retiredSelectors} oninput={(event) => setValue('retiredSelectors', event.currentTarget.value)}>
+        <small id={`${id}-retired-selectors-help`}>Checked for continued publication, not treated as active keys.</small>
+      </div>
     </div>
   </details>
   <details class="profile-options">
