@@ -6,7 +6,9 @@
   import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft.ts';
   import { trackTransientCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { IDENTITY_ACTIONS, type IdentityAction } from '../../../../packages/contracts/message-intake.mts';
+  import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   let { record, mutationBusy, persist }: { record: CaseRecord; mutationBusy: boolean; persist: PersistCaseResponse } = $props();
   let selected = $state<IdentityAction[]>([]), saved = $state('');
   let pinIds = $state<string[]>([]), saving = $state(false), owner = $state('');
@@ -51,8 +53,18 @@
     {#if record.evidencePins.length}<fieldset disabled={mutationBusy || saving}><legend>Evidence context (optional)</legend>{#each record.evidencePins as pin, index}<label><input type="checkbox" checked={pinIds.includes(pin.id)} onchange={event => { draft.changed(); pinIds = event.currentTarget.checked ? [...pinIds, pin.id] : pinIds.filter(id => id !== pin.id); saved = ''; }}>{caseEvidenceChoiceName(pin, index)}</label>{/each}</fieldset>{:else}<p>No evidence pins retained.</p>{/if}
     <ol>{#each review.nextSteps as step}<li><strong>{step.title}</strong><p>{step.detail}</p><button type="button" class="btn" disabled={mutationBusy || saving} onclick={() => void recordFollowUp(step.id)}>Record as open follow-up: {step.title}</button></li>{/each}</ol><button type="button" class="btn" disabled={mutationBusy || saving} onclick={() => void recordActions()}>Record reported actions in Case</button>
   {/if}
-  {#if followUps.length}<details><summary>Retained open follow-ups · {followUps.length}</summary><ul>{#each followUps as item (item.id)}<li>{item.statement}<small>Recorded {item.createdAt} · {item.evidencePinIds.length} linked context pins</small></li>{/each}</ul></details>{/if}
-  {#if internalActions.length}<details><summary>Recorded internal and defensive actions · {internalActions.length}</summary><ul>{#each internalActions as item (item.id)}<li>{item.type.replaceAll('_', ' ')} · {item.state.replaceAll('_', ' ')}</li>{/each}</ul></details>{/if}
+  {#if followUps.length}
+    <details class="retained-follow-ups"><summary>Retained open follow-ups · {followUps.length}</summary>
+      <p>Case domain: <strong>{record.domain}</strong>. Follow-ups and recorded actions remain separate; a shared Case does not bind an action to a request.</p>
+      <ul>{#each followUps as item (item.id)}<li>
+        <strong>{item.statement}</strong>
+        {#if item.rationale}<p>{item.rationale}</p>{/if}
+        <small>Request recorded <time datetime={item.createdAt}>{formatEvidenceDate(item.createdAt)}</time> · {item.evidencePinIds.length} linked context pins</small>
+        {#if item.evidencePinIds.length}<CaseLinkedEvidence pins={record.evidencePins} ids={item.evidencePinIds} relations={item.evidenceRelations ?? []} />{:else}<small>No supporting context linked. Affected account, observation time and outcome are not established by the request.</small>{/if}
+      </li>{/each}</ul>
+    </details>
+  {/if}
+  {#if internalActions.length}<details><summary>Recorded internal and defensive actions · {internalActions.length}</summary><ul>{#each internalActions as item (item.id)}<li>{item.type.replaceAll('_', ' ')} · {item.state.replaceAll('_', ' ')}<small>Action {item.id} · follow-up binding not recorded</small></li>{/each}</ul></details>{/if}
   <details><summary>About this review</summary><p>Recommendations and open requests are not assignments, completed recovery or independent account results. Selections stay in page memory; deliberate recording adds an analyst assertion with unresolved evidence relationships. Keep credentials and personal account identifiers out of this tool.</p><p>Use the existing action editor for assignment and tracking, and outcome tracking for independent effects. For handoff, review the existing report disclosure preview or full private Case copy. Response packets omit follow-up statements; original files require explicit selection.</p></details>
   <p role="status">{saved}</p>
 </div></details>

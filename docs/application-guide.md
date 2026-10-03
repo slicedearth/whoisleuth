@@ -171,7 +171,10 @@ source hash, optionally retaining the private original separately. In Case
 Response, **Account and device recovery** provides guidance from reported
 actions such as entering a password, granting consent or running a command.
 Selected recommendations can become open follow-ups with optional evidence links;
-they are not completed recovery actions. Incoming notices can be compared locally
+they are not completed recovery actions. Expand a retained follow-up to inspect
+its linked observations, dates and supporting or contrary context. Recorded
+internal actions remain separate; the current records do not bind them to a
+particular follow-up. Incoming notices can be compared locally
 with a selected action's recipient and delivery reference. This comparison stays
 in page memory and does not authenticate the sender or enter the saved intake.
 

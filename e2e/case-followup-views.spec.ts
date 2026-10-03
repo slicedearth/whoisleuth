@@ -120,6 +120,42 @@ test('conditional recovery follow-up preserves local selection after failed save
   await recovery.getByRole('button', { name: 'Clear local recovery selections', exact: true }).click();
 });
 
+test('retained internal follow-ups expose independent context without changing or sharing the Case', async ({ page }) => {
+  const base = createCase({ domain: 'recovery-context.example', evidencePins: [
+    { field: 'http.page', category: 'http', label: 'Retained page observation', value: 'A credential form was observed', source: 'Fixture static page observation', observedAt: AT, observationHostname: 'signin.recovery-context.example', completeness: 'partial', limitations: ['Only the selected page was observed'] },
+    { field: 'http.page', category: 'http', label: 'Separate supplied observation', value: 'The supplied observation shows a different page', source: 'Fixture supplied image', observedAt: null, completeness: 'unknown', limitations: [] },
+  ] }, AT);
+  const record = updateCase([base], base.id, { assertion: { kind: 'next_step', statement: 'Review the reported session exposure', rationale: 'The two sources need separate review.', state: 'open', evidenceRelations: [
+    { evidencePinId: base.evidencePins[0]!.id, stance: 'supports' }, { evidencePinId: base.evidencePins[1]!.id, stance: 'contradicts' },
+  ] } }, AT).record;
+  await openSeededTimelineCase(page, record.domain, [record], CASE_SCHEMA_VERSION);
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  await openCaseSection(page, 'Response');
+  const recovery = page.locator('details.identity');
+  await recovery.locator(':scope > summary').click();
+  const followUps = recovery.locator('details.retained-follow-ups');
+  await followUps.locator(':scope > summary').click();
+  await expect(followUps).toContainText(record.domain);
+  await expect(followUps).toContainText('The two sources need separate review.');
+  await followUps.getByText('Linked evidence (2)', { exact: true }).click();
+  const context = followUps.locator('details.linked-evidence');
+  await expect(context.getByText('supports', { exact: true })).toBeVisible();
+  await expect(context.getByText('contradicts', { exact: true })).toBeVisible();
+  await expect(context).toContainText('signin.recovery-context.example');
+  await expect(context).toContainText('Fixture static page observation');
+  await expect(context).toContainText('Observation time unavailable');
+  await expect(context.locator('time')).toHaveAttribute('datetime', AT);
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      await capturePanel(page, followUps, `internal-context-${theme}-${width}.png`);
+    }
+  }
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(before);
+});
+
 test('operations contributor links keep distinct Case IDs local and aggregate downloads private-safe', async ({ page }) => {
   const first = { ...createCase({ domain: 'shared.example' }, AT), id: 'contributor-first', actions: [noticeAction('contributor-action-first', 'private@route.example')] };
   const second = { ...createCase({ domain: 'shared.example' }, AT), id: 'contributor-second', actions: [noticeAction('contributor-action-second', 'private@route.example')] };
