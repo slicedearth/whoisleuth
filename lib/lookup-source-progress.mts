@@ -15,6 +15,7 @@ import type {
   LookupProgressSource,
   LookupProgressState,
 } from './lookup-progress.mts';
+import { plannedLookupSources } from './lookup-progress.mts';
 
 type LookupSourceSettlement = Readonly<{
   source: LookupProgressSource;
@@ -77,17 +78,7 @@ function plannedLookupProgressSources(
   classified: ClassifiedQuery,
   options: PlannedLookupProgressOptions = {},
 ): readonly LookupProgressSource[] {
-  const sources: LookupProgressSource[] = ['rdap', 'whois'];
-  if (classified.type === 'domain') {
-    sources.push('domain_evidence', 'registrar_rdap', 'network_context');
-    if (options.securityTxt) sources.push('security_txt');
-    if (options.externalIntelligence) sources.push('external_intelligence');
-    if (options.malwareHostIntelligence) sources.push('malware_host_intelligence');
-    if (options.malwareIocIntelligence) sources.push('malware_ioc_intelligence');
-  } else if (classified.type === 'ipv4' || classified.type === 'ipv6') {
-    sources.push('reverse_dns');
-  }
-  return Object.freeze(sources);
+  return plannedLookupSources(classified.type, 'deep', options);
 }
 
 function normalizedState(

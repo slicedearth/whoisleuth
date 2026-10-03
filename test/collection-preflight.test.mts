@@ -20,7 +20,7 @@ test('describes fast and deep Lookup collection without promising an exact reque
   assert.equal(fast.version, COLLECTION_PREFLIGHT_VERSION);
   assert.deepEqual(fast.sources.map((source) => source.id), ['availability', 'rdap']);
   assert.match(fast.sources[0]!.disclosure, /DNS authority fallback.*registrable domain/u);
-  assert.equal(deep.sources.find((source) => source.id === 'security_txt')?.state, 'included');
+  assert.equal(deep.sources.find((source) => source.id === 'security_txt')?.state, 'disabled', 'The explicitly selected contact request still depends on the website collector.');
   assert.equal(deep.sources.find((source) => source.id === 'external_intelligence')?.state, 'included');
   assert.equal(deep.sources.find((source) => source.id === 'website_probe')?.state, 'disabled');
   assert.match(deep.cautions.join(' '), /exact request count cannot be known/i);
@@ -30,8 +30,7 @@ test('keeps optional Lookup sources optional and explains multi-target handoff',
   const preflight = buildLookupCollectionPreflight({ mode: 'deep', targetCount: 4 });
   assert.match(preflight.summary, /handed to Bulk/i);
   assert.match(preflight.summary, /without collecting.*separate plan/u);
-  assert.equal(preflight.sources.find((source) => source.id === 'security_txt')?.state, 'optional');
-  assert.equal(preflight.sources.find((source) => source.id === 'external_intelligence')?.state, 'optional');
+  assert.deepEqual(preflight.sources, [], 'Bulk must show its separate compact plan rather than a single-target plan.');
 });
 
 test('distinguishes compact Bulk collection and bounds operator-facing values', () => {

@@ -20,7 +20,7 @@
     {#if preflight.sources.length}
       <ul class="source-list" aria-label="Planned source families">
         {#each preflight.sources as source}
-          <li class:optional={source.state === 'optional'} class:disabled={source.state === 'disabled'}>
+          <li data-source={source.id} data-state={source.state} class:optional={source.state === 'optional'} class:disabled={source.state === 'disabled' || source.state === 'unavailable'}>
             <span><strong>{source.label}</strong><small>{source.state}</small></span>
             <p>{source.disclosure}</p>
           </li>

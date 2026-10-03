@@ -13,7 +13,12 @@ import {
 import type { EvidenceCoverageState } from '../frontend/src/lib/analysis/evidence-coverage-ledger.ts';
 import {
   buildLookupEvidenceQualityModel,
+  buildLookupCollectionOutcomeReview,
 } from '../frontend/src/lib/analysis/lookup-evidence-quality-model.ts';
+import type { LookupHttpResponse } from '../frontend/src/lib/analysis/lookup-response.ts';
+import { MAX_EVIDENCE_COVERAGE_ENTRIES } from '../frontend/src/lib/analysis/evidence-coverage-ledger.ts';
+import { lookupDiagnosticStates as portableDiagnosticStates } from '../lib/lookup-progress.mts';
+import { lookupDiagnosticStates } from '../lib/lookup-diagnostics.mts';
 import type {
   LookupEvidenceQualityMatrix,
 } from '../frontend/src/lib/analysis/lookup-decision-support.ts';
@@ -188,6 +193,91 @@ function assertRecursivelyFrozen(value: unknown, seen = new Set<object>()): void
 function mutableClone<Value>(value: Value): Value {
   return JSON.parse(JSON.stringify(value)) as Value;
 }
+
+describe('completed Lookup recipe and source outcomes', () => {
+  const original = (type: LookupHttpResponse['type'] = 'domain'): LookupHttpResponse => ({
+    query: type === 'domain' ? 'example.test' : type === 'asn' ? 'AS64496' : '192.0.2.8',
+    type, rdap: {}, whois: {}, availability: { domain: 'example.test' },
+    diagnostics: { rdap: { status: 'partial', registrar: { status: 'disabled' } },
+      whois: { status: 'unsupported' }, availability: { status: 'complete' },
+      reverseDns: { status: 'rate_limited' }, network: { status: 'skipped' }, securityTxt: { status: 'unavailable' } },
+  });
+  const entries = () => buildLookupEvidenceQualityModel(buildFixture()).entries;
+
+  test('uses the completed target and mode with the unchanged canonical diagnostic projection', () => {
+    const response = original('ipv4');
+    const before = structuredClone(response);
+    const review = buildLookupCollectionOutcomeReview(response, 'deep', entries());
+    assert.equal(review.target, '192.0.2.8');
+    assert.equal(review.mode, 'deep');
+    assert.deepEqual(review.groups.map(group => [group.id, group.diagnosticState]), [
+      ['rdap', 'partial'], ['whois', 'unsupported'], ['reverse_dns', 'rate_limited'],
+    ]);
+    assert.deepEqual(portableDiagnosticStates(response.diagnostics), lookupDiagnosticStates(response.diagnostics));
+    assert.deepEqual(buildLookupCollectionOutcomeReview(original('asn'), 'fast', []).groups.map(group => group.id), ['rdap']);
+    assert.deepEqual(response, before);
+  });
+
+  test('missing completed results or mode cannot fabricate a completed plan after cancellation', () => {
+    assert.deepEqual(buildLookupCollectionOutcomeReview(null, 'deep', entries()).groups, []);
+    assert.deepEqual(buildLookupCollectionOutcomeReview(original(), null, entries()).groups, []);
+  });
+
+  test('preserves distinct domain records, their own clocks and unknown optional consent', () => {
+    const records = entries().slice(0, 4).map((entry, index) => ({ ...entry,
+      id: ['rdap', 'availability', 'tls', 'security-txt'][index]!,
+      observedAt: index === 2 ? '2026-08-19T00:00:00.000Z' : entry.observedAt,
+    }));
+    const review = buildLookupCollectionOutcomeReview(original(), 'deep', records);
+    assert.deepEqual(review.groups.map(group => group.id), ['rdap', 'whois', 'domain_evidence', 'registrar_rdap',
+      'network_context', 'security_txt', 'optional-intelligence']);
+    const domain = review.groups.find(group => group.id === 'domain_evidence')!;
+    assert.equal(domain.diagnosticState, 'complete');
+    assert.deepEqual(domain.records.map(record => [record.id, record.evidenceState, record.observedAt]), [
+      ['availability', 'not_observed_in_bounded_evidence', '2026-08-20T00:00:00.000Z'],
+      ['tls', 'not_collected', '2026-08-19T00:00:00.000Z'],
+    ]);
+    assert.equal(review.groups.find(group => group.id === 'security_txt')?.expectation, 'selection_unknown');
+    assert.equal(review.groups.find(group => group.id === 'registrar_rdap')?.diagnosticState, 'disabled');
+    const fast = buildLookupCollectionOutcomeReview(original(), 'fast', records);
+    assert.deepEqual(fast.groups.find(group => group.id === 'domain_evidence')?.records.map(entry => entry.id), ['availability']);
+    assert.ok(!fast.groups.some(group => group.id === 'security_txt'));
+  });
+
+  test('provider quota states use the canonical source-bound projection, not reduced coverage or guessed identities', () => {
+    const provider = (state: string, target = 'example.test') => ({ schema: 'whoisleuth.threat-intelligence-result', version: 1,
+      provider: { id: 'urlscan_search', label: 'Archived verdict provider' },
+      target: { type: 'domain', value: target, exposure: 'registrable_domain' }, state,
+      findings: [], observation: { observedAt: '2026-08-20T00:00:00.000Z', limitations: [] } });
+    const response = { ...original(), threatIntelligence: { version: 1, providers: [provider('rate_limited')] } };
+    const record = { ...entries()[3]!, id: 'external-urlscan_search' };
+    const review = buildLookupCollectionOutcomeReview(response, 'deep', [record]);
+    assert.equal(review.groups.at(-1)?.records[0]?.sourceState, 'rate_limited');
+    assert.equal(review.groups.at(-1)?.records[0]?.evidenceState, 'partial');
+    assert.equal(review.groups.at(-1)?.expectation, 'selection_unknown');
+    const localComparison = { ...record, id: 'sslbl-certificate' };
+    assert.deepEqual(buildLookupCollectionOutcomeReview(response, 'deep', [localComparison]).groups.at(-1)?.records, [],
+      'The automatic local certificate-list comparison must not be presented as optional provider consent.');
+    const mismatched = { ...response, threatIntelligence: { version: 1, providers: [provider('rate_limited', 'other.test')] } };
+    assert.equal(buildLookupCollectionOutcomeReview(mismatched, 'deep', [record]).groups.at(-1)?.records[0]?.sourceState, null);
+    const conflicting = { ...response, threatIntelligence: { version: 1, providers: [provider('success'), provider('rate_limited')] } };
+    assert.equal(buildLookupCollectionOutcomeReview(conflicting, 'deep', [record]).groups.at(-1)?.records[0]?.sourceState, 'partial',
+      'The canonical owner qualifies conflicting duplicates rather than selecting an arbitrary provider record.');
+  });
+
+  test('unknown diagnostics and bounded missing records stay unknown without invented absence or timing', () => {
+    const response = { ...original(), diagnostics: { rdap: { status: 'invented' } } };
+    const record = { ...entries()[0]!, id: 'rdap', observedAt: null };
+    const review = buildLookupCollectionOutcomeReview(response, 'deep', [record]);
+    assert.equal(review.groups[0]?.diagnosticState, null);
+    assert.equal(review.groups[0]?.records[0]?.observedAt, null);
+    assert.deepEqual(review.groups[1]?.records, []);
+    const excess = Array.from({ length: MAX_EVIDENCE_COVERAGE_ENTRIES + 1 }, (_, index) => ({
+      ...record, id: index === MAX_EVIDENCE_COVERAGE_ENTRIES ? 'rdap' : `unrelated-${index}`,
+    }));
+    assert.deepEqual(buildLookupCollectionOutcomeReview(response, 'deep', excess).groups[0]?.records, []);
+  });
+});
 
 describe('Lookup evidence quality presentation model', () => {
   test('joins all canonical states, freshness states, and provenance classes in matrix order', () => {

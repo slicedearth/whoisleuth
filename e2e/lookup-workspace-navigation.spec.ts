@@ -145,8 +145,8 @@ test('optional sources are compact, keyboard accessible and retain explicit Deep
   await page.locator('#query').fill('192.0.2.1');
   await expect(contacts).toBeChecked();
   await expect(contacts).toBeDisabled();
-  await expect(plannedContacts.locator('small')).toHaveText('optional');
-  await expect(summary).toContainText('1 selected for Deep');
+  await expect(plannedContacts).toHaveCount(0);
+  await expect(summary).toContainText('None selected');
   await page.locator('#query').fill('optional-evidence.invalid');
   await expect(contacts).toBeEnabled();
   await expect(plannedContacts.locator('small')).toHaveText('included');

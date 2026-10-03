@@ -1,4 +1,5 @@
 import type { ClassifiedQuery } from '../lib/classify.mts';
+import { plannedLookupSources } from '../lib/lookup-progress.mts';
 
 export const CLI_LOOKUP_PLAN_SCHEMA = 'whoisleuth.cli.lookup-plan';
 export const CLI_LOOKUP_PLAN_VERSION = 1;
@@ -73,20 +74,15 @@ const REVERSE_DNS: PlannedSource = Object.freeze({
 });
 
 function plannedSources(classified: ClassifiedQuery, deep: boolean, selectedUrl: boolean): readonly PlannedSource[] {
-  if (!deep) {
-    return Object.freeze(classified.type === 'domain' ? [RDAP, FAST_DOMAIN_EVIDENCE] : [RDAP]);
-  }
-  if (classified.type === 'domain') {
-    const domainEvidence = selectedUrl ? Object.freeze({
+  const domainEvidence = selectedUrl && deep ? Object.freeze({
       ...DEEP_DOMAIN_EVIDENCE,
       disclosure: 'The selected URL path and query are sent to the website and followed redirects. The fragment is not sent. DNS and TLS use its hostname; registration uses the registrable domain. Saved HTTP provenance omits queries, but page-derived text may contain sensitive information.',
-    }) : DEEP_DOMAIN_EVIDENCE;
-    return Object.freeze([RDAP, WHOIS, domainEvidence, REGISTRAR_RDAP, NETWORK_CONTEXT]);
-  }
-  if (classified.type === 'ipv4' || classified.type === 'ipv6') {
-    return Object.freeze([RDAP, WHOIS, REVERSE_DNS]);
-  }
-  return Object.freeze([RDAP, WHOIS]);
+    }) : deep ? DEEP_DOMAIN_EVIDENCE : FAST_DOMAIN_EVIDENCE;
+  const sources: Readonly<Record<string, PlannedSource>> = {
+    rdap: RDAP, whois: WHOIS, domain_evidence: domainEvidence,
+    registrar_rdap: REGISTRAR_RDAP, network_context: NETWORK_CONTEXT, reverse_dns: REVERSE_DNS,
+  };
+  return Object.freeze(plannedLookupSources(classified.type, deep ? 'deep' : 'fast').map(id => sources[id]!));
 }
 
 function buildCliLookupPlan(query: string, classified: ClassifiedQuery, deep: boolean, selectedUrl = false): CliLookupPlan {

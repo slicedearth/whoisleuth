@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import type { Capability } from '$lib/capabilities';
   import { buildLookupCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
-  import { eligibleLookupOptionalSources } from '$lib/analysis/lookup-page-actions.ts';
+  import { eligibleLookupOptionalSources, type LookupTargetType } from '$lib/analysis/lookup-page-actions.ts';
   import CollectionPreflight from '$lib/components/CollectionPreflight.svelte';
   import LookupSourceProgress from '$lib/components/LookupSourceProgress.svelte';
   import type { LookupProgressUpdate } from '../../../../lib/lookup-progress-http.mts';
@@ -24,6 +24,8 @@
     inputTooLarge,
     lookupDisabled,
     lookupLimitations,
+    targetType = 'unknown',
+    capabilityFeatures = null,
     externalIntelligenceSupported,
     malwareHostIntelligenceSupported,
     malwareIocIntelligenceSupported,
@@ -52,6 +54,8 @@
     inputTooLarge: boolean;
     lookupDisabled: Capability | null;
     lookupLimitations: Capability[];
+    targetType?: LookupTargetType;
+    capabilityFeatures?: readonly Capability[] | null;
     externalIntelligenceSupported: boolean;
     malwareHostIntelligenceSupported: boolean;
     malwareIocIntelligenceSupported: boolean;
@@ -84,18 +88,21 @@
     includeSecurityTxt, includeExternalIntelligence, includeMalwareHostIntelligence, includeMalwareIocIntelligence,
     externalIntelligenceSupported, malwareHostIntelligenceSupported, malwareIocIntelligenceSupported,
     websiteObservationSupported, securityTxtEligible,
-  }));
+  }, targetType));
   const selectedSourceCount = $derived(Object.values(eligibleSources).filter(Boolean).length);
   const preflight = $derived(buildLookupCollectionPreflight({
     mode: lookupMode,
     targetCount: entryCount,
+    targetType,
+    capabilities: capabilityFeatures,
     disabledSourceIds: lookupLimitations.map((item) => item.id),
     ...(entryCount === 1 ? eligibleSources : {}),
     selectedUrl: collectSelectedUrl && deepMode && selectedUrlEligible,
   }));
+  const domainEligible = $derived(targetType === 'domain' && entryCount === 1);
   const loadingDetail = $derived(lookupMode === 'fast'
     ? 'Fast lookup is checking authoritative registration evidence and omitting slower web, WHOIS, and enrichment sources.'
-    : 'Collecting registry, WHOIS, domain, web, TLS and eligible enrichment evidence.');
+    : 'Collecting separately attributed sources eligible for the submitted target.');
   const elapsedLabel = $derived(loadingElapsedMs < 1_000
     ? `${Math.max(0, Math.round(loadingElapsedMs))} ms elapsed`
     : `${(loadingElapsedMs / 1_000).toFixed(1)} s elapsed`);
@@ -123,8 +130,8 @@
   {#if lookupDisabled}
     <p class="feature-disabled" role="note">{lookupDisabled.reason || 'Lookup is disabled by deployment policy.'}</p>
   {/if}
-  {#if !lookupDisabled && lookupLimitations.length}
-    <p class="feature-disabled" role="note">Some lookup sources are disabled by deployment policy: {lookupLimitations.map((item) => item.id.replaceAll('_', ' ')).join(', ')}. Results will identify unevaluated evidence.</p>
+  {#if !lookupDisabled && preflight.sources.some(source => source.state === 'disabled')}
+    <p class="feature-disabled" role="note">Some planned sources are disabled by deployment policy. Review the collection preflight; results will identify unevaluated evidence.</p>
   {/if}
 
   <label class="search-label" for="query">{task === 'incident' ? 'Incident URL, domain, IP address, or ASN' : 'Domain, IP address, ASN, or domain list'}</label>
@@ -164,7 +171,10 @@
       </label>
     </div>
     <p>{lookupMode === 'deep'
-      ? 'Deep adds WHOIS, web, DNS, TLS, registrar RDAP, and selected intelligence requests, so it may take longer.'
+      ? domainEligible ? 'Deep adds WHOIS, web, DNS, TLS, registrar RDAP, and selected intelligence requests, so it may take longer.'
+        : targetType === 'asn' ? 'Deep adds separately attributed WHOIS evidence to ASN registration. Domain, website and DNS enrichment do not apply.'
+        : targetType === 'ipv4' || targetType === 'ipv6' ? 'Deep adds WHOIS and eligible public-address reverse DNS. Domain, website and TLS enrichment do not apply.'
+        : 'Deep collects only families eligible for the admitted target. Review a supported single target below; lists continue in Bulk.'
       : 'Fast checks registration evidence and skips web, WHOIS and enrichment sources.'}</p>
   </fieldset>
 
@@ -205,13 +215,13 @@
       <legend>Optional third-party intelligence</legend>
       <p class="intelligence-hint">Each selected source receives only the registrable domain for a deep single-domain lookup. Nothing is submitted for scanning or reporting, and provider verdicts do not decide availability.</p>
       {#if externalIntelligenceSupported}
-        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeExternalIntelligence} disabled={!deepMode || entryCount > 1}> <span><strong>Search archived URLscan verdicts</strong> Searches archived domain verdicts.</span></label>
+        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeExternalIntelligence} disabled={!deepMode || !domainEligible}> <span><strong>Search archived URLscan verdicts</strong> Searches archived domain verdicts.</span></label>
       {/if}
       {#if malwareHostIntelligenceSupported}
-        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeMalwareHostIntelligence} disabled={!deepMode || entryCount > 1}> <span><strong>Search malware-distribution records</strong> Searches existing host records; no URL or sample is provided.</span></label>
+        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeMalwareHostIntelligence} disabled={!deepMode || !domainEligible}> <span><strong>Search malware-distribution records</strong> Searches existing host records; no URL or sample is provided.</span></label>
       {/if}
       {#if malwareIocIntelligenceSupported}
-        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeMalwareIocIntelligence} disabled={!deepMode || entryCount > 1}> <span><strong>Search malware infrastructure records</strong> Searches retained infrastructure indicators; no IOC or sample is provided.</span></label>
+        <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeMalwareIocIntelligence} disabled={!deepMode || !domainEligible}> <span><strong>Search malware infrastructure records</strong> Searches retained infrastructure indicators; no IOC or sample is provided.</span></label>
       {/if}
     </fieldset>
   {/if}

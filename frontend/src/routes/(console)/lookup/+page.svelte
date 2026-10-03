@@ -57,6 +57,7 @@
     buildLookupResultSectionLinks,
     lookupEvidenceFamilyForHref,
     lookupSecurityTxtEligible,
+    lookupTargetType,
   } from '$lib/analysis/lookup-page-actions.ts';
   import {
     readLookupPresentation,
@@ -572,6 +573,8 @@
   inputTooLarge={parsedInput.tooLarge}
   {lookupDisabled}
   {lookupLimitations}
+  targetType={lookupTargetType(lookupEntries)}
+  capabilityFeatures={capabilityReport?.()?.features ?? null}
   {externalIntelligenceSupported}
   {malwareHostIntelligenceSupported}
   {malwareIocIntelligenceSupported}

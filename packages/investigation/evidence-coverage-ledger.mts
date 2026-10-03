@@ -63,7 +63,8 @@ export type LookupEvidenceCoverageInput = Readonly<{
   whoisParsed?: unknown;
 }>;
 
-const MAX_ENTRIES = 24;
+export const MAX_EVIDENCE_COVERAGE_ENTRIES = 24;
+const MAX_ENTRIES = MAX_EVIDENCE_COVERAGE_ENTRIES;
 const MAX_ID_LENGTH = 64;
 const MAX_LABEL_LENGTH = 120;
 const MAX_LIMITATIONS = 8;

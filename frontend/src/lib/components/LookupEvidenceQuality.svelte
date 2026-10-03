@@ -2,7 +2,7 @@
   import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
   import { untrack } from 'svelte';
   import type { DecisionFact } from '../../../../packages/evidence/decision-fact.mts';
-  import { buildLookupEvidenceQualityModel } from '$lib/analysis/lookup-evidence-quality-model.ts';
+  import { buildLookupEvidenceQualityModel, buildLookupCollectionOutcomeReview } from '$lib/analysis/lookup-evidence-quality-model.ts';
   import type { LookupEvidenceQualityMatrix } from '$lib/analysis/lookup-decision-support.ts';
   import { formatCollectionDuration } from '$lib/analysis/lookup-display-shared.ts';
   import type { LookupHttpResponse, LookupTiming } from '$lib/analysis/lookup-response.ts';
@@ -38,6 +38,7 @@
     matrix,
     facts: lookupDecisionFacts,
   }));
+  const collectionReview = $derived(buildLookupCollectionOutcomeReview(original, depth, model.entries));
 
   const initialFreshnessPolicy = untrack(() => refreshPlan.freshnessPolicy);
   let policyMode = $state<'task-default' | 'analyst-custom'>(initialFreshnessPolicy.id === 'analyst-custom' ? 'analyst-custom' : 'task-default');
@@ -88,6 +89,27 @@
       </div>
     </header>
 
+    {#if collectionReview.groups.length}
+    <details class="collection-outcomes">
+      <summary>Compare the completed plan and source outcomes</summary>
+      <p>{collectionReview.mode === 'deep' ? 'Deep' : 'Fast'} recipe for {collectionReview.target}. This review uses the completed result, not the editable query or current provider configuration.</p>
+      <p>Recipe eligibility is not proof that a request ran. Original optional selections are not retained; a missing record does not establish that a source was declined, disabled or had no findings. Each source keeps its own state and time. Use the detailed records below for limitations and deliberate refreshes.</p>
+      <ul class="outcome-groups" aria-label="Completed collection source outcomes">
+        {#each collectionReview.groups as group (group.id)}
+          <li data-planned-source={group.id}>
+            <strong>{group.label}</strong>
+            <p>Recipe: {group.expectation === 'selection_unknown' ? 'optional; original selection unknown' : group.expectation}.{group.diagnosticState ? ` Completed diagnostic: ${group.diagnosticState.replaceAll('_', ' ')}.` : ' Completed diagnostic unavailable.'}</p>
+            {#if group.id === 'domain_evidence'}<p>The domain diagnostic describes the availability branch; DNS, HTTP and TLS outcomes remain separate below.</p>{/if}
+            {#if group.records.length}
+              <ul>{#each group.records as entry (entry.id)}<li>
+                <strong>{entry.label}</strong>: {entry.statePresentation.label}{entry.sourceState ? ` · Provider result: ${entry.sourceState.replaceAll('_', ' ')}` : ''} · {entry.freshnessPresentation.label} · {observed(entry.observedAt)}{entry.truncated ? ' · Truncated' : ''}
+              </li>{/each}</ul>
+            {:else}<p>No separately attributed source record is available in this result.</p>{/if}
+          </li>
+        {/each}
+      </ul>
+    </details>
+    {/if}
     <details class="records-disclosure">
       <summary>Review {model.entries.length} source and analysis records</summary>
       <div
@@ -235,6 +257,7 @@
   .metrics strong{color:var(--text);font-size:var(--text-sm)}
   .metrics .attention strong{color:var(--amber)}
   details{margin-top:12px;border-top:1px solid var(--border)}
+  .outcome-groups{display:grid;gap:12px;margin:12px 0;padding-left:20px}.outcome-groups li{min-width:0;overflow-wrap:anywhere}.outcome-groups p{margin:4px 0}.outcome-groups ul{padding-left:20px}
   summary{padding:12px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
   .matrix{display:grid;gap:7px}

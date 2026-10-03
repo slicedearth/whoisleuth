@@ -5,6 +5,7 @@ import { expect, test } from './fixtures';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
 import { holdFixtureResponse } from './held-response';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, useTheme } from './helpers';
+import { formatEvidenceDate } from '../frontend/src/lib/analysis/evidence-time';
 
 const EARLIER = '2026-07-13T00:00:00.000Z';
 const LATER = '2026-07-14T00:00:00.000Z';
@@ -27,6 +28,22 @@ async function start(page: Page, selected = false) {
   await page.locator('#source-quality .records-disclosure > summary').click();
   await expect(page.locator('.source-refresh')).toBeVisible();
 }
+
+test('completed source-plan review stays bound to its original target, mode and observations while the draft changes', async ({ page }) => {
+  await start(page);
+  const review = page.locator('#evidence-quality .collection-outcomes');
+  await review.locator('summary').click();
+  await expect(review).toContainText(DOMAIN);
+  const rdap = review.locator('[data-planned-source="rdap"]');
+  await expect(rdap).toContainText(formatEvidenceDate(EARLIER));
+  const before = await review.innerText();
+  await page.locator('#query').fill('AS64496');
+  await page.getByRole('radio', { name: /Fast/u }).check();
+  await expect.poll(() => review.innerText()).toBe(before);
+  await expect(review.locator('[data-planned-source="domain_evidence"]')).toBeVisible();
+  await expect(review).not.toContainText('AS64496');
+  await expect(page.locator('.source-refresh .refresh-results > li')).toHaveCount(0);
+});
 
 test('refreshed facts survive section navigation and save through the existing Case checkpoint without replacing its observation', async ({ page }, testInfo) => {
   let requests = 0;
