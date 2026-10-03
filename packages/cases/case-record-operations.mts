@@ -262,7 +262,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
       evidencePins.find(pin => pin.id === review.evidencePinId), review.observedAt);
   }
   const closures = input.closure !== undefined
-    ? appendCaseClosure(normalizeCaseClosureHistory(undefined, now), input.closure, now, observedEffects, actions)
+    ? appendCaseClosure(normalizeCaseClosureHistory(undefined, now), input.closure, now, observedEffects, actions, evidencePins)
     : normalizeCaseClosureHistory(undefined, now);
   if (caseStatusRequiresClosure(normalizeStatus(input.status)) && input.closure === undefined) {
     throw new Error('Opening a resolved case requires a deliberate closure reason and its linked review context.');
@@ -495,7 +495,7 @@ export function updateCase(
     buildCaseClosureLinkContext(observedEffects, actions),
   );
   if (patch.closure !== undefined) {
-    closures = appendCaseClosure(closures, patch.closure, now, observedEffects, actions);
+    closures = appendCaseClosure(closures, patch.closure, now, observedEffects, actions, evidencePins);
   }
   if (caseStatusRequiresClosure(patch.status) && patch.closure === undefined) {
     throw new Error('Resolve this case through the deliberate closure review so the reason and evidence state remain explicit.');

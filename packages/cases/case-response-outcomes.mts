@@ -9,7 +9,7 @@ import {
 import {
   latestObservationCohort,
 } from '../evidence/latest-observations.mts';
-import { readCaseRecheckAnswerContext, COMPARATIVE_CASE_OBJECT_OUTCOMES } from './case-recheck-model.mts';
+import { readCaseRecheckAnswerContext, assertRecheckNonReproduction, COMPARATIVE_CASE_OBJECT_OUTCOMES } from './case-recheck-model.mts';
 import { readCaseResponseObject, readCaseResponseObjectOutcome, assertCaseObjectOutcome, sameCaseResponseObject } from './case-response-object.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
@@ -26,6 +26,7 @@ import {
   type CaseObservedEffectSourceClass,
   type CaseObservedEffectState,
   type CasePinCompleteness,
+  type CaseEvidencePin,
   type CaseResponseLifecycleSummary,
   type CaseResponseTimestampOptions,
 } from './case-response-records.mts';
@@ -345,6 +346,7 @@ export function appendCaseClosure(
   now: string,
   observedEffects: CaseObservedEffectHistory,
   actions: readonly CaseActionRecord[],
+  evidencePins: readonly CaseEvidencePin[] = [],
 ): CaseClosureHistory {
   const item = record(raw);
   const reason = typeof item.reason === 'string' && CLOSURE_REASONS.has(item.reason)
@@ -358,6 +360,12 @@ export function appendCaseClosure(
     : null;
   const reviewBlocker = caseClosureReviewBlocker(reason, review, now);
   const responseObject = readCaseResponseObject(item.responseObject);
+  if (responseObject && (reason === 'independently_not_reproduced' || reason === 'infrastructure_changed')) {
+    if (!sameCaseResponseObject(responseObject, review?.responseObject)) throw new TypeError('Object-specific technical closure requires a linked independent review explicitly bound to this exact object; historical missing binding remains unknown.');
+    if (!review?.recheck || !sameCaseResponseObject(responseObject, review.recheck.responseObject)) throw new TypeError('Object-specific technical closure requires a complete exact-object baseline and current review under comparable conditions.');
+    assertRecheckNonReproduction('not_reproduced', review.recheck, review.completeness, evidencePins,
+      evidencePins.find(pin => pin.id === review.evidencePinId), review.observedAt);
+  }
   if (review?.responseObject && !sameCaseResponseObject(responseObject, review.responseObject)) throw new TypeError('This independent review concerns one object. Select that object for closure; it cannot close the whole Case.');
   if (action?.responseObjects?.length && (!responseObject || !action.responseObjects.some(object => sameCaseResponseObject(object, responseObject)))) throw new TypeError('This action concerns explicitly bound objects. Select one of them for this closure; other objects remain independent.');
   if (reviewBlocker) throw new Error(reviewBlocker);

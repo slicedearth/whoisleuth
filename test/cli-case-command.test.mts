@@ -98,6 +98,20 @@ test('offline response authoring shares one receipt and closes only its explicit
   assert.match(shown.stdout, /https:\/\/example\.test\/one/u);
 });
 
+test('offline scoped technical closure cannot reinterpret an unbound retained review and never writes on rejection', async context => {
+  const root = await directory(context), file = join(root, 'cases.json'), input = join(root, 'closure.json');
+  const responseObject = { kind: 'domain', identifier: 'example.test', incidentTargetId: null };
+  for (const [reason, state] of [['independently_not_reproduced', 'not_reproduced'], ['infrastructure_changed', 'changed']] as const) {
+    const record = createCase({ domain: 'example.test', observedEffectReview: { state, observedAt: NOW, sourceClass: 'analyst', source: 'Retained legacy review', completeness: 'complete' } }, NOW);
+    const original = JSON.stringify(buildCaseExport([record], NOW)); await writeFile(file, original);
+    await writeFile(input, JSON.stringify({ responseObject, reason, summary: 'Review the selected technical observation.', observedEffectReviewId: record.observedEffects.reviews[0]!.id }));
+    const result = await invoke(['case', 'close-object', file, '--input', input, '--output', file, '--force'], { now: () => LATER });
+    assert.equal(result.code, EXIT_CODES.USAGE); assert.equal(result.stdout, '');
+    assert.match(result.stderr, /explicitly bound.*exact object/); assert.equal(await readFile(file, 'utf8'), original);
+  }
+  assert.ok((await readdir(root)).every(name => !name.endsWith('.workflow.lock') && !name.endsWith('.tmp')));
+});
+
 test('editable admission preserves immutable public and current fixtures and rejects lossy or future inputs', () => {
   for (const name of ['case-export-v15.json', 'case-export-v16.json']) {
     const raw = readFileSync(new URL(`./fixtures/case-lifecycle/${name}`, import.meta.url), 'utf8');

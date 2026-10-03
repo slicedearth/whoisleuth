@@ -127,6 +127,44 @@ test('scoped closures preserve the Case and other objects, and partial provider 
   assert.equal(closed.workflowMetadata!.incidentTargets[1]!.state, 'open');
   assert.equal(buildCaseReport(closed).json.responseLifecycle.latestClosure, null);
 });
+test('new object-specific technical closures reject unbound reviews without re-adjudicating legacy whole-Case closure', () => {
+  const responseObject = { kind: 'domain' as const, identifier: 'incident.example', incidentTargetId: null };
+  for (const [reason, state] of [['independently_not_reproduced', 'not_reproduced'], ['infrastructure_changed', 'changed']] as const) {
+    const record = createCase({ domain: 'incident.example', observedEffectReview: { state, sourceClass: 'analyst', source: 'Retained legacy review', observedAt: NOW, completeness: 'complete' } }, NOW);
+    const closure = { reason, summary: 'Review the retained technical observation.', observedEffectReviewId: record.observedEffects.reviews[0]!.id };
+    const original = JSON.stringify(record);
+    assert.throws(() => updateCase([record], record.id, { closure: { ...closure, responseObject } }, AFTER), /explicitly bound.*exact object/);
+    assert.equal(JSON.stringify(record), original);
+    assert.equal(updateCase([record], record.id, { closure }, AFTER).record.status, 'resolved');
+    const retained = { ...record, closures: { ...record.closures, records: [{ ...closure, responseObject, id: 'retained-object-closure', actionId: null, limitations: [], createdAt: AFTER }] } };
+    const restored = normalizeCaseStore(buildCaseExport([retained], AFTER)).cases[0]!;
+    assert.deepEqual(restored.closures.records, retained.closures.records);
+  }
+});
+test('scoped changed closure requires complete later same-object comparison evidence', () => {
+  const responseObject = { kind: 'domain' as const, identifier: 'incident.example', incidentTargetId: null };
+  const observation = { field: 'http.status', label: 'Baseline', value: '200', source: 'Retained fixture observation', sourceState: 'complete', completeness: 'complete', observedAt: NOW, observationHostname: 'incident.example', responseObject };
+  let record = createCase({ domain: 'incident.example', evidencePin: observation }, NOW);
+  const baseline = record.evidencePins[0]!;
+  record = updateCase([record], record.id, { evidencePin: { ...observation, label: 'Current', value: '404', observedAt: AFTER } }, AFTER).record;
+  const current = record.evidencePins.find(pin => pin.label === 'Current')!;
+  record = updateCase([record], record.id, { assertion: { kind: 'next_step', statement: 'Did this exact condition change?', recheck: { responseObject, targetHostname: 'incident.example', baselinePinId: baseline.id, conditions: 'Same retained unauthenticated response condition.' } } }, NOW).record;
+  const context = caseRecheckAnswerContext(record.assertions[0]!, 'comparable');
+  record = updateCase([record], record.id, { observedEffectReview: { state: 'changed', observedAt: AFTER, sourceClass: 'analyst', source: observation.source, completeness: 'complete', responseObject, evidencePinId: current.id, recheck: context } }, AFTER).record;
+  const review = record.observedEffects.reviews[0]!;
+  const closure = { reason: 'infrastructure_changed', summary: 'A source-qualified exact-object change was reviewed.', observedEffectReviewId: review.id, responseObject };
+  assert.equal(updateCase([record], record.id, { closure }, AFTER).record.closures.records.length, 1);
+  const variants = [
+    { ...record, observedEffects: { ...record.observedEffects, reviews: [{ ...review, completeness: 'partial' as const }] } },
+    { ...record, observedEffects: { ...record.observedEffects, reviews: [{ ...review, recheck: { ...context, conditionsMatch: 'different' as const } }] } },
+    { ...record, evidencePins: record.evidencePins.map(pin => pin.id === baseline.id ? { ...pin, completeness: 'partial' as const } : pin) },
+    { ...record, evidencePins: record.evidencePins.filter(pin => pin.id !== current.id) },
+    { ...record, evidencePins: record.evidencePins.map(pin => pin.id === current.id ? { ...pin, observedAt: NOW } : pin) },
+  ];
+  for (const invalid of variants) assert.throws(() => updateCase([invalid], invalid.id, { closure }, AFTER), /complete observation under comparable conditions/);
+  const { recheck: _context, ...unplanned } = review;
+  assert.throws(() => updateCase([{ ...record, observedEffects: { ...record.observedEffects, reviews: [unplanned] } }], record.id, { closure }, AFTER), /complete exact-object baseline/);
+});
 test('scope survives private portability but public evidence projection removes sensitive exact identifiers', () => {
   const { record, objects } = scoped();
   const pinned = updateCase([record], record.id, { evidencePin: { label: 'Exact object', value: 'Observed condition', responseObject: objects[0] } }, NOW).record;
