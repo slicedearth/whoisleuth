@@ -2,6 +2,7 @@
   import { tick } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
   import { watchContextBrandDisplay, type WatchBrandNames } from '$lib/analysis/watchlist-context-labels';
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time';
   import type { WatchlistEntry } from '$lib/watchlists';
   import { updateWatchContexts } from '$lib/watchlists';
   import {
@@ -20,6 +21,7 @@
     onrefresh,
     brandNames,
   }: { name: string; entry: WatchlistEntry; onrefresh: () => Promise<unknown>; brandNames: WatchBrandNames } = $props();
+  const contextControlsId = $props.id();
   let filter = $state('all'),
     search = $state(''),
     page = $state(1),
@@ -172,12 +174,12 @@
     lists its exact selected contexts before saving.</p
   >
   <div class="metadata-grid"
-    >{#each rows as row (row.key)}<article>
+    >{#each rows as row, index (row.key)}<article>
         <label
           ><input
             type="checkbox"
             aria-label={`${row.domain} — ${row.brand.label}`}
-            aria-description={row.brand.description}
+            aria-describedby={row.context.brandProfileId ? `${contextControlsId}-${index}` : undefined}
             checked={selected.has(row.key)}
             onchange={(event) => toggle(row.key, event.currentTarget.checked)}
             disabled={busy}
@@ -185,18 +187,16 @@
         >
         <p>{WATCH_PRIORITIES.find((option) => option.value === row.context.priority)?.label}</p>
         <p>{row.brand.label}</p>
-        {#if row.context.brandProfileId}<details><summary>Exact Brand identity</summary><p>{row.brand.description}</p></details>{/if}
+        {#if row.context.brandProfileId}<details><summary>Exact Brand identity</summary><p id={`${contextControlsId}-${index}`}>{row.brand.description}</p></details>{/if}
         <p>Reason: {row.context.reason || 'Unassigned; historical evidence was not rewritten.'}</p>
         <p
-          >Analyst changed: {row.context.changedAt || 'Unknown'} · next review: {row.context
-            .reviewDueAt || 'Not set'}</p
+          >Analyst changed: {formatEvidenceDate(row.context.changedAt, 'Unknown')} · next review: {formatEvidenceDate(row.context.reviewDueAt, 'Not set')}</p
         >
         {#if row.candidate}<details
             ><summary>Retained candidate source context</summary
             >{#each row.candidate.sources as source}<p
                 >{source.observedHostname} · {source.source} · revision {source.revision ||
-                  'unknown'} · interval {source.sourceFirstObservedAt || 'unknown'} to {source.sourceLastObservedAt ||
-                  'unknown'} · first retained locally {source.firstLocalObservedAt || 'unknown'}</p
+                  'unknown'} · interval {formatEvidenceDate(source.sourceFirstObservedAt)} to {formatEvidenceDate(source.sourceLastObservedAt)} · first retained locally {formatEvidenceDate(source.firstLocalObservedAt)}</p
               ><p>{source.completeness}: {source.gap || 'Continuous coverage unknown'}</p
               >{/each}</details
           >{/if}

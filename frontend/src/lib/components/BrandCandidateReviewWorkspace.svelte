@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { formatEvidenceDate } from '$lib/analysis/evidence-time';
   import { loadWatchlists, addCandidateWatchlist, type Watchlists } from '$lib/watchlists';
   import { loadAnalystReviewState } from '$lib/analyst-review-state';
   import {
@@ -319,11 +320,10 @@
                 ></div
               ><div
                 ><dt>Source-reported interval</dt><dd
-                  >{source.sourceFirstObservedAt || 'Start unknown'} to {source.sourceLastObservedAt ||
-                    'End unknown'}</dd
+                  >{formatEvidenceDate(source.sourceFirstObservedAt, 'Start unknown')} to {formatEvidenceDate(source.sourceLastObservedAt, 'End unknown')}</dd
                 ></div
               ><div
-                ><dt>First retained locally</dt><dd>{source.firstLocalObservedAt || 'Unknown'}</dd
+                ><dt>First retained locally</dt><dd>{formatEvidenceDate(source.firstLocalObservedAt, 'Unknown')}</dd
                 ></div
               ><div
                 ><dt>Coverage</dt><dd
@@ -333,14 +333,14 @@
             >{/each}
           {#each row.exceptionStates as state}<p
               >{state.exception.purpose.replaceAll('_', ' ')} · {state.state}: {state.exception
-                .reason} · expires {state.exception.expiresAt} · revision {state.exception
+                .reason} · expires {formatEvidenceDate(state.exception.expiresAt)} · revision {state.exception
                 .revision}</p
             ><details
               ><summary>Retained exception revisions ({state.exception.history.length})</summary><ul
                 >{#each state.exception.history as revision}<li
-                    >{revision.reviewedAt}: {revision.reason} · {revision.enabled
+                    >{formatEvidenceDate(revision.reviewedAt)}: {revision.reason} · {revision.enabled
                       ? 'enabled'
-                      : 'disabled'} · expiry {revision.expiresAt}</li
+                      : 'disabled'} · expiry {formatEvidenceDate(revision.expiresAt)}</li
                   >{/each}</ul
               ><p>{state.exception.historyOmitted} older revisions omitted by the bound.</p
               ></details
@@ -402,12 +402,11 @@
           )?.label}</h3
         ><p
           >Brand context: {active.name}. Reason: {preview.reason}. Additional requests: {preview.additionalRequests};
-          collection authorised: no. Next review: {preview.reviewDueAt || 'Not set'}; explicit existing-context replacement: {preview.replaceExistingContext ? 'yes' : 'no'}.</p
+          collection authorised: no. Next review: {formatEvidenceDate(preview.reviewDueAt, 'Not set')}; explicit existing-context replacement: {preview.replaceExistingContext ? 'yes' : 'no'}.</p
         ><ul
           >{#each preview.rows as row}<li
               >{row.domain} — {row.state}: {row.reason}{#if row.previousContext}<p
-                  >Existing reason: {row.previousContext.reason || 'Unassigned'} · changed {row
-                    .previousContext.changedAt || 'unknown'}</p
+                  >Existing reason: {row.previousContext.reason || 'Unassigned'} · changed {formatEvidenceDate(row.previousContext.changedAt, 'unknown')}</p
                 >{/if}</li
             >{/each}</ul
         ><button

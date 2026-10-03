@@ -296,7 +296,9 @@ test('domain context pages preserve exact selections beyond 200 and distinguish 
   const retained = stored.records[0]!.value.domainMetadata;
   expect(retained.find(row => row.domain === 'domain-000.example')!.contexts[0]!.priority).toBe('p1');
   expect(retained.find(row => row.domain === 'domain-199.example')!.contexts[0]!.priority).toBe('unassigned');
-  expect(retained.find(row => row.domain === 'shared.example')!.contexts.map(row => [row.brandProfileId, row.priority])).toEqual([['first-brand', 'p1'], ['second-brand', 'p1'], ['missing-brand', 'unassigned']]);
+  const sharedContexts = retained.find(row => row.domain === 'shared.example')!.contexts;
+  expect(sharedContexts).toHaveLength(3);
+  expect(Object.fromEntries(sharedContexts.map(row => [row.brandProfileId, row.priority]))).toEqual({ 'first-brand': 'p1', 'second-brand': 'p1', 'missing-brand': 'unassigned' });
 });
 
 test('conflicting exception import orders leave the browser store unchanged', async ({ page }) => {
