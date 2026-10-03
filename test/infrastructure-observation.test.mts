@@ -1,0 +1,96 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { test } from 'node:test';
+import { readInfrastructureObservation, parseInfrastructureObservation, serialiseInfrastructureObservation, compareInfrastructureObservations, MAX_INFRASTRUCTURE_HOSTS, infrastructureTechnologyRoles } from '../packages/investigation/infrastructure-observation.mts';
+
+const raw = await readFile(new URL('./fixtures/infrastructure-observations/infrastructure-observation-v1.json', import.meta.url), 'utf8');
+const fixture = () => parseInfrastructureObservation(raw);
+function later() { const result = fixture(); result.id = 'selected-example-later'; result.observedAt = '2026-10-02T12:00:00.000Z'; return result; }
+
+test('snapshot v1 round trip preserves queried owner, wildcard identity and independent provider roles', () => {
+  const value = fixture(), before = structuredClone(value);
+  assert.deepEqual(parseInfrastructureObservation(serialiseInfrastructureObservation(value)), value);
+  assert.equal(value.dns[1]!.ownerName, 'edge.example.test');
+  assert.equal(value.dns[1]!.queriedName, 'www.example.test');
+  assert.ok(value.certificates[0]!.names.includes('*.example.test'));
+  assert.deepEqual(value.roles.map(row => row.role), ['observed_edge', 'application_platform', 'routing_origin']);
+  assert.deepEqual(value, before);
+});
+test('future versions, unknown keys, duplicate source identities and duplicate JSON keys fail closed', () => {
+  assert.throws(() => readInfrastructureObservation({ ...fixture(), version: 2 }), /Unsupported/u);
+  assert.throws(() => readInfrastructureObservation({ ...fixture(), extra: true }), /structure/u);
+  const value = fixture(); value.sources.push(value.sources[0]!);
+  assert.throws(() => readInfrastructureObservation(value), /duplicate/u);
+  assert.throws(() => parseInfrastructureObservation(raw.replace('"version": 1,', '"version": 1, "version": 1,')));
+});
+test('host and DNS bounds reject rather than silently pruning accepted evidence', () => {
+  const value = fixture(); value.scope.hostnames = Array.from({ length: MAX_INFRASTRUCTURE_HOSTS + 1 }, (_, index) => `h${index}.example.test`);
+  assert.throws(() => readInfrastructureObservation(value));
+  assert.throws(() => readInfrastructureObservation({ ...fixture(), coverage: { state: 'complete', truncated: true, detail: 'Limited' } }), /Complete/u);
+});
+test('DNS outcomes, address families, wildcard host selection and alias forks are validated', () => {
+  const value = fixture(); value.dns[1]!.outcome = 'failed';
+  assert.throws(() => readInfrastructureObservation(value), /Answered/u);
+  const badAddress = fixture(); badAddress.dns[1]!.type = 'AAAA';
+  assert.throws(() => readInfrastructureObservation(badAddress));
+  const wildcard = fixture(); wildcard.scope.hostnames[0] = '*.example.test';
+  assert.throws(() => readInfrastructureObservation(wildcard), /canonical/u);
+  const aliases = fixture(); aliases.dns[0]!.values.push('other.example.test');
+  assert.throws(() => readInfrastructureObservation(aliases), /competing/u);
+});
+test('source-family matching prevents registration data from claiming routing or edge data claiming origin', () => {
+  const value = fixture(); value.sources[3]!.family = 'ip_registration';
+  assert.throws(() => readInfrastructureObservation(value), /matching source family/u);
+  const origin = fixture(); origin.roles[0]!.role = 'observed_origin'; origin.roles[0]!.value = 'origin.example.test';
+  assert.throws(() => readInfrastructureObservation(origin), /matching source family/u);
+  assert.deepEqual(infrastructureTechnologyRoles({ category: 'delivery platform' }), ['observed_edge']);
+});
+test('source references cannot retain queries or credentials and roles cannot name unobserved addresses', () => {
+  const value = fixture(); value.sources[0]!.reference = 'https://source.example.test/?token=private';
+  assert.throws(() => readInfrastructureObservation(value), /references/u);
+  const role = fixture(); role.roles[2]!.subject = '203.0.113.17';
+  assert.throws(() => readInfrastructureObservation(role), /supporting DNS/u);
+});
+test('complete selected coverage requires every selected hostname and type; partial retains failed attempts', () => {
+  const value = fixture(); value.dns.pop();
+  assert.throws(() => readInfrastructureObservation(value), /every explicitly selected/u);
+  value.coverage.state = 'partial';
+  value.dns[0] = { ...value.dns[0]!, values: [], outcome: 'failed', complete: false };
+  assert.equal(readInfrastructureObservation(value).dns[0]!.outcome, 'failed');
+});
+test('unchanged and changed comparisons remain source-qualified and do not mutate snapshots', () => {
+  const before = fixture(), after = later(), original = structuredClone(after);
+  assert.ok(compareInfrastructureObservations(before, after).rows.every(row => row.state === 'unchanged'));
+  after.dns[2]!.values = ['192.0.2.26'];
+  const result = compareInfrastructureObservations(before, after);
+  assert.equal(result.rows.find(row => row.hostname === 'mail.example.test')?.state, 'changed');
+  assert.deepEqual(original, later());
+});
+test('not returned is not disappearance and incomplete later collections produce unknowns', () => {
+  const before = fixture(), after = later();
+  after.dns[2] = { ...after.dns[2]!, values: [], outcome: 'no_data' };
+  let result = compareInfrastructureObservations(before, after);
+  assert.equal(result.rows.find(row => row.hostname === 'mail.example.test')?.state, 'not_returned');
+  assert.match(result.rows.find(row => row.hostname === 'mail.example.test')!.detail, /does not establish disappearance/u);
+  after.coverage.state = 'partial'; after.dns[2]!.complete = false; after.dns[2]!.outcome = 'failed';
+  result = compareInfrastructureObservations(before, after);
+  assert.equal(result.rows.find(row => row.hostname === 'mail.example.test')?.state, 'unknown');
+});
+test('changed sources, scope and concurrent times cannot manufacture temporal changes', () => {
+  for (const change of [(row: ReturnType<typeof fixture>) => { row.sources[0]!.name = 'Different source'; }, (row: ReturnType<typeof fixture>) => { row.observedAt = fixture().observedAt; }, (row: ReturnType<typeof fixture>) => { row.scope.selection = 'certificate_names'; }]) {
+    const after = later(); change(after);
+    assert.equal(compareInfrastructureObservations(fixture(), after).state, 'incomparable');
+    assert.ok(compareInfrastructureObservations(fixture(), after).rows.every(row => row.state === 'incomparable'));
+  }
+});
+test('wildcard-only certificate scope never invents an enumerated hostname', () => {
+  const value = fixture(); value.scope = { hostnames: [], dnsTypes: [], selection: 'certificate_names' }; value.dns = []; value.roles = []; value.certificates[0]!.names = ['*.example.test'];
+  assert.equal(readInfrastructureObservation(value).scope.hostnames.length, 0);
+});
+test('representative 128-host inventory retains every supplied response and refuses oversized serialized evidence', () => {
+  const value = fixture(); value.scope.hostnames = Array.from({ length: 128 }, (_, index) => `host-${index}.example.test`); value.scope.dnsTypes = ['A']; value.roles = []; value.certificates = [];
+  value.dns = value.scope.hostnames.map((queriedName, index) => ({ ...fixture().dns[1]!, queriedName, ownerName: queriedName, values: [`192.0.2.${index}`] }));
+  assert.equal(parseInfrastructureObservation(serialiseInfrastructureObservation(value)).dns.length, 128);
+  value.certificates = Array.from({ length: 32 }, (_, index) => ({ ...fixture().certificates[0]!, fingerprintSha256: index.toString(16).padStart(64, '0'), names: Array.from({ length: 128 }, (_, nameIndex) => `${'a'.repeat(63)}.${'b'.repeat(63)}.${'c'.repeat(63)}.n${nameIndex}.example.test`) }));
+  assert.throws(() => readInfrastructureObservation(value), /byte bound/u);
+});
