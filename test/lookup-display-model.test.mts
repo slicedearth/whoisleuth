@@ -27,6 +27,7 @@ import {
   records,
   show,
   stringList,
+  type JsonRecord,
 } from '../frontend/src/lib/analysis/lookup-display-shared.ts';
 
 test('keeps generic Lookup display fallbacks bounded and makes joined-value omission visible', () => {
@@ -232,8 +233,8 @@ test('preserves admitted form ownership and uncertainty while withholding malfor
       destinations: [{ relationship: 'same_origin', origin: 'https://example.test' }],
     }],
   };
-  const display = (formAttribution: unknown) => buildLookupPageProfileDisplay({
-    credentialSurfaceProfile: { formAttribution }, structuredDataIdentity: {},
+  const display = (formAttribution: JsonRecord | undefined) => buildLookupPageProfileDisplay({
+    credentialSurfaceProfile: formAttribution === undefined ? {} : { formAttribution }, structuredDataIdentity: {},
     technologyProfile: {}, browserLibraryProfile: {}, pageRoleProfile: {}, clientBehaviorProfile: {},
   }).credentialSurface.formAttribution;
   const before = structuredClone(attribution);
