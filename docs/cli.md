@@ -427,8 +427,10 @@ are private and unencrypted; packaging does not redact selected files. The repor
 file identity, supported source formats, opaque content, exact capsule/source
 links, declared image derivation and capture-manifest attachment matches.
 Image derivation reports an immediate-parent digest and byte length, editing
-method and operation kinds, not proof of transformation. Parent pixels are
-optional; absent declarations leave editing history unknown. Include the capture manifest and
+method and operation kinds, not proof of transformation. Parent inclusion matches
+another selected manifest entry by exact byte digest and size; an unselected Case
+attachment reference does not count. Parent pixels are optional; absent declarations
+leave editing history unknown. Include the capture manifest and
 its screenshot/DOM-digest files together to check their declared bytes; original
 filenames are not needed to establish a match. It does not import files or establish source truth, signature trust or a
 trusted timestamp. Unsupported or rejected entries produce a partial report;

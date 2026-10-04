@@ -207,6 +207,8 @@ accepted. These detect corruption, not the authenticity of the source.
 - Maximum distinct domains: 25.
 - Maximum findings per domain: 20.
 - All accepted findings and diagnostics are available through the paged preview.
+  The review shows the actual retained observation hostname, completeness and
+  storage-truncation state, with a disclosure of the retained evidence caveats.
 
 Applying a validated preview creates a missing case or adds evidence pins to an
 existing one in a single browser-storage update. Existing status, disposition,

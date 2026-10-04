@@ -1,5 +1,5 @@
 import type { CaseRecord } from '../cases/case-record-contracts.mts';
-import { caseEvidenceIncomparableReasons, compareCaseEvidence } from '../cases/case-evidence-model.mts';
+import { caseEvidenceFieldScope, caseEvidenceIncomparableReasons, compareCaseEvidence } from '../cases/case-evidence-model.mts';
 import { domainTransitionReview } from './domain-transition-review.mts';
 import { MAX_CASE_EVIDENCE_PINS, MAX_EVIDENCE_SNAPSHOTS_PER_CASE } from '../contracts/case-portability.mts';
 import { array, domain, enumeration, exact, iso, text } from '../evidence/artifact-structure.mts';
@@ -77,12 +77,13 @@ export function reviewDomainHistory(record: CaseRecord, declarations: unknown, r
       const windows = declared.expectedChanges.filter(row => row.family === category && Date.parse(row.start) <= Date.parse(after.capturedAt) && Date.parse(row.end) >= Date.parse(before.capturedAt));
       observations.push({ label: `${category} · ${change.label}`, state: 'changed',
         detail: `${JSON.stringify(change.before)} → ${JSON.stringify(change.after)}${windows.length ? ` · Overlaps ${windows.length} analyst-declared expected-change window(s); not automatically approved.` : ''}`,
-        source: `${before.source} ${before.id} → ${after.source} ${after.id}`, observedAt: after.capturedAt, hostname: after.observationHostname ?? record.domain });
+        source: `${before.source} ${before.id} → ${after.source} ${after.id}`, observedAt: after.capturedAt,
+        hostname: caseEvidenceFieldScope(change.field) === 'registration' ? record.domain : after.observationHostname ?? null });
     }
   }
   for (const pin of record.evidencePins.filter(pin => pin.certificateObservation)) {
     observations.push({ label: `Retained certificate · ${pin.label}`, state: pin.completeness === 'complete' && pin.truncated !== true ? 'observed' : 'partial', detail: pin.value,
-      source: `${pin.source} · pin ${pin.id}`, observedAt: pin.observedAt, hostname: record.domain });
+      source: `${pin.source} · pin ${pin.id}`, observedAt: pin.observedAt, hostname: pin.observationHostname ?? null });
   }
   for (const row of declared.expectedChanges) observations.push({ label: `Expected ${row.family} change`, state: 'reported', detail: `${row.start} – ${row.end} · ${row.reason}`, source: 'Analyst declaration', observedAt: null, hostname: record.domain });
   for (const row of declared.retiredDependencies) observations.push({ label: `Declared retired ${row.family} dependency`, state: 'reported', detail: `${row.asset} depended on ${row.dependency}. Check whether owned configuration still references it.`, source: row.source, observedAt: row.retiredAt, hostname: row.dependency });

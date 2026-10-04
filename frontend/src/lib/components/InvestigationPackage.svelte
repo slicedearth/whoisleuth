@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
   import { WORKSPACE_ARCHIVE_SCHEMA, ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA } from '../../../../packages/contracts/case-portability.mts';
-  import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, investigationFileMediaType } from '../../../../packages/investigation/investigation-manifest.mts';
+  import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, investigationFileMediaType, investigationImageParentIncluded } from '../../../../packages/investigation/investigation-manifest.mts';
   import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
   import type { BrowserInvestigationPackageReview, SelectedInvestigationFile } from '$lib/investigation-package-worker-model.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
@@ -238,7 +238,7 @@
             {#if 'imageDerivation' in item.entry && item.entry.imageDerivation}
               {@const derivation = item.entry.imageDerivation}
               <details class="image-derivation"><summary>Declared image edits: {derivation.operations.map(kind => kind === 'redact' ? 'redaction' : 'outline').join(', ')}</summary>
-                <dl class="source-facts"><div><dt>Method</dt><dd>{derivation.method}</dd></div><div><dt>Parent file</dt><dd class="digest">{derivation.source.digestSha256}</dd></div><div><dt>Parent size</dt><dd>{derivation.source.byteLength.toLocaleString()} bytes</dd></div></dl>
+                <dl class="source-facts"><div><dt>Method</dt><dd>{derivation.method}</dd></div><div><dt>Parent file</dt><dd class="digest">{derivation.source.digestSha256}</dd></div><div><dt>Parent size</dt><dd>{derivation.source.byteLength.toLocaleString()} bytes</dd></div><div><dt>Parent entry</dt><dd>{investigationImageParentIncluded(review.manifest, item.entry) ? 'Declared in this manifest' : 'Not declared in this manifest'}</dd></div></dl>
                 <p>The parent may itself be edited and need not be included. This declaration does not prove the edits or complete redaction.</p>
               </details>
             {:else if 'mediaType' in item.entry && item.entry.mediaType.startsWith('image/')}<p>Editing history: not declared.</p>{/if}

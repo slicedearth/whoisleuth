@@ -10,12 +10,34 @@ import { reviewConnectorProvenance, readConnectorConfiguration, reviewConnectorC
 import { reviewIncidentSequence, readIncidentStages, incidentStageFromPin } from '../packages/investigation/incident-sequence-review.mts';
 import { updateCase } from '../packages/cases/case-record-operations.mts';
 import { MAX_CONTEXT_INPUT_BYTES, MAX_CONTEXT_RECORDS } from '../packages/contracts/context-review.mts';
+import { contextReviewTargets } from '../frontend/src/lib/analysis/context-review-presentation.ts';
 import { storefrontDraft, storefrontDraftInput } from '../frontend/src/lib/analysis/storefront-review-draft.ts';
 import { buildOfflineEvidenceReview, formatOfflineEvidenceReview } from '../cli/offline-evidence-review.mts';
 import { runCli } from '../cli/runner.mts';
 import { CONTEXT_NOW as NOW, CONTEXT_BEFORE as BEFORE, contextInputs, historyCase, platformObject, storefrontObservation, incidentStage } from './context-review-fixtures.mts';
 
 describe('contextual evidence review', () => {
+  test('domain history targets registration at the parent and explicit mail, web and certificate observations at their host', async () => {
+    let record = historyCase();
+    record.evidenceHistory = record.evidenceHistory.map(snapshot => ({ ...snapshot, inputHostname: 'login.example.test', observationHostname: 'login.example.test' }));
+    const pin = { field: 'fingerprintSha256', category: 'certificate', label: 'Certificate publication', value: 'a'.repeat(64),
+      source: 'Supplied certificate event', sourceSchema: { collection: 'external_observations', schema: 'whoisleuth.certificate-observation-rows', version: 1 },
+      observedAt: NOW, completeness: 'partial', observationHostname: 'certificate.example.test',
+      certificateObservation: { eventId: 'event-17', logId: 'fixture-log', certificateSha256: 'a'.repeat(64), issuer: null, notAfter: null, dnsNameCount: 1, namesComplete: true } };
+    record = updateCase([record], record.id, { evidencePin: pin }, NOW).record;
+    record = updateCase([record], record.id, { evidencePin: { ...pin, label: 'Certificate host unknown', observationHostname: undefined } }, NOW).record;
+    const original = structuredClone(record);
+    const report = reviewDomainHistory(record, { expectedChanges: [], retiredDependencies: [] }, NOW);
+    for (const label of ['registration · Registrar', 'dns · Nameservers']) assert.equal(report.observations.find(row => row.label === label)?.hostname, 'example.test');
+    for (const label of ['mail · MX', 'web · Page title']) assert.equal(report.observations.find(row => row.label === label)?.hostname, 'login.example.test');
+    assert.equal(report.observations.find(row => row.label === 'Retained certificate · Certificate publication')?.hostname, 'certificate.example.test');
+    assert.equal(report.observations.find(row => row.label === 'Retained certificate · Certificate host unknown')?.hostname, null);
+    assert.deepEqual(contextReviewTargets(report), ['example.test', 'login.example.test', 'certificate.example.test']);
+    const file = new File([JSON.stringify(report, null, 2)], 'history-review.json', { type: 'application/json' });
+    assert.deepEqual(JSON.parse(await file.text()), report);
+    assert.deepEqual(record, original);
+  });
+
   test('browser and CLI dispatch the same exact bounded input without performing collection', () => {
     const inputs = contextInputs();
     assert.deepEqual(inputs.map(input => reviewContextInput(input, NOW).kind), ['domain_history', 'platform_continuity', 'storefront', 'connector', 'incident_sequence']);

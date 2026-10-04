@@ -173,6 +173,11 @@ for (const width of [320, 390, 1024, 1280, 1920, 3840]) {
       const review = importer.getByRole('region', { name: 'Validated import review' });
       await expect(review).toContainText('100 findings · 20 domains');
       await expect(review.getByText(/Shortened Case fields:/)).toHaveCount(10);
+      await expect(review).toContainText('Retained observation hostname: review-0.invalid · Retained completeness: partial · Storage truncation: yes');
+      const caveats = review.getByText('Retained caveats for finding 1', { exact: true });
+      await caveats.focus(); await page.keyboard.press('Enter');
+      await expect(caveats.locator('..')).toContainText('4 supplied limitations were omitted');
+      await caveats.click();
       const summary = review.getByText('Retained fields for finding 1', { exact: true });
       await summary.focus();
       await page.keyboard.press('Enter');

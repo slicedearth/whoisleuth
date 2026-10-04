@@ -57,8 +57,12 @@ later. These stages never execute a command, submit a form or open a destination
 
 The Case view compares retained snapshots using the existing source, hostname,
 scan-depth and model-version rules. Registration, DNS, mail and web changes are
-shown alongside source-qualified certificate pins. Equal-time observations are
-not ordered into a change sequence. Retired dependencies must involve the Case
+shown alongside source-qualified certificate pins.
+Registration and nameserver changes target the Case registration domain; mail
+and web changes target the explicit observation hostname. Certificate pins keep
+their own hostname, or an unknown target when none was retained. These targets
+are preserved in review downloads, retained reports and print previews.
+Equal-time observations are not ordered into a change sequence. Retired dependencies must involve the Case
 domain or one of its hostnames. An expected window qualifies the review; it does
 not approve a change automatically or establish transfer or takeover.
 Review prompts connect comparable page, mail, delegation and registration changes

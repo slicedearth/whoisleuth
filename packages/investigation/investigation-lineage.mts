@@ -5,6 +5,7 @@
 
 import {
   MAX_PROJECTION_LIMITATIONS,
+  MAX_PROJECTION_REFERENCES,
   type InvestigationRelationshipClassification,
 } from './investigation-projection.mts';
 import { readBoundedInvestigationProjection } from './investigation-projection-reader.mts';
@@ -80,6 +81,7 @@ interface ParsedRelationship {
   complete: boolean | null;
   truncated: boolean;
   limitations: string[];
+  sourceObservationIds: string[];
 }
 
 interface PendingPath {
@@ -172,6 +174,8 @@ function parseRelationship(value: unknown): ParsedRelationship | null {
     complete: typeof item?.complete === 'boolean' ? item.complete : null,
     truncated: item?.truncated === true || item?.sourceObservationsTruncated === true,
     limitations: limitations(item?.limitations),
+    sourceObservationIds: (Array.isArray(item?.sourceObservationIds) ? item.sourceObservationIds : [])
+      .slice(0, MAX_PROJECTION_REFERENCES).map(value => text(value, 100)).filter(Boolean),
   };
 }
 
@@ -222,6 +226,26 @@ export function buildInvestigationLineage(
   if (relationships.length < projection.relationships.length) truncated = true;
 
   const seedMethods = new Map<string, Set<string>>();
+  const documentedCaseIds = new Set(relationships.filter(item => item.type === 'case_documents_domain'
+    && entities.get(item.to)?.type === 'domain').map(item => item.from));
+  const casesByRecordId = new Map<string, string>();
+  for (const value of projection.entities) {
+    const item = record(value);
+    const parsed = item ? entities.get(text(item.id, 100)) : null;
+    if (parsed?.type !== 'case' || !documentedCaseIds.has(parsed.id)) continue;
+    const properties = record(item?.properties);
+    const recordId = text(properties?.caseId ?? item?.canonical, 100);
+    if (recordId) casesByRecordId.set(recordId, parsed.id);
+  }
+  const observations = new Map<string, UnknownRecord>();
+  const observationMemberships = new Map<string, Set<unknown>>();
+  for (const value of projection.observations) {
+    const item = record(value), id = text(item?.id, 100);
+    if (item && id && !observations.has(id)) {
+      observations.set(id, item);
+      observationMemberships.set(id, new Set(Array.isArray(item.entityIds) ? item.entityIds.slice(0, MAX_PROJECTION_REFERENCES) : []));
+    }
+  }
   const adjacency = new Map<string, ParsedRelationship[]>();
   for (const relationship of relationships) {
     const from = entities.get(relationship.from);
@@ -234,6 +258,19 @@ export function buildInvestigationLineage(
       if (!seedMethods.has(to.id)) seedMethods.set(to.id, new Set());
       seedMethods.get(to.id)?.add(relationship.type);
       continue;
+    }
+    // A Case's explicit observed hostname is a root in its own right. Require
+    // the exact incident and both relationship endpoints in its source record;
+    // a submitted hostname or a shared registration parent alone is not enough.
+    if (from.type === 'domain' && relationship.sourceObservationIds.some(id => {
+      const observation = observations.get(id);
+      if (observation?.store !== 'cases') return false;
+      const caseId = casesByRecordId.get(text(observation.recordId, 100));
+      const memberships = observationMemberships.get(id);
+      return !!caseId && !!memberships?.has(caseId) && memberships.has(from.id) && memberships.has(to.id);
+    })) {
+      if (!seedMethods.has(from.id)) seedMethods.set(from.id, new Set());
+      seedMethods.get(from.id)?.add('case_observation');
     }
     if (!adjacency.has(from.id)) adjacency.set(from.id, []);
     adjacency.get(from.id)?.push(relationship);

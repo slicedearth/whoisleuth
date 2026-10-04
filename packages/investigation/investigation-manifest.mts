@@ -213,6 +213,17 @@ export async function readInvestigationManifest(raw: string): Promise<SupportedI
   return value;
 }
 
+/** Matches selected manifest entries, not unselected attachment declarations. */
+export function investigationImageParentIncluded(
+  manifest: SupportedInvestigationManifest,
+  artifact: SupportedInvestigationManifest['artifacts'][number],
+): boolean | null {
+  if (!('imageDerivation' in artifact) || !artifact.imageDerivation) return null;
+  const parent = artifact.imageDerivation.source;
+  return manifest.artifacts.some(entry => entry.id !== artifact.id
+    && entry.contentDigestSha256 === parent.digestSha256 && entry.byteLength === parent.byteLength);
+}
+
 export function formatInvestigationManifest(manifest: SupportedInvestigationManifest): string {
   const lines = ['Investigation manifest', `Workflow       ${manifest.workflow}`, `Tool version   ${manifest.application.version}`,
     `Artifacts      ${manifest.summary.artifactCount}`, `Total bytes    ${manifest.summary.totalBytes}`,
@@ -222,7 +233,9 @@ export function formatInvestigationManifest(manifest: SupportedInvestigationMani
     if ('imageDerivation' in artifact && artifact.imageDerivation) {
       const declaration = artifact.imageDerivation;
       lines.push(`     Declared image derivation: ${declaration.method}; ${declaration.operations.join(', ')}`,
-        `     Parent: ${declaration.source.digestSha256} · ${declaration.source.byteLength} bytes`);
+        `     Parent: ${declaration.source.digestSha256} · ${declaration.source.byteLength} bytes`,
+        `     Parent entry: ${investigationImageParentIncluded(manifest, artifact) ? 'declared in this manifest' : 'not declared in this manifest'}`,
+        '     Declared edits are not proof of transformation or complete redaction.');
     } else if ('mediaType' in artifact && artifact.mediaType.startsWith('image/')) lines.push('     Editing history: not declared');
   }
   lines.push('', 'No source file paths or artefact contents are retained in this manifest.', '');

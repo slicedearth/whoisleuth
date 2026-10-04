@@ -8,11 +8,31 @@ import {
   INVESTIGATION_MANIFEST_SCHEMA,
   buildInvestigationManifest,
   readInvestigationManifest, formatInvestigationManifest,
+  investigationImageParentIncluded,
 } from '../cli/investigation-manifest.mts';
-import { sha256ArtifactDigestV2 } from '../packages/evidence/artifact-integrity.mts';
+import { sha256ArtifactBytes, sha256ArtifactDigestV2 } from '../packages/evidence/artifact-integrity.mts';
+import { buildInvestigationPackage, inspectInvestigationPackage } from '../packages/investigation/investigation-package.mts';
 import { MAX_BOUNDED_JSON_DEPTH } from '../cli/bounded-json.mts';
 
 const NOW = '2026-08-05T08:00:00.000Z';
+
+test('image parent disclosure follows the prepared and verified package selection by exact digest and size', async () => {
+  const parent = new Uint8Array([1, 2, 3]), derivative = new Uint8Array([4, 5]);
+  const imageDerivation = { method: 'png-regions-v1' as const, source: { digestSha256: await sha256ArtifactBytes(parent), byteLength: parent.byteLength }, operations: ['redact' as const] };
+  for (const included of [false, true]) {
+    const packaged = await buildInvestigationPackage({ workflow: 'Selected images', configurationDigestSha256: null,
+      artifacts: [...(included ? [{ content: parent, mediaType: 'image/png' as const }] : []), { content: derivative, mediaType: 'image/png', imageDerivation }] }, NOW, '2.6.0');
+    const review = await inspectInvestigationPackage(packaged.bytes);
+    const entry = requiredManifestEntry(review.manifest.artifacts.at(-1));
+    assert.equal(investigationImageParentIncluded(review.manifest, entry), included);
+    assert.match(formatInvestigationManifest(review.manifest), included ? /Parent entry: declared in this manifest/ : /Parent entry: not declared in this manifest/);
+    const wrongSize = { ...entry, imageDerivation: { ...imageDerivation, source: { ...imageDerivation.source, byteLength: parent.byteLength + 1 } } };
+    assert.equal(investigationImageParentIncluded(review.manifest, wrongSize), false);
+    assert.equal(investigationImageParentIncluded(review.manifest, { ...entry, imageDerivation: null }), null);
+  }
+});
+
+function requiredManifestEntry<T>(value: T | undefined): T { assert.ok(value); return value; }
 
 test('manifest v4 binds minimal image declarations, snapshots inputs and rejects malformed or historical additions', async () => {
   const imageDerivation = { method: 'png-regions-v1' as const, source: { digestSha256: `sha256:${'a'.repeat(64)}`, byteLength: 100 }, operations: ['redact' as const] };

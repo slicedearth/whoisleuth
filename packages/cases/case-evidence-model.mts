@@ -867,6 +867,11 @@ function compareField(
   }
 }
 
+/** Field scope is owned by the same specification that gates comparisons. */
+export function caseEvidenceFieldScope(field: string): CompareFieldSpec['scope'] | null {
+  return COMPARE_FIELDS.find(spec => spec.field === field)?.scope ?? null;
+}
+
 /**
  * Diffs two normalized snapshots into a bounded, stably-ordered list of
  * material changes. Timestamps, source, id and fingerprint are ignored;

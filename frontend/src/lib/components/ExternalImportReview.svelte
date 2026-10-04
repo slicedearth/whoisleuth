@@ -111,6 +111,8 @@
           <p class="metadata">{finding.category} · {finding.evidenceClass.replaceAll('_', ' ')} · {finding.completeness}</p>
           <p>{finding.summary}</p>
           <p class="metadata">Observed <time datetime={finding.observedAt}>{finding.observedAt}</time></p>
+          <p class="metadata">Retained observation hostname: {projection.evidencePin.observationHostname ?? 'Unknown'} · Retained completeness: {projection.evidencePin.completeness} · Storage truncation: {projection.evidencePin.truncated === true ? 'yes' : projection.evidencePin.truncated === false ? 'no' : 'unknown'}</p>
+          {#if projection.evidencePin.limitations.length}<details><summary>Retained caveats for finding {index + 1}</summary><ul class="limitations">{#each projection.evidencePin.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>{/if}
           {#if projection.shortenedFields.length || projection.omittedLimitations}<p class="warning">{projection.shortenedFields.length ? `Shortened Case fields: ${projection.shortenedFields.join(', ')}. ` : ''}{projection.omittedLimitations ? `${projection.omittedLimitations} supplied limitations are omitted with a retained notice. ` : ''}Review the retained fields.</p>{/if}
           <details>
             <summary>Retained fields for finding {index + 1}</summary>
@@ -180,7 +182,7 @@
   .retained-fields:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   pre{margin:0;padding:10px;white-space:pre-wrap;overflow-wrap:anywhere;font:var(--text-xs)/1.5 var(--mono)}
   .warning{color:var(--amber);font-size:var(--text-xs)}
-  .limitations,.diagnostic-list{display:grid;gap:7px;color:var(--muted);font-size:var(--text-xs)}
+  .limitations,.diagnostic-list{display:grid;gap:7px;min-width:0;overflow-wrap:anywhere;color:var(--muted);font-size:var(--text-xs)}
   .diagnostic-list li{padding:8px 0;border-bottom:1px solid var(--border);overflow-wrap:anywhere}
   .diagnostic-list span{display:block}
   .case-target{display:grid;gap:5px;max-width:480px;min-width:0;font-size:var(--text-xs)}

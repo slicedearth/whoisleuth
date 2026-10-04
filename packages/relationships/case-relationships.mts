@@ -11,6 +11,7 @@ import { normalizeSnapshot } from '../cases/case-evidence-model.mts';
 import {
   INVESTIGATION_SCHEMA_VERSION_FIELDS,
   MAX_PROJECTION_LIMITATIONS,
+  MAX_PROJECTION_REFERENCES,
 } from '../investigation/investigation-projection.mts';
 import { readBoundedInvestigationProjection } from '../investigation/investigation-projection-reader.mts';
 import {
@@ -543,11 +544,15 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
     });
   }
   const observations = new Map<string, Record<string, unknown>>();
+  const observationMemberships = new Map<string, Set<unknown>>();
   for (const value of projection.observations) {
     const item = plainRecord(value);
     if (!item) continue;
     const id = safeProjectionText(item.id, 100);
-    if (id && !observations.has(id)) observations.set(id, item);
+    if (id && !observations.has(id)) {
+      observations.set(id, item);
+      observationMemberships.set(id, new Set(Array.isArray(item.entityIds) ? item.entityIds.slice(0, MAX_PROJECTION_REFERENCES) : []));
+    }
   }
 
   const relationships = projection.relationships
@@ -561,6 +566,7 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
     lineageByRelationshipId.get(relationshipId)?.push(path);
   }
   const casesByDomain = new Map<string, Map<string, ProjectionCaseMember>>();
+  const casesById = new Map<string, ProjectionCaseMember>();
   const campaignsByDomain = new Map<string, Map<string, CaseRelationshipCampaign>>();
   for (const relationship of relationships) {
     const fromId = safeProjectionText(relationship.from, 100);
@@ -573,7 +579,9 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
       const domain = normalizeDomain(from.properties?.domain || to.properties?.domain || to.canonical);
       if (!id || !domain) continue;
       if (!casesByDomain.has(to.id)) casesByDomain.set(to.id, new Map());
-      casesByDomain.get(to.id)?.set(id, { id, domain, entityId: from.id });
+      const member = { id, domain, entityId: from.id };
+      casesByDomain.get(to.id)?.set(id, member);
+      casesById.set(id, member);
     }
     if (relationship.type === 'campaign_contains_domain' && from.type === 'campaign' && to.type === 'domain') {
       const id = safeCaseId(from.properties?.campaignId || from.canonical);
@@ -593,7 +601,29 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
     const domainEntity = entities.get(safeProjectionText(relationship.from, 100));
     const targetEntity = entities.get(safeProjectionText(relationship.to, 100));
     if (!domainEntity || domainEntity.type !== 'domain' || !targetEntity) continue;
-    const caseMap = casesByDomain.get(domainEntity.id);
+    // Case observations own an incident, not every incident sharing its parent
+    // domain. The relationship seed can be an explicitly observed subdomain.
+    const sourceIds = Array.isArray(relationship.sourceObservationIds) ? relationship.sourceObservationIds : [];
+    const caseMap = new Map<string, ProjectionCaseMember>();
+    let hasDomainSource = false;
+    for (const rawId of sourceIds.slice(0, MAX_RELATIONSHIP_PROVENANCE_OBSERVATIONS * 2)) {
+      const observationId = safeProjectionText(rawId, 100);
+      const observation = observations.get(observationId);
+      if (!observation) continue;
+      const memberships = observationMemberships.get(observationId);
+      if (observation.store !== 'cases') {
+        if (memberships?.has(domainEntity.id) && memberships.has(targetEntity.id)) hasDomainSource = true;
+        continue;
+      }
+      const member = casesById.get(safeCaseId(observation.recordId));
+      if (member && memberships?.has(member.entityId) && memberships.has(domainEntity.id)
+        && memberships.has(targetEntity.id)) caseMap.set(member.id, member);
+    }
+    // Independent domain-scoped sources retain their established exact-domain
+    // join. An absent or inconsistent Case source never gets that fallback.
+    if (hasDomainSource) {
+      for (const [id, member] of casesByDomain.get(domainEntity.id) ?? []) caseMap.set(id, member);
+    }
     if (!caseMap?.size) continue;
     const value = safeProjectionText(targetEntity.label || targetEntity.canonical, 300);
     if (!value) continue;
@@ -685,7 +715,7 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
     [...casesByDomain.values()].flatMap((caseMap) => [...caseMap.keys()]),
   );
   const candidates = [...buckets.values()].filter((bucket) => bucket.cases.size >= 2).map((bucket) => {
-    const allCases = [...bucket.cases.values()].sort((left, right) => left.domain.localeCompare(right.domain));
+    const allCases = [...bucket.cases.values()].sort((left, right) => left.domain.localeCompare(right.domain) || left.id.localeCompare(right.id));
     const allCampaigns = [...bucket.campaigns.values()].sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
     const allObservations = [...bucket.observations.values()].sort((left, right) => right.observedAt.localeCompare(left.observedAt) || left.id.localeCompare(right.id));
     const allMethods = [...bucket.methods].sort();
