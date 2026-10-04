@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright';
-import { brandMarkSvg, brandLogoSvg } from '../frontend/src/lib/brand-identity.ts';
+import { brandMarkSvg, brandLogoSvg } from '../packages/contracts/brand-identity.mts';
 
 /** Regenerate the static identity assets from the same vectors used by Svelte. */
 async function main() {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { brandMarkSvg, brandLogoSvg, BRAND_MARK_LENS, BRAND_MARK_LINKS, BRAND_MARK_NODES } from '../frontend/src/lib/brand-identity.ts';
+import { brandMarkSvg, brandLogoSvg, BRAND_MARK_LENS, BRAND_MARK_LINKS, BRAND_MARK_NODES } from '../packages/contracts/brand-identity.mts';
 
 test('static identity variants derive from the shared interface vectors without embedded resources', async () => {
   for (const [file, expected] of [['favicon.svg', brandMarkSvg()], ['logo.svg', brandLogoSvg()], ['logo-light.svg', brandLogoSvg(true)]] as const) {
