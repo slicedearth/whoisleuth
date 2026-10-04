@@ -135,6 +135,9 @@ function createCaptureDeadline(
       stop(timeoutError);
     }, timeoutMs);
   });
+  // Cancellation can precede the first race (during output reservation).
+  // Observe immediately without replacing the original rejecting promise.
+  void timeout.catch(() => {});
   return Object.freeze({
     run<T>(operation: Promise<T>) { return Promise.race([operation, timeout]); },
     signal: controller.signal,
@@ -242,6 +245,14 @@ export function sanitizeCaptureText(value: unknown, maximum: number): string {
       .trim()
       .slice(0, maximum)
     : '';
+}
+
+/** JSON-quoted paths preserve exact whitespace and safely escape terminal controls. */
+export function formatCaptureSuccess(domain: string, directory: string): string {
+  if (!directory || directory.length > 2048) throw new TypeError('Capture output path exceeds its display bound.');
+  const quote = (value: string) => JSON.stringify(value).replace(TERMINAL_UNSAFE_GLOBAL_RE,
+    character => character.split('').map(unit => `\\u${unit.charCodeAt(0).toString(16).padStart(4, '0')}`).join(''));
+  return `Captured ${sanitizeCaptureText(domain, 253)} to ${quote(directory)}\nManifest: ${quote(path.join(directory, 'manifest.json'))}\n`;
 }
 
 function captureUrl(value: unknown): URL {

@@ -38,6 +38,7 @@ import { serialiseWorkspacePortableJson } from '../../../packages/contracts/work
 export { MAX_WATCHLIST_IMPORT_BYTES } from '../../../packages/contracts/workspace-portability.mts';
 
 export const WATCHLIST_KEY = LEGACY_WATCHLIST_KEY;
+export { watchlistActiveDomains } from './analysis/watchlist-history.ts';
 
 export type {
   WatchlistChange,

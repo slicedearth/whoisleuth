@@ -5,7 +5,7 @@ import { extractHtmlSignals } from '../lib/html-signals.mts';
 import { externalPasswordFormObservation, validCredentialFormAttribution } from '../packages/evidence/credential-form-attribution.mts';
 import { explainRiskScore, explainRiskScoreV8 } from '../packages/analysis/risk-scoring.mts';
 import { analyzeStaticHtml } from '../lib/static-html-analysis.mts';
-import { attributeCredentialForms } from '../lib/credential-form-attribution.mts';
+import { attributeCredentialForms, staticControlIsSubmitter } from '../lib/credential-form-attribution.mts';
 import { credentialSurfaceContractState, sanitizeLookupChildProfiles } from '../lib/lookup-child-profile-contract.mts';
 
 const baseUrl = 'https://portal.example/start';
@@ -54,6 +54,27 @@ test('only enabled submitters supply alternate declared destinations', () => {
   assert.equal(external('<form><input type=password><button type=button formaction="https://collector.example">Other</button></form>'), false);
   assert.equal(external('<form><input type=password><button disabled formaction="https://collector.example">Other</button></form>'), false);
   assert.equal(external('<form><input type=password><input type=submit formaction="https://collector.example"></form>'), true);
+});
+
+test('Auto command buttons cannot manufacture an external credential destination or its risk factor', async () => {
+  for (const attributes of ['command=show-modal', 'commandfor=help', 'command=show-modal commandfor=help', 'command=""', 'commandfor=""']) {
+    for (const type of ['', 'type=invalid', 'type=button', 'type=reset', 'type=submit']) {
+      for (const disabled of ['', 'disabled']) {
+        const html = `<form action="/login"><input type=password><button ${type} ${attributes} ${disabled} formaction="https://collector.example">Help</button></form><dialog id=help>Help text</dialog>`;
+        const result = await extractHtmlSignals(html, 'portal.example', { baseUrl });
+        const submits = type === 'type=submit' && !disabled;
+        assert.equal(result.hasExternalPasswordForm, submits, `${type} ${attributes} ${disabled}`);
+        const factors = explainRiskScore({ availability: 'registered', ...result })!.factors;
+        assert.equal(factors.find(factor => /Password form|Login\/password/.test(factor.label))?.delta, submits ? 10 : 5);
+      }
+    }
+  }
+  const analysis = analyzeStaticHtml('<form><input type=password><select><button formaction="https://collector.example">Choose</button></select></form>', { baseUrl });
+  // The predicate is independent of an older parser's select-content recovery.
+  const button = { name: 'button', html: true, parent: null, attributes: [], attributesTruncated: false } as unknown as typeof analysis.elements[number];
+  const select = { ...button, name: 'select' };
+  assert.equal(staticControlIsSubmitter(button, select), false);
+  assert.equal(staticControlIsSubmitter({ ...button, attributes: [{ name: 'type', value: 'submit' }] }, select), true);
 });
 
 test('dialog forms do not imply a submission, but an explicit submitter method can override them', () => {

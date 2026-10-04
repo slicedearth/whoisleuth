@@ -554,6 +554,11 @@ function initialHistoryEvent(
   };
 }
 
+/** Active membership excludes historical baselines and includes unobserved candidates. */
+export function watchlistActiveDomains(entry: Pick<WatchlistEntry, 'results' | 'domainMetadata'>): string[] {
+  return normalizeWatchDomainMetadata(entry.domainMetadata, entry.results.map(record => record.domain)).map(record => record.domain);
+}
+
 /** @param {object} entry */
 export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
   const input = plainRecord(entry) || {};

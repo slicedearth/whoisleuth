@@ -196,8 +196,9 @@
       const result = await setShortlistSelection(
         chosen.map((row) => ({ domain: row.candidate.domain })),
         true,
+        'retain',
       );
-      message = `${result.added} domains added to Shortlist; ${result.updated} updated; ${result.skipped} skipped. Candidate-only additions retain unknown availability and no score or collection.`;
+      message = `${result.added} domains added to Shortlist; ${result.retained} already present and unchanged; ${result.skipped} skipped. New candidates have unknown availability and no score.`;
     } catch (cause) {
       message = cause instanceof Error ? cause.message : 'Could not shortlist the selection.';
     } finally {

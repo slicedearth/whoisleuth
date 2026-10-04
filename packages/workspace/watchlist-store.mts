@@ -2,7 +2,7 @@
 // evidence shape and diff semantics; this module owns collection names, schema
 // migration, import merging, and exact serialized-byte accounting.
 
-import { MAX_WATCHLIST_DOMAINS, normalizeWatchlistEntry, compactWatchlistResults, appendWatchlistScan, mergeWatchlistBaseline, type CompactWatchlistRecord, type WatchlistComparableRecord } from './watchlist-history.mts';
+import { MAX_WATCHLIST_DOMAINS, normalizeWatchlistEntry, compactWatchlistResults, appendWatchlistScan, mergeWatchlistBaseline, watchlistActiveDomains, type CompactWatchlistRecord, type WatchlistComparableRecord } from './watchlist-history.mts';
 import { mergeWatchDomainMetadata } from './brand-candidate-workflow.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
@@ -72,7 +72,7 @@ export function planWatchlistUpdate(current: WatchlistCollection, name: string, 
   const target = resolveWatchlistMutationTarget(normalizeWatchlistStore(current).watchlists, normalizedName);
   const submitted = compactWatchlistResults(input);
   if (!submitted.length || submitted.length !== input.length) throw new Error('The selected Monitor results contain invalid or repeated domains. Nothing was saved.');
-  const before = new Set(target.previous?.results.map(record => record.domain) ?? []);
+  const before = new Set(target.previous ? watchlistActiveDomains(target.previous) : []);
   const after = new Set([...(operation === 'merge' ? before : []), ...submitted.map(record => record.domain)]);
   if (after.size > MAX_WATCHLIST_DOMAINS) throw new Error(`The merged watchlist exceeds its ${MAX_WATCHLIST_DOMAINS}-domain limit. Existing members were preserved.`);
   return freezePreview(structuredClone({ name: target.name, operation, mode, previous: target.previous, input: submitted,
@@ -85,7 +85,13 @@ export function planWatchlistUpdate(current: WatchlistCollection, name: string, 
 export function applyReviewedWatchlistUpdate(current: WatchlistCollection, reviewed: WatchlistUpdatePreview, checkedAt = new Date().toISOString()) {
   const fresh = planWatchlistUpdate(current, reviewed.name, reviewed.input, reviewed.mode, reviewed.operation);
   if (JSON.stringify(fresh) !== JSON.stringify(reviewed)) throw new Error('The watchlist changed after review. Preview its membership again; nothing was overwritten.');
-  const appended = appendWatchlistScan(fresh.previous, fresh.input, { mode: fresh.mode, checkedAt });
+  // An explicit replacement removes active membership, not retained history.
+  const selected = new Set(fresh.input.map(record => record.domain));
+  const previous = fresh.operation === 'replace' && fresh.previous
+    ? { ...fresh.previous, results: fresh.previous.results.filter(record => selected.has(record.domain)),
+      domainMetadata: fresh.previous.domainMetadata.filter(record => selected.has(record.domain)) }
+    : fresh.previous;
+  const appended = appendWatchlistScan(previous, fresh.input, { mode: fresh.mode, checkedAt });
   let entry = appended.entry;
   if (fresh.operation === 'merge' && fresh.previous) {
     const records = new Map(fresh.previous.results.map(record => [record.domain, record]));

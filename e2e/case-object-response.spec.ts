@@ -27,6 +27,11 @@ test('exact affected subset survives failed writes and committed refresh failure
   const form = page.getByRole('form', { name: 'Record response event', exact: true });
   const subset = form.getByRole('listbox', { name: 'Objects affected by the provider result', exact: true });
   await expect(subset).toBeVisible();
+  await form.getByRole('combobox', { name: 'Provider outcome', exact: true }).selectOption('partially_remediated');
+  await expect(form.getByRole('button', { name: 'Record final provider outcome', exact: true })).toBeDisabled();
+  await subset.selectOption(objects.map(object => JSON.stringify(object)));
+  await expect(form.getByRole('button', { name: 'Record final provider outcome', exact: true })).toBeEnabled();
+  await subset.selectOption([]);
   await form.getByRole('combobox', { name: 'Provider outcome', exact: true }).selectOption('provider_reports_resolved');
   const submit = form.getByRole('button', { name: 'Record final provider outcome', exact: true });
   await expect(submit).toBeDisabled();
@@ -47,6 +52,38 @@ test('exact affected subset survives failed writes and committed refresh failure
   expect(saved.actions[0]!.history.filter(event => event.reference === 'EXAMPLE-SHARED-RECEIPT')).toEqual([expect.objectContaining({ responseObjects: [objects[0]], objectOutcome: 'removed', sourceClass: 'provider' })]);
   expect(saved.actions[0]!.responseObjects).toEqual(objects); expect(saved.observedEffects.reviews).toEqual([]);
   expect(saved.status).not.toBe('closed');
+});
+
+test('closure selector follows exact-object provider history rather than the action-wide latest status', async ({ page }) => {
+  const fixtureValue = fixture(); let record = fixtureValue.record;
+  const objects = fixtureValue.objects;
+  for (const [index, providerOutcome, occurredAt] of [
+    [0, 'provider_reports_resolved', '2026-09-02T10:00:00.000Z'],
+    [1, 'partially_remediated', '2026-09-03T10:00:00.000Z'],
+  ] as const) record = updateCase([record], record.id, { actionUpdate: { id: record.actions[0]!.id, transition: {
+    nextState: 'acknowledged', sourceClass: 'provider', provenance: 'Reviewed exact-object receipt',
+    providerOutcome, responseObjects: [objects[index]], occurredAt,
+  } } }, occurredAt).record;
+  await page.clock.setFixedTime('2026-09-04T10:00:00.000Z');
+  await openSeededTimelineCase(page, record.domain, [record], CASE_SCHEMA_VERSION);
+  await openCaseResponseWorkspace(page, '', 'advanced'); await openCaseSection(page, 'Response');
+  const outcome = page.getByRole('region', { name: 'Case independent review and closure', exact: true });
+  await outcome.locator(':scope > details > summary').click();
+  const closure = outcome.locator('form.closure-form');
+  await closure.getByRole('combobox', { name: 'Closure reason', exact: true }).selectOption('provider_reported_resolution_not_independently_checked');
+  const action = closure.getByRole('combobox', { name: 'Provider action', exact: true });
+  await closure.getByRole('combobox', { name: 'Closure scope', exact: true }).selectOption(JSON.stringify(objects[1]));
+  await expect(action.locator('option')).toHaveCount(1);
+  await closure.getByRole('combobox', { name: 'Closure scope', exact: true }).selectOption(JSON.stringify(objects[0]));
+  await expect(action.locator('option')).toHaveCount(2);
+  await action.selectOption(record.actions[0]!.id);
+  await closure.getByRole('textbox', { name: 'Closure summary', exact: true }).fill('Provider reported this exact page resolved.');
+  await closure.getByRole('button', { name: 'Record object closure', exact: true }).click();
+  await expect.poll(async () => (await readBrowserLocalCollection(page, 'cases')).records[0]!.value.closures.records.length).toBe(1);
+  const saved = (await readBrowserLocalCollection(page, 'cases')).records[0]!.value;
+  expect(saved.closures.records[0]!.responseObject).toEqual(objects[0]);
+  expect(saved.status).toBe(record.status);
+  expect(saved.workflowMetadata!.incidentTargets[1]!.state).toBe('open');
 });
 
 test('object authoring and qualified coverage remain available with native keyboard controls and bounded layout', async ({ page }) => {

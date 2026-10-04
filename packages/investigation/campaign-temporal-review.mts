@@ -121,7 +121,7 @@ function candidateFromPin(domain: string, pin: CaseEvidencePin): Candidate | nul
     origin: pinOrigin(pin),
     completeness: pin.completeness,
     truncated: pin.truncated === true,
-    limitations: Object.freeze(pin.limitations.slice(0, MAX_LIMITATIONS)),
+    limitations: pin.limitations,
   });
 }
 
@@ -145,14 +145,19 @@ function candidatesFromSightings(record: CaseRecord): Candidate[] {
       origin: sighting.sourceClass,
       completeness: sighting.completeness,
       truncated: false,
-      limitations: Object.freeze(sighting.limitations.slice(0, MAX_LIMITATIONS)),
+      limitations: sighting.limitations,
     })];
   });
 }
 
 function aggregateCandidates(candidates: readonly Candidate[]): CampaignTemporalEvent[] {
   const deduplicated = new Map<string, Candidate>();
+  const caveats = new Map<string, Set<string>>();
   for (const item of candidates) {
+    const groupKey = `${item.domain}\u0000${item.layer}`;
+    const retained = caveats.get(groupKey) ?? new Set<string>();
+    for (const value of item.limitations) { const clean = text(value, 240); if (clean) retained.add(clean); }
+    caveats.set(groupKey, retained);
     const key = `${item.domain}\u0000${item.layer}\u0000${item.observedAt}\u0000${item.source}\u0000${item.origin}`;
     const previous = deduplicated.get(key);
     if (!previous) { deduplicated.set(key, item); continue; }
@@ -160,7 +165,7 @@ function aggregateCandidates(candidates: readonly Candidate[]): CampaignTemporal
       ...item,
       completeness: COMPLETENESS_RANK[previous.completeness] > COMPLETENESS_RANK[item.completeness] ? previous.completeness : item.completeness,
       truncated: previous.truncated || item.truncated,
-      limitations: [...new Set([...previous.limitations, ...item.limitations])].sort().slice(0, MAX_LIMITATIONS),
+      limitations: [], // Group caveats are accumulated independently of collision order.
     });
   }
   const grouped = new Map<string, Candidate[]>();
@@ -174,6 +179,11 @@ function aggregateCandidates(candidates: readonly Candidate[]): CampaignTemporal
     const completeness = ordered.reduce<CasePinCompleteness>((least, item) => (
       COMPLETENESS_RANK[item.completeness] > COMPLETENESS_RANK[least] ? item.completeness : least
     ), 'complete');
+    const allCaveats = [...caveats.get(key) ?? []].sort();
+    const displayedCaveats = allCaveats.length <= MAX_LIMITATIONS ? allCaveats : [
+      ...allCaveats.slice(0, MAX_LIMITATIONS - 1),
+      `${allCaveats.length - (MAX_LIMITATIONS - 1)} additional source caveats are not shown in this summary; review the retained pins and sightings.`,
+    ];
     return Object.freeze({
       id: `${domain}:${layer}`,
       domain,
@@ -185,7 +195,7 @@ function aggregateCandidates(candidates: readonly Candidate[]): CampaignTemporal
       origins: Object.freeze([...new Set(ordered.map((item) => item.origin))].sort()),
       completeness,
       truncated: ordered.some((item) => item.truncated),
-      limitations: Object.freeze([...new Set(ordered.flatMap((item) => item.limitations).map((item) => text(item, 240)).filter(Boolean))].sort().slice(0, MAX_LIMITATIONS)),
+      limitations: Object.freeze(displayedCaveats),
     });
   }).sort((left, right) => left.firstObservedAt.localeCompare(right.firstObservedAt) || left.domain.localeCompare(right.domain) || left.layer.localeCompare(right.layer));
 }

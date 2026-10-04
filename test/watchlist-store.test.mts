@@ -19,6 +19,7 @@ import {
   applyReviewedWatchlistUpdate,
 } from '../frontend/src/lib/analysis/watchlist-store.ts';
 import { mergeHostedWatchlist, resolveWatchlistMutationTarget } from '../frontend/src/lib/watchlists.ts';
+import { watchlistActiveDomains, MAX_WATCHLIST_DOMAINS } from '../packages/workspace/watchlist-history.mts';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 
@@ -43,12 +44,42 @@ test('Monitor membership review distinguishes scoped evidence from complete repl
   assert.deepEqual(replace.removed, ['first.example', 'second.example']);
   const replaced = applyReviewedWatchlistUpdate(original, replace, '2026-07-15T08:00:00.000Z').watchlists.Review!;
   assert.deepEqual(replaced.results.map(record => record.domain), ['third.example']);
+  const reloaded = normalizeWatchlistStore(JSON.parse(serializeWatchlistStore({ Review: replaced }))).watchlists.Review!;
+  assert.deepEqual(watchlistActiveDomains(reloaded), ['third.example']);
+  assert.deepEqual(reloaded.domainMetadata.map(record => record.domain), ['third.example']);
   assert.equal(replaced.history.length, original.Review!.history.length + 1);
   const refresh = planWatchlistUpdate(original, 'Review', [{ ...a, availability: 'available' }], 'fast', 'merge');
   const refreshed = applyReviewedWatchlistUpdate(original, refresh, '2026-07-15T08:00:00.000Z');
   assert.equal(refreshed.watchlists.Review!.results[1]!.domain, 'second.example');
   assert.equal(refreshed.watchlists.Review!.history.at(-1)!.resultCount, 1);
   assert.ok(refreshed.changes.some(change => change.domain === 'first.example' && change.field === 'availability'));
+});
+
+test('Monitor preview, reload and capacity include candidate-only membership and retain exact contexts', () => {
+  const observed = { domain: 'observed.example', availability: 'registered', scanDepth: 'fast' as const };
+  const context = { brandProfileId: 'brand-1', priority: 'p2', reason: 'Retain this Brand context', changedAt: NOW, reviewDueAt: null };
+  const original = normalizeWatchlistStore({ Review: entry({ results: [observed],
+    domainMetadata: [{ domain: 'candidate.example', contexts: [context], candidate: null }] }) }).watchlists;
+  const input = [{ ...observed, domain: 'candidate.example' }];
+  const merge = planWatchlistUpdate(original, 'Review', input, 'fast', 'merge');
+  assert.deepEqual(merge.retained, ['candidate.example', 'observed.example']);
+  assert.deepEqual(merge.added, []);
+  const replacement = planWatchlistUpdate(original, 'Review', input, 'fast', 'replace');
+  assert.deepEqual(replacement.removed, ['observed.example']);
+  const saved = applyReviewedWatchlistUpdate(original, replacement, NOW).watchlists;
+  const restored = mergeWatchlistStores({}, buildWatchlistExport(saved)).watchlists.Review!;
+  assert.deepEqual(watchlistActiveDomains(restored), ['candidate.example']);
+  assert.deepEqual(restored.domainMetadata[0]!.contexts, [context]);
+  const drift = structuredClone(original);
+  drift.Review!.domainMetadata.push({ domain: 'peer.example', contexts: [], candidate: null });
+  assert.throws(() => applyReviewedWatchlistUpdate(drift, replacement, NOW), /changed after review/);
+  const full = normalizeWatchlistStore({ Review: entry({ results: [], domainMetadata: Array.from({ length: MAX_WATCHLIST_DOMAINS }, (_, i) => ({ domain: `candidate-${i}.example`, contexts: [], candidate: null })) }) }).watchlists;
+  assert.throws(() => planWatchlistUpdate(full, 'Review', [observed], 'fast', 'merge'), /domain limit/);
+  assert.throws(() => normalizeWatchlistStore({ Review: { ...full.Review!, results: [observed] } }), /active domains/);
+  assert.throws(() => mergeHostedWatchlist(full, 'Review', entry({ results: [observed] }) as never), /active domains/);
+  const replaceFull = planWatchlistUpdate(full, 'Review', [observed], 'fast', 'replace');
+  assert.equal(replaceFull.removed.length, MAX_WATCHLIST_DOMAINS);
+  assert.deepEqual(watchlistActiveDomains(applyReviewedWatchlistUpdate(full, replaceFull, NOW).watchlists.Review!), ['observed.example']);
 });
 
 test('Monitor consent rejects destination evidence or membership drift but preserves unrelated watchlists', () => {

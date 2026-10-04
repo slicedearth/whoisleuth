@@ -141,14 +141,34 @@ export function parseInfrastructureObservation(raw: string): InfrastructureObser
 }
 export function serialiseInfrastructureObservation(raw: unknown): string { return `${JSON.stringify(readInfrastructureObservation(raw))}\n`; }
 
+function dnsFactKey(row: InfrastructureDnsObservation): string { return JSON.stringify([row.sourceId, row.queriedName, row.ownerName, row.type]); }
+function roleFactKey(row: InfrastructureRoleObservation): string { return JSON.stringify([row.sourceId, row.subjectType, row.subject, row.role]); }
+
+/** A negative DNS answer has a clock too; a missing row has none. */
+function observationCohorts(snapshot: InfrastructureObservation) {
+  const cohorts = new Map<string, { times: Set<string>; complete: boolean }>();
+  const add = (key: string, observedAt: string, complete: boolean) => {
+    const cohort = cohorts.get(key) ?? { times: new Set<string>(), complete: true };
+    cohort.times.add(observedAt); cohort.complete &&= complete; cohorts.set(key, cohort);
+  };
+  for (const row of snapshot.dns) {
+    const complete = row.complete && !row.truncated && !['failed', 'not_checked'].includes(row.outcome);
+    add(dnsFactKey(row), row.observedAt, complete);
+    add(JSON.stringify([row.sourceId, row.queriedName, row.ownerName, row.type, 'outcome']), row.observedAt, complete);
+  }
+  for (const row of snapshot.certificates) add(JSON.stringify([row.sourceId, row.fingerprintSha256, 'certificate_names']), row.observedAt, row.namesComplete);
+  for (const row of snapshot.roles) add(roleFactKey(row), row.observedAt, row.complete);
+  return cohorts;
+}
+
 export function infrastructureObservationFacts(raw: unknown) {
   const snapshot = readInfrastructureObservation(raw);
   const sources = new Map(snapshot.sources.map(source => [source.id, source]));
   const facts: { key: string; hostname: string; family: string; value: string; observedAt: string; source: InfrastructureSource; complete: boolean }[] = [];
-  for (const row of snapshot.dns) for (const value of row.values) facts.push({ key: JSON.stringify([row.sourceId, row.ownerName, row.type]), hostname: row.ownerName, family: row.type, value, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.complete && !row.truncated });
+  for (const row of snapshot.dns) for (const value of row.values) facts.push({ key: dnsFactKey(row), hostname: row.ownerName, family: row.type, value, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.complete && !row.truncated });
   for (const row of snapshot.dns) facts.push({ key: JSON.stringify([row.sourceId, row.queriedName, row.ownerName, row.type, 'outcome']), hostname: row.ownerName, family: `${row.type}_outcome`, value: row.outcome, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.complete && !row.truncated && !['failed', 'not_checked'].includes(row.outcome) });
   for (const row of snapshot.certificates) for (const value of row.names) facts.push({ key: JSON.stringify([row.sourceId, row.fingerprintSha256, 'certificate_names']), hostname: value, family: 'certificate_names', value, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.namesComplete });
-  for (const row of snapshot.roles) facts.push({ key: JSON.stringify([row.sourceId, row.subject, row.role]), hostname: row.subject, family: row.role, value: `${row.providerId}: ${row.value}`, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.complete });
+  for (const row of snapshot.roles) facts.push({ key: roleFactKey(row), hostname: row.subject, family: row.role, value: `${row.providerId}: ${row.value}`, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.complete });
   return { snapshot, facts };
 }
 export function compareInfrastructureObservations(earlierRaw: unknown, laterRaw: unknown) {
@@ -156,18 +176,25 @@ export function compareInfrastructureObservations(earlierRaw: unknown, laterRaw:
   const scope = (row: InfrastructureObservation) => JSON.stringify({ target: row.target, mode: row.mode, selection: row.scope.selection, hostnames: [...row.scope.hostnames].sort(), dnsTypes: [...row.scope.dnsTypes].sort(), sources: [...row.sources].sort((a, b) => a.id.localeCompare(b.id)) });
   const comparable = scope(earlier.snapshot) === scope(later.snapshot) && earlier.snapshot.observedAt < later.snapshot.observedAt;
   const complete = comparable && [earlier.snapshot, later.snapshot].every(row => row.coverage.state === 'complete' && !row.coverage.truncated);
+  const beforeCohorts = observationCohorts(earlier.snapshot), afterCohorts = observationCohorts(later.snapshot);
   const groups = new Map<string, { hostname: string; family: string; source: InfrastructureSource; before: string[]; after: string[]; complete: boolean }>();
   for (const [side, values] of [['before', earlier.facts], ['after', later.facts]] as const) for (const fact of values) {
     const group = groups.get(fact.key) ?? { hostname: fact.hostname, family: fact.family, source: fact.source, before: [], after: [], complete: true };
     group[side].push(fact.value); group.complete &&= fact.complete; groups.set(fact.key, group);
   }
-  const rows = [...groups.values()].map(row => {
+  const rows = [...groups.entries()].map(([key, row]) => {
     row.before = [...new Set(row.before)].sort(); row.after = [...new Set(row.after)].sort();
+    const before = beforeCohorts.get(key), after = afterCohorts.get(key);
+    const beforeTimes = [...before?.times ?? []].sort(), afterTimes = [...after?.times ?? []].sort();
+    // Multiple historical cohorts are retained, not flattened into a fictitious
+    // single response. A later envelope never advances a source observation.
+    const ordered = beforeTimes.length === 1 && afterTimes.length === 1 && beforeTimes[0]! < afterTimes[0]!;
+    row.complete &&= Boolean(before?.complete && after?.complete);
     const same = JSON.stringify(row.before) === JSON.stringify(row.after);
-    const state = !comparable ? 'incomparable' : same ? complete && row.complete ? 'unchanged' : 'unknown' : !row.before.length ? row.complete ? 'newly_observed' : 'unknown' : !row.after.length ? complete && row.complete ? 'not_returned' : 'unknown' : complete && row.complete ? 'changed' : 'unknown';
-    return { ...row, state, detail: state === 'not_returned' ? 'Not returned by this comparable bounded collection; this does not establish disappearance.' : state === 'newly_observed' ? 'Newly present in retained evidence; not necessarily newly created.' : state === 'unknown' ? 'Incomplete evidence cannot establish a removal or change.' : state === 'incomparable' ? 'Source, scope, mode or observation ordering differs; no temporal change is inferred.' : 'Source-qualified retained observation comparison.' };
+    const state = !comparable ? 'incomparable' : !ordered || !complete || !row.complete ? 'unknown' : same ? 'unchanged' : !row.before.length ? 'newly_observed' : !row.after.length ? 'not_returned' : 'changed';
+    return { ...row, beforeTimes, afterTimes, state, detail: state === 'not_returned' ? 'Not returned by this comparable bounded collection; this does not establish disappearance.' : state === 'newly_observed' ? 'Newly present in retained evidence; not necessarily newly created.' : state === 'unknown' ? !ordered ? 'Source observation times are missing, equal, reversed or span multiple cohorts; envelope time cannot establish a temporal change.' : 'Incomplete evidence cannot establish a removal or change.' : state === 'incomparable' ? 'Source, scope, mode or observation ordering differs; no temporal change is inferred.' : 'Source-qualified retained observation comparison.' };
   });
-  return { state: comparable ? complete ? 'compared' : 'partial' : 'incomparable', earlier: earlier.snapshot.id, later: later.snapshot.id, rows, limitations: ['No new collection was made. Retained changes do not establish ownership, safety, control or maliciousness.', 'Provider-reported history remains labelled separately from local observations. Empty, failed, limited and changed-source snapshots cannot replace a stronger baseline.'] };
+  return { state: comparable ? complete && !rows.some(row => row.state === 'unknown') ? 'compared' : 'partial' : 'incomparable', earlier: earlier.snapshot.id, later: later.snapshot.id, rows, limitations: ['No new collection was made. Retained changes do not establish ownership, safety, control or maliciousness.', 'Provider-reported history remains labelled separately from local observations. Empty, failed, limited and changed-source snapshots cannot replace a stronger baseline.'] };
 }
 
 /** Technology roles reuse the canonical role owner, not a new signature catalogue. */

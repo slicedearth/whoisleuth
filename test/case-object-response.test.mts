@@ -8,6 +8,7 @@ import { caseRecheckComparisonBlockers, caseRecheckAnswerContext, assertCaseObje
 import { buildCaseReport } from '../packages/cases/case-report.mts';
 import { buildCaseResponseReviewInputs, validateCaseResponseReviewInputs } from '../packages/cases/case-response-packet.mts';
 import { normalizeSnapshot, compareCaseEvidence } from '../packages/cases/case-evidence-model.mts';
+import { caseClosureProviderBlocker, caseClosureActionBlocker } from '../packages/cases/case-response-outcomes.mts';
 const NOW = '2026-09-01T10:00:00.000Z', AFTER = '2026-09-02T10:00:00.000Z';
 function scoped() {
   let record = createCase({ domain: 'incident.example', incidentTarget: 'https://incident.example/one' }, NOW);
@@ -140,6 +141,52 @@ test('new object-specific technical closures reject unbound reviews without re-a
     const restored = normalizeCaseStore(buildCaseExport([retained], AFTER)).cases[0]!;
     assert.deepEqual(restored.closures.records, retained.closures.records);
   }
+});
+
+test('provider closure follows the latest exact-object cohort, independently of other objects', () => {
+  const { record: sent, objects } = submitted();
+  const first = '2026-09-03T10:00:00.000Z', second = '2026-09-04T10:00:00.000Z', third = '2026-09-05T10:00:00.000Z', closedAt = '2026-09-06T10:00:00.000Z';
+  const event = (record: typeof sent, object: typeof objects[number], providerOutcome: string, occurredAt: string, objectOutcome?: string) => transition(record, 'acknowledged', { sourceClass: 'provider', responseObjects: [object], providerOutcome, occurredAt, ...(objectOutcome ? { objectOutcome } : {}) });
+  const resolved = event(sent, objects[0]!, 'provider_reports_resolved', first, 'removed');
+  const unrelated = event(resolved, objects[1]!, 'partially_remediated', second);
+  assert.equal(unrelated.actions[0]!.providerOutcome, 'partially_remediated');
+  assert.equal(caseClosureProviderBlocker(unrelated.actions[0], objects[0], closedAt), null);
+  assert.equal(caseClosureActionBlocker('risk_accepted', unrelated.actions[0], objects[0], closedAt), null);
+  assert.notEqual(caseClosureActionBlocker('risk_accepted', unrelated.actions[0], undefined, closedAt), null);
+  assert.notEqual(caseClosureActionBlocker('risk_accepted', unrelated.actions[0], { kind: 'domain', identifier: sent.domain, incidentTargetId: null }, closedAt), null);
+  const closure = { reason: 'provider_reported_resolution_not_independently_checked', summary: 'Reviewed latest exact-object provider receipt', actionId: sent.actions[0]!.id, responseObject: objects[0] };
+  const closed = updateCase([unrelated], unrelated.id, { closure }, closedAt).record;
+  assert.equal(closed.closures.records.length, 1);
+  assert.equal(closed.status, sent.status);
+  assert.equal(closed.workflowMetadata!.incidentTargets[1]!.state, 'open');
+  const restored = event(resolved, objects[0]!, 'partially_remediated', second, 'restored');
+  const otherResolved = event(restored, objects[1]!, 'provider_reports_resolved', third);
+  assert.equal(otherResolved.actions[0]!.providerOutcome, 'provider_reports_resolved');
+  assert.throws(() => updateCase([otherResolved], otherResolved.id, { closure }, closedAt), /latest applicable/);
+  assert.equal(caseClosureProviderBlocker(otherResolved.actions[0], objects[1], closedAt), null);
+  assert.equal(caseClosureProviderBlocker(otherResolved.actions[0], objects[0], first), null);
+  assert.notEqual(caseClosureProviderBlocker(otherResolved.actions[0], objects[0], AFTER), null);
+  const action = structuredClone(resolved.actions[0]!);
+  const receipt = action.history.at(-1)!;
+  action.history.push({ ...receipt, id: 'conflicting-same-time', providerOutcome: 'partially_remediated', objectOutcome: 'restored' });
+  assert.notEqual(caseClosureProviderBlocker(action, objects[0], closedAt), null);
+  const unbound = { ...resolved.actions[0]!, history: resolved.actions[0]!.history.map(({ responseObjects: _scope, ...row }) => row) };
+  assert.notEqual(caseClosureProviderBlocker(unbound, objects[0], closedAt), null);
+  assert.notEqual(caseClosureProviderBlocker(resolved.actions[0], undefined, closedAt), null);
+  const { responseObjects: _bindings, ...wholeCaseAction } = unbound;
+  assert.equal(caseClosureProviderBlocker(wholeCaseAction, undefined, closedAt), null);
+  assert.deepEqual(normalizeCaseStore(buildCaseExport([closed], closedAt)).cases[0]!.closures.records, closed.closures.records);
+});
+
+test('partial provider outcomes require an explicit nonempty affected scope while acknowledgements remain administrative', () => {
+  const { record, objects } = submitted();
+  for (const scope of [undefined, []]) assert.throws(() => transition(record, 'acknowledged', { sourceClass: 'provider', providerOutcome: 'partially_remediated', ...(scope ? { responseObjects: scope } : {}) }), /Explicitly select/);
+  for (const responseObjects of [[objects[0]], objects]) {
+    const changed = transition(record, 'acknowledged', { sourceClass: 'provider', providerOutcome: 'partially_remediated', responseObjects });
+    const restored = normalizeCaseStore(buildCaseExport([changed], AFTER)).cases[0]!;
+    assert.deepEqual(restored.actions[0]!.history.at(-1)!.responseObjects, responseObjects);
+  }
+  assert.doesNotThrow(() => transition(record, 'acknowledged', { sourceClass: 'provider' }));
 });
 test('scoped changed closure requires complete later same-object comparison evidence', () => {
   const responseObject = { kind: 'domain' as const, identifier: 'incident.example', incidentTargetId: null };

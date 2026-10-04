@@ -18,7 +18,10 @@ limitations remain attached to a separately labelled evidence pin. WHOISleuth do
 change the case's analyst status or disposition, fetch a reference, execute
 content, contact a provider, or submit a report.
 
-## Version 4 schema
+## Current and historical schemas
+
+The current writer emits version 5. The reader supports versions 4 and 5.
+The version 4 example below remains supported historical input:
 
 ```json
 {
@@ -67,14 +70,17 @@ Each finding accepts only:
 - `limitations`: up to eight text entries of at most 240 characters each;
 - `reference`: optional text, at most 500 characters;
 - `structuredObservation`: optional strict metadata retained only for the
-  documented domain, DNS, and certificate row converters.
+  documented domain, DNS, and certificate row converters;
+- `infrastructureObservation`: version 5 only; a validated version 1 infrastructure
+  snapshot retaining exact query/owner names, per-fact observation times, source
+  roles, selection scope and coverage. Its container time does not establish a
+  later observation, and incomplete NS answers do not establish a complete set.
 
 Additional properties, unsupported categories or completeness states, invalid
 domains or dates, control characters, empty findings, and future schema
 versions reject the whole document.
 
-Only the exact current version 4 findings writer is readable. Earlier
-reader-only findings versions and unreleased checkpoints are unsupported and
+Only versions 4 and 5 are readable. Earlier findings versions and unreleased checkpoints are unsupported and
 never reclassified as first-party observations. Analyst hypotheses and
 conclusions do not belong in this findings schema; use the separate Case
 assertion review so claims never become observed evidence.

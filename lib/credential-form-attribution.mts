@@ -10,6 +10,17 @@ import {
 const attribute = (element: StaticHtmlElement, name: string): string | undefined =>
   element.attributes.find(item => item.name === name)?.value;
 
+/** HTML Auto buttons submit only without command attributes or a select parent. */
+export function staticControlIsSubmitter(element: StaticHtmlElement, parent?: StaticHtmlElement): boolean {
+  const type = (attribute(element, 'type') ?? '').toLowerCase();
+  if (element.name === 'input') return type === 'submit' || type === 'image';
+  if (element.name !== 'button') return false;
+  if (type === 'submit') return true;
+  if (type === 'button' || type === 'reset') return false;
+  return attribute(element, 'command') === undefined && attribute(element, 'commandfor') === undefined
+    && !(parent?.html && parent.name === 'select');
+}
+
 // Uses the existing bounded, inert-template-free tree. IDs and control values
 // are transient association inputs; only ordinal forms and fixed categories
 // leave this projection.
@@ -87,8 +98,7 @@ export function attributeCredentialForms(analysis: StaticHtmlAnalysis, documentU
       if (!row) { unassociatedInputs++; complete = false; }
       else for (const category of categories.values) row.categories[category]++;
     }
-    const type = (attribute(element, 'type') ?? '').toLowerCase();
-    const submitter = element.name === 'button' ? !['button', 'reset'].includes(type) : ['submit', 'image'].includes(type);
+    const submitter = staticControlIsSubmitter(element, element.parent === null ? undefined : elements[element.parent]);
     if (row && ownerIndex !== null && submitter && (attribute(element, 'formaction') !== undefined || attribute(element, 'formmethod') !== undefined)) {
       const next = destination(elements[ownerIndex]!, element);
       if (!row.destinations.some(value => value.relationship === next.relationship && value.origin === next.origin)) {

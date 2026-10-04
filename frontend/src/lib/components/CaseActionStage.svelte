@@ -7,7 +7,7 @@
     CASE_PROVIDER_OUTCOMES,
   } from '../../../../packages/cases/case-response-records.mts';
   import type { CaseRecord, CaseActionRecord, CaseActionState } from '../cases.ts';
-  import { isLegalCaseActionTransition, type CaseActionEventSourceClass } from '$lib/analysis/case-response-model.ts';
+  import { isLegalCaseActionTransition, providerOutcomeRequiresObjectScope, type CaseActionEventSourceClass } from '$lib/analysis/case-response-model.ts';
   import { isoFromUtcInput, utcInputFromIso, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
@@ -350,7 +350,7 @@
               {/if}
               <label class="field">Provider outcome detail<textarea bind:value={transitionDraft.value.transitionOutcomeDetail} maxlength="2000" rows="2"></textarea></label>
               <label class="field">Event limitations <small>one per line</small><textarea bind:value={transitionDraft.value.transitionLimitations} maxlength="2000" rows="2"></textarea></label>
-              <button class="btn" type="submit" disabled={transitionDraft.state.busy || mutationBusy}>Append transition</button>
+              <button class="btn" type="submit" disabled={transitionDraft.state.busy || mutationBusy || Boolean(transitionAction.responseObjects?.length && (transitionDraft.value.objectOutcome || providerOutcomeRequiresObjectScope(transitionDraft.value.transitionProviderOutcome)) && !transitionDraft.value.responseObjects.length)}>Append transition</button>
             {:else}
               <p class="notice">This action is terminal. Its retained transition history cannot be rewritten or extended.</p>
             {/if}

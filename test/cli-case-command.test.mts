@@ -62,9 +62,11 @@ test('Case grammar keeps mutations explicit and every operation offline', () => 
 
 test('offline response authoring shares one receipt and closes only its explicitly affected object', async context => {
   const root = await directory(context), file = await initialFile(root), inputFile = join(root, 'operation.json');
+  let clock = Date.parse(NOW);
   const mutate = async (operation: string, input: unknown) => {
     await writeFile(inputFile, JSON.stringify(input));
-    return invoke(['case', operation, file, '--input', inputFile, '--output', file, '--force']);
+    clock += 1_000;
+    return invoke(['case', operation, file, '--input', inputFile, '--output', file, '--force'], { now: () => new Date(clock).toISOString() });
   };
   for (const url of ['https://example.test/one', 'https://example.test/two']) {
     const result = await mutate('incident-link', { url });
@@ -81,8 +83,21 @@ test('offline response authoring shares one receipt and closes only its explicit
     assert.equal(result.code, EXIT_CODES.SUCCESS, result.stderr);
   }
   const before = await readFile(file, 'utf8');
+  for (const responseObjects of [undefined, []]) {
+    result = await mutate('action-event', { id, transition: { nextState: 'acknowledged', sourceClass: 'provider', provenance: 'Provider correspondence',
+      providerOutcome: 'partially_remediated', ...(responseObjects ? { responseObjects } : {}) } });
+    assert.equal(result.code, EXIT_CODES.USAGE);
+    assert.equal(await readFile(file, 'utf8'), before);
+  }
+  for (const responseObjects of [[objects[0]], objects]) {
+    result = await mutate('action-event', { id, transition: { nextState: 'acknowledged', sourceClass: 'provider', provenance: 'Provider correspondence',
+      providerOutcome: 'partially_remediated', responseObjects } });
+    assert.equal(result.code, EXIT_CODES.SUCCESS, result.stderr);
+    assert.deepEqual(readEditableCaseExport(await readFile(file, 'utf8'))[0]!.actions[0]!.history.at(-1)!.responseObjects, responseObjects);
+  }
+  const beforeResolution = await readFile(file, 'utf8');
   result = await mutate('action-event', { id, transition: { nextState: 'acknowledged', sourceClass: 'provider', provenance: 'Provider correspondence', providerOutcome: 'provider_reports_resolved', objectOutcome: 'removed' } });
-  assert.equal(result.code, EXIT_CODES.USAGE); assert.equal(await readFile(file, 'utf8'), before);
+  assert.equal(result.code, EXIT_CODES.USAGE); assert.equal(await readFile(file, 'utf8'), beforeResolution);
   result = await mutate('action-event', { id, transition: { nextState: 'acknowledged', sourceClass: 'provider', provenance: 'Provider correspondence', reference: 'EXAMPLE-RECEIPT', providerOutcome: 'provider_reports_resolved', responseObjects: [objects[0]], objectOutcome: 'removed' } });
   assert.equal(result.code, EXIT_CODES.SUCCESS, result.stderr);
   result = await mutate('close-object', { responseObject: objects[0], reason: 'provider_reported_resolution_not_independently_checked', summary: 'Provider reported one page removed; independent review remains pending.', actionId: id });
@@ -91,7 +106,7 @@ test('offline response authoring shares one receipt and closes only its explicit
   assert.notEqual(record.status, 'closed'); assert.equal(record.actions.length, 1);
   const coverage = buildCaseIncidentCoverage(record);
   assert.equal(coverage[0]!.providerEvents.at(-1)?.outcome, 'removed'); assert.equal(coverage[0]!.closures.length, 1);
-  assert.equal(coverage[1]!.providerEvents.length, 0); assert.equal(coverage[1]!.closures.length, 0);
+  assert.equal(coverage[1]!.providerEvents.length, 1); assert.equal(coverage[1]!.providerEvents[0]!.outcome, 'partially_remediated'); assert.equal(coverage[1]!.closures.length, 0);
   assert.ok(coverage.every(row => row.observationCoverage === 'unknown'));
   const shown = await invoke(['case', 'show', file]);
   assert.equal(shown.code, EXIT_CODES.SUCCESS, shown.stderr); assert.match(shown.stdout, /reported removed/u);

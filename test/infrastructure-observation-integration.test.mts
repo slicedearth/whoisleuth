@@ -17,10 +17,17 @@ import { buildInvestigationProjection } from '../packages/investigation/investig
 import { buildCaseExport, serializeCaseStore } from '../packages/cases/case-storage-model.mts';
 import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
 import { projectCaseForAudience } from '../packages/cases/case-record-projection.mts';
+import { buildInvestigationCaseRelationships } from '../packages/relationships/case-relationships.mts';
+import { buildCaseRelationshipClusters } from '../packages/relationships/case-relationship-clusters.mts';
+import { buildRelationshipGraphDocument } from '../packages/relationships/case-relationship-graph-export.mts';
 
 const raw = await readFile(new URL('./fixtures/infrastructure-observations/infrastructure-observation-v1.json', import.meta.url), 'utf8');
 const fixture = () => parseInfrastructureObservation(raw);
-function later() { const result = fixture(); result.id = 'selected-example-later'; result.observedAt = '2026-10-02T12:00:00.000Z'; return result; }
+function later() {
+  const result = fixture(); result.id = 'selected-example-later'; result.observedAt = '2026-10-02T12:00:00.000Z';
+  for (const row of [...result.dns, ...result.certificates, ...result.roles]) row.observedAt = '2026-10-02T11:59:00.000Z';
+  return result;
+}
 
 test('snapshot import is one exact retained finding, preserving v4 historical reader output', () => {
   const document = convertInfrastructureObservation(fixture());
@@ -100,4 +107,70 @@ test('projection links aliases to response owner, separates wildcard patterns an
   const projection = { schema: 'whoisleuth.investigation-projection', version: 1, entities, observations, relationships, truncated: false };
   const review = reviewRetainedInfrastructureSnapshots(projection);
   assert.equal(review.total, 1); assert.equal(review.summaries[0]!.hostCount, 2);
+});
+
+test('reversed fact clocks stay qualified through CLI, retained browser comparison and Review Items', async () => {
+  const earlier = fixture(), stale = later(), now = '2026-10-03T00:00:00.000Z';
+  for (const row of [...stale.dns, ...stale.certificates, ...stale.roles]) row.observedAt = '2026-09-30T00:00:00.000Z';
+  stale.dns[2]!.values = ['192.0.2.26'];
+  const input = { schema: 'whoisleuth.infrastructure-comparison.input', version: 1, earlier, later: stale };
+  const review = buildOfflineEvidenceReview(JSON.stringify(input), now);
+  assert.match(formatOfflineEvidenceReview(review), /unknown/);
+  assert.doesNotMatch(formatOfflineEvidenceReview(review), / · changed\n/);
+  assert.equal(await runCli(['review-evidence', '--json', '--strict-exit'], { stdout: { write() {} }, stderr: { write() {} }, now: () => now, readArtifactInput: async () => JSON.stringify(input) }), EXIT_CODES.PARTIAL_FAILURE);
+  let cases = mergeExternalFindingsIntoCases([], convertInfrastructureObservation(earlier), now).cases;
+  cases = mergeExternalFindingsIntoCases(cases, convertInfrastructureObservation(stale), now).cases;
+  const projection = buildInvestigationProjection({ cases: buildCaseExport(cases, now) }, { generatedAt: now });
+  const summaries = reviewRetainedInfrastructureSnapshots(projection).summaries;
+  const browser = reviewRetainedInfrastructureSnapshots(projection, summaries.map(row => row.identity));
+  assert.equal(browser.comparison?.state, 'partial');
+  assert.ok(browser.comparison?.rows.every(row => row.state === 'unknown'));
+  const item = buildLocalAnalystReviewProjection({ cases }, now).items.find(row => row.title === 'Source-qualified infrastructure review')!;
+  assert.ok(item); assert.equal(item.completeness, 'partial'); assert.equal(item.nextAction, 'refresh');
+  assert.match(item.detail, /^0 changed/);
+});
+
+test('complete imported NS responses share whole-set identity with Lookup through graph and cohort consumers', () => {
+  const now = '2026-10-03T00:00:00.000Z';
+  const imported = (values: string[], complete = true) => {
+    const snapshot = fixture(); snapshot.scope = { hostnames: ['alias.example.test'], dnsTypes: ['NS'], selection: 'explicit_hosts' };
+    snapshot.sources = [snapshot.sources[0]!]; snapshot.certificates = []; snapshot.roles = [];
+    snapshot.coverage.state = complete ? 'complete' : 'partial';
+    snapshot.dns = [{ sourceId: snapshot.sources[0]!.id, queriedName: 'alias.example.test', ownerName: 'example.test', type: 'NS', outcome: 'answered', values, observedAt: snapshot.observedAt, complete, truncated: !complete }];
+    const record = createCase({ domain: 'example.test' }, now);
+    const document = convertInfrastructureObservation(snapshot);
+    record.evidencePins = [{ ...externalFindingCaseProjection(document.findings[0]!, document.source).evidencePin, id: `pin-${record.id}`, createdAt: now }];
+    return record;
+  };
+  const project = (cases: ReturnType<typeof createCase>[]) => buildInvestigationProjection({ cases: buildCaseExport(cases, now) }, { generatedAt: now });
+  const first = imported(['ns1.example.test', 'ns2.example.test']);
+  const overlap = project([first, imported(['ns1.example.test', 'ns3.example.test'])]);
+  assert.equal(buildInvestigationCaseRelationships(overlap).groups.length, 0);
+  assert.equal(overlap.entities.filter(row => row.type === 'nameserver_set').length, 2);
+  assert.ok(!overlap.entities.some(row => row.type === 'nameserver_set' && row.canonical === 'ns1.example.test'));
+  const equal = imported(['ns2.example.test', 'ns1.example.test']);
+  const lookup = createCase({ domain: 'lookup.example', evidence: { capturedAt: now, scanDepth: 'deep', nameservers: ['NS2.EXAMPLE.TEST.', 'ns1.example.test'] } }, now);
+  const projection = project([first, equal, lookup]);
+  const summary = buildInvestigationCaseRelationships(projection);
+  const group = summary.groups.find(row => row.type === 'nameserver_set')!;
+  assert.ok(group); assert.equal(group.cases.length, 3);
+  assert.equal(new Set(group.cases.map(row => row.id)).size, 3);
+  assert.equal(projection.entities.filter(row => row.type === 'nameserver_set').length, 1);
+  assert.equal(buildCaseRelationshipClusters(summary).clusters[0]!.cases.length, 3);
+  const graph = buildRelationshipGraphDocument(summary, { generatedAt: now });
+  assert.equal(graph.graph.nodes.filter(row => row.kind === 'case').length, 3);
+  assert.ok(JSON.stringify(graph).includes('ns1.example.test · ns2.example.test'));
+  const partial = project([first, imported(['ns1.example.test', 'ns2.example.test'], false)]);
+  assert.equal(buildInvestigationCaseRelationships(partial).groups.length, 0);
+  assert.ok(partial.observations.some(row => row.limitations.some(value => /incomplete response/.test(value))));
+  const singleton = project([imported(['ns1.example.test']), imported(['ns1.example.test'])]);
+  assert.equal(buildInvestigationCaseRelationships(singleton).groups.length, 1);
+  const separate = imported(['ns1.example.test']);
+  const snapshot = separate.evidencePins[0]!.infrastructureObservation!;
+  snapshot.dns.push({ ...snapshot.dns[0]!, values: ['ns2.example.test'], observedAt: '2026-10-01T11:00:00.000Z' });
+  snapshot.sources.push({ ...snapshot.sources[0]!, id: 'another-source' });
+  snapshot.dns.push({ ...snapshot.dns[0]!, sourceId: 'another-source', values: ['ns3.example.test'] });
+  const separateProjection = project([separate, first]);
+  assert.equal(buildInvestigationCaseRelationships(separateProjection).groups.length, 0);
+  assert.deepEqual(separateProjection.entities.filter(row => row.type === 'nameserver_set').map(row => row.canonical).sort(), ['ns1.example.test', 'ns1.example.test|ns2.example.test', 'ns2.example.test', 'ns3.example.test']);
 });

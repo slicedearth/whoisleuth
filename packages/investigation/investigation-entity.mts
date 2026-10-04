@@ -1,3 +1,11 @@
+import { normalizeDomain } from '../evidence/domain-name.mts';
+
+/** Identity for an already bounded, whole retained NS response, never an individual pin. */
+export function nameserverSetIdentity(values: readonly string[]) {
+  const nameservers = [...new Set(values.map(normalizeDomain).filter(Boolean))].sort();
+  return { canonical: nameservers.join('|'), label: nameservers.join(' · '), nameservers };
+}
+
 /** Shared entity vocabulary; importing labels does not load saved-work readers. */
 export const INVESTIGATION_ENTITY_LABELS = Object.freeze({
   domain: 'Domain',

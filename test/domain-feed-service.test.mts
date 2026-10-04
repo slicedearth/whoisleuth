@@ -263,6 +263,30 @@ test('loopback service enforces a shared rate and two-query concurrency ceiling'
   } finally { release!(); await service.close(); }
 }));
 
+test('disconnected queries retain admission slots until their workers finish', async () => temporary(async directory => {
+  let entered = 0, aborted = 0;
+  let release!: () => void, ready!: () => void, stopped!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const bothEntered = new Promise<void>(resolve => { ready = resolve; });
+  const bothAborted = new Promise<void>(resolve => { stopped = resolve; });
+  const service = await startDomainFeedService({ directory, token: TOKEN, feedIds: [FEED], automaticRefresh: false,
+    worker: async (_task, signal) => {
+      if (++entered === 2) ready();
+      signal.addEventListener('abort', () => { if (++aborted === 2) stopped(); }, { once: true });
+      await held;
+      return { enabled: true, feeds: [] };
+    } });
+  const post = (signal?: AbortSignal) => fetch(`${service.origin}/status`, { method: 'POST',
+    headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: '{}', ...(signal ? { signal } : {}) });
+  const controller = new AbortController();
+  const requests = [post(controller.signal).catch(() => null), post(controller.signal).catch(() => null)];
+  try {
+    await bothEntered; controller.abort(); await bothAborted; await Promise.all(requests);
+    assert.equal((await post()).status, 429);
+    assert.equal(entered, 2);
+  } finally { release(); await service.close(); }
+}));
+
 test('service refresh ownership prevents duplicate concurrent jobs and preserves an explicit failure state', async () => temporary(async directory => {
   let refreshes = 0; let release: (() => void) | null = null;
   let started: (() => void) | null = null;

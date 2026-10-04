@@ -1,4 +1,5 @@
 import { readInfrastructureObservation, type InfrastructureObservation } from './infrastructure-observation.mts';
+import { nameserverSetIdentity } from './investigation-entity.mts';
 import type { InvestigationCollectionProjectionContext } from './investigation-projection-collections.mts';
 import type { InvestigationEntity, NormalizedCaseEvidencePin, NormalizedCaseRecord } from './investigation-projection.mts';
 
@@ -29,13 +30,28 @@ export function projectInfrastructureObservation(context: InvestigationCollectio
     if (!owner) continue;
     linkObservationEntity(observation, owner);
     if (observation) observation.limitations.push(`Queried ${row.queriedName} ${row.type}; response owner ${row.ownerName}; outcome ${row.outcome}. Failed/no-data outcomes are not domain absence.`);
+    if (row.type === 'NS') {
+      if (row.outcome === 'answered' && row.complete && !row.truncated) {
+        const identity = nameserverSetIdentity(row.values);
+        const entity = addEntity('nameserver_set', identity.canonical, identity.label, { nameservers: identity.nameservers });
+        if (entity) {
+          linkObservationEntity(observation, entity);
+          addRelationship({ type: 'domain_uses_nameserver_set', from: owner.id, to: entity.id, classification: 'normalized',
+            method: `Exact retained normalised nameserver set; queried ${row.queriedName}; owner ${row.ownerName}` }, observation);
+        }
+      } else {
+        for (const value of row.values) linkObservationEntity(observation, host(value));
+        if (row.values.length && observation) observation.limitations.push('Individual nameservers from an incomplete response cannot establish an exact nameserver set.');
+      }
+      continue;
+    }
     for (const value of row.values) {
       const targetValue = row.type === 'MX' ? value.split(' ')[1]! : value;
       const entity = row.type === 'A' || row.type === 'AAAA' ? addEntity('ip_address', value, value, { address: value })
-        : row.type === 'NS' ? addEntity('nameserver_set', targetValue, targetValue, { nameservers: [targetValue] }) : host(targetValue);
+        : host(targetValue);
       if (!entity) continue;
       linkObservationEntity(observation, entity);
-      const type = row.type === 'A' || row.type === 'AAAA' ? 'domain_resolved_to_ip' : row.type === 'CNAME' ? 'domain_aliases_to_domain' : row.type === 'NS' ? 'domain_uses_nameserver_set' : row.type === 'MX' ? 'domain_uses_mail_server' : null;
+      const type = row.type === 'A' || row.type === 'AAAA' ? 'domain_resolved_to_ip' : row.type === 'CNAME' ? 'domain_aliases_to_domain' : row.type === 'MX' ? 'domain_uses_mail_server' : null;
       if (type) addRelationship({ type, from: owner.id, to: entity.id, classification: 'direct', method: `Exact retained DNS ${row.type}; queried ${row.queriedName}; owner ${row.ownerName}${row.type === 'MX' ? `; preference ${value.split(' ')[0]}` : ''}` }, observation);
     }
   }

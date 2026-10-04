@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, writeFile } 
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
 
 import type { Route } from '@playwright/test';
@@ -24,6 +24,7 @@ import {
   installDomProjectionIntrinsics,
   parseCaptureArguments,
   sanitizeCaptureText,
+  formatCaptureSuccess,
   type CaptureBrowser,
 } from '../packages/web-capture/capture.mts';
 import { startAnchoredArtifactWriter } from '../packages/web-capture/anchored-artifact-writer.mts';
@@ -792,8 +793,11 @@ describe('optional local rendered capture package', () => {
         await writeFile(manifestPath, JSON.stringify(manifest));
       }
       const left = path.join(directories[0]!, 'manifest.json'), right = path.join(directories[2]!, 'manifest.json');
+      const printed = formatCaptureSuccess('capture-0.example.test', directories[0]!);
+      const reported = JSON.parse(printed.split('\n').find(line => line.startsWith('Manifest: '))!.slice('Manifest: '.length));
+      assert.equal(reported, left);
       assert.equal(parseCaptureCompareArguments([left, right]).leftManifest, left);
-      const comparison = await compareRenderedCaptures(left, right);
+      const comparison = await compareRenderedCaptures(reported, right);
       assert.equal(comparison.left.domain, 'capture-0.example.test');
       assert.deepEqual(comparison.sourceLimitations, {
         left: { capture: ['left capture caveat'], domDigest: ['left DOM caveat'] },
@@ -806,6 +810,16 @@ describe('optional local rendered capture package', () => {
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
+  });
+
+  test('capture success diagnostics preserve exact paths without raw terminal controls', () => {
+    for (const directory of [' case  1 ', 'case 1', 'folder\u001b[31m\u0085\u202e\"\\name', 'folder/\u{e0001}']) {
+      const output = formatCaptureSuccess('example.test', directory);
+      assert.doesNotMatch(output.replaceAll('\n', ''), /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+      assert.equal(JSON.parse(output.split('\n')[0]!.split(' to ')[1]!), directory);
+      assert.equal(JSON.parse(output.split('\n')[1]!.slice('Manifest: '.length)), path.join(directory, 'manifest.json'));
+    }
+    assert.throws(() => formatCaptureSuccess('example.test', 'x'.repeat(2049)), /bound/);
   });
 
   test('compares two verified local captures offline without exposing paths or retained page text', async () => {
@@ -1241,6 +1255,48 @@ describe('optional local rendered capture package', () => {
       assert.deepEqual(await closed, { code: 130, signal: null });
       assert.equal(output.split('cleanup requested').length - 1, 1);
     }
+  });
+
+  test('an interrupt during actual output reservation exits 130 after owned cleanup without an unhandled rejection', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-reservation-interrupt-'));
+    const output = path.join(parent, 'reserved');
+    try {
+      const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+        import fs from 'node:fs/promises';
+        import { syncBuiltinESMExports } from 'node:module';
+        import { chromium } from 'playwright';
+        const output = ${JSON.stringify(output)};
+        const mkdir = fs.mkdir, lstat = fs.lstat;
+        let reserved = false, reads = 0, launches = 0;
+        chromium.launch = async () => { launches++; throw new Error('Browser launch was not permitted'); };
+        fs.mkdir = async (...args) => {
+          const result = await mkdir(...args);
+          if (args[0] === output) {
+            reserved = true;
+            process.emit('SIGINT');
+            await new Promise(resolve => setImmediate(resolve));
+          }
+          return result;
+        };
+        fs.lstat = async (...args) => {
+          if (args[0] === output && ++reads > 1) await new Promise(resolve => setTimeout(resolve, 30));
+          return lstat(...args);
+        };
+        syncBuiltinESMExports();
+        process.argv = [process.execPath, ${JSON.stringify(CAPTURE_ENTRY)}, 'https://capture.example/', '--output-dir', output, '--authorize-rendered-capture'];
+        await import(${JSON.stringify(pathToFileURL(CAPTURE_ENTRY).href)});
+        if (!reserved) throw new Error('The actual reservation was not reached');
+        if (launches !== 0) throw new Error('Browser launch was attempted after interruption');
+        try { await lstat(output); throw new Error('Owned directory survived cleanup'); }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+      `], { encoding: 'utf8', timeout: 10_000, env: { ...process.env, NODE_OPTIONS: '', NODE_PATH: '' } });
+      assert.equal(child.error, undefined);
+      assert.equal(child.signal, null);
+      assert.equal(child.status, 130, child.stderr);
+      assert.match(child.stderr, /Capture error: Rendered capture interrupted/);
+      assert.doesNotMatch(child.stderr, /UnhandledPromise|triggerUncaughtException|browserType|Executable doesn't exist/);
+      await assert.rejects(stat(output), { code: 'ENOENT' });
+    } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   test('keeps an unavailable screenshot perceptual hash distinct from a visual difference', async () => {

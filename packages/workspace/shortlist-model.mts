@@ -181,12 +181,14 @@ export function setShortlistSelection(
   selectedRaw: unknown,
   selected: boolean,
   nowIso: unknown = new Date().toISOString(),
+  existing: 'refresh' | 'retain' = 'refresh',
 ) {
   const local = normalizeShortlistStore(localRaw).entries;
   const byDomain = new Map(local.map((record) => [record.domain, record]));
   const candidates = Array.isArray(selectedRaw) ? selectedRaw.slice(0, MAX_SHORTLIST_INPUTS) : [];
   let added = 0;
   let updated = 0;
+  let retained = 0;
   let removed = 0;
   let skipped = Math.max(0, (Array.isArray(selectedRaw) ? selectedRaw.length : 0) - MAX_SHORTLIST_INPUTS);
   const seen = new Set<string>();
@@ -198,6 +200,10 @@ export function setShortlistSelection(
     }
     seen.add(record.domain);
     if (selected) {
+      if (existing === 'retain' && byDomain.has(record.domain)) {
+        retained += 1;
+        continue;
+      }
       if (!byDomain.has(record.domain) && byDomain.size >= MAX_SHORTLIST_ENTRIES) {
         skipped += 1;
         continue;
@@ -213,6 +219,7 @@ export function setShortlistSelection(
     entries: assertShortlistStoreBudget([...byDomain.values()]).entries,
     added,
     updated,
+    retained,
     removed,
     skipped,
   };

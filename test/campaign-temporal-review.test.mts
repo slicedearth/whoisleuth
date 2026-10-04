@@ -9,6 +9,41 @@ import { openOrCreateCase, updateCase } from '../frontend/src/lib/analysis/case-
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
 
 describe('campaign temporal review', () => {
+  test('bounded caveat summaries disclose omissions without changing collection quality', async () => {
+    const opened = openOrCreateCase([], { domain: 'alpha.example' }, '2026-08-01T00:00:00Z');
+    const record = updateCase(opened.cases, opened.record.id, { evidencePin: {
+      field: 'dns.nameservers', category: 'dns', label: 'Nameservers', value: 'ns1.alpha.example',
+      source: 'Fixture resolver', observedAt: '2026-07-21T00:00:00Z', completeness: 'complete',
+    } }, '2026-08-01T01:00:00Z').record;
+    const pin = record.evidencePins[0]!;
+    for (const count of [6, 7, 12]) {
+      const caveats = Array.from({ length: count }, (_, index) => `Qualification ${String(index + 1).padStart(2, '0')}.`);
+      const reviewed = { ...record,
+        evidencePins: [{ ...pin, limitations: caveats.slice(0, 6) }],
+        sightings: [{ id: 'linked-sighting', state: 'analyst_confirmed' as const, sourceClass: 'analyst' as const,
+          category: 'delegation' as const, source: pin.source, observedAt: pin.observedAt,
+          completeness: 'complete' as const, evidencePinId: pin.id,
+          limitations: [...caveats.slice(5), caveats[0]!], createdAt: record.createdAt }],
+      };
+      const review = buildCampaignTemporalReview(['alpha.example'], [reviewed]);
+      const event = review.events[0]!;
+      assert.equal(event.observationCount, 1);
+      assert.equal(event.completeness, 'complete');
+      assert.equal(event.truncated, false);
+      assert.equal(review.truncated, false);
+      assert.equal(event.limitations.length, 6);
+      assert.deepEqual(event.limitations.slice(0, count === 6 ? 6 : 5), caveats.slice(0, count === 6 ? 6 : 5));
+      if (count > 6) assert.equal(event.limitations[5], `${count - 5} additional source caveats are not shown in this summary; review the retained pins and sightings.`);
+      const reordered = { ...reviewed,
+        evidencePins: [...reviewed.evidencePins, ...reviewed.evidencePins].map(value => ({ ...value, limitations: [...value.limitations].reverse() })),
+        sightings: reviewed.sightings.map(value => ({ ...value, limitations: [...value.limitations].reverse() })),
+      };
+      assert.deepEqual(buildCampaignTemporalReview(['alpha.example'], [reordered]), review);
+      const exported = await buildCampaignTemporalExport({ id: 'campaign-1', name: 'Example review', domains: ['alpha.example'] }, review, '2026-08-02T00:00:00Z');
+      assert.deepEqual(JSON.parse(JSON.stringify(exported)).review.events[0].limitations, event.limitations);
+    }
+  });
+
   test('colliding observation groups conserve caveats independently of pin order', async () => {
     const opened = openOrCreateCase([], { domain: 'alpha.example', source: 'lookup' }, '2026-08-01T00:00:00Z');
     let cases = opened.cases;

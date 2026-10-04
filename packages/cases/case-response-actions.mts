@@ -700,6 +700,10 @@ export function appendCaseAction(
   return normalizeCaseActions([...current, created], now, { sourceVersion: CASE_SCHEMA_VERSION });
 }
 
+export function providerOutcomeRequiresObjectScope(outcome: unknown): boolean {
+  return outcome === 'provider_reports_resolved' || outcome === 'partially_remediated';
+}
+
 export function appendCaseActionTransition(
   current: readonly CaseActionRecord[],
   actionId: string,
@@ -714,7 +718,7 @@ export function appendCaseActionTransition(
   const outcome = readCaseResponseObjectOutcome(item.objectOutcome);
   if (selectedObjects?.some(object => !action.responseObjects?.some(bound => sameCaseResponseObject(bound, object)))) throw new TypeError('A transition may concern only objects explicitly bound to its action.');
   if (outcome && !selectedObjects?.length) throw new TypeError('Explicitly select the affected objects for this outcome; it is not applied to every action object.');
-  if (action.responseObjects?.length && item.providerOutcome === 'provider_reports_resolved' && !selectedObjects?.length) throw new TypeError('Explicitly select the objects covered by this provider-reported resolution; other action objects remain unchecked.');
+  if (action.responseObjects?.length && providerOutcomeRequiresObjectScope(item.providerOutcome) && !selectedObjects?.length) throw new TypeError('Explicitly select the objects covered by this provider-reported outcome; other action objects remain unchecked.');
   const nextState = typeof item.nextState === 'string' && ACTION_STATES.has(item.nextState)
     ? item.nextState as CaseActionState
     : null;

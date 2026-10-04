@@ -3,6 +3,7 @@
   import { CASE_PROVIDER_OUTCOMES } from '../../../../packages/cases/case-response-records.mts';
   import type { CaseRecord, CaseActionRecord, CaseActionState } from '../cases.ts';
   import type { CaseActionEventSourceClass } from '$lib/analysis/case-response-model.ts';
+  import { providerOutcomeRequiresObjectScope } from '../../../../packages/cases/case-response-actions.mts';
   import { isoFromUtcInput, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { responseRouteFreshness } from '../../../../packages/cases/response-route-freshness.mts';
@@ -151,7 +152,7 @@
       <details><summary>Event evidence and limitations</summary><div class="stack"><CaseEvidencePinSelect label="Receipt evidence" pins={record.evidencePins} bind:value={quickActionDraft.value.quickEvidencePinId} /><label class="field">Receipt limitations <small>one per line</small><textarea bind:value={quickActionDraft.value.quickLimitations} maxlength="2000" rows="2"></textarea></label></div></details>
     {/if}
     {#if quickAction.state !== 'terminal'}
-      <button id={`quick-action-advance-${record.id}`} class="primary" type="submit" disabled={quickActionDraft.state.busy || mutationBusy || quickAction.state === 'authorised' && !quickActionDraft.value.quickActionReference.trim() || ['submitted', 'acknowledged'].includes(quickAction.state) && (!quickActionDraft.value.quickProviderOutcome || Boolean(quickAction.responseObjects?.length && (quickActionDraft.value.objectOutcome || quickActionDraft.value.quickProviderOutcome === 'provider_reports_resolved') && !quickActionDraft.value.responseObjects.length))}>{quickActionVerb(quickAction)}</button>
+      <button id={`quick-action-advance-${record.id}`} class="primary" type="submit" disabled={quickActionDraft.state.busy || mutationBusy || quickAction.state === 'authorised' && !quickActionDraft.value.quickActionReference.trim() || ['submitted', 'acknowledged'].includes(quickAction.state) && (!quickActionDraft.value.quickProviderOutcome || Boolean(quickAction.responseObjects?.length && (quickActionDraft.value.objectOutcome || providerOutcomeRequiresObjectScope(quickActionDraft.value.quickProviderOutcome)) && !quickActionDraft.value.responseObjects.length))}>{quickActionVerb(quickAction)}</button>
     {:else}
       <p class="notice">This action is terminal. Its retained history is immutable.</p>
     {/if}

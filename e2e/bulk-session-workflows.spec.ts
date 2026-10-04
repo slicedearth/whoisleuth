@@ -168,6 +168,38 @@ test('Monitor review conserves scoped membership and rejects stale replacement c
   } finally { await peer.close(); }
 });
 
+test('confirmed Monitor replacement survives reload and prepares only the reviewed active members', async ({ page }) => {
+  const session = richBulkSessionStore(1).sessions[0]!;
+  const rows = ['removed-one.example', 'removed-two.example'].map(domain => ({ domain, availability: 'registered', scanDepth: 'fast' }));
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([session]),
+    'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', { Review: {
+      updatedAt: session.updatedAt, results: rows, baseline: rows, history: [],
+      domainMetadata: [{ domain: 'candidate-only.example', contexts: [], candidate: null }],
+    } }),
+  });
+  await openBulkWorkspaceTools(page);
+  await page.getByRole('article').filter({ has: page.getByRole('heading', { name: session.name, exact: true }) }).getByRole('button', { name: 'Load', exact: true }).click();
+  await openBulkFilters(page);
+  await page.getByLabel('Watchlist name', { exact: true }).fill('Review');
+  await page.getByRole('button', { name: 'Save to Monitor', exact: true }).click();
+  const review = page.getByRole('region', { name: 'Review Monitor membership' });
+  await expect(review).toContainText('Removed current members: 3');
+  await expect(review).toContainText('Added current members: 1');
+  await review.getByRole('button', { name: 'Confirm snapshot replacement', exact: true }).click();
+  await expect(review).toHaveCount(0);
+  const saved = (await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 })).records[0]!.value;
+  expect(saved.domainMetadata.map(row => row.domain)).toEqual(session.domains);
+  expect(saved.results.map(row => row.domain)).toEqual(session.domains);
+  await page.goto('/monitor?view=watchlists');
+  await page.reload();
+  const row = page.getByRole('row', { name: /Review/ });
+  await expect(row.getByRole('cell').first()).toHaveText('1');
+  await row.getByRole('button', { name: 'Rescan in Bulk' }).click();
+  await expect(page).toHaveURL(/\/bulk\?source=watchlist&handoff=[0-9a-f]{32}$/u);
+  await expect(page.getByLabel('Domains', { exact: true })).toHaveValue(session.domains.join('\n'));
+});
+
 test('reviews capacity before saving and invalidates consent when another tab changes the affected records', async ({ page, context }) => {
   const base = richBulkSessionStore(1).sessions[0]!;
   await migrateLegacyBrowserData(page, {

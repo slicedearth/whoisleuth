@@ -3,7 +3,7 @@
 import manifest from '../package.json' with { type: 'json' };
 import { launchCaptureBrowser } from '../browser.mts';
 
-import { captureRenderedPage, createCaptureInterruption, parseCaptureArguments, sanitizeCaptureText } from '../capture.mts';
+import { captureRenderedPage, createCaptureInterruption, parseCaptureArguments, sanitizeCaptureText, formatCaptureSuccess } from '../capture.mts';
 import {
   compareRenderedCaptures,
   formatRenderedCaptureComparison,
@@ -59,10 +59,7 @@ try {
     })();
     const capture = manifest.captures[0];
     if (!capture) throw new Error('Rendered capture completed without manifest evidence.');
-    const safeDomain = sanitizeCaptureText(capture.domain, 253);
-    const safeOutputDirectory = sanitizeCaptureText(options.outputDirectory, 2048);
-    process.stdout.write(`Captured ${safeDomain} to ${safeOutputDirectory}\n`);
-    process.stdout.write(`Manifest: ${safeOutputDirectory}/manifest.json\n`);
+    process.stdout.write(formatCaptureSuccess(capture.domain, options.outputDirectory));
   }
 } catch (error) {
   const message = error instanceof Error ? error.message : 'Rendered capture failed.';

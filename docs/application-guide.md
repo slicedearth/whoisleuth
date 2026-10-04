@@ -741,7 +741,11 @@ explicit action binding and independent observation coverage. Manually reviewed
 actions can bind up to 20 typed domain, hostname, page, advertisement, social,
 messaging, storefront, app or other objects in one shared reporting record.
 Choose the affected subset on each provider result; acknowledgement is not
-removal. Event snapshots remain immutable, and already-retained historical
+removal. Partial-remediation and resolution reports require an explicit nonempty
+subset; a ticket-wide partial response does not mark every object remediated.
+Provider-reported closure uses the latest applicable outcome for that exact
+object, not a later response about another object. Conflicting same-time claims
+cannot support closure. Event snapshots remain immutable, and already-retained historical
 identities stay selectable after a link edit without binding to its replacement.
 Missing historical bindings remain unknown. Pins, saved recheck questions and
 independent reviews can concern the same exact object. Technical outcomes need

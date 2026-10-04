@@ -10,7 +10,7 @@ import {
   latestObservationCohort,
 } from '../evidence/latest-observations.mts';
 import { readCaseRecheckAnswerContext, assertRecheckNonReproduction, COMPARATIVE_CASE_OBJECT_OUTCOMES } from './case-recheck-model.mts';
-import { readCaseResponseObject, readCaseResponseObjectOutcome, assertCaseObjectOutcome, sameCaseResponseObject } from './case-response-object.mts';
+import { readCaseResponseObject, readCaseResponseObjectOutcome, assertCaseObjectOutcome, sameCaseResponseObject, type CaseResponseObject } from './case-response-object.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   CASE_CLOSURE_REASONS,
@@ -320,13 +320,24 @@ export function caseClosureReviewBlocker(
   reason: CaseClosureReason | null,
   review: CaseObservedEffectReview | null | undefined,
   now: string,
+  responseObject?: CaseResponseObject,
+  evidencePins: readonly CaseEvidencePin[] = [],
 ): string | null {
+  if (review?.responseObject && !sameCaseResponseObject(responseObject, review.responseObject)) return 'This independent review concerns one object. Select that object for closure; it cannot close the whole Case.';
   if (reason !== 'independently_not_reproduced' && reason !== 'infrastructure_changed') return null;
   const expected = reason === 'independently_not_reproduced' ? 'not_reproduced' : 'changed';
   const invalidLink = reason === 'independently_not_reproduced'
     ? 'This closure reason requires a linked independent not-reproduced review.'
     : 'This closure reason requires a linked independent changed review.';
   if (!review || review.state !== expected) return invalidLink;
+  if (responseObject) {
+    if (!sameCaseResponseObject(responseObject, review.responseObject)) return 'Object-specific technical closure requires a linked independent review explicitly bound to this exact object; historical missing binding remains unknown.';
+    if (!review.recheck || !sameCaseResponseObject(responseObject, review.recheck.responseObject)) return 'Object-specific technical closure requires a complete exact-object baseline and current review under comparable conditions.';
+    try {
+      assertRecheckNonReproduction('not_reproduced', review.recheck, review.completeness, evidencePins,
+        evidencePins.find(pin => pin.id === review.evidencePinId), review.observedAt);
+    } catch (cause) { return cause instanceof Error ? cause.message : 'The exact-object review cannot support technical closure.'; }
+  }
   const observedAt = normalizeExplicitIsoTimestamp(review.observedAt);
   const createdAt = normalizeExplicitIsoTimestamp(review.createdAt);
   const closedAt = normalizeExplicitIsoTimestamp(now);
@@ -338,6 +349,27 @@ export function caseClosureReviewBlocker(
     if (review.recheck && review.recheck.conditionsMatch !== 'comparable') return 'Independent non-reproduction closure requires comparable recheck conditions.';
   }
   return null;
+}
+
+/** Latest applicable provider cohort, never the action-wide summary or an old receipt. */
+export function caseClosureProviderBlocker(action: CaseActionRecord | null | undefined, responseObject: CaseResponseObject | undefined, now: string): string | null {
+  const blocked = 'This closure reason requires a linked typed provider-reported-resolution outcome for the latest applicable object observation.';
+  const closedAt = normalizeExplicitIsoTimestamp(now);
+  if (!action || !closedAt) return blocked;
+  if (responseObject ? !action.responseObjects?.some(object => sameCaseResponseObject(object, responseObject)) : action.responseObjects?.length) return blocked;
+  const events = action.history.filter(event => event.applied && (event.providerOutcome !== null || event.objectOutcome !== undefined)
+    && Date.parse(event.occurredAt) <= Date.parse(closedAt)
+    && (responseObject ? event.responseObjects?.some(object => sameCaseResponseObject(object, responseObject)) : !event.responseObjects?.length));
+  const cohort = latestObservationCohort(events, event => event.occurredAt);
+  if (!cohort.latest.length || cohort.undated.length || cohort.latest.some(event => event.providerOutcome !== 'provider_reports_resolved'
+    || event.objectOutcome === 'restored' || event.objectOutcome === 'disputed')
+    || new Set(cohort.latest.map(event => event.objectOutcome ?? null)).size !== 1) return blocked;
+  return null;
+}
+
+export function caseClosureActionBlocker(reason: CaseClosureReason | null, action: CaseActionRecord | null | undefined, responseObject: CaseResponseObject | undefined, now: string): string | null {
+  if (action?.responseObjects?.length && (!responseObject || !action.responseObjects.some(object => sameCaseResponseObject(object, responseObject)))) return 'This action concerns explicitly bound objects. Select one of them for this closure; other objects remain independent.';
+  return reason === 'provider_reported_resolution_not_independently_checked' ? caseClosureProviderBlocker(action, responseObject, now) : null;
 }
 
 export function appendCaseClosure(
@@ -358,25 +390,11 @@ export function appendCaseClosure(
   const action = typeof item.actionId === 'string'
     ? actions.find((candidate) => candidate.id === item.actionId) ?? null
     : null;
-  const reviewBlocker = caseClosureReviewBlocker(reason, review, now);
   const responseObject = readCaseResponseObject(item.responseObject);
-  if (responseObject && (reason === 'independently_not_reproduced' || reason === 'infrastructure_changed')) {
-    if (!sameCaseResponseObject(responseObject, review?.responseObject)) throw new TypeError('Object-specific technical closure requires a linked independent review explicitly bound to this exact object; historical missing binding remains unknown.');
-    if (!review?.recheck || !sameCaseResponseObject(responseObject, review.recheck.responseObject)) throw new TypeError('Object-specific technical closure requires a complete exact-object baseline and current review under comparable conditions.');
-    assertRecheckNonReproduction('not_reproduced', review.recheck, review.completeness, evidencePins,
-      evidencePins.find(pin => pin.id === review.evidencePinId), review.observedAt);
-  }
-  if (review?.responseObject && !sameCaseResponseObject(responseObject, review.responseObject)) throw new TypeError('This independent review concerns one object. Select that object for closure; it cannot close the whole Case.');
-  if (action?.responseObjects?.length && (!responseObject || !action.responseObjects.some(object => sameCaseResponseObject(object, responseObject)))) throw new TypeError('This action concerns explicitly bound objects. Select one of them for this closure; other objects remain independent.');
+  const reviewBlocker = caseClosureReviewBlocker(reason, review, now, responseObject, evidencePins);
   if (reviewBlocker) throw new Error(reviewBlocker);
-  if (reason === 'provider_reported_resolution_not_independently_checked'
-    && (action?.providerOutcome !== 'provider_reports_resolved'
-      || !action.history.some((event) => event.applied
-        && event.providerOutcome === 'provider_reports_resolved'
-        && (!responseObject || event.responseObjects?.some(object => sameCaseResponseObject(object, responseObject)))
-        && Date.parse(event.occurredAt) <= Date.parse(now)))) {
-    throw new Error('This closure reason requires a linked typed provider-reported-resolution outcome.');
-  }
+  const actionBlocker = caseClosureActionBlocker(reason, action, responseObject, now);
+  if (actionBlocker) throw new Error(actionBlocker);
   const linkContext = buildCaseClosureLinkContext(observedEffects, actions);
   const created = normalizeClosure({ ...item, id: freshId('case-closure'), createdAt: now }, now,
     new Set(observedEffects.reviews.map((candidate) => candidate.id)),

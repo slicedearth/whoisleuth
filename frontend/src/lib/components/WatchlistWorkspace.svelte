@@ -10,6 +10,7 @@
     formatValue,
     projectWatchlistDomainHistory,
     watchlistHistoryDomains,
+    watchlistActiveDomains,
     type WatchlistEntry,
     type WatchlistEvent,
     type Watchlists,
@@ -112,7 +113,7 @@
         <thead><tr><th scope="col">Name</th><th scope="col">Domains</th><th scope="col">Checks</th><th scope="col">Latest changes</th><th scope="col">Updated</th><th scope="col">Actions</th></tr></thead>
         <tbody>{#each pagedNames as name}{@const item=watchlists[name]}{#if item}{@const latest=item.history.at(-1)}
           <tr>
-            <th scope="row">{name}</th><td>{item.domainMetadata.length}</td><td>{item.history.length}</td>
+            <th scope="row">{name}</th><td>{watchlistActiveDomains(item).length}</td><td>{item.history.length}</td>
             <td><span class:changed={(latest?.changeCount || 0) > 0}>{latest?.changeCount || 0}</span></td>
             <td>{formatDate(item.updatedAt)}</td>
             <td><div class="actions toolbar">

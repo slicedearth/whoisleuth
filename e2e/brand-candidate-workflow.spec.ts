@@ -8,7 +8,12 @@ import {
   useTheme,
   failNextBrowserLocalCollectionReadAfterWrite,
   currentBrowserLocalDocument,
+  currentBulkSessionBrowserStore,
+  holdBrowserLocalTransaction,
+  openBulkWorkspaceTools,
+  openBulkFilters,
 } from './helpers';
+import { richBulkSessionStore } from '../test/bulk-session-fixture.mts';
 import { openConsoleView } from './console-navigation';
 import { normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
 import type { WatchDomainContext, WatchDomainMetadata } from '../packages/workspace/brand-candidate-workflow.mts';
@@ -50,13 +55,14 @@ const profile = normalizeBrandProfile(
   { nowIso: NOW },
 )!;
 
-async function seed(page: import('@playwright/test').Page) {
+async function seed(page: import('@playwright/test').Page, extra: Record<string, unknown> = {}) {
   await page.goto('/brands');
   await migrateLegacyBrowserData(
     page,
     {
       'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile]),
       'whois-rdap-active-brand-profile-v1': profile.id,
+      ...extra,
     },
     { clearStorage: true, destination: '/brands' },
   );
@@ -69,6 +75,42 @@ async function seed(page: import('@playwright/test').Page) {
   ).toBeEnabled();
   return workspace;
 }
+
+test('candidate nomination preserves full Shortlist evidence and a concurrent observed refresh', { tag: '@timing-sensitive' }, async ({ page, context }) => {
+  const session = richBulkSessionStore(1).sessions[0]!;
+  session.domains = [candidate.domain];
+  session.results = session.results.map(row => ({ ...row, domain: candidate.domain, registrar: 'Updated Example Registrar', pageTitle: 'New retained page' }));
+  const workspace = await seed(page, {
+    'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([session]),
+    'whois-rdap-shortlist-v1': currentBrowserLocalDocument('shortlist', { entries: [{
+      domain: candidate.domain, savedAt: NOW, scanDepth: 'deep', availability: 'registered',
+      registrarName: 'Original Example Registrar', pageTitle: 'Retained original page',
+      riskModelVersion: 9, riskScore: 72, opportunityModelVersion: 2, opportunityScore: 41, mutationTypes: ['omission'],
+    }] }),
+  });
+  await workspace.getByRole('checkbox', { name: candidate.domain, exact: true }).check();
+  const nominate = workspace.getByRole('button', { name: 'Shortlist selected', exact: true });
+  const before = (await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 })).records[0]!.value;
+  await nominate.click();
+  await expect(workspace.getByRole('status')).toContainText('0 domains added to Shortlist; 1 already present and unchanged; 0 skipped');
+  expect((await readBrowserLocalCollection(page, 'shortlist')).records[0]!.value).toEqual(before);
+  const peer = await context.newPage();
+  try {
+    await peer.goto('/bulk'); await openBulkWorkspaceTools(peer);
+    await peer.getByRole('article').filter({ has: peer.getByRole('heading', { name: session.name, exact: true }) }).getByRole('button', { name: 'Load', exact: true }).click();
+    await openBulkFilters(peer);
+    const release = await holdBrowserLocalTransaction(peer);
+    try {
+      await peer.getByRole('button', { name: 'Select matched', exact: true }).click();
+      await nominate.click();
+    } finally { await release(); }
+    await expect(nominate).toBeEnabled();
+    await expect.poll(async () => (await readBrowserLocalCollection(peer, 'shortlist')).records[0]!.value.registrarName).toBe('Updated Example Registrar');
+    await page.reload();
+    const retained = (await readBrowserLocalCollection(page, 'shortlist')).records[0]!.value;
+    expect(retained).toMatchObject({ domain: candidate.domain, availability: 'registered', registrarName: 'Updated Example Registrar', pageTitle: 'New retained page' });
+  } finally { await peer.close(); }
+});
 
 test('retained candidate review hands off exact local context without collection or a fake baseline', async ({
   page,

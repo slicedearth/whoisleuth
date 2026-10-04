@@ -309,11 +309,11 @@ export function normalizeWatchDomainMetadata(
         candidate?.domain === domain ? candidate : null,
       ),
     });
-    if (output.size >= MAX_WATCHLIST_DOMAINS) break;
+    if (output.size > MAX_WATCHLIST_DOMAINS) throw new RangeError(`Watchlists are limited to ${MAX_WATCHLIST_DOMAINS} active domains. No members were discarded.`);
   }
-  for (const raw of legacyDomains.slice(0, MAX_WATCHLIST_DOMAINS)) {
+  for (const raw of legacyDomains.slice(0, MAX_WATCHLIST_INPUT_RECORDS)) {
     const domain = normalizeDomain(raw);
-    if (domain && !output.has(domain) && output.size < MAX_WATCHLIST_DOMAINS)
+    if (domain && !output.has(domain))
       output.set(domain, {
         domain,
         contexts: [
@@ -327,6 +327,7 @@ export function normalizeWatchDomainMetadata(
         ],
         candidate: null,
       });
+    if (output.size > MAX_WATCHLIST_DOMAINS) throw new RangeError(`Watchlists are limited to ${MAX_WATCHLIST_DOMAINS} active domains. No members were discarded.`);
   }
   return [...output.values()];
 }
@@ -336,7 +337,8 @@ export function mergeWatchDomainMetadata(local: unknown, imported: unknown): Wat
   for (const incoming of normalizeWatchDomainMetadata(imported)) {
     const previous = output.get(incoming.domain);
     if (!previous) {
-      if (output.size < MAX_WATCHLIST_DOMAINS) output.set(incoming.domain, incoming);
+      if (output.size >= MAX_WATCHLIST_DOMAINS) throw new RangeError(`Watchlists are limited to ${MAX_WATCHLIST_DOMAINS} active domains. No members were discarded.`);
+      output.set(incoming.domain, incoming);
       continue;
     }
     const contexts = new Map(previous.contexts.map((context) => [context.brandProfileId, context]));

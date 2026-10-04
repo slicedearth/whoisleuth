@@ -5,7 +5,11 @@ import { readInfrastructureObservation, parseInfrastructureObservation, serialis
 
 const raw = await readFile(new URL('./fixtures/infrastructure-observations/infrastructure-observation-v1.json', import.meta.url), 'utf8');
 const fixture = () => parseInfrastructureObservation(raw);
-function later() { const result = fixture(); result.id = 'selected-example-later'; result.observedAt = '2026-10-02T12:00:00.000Z'; return result; }
+function later() {
+  const result = fixture(); result.id = 'selected-example-later'; result.observedAt = '2026-10-02T12:00:00.000Z';
+  for (const row of [...result.dns, ...result.certificates, ...result.roles]) row.observedAt = '2026-10-02T11:59:00.000Z';
+  return result;
+}
 
 test('snapshot v1 round trip preserves queried owner, wildcard identity and independent provider roles', () => {
   const value = fixture(), before = structuredClone(value);
@@ -77,11 +81,51 @@ test('not returned is not disappearance and incomplete later collections produce
   assert.equal(result.rows.find(row => row.hostname === 'mail.example.test')?.state, 'unknown');
 });
 test('changed sources, scope and concurrent times cannot manufacture temporal changes', () => {
-  for (const change of [(row: ReturnType<typeof fixture>) => { row.sources[0]!.name = 'Different source'; }, (row: ReturnType<typeof fixture>) => { row.observedAt = fixture().observedAt; }, (row: ReturnType<typeof fixture>) => { row.scope.selection = 'certificate_names'; }]) {
+  for (const change of [(row: ReturnType<typeof fixture>) => { row.sources[0]!.name = 'Different source'; }, (row: ReturnType<typeof fixture>) => { row.observedAt = fixture().observedAt; for (const fact of [...row.dns, ...row.certificates, ...row.roles]) fact.observedAt = row.observedAt; }, (row: ReturnType<typeof fixture>) => { row.scope.selection = 'certificate_names'; }]) {
     const after = later(); change(after);
     assert.equal(compareInfrastructureObservations(fixture(), after).state, 'incomparable');
     assert.ok(compareInfrastructureObservations(fixture(), after).rows.every(row => row.state === 'incomparable'));
   }
+});
+
+test('later envelopes cannot order reversed, equal or mixed source cohorts in any evidence family', () => {
+  for (const observedAt of ['2026-09-30T11:00:00.000Z', '2026-10-01T11:59:00.000Z']) {
+    const before = fixture(), after = later();
+    for (const row of [...before.dns, ...before.certificates, ...before.roles]) row.observedAt = '2026-10-01T11:59:00.000Z';
+    for (const row of [...after.dns, ...after.certificates, ...after.roles]) row.observedAt = observedAt;
+    after.dns[2]!.values = ['192.0.2.26']; after.roles[0]!.value = 'Changed claim'; after.certificates[0]!.names = ['other.example.test'];
+    const compared = compareInfrastructureObservations(before, after);
+    assert.equal(compared.state, 'partial');
+    assert.ok(compared.rows.every(row => row.state === 'unknown'));
+    assert.ok(compared.rows.every(row => row.beforeTimes.length === 1 && row.afterTimes[0] === observedAt));
+    after.dns[2] = { ...after.dns[2]!, values: [], outcome: 'no_data' };
+    assert.equal(compareInfrastructureObservations(before, after).rows.find(row => row.family === 'A' && row.hostname === 'mail.example.test')!.state, 'unknown');
+  }
+  const before = fixture(), after = later();
+  after.dns.push({ ...after.dns[2]!, observedAt: '2026-10-02T10:00:00.000Z', values: ['192.0.2.27'] });
+  const row = compareInfrastructureObservations(before, after).rows.find(row => row.family === 'A' && row.hostname === 'mail.example.test')!;
+  assert.equal(row.state, 'unknown'); assert.equal(row.afterTimes.length, 2);
+  after.certificates.push({ ...after.certificates[0]!, observedAt: '2026-10-02T10:00:00.000Z' });
+  after.roles.push({ ...after.roles[0]!, observedAt: '2026-10-02T10:00:00.000Z' });
+  for (const family of ['certificate_names', after.roles[0]!.role]) {
+    const mixed = compareInfrastructureObservations(before, after).rows.filter(value => value.family === family);
+    assert.ok(mixed.length > 0);
+    assert.ok(mixed.every(value => value.state === 'unknown' && value.afterTimes.length === 2));
+  }
+  const missing = later(); missing.certificates = []; missing.roles = [];
+  assert.ok(compareInfrastructureObservations(before, missing).rows.filter(row => row.family === 'certificate_names' || row.family === 'observed_edge').every(row => row.state === 'unknown'));
+});
+
+test('DNS comparisons never combine answers to different queried names sharing one owner', () => {
+  const before = fixture(), after = later();
+  for (const value of [before, after]) {
+    value.dns[2]!.ownerName = 'edge.example.test';
+    value.dns[2]!.values = ['192.0.2.26'];
+  }
+  after.dns[2]!.values = ['192.0.2.27'];
+  const rows = compareInfrastructureObservations(before, after).rows.filter(row => row.family === 'A' && row.hostname === 'edge.example.test');
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map(row => row.state), ['unchanged', 'changed']);
 });
 test('wildcard-only certificate scope never invents an enumerated hostname', () => {
   const value = fixture(); value.scope = { hostnames: [], dnsTypes: [], selection: 'certificate_names' }; value.dns = []; value.roles = []; value.certificates[0]!.names = ['*.example.test'];
@@ -109,8 +153,11 @@ test('incomplete identical rows are unknown and negative DNS outcomes stay disti
   after.coverage.state = 'complete'; after.dns[2] = { ...after.dns[2]!, values: [], outcome: 'nxdomain', complete: true };
   const row = compareInfrastructureObservations(before, after).rows.find(row => row.family === 'A_outcome' && row.hostname === 'mail.example.test');
   assert.deepEqual(row?.before, ['no_data']); assert.deepEqual(row?.after, ['nxdomain']); assert.equal(row?.state, 'changed');
-  after.coverage.state = 'partial'; after.dns[2]!.outcome = 'failed'; after.dns[2]!.complete = false;
-  assert.equal(compareInfrastructureObservations(before, after).rows.find(row => row.family === 'A_outcome' && row.hostname === 'mail.example.test')?.state, 'unknown');
+  after.coverage.state = 'partial'; after.dns[2]!.complete = false;
+  for (const outcome of ['failed', 'not_checked'] as const) {
+    after.dns[2]!.outcome = outcome;
+    assert.equal(compareInfrastructureObservations(before, after).rows.find(row => row.family === 'A_outcome' && row.hostname === 'mail.example.test')?.state, 'unknown');
+  }
 });
 test('observation ordering requires canonical UTC instants and duplicate certificate or role identities reject', () => {
   const before = fixture(), after = later();

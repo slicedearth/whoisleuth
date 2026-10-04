@@ -10,10 +10,10 @@
   import CaseRecheckReview from './CaseRecheckReview.svelte';
   import CaseRecheckQuestions from './CaseRecheckQuestions.svelte';
   import CaseResponseObjectSelect from './CaseResponseObjectSelect.svelte';
-  import { selectedCaseResponseObject } from '../../../../packages/cases/case-response-object.mts';
+  import { selectedCaseResponseObject, caseResponseObjectChoices } from '../../../../packages/cases/case-response-object.mts';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   import { CASE_RECHECK_CONDITIONS } from '../../../../packages/cases/case-recheck-model.mts';
-  import { caseClosureReviewBlocker } from '../../../../packages/cases/case-response-outcomes.mts';
+  import { caseClosureReviewBlocker, caseClosureActionBlocker } from '../../../../packages/cases/case-response-outcomes.mts';
 
   let { record, mode, mutationBusy, persist }: {
     record: CaseRecord;
@@ -39,11 +39,13 @@
   const responseLifecycle = $derived(buildCaseResponseLifecycleSummary(record));
   const closureNeedsReview = $derived(closureDraft.value.closureReason === 'independently_not_reproduced' || closureDraft.value.closureReason === 'infrastructure_changed');
   const closureNeedsAction = $derived(closureDraft.value.closureReason === 'provider_reported_resolution_not_independently_checked');
+  const closureObject = $derived(caseResponseObjectChoices(record).find(choice => choice.value === closureDraft.value.responseObject)?.object);
   const eligibleClosureReviews = $derived(record.observedEffects.reviews.filter((review) =>
-    caseClosureReviewBlocker(closureDraft.value.closureReason, review, new Date().toISOString()) === null
-    && (closureDraft.value.responseObject ? JSON.stringify(review.responseObject) === closureDraft.value.responseObject : !review.responseObject)));
+    (!closureDraft.value.responseObject || closureObject)
+    && caseClosureReviewBlocker(closureDraft.value.closureReason, review, new Date().toISOString(), closureObject, record.evidencePins) === null));
   const eligibleClosureActions = $derived(record.actions.filter((action) =>
-    closureNeedsAction ? action.providerOutcome === 'provider_reports_resolved' : true));
+    (!closureDraft.value.responseObject || closureObject)
+    && caseClosureActionBlocker(closureDraft.value.closureReason, action, closureObject, new Date().toISOString()) === null));
 
   async function closeCaseDeliberately() {
     selectionError = '';
@@ -111,7 +113,7 @@
         <div class="two-columns">
           <label class="field">{mode === 'quick' ? 'Reason' : 'Closure reason'}<select bind:value={closureDraft.value.closureReason}>{#each CASE_CLOSURE_REASONS as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
           <label class="field">Independent review<select bind:value={closureDraft.value.closureReviewId} required={closureNeedsReview}><option value="">{closureNeedsReview ? 'Select the required typed review' : 'No linked review'}</option>{#each eligibleClosureReviews as review}<option value={review.id}>{review.state.replaceAll('_', ' ')} · {review.observedAt}</option>{/each}</select></label>
-          <label class="field">Provider action<select bind:value={closureDraft.value.closureActionId} required={closureNeedsAction}><option value="">{closureNeedsAction ? 'Select the required provider-resolution action' : 'No linked provider action'}</option>{#each eligibleClosureActions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.providerOutcome?.replaceAll('_', ' ') ?? action.state.replaceAll('_', ' ')}</option>{/each}</select></label>
+          <label class="field">Provider action<select bind:value={closureDraft.value.closureActionId} required={closureNeedsAction}><option value="">{closureNeedsAction ? 'Select the required provider-resolution action' : 'No linked provider action'}</option>{#each eligibleClosureActions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {closureNeedsAction ? 'provider reported resolution' : action.providerOutcome?.replaceAll('_', ' ') ?? action.state.replaceAll('_', ' ')}</option>{/each}</select></label>
         </div>
         <label class="field">Closure summary<textarea bind:value={closureDraft.value.closureSummary} maxlength="2000" rows="2" required></textarea></label>
         <label class="field">Closure limitations <small>one per line</small><textarea bind:value={closureDraft.value.closureLimitations} maxlength="2000" rows="2"></textarea></label>
