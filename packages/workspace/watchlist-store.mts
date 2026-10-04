@@ -2,7 +2,7 @@
 // evidence shape and diff semantics; this module owns collection names, schema
 // migration, import merging, and exact serialized-byte accounting.
 
-import { MAX_WATCHLIST_DOMAINS, normalizeWatchlistEntry, compactWatchlistResults, appendWatchlistScan, mergeWatchlistBaseline, type WatchlistComparableRecord } from './watchlist-history.mts';
+import { MAX_WATCHLIST_DOMAINS, normalizeWatchlistEntry, compactWatchlistResults, appendWatchlistScan, mergeWatchlistBaseline, type CompactWatchlistRecord, type WatchlistComparableRecord } from './watchlist-history.mts';
 import { mergeWatchDomainMetadata } from './brand-candidate-workflow.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
@@ -45,7 +45,7 @@ export type WatchlistUpdatePreview = Readonly<{
   added: readonly string[];
   removed: readonly string[];
   previous: WatchlistEntry | null;
-  input: readonly WatchlistComparableRecord[];
+  input: readonly CompactWatchlistRecord[];
 }>;
 
 export function resolveWatchlistMutationTarget(current: WatchlistCollection, requestedName: string): { name: string; previous: WatchlistEntry | null } {

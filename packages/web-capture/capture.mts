@@ -149,7 +149,10 @@ function createCaptureDeadline(
 
 /** The first signal requests owned cleanup; a second explicitly forces exit. */
 export function createCaptureInterruption(
-  events: Pick<NodeJS.Process, 'on' | 'off'> = process,
+  events: {
+    on(signal: 'SIGINT' | 'SIGTERM', listener: () => void): unknown;
+    off(signal: 'SIGINT' | 'SIGTERM', listener: () => void): unknown;
+  } = process,
   emergencyExit: () => void = () => process.exit(130),
 ) {
   const controller = new AbortController();

@@ -4,6 +4,42 @@ import { readFile } from 'node:fs/promises';
 import { test, expect } from './fixtures';
 import { expectNoHorizontalOverflow, openBulkWorkspaceTools, readBrowserLocalCollection, useTheme } from './helpers';
 import { captureDownloads } from './bulk-analysis-fixtures';
+import { buildManagedIndicatorRevision, parseManagedIndicatorJson, readManagedIndicatorSet, serializeManagedIndicatorSet } from '../packages/interchange/managed-indicator-set.mts';
+import { MAX_MANAGED_INDICATOR_SET_BYTES } from '../packages/contracts/analyst-interchange.mts';
+
+test('near-limit indicator files survive browser renewal, download and reimport unchanged', async ({ page }) => {
+  const now = '2026-10-04T00:00:00.000Z';
+  const rows = Array.from({ length: 1_000 }, (_, index) => ({ domain: `entry-${index}.example.test`, availability: 'registered', risk: 85,
+    analystDisposition: 'suspicious', profileContext: { sourceState: 'ready' } }));
+  const baseline = (await buildManagedIndicatorRevision({ name: 'Large retained set', basis: 'é'.repeat(930),
+    expiresAt: '2026-11-04T00:00:00.000Z', rows, selectedDomains: rows.map(row => row.domain) }, now)).manifest;
+  expect(Buffer.byteLength(JSON.stringify(baseline, null, 2))).toBeGreaterThan(MAX_MANAGED_INDICATOR_SET_BYTES);
+  await page.clock.setFixedTime(new Date('2026-10-05T00:00:00.000Z'));
+  await page.goto('/bulk');
+  await openBulkWorkspaceTools(page, 'indicators');
+  const section = page.getByRole('region', { name: 'Indicator revisions', exact: true });
+  await section.getByLabel('Preview a retained revision').setInputFiles({ name: 'large.json', mimeType: 'application/json', buffer: Buffer.from(serializeManagedIndicatorSet(baseline)) });
+  await expect(section.getByLabel('Imported indicator revision preview')).toContainText('Retained identities: 1000');
+  await section.getByRole('button', { name: 'Use this revision as baseline' }).click();
+  const form = section.getByRole('form', { name: 'Prepare indicator revision' });
+  await form.getByLabel(`Renew ${baseline.entries[0]!.domain}`, { exact: true }).check();
+  await form.getByLabel(`Withdraw ${baseline.entries[1]!.domain}`, { exact: true }).check();
+  await form.getByLabel('Review basis', { exact: true }).fill('Reviewed "quoted" evidence \\ again');
+  await form.getByLabel('Expiry for additions and renewals (UTC)', { exact: true }).fill('2026-12-04T00:00:00.000Z');
+  await form.getByRole('button', { name: 'Prepare revision preview' }).click();
+  const preview = section.getByRole('region', { name: 'Prepared indicator revision' });
+  const [download] = await captureDownloads(page, () => preview.getByRole('button', { name: 'Download revision manifest', exact: true }).click(), 1);
+  const bytes = await readFile((await download!.path())!);
+  expect(bytes.byteLength).toBeLessThanOrEqual(MAX_MANAGED_INDICATOR_SET_BYTES);
+  const reopened = await readManagedIndicatorSet(parseManagedIndicatorJson(bytes.toString('utf8')));
+  expect(reopened.entries.map(entry => entry.id)).toEqual(baseline.entries.map(entry => entry.id));
+  expect(reopened.entries[0]!.expiresAt).toBe('2026-12-04T00:00:00.000Z');
+  expect(reopened.entries[1]!.withdrawal?.reason).toBe('Reviewed "quoted" evidence \\ again');
+  expect(reopened.entries.slice(2)).toEqual(baseline.entries.slice(2));
+  await section.getByLabel('Preview a retained revision').setInputFiles({ name: 'downloaded.json', mimeType: 'application/json', buffer: bytes });
+  await expect(section.getByLabel('Imported indicator revision preview')).toContainText('Large retained set · revision 2');
+  await expect(section.getByLabel('Imported indicator revision preview')).toContainText('Retained identities: 1000');
+});
 
 async function openRetainedIndicators(page: import('@playwright/test').Page) {
   await page.clock.setFixedTime(new Date('2026-11-01T01:00:00.000Z'));

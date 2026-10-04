@@ -31,6 +31,11 @@ type WritableLike = { write(value: string): unknown };
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 type CheckOptions = Readonly<{ fetcher?: Fetcher; requestTimeoutMs?: number }>;
 type MainOptions = Readonly<{ stdout?: WritableLike; stderr?: WritableLike; fetcher?: Fetcher }>;
+type ReviewedCliCandidate = CliPackageReport & Readonly<{
+  publicationEnabled: true;
+  archiveFilename: string;
+  archiveSha256: string;
+}>;
 
 type PublishedCliReport = Readonly<{
   schema: typeof PUBLISHED_CLI_CHECK_SCHEMA;
@@ -243,7 +248,7 @@ function validatedTarballUrl(value: unknown, version: string): string {
   return parsed.toString();
 }
 
-export function validateCandidateReport(value: unknown, expectedVersionValue: unknown): CliPackageReport {
+export function validateCandidateReport(value: unknown, expectedVersionValue: unknown): ReviewedCliCandidate {
   const expectedVersion = normalizeSemanticVersion(expectedVersionValue);
   const report = record(value, 'Reviewed candidate report');
   exactKeys(report, [
@@ -273,7 +278,7 @@ export function validateCandidateReport(value: unknown, expectedVersionValue: un
     || report.installedChecks.some((item) => typeof item !== 'string' || !item || item.length > 80)) {
     throw new TypeError('Reviewed installed checks must be a bounded non-empty string array.');
   }
-  return Object.freeze(report as unknown as CliPackageReport);
+  return Object.freeze(report as unknown as ReviewedCliCandidate);
 }
 
 export function validatePublishedManifest(value: unknown, expectedVersionValue: unknown) {

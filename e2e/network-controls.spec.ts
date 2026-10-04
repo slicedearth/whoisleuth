@@ -158,6 +158,7 @@ test('an incomplete deep scan is stored conservatively so skipped probes cannot 
   await openBulkFilters(page);
   await page.getByLabel('Watchlist name').fill('Policy-safe baseline');
   await page.getByRole('button', { name: 'Save to Monitor' }).click();
+  await page.getByRole('region', { name: 'Review Monitor membership' }).getByRole('button', { name: 'Confirm snapshot replacement', exact: true }).click();
 
   const storedDepth = (await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 })).records[0]?.value?.results?.[0]?.scanDepth;
   expect(storedDepth).toBe('fast');

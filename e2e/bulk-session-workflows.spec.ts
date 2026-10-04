@@ -147,7 +147,7 @@ test('Monitor review conserves scoped membership and rejects stale replacement c
   await expect(review).toHaveCount(0);
   const merged = (await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 })).records[0]!.value;
   expect(merged.results.map((row: { domain: string }) => row.domain).sort()).toEqual([...session.domains, 'retained-one.example', 'retained-two.example'].sort());
-  expect(merged.history.at(-1).resultCount).toBe(1);
+  expect(merged.history.at(-1)).toMatchObject({ resultCount: 1 });
   await page.getByLabel('Watchlist name', { exact: true }).fill('Review');
   await page.getByRole('button', { name: 'Save to Monitor', exact: true }).click();
   await expect(review).toContainText('Full snapshot replacement');
