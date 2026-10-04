@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { expect, test } from './fixtures';
 import { BULK_SESSION_SCHEMA, BULK_SESSION_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { MAX_BULK_SESSIONS } from '../packages/workspace/bulk-session-model.mts';
@@ -84,11 +85,14 @@ test('held domain file reading cannot replace a typed and admitted queue', { tag
 
 test('saved Bulk results retain admitted targets and mode after next-run draft edits', async ({ page }) => {
   const session = richBulkSessionStore(2).sessions[0]!;
+  session.inputDigest = `sha256:${createHash('sha256').update(`${session.mode}\u0000${session.domains.join('\n')}`).digest('hex')}`;
   await migrateLegacyBrowserData(page, { 'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([session]) });
   await openBulkWorkspaceTools(page);
   await page.getByRole('article').filter({ has: page.getByRole('heading', { name: session.name, exact: true }) }).getByRole('button', { name: 'Load', exact: true }).click();
   await page.getByLabel('Domains', { exact: true }).fill('next-draft.example');
-  await page.getByLabel('Scan mode', { exact: true }).selectOption('fast');
+  const mode = page.getByRole('combobox', { name: 'Scan mode', exact: true });
+  await mode.selectOption('fast');
+  await expect(mode).toHaveValue('fast');
   await page.getByRole('button', { name: 'Update saved session', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: `Updated ${session.name}.` })).toBeVisible();
   const actual = (await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: 1 })).records[0]!.value;

@@ -3,7 +3,7 @@ import type { ScanResult } from '../analysis/bulk-result-model.ts';
 import type { ShortlistRecord } from '../shortlist.ts';
 import type { BrowserLocalCollectionLoadState } from '../browser-local-data-service.ts';
 import type { registerAnalystUndo } from '../analyst-undo.ts';
-import { MAX_SHORTLIST_INPUTS } from '../analysis/shortlist-model.ts';
+import { MAX_SHORTLIST_INPUTS, normalizeShortlistRecord } from '../analysis/shortlist-model.ts';
 
 type Storage = Pick<
   typeof import('../shortlist.ts'),
@@ -83,13 +83,14 @@ export class BulkShortlistWorkspace {
     return null;
   }
   async toggle(row: ScanResult): Promise<void> {
+    const domain = row.domain;
     const captured = this.#capture([row]);
     if (!captured) return;
     await this.#enqueue(async () => {
       await this.ensureLoaded();
-      const selected = !this.#state.records.some((record) => record.domain === row.domain);
+      const selected = !this.#state.records.some((record) => record.domain === domain);
       if (await this.#select(captured, selected)) this.#update({ status: selected
-        ? `Added ${row.domain} to the shortlist.` : `Removed ${row.domain} from the shortlist.` });
+        ? `Added ${domain} to the shortlist.` : `Removed ${domain} from the shortlist.` });
       return true;
     });
   }
@@ -102,8 +103,15 @@ export class BulkShortlistWorkspace {
       this.#update({ status: 'The requested shortlist selection exceeds the bounded input limit.' });
       return null;
     }
-    return structuredClone(rows.map(row => ({ ...row.saved, riskScore: row.risk,
-      opportunityScore: row.opportunity, savedAt: this.#options.now?.() ?? new Date().toISOString() })));
+    // The domain owner produces detached, bounded records even when the view
+    // supplies nested reactive proxies. Keep invalid slots for skipped counts.
+    try {
+      return rows.map(row => normalizeShortlistRecord({ ...row.saved, riskScore: row.risk,
+        opportunityScore: row.opportunity, savedAt: this.#options.now?.() ?? new Date().toISOString() }));
+    } catch {
+      this.#update({ status: 'The selected rows could not be prepared. No shortlist changes were saved.' });
+      return null;
+    }
   }
   #enqueue(operation: () => Promise<boolean>): Promise<boolean> {
     if (this.#disposed) return Promise.resolve(false);
