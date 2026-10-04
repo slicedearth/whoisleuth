@@ -182,6 +182,15 @@ unsupported record digest leaves the finding partial; a mismatched supported
 digest excludes the response. Paths, queries, fragments, headers, request
 bodies, response bodies, and archive bytes are not retained.
 
+A bounded decimal HTTP `Content-Length` that differs from a nonempty,
+unencoded retained body adds a fixed caveat and leaves the finding partial,
+even when its block digest matches. This qualifies record consistency, not
+the cause of the difference or proof of source truncation. Empty responses,
+bodyless statuses and transfer-encoded responses are not compared this way;
+the importer does not reconstruct the request method. Outer
+[WARC framing](https://iipc.github.io/warc-specifications/specifications/warc-format/warc-1.1/)
+remains independent of [HTTP representation length](https://www.rfc-editor.org/rfc/rfc9110.html#section-8.6).
+
 The same control accepts a bounded `.wacz` package conforming to the supported
 WACZ 1.x data-package structure. The package is processed locally and is never
 replayed. WHOISleuth requires a root `datapackage.json`, one to eight declared

@@ -22,18 +22,18 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.slice().buffer;
 }
 
-function responseBlock(): Uint8Array {
+function responseBlock(extraHeaders: string[] = []): Uint8Array {
   const body = '<!doctype html><html><head><title>Reviewed package</title></head><body>Discarded body</body></html>';
   return encoder.encode([
     'HTTP/1.1 200 OK',
     'Content-Type: text/html; charset=utf-8',
+    ...extraHeaders,
     '',
     body,
   ].join('\r\n'));
 }
 
-function warcArchive(target = 'https://portal.example.test/review?secret=value'): Uint8Array {
-  const block = responseBlock();
+function warcArchive(target = 'https://portal.example.test/review?secret=value', block = responseBlock()): Uint8Array {
   const headers = encoder.encode([
     'WARC/1.1',
     'WARC-Type: response',
@@ -93,6 +93,16 @@ function wacz(options: Readonly<{
 }
 
 describe('portable WACZ evidence import', () => {
+  test('keeps a retained HTTP length inconsistency partial after package integrity verification', async () => {
+    const input = wacz({ warcBytes: warcArchive('https://portal.example.test/', responseBlock(['Content-Length: 1'])) });
+    const report = await parseWaczEvidenceArchive(toArrayBuffer(input));
+    assert.equal(report.manifestDigest, 'verified');
+    assert.equal(report.resourcesVerified, 1);
+    assert.equal(report.accepted, 1);
+    assert.equal(report.document.findings[0]?.completeness, 'partial');
+    assert.match(report.document.findings[0]?.limitations.join(' ') ?? '', /HTTP Content-Length differs.*does not establish source truncation/u);
+  });
+
   test('matches exact resource case while rejecting ambiguous case-folded duplicates', async () => {
     for (const resourcePath of ['archive/Capture.warc.gz', 'archive/Capture.WARC.GZ']) {
       const report = await parseWaczEvidenceArchive(toArrayBuffer(wacz({ resourcePath })));
