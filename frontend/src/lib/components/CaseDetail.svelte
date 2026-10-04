@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { goto } from '$app/navigation';
+  import { beforeNavigate, goto } from '$app/navigation';
   import { tick } from 'svelte';
   import PageHeading from '#lib/components/PageHeading.svelte';
   import CaseRelationships from '#lib/components/CaseRelationships.svelte';
@@ -70,6 +70,22 @@
   const deepLinkTargetId = $derived(page.url.searchParams.get('response') === '1'
     ? `case-response-preflight-${record.id}`
     : page.url.hash.startsWith('#case-response-') ? page.url.hash.slice(1) : null);
+  let deepLinkNavigation: { href: string; caseId: string; origin: Element | null } | null = null;
+  beforeNavigate(({ to }) => {
+    const destination = to?.url;
+    const active = document.activeElement;
+    deepLinkNavigation = destination?.pathname === '/cases'
+      && destination.searchParams.get('case') === record.id
+      && (destination.searchParams.get('response') === '1' || destination.hash.startsWith('#case-response-'))
+      ? {
+        href: destination.href,
+        caseId: record.id,
+        // Section history can preserve focus until the outgoing panel is hidden.
+        // Only that Case's original control may yield to the requested target.
+        origin: active?.closest('[data-case-detail]')?.getAttribute('data-case-detail') === record.id ? active : null,
+      }
+      : null;
+  });
 
   // Reading positions are transient and belong only to this mounted Case.
   const readingPositions = new Map<CaseWorkspaceSection, number>();
@@ -119,6 +135,8 @@
   }
   $effect(() => {
     const targetId = deepLinkTargetId;
+    const navigation = deepLinkNavigation;
+    const origin = navigation?.href === page.url.href && navigation.caseId === record.id ? navigation.origin : null;
     let current = true;
     void tick().then(() => {
       if (!current || !targetId) return;
@@ -126,9 +144,10 @@
       if (!target?.closest(`[data-case-detail]`)) return;
       if (target instanceof HTMLDetailsElement) target.open = true;
       const heading = target.querySelector<HTMLElement>(':scope > summary') ?? target;
-      if (restoreSubmittedFocus(null, heading, target)) {
+      if (restoreSubmittedFocus(origin, heading, target)) {
         heading.scrollIntoView({ block: 'center', behavior: 'instant' });
       }
+      if (deepLinkNavigation === navigation) deepLinkNavigation = null;
     });
     return () => { current = false; };
   });

@@ -224,6 +224,23 @@ test('legacy response deep links still open the packet and Case follow-up keeps 
   await expect(page).toHaveURL('/monitor?view=inbox&queue=all');
 });
 
+test('a Case history return preserves focus moved outside the outgoing section', async ({ page }) => {
+  await seedCases(page, '/cases?case=workspace-first&response=1#case-response-workspace-first');
+  await expect(page.locator('#case-response-preflight-workspace-first > summary')).toBeFocused();
+  await openCaseSection(page, 'History');
+  await page.getByRole('textbox', { name: 'Add note', exact: true }).fill('Keep this unsaved note');
+  const laterControl = page.getByRole('button', { name: 'Sign out', exact: true });
+  await laterControl.evaluate(element => {
+    window.addEventListener('popstate', () => queueMicrotask(() => element.focus()), { once: true });
+  });
+  await page.goBack();
+  await expect(page.getByRole('navigation', { name: 'Case sections' }).getByRole('link', { name: 'Response', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('#case-response-preflight-workspace-first')).toHaveAttribute('open', '');
+  await expect(laterControl).toBeFocused();
+  await page.goForward();
+  await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('Keep this unsaved note');
+});
+
 for (const theme of ['light', 'dark'] as const) {
   test(`Case sections stay usable across mobile and wide desktop in ${theme}`, async ({ page }, testInfo) => {
     await seedCases(page, '/cases?case=workspace-first');
