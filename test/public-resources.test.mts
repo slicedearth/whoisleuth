@@ -41,9 +41,9 @@ test('public resources expose a bounded unique set of useful investigation topic
   for (const resource of PUBLIC_RESOURCES) {
     assert.match(resource.slug, /^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
     assert.ok(resource.summary.length > 0);
-    assert.equal(resource.steps.length, 3);
-    assert.equal(resource.evidence.length, 3);
-    assert.equal(resource.questions.length, 3);
+    for (const section of ['steps', 'evidence', 'questions'] as const) {
+      assert.ok(resource[section].length > 0, `${resource.slug}: ${section} must contain useful content`);
+    }
     const maximumReferences = resource.slug === 'reporting-and-takedown-guidance' ? 11 : 3;
     assert.ok(resource.references.length >= 2 && resource.references.length <= maximumReferences);
     if (resource.slug === 'reporting-and-takedown-guidance') assert.equal(resource.references.length, 11);

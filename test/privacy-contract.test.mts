@@ -363,7 +363,7 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
       new RegExp(`Case schema ${CASE_SCHEMA_VERSION}`, 'iu'),
       new RegExp(`exact public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}`, 'iu'),
       new RegExp(
-        `published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION}–${Math.max(...CASE_IMPORT_VERSIONS.filter(version => version !== CASE_SCHEMA_VERSION))} remain readable`,
+        `earlier v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION}–${Math.max(...CASE_IMPORT_VERSIONS.filter(version => version !== CASE_SCHEMA_VERSION))} remain readable`,
         'iu',
       ),
     ],

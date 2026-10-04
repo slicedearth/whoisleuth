@@ -254,7 +254,7 @@ posture comparisons, evidence-gap queues and response preflight from retained
 records without another request. Derived views do not create evidence, prove a
 target state or silently mark an item reviewed.
 
-Creating or refreshing a Case is deliberate. Current Case schema 19 can retain
+Creating or refreshing a Case is deliberate. A Case can retain
 the exact normalised submitted hostname and the DNS, TLS and web observation
 hostname on a new evidence snapshot, analyst
 decision confidence and its basis, and a response route's observation and
@@ -292,9 +292,11 @@ They contain domain identities, minimised original observations, review notes,
 expiry and withdrawal records. Previewing or revising them makes no requests;
 only deliberate downloads create output files. STIX and MISP exports are not
 submitted or applied automatically. Content digests do not authenticate authors.
-Exact public v1 Case schema 12 and published-v2 schemas 13–17
-remain readable and migrate directly; migrated fields can remain null, unknown
-or blank because WHOISleuth does not reconstruct them from weaker evidence.
+
+Current Case schema 19 is written for new saves. Exact public v1 Case schema 12
+and earlier v2 schemas 13–18 remain readable and migrate directly; migrated
+fields can remain null, unknown or blank because WHOISleuth does not reconstruct
+them from weaker evidence.
 Case report v15 JSON and Markdown do not add the snapshot hostname.
 Explicitly selected evidence pins can include their own observation hostname
 in response packets; this remains distinct from the Case's registration domain.
