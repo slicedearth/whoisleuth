@@ -9,6 +9,7 @@ import {
   type WatchlistCollection,
 } from './watchlist-store.mts';
 import { MAX_WATCHLIST_DOMAINS } from '../contracts/workspace-portability.mts';
+import { assertWatchlistEditable } from './watchlist-history.mts';
 import {
   MAX_WATCH_CONTEXTS,
   WATCH_PRIORITIES,
@@ -98,6 +99,7 @@ export function planCandidateWatchHandoff(
     input.name;
   const entry = local[name],
     existing = new Map(entry?.domainMetadata.map((record) => [record.domain, record]) ?? []);
+  assertWatchlistEditable(entry);
   const seen = new Set<string>(),
     rows: CandidateWatchOutcome[] = [];
   let admitted = existing.size;
@@ -255,6 +257,7 @@ export function setWatchDomainContexts(
   const local = normalizeWatchlistStore(localRaw).watchlists,
     entry = local[name];
   if (!entry) throw new Error('The selected watchlist was deleted; nothing was overwritten.');
+  assertWatchlistEditable(entry);
   const metadata = new Map(entry.domainMetadata.map((record) => [record.domain, record])),
     seen = new Set<string>();
   for (const edit of edits) {

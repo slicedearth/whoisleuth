@@ -141,6 +141,7 @@ export interface CaseRelationshipGroup {
   label: string;
   method: string;
   value: string;
+  entityId?: string;
   cases: CaseRelationshipMember[];
   description: string;
   methods?: string[];
@@ -192,7 +193,7 @@ export interface CaseRelationshipFilterOptions {
 }
 
 /** Stable, bounded DOM/view identifier for one normalized relationship group. */
-export function caseRelationshipGroupId(group: Pick<CaseRelationshipGroup, 'type' | 'value'>): string {
+export function caseRelationshipGroupId(group: Pick<CaseRelationshipGroup, 'type' | 'value' | 'entityId'>): string {
   const type = typeof group?.type === 'string'
     && group.type.length <= 80
     && !/[\x00-\x1f\x7f]/u.test(group.type)
@@ -204,7 +205,10 @@ export function caseRelationshipGroupId(group: Pick<CaseRelationshipGroup, 'type
     ? group.value.trim()
     : '';
   if (!type || !value) return '';
-  return observationEnvelopeId('relationship', `${type}\u0000${value}`).slice(0, MAX_CASE_RELATIONSHIP_GROUP_ID_LENGTH);
+  const identity = group.entityId === undefined ? value
+    : typeof group.entityId === 'string' && /^[A-Za-z0-9:_-]{1,100}$/u.test(group.entityId) ? group.entityId : '';
+  if (!identity) return '';
+  return observationEnvelopeId('relationship', `${type}\u0000${identity}`).slice(0, MAX_CASE_RELATIONSHIP_GROUP_ID_LENGTH);
 }
 
 export function normalizeCaseRelationshipGroupId(value: unknown): string {
@@ -237,6 +241,7 @@ interface ProjectionBucket {
   type: string;
   label: string;
   value: string;
+  entityId: string;
   description: string;
   cases: Map<string, ProjectionCaseMember>;
   campaigns: Map<string, CaseRelationshipCampaign>;
@@ -633,6 +638,7 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
         type: definition.type,
         label: definition.label,
         value,
+        entityId: targetEntity.id,
         description: definition.description,
         cases: new Map<string, ProjectionCaseMember>(),
         campaigns: new Map<string, CaseRelationshipCampaign>(),
@@ -743,6 +749,7 @@ export function buildInvestigationCaseRelationships(rawProjection: unknown): Cas
       methods,
       classifications,
       value: bucket.value,
+      entityId: bucket.entityId,
       cases: allCases.slice(0, MAX_CASES_PER_RELATIONSHIP),
       campaigns: allCampaigns.slice(0, MAX_RELATIONSHIP_SCOPE_OPTIONS),
       description: nonPublicAddress ? NON_PUBLIC_RELATIONSHIP_LIMITATION : bucket.description,

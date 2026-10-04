@@ -73,6 +73,9 @@ test('multi-host snapshot review exposes exact outcomes, wildcards and history w
   const requests: string[] = [];
   page.on('request', request => { const path = new URL(request.url()).pathname; if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) requests.push(path); });
   const early = parseInfrastructureObservation(await readFile('test/fixtures/infrastructure-observations/infrastructure-observation-v1.json', 'utf8'));
+  early.dns[2]!.ownerName = early.dns[1]!.ownerName;
+  early.dns[2]!.values = [...early.dns[1]!.values];
+  early.certificates.push({ ...early.certificates[0]!, fingerprintSha256: 'b'.repeat(64), names: [...early.certificates[0]!.names] });
   const later = structuredClone(early); later.id = 'selected-example-later'; later.observedAt = '2026-10-02T12:00:00.000Z'; later.coverage.state = 'partial'; later.dns[2] = { ...later.dns[2]!, values: [], outcome: 'failed', complete: false };
   const pins = [early, later].map((snapshot, index) => { const document = convertInfrastructureObservation(snapshot); return { ...externalFindingCaseProjection(document.findings[0]!, document.source).evidencePin, id: `snapshot-pin-${index}` }; });
   await page.goto('/dashboard');
@@ -85,18 +88,23 @@ test('multi-host snapshot review exposes exact outcomes, wildcards and history w
   await snapshots.getByRole('checkbox', { name: /^selected-example-early/u }).check();
   const exact = snapshots.getByRole('region', { name: 'Exact snapshot selected-example-early', exact: true });
   await expect(exact.getByRole('link', { name: 'Prepare Lookup for www.example.test', exact: true })).toHaveAttribute('href', '/lookup?q=www.example.test#query');
-  await exact.getByText('1 certificate observations, exact names and wildcard patterns', { exact: true }).click();
+  await exact.getByText('2 certificate observations, exact names and wildcard patterns', { exact: true }).click();
   await expect(exact).toContainText('*.example.test · Wildcard pattern, not an enumerated host');
   await expect(exact.getByRole('checkbox', { name: '*.example.test', exact: true })).toHaveCount(0);
   await snapshots.getByRole('checkbox', { name: /^selected-example-later/u }).check();
   const comparison = snapshots.getByRole('region', { name: 'Infrastructure snapshot comparison', exact: true });
   await expect(comparison).toContainText('Comparison · partial'); await expect(comparison).toContainText('unknown'); await expect(comparison).toContainText('failed');
+  await expect(comparison).toContainText('Query www.example.test · owner edge.example.test · A values');
+  await expect(comparison).toContainText('Query mail.example.test · owner edge.example.test · A values');
+  await expect(comparison).toContainText(`Certificate SHA-256 ${early.certificates[0]!.fingerprintSha256}`);
+  await expect(comparison).toContainText(`Certificate SHA-256 ${'b'.repeat(64)}`);
+  await expect(comparison).toContainText('Earlier observations:'); await expect(comparison).toContainText('Later observations:');
   for (const width of [1280, 390, 320]) {
     await page.setViewportSize({ width, height: 844 });
     for (const theme of ['light', 'dark'] as const) {
       await useTheme(page, theme); await expectNoHorizontalOverflow(page);
       if (captureVisualEvidenceEnabled()) {
-        await snapshots.scrollIntoViewIfNeeded();
+        await comparison.evaluate(element => window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - 140, behavior: 'instant' }));
         await page.screenshot({ path: test.info().outputPath(`snapshot-review-${theme}-${width}.png`) });
       }
     }

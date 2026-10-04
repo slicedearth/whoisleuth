@@ -8,7 +8,6 @@ import {
 import { httpSecurityHeaderLabel } from './analysis/http-summary.ts';
 import {
   buildWatchlistExport,
-  MAX_WATCHLISTS,
   mergeWatchlistStores,
   normalizeWatchlistName,
   serializeWatchlistStore,
@@ -16,12 +15,13 @@ import {
   planWatchlistUpdate,
   applyReviewedWatchlistUpdate,
   type WatchlistUpdatePreview,
+  planHostedWatchlistRestore,
+  applyReviewedHostedWatchlistRestore,
+  type HostedWatchlistRestorePreview,
 } from './analysis/watchlist-store.ts';
 import { normalizeDomain } from '../../../packages/evidence/domain-name.mts';
 import { applyCandidateWatchHandoff, planCandidateWatchHandoff, setWatchDomainContext, setWatchDomainContexts, type CandidateWatchInput, type CandidateWatchPlan, type WatchDomainContextEdit } from '../../../packages/workspace/candidate-watch-handoff.mts';
 import type { WatchDomainContext } from '../../../packages/workspace/brand-candidate-workflow.mts';
-import { mergeWatchDomainMetadata } from '../../../packages/workspace/brand-candidate-workflow.mts';
-import { normalizeWatchlistEntry } from '../../../packages/workspace/watchlist-history.mts';
 import type {
   WatchlistCollection,
   WatchlistEntry,
@@ -84,6 +84,7 @@ function boundedWatchlists(all: Watchlists): Watchlists {
 }
 
 export { resolveWatchlistMutationTarget };
+export { planHostedWatchlistRestore, type HostedWatchlistRestorePreview };
 
 export async function previewWatchlistUpdate(name: string, results: readonly WatchlistComparableRecord[], mode: 'fast' | 'deep', operation: 'merge' | 'replace') {
   const captured = structuredClone(results);
@@ -106,29 +107,14 @@ export function mergeHostedWatchlist(
   name: string,
   hostedEntry: Omit<WatchlistEntry, 'domainMetadata'>,
 ): Watchlists {
-  const normalizedName = normalizeWatchlistName(name);
-  if (!normalizedName) throw new Error('Hosted watchlist name is invalid.');
-  const all = { ...current } as Watchlists;
-  const existing = Object.keys(all).find((candidate) => candidate.toLowerCase() === normalizedName.toLowerCase());
-  const localMetadata = existing ? all[existing]?.domainMetadata : [];
-  if (!existing && Object.keys(all).length >= MAX_WATCHLISTS) {
-    throw new Error('Watchlist storage is full. Export and remove a watchlist before saving more.');
-  }
-  if (existing && existing !== normalizedName) delete all[existing];
-  Object.defineProperty(all, normalizedName, {
-    value: { ...normalizeWatchlistEntry(hostedEntry), domainMetadata: mergeWatchDomainMetadata(localMetadata, normalizeWatchlistEntry(hostedEntry).domainMetadata) },
-    writable: true,
-    enumerable: true,
-    configurable: true,
-  });
-  return boundedWatchlists(all);
+  return applyReviewedHostedWatchlistRestore(current, planHostedWatchlistRestore(current, name, hostedEntry));
 }
 
-export async function restoreHostedWatchlist(name: string, hostedEntry: Omit<WatchlistEntry, 'domainMetadata'>): Promise<void> {
-  await updateBrowserLocalData('watchlists', (current) => ({
-    document: mergeHostedWatchlist(current as Watchlists, name, hostedEntry),
-    result: undefined,
-  }));
+export async function restoreHostedWatchlist(reviewed: HostedWatchlistRestorePreview): Promise<Watchlists> {
+  return updateBrowserLocalData('watchlists', current => {
+    const document = applyReviewedHostedWatchlistRestore(current, reviewed);
+    return { document, result: document };
+  });
 }
 
 export async function saveWatchlist(name:string, results:WatchlistComparableRecord[], mode:'fast'|'deep'|'saved'): Promise<WatchlistChange[]> {

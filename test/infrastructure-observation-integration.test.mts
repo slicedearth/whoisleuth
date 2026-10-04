@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
-import { parseInfrastructureObservation } from '../packages/investigation/infrastructure-observation.mts';
+import { parseInfrastructureObservation, compareInfrastructureObservations, infrastructureObservationFacts } from '../packages/investigation/infrastructure-observation.mts';
 import { convertInfrastructureObservation } from '../packages/interchange/external-findings-converters.mts';
 import { parseExternalFindingsDocument, externalFindingCaseProjection, mergeExternalFindingsIntoCases, serializeExternalFindingsDocument, MAX_EXTERNAL_FINDINGS_IMPORT_BYTES } from '../packages/interchange/external-findings-import.mts';
 import { projectInfrastructureObservation } from '../packages/investigation/infrastructure-collection-projection.mts';
@@ -17,9 +17,9 @@ import { buildInvestigationProjection } from '../packages/investigation/investig
 import { buildCaseExport, serializeCaseStore } from '../packages/cases/case-storage-model.mts';
 import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
 import { projectCaseForAudience } from '../packages/cases/case-record-projection.mts';
-import { buildInvestigationCaseRelationships } from '../packages/relationships/case-relationships.mts';
-import { buildCaseRelationshipClusters } from '../packages/relationships/case-relationship-clusters.mts';
-import { buildRelationshipGraphDocument } from '../packages/relationships/case-relationship-graph-export.mts';
+import { buildInvestigationCaseRelationships, filterInvestigationCaseRelationships, caseRelationshipGroupId } from '../packages/relationships/case-relationships.mts';
+import { buildCaseRelationshipClusters, applyCaseRelationshipClusterAdjustments } from '../packages/relationships/case-relationship-clusters.mts';
+import { buildRelationshipGraphDocument, buildRelationshipGraphExport } from '../packages/relationships/case-relationship-graph-export.mts';
 
 const raw = await readFile(new URL('./fixtures/infrastructure-observations/infrastructure-observation-v1.json', import.meta.url), 'utf8');
 const fixture = () => parseInfrastructureObservation(raw);
@@ -173,4 +173,77 @@ test('complete imported NS responses share whole-set identity with Lookup throug
   const separateProjection = project([separate, first]);
   assert.equal(buildInvestigationCaseRelationships(separateProjection).groups.length, 0);
   assert.deepEqual(separateProjection.entities.filter(row => row.type === 'nameserver_set').map(row => row.canonical).sort(), ['ns1.example.test', 'ns1.example.test|ns2.example.test', 'ns2.example.test', 'ns3.example.test']);
+});
+
+test('comparison output preserves exact query and certificate cohorts and clocks independently of input order',()=>{
+  const before=fixture(),after=later();
+  for(const snapshot of [before,after]){
+    snapshot.dns[2]!.ownerName=snapshot.dns[1]!.ownerName;
+    snapshot.dns[2]!.values=[...snapshot.dns[1]!.values];
+    snapshot.certificates.push({...snapshot.certificates[0]!,fingerprintSha256:'b'.repeat(64),names:[...snapshot.certificates[0]!.names]});
+  }
+  before.dns[2]!.observedAt='2026-10-01T11:50:00.000Z';
+  after.dns[2]!.observedAt='2026-10-02T11:50:00.000Z';
+  after.dns[2]!.values=['192.0.2.27'];
+  after.certificates[1]!.names.push('new.example.test');
+  const result=compareInfrastructureObservations(before,after);
+  for(const fact of infrastructureObservationFacts(before).facts.filter(row=>row.family==='certificate_names'))assert.equal(fact.hostname,fact.value);
+  const dns=result.rows.filter(row=>row.family==='A');
+  assert.equal(dns.length,2);
+  const changed=dns.find(row=>row.cohort.kind==='dns'&&row.cohort.queriedName==='mail.example.test')!;
+  assert.equal(changed.state,'changed'); assert.deepEqual(changed.beforeTimes,['2026-10-01T11:50:00.000Z']);
+  assert.deepEqual(changed.afterTimes,['2026-10-02T11:50:00.000Z']);
+  assert.equal(dns.find(row=>row.cohort.kind==='dns'&&row.cohort.queriedName==='www.example.test')!.state,'unchanged');
+  const certificates=result.rows.filter(row=>row.cohort.kind==='certificate_names');
+  assert.equal(certificates.length,2); assert.notDeepEqual(certificates[0]!.cohort,certificates[1]!.cohort);
+  for(const snapshot of [before,after]){snapshot.dns.reverse();snapshot.certificates.reverse();for(const row of snapshot.certificates)row.names.reverse();}
+  assert.deepEqual(compareInfrastructureObservations(before,after),result);
+  assert.deepEqual(JSON.parse(JSON.stringify(result)),result);
+  const review=buildOfflineEvidenceReview(JSON.stringify({schema:'whoisleuth.infrastructure-comparison.input',version:1,earlier:before,later:after}),'2026-10-03T00:00:00.000Z');
+  assert.deepEqual(review.result,result);
+  const rendered=formatOfflineEvidenceReview(review);
+  assert.ok(rendered.includes('queriedName=mail.example.test'));
+  assert.ok(rendered.includes('queriedName=www.example.test'));
+  assert.ok(rendered.includes('b'.repeat(64)));
+  assert.ok(rendered.includes('2026-10-01T11:50:00.000Z')); assert.ok(rendered.includes('2026-10-02T11:50:00.000Z'));
+  const longHost = [63,63,63,48].map(length=>'a'.repeat(length)).join('.')+'.example.test';
+  const longOwner = longHost.replace(/^a/u,'b');
+  assert.equal(longHost.length,253);
+  for(const snapshot of [before,after]){
+    snapshot.scope.hostnames=snapshot.scope.hostnames.map(host=>host==='www.example.test'?longHost:host);
+    for(const row of snapshot.dns)if(row.queriedName==='www.example.test'){row.queriedName=longHost;row.ownerName=longOwner;}
+    for(const row of snapshot.roles)if(row.subject==='www.example.test')row.subject=longHost;
+  }
+  const longText=formatOfflineEvidenceReview(buildOfflineEvidenceReview(JSON.stringify({schema:'whoisleuth.infrastructure-comparison.input',version:1,earlier:before,later:after}),'2026-10-03T00:00:00.000Z'));
+  assert.ok(longText.includes(`queriedName=${longHost}`));
+  assert.ok(longText.includes(`ownerName=${longOwner}`));
+});
+
+test('long whole-set labels keep separate canonical groups through filtering, graph export and manual cluster merging',()=>{
+  const now='2026-10-03T00:00:00.000Z';
+  const shared=Array.from({length:10},(_,index)=>`ns${index}-${'shared'.repeat(5)}.example.test`);
+  const cases=['a-one','a-two','b-one','b-two'].map((name,index)=>createCase({domain:`${name}.example`,evidence:{capturedAt:now,scanDepth:'deep',nameservers:[...shared,`zz-${index<2?'first':'second'}.example.test`]}},now));
+  const projection=buildInvestigationProjection({cases:buildCaseExport(cases,now)},{generatedAt:now});
+  const summary=buildInvestigationCaseRelationships(projection);
+  assert.equal(summary.groups.length,2); assert.equal(summary.groups[0]!.value,summary.groups[1]!.value);
+  assert.ok(summary.groups[0]!.value.length<=300);
+  assert.ok(projection.entities.filter(row=>row.type==='nameserver_set').every(row=>row.canonical.length>300));
+  assert.notEqual(summary.groups[0]!.entityId,summary.groups[1]!.entityId);
+  assert.equal(new Set(summary.groups.map(caseRelationshipGroupId)).size,2);
+  const filtered=filterInvestigationCaseRelationships(summary);
+  assert.equal(filtered.groups.length,2); assert.equal(filtered.discardedRelationshipCount,0); assert.equal(summary.truncated,false);
+  assert.deepEqual(filtered.groups.map(group=>group.cases.map(row=>row.domain).sort()).sort(),[['a-one.example','a-two.example'],['b-one.example','b-two.example']]);
+  const graph=buildRelationshipGraphDocument(summary,{generatedAt:now});
+  const nodes=graph.graph.nodes.filter(row=>row.kind==='relationship');
+  assert.equal(nodes.length,2); assert.equal(new Set(nodes.map(row=>row.id)).size,2);
+  assert.equal(new Set(nodes.map(row=>row.entityId)).size,2); assert.equal(graph.graph.edges.length,4); assert.equal(graph.graph.truncated,false);
+  for(const node of nodes)assert.equal(graph.graph.edges.filter(edge=>edge.target===node.id).length,2);
+  for(const format of ['json','graphml','gexf'] as const){
+    const exported=buildRelationshipGraphExport(summary,{generatedAt:now,format}).content;
+    for(const node of nodes){assert.ok(exported.includes(node.id));assert.equal(typeof node.entityId,'string');assert.ok(exported.includes(String(node.entityId)));}
+  }
+  const clusters=buildCaseRelationshipClusters(summary);
+  assert.equal(clusters.clusters.length,2);
+  const merged=applyCaseRelationshipClusterAdjustments(clusters,{labels:{},dismissed:[],merged:[clusters.clusters.map(row=>row.id)],splitCases:{}});
+  assert.equal(merged.clusters.length,1); assert.equal(merged.clusters[0]!.groups.length,2);
 });

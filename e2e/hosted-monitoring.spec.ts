@@ -1,5 +1,7 @@
 import { expect, test } from './fixtures';
-import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, readBrowserLocalCollection, requiredValue } from './helpers';
+import { readFile } from 'node:fs/promises';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
+import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, readBrowserLocalCollection, requiredValue, migrateLegacyBrowserData, useTheme } from './helpers';
 import type { Page, Route } from '@playwright/test';
 import type { ScheduledMonitoringRecoveryReport } from '../frontend/src/lib/scheduled-monitoring.ts';
 
@@ -251,6 +253,7 @@ test('a signed-in user explicitly schedules, pauses, resumes, replaces, restores
   expect(cleared.records).toEqual([]);
 
   await item.getByRole('button', { name: 'Restore to browser' }).click();
+  await hosted.getByRole('button', { name: 'Restore reviewed evidence' }).click();
   const restored = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1, minimumRevision: 3 });
   const restoredWatchlist = requiredValue(restored.records[0], 'The restored watchlist fixture is missing.').value;
   expect(requiredValue(restoredWatchlist.results[0], 'The restored watchlist result is missing.').domain).toBe('alpha.invalid');
@@ -358,10 +361,11 @@ test('announces a hosted restore only after browser-local persistence succeeds',
   const hosted = page.getByRole('region', { name: 'Scheduled watchlists' });
   const restore = hosted.getByRole('button', { name: 'Restore to browser' });
   await expect(restore).toBeVisible();
-  await holdBrowserLocalReads(page, 2_000, '.hosted-list .actions button:nth-child(3)');
+  await restore.click();
+  await holdBrowserLocalReads(page, 2_000, '.restore-preview .primary');
   await expect(restore).toBeDisabled();
   await expect(hosted.getByRole('status')).toHaveCount(0);
-  await expect(hosted.getByRole('status')).toContainText('saved watchlist', { timeout: 8_000 });
+  await expect(hosted.getByRole('status')).toContainText('Restored evidence', { timeout: 8_000 });
   await expect(restore).toBeEnabled();
 
   const localTable = page.locator('table').filter({ hasText: 'Latest changes' });
@@ -369,8 +373,75 @@ test('announces a hosted restore only after browser-local persistence succeeds',
   await expect(localTable.getByText('Priority domains', { exact: true })).toHaveCount(0);
   await failBrowserLocalManifestWrites(page, 'watchlists');
   await restore.click();
+  await hosted.getByRole('button', { name: 'Restore reviewed evidence' }).click();
   await expect(hosted.getByRole('alert')).toContainText(/storage|write|quota/iu);
   await expect(hosted.getByRole('status')).toHaveCount(0);
+});
+
+test('hosted restore consent, reloaded membership and the next Bulk queue agree', async ({page})=>{
+  const contexts=[{brandProfileId:'brand-retained',priority:'p2',reason:'Keep this context',changedAt:NOW,reviewDueAt:null}];
+  const value=currentBrowserLocalDocument('watchlists',{watchlists:{'Priority domains':{...localEntry('a.example'),results:[...localEntry('a.example').results,...localEntry('b.example').results],domainMetadata:[{domain:'a.example',contexts,candidate:null},{domain:'candidate.example',contexts:[],candidate:null}]},Other:localEntry('other.example')}});
+  await page.addInitScript(({key,value})=>localStorage.setItem(key,JSON.stringify(value)),{key:WATCHLIST_KEY,value});
+  await mockCapability(page,'supported'); await installManagementMock(page,[hostedWatchlist(localEntry('c.example'),{name:'PRIORITY DOMAINS'})]);
+  await page.goto('/monitor?view=watchlists');
+  const hosted=page.getByRole('region',{name:'Scheduled watchlists'});
+  await hosted.getByRole('button',{name:'Restore to browser'}).click();
+  const preview=hosted.getByRole('region',{name:'Review hosted restore: Priority domains'});
+  await expect(preview.getByRole('heading')).toBeFocused();
+  await expect(preview).toContainText('3 retained · 1 added · 0 removed');
+  await expect(preview).toContainText('The next Bulk queue contains 4 of 2000 permitted domains');
+  await preview.getByText('Retained domains (3)',{exact:true}).click();
+  for(const domain of ['a.example','b.example','candidate.example'])await expect(preview.getByText(domain,{exact:true})).toBeVisible();
+  for(const width of [320,390,1280]) for(const theme of ['light','dark'] as const){
+    await page.setViewportSize({width,height:844}); await useTheme(page,theme); await expectNoHorizontalOverflow(page);
+    if(captureVisualEvidenceEnabled()){await preview.evaluate(element=>window.scrollTo({top:window.scrollY+element.getBoundingClientRect().top-90,behavior:'instant'}));await page.screenshot({path:test.info().outputPath(`hosted-restore-${theme}-${width}.png`)});}
+  }
+  await preview.getByRole('button',{name:'Restore reviewed evidence'}).click();
+  await expect(hosted.getByRole('status')).toContainText('4 active domains');
+  await expect(hosted.getByRole('button',{name:'Restore to browser'})).toBeFocused();
+  const saved=(await readBrowserLocalCollection(page,'watchlists')).records;
+  const retained=saved.find(row=>row.id==='Priority domains')!.value;
+  expect(retained.domainMetadata.find(row=>row.domain==='a.example')!.contexts).toEqual(contexts);
+  expect(retained.domainMetadata.map(row=>row.domain).sort()).toEqual(['a.example','b.example','c.example','candidate.example']);
+  expect(saved.find(row=>row.id==='Other')!.value.results[0]!.domain).toBe('other.example');
+  await page.reload();
+  const row=page.getByRole('row',{name:/Priority domains/});
+  await expect(row.getByRole('cell').first()).toHaveText('4');
+  await row.getByRole('button',{name:'Rescan in Bulk'}).click();
+  await expect(page).toHaveURL(/\/bulk\?source=watchlist&handoff=/);
+  await expect(page.getByLabel('Domains',{exact:true})).toHaveValue(retained.domainMetadata.map(row=>row.domain).join('\n'));
+});
+
+test('older overflow watchlists remain reviewable and exportable without blocking healthy records or enabling scans',async({page})=>{
+  const bytes=await readFile('test/fixtures/workspace-lifecycle/watchlist-v5-membership-overflow.json','utf8');
+  const original=JSON.parse(bytes);
+  await mockCapability(page,'disabled');
+  await page.goto('/monitor?view=watchlists');
+  await migrateLegacyBrowserData(page,{[WATCHLIST_KEY]:bytes});
+  const affected=page.getByRole('row',{name:/Retained/});
+  await expect(affected).toContainText('Paused — recovery required');
+  await expect(affected.getByRole('button',{name:'Rescan in Bulk'})).toBeDisabled();
+  const healthy=page.getByRole('row',{name:/Unaffected/});
+  await expect(healthy.getByRole('button',{name:'Rescan in Bulk'})).toBeEnabled();
+  await affected.getByRole('button',{name:'History',exact:true}).click();
+  const recovery=page.getByRole('region',{name:'Watchlist membership recovery'});
+  await expect(recovery).toContainText('2000 membership records · 1 current observation · 0 active scan targets');
+  const download=page.waitForEvent('download');
+  await recovery.getByRole('button',{name:'Export preserved watchlists'}).click();
+  const path=await(await download).path(); expect(path).not.toBeNull();
+  const exported=JSON.parse(await readFile(path!,'utf8'));
+  expect(exported.version).toBe(6);
+  expect(exported.watchlists.Retained.domainMetadata).toEqual(original.watchlists.Retained.domainMetadata);
+  expect(exported.watchlists.Retained.results).toEqual(original.watchlists.Retained.results);
+  expect(exported.watchlists.Retained.membershipRecovery).toBe('legacy_overflow');
+  await page.reload(); await expect(affected).toContainText('Paused — recovery required');
+  await affected.getByRole('button',{name:'History',exact:true}).click();
+  for(const width of [320,1280])for(const theme of ['light','dark'] as const){
+    await page.setViewportSize({width,height:844});await useTheme(page,theme);await expectNoHorizontalOverflow(page);
+    if(captureVisualEvidenceEnabled()){await recovery.scrollIntoViewIfNeeded();await page.screenshot({path:test.info().outputPath(`watchlist-recovery-${theme}-${width}.png`)});}
+  }
+  await healthy.getByRole('button',{name:'Rescan in Bulk'}).click();
+  await expect(page.getByLabel('Domains',{exact:true})).toHaveValue('unaffected.example');
 });
 
 test('disables every mutation while a hosted refresh is pending', async ({ page }) => {

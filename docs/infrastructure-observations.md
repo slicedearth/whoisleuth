@@ -60,6 +60,11 @@ incomparable snapshots cannot generate removal findings. Equal-time observations
 have no temporal order. Provider-reported history stays labelled separately from
 supplied local observations.
 
+Comparison rows retain the exact DNS query, response owner and record type, or
+the certificate SHA-256, alongside their source and observation clocks. Labels
+are presentation only: relationship groups and graph exports use canonical
+entity identities, including when long nameserver-set labels look identical.
+
 The existing offline command shares the website reader and comparison owner:
 
 ```sh

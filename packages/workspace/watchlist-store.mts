@@ -2,8 +2,8 @@
 // evidence shape and diff semantics; this module owns collection names, schema
 // migration, import merging, and exact serialized-byte accounting.
 
-import { MAX_WATCHLIST_DOMAINS, normalizeWatchlistEntry, compactWatchlistResults, appendWatchlistScan, mergeWatchlistBaseline, watchlistActiveDomains, type CompactWatchlistRecord, type WatchlistComparableRecord } from './watchlist-history.mts';
-import { mergeWatchDomainMetadata } from './brand-candidate-workflow.mts';
+import { MAX_WATCHLIST_DOMAINS, normalizeWatchlistEntry, compactWatchlistResults, appendWatchlistScan, mergeWatchlistBaseline, watchlistActiveDomains, assertWatchlistEditable, type CompactWatchlistRecord, type WatchlistComparableRecord } from './watchlist-history.mts';
+import { mergeWatchDomainMetadata, normalizeWatchDomainMetadata } from './brand-candidate-workflow.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
@@ -48,9 +48,44 @@ export type WatchlistUpdatePreview = Readonly<{
   input: readonly CompactWatchlistRecord[];
 }>;
 
+export type HostedWatchlistRestorePreview = Readonly<{
+  name: string;
+  previous: WatchlistEntry | null;
+  snapshot: WatchlistEntry;
+  retained: readonly string[];
+  added: readonly string[];
+  removed: readonly string[];
+  capacity: number;
+}>;
+
+/** Restore evidence while retaining every local active member and its context. */
+export function planHostedWatchlistRestore(current: WatchlistCollection, name: string, input: unknown): HostedWatchlistRestorePreview {
+  const normalizedName = normalizeWatchlistName(name);
+  if (!normalizedName) throw new Error('Hosted watchlist name is invalid.');
+  const target = resolveWatchlistMutationTarget(normalizeWatchlistStore(current).watchlists, normalizedName);
+  const snapshot = normalizeWatchlistEntry(input);
+  assertWatchlistEditable(snapshot);
+  const before = new Set(target.previous ? watchlistActiveDomains(target.previous) : []);
+  const metadata = normalizeWatchDomainMetadata(target.previous?.domainMetadata, snapshot.results.map(record => record.domain));
+  const after = new Set(metadata.map(record => record.domain));
+  // Check bytes as well as membership before requesting consent.
+  assertWatchlistStoreBudget({ ...current, [target.name]: { ...snapshot, domainMetadata: metadata } });
+  return freezePreview(structuredClone({ name: target.name, previous: target.previous, snapshot,
+    retained: [...before].sort(), added: [...after].filter(domain => !before.has(domain)).sort(),
+    removed: [], capacity: MAX_WATCHLIST_DOMAINS }));
+}
+
+export function applyReviewedHostedWatchlistRestore(current: WatchlistCollection, reviewed: HostedWatchlistRestorePreview): WatchlistCollection {
+  const fresh = planHostedWatchlistRestore(current, reviewed.name, reviewed.snapshot);
+  if (JSON.stringify(fresh) !== JSON.stringify(reviewed)) throw new Error('The watchlist changed after review. Preview its membership again; nothing was overwritten.');
+  return assertWatchlistStoreBudget({ ...current, [fresh.name]: { ...fresh.snapshot,
+    domainMetadata: normalizeWatchDomainMetadata(fresh.previous?.domainMetadata, fresh.snapshot.results.map(record => record.domain)) } }).watchlists;
+}
+
 export function resolveWatchlistMutationTarget(current: WatchlistCollection, requestedName: string): { name: string; previous: WatchlistEntry | null } {
   const existingName = Object.keys(current).find(candidate => candidate.toLowerCase() === requestedName.toLowerCase());
   const previous = existingName ? current[existingName] ?? null : null;
+  assertWatchlistEditable(previous);
   if (!previous && Object.keys(current).length >= MAX_WATCHLISTS) throw new Error('Watchlist storage is full. Export and remove a watchlist before saving more.');
   return { name: existingName || requestedName, previous };
 }
@@ -143,6 +178,7 @@ function defineEntry(
 }
 
 function assertHistoricalQuality(entry: Record<string, unknown>, version: number | null): void {
+  if (version !== null && version < 6 && Object.hasOwn(entry, 'membershipRecovery')) throw new TypeError('Watchlist membership recovery requires schema 6.');
   if (version !== null && version < 5 && Object.hasOwn(entry, 'domainMetadata')) {
     throw new TypeError('Domain watch metadata requires Watchlist schema 5; historical evidence was not reinterpreted.');
   }
@@ -176,7 +212,7 @@ export function normalizeWatchlistStore(raw: unknown): WatchlistStore {
     const entry = plainRecord(rawEntry);
     if (!name || !entry || !Array.isArray(entry.results) || entry.results.length > MAX_WATCHLIST_DOMAINS) continue;
     assertHistoricalQuality(entry, root?.schema === WATCHLIST_SCHEMA ? watchlistStoreVersion(root) : null);
-    defineEntry(watchlists, name, normalizeWatchlistEntry(entry));
+    defineEntry(watchlists, name, normalizeWatchlistEntry(entry, { recoverLegacyMembership: root?.schema === WATCHLIST_SCHEMA && root.version === 5 }));
     if (Object.keys(watchlists).length >= MAX_WATCHLISTS) break;
   }
   return { schema: WATCHLIST_SCHEMA, version: WATCHLIST_SCHEMA_VERSION, watchlists };
@@ -234,8 +270,12 @@ export function mergeWatchlistStores(localRaw: unknown, importedRaw: unknown) {
       continue;
     }
     assertHistoricalQuality(entry, importedVersion);
-    const normalized = normalizeWatchlistEntry(entry);
+    const normalized = normalizeWatchlistEntry(entry, { recoverLegacyMembership: importedVersion === 5 });
     if (Object.prototype.hasOwnProperty.call(local, name)) {
+      if (normalized.membershipRecovery || local[name]!.membershipRecovery) {
+        if (JSON.stringify(normalized) === JSON.stringify(local[name])) { skipped++; continue; }
+        throw new Error('A watchlist awaiting membership recovery cannot be merged or replaced. Import it under a separate name to preserve both records.');
+      }
       const localTime = local[name]!.updatedAt;
       const previous = local[name]!;
       const domainMetadata = mergeWatchDomainMetadata(previous.domainMetadata, Object.hasOwn(entry, 'domainMetadata') ? normalized.domainMetadata : []);

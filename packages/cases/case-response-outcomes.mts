@@ -357,11 +357,13 @@ export function caseClosureProviderBlocker(action: CaseActionRecord | null | und
   const closedAt = normalizeExplicitIsoTimestamp(now);
   if (!action || !closedAt) return blocked;
   if (responseObject ? !action.responseObjects?.some(object => sameCaseResponseObject(object, responseObject)) : action.responseObjects?.length) return blocked;
-  const events = action.history.filter(event => event.applied && (event.providerOutcome !== null || event.objectOutcome !== undefined)
+  // A losing workflow transition is still retained evidence. Select the
+  // exact-object cohort before checking whether its receipts were applied.
+  const events = action.history.filter(event => (event.providerOutcome !== null || event.objectOutcome !== undefined)
     && Date.parse(event.occurredAt) <= Date.parse(closedAt)
     && (responseObject ? event.responseObjects?.some(object => sameCaseResponseObject(object, responseObject)) : !event.responseObjects?.length));
   const cohort = latestObservationCohort(events, event => event.occurredAt);
-  if (!cohort.latest.length || cohort.undated.length || cohort.latest.some(event => event.providerOutcome !== 'provider_reports_resolved'
+  if (!cohort.latest.length || cohort.undated.length || cohort.latest.some(event => !event.applied || event.providerOutcome !== 'provider_reports_resolved'
     || event.objectOutcome === 'restored' || event.objectOutcome === 'disputed')
     || new Set(cohort.latest.map(event => event.objectOutcome ?? null)).size !== 1) return blocked;
   return null;

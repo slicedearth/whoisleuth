@@ -182,7 +182,7 @@
             aria-describedby={row.context.brandProfileId ? `${contextControlsId}-${index}` : undefined}
             checked={selected.has(row.key)}
             onchange={(event) => toggle(row.key, event.currentTarget.checked)}
-            disabled={busy}
+            disabled={busy || Boolean(entry.membershipRecovery)}
           /><strong>{row.domain}</strong></label
         >
         <p>{WATCH_PRIORITIES.find((option) => option.value === row.context.priority)?.label}</p>
@@ -227,7 +227,7 @@
       >Additional contextual change reviews were omitted by the 500-item bound; no absence is
       inferred.</p
     >{/if}
-  <fieldset disabled={busy}
+  <fieldset disabled={busy || Boolean(entry.membershipRecovery)}
     ><legend>Reviewed selected-context change</legend>
     <label
       >New analyst priority<select bind:value={priority}

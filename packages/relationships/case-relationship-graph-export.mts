@@ -281,6 +281,7 @@ function relationshipMetadata(node: CaseRelationshipGraphRelationshipNode) {
   return {
     relationshipType: text(node.type, 40),
     value: text(node.value, 300),
+    ...(node.entityId ? { entityId: node.entityId } : {}),
     description: text(node.description, 300),
     method: text(node.method, 400),
     certaintyClasses: strings(node.classifications, 8, 40),
@@ -341,7 +342,7 @@ export function buildRelationshipGraphDocument(
   for (const node of graph.relationshipNodes) {
     const metadata = relationshipMetadata(node);
     if (!metadata.relationshipType || !metadata.value) continue;
-    const semantic = `${metadata.relationshipType}\u0000${metadata.value}`;
+    const semantic = `${metadata.relationshipType}\u0000${metadata.entityId ?? node.value}`;
     const id = stableId('relationship', semantic, seenIds);
     sourceToExportId.set(node.id, id);
     nodes.push({
@@ -436,6 +437,7 @@ function scalar(value: unknown): string {
 const NODE_FIELDS: ReadonlyArray<readonly [string, string]> = [
   ['kind', 'Kind'], ['canonical', 'Canonical value'], ['label', 'Label'],
   ['relationshipType', 'Relationship type'], ['value', 'Relationship value'], ['description', 'Description'],
+  ['entityId', 'Canonical entity identity'],
   ['method', 'Comparison method'], ['certaintyClasses', 'Certainty classes'],
   ['sources', 'Sources'], ['scanDepths', 'Scan depths'], ['firstObservedAt', 'First observed'],
   ['lastObservedAt', 'Last observed'], ['complete', 'Complete'], ['truncated', 'Truncated'],

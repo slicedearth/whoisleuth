@@ -26,6 +26,17 @@ the save transaction checks the complete reviewed collection again before any
 confirmed removal. A failed refresh after a successful write is reported as a
 refresh failure, not a request to repeat the write.
 
+Watchlist schema 6 retains schema-5 membership overflow as a paused recovery
+record. Its observations, history and Brand contexts remain reviewable and
+exportable; no targets are activated or pruned. Other watchlists remain usable.
+Export the preserved records before creating a separate watchlist with at most
+2,000 selected members. Only an explicit deletion removes the recovery record.
+
+Restoring hosted evidence previews the complete local/hosted membership union.
+It replaces the evidence snapshot and history while retaining local members
+and Brand contexts. The save transaction rechecks the reviewed destination;
+the next manually initiated Bulk queue uses that same membership.
+
 The default and unencrypted named workspaces use the plaintext JSON codec.
 Anyone able to use the browser profile, a privileged extension or the device
 may be able to read them. Named workspaces can instead use the encrypted codec

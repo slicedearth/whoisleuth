@@ -212,6 +212,7 @@ export function projectHostedWatchlistEntry(value: unknown): WatchlistEntry | nu
   const input = plainRecord(value);
   if (!input) return null;
   const normalized = normalizeWatchlistEntry(input);
+  if (normalized.membershipRecovery) return null;
   const results = normalized.results.slice(0, MAX_SCHEDULED_DOMAINS).map(projectHostedCompactRecord);
   if (results.length === 0) return null;
   const domains = new Set(results.map((record) => record.domain));

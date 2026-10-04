@@ -20,6 +20,18 @@ export type InfrastructureSource = { id: string; name: string; family: typeof IN
 export type InfrastructureDnsObservation = { sourceId: string; queriedName: string; ownerName: string; type: typeof INFRASTRUCTURE_DNS_TYPES[number]; observedAt: string; outcome: 'answered' | 'no_data' | 'nxdomain' | 'failed' | 'not_checked'; values: string[]; complete: boolean; truncated: boolean };
 export type InfrastructureCertificateObservation = { sourceId: string; fingerprintSha256: string; observedAt: string; names: string[]; namesComplete: boolean };
 export type InfrastructureRoleObservation = { sourceId: string; subject: string; subjectType: 'hostname' | 'address'; role: InfrastructureProviderRole; providerId: string; providerLabel: string; value: string; observedAt: string; complete: boolean };
+export type InfrastructureCohort =
+  | { kind: 'dns'; sourceId: string; queriedName: string; ownerName: string; type: InfrastructureDnsObservation['type']; aspect: 'values' | 'outcome' }
+  | { kind: 'certificate_names'; sourceId: string; fingerprintSha256: string }
+  | { kind: 'provider_role'; sourceId: string; subjectType: InfrastructureRoleObservation['subjectType']; subject: string; role: InfrastructureProviderRole };
+
+export function infrastructureCohortLabel(cohort: InfrastructureCohort): string {
+  switch (cohort.kind) {
+    case 'dns': return `Query ${cohort.queriedName} · owner ${cohort.ownerName} · ${cohort.type} ${cohort.aspect}`;
+    case 'certificate_names': return `Certificate SHA-256 ${cohort.fingerprintSha256}`;
+    case 'provider_role': return `${cohort.subjectType} ${cohort.subject} · ${cohort.role}`;
+  }
+}
 export type InfrastructureObservation = {
   schema: typeof INFRASTRUCTURE_OBSERVATION_SCHEMA; version: typeof INFRASTRUCTURE_OBSERVATION_VERSION;
   id: string; target: string; observedAt: string; mode: 'supplied' | 'selected_lookup' | 'certificate_log';
@@ -164,11 +176,12 @@ function observationCohorts(snapshot: InfrastructureObservation) {
 export function infrastructureObservationFacts(raw: unknown) {
   const snapshot = readInfrastructureObservation(raw);
   const sources = new Map(snapshot.sources.map(source => [source.id, source]));
-  const facts: { key: string; hostname: string; family: string; value: string; observedAt: string; source: InfrastructureSource; complete: boolean }[] = [];
-  for (const row of snapshot.dns) for (const value of row.values) facts.push({ key: dnsFactKey(row), hostname: row.ownerName, family: row.type, value, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.complete && !row.truncated });
-  for (const row of snapshot.dns) facts.push({ key: JSON.stringify([row.sourceId, row.queriedName, row.ownerName, row.type, 'outcome']), hostname: row.ownerName, family: `${row.type}_outcome`, value: row.outcome, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.complete && !row.truncated && !['failed', 'not_checked'].includes(row.outcome) });
-  for (const row of snapshot.certificates) for (const value of row.names) facts.push({ key: JSON.stringify([row.sourceId, row.fingerprintSha256, 'certificate_names']), hostname: value, family: 'certificate_names', value, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.namesComplete });
-  for (const row of snapshot.roles) facts.push({ key: roleFactKey(row), hostname: row.subject, family: row.role, value: `${row.providerId}: ${row.value}`, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.complete });
+  const facts: { key: string; cohort: InfrastructureCohort; hostname: string; family: string; value: string; observedAt: string; source: InfrastructureSource; complete: boolean }[] = [];
+  const dnsCohort = (row: InfrastructureDnsObservation, aspect: 'values' | 'outcome'): InfrastructureCohort => ({ kind: 'dns', sourceId: row.sourceId, queriedName: row.queriedName, ownerName: row.ownerName, type: row.type, aspect });
+  for (const row of snapshot.dns) for (const value of row.values) facts.push({ key: dnsFactKey(row), cohort: dnsCohort(row, 'values'), hostname: row.ownerName, family: row.type, value, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.complete && !row.truncated });
+  for (const row of snapshot.dns) facts.push({ key: JSON.stringify([row.sourceId, row.queriedName, row.ownerName, row.type, 'outcome']), cohort: dnsCohort(row, 'outcome'), hostname: row.ownerName, family: `${row.type}_outcome`, value: row.outcome, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.complete && !row.truncated && !['failed', 'not_checked'].includes(row.outcome) });
+  for (const row of snapshot.certificates) for (const value of row.names) facts.push({ key: JSON.stringify([row.sourceId, row.fingerprintSha256, 'certificate_names']), cohort: { kind: 'certificate_names', sourceId: row.sourceId, fingerprintSha256: row.fingerprintSha256 }, hostname: value, family: 'certificate_names', value, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.namesComplete });
+  for (const row of snapshot.roles) facts.push({ key: roleFactKey(row), cohort: { kind: 'provider_role', sourceId: row.sourceId, subjectType: row.subjectType, subject: row.subject, role: row.role }, hostname: row.subject, family: row.role, value: `${row.providerId}: ${row.value}`, observedAt: row.observedAt, source: sources.get(row.sourceId)!, complete: row.complete });
   return { snapshot, facts };
 }
 export function compareInfrastructureObservations(earlierRaw: unknown, laterRaw: unknown) {
@@ -177,12 +190,13 @@ export function compareInfrastructureObservations(earlierRaw: unknown, laterRaw:
   const comparable = scope(earlier.snapshot) === scope(later.snapshot) && earlier.snapshot.observedAt < later.snapshot.observedAt;
   const complete = comparable && [earlier.snapshot, later.snapshot].every(row => row.coverage.state === 'complete' && !row.coverage.truncated);
   const beforeCohorts = observationCohorts(earlier.snapshot), afterCohorts = observationCohorts(later.snapshot);
-  const groups = new Map<string, { hostname: string; family: string; source: InfrastructureSource; before: string[]; after: string[]; complete: boolean }>();
+  const groups = new Map<string, { cohort: InfrastructureCohort; hostname: string; family: string; source: InfrastructureSource; before: string[]; after: string[]; complete: boolean }>();
   for (const [side, values] of [['before', earlier.facts], ['after', later.facts]] as const) for (const fact of values) {
-    const group = groups.get(fact.key) ?? { hostname: fact.hostname, family: fact.family, source: fact.source, before: [], after: [], complete: true };
+    const group = groups.get(fact.key) ?? { cohort: fact.cohort, hostname: fact.hostname, family: fact.family, source: fact.source, before: [], after: [], complete: true };
+    if (fact.hostname < group.hostname) group.hostname = fact.hostname;
     group[side].push(fact.value); group.complete &&= fact.complete; groups.set(fact.key, group);
   }
-  const rows = [...groups.entries()].map(([key, row]) => {
+  const rows = [...groups.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, row]) => {
     row.before = [...new Set(row.before)].sort(); row.after = [...new Set(row.after)].sort();
     const before = beforeCohorts.get(key), after = afterCohorts.get(key);
     const beforeTimes = [...before?.times ?? []].sort(), afterTimes = [...after?.times ?? []].sort();

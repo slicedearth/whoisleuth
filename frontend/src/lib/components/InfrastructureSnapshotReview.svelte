@@ -2,7 +2,7 @@
   import { goto } from '$app/navigation';
   import type { InvestigationSearchSession } from '$lib/investigation-search-session';
   import type { RetainedInfrastructureSnapshotReview } from '../../../../packages/investigation/retained-infrastructure-snapshots.mts';
-  import { serialiseInfrastructureObservation } from '../../../../packages/investigation/infrastructure-observation.mts';
+  import { infrastructureCohortLabel, serialiseInfrastructureObservation } from '../../../../packages/investigation/infrastructure-observation.mts';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
   import { downloadLocalFile } from '$lib/download-local-file';
   import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
@@ -58,7 +58,7 @@
     {/each}
     {#if hosts.length}<p>Bulk opens these {hosts.length} selected hostnames for review, without scanning, changing a watchlist or scheduling.</p><button class="btn small" type="button" onclick={() => void prepareBulk()}>Prepare selected hosts in Bulk</button>{/if}
     {#if message}<p role="status">{message}</p>{/if}
-    {#if response.comparison}<section aria-label="Infrastructure snapshot comparison"><h5>Comparison · {response.comparison.state}</h5><ol>{#each response.comparison.rows as row}<li>{row.hostname} · {row.family.replaceAll('_', ' ')} · {row.source.name} ({row.source.evidenceClass.replaceAll('_', ' ')}) · {row.state.replaceAll('_', ' ')}<p>{row.before.join(', ') || 'No earlier values retained'} → {row.after.join(', ') || 'No later values retained'}</p><p>{row.detail}</p></li>{/each}</ol><ul>{#each response.comparison.limitations as limitation}<li>{limitation}</li>{/each}</ul></section>{/if}
+    {#if response.comparison}<section aria-label="Infrastructure snapshot comparison"><h5>Comparison · {response.comparison.state}</h5><ol>{#each response.comparison.rows as row}<li>{infrastructureCohortLabel(row.cohort)} · {row.source.name} [{row.source.id}] ({row.source.evidenceClass.replaceAll('_', ' ')}) · {row.state.replaceAll('_', ' ')}<p>{row.before.join(', ') || 'No earlier values retained'} → {row.after.join(', ') || 'No later values retained'}</p><p>Earlier observations: {row.beforeTimes.map(time => formatEvidenceDate(time)).join(', ') || 'None retained'}. Later observations: {row.afterTimes.map(time => formatEvidenceDate(time)).join(', ') || 'None retained'}.</p><p>{row.detail}</p></li>{/each}</ol><ul>{#each response.comparison.limitations as limitation}<li>{limitation}</li>{/each}</ul></section>{/if}
   {/if}
 </section>
 <style>

@@ -1,0 +1,11 @@
+{
+  "writerCommit": "13bf1846bb4117605cb7146ab1a3460197b32e70",
+  "writer": "packages/workspace/watchlist-store.mts",
+  "operations": ["normalizeWatchlistStore", "planWatchlistUpdate:replace", "applyReviewedWatchlistUpdate", "serializeWatchlistStore", "prepareLocalDataContent:WATCHLISTS_COLLECTION"],
+  "schemaVersion": 5,
+  "serializedBytes": 319851,
+  "sha256": "087c0688d4cdb293157ae34330e41d81999c2f2ab9aff98af7c2608988b4e118",
+  "manifestSha256": "8d5b62ad8e39f58b1283557a348de80f66ea20e85fa263b5b41498ae2c98a000",
+  "input": "2,000 member-N.example metadata records, one observed member, and a separate unaffected watchlist. Explicit replacement selects new-observation.example. The original writer retains all old metadata and omits the new domain from that metadata. Member zero has an explicit Brand context; other members have deliberately empty contexts. All values are synthetic.",
+  "retention": "Literal historical writer output and its original browser manifest. Tests rebuild only the unchanged JSON record envelope from these bytes, never regenerate domain evidence with current normalisers."
+}

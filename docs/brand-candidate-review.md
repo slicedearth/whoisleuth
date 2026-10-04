@@ -97,9 +97,10 @@ Run `plan` before `export` to inspect each duplicate/rejected outcome.
 ## Storage and sharing
 
 Brand Profile schema 10 retains candidate observations and scoped exceptions;
-versions 6–9 remain readable without invented provenance. Watchlist schema 5
-retains context metadata and nullable local password-form attribution; versions
-2–4 remain readable with unassigned urgency and unknown new evidence. New fields
+versions 6–9 remain readable without invented provenance. Watchlist schema 6
+retains context metadata, nullable local password-form attribution and paused
+[membership recovery](browser-local-data.md) for older over-capacity records.
+Versions 2–5 remain readable; older evidence receives no invented context. New fields
 declared under an older epoch are rejected. Future epochs fail closed.
 Historical fixture bytes remain independent of current writers.
 

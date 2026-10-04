@@ -67,15 +67,15 @@ test('unchanged and changed comparisons remain source-qualified and do not mutat
   assert.ok(compareInfrastructureObservations(before, after).rows.every(row => row.state === 'unchanged'));
   after.dns[2]!.values = ['192.0.2.26'];
   const result = compareInfrastructureObservations(before, after);
-  assert.equal(result.rows.find(row => row.hostname === 'mail.example.test')?.state, 'changed');
+  assert.equal(result.rows.find(row => row.hostname === 'mail.example.test' && row.family === 'A')?.state, 'changed');
   assert.deepEqual(original, later());
 });
 test('not returned is not disappearance and incomplete later collections produce unknowns', () => {
   const before = fixture(), after = later();
   after.dns[2] = { ...after.dns[2]!, values: [], outcome: 'no_data' };
   let result = compareInfrastructureObservations(before, after);
-  assert.equal(result.rows.find(row => row.hostname === 'mail.example.test')?.state, 'not_returned');
-  assert.match(result.rows.find(row => row.hostname === 'mail.example.test')!.detail, /does not establish disappearance/u);
+  assert.equal(result.rows.find(row => row.hostname === 'mail.example.test' && row.family === 'A')?.state, 'not_returned');
+  assert.match(result.rows.find(row => row.hostname === 'mail.example.test' && row.family === 'A')!.detail, /does not establish disappearance/u);
   after.coverage.state = 'partial'; after.dns[2]!.complete = false; after.dns[2]!.outcome = 'failed';
   result = compareInfrastructureObservations(before, after);
   assert.equal(result.rows.find(row => row.hostname === 'mail.example.test')?.state, 'unknown');
@@ -125,7 +125,8 @@ test('DNS comparisons never combine answers to different queried names sharing o
   after.dns[2]!.values = ['192.0.2.27'];
   const rows = compareInfrastructureObservations(before, after).rows.filter(row => row.family === 'A' && row.hostname === 'edge.example.test');
   assert.equal(rows.length, 2);
-  assert.deepEqual(rows.map(row => row.state), ['unchanged', 'changed']);
+  assert.equal(rows.find(row => row.cohort.kind === 'dns' && row.cohort.queriedName === 'mail.example.test')?.state, 'changed');
+  assert.equal(rows.find(row => row.cohort.kind === 'dns' && row.cohort.queriedName === 'www.example.test')?.state, 'unchanged');
 });
 test('wildcard-only certificate scope never invents an enumerated hostname', () => {
   const value = fixture(); value.scope = { hostnames: [], dnsTypes: [], selection: 'certificate_names' }; value.dns = []; value.roles = []; value.certificates[0]!.names = ['*.example.test'];

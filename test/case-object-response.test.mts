@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { createCase, updateCase, buildCaseExport, projectCaseForAudience, normalizeCaseStore, serializeCaseStore } from '../packages/cases/case-model.mts';
+import { createCase, updateCase, buildCaseExport, projectCaseForAudience, normalizeCaseStore, serializeCaseStore, mergeCases } from '../packages/cases/case-model.mts';
+import { mergeCaseActions } from '../packages/cases/case-response-actions.mts';
 import { buildCaseIncidentCoverage } from '../packages/cases/case-workflow-metadata.mts';
 import { caseResponseObjectChoices, selectedCaseResponseObject, readCaseResponseObject, readCaseResponseObjects } from '../packages/cases/case-response-object.mts';
 import { caseRecheckComparisonBlockers, caseRecheckAnswerContext, assertCaseObjectObservationOutcome } from '../packages/cases/case-recheck-model.mts';
@@ -187,6 +188,53 @@ test('partial provider outcomes require an explicit nonempty affected scope whil
     assert.deepEqual(restored.actions[0]!.history.at(-1)!.responseObjects, responseObjects);
   }
   assert.doesNotThrow(() => transition(record, 'acknowledged', { sourceClass: 'provider' }));
+});
+
+test('normalised imported terminal receipts cannot hide conflicting exact-object closure evidence', () => {
+  const { record: sent, objects } = submitted();
+  const acknowledged = transition(sent, 'acknowledged', { sourceClass: 'provider' });
+  const first = '2026-09-03T10:00:00.000Z', later = '2026-09-04T10:00:00.000Z', closedAt = '2026-09-05T10:00:00.000Z';
+  function branch(base: typeof sent, object: typeof objects[number], resolved: boolean, at: string, id: string) {
+    const result = transition(base, 'terminal', { sourceClass: 'provider', occurredAt: at, responseObjects: [object],
+      providerOutcome: resolved ? 'provider_reports_resolved' : 'partially_remediated', objectOutcome: resolved ? 'removed' : 'restored' });
+    // Legal IDs control the equal-time order. Projection flags are recomputed by
+    // the real reader and merge; the fixture never assigns an applied flag.
+    result.actions[0]!.history.at(-1)!.id = id;
+    return normalizeCaseStore(JSON.parse(serializeCaseStore([result]))).cases[0]!;
+  }
+  const closure = { reason: 'provider_reported_resolution_not_independently_checked', summary: 'Review exact-object provider evidence', actionId: sent.actions[0]!.id, responseObject: objects[0] };
+  for (const [resolutionId, conflictId, conflictAt] of [
+    ['receipt-a', 'receipt-z', first], ['receipt-z', 'receipt-a', first], ['receipt-a', 'receipt-z', later],
+  ]) {
+    const resolved = branch(acknowledged, objects[0]!, true, first, resolutionId!);
+    const contradicted = branch(acknowledged, objects[0]!, false, conflictAt!, conflictId!);
+    const actions = mergeCaseActions(resolved.actions, contradicted.actions, closedAt);
+    assert.equal(actions[0]!.history.filter(event => event.nextState === 'terminal' && event.applied).length, 1);
+    assert.equal(actions[0]!.history.filter(event => event.nextState === 'terminal' && !event.applied).length, 1);
+    assert.notEqual(caseClosureProviderBlocker(actions[0], objects[0], closedAt), null);
+    const merged = mergeCases([resolved], JSON.parse(JSON.stringify(buildCaseExport([contradicted], closedAt)))).cases[0]!;
+    assert.throws(() => updateCase([merged], merged.id, { closure }, closedAt), /latest applicable/);
+    const reloaded = normalizeCaseStore(JSON.parse(serializeCaseStore([merged]))).cases[0]!;
+    assert.deepEqual(reloaded.actions[0]!.history, merged.actions[0]!.history);
+    assert.notEqual(caseClosureProviderBlocker(reloaded.actions[0], objects[0], closedAt), null);
+    assert.equal(reloaded.closures.records.length, 0);
+    assert.equal(reloaded.status, sent.status);
+  }
+  const resolved = branch(acknowledged, objects[0]!, true, first, 'receipt-a');
+  const consistent = branch(acknowledged, objects[0]!, true, first, 'receipt-z');
+  // A losing transition does not gain authority merely because its wording
+  // agrees. A duplicated identical receipt, however, is one retained event.
+  assert.notEqual(caseClosureProviderBlocker(mergeCaseActions(resolved.actions, consistent.actions, closedAt)[0], objects[0], closedAt), null);
+  assert.equal(caseClosureProviderBlocker(mergeCaseActions(resolved.actions, resolved.actions, closedAt)[0], objects[0], closedAt), null);
+  const aResolved = transition(acknowledged, 'acknowledged', { sourceClass: 'provider', occurredAt: first, responseObjects: [objects[0]], providerOutcome: 'provider_reports_resolved', objectOutcome: 'removed' });
+  const bResolved = branch(aResolved, objects[1]!, true, later, 'receipt-a');
+  const bContradicted = branch(aResolved, objects[1]!, false, later, 'receipt-z');
+  const unrelated = mergeCases([bResolved], buildCaseExport([bContradicted], closedAt)).cases[0]!;
+  assert.equal(caseClosureProviderBlocker(unrelated.actions[0], objects[0], closedAt), null);
+  const closed = updateCase([unrelated], unrelated.id, { closure }, closedAt).record;
+  assert.equal(closed.closures.records.length, 1);
+  assert.equal(closed.status, sent.status);
+  assert.deepEqual(normalizeCaseStore(buildCaseExport([closed], closedAt)).cases[0]!.closures.records, closed.closures.records);
 });
 test('scoped changed closure requires complete later same-object comparison evidence', () => {
   const responseObject = { kind: 'domain' as const, identifier: 'incident.example', incidentTargetId: null };

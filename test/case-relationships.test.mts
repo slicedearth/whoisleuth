@@ -409,7 +409,8 @@ describe('projection-backed cross-case relationships', () => {
     assert.equal(normalizeCaseRelationshipGroupId(first), first);
     assert.equal(normalizeCaseRelationshipGroupId(`${first}:extra`), '');
     assert.equal(normalizeCaseRelationshipGroupId('relationship:unsafe value'), '');
-    assert.notEqual(first, caseRelationshipGroupId({ ...group, value: `${group.value}-different` }));
+    assert.equal(first, caseRelationshipGroupId({ ...group, value: `${group.value}-different` }));
+    assert.notEqual(first, caseRelationshipGroupId({ ...group, entityId: `${group.entityId}-different` }));
   });
 
   test('fails closed when malformed groups cannot receive unique view identities', () => {

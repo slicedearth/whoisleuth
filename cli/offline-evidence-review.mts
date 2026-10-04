@@ -242,7 +242,13 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
   } else if (document.kind === 'infrastructure_comparison') {
     for (const item of Array.isArray(result.rows) ? result.rows : []) {
       const row = record(item), source = record(row.source);
+      // Bound individual identities, not the combined label: a valid DNS query
+      // and owner may each occupy all 253 hostname characters.
+      const cohort = Object.entries(record(row.cohort)).map(([key, value]) => `${safeTerminalValue(key)}=${safeTerminalValue(value, '', 253)}`).join(' · ');
+      const times = (value: unknown): string => Array.isArray(value) ? value.map(time => safeTerminalValue(time, '')).join(', ') : '';
       lines.push(`${safeTerminalValue(row.hostname, '')} · ${safeTerminalValue(row.family, '')} · ${safeTerminalValue(source.name, '')} (${safeTerminalValue(source.evidenceClass, '')}) · ${safeTerminalValue(row.state, '')}`,
+        `  Cohort: ${cohort}`,
+        `  Earlier observations: ${times(row.beforeTimes)}; later observations: ${times(row.afterTimes)}`,
         `  ${safeTerminalValue(JSON.stringify(row.before), '')} → ${safeTerminalValue(JSON.stringify(row.after), '')}`, `  ${safeTerminalValue(row.detail, '')}`);
     }
   } else if ((CONTEXT_REVIEW_KINDS as readonly string[]).includes(document.kind)) {

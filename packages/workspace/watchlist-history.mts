@@ -82,6 +82,7 @@ export interface WatchlistEntry {
   baseline: WatchlistComparableRecord[];
   history: WatchlistHistoryEvent[];
   domainMetadata: WatchDomainMetadata[];
+  membershipRecovery?: 'legacy_overflow';
 }
 
 export interface AppendWatchlistScanOptions {
@@ -555,12 +556,17 @@ function initialHistoryEvent(
 }
 
 /** Active membership excludes historical baselines and includes unobserved candidates. */
-export function watchlistActiveDomains(entry: Pick<WatchlistEntry, 'results' | 'domainMetadata'>): string[] {
+export function watchlistActiveDomains(entry: Pick<WatchlistEntry, 'results' | 'domainMetadata' | 'membershipRecovery'>): string[] {
+  if (entry.membershipRecovery) return [];
   return normalizeWatchDomainMetadata(entry.domainMetadata, entry.results.map(record => record.domain)).map(record => record.domain);
 }
 
+export function assertWatchlistEditable(entry: Pick<WatchlistEntry, 'membershipRecovery'> | null | undefined): void {
+  if (entry?.membershipRecovery) throw new Error('This older watchlist is paused for membership recovery. Export its preserved records and create a separate watchlist with at most 2,000 selected domains.');
+}
+
 /** @param {object} entry */
-export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
+export function normalizeWatchlistEntry(entry: unknown, options: { recoverLegacyMembership?: boolean } = {}): WatchlistEntry {
   const input = plainRecord(entry) || {};
   const rawResults = Array.isArray(input.results) ? input.results : [];
   const results = compactWatchlistResults(rawResults);
@@ -592,12 +598,18 @@ export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
       };
     }).slice(-MAX_WATCHLIST_HISTORY_EVENTS)
     : [];
-  const normalized = {
+  const metadata = normalizeWatchDomainMetadata(input.domainMetadata);
+  const membership = new Set([...metadata.map(record => record.domain), ...results.map(record => record.domain)]);
+  const recovery = membership.size > MAX_WATCHLIST_DOMAINS
+    && (options.recoverLegacyMembership || input.membershipRecovery === 'legacy_overflow');
+  if (input.membershipRecovery !== undefined && (!recovery || input.membershipRecovery !== 'legacy_overflow')) throw new TypeError('Watchlist membership recovery state is invalid.');
+  const normalized: WatchlistEntry = {
     updatedAt: normalizeExplicitIsoTimestamp(input.updatedAt),
     results,
     baseline,
     history,
-    domainMetadata: normalizeWatchDomainMetadata(input.domainMetadata, results.map(record => record.domain)),
+    domainMetadata: recovery ? metadata : normalizeWatchDomainMetadata(metadata, results.map(record => record.domain)),
+    ...(recovery ? { membershipRecovery: 'legacy_overflow' as const } : {}),
   };
   if (normalized.history.length === 0 && (results.length || baseline.length)) normalized.history.push(initialHistoryEvent(normalized, baseline));
   return normalized;
@@ -626,6 +638,7 @@ export function appendWatchlistScan(
     ? options.mode as WatchlistScanMode
     : 'saved';
   const previous = existingEntry ? normalizeWatchlistEntry(existingEntry) : null;
+  assertWatchlistEditable(previous);
   const current = compactWatchlistResults(results);
   const changes = previous
     ? diffWatchlistBaseline(previous.baseline, current, options.ignoredDomains || new Set())

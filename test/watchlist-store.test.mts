@@ -17,6 +17,8 @@ import {
   watchlistStoreVersion,
   planWatchlistUpdate,
   applyReviewedWatchlistUpdate,
+  planHostedWatchlistRestore,
+  applyReviewedHostedWatchlistRestore,
 } from '../frontend/src/lib/analysis/watchlist-store.ts';
 import { mergeHostedWatchlist, resolveWatchlistMutationTarget } from '../frontend/src/lib/watchlists.ts';
 import { watchlistActiveDomains, MAX_WATCHLIST_DOMAINS } from '../packages/workspace/watchlist-history.mts';
@@ -286,8 +288,8 @@ test('hosted restore merges against the transaction-current collection', () => {
 
   const replacement = requiredValue(normalizeWatchlistStore({ Hosted: entry() }).watchlists.Hosted);
   const replaced = mergeHostedWatchlist(restored, 'Hosted', replacement);
-  assert.equal(Object.hasOwn(replaced, 'hosted'), false);
-  assert.equal(Object.hasOwn(replaced, 'Hosted'), true);
+  assert.equal(Object.hasOwn(replaced, 'hosted'), true);
+  assert.equal(Object.hasOwn(replaced, 'Hosted'), false);
   assert.equal(Object.hasOwn(replaced, 'Beta'), true);
 });
 
@@ -315,8 +317,30 @@ test('hosted restore preserves capacity errors while allowing additions and repl
   };
   const replaced = mergeHostedWatchlist(fullWithExisting, 'Hosted', hostedEntry);
   assert.equal(Object.keys(replaced).length, MAX_WATCHLISTS);
-  assert.equal(Object.hasOwn(replaced, 'hosted'), false);
-  assert.ok(replaced.Hosted);
+  assert.equal(Object.hasOwn(replaced, 'Hosted'), false);
+  assert.ok(replaced.hosted);
+});
+
+test('hosted restore reviews the actual membership union and revalidates its destination only', () => {
+  const original = normalizeWatchlistStore({ Review: entry({ results: [{domain:'a.example'}, {domain:'b.example'}],
+    domainMetadata: [{ domain:'a.example',contexts:[{brandProfileId:'brand-one',priority:'p2',reason:'Keep context',changedAt:NOW,reviewDueAt:null}],candidate:null },
+      {domain:'candidate.example',contexts:[],candidate:null}] }), Other:entry() }).watchlists;
+  const before=structuredClone(original);
+  const snapshot=entry({results:[{domain:'c.example'},{domain:'a.example'}]});
+  const plan=planHostedWatchlistRestore(original,'review',snapshot);
+  assert.equal(plan.name,'Review'); assert.equal(plan.capacity,2000);
+  assert.deepEqual(plan.retained,['a.example','b.example','candidate.example']);
+  assert.deepEqual(plan.added,['c.example']); assert.deepEqual(plan.removed,[]);
+  assert.ok(Object.isFrozen(plan.snapshot));
+  const saved=applyReviewedHostedWatchlistRestore(original,plan);
+  const reloaded=normalizeWatchlistStore(JSON.parse(serializeWatchlistStore(saved))).watchlists;
+  assert.deepEqual(watchlistActiveDomains(reloaded.Review!).sort(),[...plan.retained,...plan.added].sort());
+  assert.deepEqual(reloaded.Review!.domainMetadata.find(row=>row.domain==='a.example'),before.Review!.domainMetadata.find(row=>row.domain==='a.example'));
+  assert.deepEqual(reloaded.Other,before.Other); assert.deepEqual(original,before);
+  const changed=structuredClone(original); changed.Review!.domainMetadata.push({domain:'peer.example',contexts:[],candidate:null});
+  assert.throws(()=>applyReviewedHostedWatchlistRestore(changed,plan),/changed after review/);
+  changed.Review=original.Review!; changed.Other=normalizeWatchlistStore({Other:entry({results:[{domain:'peer-other.example'}]})}).watchlists.Other!;
+  assert.deepEqual(applyReviewedHostedWatchlistRestore(changed,plan).Other,changed.Other);
 });
 
 test('Bulk watchlist admission rejects a new 101st list without changing retained lists', () => {

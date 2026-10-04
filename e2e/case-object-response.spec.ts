@@ -2,6 +2,7 @@ import { expect, test } from './fixtures';
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { createCase, updateCase } from '../packages/cases/case-record-operations.mts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import { buildCaseExport } from '../packages/cases/case-storage-model.mts';
 import { openSeededTimelineCase, openCaseResponseWorkspace } from './case-test-fixtures';
 import { openCaseClassification, openCaseSection } from './console-navigation';
 import { caseWorkspaceActionStatus } from './case-response-fixtures';
@@ -84,6 +85,40 @@ test('closure selector follows exact-object provider history rather than the act
   expect(saved.closures.records[0]!.responseObject).toEqual(objects[0]);
   expect(saved.status).toBe(record.status);
   expect(saved.workflowMetadata!.incidentTargets[1]!.state).toBe('open');
+});
+
+test('imported competing legal terminal receipts withhold new closure in the real selector and storage',async({page})=>{
+  const {record,objects}=fixture();
+  const branch=(resolved:boolean,id:string)=>{
+    const value=updateCase([record],record.id,{actionUpdate:{id:record.actions[0]!.id,transition:{nextState:'terminal',sourceClass:'provider',provenance:'Independent exact-object receipt',providerOutcome:resolved?'provider_reports_resolved':'partially_remediated',objectOutcome:resolved?'removed':'restored',responseObjects:[objects[0]!],occurredAt:after}}},after).record;
+    value.actions[0]!.history.at(-1)!.id=id; return value;
+  };
+  const resolved=branch(true,'receipt-a'),conflicting=branch(false,'receipt-z');
+  await page.clock.setFixedTime('2026-09-04T10:00:00.000Z');
+  await openSeededTimelineCase(page,record.domain,[resolved],CASE_SCHEMA_VERSION);
+  await page.getByRole('link',{name:'All Cases',exact:true}).click();
+  await page.getByRole('region',{name:'Case workspace controls'}).getByLabel('Import JSON',{exact:true}).setInputFiles({name:'conflicting-case.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(buildCaseExport([conflicting],'2026-09-03T00:00:00.000Z')))});
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Imported 0 new and 1 merged cases');
+  await page.locator('.case-head',{hasText:record.domain}).click();
+  await openCaseResponseWorkspace(page,'','advanced'); await openCaseSection(page,'Response');
+  const outcome=page.getByRole('region',{name:'Case independent review and closure',exact:true});
+  await outcome.locator(':scope > details > summary').click();
+  const closure=outcome.locator('form.closure-form');
+  await closure.getByRole('combobox',{name:'Closure reason',exact:true}).selectOption('provider_reported_resolution_not_independently_checked');
+  await closure.getByRole('combobox',{name:'Closure scope',exact:true}).selectOption(JSON.stringify(objects[0]));
+  const action=closure.getByRole('combobox',{name:'Provider action',exact:true});
+  await expect(action.locator('option')).toHaveCount(1);
+  await closure.getByRole('textbox',{name:'Closure summary',exact:true}).fill('This conflicted receipt cannot support a closure.');
+  const beforeSave=await readBrowserLocalCollection(page,'cases');
+  await closure.getByRole('button',{name:'Record object closure',exact:true}).click();
+  await expect(action).toBeFocused();
+  expect(await action.evaluate(element=>(element as HTMLSelectElement).validity.valueMissing)).toBe(true);
+  const afterSave=await readBrowserLocalCollection(page,'cases');
+  expect(afterSave.manifest.revision).toBe(beforeSave.manifest.revision);
+  const saved=afterSave.records[0]!.value;
+  expect(saved.actions[0]!.history.filter(event=>event.nextState==='terminal')).toHaveLength(2);
+  expect(saved.actions[0]!.history.filter(event=>event.nextState==='terminal'&&!event.applied)).toHaveLength(1);
+  expect(saved.closures.records).toEqual([]); expect(saved.status).toBe(record.status);
 });
 
 test('object authoring and qualified coverage remain available with native keyboard controls and bounded layout', async ({ page }) => {

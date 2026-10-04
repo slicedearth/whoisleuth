@@ -69,8 +69,8 @@ export const MAX_CAMPAIGN_INPUT_RECORDS = 500;
 export const MAX_CAMPAIGN_STORE_BYTES = 512 * 1024;
 
 export const WATCHLIST_SCHEMA = 'whoisleuth.watchlists';
-export const WATCHLIST_SCHEMA_VERSION = 5;
-export const WATCHLIST_BROWSER_SUPPORTED_VERSIONS = Object.freeze([2, 3, 4, WATCHLIST_SCHEMA_VERSION]);
+export const WATCHLIST_SCHEMA_VERSION = 6;
+export const WATCHLIST_BROWSER_SUPPORTED_VERSIONS = Object.freeze([2, 3, 4, 5, WATCHLIST_SCHEMA_VERSION]);
 export const WATCHLIST_EXPORT_SUPPORTED_VERSIONS = WATCHLIST_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_WATCHLISTS = 100;
 export const MAX_WATCHLIST_INPUTS = MAX_WATCHLISTS * 4;
@@ -362,7 +362,7 @@ export const WATCHLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   supportedVersions: WATCHLIST_EXPORT_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_WATCHLIST_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Versions 2–4 remain readable. Version 5 retains per-domain Brand contexts, candidate-only watches and nullable local password-form attribution without inventing scans, review clocks or historical scalar meaning. Incomplete checks cannot erase a usable baseline.',
+  note: 'Versions 2–5 remain readable. Version 6 preserves older membership overflow as paused, exportable records without activating or pruning domains. New active membership remains bounded. Brand contexts and incomplete-check baselines remain preserved.',
 });
 export const SHORTLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.shortlist', kind: 'export', schema: SHORTLIST_SCHEMA, currentVersion: SHORTLIST_SCHEMA_VERSION,
@@ -549,7 +549,7 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
       { id: 'watchlists', path: 'watchlists', maximum: MAX_WATCHLISTS, handling: 'truncate' },
       { id: 'domains', path: 'watchlists[].results', maximum: MAX_WATCHLIST_DOMAINS, handling: 'drop_value' },
       { id: 'history', path: 'watchlists[].history', maximum: MAX_WATCHLIST_HISTORY_EVENTS, handling: 'truncate' },
-      { id: 'domain-contexts', path: 'watchlists[].domainMetadata', maximum: MAX_WATCHLIST_DOMAINS, handling: 'truncate' },
+      { id: 'domain-contexts', path: 'watchlists[].domainMetadata', maximum: MAX_WATCHLIST_DOMAINS, handling: 'reject' },
       { id: 'brand-contexts', path: 'watchlists[].domainMetadata[].contexts', maximum: MAX_WATCH_CONTEXTS, handling: 'truncate' },
     ],
     portable: {
@@ -735,6 +735,8 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
 ]);
 
 const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly Pick<SchemaLifecycleFixture, 'id' | 'path' | 'bytes' | 'sha256' | 'schema' | 'version'>[] = Object.freeze([
+  { id: 'workspace.browser.watchlist.v6', path: 'test/fixtures/workspace-lifecycle/browser-watchlist-v6.json', bytes: 76, sha256: '16df0f813b17f1765862f5c2ff41c2db9c7d6d76e75f24746aa6d75b59d3f02e', schema: 'whoisleuth.browser.watchlist-store', version: 6 },
+  { id: 'workspace.portable.watchlist.v6', path: 'test/fixtures/workspace-lifecycle/portable-watchlist-v6.json', bytes: 120, sha256: 'ced22d0d16e839e0b4625f8799eef30a776908abf3af998de6fad5b549898987', schema: 'whoisleuth.watchlists', version: 6 },
   { id: 'workspace.browser.brand.v10', path: 'test/fixtures/workspace-lifecycle/browser-brand-v10.json', bytes: 38, sha256: 'bebf3a72ba57c06246e6169ebd9a597eb5b867508db85e1db0e3d763bc0839bc', schema: 'whoisleuth.browser.brand-profile-store', version: 10 },
   { id: 'workspace.portable.brand.v10', path: 'test/fixtures/workspace-lifecycle/portable-brand-v10.json', bytes: 123, sha256: '85cd7c58696f8219484ac88210ad7ab4a0ad1c9798e8cb02ff6ebb3fd2c82d8a', schema: 'whoisleuth.brand-profiles', version: 10 },
   { id: 'workspace.browser.watchlist.v5', path: 'test/fixtures/workspace-lifecycle/browser-watchlist-v5.json', bytes: 76, sha256: '11eabd20f952611307a5c84291c7892c15d3748f7ada5549813e1d705967c2c0', schema: 'whoisleuth.browser.watchlist-store', version: 5 },

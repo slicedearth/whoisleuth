@@ -248,7 +248,7 @@ test('hosted restoration preserves exact local Brand contexts and candidate-only
       baseline: [],
       history: [],
     });
-  const metadata = restored['EXAMPLE REVIEW']!.domainMetadata;
+  const metadata = restored['Example review']!.domainMetadata;
   assert.deepEqual(
     metadata.find((row) => row.domain === candidate.domain),
     local['Example review']!.domainMetadata[0],
@@ -661,7 +661,7 @@ test('offline fixture plan and portable export never require a Lookup result', (
   const exported = reviewCandidateWatchInput(fixtureText, 'export', NOW) as ReturnType<
     typeof buildWatchlistExport
   >;
-  assert.equal(exported.version, 5);
+  assert.equal(exported.version, 6);
   assert.deepEqual(exported.watchlists['Example review']!.baseline, []);
   assert.throws(() => parseCandidateWatchInput({ ...fixture, version: 2 }), /schema 1/);
   assert.throws(
