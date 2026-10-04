@@ -29,6 +29,8 @@ import { isCtQueryError, normalizeCtQuery } from './packages/analysis/ct-query.m
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors, normalizeMailProtectionProfile } from './lib/domain-posture.mts';
 import { parseInheritedDnsSelection } from './lib/dns-inheritance-review.mts';
 import { capabilityReport } from './lib/capabilities.mts';
+import { DOMAIN_FEED_BODY_BYTES } from './lib/server/domain-feed-config.mts';
+import { parseDomainFeedOperation, executeDomainFeedOperation } from './lib/server/domain-feed-client.mts';
 import {
   COOKIE_NAME,
   type RequestOriginContext,
@@ -111,6 +113,7 @@ type NetworkRouteServices = Readonly<{
   checkDomainAvailability: typeof checkDomainAvailability;
   searchCertificateTransparency: typeof searchCertificateTransparency;
   checkDomainPosture: typeof checkDomainPosture;
+  executeDomainFeedOperation?: typeof executeDomainFeedOperation;
 }>;
 
 function sendPrerenderedHtmlFile(
@@ -370,6 +373,45 @@ function registerNetworkApiRoutes(
   target: ExpressApplication,
   services: NetworkRouteServices = DEFAULT_NETWORK_ROUTE_SERVICES,
 ): void {
+  target.post('/api/domain-feed', apiRateLimit, requireAuth, requireNetworkRequestAdmission,
+    (req, res, next) => {
+      if ((req.headers['content-encoding'] && req.headers['content-encoding'] !== 'identity')
+        || req.headers['content-type']?.split(';')[0] !== 'application/json') { res.status(415).json({ error: 'Use uncompressed JSON.' }); return; }
+      next();
+    },
+    async (req, res, next) => {
+      const controller = new AbortController();
+      const aborted = () => controller.abort();
+      req.once('aborted', aborted);
+      res.once('close', aborted);
+      try {
+        const read = await readRequestTextCapped({ body: Readable.toWeb(req) as ReadableStream<Uint8Array>,
+          headers: new Headers(req.headers['content-length'] ? { 'content-length': req.headers['content-length'] } : {}),
+          signal: controller.signal }, DOMAIN_FEED_BODY_BYTES, 5000);
+        if (read.status !== 'ok') {
+          if (res.destroyed) return;
+          res.setHeader('Connection', 'close');
+          res.once('finish', () => req.destroy());
+          res.status(read.status === 'too_large' ? 413 : read.status === 'invalid_encoding' ? 400 : 408).json({ error: 'Feed request body could not be read.' });
+          return;
+        }
+        try { req.body = JSON.parse(read.body); }
+        catch { res.status(400).json({ error: 'Invalid domain feed request.' }); return; }
+        next();
+      } finally { req.off('aborted', aborted); res.off('close', aborted); }
+    }, async (req, res) => {
+      let operation;
+      try { operation = parseDomainFeedOperation(req.body); }
+      catch { return res.status(400).json({ error: 'Invalid domain feed request.' }); }
+      return withExpressOperationBudget(req, res, operationBudgetTargetFor('domain_feed_search'), async signal => {
+        const reply = await (services.executeDomainFeedOperation ?? executeDomainFeedOperation)(operation, { signal });
+        if (!signal.aborted) res.status(reply.status).json(reply.body);
+      });
+    });
+  target.all('/api/domain-feed', apiRateLimit, requireAuth, requireNetworkRequestAdmission, (_req, res) => {
+    res.setHeader('Allow', 'POST');
+    res.status(405).json({ error: 'Method not allowed.' });
+  });
   const handleLookup = async (req: Request & { networkFeaturePolicy?: NetworkFeaturePolicy }, res: Response) => {
     const operation = prepareLookupHttpOperation({ params: req.query, method: req.method,
       contentType: req.headers['content-type'], accept: req.headers.accept, body: req.body,
