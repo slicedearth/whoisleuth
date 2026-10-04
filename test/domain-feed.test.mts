@@ -6,6 +6,8 @@ import { DOMAIN_FEED_CATALOGUE, DOMAIN_FEED_LIMITS, domainFeedDefinition, normal
   strictDomainFeedHostname, scanDomainFeed, projectDomainFeedMatch, buildDomainFeedReview, normalizeDomainFeedReview,
   buildDomainFeedWatchInput } from '../packages/monitoring/domain-feed.mts';
 import { reviewCandidateWatchInput } from '../cli/watchlist-review.mts';
+import { normalizeCandidateObservation } from '../packages/workspace/brand-candidate-workflow.mts';
+import { normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
 
 const NOW = '2026-10-04T00:00:00.000Z';
 const selection = normalizeDomainFeedSelection({ hosts: ['exact.example'], terms: ['brand'], brandProfileId: 'review-profile' });
@@ -138,6 +140,17 @@ test('cached projection preserves full snapshot identity and unknown limited-que
     if (mutation === 'extra') hostile.futureVersion = 2;
     assert.equal(normalizeDomainFeedReview(hostile), null);
   }
+});
+
+test('explicit branded exact hosts survive canonical candidate and Brand Profile admission', async () => {
+  const result = await scan('exact.example');
+  const candidate = normalizeCandidateObservation(result.matches[0]!.candidate)!;
+  assert.equal(candidate.matches.length, 1);
+  assert.equal(candidate.matches[0]!.brandProfileId, 'review-profile');
+  assert.match(candidate.matches[0]!.ruleKey, /^feed-host:[a-f0-9]{32}$/u);
+  assert.equal(candidate.matches[0]!.term, 'exact.example');
+  const profile = normalizeBrandProfile({ id: 'review-profile', name: 'Example review', createdAt: NOW, updatedAt: NOW, candidateObservations: [candidate] }, { nowIso: NOW })!;
+  assert.deepEqual(profile.candidateObservations[0], candidate);
 });
 
 test('feed review composes with existing candidate-watch input without changing scores, availability or baseline', async () => {

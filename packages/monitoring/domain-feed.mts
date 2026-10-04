@@ -1,7 +1,7 @@
 import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { createIncrementalSha256, sha256IdentityHex } from '../evidence/record-identity.mts';
-import type { BrandCandidateObservation } from '../workspace/brand-candidate-workflow.mts';
+import { MAX_CANDIDATE_MATCHES, normalizeCandidateObservation, type BrandCandidateObservation } from '../workspace/brand-candidate-workflow.mts';
 import { planCandidateWatchHandoff, type CandidateWatchInput } from '../workspace/candidate-watch-handoff.mts';
 import { CANDIDATE_WATCH_INPUT_SCHEMA, CANDIDATE_WATCH_INPUT_VERSION } from '../contracts/candidate-watch-review.mts';
 import { assertWorkspaceInputGraph, ordinaryWorkspaceRecord } from '../workspace/hostile-input.mts';
@@ -95,12 +95,16 @@ export function projectDomainFeedMatch(domain: string, metadata: DomainFeedSnaps
   const exactHost = selection.hosts.includes(host), terms = selection.terms.filter(term => host.includes(term));
   if (!exactHost && !terms.length) return null;
   const candidate: BrandCandidateObservation = { domain: host,
-    matches: selection.brandProfileId ? terms.map(term => ({ brandProfileId: selection.brandProfileId!,
+    matches: selection.brandProfileId ? [...(exactHost ? [{ brandProfileId: selection.brandProfileId,
+      ruleKey: `feed-host:${sha256IdentityHex(new TextEncoder().encode(host)).slice(0, 32)}`,
+      term: host, reason: 'The analyst explicitly selected this exact feed hostname for Brand review; inclusion is not a verdict.' }] : []), ...terms.map(term => ({ brandProfileId: selection.brandProfileId!,
       ruleKey: `feed-literal:${sha256IdentityHex(new TextEncoder().encode(term)).slice(0, 32)}`,
-      term, reason: 'An explicit literal term occurs in this exact feed hostname; analyst review is required.' })) : [],
+      term, reason: 'An explicit literal term occurs in this exact feed hostname; analyst review is required.' }))] : [],
     sources: [{ source: `domain-feed:${snapshot.feedId}`, revision: snapshot.revision, observedHostname: host,
       sourceFirstObservedAt: null, sourceLastObservedAt: null, firstLocalObservedAt: snapshot.importedAt,
       completeness: 'unknown', gap: 'Feed membership and file publication do not establish a per-host event time, maliciousness or completeness.' }] };
+  if (candidate.matches.length > MAX_CANDIDATE_MATCHES) throw new RangeError('This hostname matches too many explicit selectors for retained Brand provenance. Reduce the literal selection; no rule was silently discarded.');
+  if (!normalizeCandidateObservation(candidate)) throw new TypeError('The feed candidate provenance could not be admitted.');
   return freezeOwned({ domain: host, exactHost, terms, candidate });
 }
 function freezeOwned<T>(value: T): T {
