@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtemp, open, readdir, rm, stat, symlink } from 'node:fs/promises';
+import { mkdtemp, open, readdir, rm, stat, symlink, rename, readFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -8,7 +10,8 @@ import { request as httpRequest } from 'node:http';
 import { normalizeDomainFeedSelection, normalizeDomainFeedReview, buildDomainFeedReview } from '../packages/monitoring/domain-feed.mts';
 import { domainFeedConnection, domainFeedServiceConfiguration, acceptsDomainFeedBearer, DOMAIN_FEED_RESPONSE_BYTES, DOMAIN_FEED_BODY_BYTES,
   DOMAIN_FEED_SERVICE_LIMITATIONS, domainFeedResultAllocation } from '../lib/server/domain-feed-config.mts';
-import { refreshDomainFeedCache, queryDomainFeedCache, domainFeedCacheStatus, prepareDomainFeedCache } from '../lib/server/domain-feed-cache.mts';
+import { refreshDomainFeedCache, queryDomainFeedCache, domainFeedCacheStatus, prepareDomainFeedCache,
+  createOwnedFeedFile, removeOwnedFeedFile } from '../lib/server/domain-feed-cache.mts';
 import { startDomainFeedService, executeDomainFeedWorker } from '../lib/server/domain-feed-service.mts';
 import { parseDomainFeedOperation, executeDomainFeedOperation, validateDomainFeedReply } from '../lib/server/domain-feed-client.mts';
 
@@ -323,4 +326,121 @@ test('pre-existing staging output is never deleted when exclusive ownership fail
   const existing = await open(filename, 'wx', 0o600); await existing.close();
   await assert.rejects(refreshDomainFeedCache({ directory, feedId: FEED, stagingFilename: filename, fetch: async () => feedResponse('exact.example\n') }), /EEXIST/u);
   assert.deepEqual(await readdir(directory), [path.basename(filename)]);
+}));
+
+test('staging cleanup failure preserves truthful status and releases every feed admission', async () => {
+  for (const workerFails of [false, true]) await temporary(async directory => {
+    await retain(directory);
+    const before = (await domainFeedCacheStatus(directory, FEED, NOW)).metadata?.revision;
+    let refreshes = 0;
+    let failCleanup = true;
+    const service = await startDomainFeedService({ directory, token: TOKEN, feedIds: [FEED, 'nrd7'], automaticRefresh: false,
+      removeOwnedFile: async (filename, identity) => {
+        if (failCleanup && filename.endsWith('.pending.sqlite')) throw new Error('private filesystem detail');
+        await removeOwnedFeedFile(filename, identity);
+      },
+      worker: async task => {
+        if (task.operation === 'refresh') { refreshes++; if (workerFails) throw new Error('private worker detail'); return; }
+        return { enabled: true, feeds: [{ feedId: FEED, cached: true, error: null }] };
+      } });
+    try {
+      assert.equal(await service.refresh(FEED), false);
+      const response = await fetch(`${service.origin}/status`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: '{}' });
+      const body = await response.json() as { feeds: Array<{ error: string }> };
+      assert.equal(body.feeds[0]?.error, workerFails
+        ? 'Latest refresh and temporary-file cleanup failed; last-good snapshot, if present, is retained. Operator review is needed.'
+        : 'Latest refresh completed, but temporary-file cleanup failed. Retained snapshot remains available; operator review is needed.');
+      assert.doesNotMatch(JSON.stringify(body), /private filesystem|private worker/u);
+      assert.equal(await service.refresh('nrd7'), false);
+      failCleanup = false;
+      assert.equal(await service.refresh(FEED), !workerFails);
+      assert.equal(refreshes, 3);
+      assert.equal((await domainFeedCacheStatus(directory, FEED, NOW)).metadata?.revision, before);
+    } finally { await service.close(); }
+    assert.equal((await readdir(directory)).includes('service.lock'), false);
+  });
+});
+
+test('concurrent shutdown joins the refresh writer before identity-checked lock cleanup', async () => temporary(async directory => {
+  let markEntered: (() => void) | null = null;
+  let releaseWriter: (() => void) | null = null;
+  const entered = new Promise<void>(resolve => { markEntered = resolve; });
+  const released = new Promise<void>(resolve => { releaseWriter = resolve; });
+  let writerFinished = false;
+  let lockAttempts = 0;
+  const service = await startDomainFeedService({ directory, token: TOKEN, feedIds: [FEED], automaticRefresh: false,
+    worker: async () => { markEntered!(); await released; writerFinished = true; },
+    removeOwnedFile: async (filename, identity) => {
+      if (filename.endsWith('.pending.sqlite')) throw new Error('private cleanup failure');
+      assert.equal(writerFinished, true);
+      lockAttempts++;
+      await removeOwnedFeedFile(filename, identity);
+    } });
+  const refresh = service.refresh(FEED);
+  await entered;
+  const firstClose = service.close();
+  const secondClose = service.close();
+  assert.equal(firstClose, secondClose);
+  assert.equal(await readFile(path.join(directory, 'service.lock'), 'utf8'), '');
+  assert.equal(lockAttempts, 0);
+  releaseWriter!();
+  await firstClose;
+  assert.equal(await refresh, false);
+  assert.equal(lockAttempts, 1);
+  assert.equal((await readdir(directory)).includes('service.lock'), false);
+  assert.equal(await service.refresh(FEED), false);
+}));
+
+test('failed lock cleanup is reported only after owned work has settled', async () => temporary(async directory => {
+  let finished = false;
+  const service = await startDomainFeedService({ directory, token: TOKEN, feedIds: [FEED], automaticRefresh: false,
+    worker: async () => { finished = true; },
+    removeOwnedFile: async (filename, identity) => {
+      if (filename.endsWith('service.lock')) { assert.equal(finished, true); throw new Error('private lock path'); }
+      await removeOwnedFeedFile(filename, identity);
+    } });
+  assert.equal(await service.refresh(FEED), true);
+  await assert.rejects(service.close(), { message: 'Feed service stopped, but shutdown cleanup could not be completed. Operator review is needed.' });
+  assert.equal(await readFile(path.join(directory, 'service.lock'), 'utf8'), '');
+  assert.equal(await service.refresh(FEED), false);
+}));
+
+test('owned cleanup accepts missing output but refuses replaced inode and symlink content', async () => temporary(async directory => {
+  const filename = staging(directory);
+  const original = await createOwnedFeedFile(filename);
+  await rename(filename, path.join(directory, 'retained.sqlite'));
+  await removeOwnedFeedFile(filename, original);
+  const replacement = await createOwnedFeedFile(filename);
+  assert.notEqual(replacement.ino, original.ino);
+  await removeOwnedFeedFile(filename, original);
+  assert.equal((await stat(filename)).ino, replacement.ino);
+  await rm(filename);
+  await symlink(path.join(directory, 'retained.sqlite'), filename);
+  await removeOwnedFeedFile(filename, original);
+  assert.equal((await readFile(filename)).length, 0);
+  assert.equal((await stat(path.join(directory, 'retained.sqlite'))).ino, original.ino);
+}));
+
+test('automatic cleanup faults are observed under the default subprocess rejection policy', async () => temporary(async directory => {
+  const source = `
+    import { startDomainFeedService } from ${JSON.stringify(new URL('../lib/server/domain-feed-service.mts', import.meta.url).href)};
+    import { removeOwnedFeedFile } from ${JSON.stringify(new URL('../lib/server/domain-feed-cache.mts', import.meta.url).href)};
+    const cleaned = Promise.withResolvers();
+    const service = await startDomainFeedService({ directory: process.argv[1], token: 'fixture'.repeat(8), feedIds: ['tif-mini'],
+      worker: async () => {}, removeOwnedFile: async (filename, identity) => {
+        if (filename.endsWith('.pending.sqlite')) { cleaned.resolve(); throw new Error('private cleanup detail'); }
+        await removeOwnedFeedFile(filename, identity);
+      } });
+    await cleaned.promise;
+    await new Promise(resolve => setImmediate(resolve));
+    await service.close();
+    console.log('closed');
+  `;
+  const environment = { ...process.env };
+  delete environment.NODE_OPTIONS;
+  const result = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', source, directory],
+    { env: environment, timeout: 15_000, maxBuffer: 16_384 });
+  assert.equal(result.stdout.trim(), 'closed');
+  assert.doesNotMatch(result.stderr, /private cleanup detail|UnhandledPromiseRejection/u);
+  assert.equal((await readdir(directory)).includes('service.lock'), false);
 }));

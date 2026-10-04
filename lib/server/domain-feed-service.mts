@@ -57,15 +57,18 @@ async function readServiceBody(request: IncomingMessage, signal: AbortSignal): P
 }
 
 async function startDomainFeedService(options: { directory: string; token: string; feedIds: string[]; port?: number;
-  refreshIntervalMs?: number; worker?: FeedWorker; automaticRefresh?: boolean }) {
+  refreshIntervalMs?: number; worker?: FeedWorker; automaticRefresh?: boolean;
+  removeOwnedFile?: typeof removeOwnedFeedFile }) {
   const feedIds = selectedDomainFeeds(options.feedIds);
   if (!acceptsDomainFeedBearer(`Bearer ${options.token}`, options.token)) throw new Error('A strong service token is required.');
   await prepareDomainFeedCache(options.directory);
   const lockFilename = path.join(options.directory, 'service.lock');
   const lock = await createOwnedFeedFile(lockFilename);
   const worker = options.worker ?? executeDomainFeedWorker;
+  const removeOwnedFile = options.removeOwnedFile ?? removeOwnedFeedFile;
   const jobs = new Set<Promise<unknown>>();
   const runWorker: FeedWorker = (task, signal, timeout) => {
+    signal.throwIfAborted();
     const job = worker(task, signal, timeout);
     jobs.add(job);
     void job.finally(() => { jobs.delete(job); }).catch(() => {});
@@ -127,7 +130,7 @@ async function startDomainFeedService(options: { directory: string; token: strin
   server.keepAliveTimeout = 1000;
   try {
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(options.port ?? 0, '127.0.0.1', () => { server.off('error', reject); resolve(); }); });
-  } catch (error) { await removeOwnedFeedFile(lockFilename, lock); throw error; }
+  } catch (error) { await removeOwnedFile(lockFilename, lock); throw error; }
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Service listener unavailable.');
   origin = `http://127.0.0.1:${address.port}`;
@@ -140,35 +143,59 @@ async function startDomainFeedService(options: { directory: string; token: strin
     const stagingFilename = path.join(options.directory, `${feedId}.${randomUUID()}.pending.sqlite`);
     activeRefresh = (async () => {
       let stagingIdentity: FeedFileIdentity | null = null;
+      let completed = false;
       try {
         stagingIdentity = await createOwnedFeedFile(stagingFilename);
         await runWorker({ operation: 'refresh', directory: options.directory, feedIds: [feedId], stagingFilename, stagingIdentity }, lifetime.signal, DOMAIN_FEED_REFRESH_TIMEOUT_MS + 5000);
         failures.delete(feedId);
-        return true;
-      } catch { failures.set(feedId, 'Latest refresh failed; last-good snapshot, if present, is retained.'); return false; }
-      finally { if (stagingIdentity) await removeOwnedFeedFile(stagingFilename, stagingIdentity); refreshing.delete(feedId); }
+        completed = true;
+      } catch { failures.set(feedId, 'Latest refresh failed; last-good snapshot, if present, is retained.'); }
+      finally {
+        try { if (stagingIdentity) await removeOwnedFile(stagingFilename, stagingIdentity); }
+        catch {
+          failures.set(feedId, completed
+            ? 'Latest refresh completed, but temporary-file cleanup failed. Retained snapshot remains available; operator review is needed.'
+            : 'Latest refresh and temporary-file cleanup failed; last-good snapshot, if present, is retained. Operator review is needed.');
+          completed = false;
+        } finally { refreshing.delete(feedId); }
+      }
+      return completed;
     })().finally(() => { activeRefresh = null; });
     return activeRefresh;
   }
   let refreshCycle: Promise<void> | null = null;
   const refreshAll = () => {
     if (refreshCycle || lifetime.signal.aborted) return;
-    refreshCycle = (async () => { for (const feedId of feedIds) { if (lifetime.signal.aborted) break; await refresh(feedId); } })().finally(() => { refreshCycle = null; });
+    refreshCycle = (async () => { for (const feedId of feedIds) { if (lifetime.signal.aborted) break; await refresh(feedId); } })()
+      .catch(() => { for (const feedId of feedIds) failures.set(feedId, 'Automatic refresh interrupted; retained snapshots remain available. Operator review is needed.'); })
+      .finally(() => { refreshCycle = null; });
   };
   const intervalMs = options.refreshIntervalMs ?? 6 * 60 * 60 * 1000;
-  if (!Number.isInteger(intervalMs) || intervalMs < 60_000 || intervalMs > 24 * 60 * 60 * 1000) { server.close(); await removeOwnedFeedFile(lockFilename, lock); throw new Error('Invalid refresh interval.'); }
+  if (!Number.isInteger(intervalMs) || intervalMs < 60_000 || intervalMs > 24 * 60 * 60 * 1000) { server.close(); await removeOwnedFile(lockFilename, lock); throw new Error('Invalid refresh interval.'); }
   const interval = options.automaticRefresh === false ? null : setInterval(refreshAll, intervalMs);
   if (options.automaticRefresh !== false) refreshAll();
-  return { origin, refresh, close: async () => {
+  let closing: Promise<void> | null = null;
+  const close = (): Promise<void> => {
+    if (closing) return closing;
     lifetime.abort();
     if (interval) clearInterval(interval);
     server.closeAllConnections();
-    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
-    await refreshCycle;
-    await activeRefresh;
-    await Promise.allSettled([...jobs]);
-    await removeOwnedFeedFile(lockFilename, lock);
-  } };
+    closing = (async () => {
+      const settled = await Promise.allSettled([
+        new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())),
+        refreshCycle, activeRefresh,
+      ]);
+      // Retain the directory lock until every owned worker has stopped writing.
+      await Promise.allSettled([...jobs]);
+      let cleanupFailed = false;
+      try { await removeOwnedFile(lockFilename, lock); } catch { cleanupFailed = true; }
+      if (cleanupFailed || settled.some(result => result.status === 'rejected')) {
+        throw new Error('Feed service stopped, but shutdown cleanup could not be completed. Operator review is needed.');
+      }
+    })();
+    return closing;
+  };
+  return { origin, refresh, close };
 }
 
 export { startDomainFeedService, executeDomainFeedWorker };
