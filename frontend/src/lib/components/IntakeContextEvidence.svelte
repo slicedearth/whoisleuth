@@ -22,6 +22,7 @@
     onpending,
     phoneReview,
     onreviewchange,
+    headingTag = 'h4',
   }: {
     report: MessageIntakeReport;
     disabled?: boolean;
@@ -29,6 +30,7 @@
     onpending: (pending: boolean) => void;
     phoneReview?: IntakePhoneReview | undefined;
     onreviewchange: (report: CurrentMessageIntakeReport) => void;
+    headingTag?: 'h3' | 'h4';
   } = $props();
   let page = $state(1),
     channel = $state<IntakeDistributionContext['channel']>('unknown');
@@ -42,6 +44,7 @@
   let selectionPending = $state(false);
   const indicators = $derived(intakeIndicators(report));
   const context = $derived(report.schemaVersion === 2 ? report.distributionContext : null);
+  const detailHeadingTag = $derived(headingTag === 'h3' ? 'h4' : 'h5');
   function changed() {
     pending = true;
     onpending(true);
@@ -82,7 +85,7 @@
 </script>
 
 <section class="intake-context" aria-label="Source-linked indicators and distribution context">
-  <h4>Literal IPs and labelled hashes · {indicators.length}</h4>
+  <svelte:element this={headingTag} class="indicator-heading">Literal IPs and labelled hashes · {indicators.length}</svelte:element>
   <p
     >These values were found in selected text, not resolved or reputation-checked. Hashes require an
     algorithm label. A matching hash-like string does not identify a file or establish
@@ -190,7 +193,7 @@
     {#if error}<p role="alert">{error}</p>{/if}
   </details>
   {#if context}<section aria-label="Applied distribution declaration"
-      ><h5>Analyst-declared distribution</h5><p>{context.channel} · {context.sourceLabel}</p><p
+      ><svelte:element this={detailHeadingTag} class="detail-heading">Analyst-declared distribution</svelte:element><p>{context.channel} · {context.sourceLabel}</p><p
         ><EvidenceTimestamp value={context.observedAt} label="declared observation time" /></p
       ><p
         >Reference: {context.reference ?? 'Not supplied'} · Observer: {context.observerLabel ??
@@ -200,7 +203,7 @@
         establish independent collection.</p
       ></section
     >{/if}
-  <IntakeSelectedEvidence {report} {phoneReview} {disabled} onchange={onreviewchange} onpending={value => { selectionPending = value; onpending(pending || value); }} />
+  <IntakeSelectedEvidence {report} {phoneReview} {disabled} headingTag={detailHeadingTag} onchange={onreviewchange} onpending={value => { selectionPending = value; onpending(pending || value); }} />
 </section>
 
 <style>
@@ -212,15 +215,15 @@
     gap: 10px;
     min-width: 0;
   }
-  h4,
-  h5,
+  .indicator-heading,
+  .detail-heading,
   p {
     margin: 0;
   }
-  h4 {
+  .indicator-heading {
     font-size: var(--text-sm);
   }
-  h5 {
+  .detail-heading {
     font-size: var(--text-xs);
   }
   p,

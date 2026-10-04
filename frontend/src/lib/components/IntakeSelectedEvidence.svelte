@@ -4,9 +4,10 @@
   import { withIntakeSelectedEvidence } from '../../../../packages/investigation/intake-context.mts';
   import { MAX_SELECTED_INTAKE_PHONES } from '../../../../packages/investigation/intake-phones.mts';
   import Pagination from './Pagination.svelte';
-  let { report, phoneReview, disabled = false, onchange, onpending }: {
+  let { report, phoneReview, disabled = false, onchange, onpending, headingTag = 'h5' }: {
     report: MessageIntakeReport; phoneReview?: IntakePhoneReview | undefined; disabled?: boolean;
     onchange: (report: CurrentMessageIntakeReport) => void; onpending: (pending: boolean) => void;
+    headingTag?: 'h4' | 'h5';
   } = $props();
   let selected = $state<string[]>([]), page = $state(1), sourceLabel = $state(''), observedAt = $state(''), countryCallingCode = $state('');
   let basis = $state<IntakeEvidenceDeclaration['basis']>('unknown'), role = $state<IntakePhoneDeclaration['role']>('unknown');
@@ -105,7 +106,7 @@
   {#if error}<p role="alert">{error}</p>{/if}
   {#if retained}
     <section aria-label="Applied selected evidence">
-      <h5 tabindex="-1" bind:this={appliedHeading}>Applied selected evidence</h5>
+      <svelte:element this={headingTag} class="applied-heading" tabindex="-1" bind:this={appliedHeading}>Applied selected evidence</svelte:element>
       <p>Selected phone groups: {retained.phones.length} · source <code>{retained.sourceDigestSha256}</code></p>
       <p>Phone extraction coverage: {retained.phoneCoverage.state.replaceAll('_', ' ')} · {retained.phoneCoverage.candidatesShown} candidates shown; unselected values are not included.</p>
       {#each retained.phones as phone}<p>{phone.canonical ?? 'No canonical number'} · {phone.state.replaceAll('_', ' ')} · {phone.occurrences.length} source occurrence(s) · declared {phone.declaration.role.replaceAll('_', ' ')}</p>{/each}
@@ -128,7 +129,8 @@
   fieldset { border: 0; padding: 0; margin-block: 12px; }
   legend { font-weight: 600; }
   summary { cursor: pointer; padding-block: 6px; min-height: 32px; }
-  p, h5 { margin: 0; }
+  p, .applied-heading { margin: 0; }
+  .applied-heading { font-size: var(--text-xs); }
   p, label, li, code { font-size: var(--text-xs); line-height: 1.6; overflow-wrap: anywhere; }
   label { display: grid; gap: 4px; }
   .check { display: flex; align-items: start; gap: 8px; }

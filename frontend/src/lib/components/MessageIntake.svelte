@@ -102,7 +102,7 @@
         {/each}
       </ol>
       {#if report.links.length > PAGE_SIZE}<Pagination currentPage={page} pageCount={Math.ceil(report.links.length / PAGE_SIZE)} setPage={next => page = next} ariaLabel="Extracted destination pages" />{/if}
-      {#key report.source.digestSha256}<IntakeContextEvidence {report} phoneReview={result.phoneReview} disabled={disabled || saving} onpending={pending => contextPending = pending} onchange={context => { if (result && !saving && !disabled) result = { ...result, report: withIntakeDistributionContext(result.report, context) }; }} onreviewchange={updated => { if (result && !saving && !disabled) result = { ...result, report: updated }; }} />{/key}
+      {#key report.source.digestSha256}<IntakeContextEvidence {report} headingTag={subheadingTag} phoneReview={result.phoneReview} disabled={disabled || saving} onpending={pending => contextPending = pending} onchange={context => { if (result && !saving && !disabled) result = { ...result, report: withIntakeDistributionContext(result.report, context) }; }} onreviewchange={updated => { if (result && !saving && !disabled) result = { ...result, report: updated }; }} />{/key}
       {#key report.source.digestSha256}<SelectedInputEvidence {report} headingTag={subheadingTag} />{/key}
       {#if report.identityEventReview}{#key report.source.digestSha256}<IdentityEventEvidence review={report.identityEventReview} headingTag={subheadingTag} disabled={disabled || saving} onchange={identityEventReview => { if (result && !saving && !disabled) result = { ...result, report: { ...result.report, identityEventReview } }; }} />{/key}{/if}
       {#if report.identities.length || report.authenticationClaims.length || report.actionHints.length}
