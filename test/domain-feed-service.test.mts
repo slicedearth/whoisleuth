@@ -5,8 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
-import { normalizeDomainFeedSelection, normalizeDomainFeedReview } from '../packages/monitoring/domain-feed.mts';
-import { domainFeedConnection, domainFeedServiceConfiguration, acceptsDomainFeedBearer, DOMAIN_FEED_RESPONSE_BYTES, DOMAIN_FEED_BODY_BYTES } from '../lib/server/domain-feed-config.mts';
+import { normalizeDomainFeedSelection, normalizeDomainFeedReview, buildDomainFeedReview } from '../packages/monitoring/domain-feed.mts';
+import { domainFeedConnection, domainFeedServiceConfiguration, acceptsDomainFeedBearer, DOMAIN_FEED_RESPONSE_BYTES, DOMAIN_FEED_BODY_BYTES,
+  DOMAIN_FEED_SERVICE_LIMITATIONS, domainFeedResultAllocation } from '../lib/server/domain-feed-config.mts';
 import { refreshDomainFeedCache, queryDomainFeedCache, domainFeedCacheStatus, prepareDomainFeedCache } from '../lib/server/domain-feed-cache.mts';
 import { startDomainFeedService, executeDomainFeedWorker } from '../lib/server/domain-feed-service.mts';
 import { parseDomainFeedOperation, executeDomainFeedOperation, validateDomainFeedReply } from '../lib/server/domain-feed-client.mts';
@@ -104,6 +105,33 @@ test('conditional 304 updates source check time without replacing acquisition or
   assert.equal((await domainFeedCacheStatus(directory, FEED, NOW + 40 * 60 * 60 * 1000)).stale, true);
 }));
 
+test('completed acquisition clock follows a held scan and both acquisition/import clocks survive 304', async () => temporary(async directory => {
+  let clock = NOW;
+  let entered: (() => void) | null = null;
+  let release: (() => void) | null = null;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const held = new Promise<void>(resolve => { release = resolve; });
+  let first = true;
+  const stream = new ReadableStream<Uint8Array>({ async pull(controller) {
+    if (first) { first = false; controller.enqueue(encode('exact.example\n')); return; }
+    entered!(); await held; controller.close();
+  } });
+  const refreshing = refreshDomainFeedCache({ directory, feedId: FEED, stagingFilename: staging(directory), now: () => clock,
+    fetch: async () => new Response(stream, { headers: { etag: '"held-revision"' } }) });
+  await started;
+  // The reader has requested its held tail, so the scan-start clock is fixed.
+  clock += 60_000; release!(); await refreshing;
+  const before = await domainFeedCacheStatus(directory, FEED, clock);
+  assert.equal(before.metadata?.importedAt, new Date(NOW).toISOString());
+  assert.equal(before.metadata?.acquiredAt, new Date(NOW + 60_000).toISOString());
+  clock += 60_000;
+  await refreshDomainFeedCache({ directory, feedId: FEED, stagingFilename: staging(directory), now: () => clock,
+    fetch: async () => new Response(null, { status: 304 }) });
+  const after = await domainFeedCacheStatus(directory, FEED, clock);
+  assert.deepEqual(after.metadata, before.metadata);
+  assert.equal(after.checkedAt, new Date(NOW + 120_000).toISOString());
+}));
+
 test('cache rejects symlink roots and oversized existing disk budget without following them', async () => temporary(async directory => {
   const link = `${directory}-link`;
   await symlink(directory, link);
@@ -115,7 +143,7 @@ test('cache rejects symlink roots and oversized existing disk budget without fol
   await assert.rejects(prepareDomainFeedCache(directory), /disk budget/u);
 }));
 
-test('bounded worker query and forced deadline do not scan or block the service event loop', async () => temporary(async directory => {
+test('real worker query retains bounded matches while startup deadline and pre-start abort terminate its owner', async () => temporary(async directory => {
   let produced = 0;
   const stream = new ReadableStream<Uint8Array>({ pull(controller) {
     if (produced >= 100_000) { controller.close(); return; }
@@ -175,6 +203,43 @@ test('backend bounds replies, refuses redirect credential forwarding and propaga
   } });
   assert.equal((await running).status, 408); assert.equal(cancelled, true);
   assert.throws(() => validateDomainFeedReply({ enabled: true, feeds: [], secret: TOKEN }, { operation: 'status' }));
+});
+
+test('backend rejects Unicode-escaped bearer and gateway secret echoes in decoded status and query metadata', async () => {
+  const accessSecret = 'fixture-access-secret';
+  const env = { WHOISLEUTH_DOMAIN_FEED_ENABLED: '1', WHOISLEUTH_DOMAIN_FEED_URL: 'https://feed-service.example', WHOISLEUTH_DOMAIN_FEED_TOKEN: TOKEN,
+    WHOISLEUTH_DOMAIN_FEED_ACCESS_CLIENT_ID: 'fixture-access-id', WHOISLEUTH_DOMAIN_FEED_ACCESS_CLIENT_SECRET: accessSecret };
+  for (const secret of [TOKEN, accessSecret]) for (const kind of ['status', 'query'] as const) {
+    const metadata = { feedId: FEED, revision: `sha256:${'a'.repeat(64)}`, importedAt: new Date(NOW).toISOString(), acquiredAt: new Date(NOW).toISOString(),
+      declaredPublishedAt: null, declaredVersion: secret, bytes: 100, rows: 1 };
+    const operation = kind === 'status' ? parseDomainFeedOperation({ operation: 'status' })
+      : parseDomainFeedOperation({ operation: 'query', feedIds: [FEED], selection: { terms: ['brand'] } });
+    const review = buildDomainFeedReview(metadata, normalizeDomainFeedSelection({ terms: ['brand'] }), ['brand.example'], { matched: null, omitted: null, truncated: false });
+    const reply = kind === 'status'
+      ? { enabled: true, feeds: [{ feedId: FEED, cached: true, stale: false, error: null, metadata, checkedAt: new Date(NOW).toISOString() }] }
+      : { enabled: true, feeds: [{ feedId: FEED, stale: false, error: null, review }], limitations: DOMAIN_FEED_SERVICE_LIMITATIONS };
+    // This remains an otherwise canonical reply; only JSON string spelling changes.
+    assert.doesNotThrow(() => validateDomainFeedReply(reply, operation));
+    const escaped = [...secret].map(character => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`).join('');
+    const wire = JSON.stringify(reply).replace(secret, escaped);
+    assert.equal(wire.includes(secret), false);
+    const result = await executeDomainFeedOperation(operation, { env, transport: async () => new Response(wire, { headers: { 'content-type': 'application/json' } }) });
+    assert.equal(result.status, 503);
+    assert.deepEqual(result.body, { error: 'Optional domain feed service is unavailable.', errorCode: 'DOMAIN_FEED_UNAVAILABLE' });
+    assert.equal(JSON.stringify(result.body).includes(secret), false);
+  }
+});
+
+test('backend enforces shared per-feed allocation and aggregate result ceilings for canonical reviews', () => {
+  const operation = parseDomainFeedOperation({ operation: 'query', feedIds: [FEED, 'nrd7'], selection: { terms: ['brand'] } });
+  assert.equal(domainFeedResultAllocation(2), 100);
+  const reply = (count: number) => ({ enabled: true, limitations: DOMAIN_FEED_SERVICE_LIMITATIONS,
+    feeds: [FEED, 'nrd7'].map(feedId => ({ feedId, stale: false, error: null, review: buildDomainFeedReview({ feedId,
+      revision: `sha256:${'b'.repeat(64)}`, importedAt: new Date(NOW).toISOString(), acquiredAt: new Date(NOW).toISOString(),
+      declaredPublishedAt: null, declaredVersion: null, bytes: 4096, rows: 200 }, normalizeDomainFeedSelection({ terms: ['brand'] }),
+    Array.from({ length: count }, (_, index) => `brand-${index}.example`), { matched: null, omitted: null, truncated: true }) })) });
+  assert.throws(() => validateDomainFeedReply(reply(101), operation), /allocation/u);
+  assert.doesNotThrow(() => validateDomainFeedReply(reply(100), operation));
 });
 
 test('loopback service enforces a shared rate and two-query concurrency ceiling', async () => temporary(async directory => {

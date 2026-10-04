@@ -10,6 +10,10 @@ const DOMAIN_FEED_RESPONSE_BYTES = 512 * 1024;
 const DOMAIN_FEED_QUERY_TIMEOUT_MS = 5_000;
 const DOMAIN_FEED_STALE_MS = 36 * 60 * 60 * 1000;
 const DOMAIN_FEED_MAX_RESULTS = 200;
+function domainFeedResultAllocation(feedCount: number): number {
+  if (!Number.isInteger(feedCount) || feedCount < 1 || feedCount > 11) throw new Error('Invalid selected feed count.');
+  return Math.floor(DOMAIN_FEED_MAX_RESULTS / feedCount);
+}
 const DOMAIN_FEED_SERVICE_LIMITATIONS = Object.freeze([
   'Feed membership only nominates candidates; it does not establish abuse, ownership or domain availability.',
   'Coverage and publisher freshness remain unknown where the snapshot does not declare them. Stale snapshots require review.',
@@ -61,5 +65,5 @@ function acceptsDomainFeedBearer(header: string | undefined, token: string): boo
 
 export { DOMAIN_FEED_BODY_BYTES, DOMAIN_FEED_RESPONSE_BYTES, DOMAIN_FEED_QUERY_TIMEOUT_MS, DOMAIN_FEED_STALE_MS,
   DOMAIN_FEED_MAX_RESULTS, domainFeedConnection, selectedDomainFeeds, domainFeedServiceConfiguration, acceptsDomainFeedBearer };
-export { DOMAIN_FEED_SERVICE_LIMITATIONS };
+export { DOMAIN_FEED_SERVICE_LIMITATIONS, domainFeedResultAllocation };
 export type { DomainFeedConnection, FeedEnvironment };

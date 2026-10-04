@@ -4,12 +4,18 @@ import { normalizeDomainFeedSelection, normalizeDomainFeedReview, buildDomainFee
   type DomainFeedSnapshotMetadata } from '../../packages/monitoring/domain-feed.mts';
 import { domainFeedConnection, selectedDomainFeeds, DOMAIN_FEED_BODY_BYTES, DOMAIN_FEED_RESPONSE_BYTES,
   DOMAIN_FEED_QUERY_TIMEOUT_MS, type FeedEnvironment } from './domain-feed-config.mts';
-import { DOMAIN_FEED_SERVICE_LIMITATIONS } from './domain-feed-config.mts';
+import { DOMAIN_FEED_SERVICE_LIMITATIONS, DOMAIN_FEED_MAX_RESULTS, domainFeedResultAllocation } from './domain-feed-config.mts';
 import { normalizeExplicitIsoTimestamp } from '../../packages/evidence/observation.mts';
 
 type DomainFeedOperation = Readonly<{ operation: 'status' }> | Readonly<{ operation: 'query'; feedIds: string[];
   selection: ReturnType<typeof normalizeDomainFeedSelection> }>;
 type DomainFeedTransport = (url: string, init: RequestInit) => Promise<Response>;
+
+function containsDecodedCredential(value: unknown, credentials: readonly string[]): boolean {
+  if (typeof value === 'string') return credentials.some(secret => value.includes(secret));
+  if (value && typeof value === 'object') return Object.values(value).some(child => containsDecodedCredential(child, credentials));
+  return false;
+}
 
 function parseDomainFeedOperation(value: unknown): DomainFeedOperation {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Buffer.byteLength(JSON.stringify(value)) > DOMAIN_FEED_BODY_BYTES) throw new Error('Invalid domain feed request.');
@@ -38,6 +44,7 @@ function validateDomainFeedReply(value: unknown, operation: DomainFeedOperation)
   if (record.enabled !== true || !Array.isArray(record.feeds) || record.feeds.length < 1 || record.feeds.length > 11) throw new Error('Invalid feed service reply.');
   const seen = new Set<string>();
   const feeds = [];
+  let retainedMatches = 0;
   for (const entry of record.feeds) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('Invalid feed service reply.');
     const feed = entry as Record<string, unknown>;
@@ -50,6 +57,10 @@ function validateDomainFeedReply(value: unknown, operation: DomainFeedOperation)
       const review = feed.review === null ? null : normalizeDomainFeedReview(feed.review);
       if (!operation.feedIds.includes(feed.feedId) || (feed.review !== null && !review)) throw new Error('Invalid feed service review.');
       if (review && (review.feedId !== feed.feedId || JSON.stringify(review.selection) !== JSON.stringify(operation.selection))) throw new Error('Feed identity or selection mismatch.');
+      if (review) {
+        retainedMatches += review.matches.length;
+        if (review.matches.length > domainFeedResultAllocation(operation.feedIds.length) || retainedMatches > DOMAIN_FEED_MAX_RESULTS) throw new Error('Feed result allocation exceeded.');
+      }
       feeds.push({ feedId: feed.feedId, stale: feed.stale, review, error: feed.error === null ? null : review
         ? 'Latest refresh failed; the returned retained snapshot may be stale.' : 'Retained feed snapshot is unavailable.' });
     } else {
@@ -92,7 +103,11 @@ async function executeDomainFeedOperation(operation: DomainFeedOperation, option
     const body = await readRequestTextCapped({ body: response.body, headers: response.headers, signal }, DOMAIN_FEED_RESPONSE_BYTES);
     if (body.status !== 'ok') throw new Error('Invalid feed service response body.');
     if (body.body.includes(configuration.token) || (configuration.access && body.body.includes(configuration.access.secret))) throw new Error('Credential echo rejected.');
-    return { status: 200, body: validateDomainFeedReply(JSON.parse(body.body), operation) };
+    const decoded = validateDomainFeedReply(JSON.parse(body.body), operation);
+    const outgoing = JSON.stringify(decoded);
+    const credentials = [configuration.token, ...(configuration.access ? [configuration.access.secret] : [])];
+    if (credentials.some(secret => outgoing.includes(secret)) || containsDecodedCredential(decoded, credentials)) throw new Error('Decoded credential echo rejected.');
+    return { status: 200, body: decoded };
   } catch {
     return { status: options.signal?.aborted ? 408 : 503, body: { error: 'Optional domain feed service is unavailable.', errorCode: 'DOMAIN_FEED_UNAVAILABLE' } };
   }

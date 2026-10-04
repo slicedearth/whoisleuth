@@ -192,8 +192,9 @@ async function refreshDomainFeedCache(options: { directory: string; feedId: stri
     database.exec('BEGIN');
     const review = await scanDomainFeed(responseChunks(response, signal), { feedId: options.feedId, selection: normalizeDomainFeedSelection({}),
       importedAt: new Date(now()).toISOString(), signal, onDomains: async domains => { for (const domain of domains) insert.run(domain); } });
+    const acquiredAt = new Date(now()).toISOString();
     const snapshot: DomainFeedSnapshotMetadata = { feedId: review.feedId, revision: review.revision, importedAt: review.importedAt,
-      acquiredAt: review.importedAt, declaredPublishedAt: review.declaredPublishedAt, declaredVersion: review.declaredVersion,
+      acquiredAt, declaredPublishedAt: review.declaredPublishedAt, declaredVersion: review.declaredVersion,
       bytes: review.bytes, rows: review.rows };
     database.prepare('INSERT INTO metadata(id,value) VALUES(1,?)').run(JSON.stringify({ snapshot, checkedAt: new Date(now()).toISOString(),
       etag: conditionalHeader(response.headers.get('etag')), modified: conditionalHeader(response.headers.get('last-modified')) }));
