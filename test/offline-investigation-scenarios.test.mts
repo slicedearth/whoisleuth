@@ -15,7 +15,7 @@ test('covers the three foundational investigation recipes with bounded fictional
     ['brand_sweep', 'infrastructure_pivot', 'new_domain_triage'],
   );
   for (const scenario of OFFLINE_INVESTIGATION_SCENARIOS) {
-    assert.match(scenario.target, /\.example\.invalid$/u);
+    assert.match(scenario.target, /\.(?:example|invalid)$/u);
     assert.ok(scenario.steps.length > 0);
     assert.ok(scenario.steps.length <= MAX_OFFLINE_SCENARIO_STEPS);
     assert.equal(offlineInvestigationScenario(scenario.id)?.id, scenario.id);

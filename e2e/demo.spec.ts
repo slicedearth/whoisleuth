@@ -209,7 +209,7 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
     }
   }
   await page.getByRole('button', { name: 'Inspect suspicious domain' }).click();
-  await expect(page.getByRole('heading', { name: 'northstar-login.example', exact: true })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'exampleshop-login.example', exact: true })).toBeFocused();
   await expect(page.getByRole('button', { name: 'Open synthetic Case' })).toBeVisible();
   await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   const evidence = page.getByRole('region', { name: 'Where this result came from', exact: true });
@@ -225,7 +225,7 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
   }
   await page.getByRole('button', { name: 'Reset demo' }).click();
   await page.getByRole('button', { name: 'Compare a reported change' }).click();
-  await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeFocused();
   await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
   await expect(page.getByRole('heading', { name: 'Repeated evidence and material changes stay distinct' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Export synthetic case report' })).toBeVisible();
@@ -245,8 +245,8 @@ async function progressToLookup(page: Page) {
   await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
   await expect(page.getByRole('heading', { name: 'Prioritise candidates without collapsing evidence' })).toBeFocused();
   await expect(workspace).toHaveAttribute('aria-busy', 'false');
-  await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
-  await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeFocused();
+  await page.getByRole('button', { name: 'Inspect exampleshop-login.example' }).click();
+  await expect(page.getByRole('heading', { name: 'exampleshop-login.example' })).toBeFocused();
   await expect(workspace).toHaveAttribute('aria-busy', 'false');
 }
 
@@ -279,8 +279,8 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(page.getByRole('button', { name: /Cases.*Upcoming/ })).toBeDisabled();
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
   await expect(page.getByRole('heading', { name: 'Define the official identity' })).toBeFocused();
-  await expect(page.getByRole('heading', { name: 'Northstar Outfitters' })).toBeVisible();
-  await expect(page.getByText(/northstar\.example · Complete/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Example Shop' })).toBeVisible();
+  await expect(page.getByText(/exampleshop\.example · Complete/)).toBeVisible();
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();
   await expect(page.getByRole('heading', { name: 'Generate bounded candidate coverage' })).toBeFocused();
 
@@ -296,8 +296,8 @@ test('completes the guided synthetic workflow without investigation requests or 
   await page.getByRole('button', { name: 'High priority · 1' }).click();
   await expect(page.locator('.candidate')).toHaveCount(1);
 
-  await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
-  await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeFocused();
+  await page.getByRole('button', { name: 'Inspect exampleshop-login.example' }).click();
+  await expect(page.getByRole('heading', { name: 'exampleshop-login.example' })).toBeFocused();
   await expect(page.getByRole('heading', { name: 'What needs analyst attention?' })).toBeVisible();
   await expect(page.locator('.demo-decision-brief .priority-cue')).toHaveText('Elevated review priority');
   await expect(page.locator('.demo-decision-brief')).not.toContainText('78/100');
@@ -345,8 +345,8 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(page.locator('.timing-summary')).toContainText('Network context');
 
   await monitorHandoff.click();
-  await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeFocused();
-  await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Watchlist activity' })).toHaveCount(0);
 
   await page.getByRole('combobox', { name: /^Status/u }).selectOption('reviewing');
@@ -373,16 +373,16 @@ test('completes the guided synthetic workflow without investigation requests or 
   const body = await (await download.createReadStream()).toArray();
   const payload = JSON.parse(Buffer.concat(body).toString('utf-8'));
   expect(download.suggestedFilename()).toBe('whoisleuth-synthetic-demo-case.json');
-  expect(payload).toMatchObject({ schema: 'whoisleuth.synthetic-demo-case', version: 5, synthetic: true, case: { domain: 'northstar-login.example', status: 'monitoring', note: 'Fixture reviewed for demonstration.' } });
+  expect(payload).toMatchObject({ schema: 'whoisleuth.synthetic-demo-case', version: 5, synthetic: true, case: { domain: 'exampleshop-login.example', status: 'monitoring', note: 'Fixture reviewed for demonstration.' } });
   expect(payload.timeline).toHaveLength(2);
   expect(payload.evidence.registry.source).toBe('Registry RDAP fixture');
   expect(payload.evidence.securityTxt.state).toBe('present');
   expect(payload.evidence.credentialSurface.categories.password).toBe(1);
-  expect(payload.evidence.structuredIdentity.entities[0].name).toBe('Northstar account service');
+  expect(payload.evidence.structuredIdentity.entities[0].name).toBe('Example Shop account service');
   expect(payload.evidence.observedNetwork.address).toBe('203.0.113.44');
 
   await page.reload();
-  const restoredHeading = page.getByRole('heading', { name: 'Document and revisit northstar-login.example' });
+  const restoredHeading = page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' });
   await expect(restoredHeading).toBeVisible();
   await expect(restoredHeading).not.toBeFocused();
   await page.getByRole('button', { name: 'Reset demo' }).click();
@@ -397,18 +397,18 @@ test('settles long-to-short stage transitions at one stable workspace anchor', a
   await page.goto('/demo');
   await progressToLookup(page);
   await page.getByRole('button', { name: 'Open synthetic Case' }).click();
-  await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeFocused();
   await expect(page.locator('#demo-workspace')).toHaveAttribute('aria-busy', 'false');
-  await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeInViewport({ ratio: 1 });
   await expect.poll(() => workspaceNeedsScroll(page), { timeout: 2500 }).toBe(false);
   const settledTop = await workspaceTop(page);
   expect(await workspaceTop(page)).toBe(settledTop);
 
   await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
   await page.getByRole('button', { name: 'Review Lookup evidence' }).click();
-  await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'exampleshop-login.example' })).toBeFocused();
   await expect(page.locator('#demo-workspace')).toHaveAttribute('aria-busy', 'false');
-  await expect(page.getByRole('heading', { name: 'northstar-login.example', exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole('heading', { name: 'exampleshop-login.example', exact: true })).toBeInViewport({ ratio: 1 });
   await expect.poll(() => workspaceNeedsScroll(page), { timeout: 2500 }).toBe(false);
   const returnTop = await workspaceTop(page);
   expect(await workspaceTop(page)).toBe(returnTop);
@@ -476,8 +476,8 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await expect(page.locator('.map-mobile')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  await page.getByRole('button', { name: 'Inspect northstar-login.example' }).click();
-  await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeFocused();
+  await page.getByRole('button', { name: 'Inspect exampleshop-login.example' }).click();
+  await expect(page.getByRole('heading', { name: 'exampleshop-login.example' })).toBeFocused();
   const activeStageCenterOffset = () => rail.evaluate((element) => {
     const active = element.querySelector('[aria-current="step"]');
     if (!active) return Number.POSITIVE_INFINITY;
@@ -492,8 +492,8 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
 
   await rail.evaluate((element) => element.scrollTo({ left: 0, behavior: 'auto' }));
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'northstar-login.example' })).not.toBeFocused();
+  await expect(page.getByRole('heading', { name: 'exampleshop-login.example' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'exampleshop-login.example' })).not.toBeFocused();
   await expect(page.locator('.hero-full-title')).toHaveCount(1);
   await expect(page.locator('.hero-full-title')).toBeHidden();
   await expect(page.locator('.hero-compact-title')).toBeVisible();

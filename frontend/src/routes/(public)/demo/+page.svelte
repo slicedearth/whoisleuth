@@ -407,7 +407,7 @@
   <section class="demo-panel card" aria-labelledby="discover-heading">
     <p class="eyebrow">Discover · Synthetic candidate generation</p><h2 id="discover-heading" data-stage-heading tabindex="-1">Generate bounded candidate coverage</h2>
     <p>Discover combines bounded local mutations with separately attributed Certificate Transparency results. Review each origin before handing a small set to Bulk; generated and observed names are different evidence.</p>
-    <div class="configuration-grid"><article><span>Seed</span><strong>Northstar</strong></article><article><span>Selected families</span><strong>Character · term · TLD</strong></article><article><span>Candidate cap</span><strong>3 synthetic records</strong></article></div>
+    <div class="configuration-grid"><article><span>Seed</span><strong>{SYNTHETIC_DEMO_PROFILE.name}</strong></article><article><span>Selected families</span><strong>Character · term · TLD</strong></article><article><span>Candidate cap</span><strong>3 synthetic records</strong></article></div>
     {#if !discoverPreviewReady&&!demoState.candidatesReady}
       <div class="preview-list"><span>Character edit</span><span>Unicode + DNS-safe forms</span><span>Local custom terms</span><span>Alternate TLD</span><span>CT provenance</span></div>
       <button class="primary" type="button" onclick={generate}>Generate fixed candidates</button>

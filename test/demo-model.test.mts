@@ -76,14 +76,18 @@ describe('synthetic demo state', () => {
   });
 
   test('exposes only the fixed candidate inventory', () => {
-    assert.equal(SYNTHETIC_DEMO_CANDIDATES.length, 3);
-    assert.equal(syntheticDemoCandidate('credential-lure')?.domain, 'northstar-login.example');
+    assert.deepEqual(SYNTHETIC_DEMO_CANDIDATES.map(candidate => candidate.domain), [
+      'exampleshop-login.example', 'examplesh0p.example', 'exampleshop.invalid',
+    ]);
+    assert.equal(syntheticDemoCandidate('credential-lure')?.domain, 'exampleshop-login.example');
+    assert.equal(syntheticDemoCandidate('character-edit')?.mutation, 'Character substitution');
     assert.equal(syntheticDemoCandidate('unknown'), null);
   });
 
   test('uses the production-shaped profile and centralized stage manifest', () => {
     assert.deepEqual(SYNTHETIC_DEMO_STAGES.map((stage) => stage.id), ['dashboard', 'brands', 'discover', 'bulk', 'lookup', 'monitor']);
-    assert.deepEqual(SYNTHETIC_DEMO_PROFILE.officialDomains, ['northstar.example']);
+    assert.deepEqual(SYNTHETIC_DEMO_PROFILE.officialDomains, ['exampleshop.example']);
+    assert.equal(SYNTHETIC_DEMO_PROFILE.name, 'Example Shop');
     assert.equal(SYNTHETIC_DEMO_PROFILE.pageBaseline?.complete, true);
     assert.equal(Object.isFrozen(SYNTHETIC_DEMO_PROFILE.pageBaseline), true);
   });
@@ -104,7 +108,7 @@ describe('synthetic demo state', () => {
     const lookup = syntheticDemoLookupView('credential-lure');
     assert.ok(lookup);
     assert.equal(lookup.assessment.risk.score, 78);
-    assert.equal(lookup.registry.rdapParsed.domain, 'northstar-login.example');
+    assert.equal(lookup.registry.rdapParsed.domain, 'exampleshop-login.example');
     assert.deepEqual(
       [lookup.dns.status, lookup.http.status, lookup.securityPosture.status, lookup.technology.status, lookup.network.status, lookup.tls.status],
       ['Success', 'Success', 'Success', 'Success', 'Success', 'Success'],
@@ -131,11 +135,11 @@ describe('synthetic demo state', () => {
 
     const relationships = syntheticDemoRelationshipGroups();
     assert.equal(relationships.length, 1);
-    assert.deepEqual(requiredValue(relationships[0]).domains, ['northstar-login.example', 'northstarr.example']);
+    assert.deepEqual(requiredValue(relationships[0]).domains, ['examplesh0p.example', 'exampleshop-login.example']);
 
     const record = syntheticDemoCaseRecord(completeState());
     assert.ok(record);
-    assert.equal(record.domain, 'northstar-login.example');
+    assert.equal(record.domain, 'exampleshop-login.example');
     assert.equal(record.evidenceHistory.length, 2);
     assert.notEqual(requiredValue(record.evidenceHistory[0]).firstCapturedAt, requiredValue(record.evidenceHistory[0]).capturedAt);
     assert.equal(syntheticDemoCaseRecord(createSyntheticDemoState()), null);
@@ -149,12 +153,12 @@ describe('synthetic demo export', () => {
     assert.equal(payload.version, SYNTHETIC_DEMO_EXPORT_VERSION);
     assert.equal(payload.synthetic, true);
     assert.equal(payload.generatedAt, '2026-07-14T01:02:03.000Z');
-    assert.equal(payload.case.domain, 'northstar-login.example');
+    assert.equal(payload.case.domain, 'exampleshop-login.example');
     assert.equal(payload.timeline.length, 2);
     assert.equal(payload.provenance.source, 'Certificate Transparency');
     assert.equal(payload.evidence.securityTxt.state, 'present');
     assert.equal(payload.evidence.credentialSurface.categories.password, 1);
-    assert.equal(requiredValue(payload.evidence.structuredIdentity.entities[0]).name, 'Northstar account service');
+    assert.equal(requiredValue(payload.evidence.structuredIdentity.entities[0]).name, 'Example Shop account service');
     assert.deepEqual(payload.evidence.technology.findings.map((finding) => finding.name), ['Example CMS', 'Example Commerce', 'Example Edge']);
     assert.equal(payload.evidence.observedNetwork.address, '203.0.113.44');
     assert.match(payload.warning, /Synthetic demonstration data only/);

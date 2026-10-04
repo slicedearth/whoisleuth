@@ -1,4 +1,5 @@
 import type { InvestigationRecipeId } from './investigation-guide.ts';
+import { SYNTHETIC_BRAND } from '../synthetic-brand.ts';
 
 export const OFFLINE_INVESTIGATION_SCENARIO_VERSION = 1;
 export const MAX_OFFLINE_SCENARIO_STEPS = 4;
@@ -45,7 +46,7 @@ export const OFFLINE_INVESTIGATION_SCENARIOS: readonly OfflineInvestigationScena
     recipeId: 'brand_sweep',
     label: 'Review a possible brand lookalike',
     summary: 'Move from a trusted brand boundary to a small candidate set without treating similarity as maliciousness.',
-    target: 'northstar.example.invalid',
+    target: SYNTHETIC_BRAND.officialDomain,
     learningGoal: 'Separate candidate generation, public observations, authority checks, and analyst conclusions.',
     steps: [
       {
@@ -53,7 +54,7 @@ export const OFFLINE_INVESTIGATION_SCENARIOS: readonly OfflineInvestigationScena
         title: 'Confirm the trusted boundary',
         prompt: 'Which action should come first?',
         evidence: [
-          { source: 'Brand profile', state: 'success', observation: 'northstar.example.invalid is analyst-marked as official.', limitation: 'The profile is analyst-owned context, not public proof of ownership.' },
+          { source: 'Brand profile', state: 'success', observation: `${SYNTHETIC_BRAND.officialDomain} is analyst-marked as official.`, limitation: 'The profile is analyst-owned context, not public proof of ownership.' },
           { source: 'Candidate generator', state: 'not_observed', observation: 'No candidates have been generated yet.', limitation: 'No candidate list is not evidence that lookalikes do not exist.' },
         ],
         choices: [
@@ -67,7 +68,7 @@ export const OFFLINE_INVESTIGATION_SCENARIOS: readonly OfflineInvestigationScena
         title: 'Interpret candidate provenance',
         prompt: 'A candidate appears in local permutations and a CT result. What is the defensible conclusion?',
         evidence: [
-          { source: 'Local generation', state: 'success', observation: 'northstarr.example.invalid is one edit from the official name.', limitation: 'A generated string is not evidence that a domain exists.' },
+          { source: 'Local generation', state: 'success', observation: `${SYNTHETIC_BRAND.lookalikeDomain} is one edit from the official name.`, limitation: 'A generated string is not evidence that a domain exists.' },
           { source: 'Certificate Transparency', state: 'success', observation: 'A certificate log reported the candidate name.', limitation: 'A CT observation is not authoritative registration status or evidence of current service.' },
         ],
         choices: [
