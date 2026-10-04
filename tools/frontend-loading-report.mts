@@ -228,15 +228,19 @@ export function parseGeneratedRouteNodes(source: string): RouteNode[] {
   }
   const match = source.match(/export const dictionary = \{([\s\S]*?)\};/u);
   if (!match) throw new Error('Could not find the generated client route dictionary.');
-  const dictionary = match[1] ?? '';
+  const dictionary = (match[1] ?? '').trim();
   const routes: RouteNode[] = [];
-  const pattern = /"([^"]+)": \[(\d+),\[([^\]]*)\]\]/gu;
-  for (const match of dictionary.matchAll(pattern)) {
-    const routeKey = match[1] === undefined
-      ? ''
-      : boundedManifestKey(match[1], 'Generated route key');
+  // Consume every generated tuple, including root-only routes and optional
+  // error nodes. The ~ marker declares a server load, not a different node.
+  const pattern = /\s*("(?:[^"\\]|\\.)+")\s*:\s*\[\s*~?(\d+)\s*(?:,\s*\[([\d,\s]*)\])?(?:,\s*\[[\d,\s]*\])?\s*\]\s*(?:,|$)/uy;
+  let offset = 0;
+  while (offset < dictionary.length) {
+    const match = pattern.exec(dictionary);
+    if (!match) throw new Error('Generated client route dictionary contains an unsupported route tuple.');
+    offset = pattern.lastIndex;
+    const routeKey = boundedManifestKey(JSON.parse(match[1]!), 'Generated route key');
     const pageNode = Number(match[2]);
-    if (!routeKey || !Number.isInteger(pageNode)) continue;
+    if (!Number.isSafeInteger(pageNode)) throw new Error('Generated route has an invalid page node.');
     const layoutNodes = (match[3] ?? '')
       .split(',')
       .map((value) => value.trim())
@@ -245,7 +249,7 @@ export function parseGeneratedRouteNodes(source: string): RouteNode[] {
     if (layoutNodes.length > MAX_FRONTEND_LAYOUT_NODES_PER_ROUTE) {
       throw new Error(`Generated route ${routeKey} exceeds its layout-node limit.`);
     }
-    if (layoutNodes.some((node) => !Number.isInteger(node))) {
+    if (layoutNodes.some((node) => !Number.isSafeInteger(node))) {
       throw new Error(`Generated route ${routeKey} has an invalid layout node.`);
     }
     routes.push(Object.freeze({ routeKey, pageNode, layoutNodes: Object.freeze(layoutNodes) }));
@@ -258,6 +262,20 @@ export function parseGeneratedRouteNodes(source: string): RouteNode[] {
     throw new Error('Generated client route dictionary contains duplicate route keys.');
   }
   return routes;
+}
+
+export function readFrontendRouteNodes(frontendRoot: string, manifest: Manifest): RouteNode[] {
+  const entries = Object.entries(manifest).filter(([, entry]) => entry.name === 'entry/app');
+  if (entries.length !== 1) throw new Error('Client manifest must identify exactly one application entry source.');
+  const source = boundedSafeRelativePath(entries[0]![0], 'Generated application entry source', 1024);
+  const generatedRoot = realpathSync(path.join(frontendRoot, '.svelte-kit/generated'));
+  const sourcePath = path.resolve(frontendRoot, source);
+  if (!pathIsWithin(generatedRoot, realpathSync(sourcePath))) {
+    throw new TypeError('Generated application entry source resolves outside the generated root.');
+  }
+  return parseGeneratedRouteNodes(readBoundedStableRegularFileSync(
+    sourcePath, MAX_FRONTEND_ROUTE_SOURCE_BYTES, 'Generated client route source',
+  ).toString('utf8'));
 }
 
 export function buildFrontendLoadingReport(input: FrontendLoadingReportInput) {
@@ -318,7 +336,7 @@ export function buildFrontendLoadingReport(input: FrontendLoadingReportInput) {
       const previousGzipBytes = previous && Object.hasOwn(previous, path) ? previous[path]! : null;
       return Object.freeze({
         path,
-        access: route.routeKey.includes('(public)') ? 'public' as const : 'protected' as const,
+        access: route.routeKey.split('/').includes('(console)') ? 'protected' as const : 'public' as const,
         assetCount: measured.assets.length,
         bytes: measured.bytes,
         gzipBytes: measured.gzipBytes,
@@ -449,13 +467,7 @@ export function main(
       label: 'Frontend client manifest',
       maximumBytes: MAX_FRONTEND_MANIFEST_BYTES,
     }));
-    const routeNodes = parseGeneratedRouteNodes(
-      readBoundedStableRegularFileSync(
-        path.join(frontend, '.svelte-kit/generated/client/app.js'),
-        MAX_FRONTEND_ROUTE_SOURCE_BYTES,
-        'Generated client route source',
-      ).toString('utf8'),
-    );
+    const routeNodes = readFrontendRouteNodes(frontend, manifest);
     const measurements = new Map<string, AssetMeasurement>();
     let measuredBytes = 0;
     const report = buildFrontendLoadingReport({
