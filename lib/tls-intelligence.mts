@@ -115,6 +115,7 @@ type TimerHandle = unknown;
 type SetTimer = (callback: () => void, milliseconds: number) => TimerHandle;
 type ClearTimer = (handle: TimerHandle) => void;
 type TlsCollectOptions = {
+  signal?: AbortSignal;
   resolveAddresses?: (hostname: string) => Promise<unknown> | unknown;
   connect?: TlsConnect;
   checkServerIdentity?: (hostname: string, certificate: unknown) => Error | undefined;
@@ -765,6 +766,7 @@ function skippedTlsObservation(detail = 'TLS evidence collection is disabled by 
 }
 
 async function collectTlsIntelligence(hostname: string, options: TlsCollectOptions = {}) {
+  options.signal?.throwIfAborted();
   const normalizedHostname = normalizeTlsHostname(hostname);
   const now = options.now || Date.now;
   const observedAt = options.observedAt || (() => new Date().toISOString());
@@ -785,8 +787,10 @@ async function collectTlsIntelligence(hostname: string, options: TlsCollectOptio
         resolutionDeadline = setTimer(() => reject(new Error('TLS resolution timed out')), timeoutMs);
       }),
     ]);
+    options.signal?.throwIfAborted();
     records = normalizePublicAddressRecords(resolved);
   } catch (error) {
+    options.signal?.throwIfAborted();
     return failedTlsObservation(error, { sniHost: normalizedHostname, observedAt: observedAt(), durationMs: now() - started });
   } finally {
     if (resolutionDeadline !== undefined) clearTimer(resolutionDeadline);
@@ -813,15 +817,25 @@ async function collectTlsIntelligence(hostname: string, options: TlsCollectOptio
     });
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let socket: TlsSocket;
     let deadline: TimerHandle;
     let settled = false;
+    const cleanup = () => {
+      if (deadline !== undefined) clearTimer(deadline);
+      options.signal?.removeEventListener('abort', cancelled);
+      if (socket && typeof socket.destroy === 'function') socket.destroy();
+    };
+    const cancelled = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(options.signal!.reason);
+    };
     const finish = (result: unknown) => {
       if (settled) return;
       settled = true;
-      if (deadline !== undefined) clearTimer(deadline);
-      if (socket && typeof socket.destroy === 'function') socket.destroy();
+      cleanup();
       resolve(result);
     };
     const fail = (error: unknown) => finish(failedTlsObservation(error, {
@@ -831,6 +845,8 @@ async function collectTlsIntelligence(hostname: string, options: TlsCollectOptio
       observedAt: observedAt(),
       durationMs: now() - started,
     }));
+    options.signal?.addEventListener('abort', cancelled, { once: true });
+    if (options.signal?.aborted) { cancelled(); return; }
     try {
       socket = connect({
         host: selected.address,
@@ -842,6 +858,7 @@ async function collectTlsIntelligence(hostname: string, options: TlsCollectOptio
         checkServerIdentity: () => undefined,
         ALPNProtocols: ['h2', 'http/1.1'],
       }, () => {
+        if (settled) return;
         try {
           const peerCertificate = socket.getPeerCertificate(true);
           let hostnameError: Error | null = null;
@@ -870,6 +887,7 @@ async function collectTlsIntelligence(hostname: string, options: TlsCollectOptio
           fail(error);
         }
       });
+      if (settled) { socket.destroy(); return; }
       socket.once('error', fail);
       deadline = setTimer(() => fail(new Error('TLS handshake timed out')), remainingMs);
       if (settled && deadline !== undefined) clearTimer(deadline);

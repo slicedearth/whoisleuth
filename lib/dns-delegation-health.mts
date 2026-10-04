@@ -28,6 +28,7 @@ type AuthorityQueryResult = {
   error: unknown;
 };
 type AuthorityQuery = (input: {
+  signal?: AbortSignal;
   domain: string;
   nameserver: string;
   address: string;
@@ -43,12 +44,14 @@ type AuthorityRecordSet = {
   discarded?: number;
 };
 type AuthorityRecordQuery = (input: {
+  signal?: AbortSignal;
   domain: string;
   nameserver: string;
   address: string;
   timeoutMs: number;
 }) => Promise<AuthorityRecordSet[]>;
 type DnsDelegationHealthOptions = {
+  signal?: AbortSignal;
   registryEvidence?: unknown;
   resolve4?: (hostname: string) => Promise<unknown>;
   resolve6?: (hostname: string) => Promise<unknown>;
@@ -161,19 +164,24 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 }
 
 async function defaultAuthorityQuery(input: {
+  signal?: AbortSignal;
   domain: string;
   address: string;
   timeoutMs: number;
 }): Promise<AuthorityQueryResult> {
+  input.signal?.throwIfAborted();
   const resolver = new dns.Resolver({
     timeout: Math.max(250, Math.min(input.timeoutMs, DNS_DELEGATION_TIMEOUT_MS)),
     tries: 1,
   });
   resolver.setServers([net.isIP(input.address) === 6 ? `[${input.address}]:53` : input.address]);
+  const cancelled = () => resolver.cancel();
+  input.signal?.addEventListener('abort', cancelled, { once: true });
   const [nameservers, soa] = await Promise.allSettled([
     resolver.resolveNs(input.domain),
     resolver.resolveSoa(input.domain),
-  ]);
+  ]).finally(() => { input.signal?.removeEventListener('abort', cancelled); resolver.cancel(); });
+  input.signal?.throwIfAborted();
   const reason = nameservers.status === 'rejected'
     ? nameservers.reason
     : soa.status === 'rejected'
@@ -255,22 +263,26 @@ function normaliseAuthorityValues(type: AuthorityRecordType, value: unknown): st
 }
 
 async function defaultAuthorityRecordQuery(input: {
+  signal?: AbortSignal;
   domain: string;
   address: string;
   timeoutMs: number;
 }): Promise<AuthorityRecordSet[]> {
+  input.signal?.throwIfAborted();
   const resolver = new dns.Resolver({
     timeout: Math.max(250, Math.min(input.timeoutMs, DNS_DELEGATION_TIMEOUT_MS)),
     tries: 1,
   });
   resolver.setServers([net.isIP(input.address) === 6 ? `[${input.address}]:53` : input.address]);
+  const cancelled = () => resolver.cancel();
+  input.signal?.addEventListener('abort', cancelled, { once: true });
   const queries: ReadonlyArray<readonly [AuthorityRecordType, Promise<unknown>]> = [
     ['A', resolver.resolve4(input.domain)],
     ['AAAA', resolver.resolve6(input.domain)],
     ['CAA', resolver.resolveCaa(input.domain)],
     ['MX', resolver.resolveMx(input.domain)],
   ];
-  return Promise.all(queries.map(async ([type, promise]) => {
+  const result = await Promise.all(queries.map(async ([type, promise]) => {
     try {
       const response = await withTimeout(promise, input.timeoutMs);
       const normalised = normaliseAuthorityValueSet(type, response);
@@ -294,7 +306,9 @@ async function defaultAuthorityRecordQuery(input: {
         discarded: 0,
       };
     }
-  }));
+  })).finally(() => { input.signal?.removeEventListener('abort', cancelled); resolver.cancel(); });
+  input.signal?.throwIfAborted();
+  return result;
 }
 
 function authorityRecordMatrix(authorities: readonly {
@@ -407,6 +421,7 @@ async function collectDnsDelegationHealth(
   parentQueryValue: ParentNameserverQuery,
   options: DnsDelegationHealthOptions = {},
 ) {
+  options.signal?.throwIfAborted();
   const domain = hostname(domainValue);
   if (!domain) return skippedDnsDelegationHealth('The domain was not eligible for authoritative delegation checks.');
   const registry = registryProjection(options.registryEvidence);
@@ -427,7 +442,8 @@ async function collectDnsDelegationHealth(
   const now = options.now || Date.now;
   const started = now();
 
-  const authorities = await Promise.all(candidates.map(async (nameserver) => {
+  const pending = candidates.map(async (nameserver) => {
+    options.signal?.throwIfAborted();
     const glue = registry.nameserverDetails.find((item) => item.name === nameserver)?.addresses ?? [];
     const resolved = glue.length
       ? glue
@@ -439,11 +455,12 @@ async function collectDnsDelegationHealth(
           : [])
           .map(publicAddress)
           .filter((address): address is string => address !== null);
+    options.signal?.throwIfAborted();
     const addresses = [...new Set(resolved)].slice(0, MAX_AUTHORITY_ADDRESSES);
     const attempts = await Promise.all(addresses.map(async (address) => {
       try {
         const raw = await withTimeout(
-          queryAuthority({ domain, nameserver, address, timeoutMs }),
+          queryAuthority({ domain, nameserver, address, timeoutMs, ...(options.signal ? { signal: options.signal } : {}) }),
           timeoutMs,
         );
         const query = record(raw);
@@ -475,6 +492,7 @@ async function collectDnsDelegationHealth(
         };
       }
     }));
+    options.signal?.throwIfAborted();
     const successful = attempts.find((attempt) => attempt.state === 'success');
     const partial = attempts.find((attempt) => attempt.state === 'partial');
     const retained = successful ?? partial;
@@ -482,7 +500,7 @@ async function collectDnsDelegationHealth(
     const recordAddress = retained?.address ?? addresses[0];
     if (queryAuthorityRecords && recordAddress) {
       try {
-        recordSets = (await withTimeout(queryAuthorityRecords({ domain, nameserver, address: recordAddress, timeoutMs }), timeoutMs))
+        recordSets = (await withTimeout(queryAuthorityRecords({ domain, nameserver, address: recordAddress, timeoutMs, ...(options.signal ? { signal: options.signal } : {}) }), timeoutMs))
           .filter((item) => ['A', 'AAAA', 'CAA', 'MX'].includes(item.type))
           .slice(0, 4)
           .map((item) => {
@@ -518,6 +536,7 @@ async function collectDnsDelegationHealth(
         }));
       }
     }
+    options.signal?.throwIfAborted();
     return {
       nameserver,
       addressSource: glue.length ? 'registry_glue' as const : 'recursive_address' as const,
@@ -535,7 +554,9 @@ async function collectDnsDelegationHealth(
       recordSets,
       attempts,
     };
-  }));
+  });
+  const authorities = await Promise.all(pending).finally(() => Promise.allSettled(pending));
+  options.signal?.throwIfAborted();
 
   const successfulAuthorities = authorities.filter((authority) => authority.state === 'success');
   const partialAuthorities = authorities.filter((authority) => authority.state === 'partial');

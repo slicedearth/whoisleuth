@@ -27,6 +27,7 @@ type DnsExchange = (
   options: DnsExchangeOptions,
 ) => Promise<Buffer>;
 type ResolveServiceBindingOptions = {
+  signal?: AbortSignal;
   exchange?: DnsExchange;
   tcpExchange?: DnsExchange;
   servers?: string[];
@@ -631,6 +632,7 @@ function defaultTcpExchange(
       }
     });
     socket.once('connect', () => {
+      if (settled) return;
       const length = Buffer.alloc(2);
       length.writeUInt16BE(query.length, 0);
       socket.write(Buffer.concat([length, query]));
@@ -644,6 +646,7 @@ function defaultDnsExchange(
   options: DnsExchangeOptions,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    options.signal?.throwIfAborted();
     const socket = createSocket(resolver.family === 6 ? 'udp6' : 'udp4');
     let settled = false;
     const timer = setTimeout(() => {
@@ -653,6 +656,7 @@ function defaultDnsExchange(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      options.signal?.removeEventListener('abort', cancelled);
       try {
         socket.close();
       } catch {
@@ -661,6 +665,9 @@ function defaultDnsExchange(
       if (error) reject(error);
       else resolve(response as Buffer);
     };
+    const cancelled = () => finish(options.signal?.reason ?? new Error('DNS UDP query cancelled'));
+    options.signal?.addEventListener('abort', cancelled, { once: true });
+    if (options.signal?.aborted) { cancelled(); return; }
     socket.once('error', (error) => finish(error));
     socket.once('message', (message) => {
       if (message.length > MAX_DNS_MESSAGE_BYTES) {
@@ -670,6 +677,7 @@ function defaultDnsExchange(
       }
     });
     socket.connect(resolver.port, resolver.address, () => {
+      if (settled) return;
       socket.send(query, (error) => {
         if (error) finish(error);
       });
@@ -701,6 +709,7 @@ async function resolveServiceBindingRecords(
   type: ServiceBindingRecordType,
   options: ResolveServiceBindingOptions = {},
 ): Promise<ServiceBindingResolution> {
+  options.signal?.throwIfAborted();
   const name = normalizeQueryName(nameValue);
   const transactionId = options.transactionId ?? randomInt(0x1_0000);
   const query = buildServiceBindingDnsQuery(name, type, transactionId);
@@ -717,10 +726,12 @@ async function resolveServiceBindingRecords(
   const deadline = Date.now() + timeoutMs;
   let lastError: unknown = null;
   for (const resolver of resolvers) {
+    options.signal?.throwIfAborted();
     const udpTimeoutMs = deadline - Date.now();
     if (udpTimeoutMs <= 0) break;
     try {
-      let response = await exchange(query, resolver, { timeoutMs: udpTimeoutMs });
+      let response = await exchange(query, resolver, { timeoutMs: udpTimeoutMs, ...(options.signal ? { signal: options.signal } : {}) });
+      options.signal?.throwIfAborted();
       if (isTruncatedDnsResponse(response, transactionId)) {
         const tcpTimeoutMs = deadline - Date.now();
         if (tcpTimeoutMs <= 0) {
@@ -729,8 +740,9 @@ async function resolveServiceBindingRecords(
         response = await (options.tcpExchange || defaultTcpExchange)(
           query,
           resolver,
-          { timeoutMs: tcpTimeoutMs },
+          { timeoutMs: tcpTimeoutMs, ...(options.signal ? { signal: options.signal } : {}) },
         );
+        options.signal?.throwIfAborted();
       }
       const parsed = parseServiceBindingDnsResponse(response, { transactionId, name, type });
       if (parsed.truncatedResponse) throw new ServiceBindingDnsError('DNS TCP response is still truncated');
@@ -739,6 +751,7 @@ async function resolveServiceBindingRecords(
       if (!parsed.records.length) throw new ServiceBindingDnsError('No service-binding records were returned', 'ENODATA');
       return { records: parsed.records, truncated: parsed.truncated };
     } catch (error) {
+      options.signal?.throwIfAborted();
       lastError = error;
       const code = error && typeof error === 'object' ? String((error as { code?: unknown }).code || '') : '';
       if (code === 'ENODATA' || code === 'ENOTFOUND') throw error;

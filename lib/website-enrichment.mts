@@ -261,6 +261,7 @@ function deriveWebsiteActivity(homepageStatus: string, hasFavicon: boolean, alre
 
 type WebsiteContext = RegistrationAssessment & { domain: string; observationHostname: string; selectedUrl: string | undefined };
 async function enrichWebsite(context: WebsiteContext, options: WebsiteEnrichmentOptions, featurePolicy: ReturnType<typeof networkFeaturePolicy>) {
+  options.signal?.throwIfAborted();
   const { domain, observationHostname, selectedUrl, registration, registryDnsEvidence, nameservers, dnssec } = context;
   const websiteProbeEnabled = featureDecision('website_probe', featurePolicy).enabled;
   const collectDns = options.collectDnsIntelligence || collectDnsIntelligence;
@@ -285,7 +286,7 @@ async function enrichWebsite(context: WebsiteContext, options: WebsiteEnrichment
   // sites serve no /favicon.ico and only point to a CDN PNG this way). One
   // extra round-trip on the already-slow deep path, in exchange for finding
   // favicons the bare /favicon.ico probe would miss.
-  const [homepage, dnsIntelligence, tlsIntelligence] = await Promise.all([
+  const pending = [
     websiteProbeEnabled ? fetchHomepageForDomain(observationHostname, {
       ...(selectedUrl ? { selectedUrl } : {}), ...(options.signal ? { signal: options.signal } : {}),
     }).catch((err): HomepageResult => ({
@@ -304,6 +305,7 @@ async function enrichWebsite(context: WebsiteContext, options: WebsiteEnrichment
     }),
     dnsIntelligenceEnabled
       ? collectDns(observationHostname, {
+          ...(options.signal ? { signal: options.signal } : {}),
           ...(options.dnsResolvers ? { resolvers: options.dnsResolvers } : {}),
           includeExtendedContext: options.includeExtendedDnsContext === true,
           includeInheritedCaa: options.includeInheritedCaa === true,
@@ -318,9 +320,11 @@ async function enrichWebsite(context: WebsiteContext, options: WebsiteEnrichment
           },
         )),
     tlsIntelligenceEnabled
-      ? collectTls(observationHostname)
+      ? collectTls(observationHostname, { ...(options.signal ? { signal: options.signal } : {}) })
       : Promise.resolve(skippedTlsObservation()),
-  ]);
+  ] as const;
+  const [homepage, dnsIntelligence, tlsIntelligence] = await Promise.all(pending)
+    .finally(() => Promise.allSettled(pending));
   options.signal?.throwIfAborted();
   const page = homepage.text;
   const pageBaseUrl = homepage.analysisBaseUrl ?? (typeof homepage.http?.finalUrl === 'string' ? homepage.http.finalUrl : `https://${observationHostname}/`);
@@ -402,8 +406,10 @@ async function enrichWebsite(context: WebsiteContext, options: WebsiteEnrichment
   const favicon = websiteProbeEnabled
     ? await fetchFaviconForDomain(observationHostname, {
         baseUrl: pageBaseUrl, ...(faviconEvidence ? { htmlAnalysis: faviconEvidence } : {}),
+        ...(options.signal ? { signal: options.signal } : {}),
       }).catch(() => null)
     : null;
+  options.signal?.throwIfAborted();
   const faviconHash = favicon ? favicon.hash : null;
   const faviconPHash = favicon ? favicon.phash : null;
 

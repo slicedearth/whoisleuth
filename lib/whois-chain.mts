@@ -188,7 +188,16 @@ export async function buildWhoisChainUncached(
   return chain;
 }
 
-export async function buildWhoisChain(query: string, options: { signal?: AbortSignal } = {}): Promise<WhoisChain> {
-  if (options.signal) return buildWhoisChainUncached(query, options);
-  return cached(`whois:${query.toLowerCase()}`, () => buildWhoisChainUncached(query));
+export async function buildWhoisChain(query: string, options: Parameters<typeof buildWhoisChainUncached>[1] = {}): Promise<WhoisChain> {
+  let ownedCollection: Promise<WhoisChain> | undefined;
+  try {
+    return await cached(`whois:${query.toLowerCase()}`, () => {
+      ownedCollection = buildWhoisChainUncached(query, options);
+      return ownedCollection;
+    }, options.signal);
+  } finally {
+    // Cache cancellation rejects promptly, but a started transport still belongs
+    // to this lookup lease. Drain it before its caller can release that lease.
+    await ownedCollection?.catch(() => {});
+  }
 }

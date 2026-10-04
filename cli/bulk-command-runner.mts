@@ -113,6 +113,10 @@ async function runBulkCommand(
       await checkpoint?.flush();
     } catch (error) {
       checkpointFailure = error;
+      eventProgress.emit({ event: 'warning', state: 'checkpoint_unavailable' });
+      if (!eventProgress.enabled) {
+        context.writeStderr(`Checkpoint warning: ${boundedCliErrorMessage(error, 'Checkpoint could not be written')}. The latest progress may not be saved.\n`);
+      }
     }
   }
 
@@ -134,12 +138,6 @@ async function runBulkCommand(
     else if (args.output === 'domains') context.writeStdout(formatBulkDomainList(selectedItems));
     else if (args.output === 'queries') context.writeStdout(formatBulkQueryList(selectedItems));
     else context.writeStdout(context.terminal(formatTerminalBulk(selectedItems, metadata), args.color));
-  }
-  if (checkpointFailure) {
-    eventProgress.emit({ event: 'warning', state: 'checkpoint_unavailable' });
-    if (!eventProgress.enabled) {
-      context.writeStderr(`Checkpoint warning: ${boundedCliErrorMessage(checkpointFailure, 'Checkpoint could not be written')}. Completed output is still available.\n`);
-    }
   }
   const policyFindings = evaluateCliFailPolicies(buildCliBulkDocument(items, { ...metadata, filter: 'all' }), args.failOn || []);
   if (policyFindings.length && !eventProgress.enabled) context.writeStderr(formatFailPolicyNotice(policyFindings));
