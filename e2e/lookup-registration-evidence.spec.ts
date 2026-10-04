@@ -1125,7 +1125,8 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   await expect(section.locator('article').filter({ hasText: 'URLhaus malware-host records' }).locator('.chip')).toHaveClass(/\bwarn\b/);
   await expect(section.locator('article').filter({ hasText: 'ThreatFox malware IOCs' }).locator('.chip')).toHaveClass(/\bunavailable\b/);
   await expect(section.getByText(/do not decide availability/i)).toBeVisible();
-  await expect(section.getByText(new RegExp(`2 independent publisher families contributed \\+18 under model v${RISK_MODEL_VERSION}`, 'i'))).toBeVisible();
+  await expect(section.getByText(new RegExp(`2 distinct publisher families contributed \\+18 under model v${RISK_MODEL_VERSION}`, 'i'))).toBeVisible();
+  await expect(section.getByText(/Publisher diversity does not establish independent underlying reports/u)).toBeVisible();
   const riskExplanation = page.locator('.risk-band details.score-detail > summary');
   await riskExplanation.focus();
   await expect(riskExplanation).toBeFocused();

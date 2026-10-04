@@ -163,10 +163,16 @@ const CASE_FIELD_RULES = Object.freeze({
     profile === 'public'
       ? []
       : profile === 'trusted'
-        ? structuredClone(record.actions).map((item) => ({ ...item, recipient: '[redacted]' }))
+        ? structuredClone(record.actions).map((item) => {
+          const { correction: _privateCorrection, ...shared } = item;
+          return { ...shared, recipient: '[redacted]', history: shared.history.map(event => {
+            const { packetReceipt: _privateReceipt, ...sharedEvent } = event;
+            return sharedEvent;
+          }) };
+        })
         : structuredClone(record.actions)
   ), {
-    nestedSensitiveFields: ['recipient', 'responseObjects'],
+    nestedSensitiveFields: ['recipient', 'responseObjects', 'correction', 'packetReceipt'],
     audienceExclusions: {
       trusted: { label: 'Recipient values', order: 2 },
       public: { label: 'Actions and recipient values', order: 3 },
@@ -266,6 +272,7 @@ const OUTSIDE_SCHEMA_EXCLUSIONS = Object.freeze({
 
 function currentAudienceExclusions(audience: CaseAudience, caseVersion: number): readonly string[] {
   const entries = [
+    ...(audience === 'trusted' && caseVersion >= 19 ? [{ label: 'Private correction content and exact delivery receipts', order: 2 }] : []),
     ...Object.values(CASE_FIELD_RULES).flatMap((rule) => (
       rule.audienceExclusions[audience] ? [rule.audienceExclusions[audience]] : []
     )),

@@ -111,7 +111,7 @@ export function applyCliCaseOperation(cases: CaseRecord[], args: CaseArguments, 
     result = updateCase(cases, current.id, { incidentTarget: input.url }, now);
   } else if (args.operation === 'action') {
     if (!input) throw new CliUsageError('A response action requires JSON input.');
-    fields(input, ['type', 'recipient', 'contactSource', 'routeObservedAt', 'routeReviewAfter', 'contactLimitations', 'dueAt', 'followUpAt', 'responseObjects', 'originActionId'], 'Response action');
+    fields(input, ['type', 'recipient', 'contactSource', 'routeObservedAt', 'routeReviewAfter', 'contactLimitations', 'dueAt', 'followUpAt', 'responseObjects', 'originActionId', 'amendment', 'correction'], 'Response action');
     result = updateCase(cases, current.id, { action: input }, now);
     const action = result.record.actions.find(candidate => !current.actions.some(prior => prior.id === candidate.id))!;
     if (!action) throw new CliUsageError('No new action was retained within the Case bounds; nothing was written.');
@@ -122,7 +122,7 @@ export function applyCliCaseOperation(cases: CaseRecord[], args: CaseArguments, 
     if (!input || !input.transition || typeof input.transition !== 'object' || Array.isArray(input.transition)) throw new CliUsageError('An action event requires id and transition JSON.');
     fields(input, ['id', 'transition'], 'Response action event');
     const transition = input.transition as JsonObject;
-    fields(transition, ['nextState', 'occurredAt', 'sourceClass', 'provenance', 'reference', 'evidencePinId', 'limitations', 'providerOutcome', 'outcomeDetail', 'responseObjects', 'objectOutcome', 'evidenceRequest'], 'Response transition');
+    fields(transition, ['nextState', 'occurredAt', 'sourceClass', 'provenance', 'reference', 'evidencePinId', 'limitations', 'providerOutcome', 'outcomeDetail', 'responseObjects', 'objectOutcome', 'evidenceRequest', 'packetReceipt'], 'Response transition');
     result = updateCase(cases, current.id, { actionUpdate: input }, now);
     const previous = current.actions.find(action => action.id === input.id);
     const event = result.record.actions.find(action => action.id === input.id)?.history.find(candidate => !previous?.history.some(prior => prior.id === candidate.id));

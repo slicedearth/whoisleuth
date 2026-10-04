@@ -8,11 +8,14 @@
   const queryUrls = $derived(material.incident.abusiveUrls.filter(value => {
     try { const url = new URL(value); return Boolean(url.search || url.hash); } catch { return false; }
   }));
+  const correction = $derived(material.escalationHistory.find(action => action.actionId === material.actionBinding.selectedActionId)?.correction);
 </script>
 
 <section class="packet-disclosure" aria-label="Recipient copy review">
   <h4>What this recipient will receive</h4>
   <p>{material.recipientRoute?.contact ?? 'No recipient selected'} · {material.profile.label}</p>
+  {#if correction}<section aria-label="Correction fields disclosed"><h4>{correction.purpose === 'correction' ? 'Correction request' : 'Retraction request'}</h4><p>Original delivery {correction.deliveryEventId} · packet v{correction.packetVersion} · SHA-256 {correction.packetDigestSha256}</p><p>Analyst reason: {correction.reason}</p><p>Previous statement: {correction.previousStatement}</p><p>Corrected statement: {correction.correctedStatement || 'Request to retract the previous statement'}</p><p>These private correction fields are included in this exact recipient copy. Preparing it is not sending, acceptance or restoration.</p></section>{/if}
+  {#each material.sourceQualifications as limitation}<p>{limitation}</p>{/each}
   <dl>
     <div><dt>Incident</dt><dd>{material.incident.category} · {material.incident.affectedParty}</dd></div>
     <div><dt>Observation</dt><dd>{formatEvidenceDate(material.incident.observedAt)}<p>{material.incident.observedHarm}</p></dd></div>

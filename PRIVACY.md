@@ -246,7 +246,7 @@ posture comparisons, evidence-gap queues and response preflight from retained
 records without another request. Derived views do not create evidence, prove a
 target state or silently mark an item reviewed.
 
-Creating or refreshing a Case is deliberate. Current Case schema 18 can retain
+Creating or refreshing a Case is deliberate. Current Case schema 19 can retain
 the exact normalised submitted hostname and the DNS, TLS and web observation
 hostname on a new evidence snapshot, analyst
 decision confidence and its basis, and a response route's observation and
@@ -267,6 +267,14 @@ Provider evidence requests retain the original submitted-packet digest, request
 summary, optional deadline, preparation notes and selected pin identities.
 Amendments link to those request events without rewriting the original packet.
 These records stay browser-local until exported; public Case packs exclude them.
+Newly recorded packet deliveries can also retain the prepared packet's version,
+digest, recipient and exact response-object scope. A correction or withdrawal
+draft references one such receipt, its changed assertion, reason and selected
+evidence. Historical digest-only records acquire no fabricated receipt. Full
+local exports preserve the relationship. Trusted Case packs omit the correction
+content and delivery receipt; public packs exclude actions. A redacted copy
+cannot authorise an exact-recipient correction. Neither drafting nor export
+sends a request or changes the original delivery record.
 Analyst-declared evidence relationships retain pin identities, their basis and
 any withdrawal reason. Matching source labels, checkpoints and imported-content
 identities are displayed without assuming independent corroboration. Case files
@@ -279,7 +287,7 @@ submitted or applied automatically. Content digests do not authenticate authors.
 Exact public v1 Case schema 12 and published-v2 schemas 13–17
 remain readable and migrate directly; migrated fields can remain null, unknown
 or blank because WHOISleuth does not reconstruct them from weaker evidence.
-Case report v14 JSON and Markdown do not add the snapshot hostname.
+Case report v15 JSON and Markdown do not add the snapshot hostname.
 Explicitly selected evidence pins can include their own observation hostname
 in response packets; this remains distinct from the Case's registration domain.
 
@@ -588,6 +596,16 @@ message headers, HAR and identity-event objects are not scanned for these values
 Optional distribution, observer, vantage and reference labels are analyst
 declarations included only in an explicitly downloaded or retained review;
 ordinary Case summary pins include counts and digests, not those values.
+
+Plain-text phone candidates remain in the temporary intake until deliberately
+selected. A selected observation retains its exact original spelling, source
+digest, UTF-16 text range, and supplied source/time/basis/role declarations;
+the surrounding snippet is excluded. A manual displayed/destination pair retains
+minimised host/origin evidence and its declarations, while exact private URLs
+remain transient. These selected values can still be sensitive. Private intake
+attachments are excluded from trusted and public Case packs; unsupported
+interchange mappings carry an omission limitation rather than inventing a field.
+No telephone, destination or reputation service is contacted.
 
 Internal containment handoffs contain only selected retained follow-up
 assertions and linked pins after audience projection and explicit disclosure

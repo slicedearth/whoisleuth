@@ -58,6 +58,57 @@ export type IntakeIndicator = Readonly<{
   basis: 'literal_text';
 }>;
 
+export const INTAKE_TEXT_BASES = ['supplied_text', 'manual_transcription', 'ocr_text', 'unknown'] as const;
+export const INTAKE_PHONE_ROLES = ['advertised_support_contact', 'sender_or_caller_id_claim', 'unknown'] as const;
+export type IntakeEvidenceDeclaration = Readonly<{
+  sourceLabel: string;
+  observedAt: string | null;
+  basis: typeof INTAKE_TEXT_BASES[number];
+}>;
+export type IntakePhoneDeclaration = IntakeEvidenceDeclaration & Readonly<{
+  role: typeof INTAKE_PHONE_ROLES[number];
+  countryCallingCode: string | null;
+}>;
+export type IntakePhoneCandidate = Readonly<{
+  id: string; original: string; start: number; end: number;
+  canonical: string | null; extension: string | null;
+  state: 'international_candidate' | 'national_ambiguous' | 'unsupported';
+  issues: readonly string[];
+}>;
+/** Offsets index the exact UTF-8 decoded input, including a leading BOM, in UTF-16 code units. */
+export type IntakePhoneReview = Readonly<{
+  version: 1; sourceDigestSha256: string; sourceTextLength: number;
+  offsetUnit: 'utf16_code_unit'; state: 'reviewed' | 'partial';
+  candidatesReviewed: number; candidates: readonly IntakePhoneCandidate[];
+}>;
+export type IntakeSelectedPhone = Readonly<{
+  canonical: string | null; extension: string | null;
+  state: 'international_candidate' | 'national_ambiguous' | 'country_context_conflict';
+  declaration: IntakePhoneDeclaration;
+  occurrences: readonly Readonly<{ original: string; start: number; end: number }>[];
+}>;
+export type IntakeDestinationProjection = Readonly<{
+  state: 'parsed' | 'missing' | 'unsupported';
+  hostname: string | null; origin: string | null; registrationDomain: string | null;
+  hasPrivateLocation: boolean; normalisation: readonly string[];
+}>;
+export type IntakeDestinationDeclaration = IntakeEvidenceDeclaration & Readonly<{
+  role: 'displayed_claim' | 'claimed_landing' | 'supplied_redirect';
+}>;
+export type IntakeDestinationPair = Readonly<{
+  displayed: IntakeDestinationProjection;
+  destination: IntakeDestinationProjection;
+  displayedDeclaration: IntakeDestinationDeclaration;
+  destinationDeclaration: IntakeDestinationDeclaration;
+  state: 'same_host' | 'different_host' | 'insufficient_evidence';
+}>;
+export type IntakeSelectedEvidence = Readonly<{
+  version: 1; sourceDigestSha256: string; sourceTextLength: number | null;
+  phoneCoverage: Readonly<{ state: 'reviewed' | 'partial' | 'not_reviewed'; candidatesReviewed: number; candidatesShown: number }>;
+  offsetUnit: 'utf16_code_unit'; phones: readonly IntakeSelectedPhone[];
+  destinationPair: IntakeDestinationPair | null; limitations: readonly string[];
+}>;
+
 export type AuthorisationLinkReview = Readonly<{
   kind: 'authorisation_parameters' | 'device_code_reference';
   clientId: string | null;
@@ -109,6 +160,7 @@ export type CurrentMessageIntakeReport = MessageIntakeReportFields & Readonly<{
   indicators: readonly IntakeIndicator[];
   indicatorCoverage: Readonly<{ state: 'reviewed' | 'partial' | 'not_reviewed'; candidatesReviewed: number }>;
   distributionContext: IntakeDistributionContext | null;
+  selectedEvidence?: IntakeSelectedEvidence;
 }>;
 export type MessageIntakeReport = LegacyMessageIntakeReport | CurrentMessageIntakeReport;
-export type MessageIntakeResult = Readonly<{ report: MessageIntakeReport; targets: readonly IntakeTarget[] }>;
+export type MessageIntakeResult = Readonly<{ report: MessageIntakeReport; targets: readonly IntakeTarget[]; phoneReview?: IntakePhoneReview }>;

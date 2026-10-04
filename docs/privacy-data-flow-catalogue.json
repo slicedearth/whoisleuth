@@ -3111,7 +3111,7 @@
       "command": "case",
       "capabilityFamilyId": "analyst_cases",
       "title": "Review and update ordinary local Case files",
-      "requestPurpose": "Reads exact Case schemas 15 or 16 or 17 or 18. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 18.",
+      "requestPurpose": "Reads exact Case schemas 15 or 16 or 17 or 18 or 19. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 19.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -3182,7 +3182,7 @@
       "command": "case-pack",
       "capabilityFamilyId": "portable_evidence",
       "title": "Build a reviewed case package",
-      "requestPurpose": "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 and writes a separate audience-specific Case-pack v2.",
+      "requestPurpose": "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 or 19 and writes a separate audience-specific Case-pack v2.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -4933,7 +4933,7 @@
       "command": "intake",
       "capabilityFamilyId": "offline_review",
       "title": "Review selected files and identity events offline",
-      "requestPurpose": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded distribution-declaration file. No collection or automatic Case write.",
+      "requestPurpose": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic Case write.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -4994,7 +4994,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Offline only: no destination, embedded command or QR payload is opened or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Literal IPs and labelled hashes are bounded text observations, not lookup targets or verdicts; headers, URL contents, QR, HAR and identity-event fields are not scanned for them. Optional --intake-context reads one separate file up to 8 KiB, not stdin; its analyst-declared channel, source, time and labels are retained in output. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.",
+        "Offline only: no destination, embedded command, phone number or QR payload is opened, contacted or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Literal IPs and labelled hashes are bounded text observations, not lookup targets or verdicts; headers, URL contents, QR, HAR and identity-event fields are not scanned for them. Plain-text phone discovery writes only counts, source digest, ranges and status to stderr; --quiet suppresses it. Optional --intake-context reads one separate file up to 8 KiB, not stdin. Version 1 carries distribution declarations; version 2 can also bind explicit phone selections and a supplied destination pair to the exact input digest. Selected phone strings and source declarations enter output; unselected candidates and exact private URLs do not. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -8345,7 +8345,7 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.case-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 18,
+      "currentVersion": 19,
       "supportedVersions": [
         12,
         13,
@@ -8353,7 +8353,8 @@
         15,
         16,
         17,
-        18
+        18,
+        19
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
@@ -8808,14 +8809,15 @@
       "schema": "whoisleuth.case-response-review-inputs",
       "lifecycleSchema": "whoisleuth.case-response-review-inputs",
       "coverageClass": "registered_schema",
-      "currentVersion": 6,
+      "currentVersion": 7,
       "supportedVersions": [
         1,
         2,
         3,
         4,
         5,
-        6
+        6,
+        7
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -9115,14 +9117,15 @@
       "schema": "whoisleuth.case-report",
       "lifecycleSchema": "whoisleuth.case-report",
       "coverageClass": "registered_schema",
-      "currentVersion": 14,
+      "currentVersion": 15,
       "supportedVersions": [
         9,
         10,
         11,
         12,
         13,
-        14
+        14,
+        15
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -9138,7 +9141,7 @@
       "schema": "whoisleuth.case-response-packet",
       "lifecycleSchema": "whoisleuth.case-response-packet",
       "coverageClass": "registered_schema",
-      "currentVersion": 12,
+      "currentVersion": 13,
       "supportedVersions": [
         6,
         7,
@@ -9146,7 +9149,8 @@
         9,
         10,
         11,
-        12
+        12,
+        13
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -9162,7 +9166,7 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.case-export",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 18,
+      "currentVersion": 19,
       "supportedVersions": [
         12,
         13,
@@ -9170,7 +9174,8 @@
         15,
         16,
         17,
-        18
+        18,
+        19
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -11942,7 +11947,8 @@
             15,
             16,
             17,
-            18
+            18,
+            19
           ],
           "mode": "direct",
           "discriminator": null
@@ -11950,7 +11956,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.case-store",
-        "version": 18,
+        "version": 19,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.browser-state",
@@ -11975,7 +11981,8 @@
             15,
             16,
             17,
-            18
+            18,
+            19
           ],
           "mode": "direct",
           "discriminator": null
@@ -11983,7 +11990,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.case-export",
-        "version": 18,
+        "version": 19,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -12008,7 +12015,8 @@
             15,
             16,
             17,
-            18
+            18,
+            19
           ],
           "mode": "direct",
           "discriminator": null
@@ -12122,7 +12130,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-export",
-        "version": 18,
+        "version": 19,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -12143,7 +12151,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-response-packet",
-        "version": 12,
+        "version": 13,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -12171,7 +12179,8 @@
             9,
             10,
             11,
-            12
+            12,
+            13
           ],
           "mode": "direct",
           "discriminator": null
@@ -12202,7 +12211,8 @@
             9,
             10,
             11,
-            12
+            12,
+            13
           ],
           "mode": "direct",
           "discriminator": null
@@ -12226,7 +12236,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-report",
-        "version": 14,
+        "version": 15,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -12253,7 +12263,8 @@
             11,
             12,
             13,
-            14
+            14,
+            15
           ],
           "mode": "embedded",
           "discriminator": null
@@ -12277,7 +12288,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-response-review-inputs",
-        "version": 6,
+        "version": 7,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -12304,7 +12315,8 @@
             3,
             4,
             5,
-            6
+            6,
+            7
           ],
           "mode": "direct",
           "discriminator": null
@@ -12415,7 +12427,8 @@
             15,
             16,
             17,
-            18
+            18,
+            19
           ],
           "mode": "direct",
           "discriminator": null

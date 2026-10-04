@@ -57,6 +57,7 @@ export const CASE_PORTABILITY_IDENTITY_CONSTANTS = Object.freeze([
   'WORKSPACE_ARCHIVE_SCHEMA',
   'PUBLIC_WORKSPACE_ARCHIVE_VERSION',
   'WORKSPACE_ARCHIVE_VERSION',
+  'WORKSPACE_ARCHIVE_WRITER_FIXTURE_ID',
   'SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS',
   'PUBLIC_WORKSPACE_ARCHIVE_SECTION_IDS',
   'WORKSPACE_ARCHIVE_SECTION_IDS',
@@ -169,7 +170,8 @@ export const PUBLISHED_V2_3_CASE_SCHEMA_VERSION = 15;
 export const INCIDENT_CASE_SCHEMA_VERSION = 16;
 export const EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION = 17;
 export const OBJECT_RESPONSE_CASE_SCHEMA_VERSION = 18;
-export const CASE_SCHEMA_VERSION = OBJECT_RESPONSE_CASE_SCHEMA_VERSION;
+export const DELIVERY_CORRECTION_CASE_SCHEMA_VERSION = 19;
+export const CASE_SCHEMA_VERSION = DELIVERY_CORRECTION_CASE_SCHEMA_VERSION;
 export const CASE_BROWSER_SUPPORTED_VERSIONS = Object.freeze([
   PUBLIC_CASE_SCHEMA_VERSION,
   PUBLISHED_V2_CASE_SCHEMA_VERSION,
@@ -177,6 +179,7 @@ export const CASE_BROWSER_SUPPORTED_VERSIONS = Object.freeze([
   PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
   INCIDENT_CASE_SCHEMA_VERSION,
   EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION,
+  OBJECT_RESPONSE_CASE_SCHEMA_VERSION,
   CASE_SCHEMA_VERSION,
 ] as const);
 export const CASE_IMPORT_VERSIONS = CASE_BROWSER_SUPPORTED_VERSIONS;
@@ -187,13 +190,15 @@ export const PUBLISHED_V2_CASE_REPORT_SCHEMA_VERSION = 9;
 export const PUBLISHED_V2_2_CASE_REPORT_SCHEMA_VERSION = 10;
 export const PUBLISHED_V2_3_CASE_REPORT_SCHEMA_VERSION = 11;
 export const EVIDENCE_FOLLOW_UP_CASE_REPORT_SCHEMA_VERSION = 13;
-export const CASE_REPORT_SCHEMA_VERSION = 14;
+export const OBJECT_RESPONSE_CASE_REPORT_SCHEMA_VERSION = 14;
+export const CASE_REPORT_SCHEMA_VERSION = 15;
 export const CASE_REPORT_OUTPUT_VERSIONS = Object.freeze([
   PUBLISHED_V2_CASE_REPORT_SCHEMA_VERSION,
   PUBLISHED_V2_2_CASE_REPORT_SCHEMA_VERSION,
   PUBLISHED_V2_3_CASE_REPORT_SCHEMA_VERSION,
   LATEST_PUBLIC_CASE_REPORT_SCHEMA_VERSION,
   EVIDENCE_FOLLOW_UP_CASE_REPORT_SCHEMA_VERSION,
+  OBJECT_RESPONSE_CASE_REPORT_SCHEMA_VERSION,
   CASE_REPORT_SCHEMA_VERSION,
 ] as const);
 
@@ -203,7 +208,8 @@ export const PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION = 7;
 export const PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION = 8;
 export const PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION = 9;
 export const EVIDENCE_FOLLOW_UP_CASE_RESPONSE_PACKET_VERSION = 11;
-export const CASE_RESPONSE_PACKET_VERSION = 12;
+export const OBJECT_RESPONSE_CASE_PACKET_VERSION = 12;
+export const CASE_RESPONSE_PACKET_VERSION = 13;
 export const CASE_RESPONSE_PACKET_OUTPUT_VERSIONS = Object.freeze([
   PUBLIC_CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
@@ -211,6 +217,7 @@ export const CASE_RESPONSE_PACKET_OUTPUT_VERSIONS = Object.freeze([
   PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION,
   LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION,
   EVIDENCE_FOLLOW_UP_CASE_RESPONSE_PACKET_VERSION,
+  OBJECT_RESPONSE_CASE_PACKET_VERSION,
   CASE_RESPONSE_PACKET_VERSION,
 ] as const);
 export const SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS = CASE_RESPONSE_PACKET_OUTPUT_VERSIONS;
@@ -219,19 +226,21 @@ export const PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION = 1;
 export const PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION = 2;
 export const PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION = 3;
 export const EVIDENCE_FOLLOW_UP_CASE_RESPONSE_REVIEW_INPUTS_VERSION = 5;
-export const CASE_RESPONSE_REVIEW_INPUTS_VERSION = 6;
+export const OBJECT_RESPONSE_CASE_REVIEW_INPUTS_VERSION = 6;
+export const CASE_RESPONSE_REVIEW_INPUTS_VERSION = 7;
 export const SUPPORTED_CASE_RESPONSE_REVIEW_INPUTS_VERSIONS = Object.freeze([
   PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   EVIDENCE_FOLLOW_UP_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  OBJECT_RESPONSE_CASE_REVIEW_INPUTS_VERSION,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
 ] as const);
 
 export const CLI_CASE_PACK_SCHEMA = 'whoisleuth.cli.case-pack';
 export const CLI_CASE_PACK_VERSION = 2;
-export const CLI_CASE_PACK_WRITER_FIXTURE_ID = 'cli-case-pack-v2-case-v18-current';
+export const CLI_CASE_PACK_WRITER_FIXTURE_ID = 'cli-case-pack-v2-case-v19-current';
 export const CLI_CASE_PACK_INPUT_CASE_VERSIONS = Object.freeze(
   CASE_IMPORT_VERSIONS.filter((version) => version >= PUBLISHED_V2_3_CASE_SCHEMA_VERSION),
 );
@@ -254,6 +263,7 @@ export const CLI_CASE_PACK_CASE_REPORT_EPOCHS = Object.freeze([
   Object.freeze({ caseVersions: Object.freeze([PUBLISHED_V2_3_CASE_SCHEMA_VERSION] as const), reportVersions: Object.freeze([PUBLISHED_V2_3_CASE_REPORT_SCHEMA_VERSION] as const) }),
   Object.freeze({ caseVersions: Object.freeze([INCIDENT_CASE_SCHEMA_VERSION] as const), reportVersions: Object.freeze([LATEST_PUBLIC_CASE_REPORT_SCHEMA_VERSION] as const) }),
   Object.freeze({ caseVersions: Object.freeze([EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION] as const), reportVersions: Object.freeze([EVIDENCE_FOLLOW_UP_CASE_REPORT_SCHEMA_VERSION] as const) }),
+  Object.freeze({ caseVersions: Object.freeze([OBJECT_RESPONSE_CASE_SCHEMA_VERSION] as const), reportVersions: Object.freeze([OBJECT_RESPONSE_CASE_REPORT_SCHEMA_VERSION] as const) }),
   Object.freeze({ caseVersions: Object.freeze([CASE_SCHEMA_VERSION] as const), reportVersions: Object.freeze([CASE_REPORT_SCHEMA_VERSION] as const) }),
 ] as const);
 
@@ -272,6 +282,7 @@ export const PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION = 6;
 export const PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION = 7;
 export const PUBLISHED_V2_3_WORKSPACE_ARCHIVE_VERSION = 8;
 export const WORKSPACE_ARCHIVE_VERSION = 10;
+export const WORKSPACE_ARCHIVE_WRITER_FIXTURE_ID = 'workspace-archive-v10-case-v19-empty-current';
 export const SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS = Object.freeze([
   PUBLIC_WORKSPACE_ARCHIVE_VERSION,
   PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION,
@@ -482,6 +493,104 @@ export function serialiseWorkspaceArchiveSection(value: unknown): string {
 
 const CASE_LIFECYCLE_FIXTURES = Object.freeze([
   Object.freeze({
+    id: 'browser-case-v19',
+    path: 'test/fixtures/case-lifecycle/browser-case-v19.json',
+    bytes: 3312,
+    sha256: '3d3c3c3f35f05406d5f4d2b9a0925e6971a9dd237f570733a0b1e82a52d99a92',
+    contentDigestSha256: null,
+    schema: CASE_BROWSER_STORE_LIFECYCLE_SCHEMA,
+    version: CASE_SCHEMA_VERSION,
+    role: 'current' as const,
+    expectation: 'accepted_exact' as const,
+    expectedOutputFixtureId: null,
+    shapeId: 'case.browser-store.v19',
+    scope: 'repository' as const,
+  }),
+  Object.freeze({
+    id: 'case-export-v19',
+    path: 'test/fixtures/case-lifecycle/case-export-v19.json',
+    bytes: 3356,
+    sha256: '65cbb4952766cf6016d4ba81b5859a8a2bd16eb373c7c2f6d08d666aa29c99c1',
+    contentDigestSha256: null,
+    schema: CASE_EXPORT_LIFECYCLE_SCHEMA,
+    version: CASE_SCHEMA_VERSION,
+    role: 'current' as const,
+    expectation: 'accepted_exact' as const,
+    expectedOutputFixtureId: null,
+    shapeId: 'case.export.v19',
+    scope: 'repository' as const,
+  }),
+  Object.freeze({
+    id: 'case-report-v15',
+    path: 'test/fixtures/case-lifecycle/case-report-v15.json',
+    bytes: 4894,
+    sha256: '8e6fe5c4c8cd96aa5a89f39e6290137157db40fe07c84525f26e0a6105e4d162',
+    contentDigestSha256: null,
+    schema: CASE_REPORT_SCHEMA,
+    version: CASE_REPORT_SCHEMA_VERSION,
+    role: 'current' as const,
+    expectation: 'accepted_exact' as const,
+    expectedOutputFixtureId: null,
+    shapeId: 'case.report.v15',
+    scope: 'repository' as const,
+  }),
+  Object.freeze({
+    id: 'case-response-review-inputs-v7',
+    path: 'test/fixtures/case-lifecycle/case-response-review-inputs-v7.json',
+    bytes: 7634,
+    sha256: 'f8a7de7af1a2f341b5123e0d6c41d10a85f4dcaa13815b3aa7974355f070f55b',
+    contentDigestSha256: null,
+    schema: CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
+    version: CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+    role: 'current' as const,
+    expectation: 'accepted_exact' as const,
+    expectedOutputFixtureId: null,
+    shapeId: 'case.response-review-inputs.v7',
+    scope: 'repository' as const,
+  }),
+  Object.freeze({
+    id: 'case-response-packet-v13',
+    path: 'test/fixtures/case-lifecycle/case-response-packet-v13.json',
+    bytes: 12276,
+    sha256: 'e24bfaa12c12ee9bca57e165dcbd8445a9768b3095a19fb08f1c56a12e1acc97',
+    contentDigestSha256: "sha256:424cd8a9fd2dbfec2e272891d97359164f4492426e3160eb6e2f52d9b432b9fe",
+    schema: CASE_RESPONSE_PACKET_SCHEMA,
+    version: CASE_RESPONSE_PACKET_VERSION,
+    role: 'current' as const,
+    expectation: 'accepted_exact' as const,
+    expectedOutputFixtureId: null,
+    shapeId: 'case.response-packet.v13',
+    scope: 'repository' as const,
+  }),
+  Object.freeze({
+    id: 'cli-case-pack-v2-case-v19-current',
+    path: 'test/fixtures/case-lifecycle/cli-case-pack-v2-case-v19-current.json',
+    bytes: 9874,
+    sha256: 'd29be046deeed1ff8b626ec3e79d7c14be690d35b67a506f95141075f50c3701',
+    contentDigestSha256: "sha256:218f1a1ca412920a85c2577b5fc958e6bbef47606da8056a09069619560e8435",
+    schema: CLI_CASE_PACK_SCHEMA,
+    version: CLI_CASE_PACK_VERSION,
+    role: 'current' as const,
+    expectation: 'accepted_exact' as const,
+    expectedOutputFixtureId: null,
+    shapeId: 'case.cli-pack.current',
+    scope: 'repository' as const,
+  }),
+  Object.freeze({
+    id: WORKSPACE_ARCHIVE_WRITER_FIXTURE_ID,
+    path: `test/fixtures/case-lifecycle/${WORKSPACE_ARCHIVE_WRITER_FIXTURE_ID}.json`,
+    bytes: 7616,
+    sha256: '4dee9ab450b16a2ab4cf46a4807fd2be81c1809c8dd4641fbef47ffb78b21794',
+    contentDigestSha256: null,
+    schema: WORKSPACE_ARCHIVE_SCHEMA,
+    version: WORKSPACE_ARCHIVE_VERSION,
+    role: 'current' as const,
+    expectation: 'accepted_exact' as const,
+    expectedOutputFixtureId: null,
+    shapeId: 'case.workspace-archive.v10',
+    scope: 'repository' as const,
+  }),
+  Object.freeze({
     id: 'browser-case-v12-public',
     path: 'test/fixtures/case-lifecycle/browser-case-v12.json',
     bytes: 1286,
@@ -491,7 +600,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLIC_CASE_SCHEMA_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'browser-case-v18',
+    expectedOutputFixtureId: 'browser-case-v19',
     shapeId: `case.browser-store.v${PUBLIC_CASE_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
@@ -505,7 +614,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLISHED_V2_CASE_SCHEMA_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'browser-case-v18',
+    expectedOutputFixtureId: 'browser-case-v19',
     shapeId: `case.browser-store.v${PUBLISHED_V2_CASE_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
@@ -519,7 +628,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLISHED_V2_2_CASE_SCHEMA_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'browser-case-v18',
+    expectedOutputFixtureId: 'browser-case-v19',
     shapeId: `case.browser-store.v${PUBLISHED_V2_2_CASE_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
@@ -533,7 +642,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'browser-case-v18',
+    expectedOutputFixtureId: 'browser-case-v19',
     shapeId: `case.browser-store.v${PUBLISHED_V2_3_CASE_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
@@ -547,7 +656,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: INCIDENT_CASE_SCHEMA_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'browser-case-v18',
+    expectedOutputFixtureId: 'browser-case-v19',
     shapeId: `case.browser-store.v${INCIDENT_CASE_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
@@ -561,7 +670,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'browser-case-v18',
+    expectedOutputFixtureId: 'browser-case-v19',
     shapeId: `case.browser-store.v${EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
@@ -572,11 +681,11 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     sha256: 'def2f8c2aca1b124d7361438ab7e448b2f53c2ef6804336da35b441d0233528a',
     contentDigestSha256: null,
     schema: CASE_BROWSER_STORE_LIFECYCLE_SCHEMA,
-    version: CASE_SCHEMA_VERSION,
-    role: 'current' as const,
-    expectation: 'accepted_exact' as const,
-    expectedOutputFixtureId: null,
-    shapeId: `case.browser-store.v${CASE_SCHEMA_VERSION}`,
+    version: OBJECT_RESPONSE_CASE_SCHEMA_VERSION,
+    role: 'historical' as const,
+    expectation: 'normalises_to_current_output' as const,
+    expectedOutputFixtureId: 'browser-case-v19',
+    shapeId: `case.browser-store.v${OBJECT_RESPONSE_CASE_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
   Object.freeze({
@@ -589,7 +698,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLIC_CASE_SCHEMA_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'case-export-v18',
+    expectedOutputFixtureId: 'case-export-v19',
     shapeId: `case.export.v${PUBLIC_CASE_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
@@ -603,7 +712,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLISHED_V2_CASE_SCHEMA_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'case-export-v18',
+    expectedOutputFixtureId: 'case-export-v19',
     shapeId: `case.export.v${PUBLISHED_V2_CASE_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
@@ -617,7 +726,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLISHED_V2_2_CASE_SCHEMA_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'case-export-v18',
+    expectedOutputFixtureId: 'case-export-v19',
     shapeId: `case.export.v${PUBLISHED_V2_2_CASE_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
@@ -631,7 +740,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'case-export-v18',
+    expectedOutputFixtureId: 'case-export-v19',
     shapeId: `case.export.v${PUBLISHED_V2_3_CASE_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
@@ -645,7 +754,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: INCIDENT_CASE_SCHEMA_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'case-export-v18',
+    expectedOutputFixtureId: 'case-export-v19',
     shapeId: `case.export.v${INCIDENT_CASE_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
@@ -659,7 +768,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'case-export-v18',
+    expectedOutputFixtureId: 'case-export-v19',
     shapeId: `case.export.v${EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
@@ -670,11 +779,11 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     sha256: '796744c3dbffdbdb2e93dbece159a812a9c1f7c6e46b9ecd130aa84f1283828b',
     contentDigestSha256: null,
     schema: CASE_EXPORT_LIFECYCLE_SCHEMA,
-    version: CASE_SCHEMA_VERSION,
-    role: 'current' as const,
-    expectation: 'accepted_exact' as const,
-    expectedOutputFixtureId: null,
-    shapeId: `case.export.v${CASE_SCHEMA_VERSION}`,
+    version: OBJECT_RESPONSE_CASE_SCHEMA_VERSION,
+    role: 'historical' as const,
+    expectation: 'normalises_to_current_output' as const,
+    expectedOutputFixtureId: 'case-export-v19',
+    shapeId: `case.export.v${OBJECT_RESPONSE_CASE_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
   Object.freeze({
@@ -768,11 +877,11 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     sha256: '0fb3613dfaace2f86e38eaa86f9c081a41afde2a7a373a21a6c0de78cd17e6ac',
     contentDigestSha256: null,
     schema: CASE_REPORT_SCHEMA,
-    version: CASE_REPORT_SCHEMA_VERSION,
-    role: 'current' as const,
+    version: OBJECT_RESPONSE_CASE_REPORT_SCHEMA_VERSION,
+    role: 'historical' as const,
     expectation: 'accepted_exact' as const,
     expectedOutputFixtureId: null,
-    shapeId: `case.report.v${CASE_REPORT_SCHEMA_VERSION}`,
+    shapeId: `case.report.v${OBJECT_RESPONSE_CASE_REPORT_SCHEMA_VERSION}`,
     scope: 'repository' as const,
   }),
   Object.freeze({
@@ -852,11 +961,11 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     sha256: '2f35363026f10b5eb7f7c0c3ece9c69ae776b4366510512302d7c43e8baee099',
     contentDigestSha256: 'sha256:4fa4e033ef4cc7943d6ee95e513f27a982f35d0e3da402cda78bc9df28db9e05',
     schema: CASE_RESPONSE_PACKET_SCHEMA,
-    version: CASE_RESPONSE_PACKET_VERSION,
-    role: 'current' as const,
+    version: OBJECT_RESPONSE_CASE_PACKET_VERSION,
+    role: 'historical' as const,
     expectation: 'accepted_exact' as const,
     expectedOutputFixtureId: null,
-    shapeId: `case.response-packet.v${CASE_RESPONSE_PACKET_VERSION}`,
+    shapeId: `case.response-packet.v${OBJECT_RESPONSE_CASE_PACKET_VERSION}`,
     scope: 'repository' as const,
   }),
   Object.freeze({
@@ -936,11 +1045,11 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     sha256: '1cfd2d65b85b3c0c3e92af388be1163eff6efea740a05447bdc54024ed98be0d',
     contentDigestSha256: null,
     schema: CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
-    version: CASE_RESPONSE_REVIEW_INPUTS_VERSION,
-    role: 'current' as const,
+    version: OBJECT_RESPONSE_CASE_REVIEW_INPUTS_VERSION,
+    role: 'historical' as const,
     expectation: 'accepted_exact' as const,
     expectedOutputFixtureId: null,
-    shapeId: `case.response-review-inputs.v${CASE_RESPONSE_REVIEW_INPUTS_VERSION}`,
+    shapeId: `case.response-review-inputs.v${OBJECT_RESPONSE_CASE_REVIEW_INPUTS_VERSION}`,
     scope: 'repository' as const,
   }),
   Object.freeze({
@@ -1042,8 +1151,8 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     scope: 'repository' as const,
   }),
   Object.freeze({
-    id: CLI_CASE_PACK_WRITER_FIXTURE_ID,
-    path: `test/fixtures/case-lifecycle/${CLI_CASE_PACK_WRITER_FIXTURE_ID}.json`,
+    id: 'cli-case-pack-v2-case-v18-current',
+    path: 'test/fixtures/case-lifecycle/cli-case-pack-v2-case-v18-current.json',
     bytes: 9874,
     sha256: 'fb95d648a3e8a6772a0da0726e9259cff622f58287d5cc5d6232904db2e32c42',
     contentDigestSha256: 'sha256:e55955de4751538fbf5830129d99e08b0aef28325a1d98a31ecfe0b5415cef20',
@@ -1065,7 +1174,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLIC_WORKSPACE_ARCHIVE_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: `workspace-archive-v${WORKSPACE_ARCHIVE_VERSION}-empty-current`,
+    expectedOutputFixtureId: WORKSPACE_ARCHIVE_WRITER_FIXTURE_ID,
     shapeId: 'case.workspace-archive.v5',
     scope: 'repository' as const,
   }),
@@ -1079,7 +1188,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: `workspace-archive-v${WORKSPACE_ARCHIVE_VERSION}-empty-current`,
+    expectedOutputFixtureId: WORKSPACE_ARCHIVE_WRITER_FIXTURE_ID,
     shapeId: 'case.workspace-archive.v6',
     scope: 'repository' as const,
   }),
@@ -1093,7 +1202,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: `workspace-archive-v${WORKSPACE_ARCHIVE_VERSION}-empty-current`,
+    expectedOutputFixtureId: WORKSPACE_ARCHIVE_WRITER_FIXTURE_ID,
     shapeId: 'case.workspace-archive.v7',
     scope: 'repository' as const,
   }),
@@ -1107,7 +1216,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLISHED_V2_3_WORKSPACE_ARCHIVE_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: `workspace-archive-v${WORKSPACE_ARCHIVE_VERSION}-empty-current`,
+    expectedOutputFixtureId: WORKSPACE_ARCHIVE_WRITER_FIXTURE_ID,
     shapeId: 'case.workspace-archive.v8',
     scope: 'repository' as const,
   }),
@@ -1121,7 +1230,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: `workspace-archive-v${WORKSPACE_ARCHIVE_VERSION}-empty-current`,
+    expectedOutputFixtureId: WORKSPACE_ARCHIVE_WRITER_FIXTURE_ID,
     shapeId: 'case.workspace-archive.v9',
     scope: 'repository' as const,
   }),
@@ -1329,6 +1438,7 @@ const CASE_LIFECYCLE_SHAPES = Object.freeze([
     [
       'contract', 'version', 'profile', 'case', 'incident', 'contacts',
       'recipientRoute', 'actionBinding', 'selectedEvidence', 'contradictions',
+      ...(version >= 7 ? ['sourceQualifications'] : []),
       'readiness', 'artefactReferences', 'escalationHistory',
       'escalationHistoryOmitted', 'escalationHistoryLimitations', 'responseLifecycle',
     ],

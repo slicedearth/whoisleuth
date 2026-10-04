@@ -4,6 +4,7 @@ import { readEditableCaseExport } from './case-export-input.mts';
 import { array, enumeration, exact, iso, text } from '../evidence/artifact-structure.mts';
 import { escapeCaseMarkdownInline } from './case-markdown.mts';
 import { MAX_CASE_ASSERTIONS, MAX_CASE_EVIDENCE_PINS } from '../contracts/case-portability.mts';
+import { caseSelectedEvidenceSourceLimitations } from './case-evidence-links.mts';
 
 export const CASE_CONTAINMENT_INPUT_SCHEMA = 'whoisleuth.internal-containment.input';
 export const CASE_CONTAINMENT_HANDOFF_SCHEMA = 'whoisleuth.internal-containment';
@@ -176,6 +177,7 @@ export function previewCaseContainmentHandoff(
       'Open and resolved assertion states are preserved as recorded. External provider resolution, object closure and Case status do not resolve open internal requests.',
       'Unselected or missing supporting pins remain explicit. A linked pin may support, contradict or leave a request unresolved; linkage does not establish truth.',
       'This local handoff sends no message, changes no Case state and includes no original attachment bytes.',
+      ...caseSelectedEvidenceSourceLimitations(pins, record.evidenceLinks, pins.map(pin => pin.id)),
     ],
   };
   if (new TextEncoder().encode(JSON.stringify(report)).byteLength > MAX_CONTAINMENT_OUTPUT_BYTES)

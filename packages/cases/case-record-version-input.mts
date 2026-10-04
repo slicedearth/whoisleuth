@@ -4,11 +4,17 @@ import {
   PUBLISHED_V2_CASE_SCHEMA_VERSION,
   PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
   OBJECT_RESPONSE_CASE_SCHEMA_VERSION,
+  DELIVERY_CORRECTION_CASE_SCHEMA_VERSION,
 } from '../contracts/case-portability.mts';
 
 /** Adapt declared historical fields before ordinary current-record recovery. */
 export function caseRecordVersionInput(record: Record<string, unknown>, sourceVersion?: number | null) {
   const declared = sourceVersion != null;
+  if (declared && sourceVersion < DELIVERY_CORRECTION_CASE_SCHEMA_VERSION && Array.isArray(record.actions)
+    && record.actions.some(action => action && typeof action === 'object' && (action.correction !== undefined
+      || Array.isArray(action.history) && action.history.some((event: Record<string, unknown>) => event?.packetReceipt !== undefined)))) {
+    throw new TypeError('Delivery receipts and corrections require Case schema 19; historical deliveries were not reinterpreted.');
+  }
   if (declared && sourceVersion < OBJECT_RESPONSE_CASE_SCHEMA_VERSION) {
     const items = (value: unknown): Record<string, unknown>[] => Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item)) : [];
     const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};

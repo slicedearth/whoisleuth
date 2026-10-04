@@ -1,7 +1,7 @@
 import { canonicalRegistrableDomain } from '../analysis/registrable-domain.mts';
 import { parseCredentialFreeHttpUrl } from '../evidence/lookup-target.mts';
 import { MAX_INTAKE_LINKS, MAX_INTAKE_URL_LENGTH, MAX_EMBEDDED_LINK_DEPTH, MAX_AUTH_SCOPES,
-  type AuthorisationLinkReview, type IntakeLink, type IntakeTarget } from '../contracts/message-intake.mts';
+  type AuthorisationLinkReview, type IntakeLink, type IntakeTarget, type IntakeDestinationProjection } from '../contracts/message-intake.mts';
 export type LinkIntake = Readonly<{
   links: readonly IntakeLink[];
   targets: readonly IntakeTarget[];
@@ -80,11 +80,37 @@ function proseUrl(value: string): string {
   }
 }
 
-function displayedHost(value: string): string | null {
+function admittedDestination(url: URL, registrationDomain: string, normalisation: string[] = []): IntakeDestinationProjection {
+  return { state: 'parsed', hostname: url.hostname, origin: url.origin, registrationDomain,
+    hasPrivateLocation: url.pathname !== '/' || Boolean(url.search || url.hash), normalisation };
+}
+
+export function projectIntakeDestination(value: string, allowBareHostname = false): IntakeDestinationProjection {
+  const empty = (state: 'missing' | 'unsupported'): IntakeDestinationProjection => ({ state, hostname: null, origin: null, registrationDomain: null, hasPrivateLocation: false, normalisation: [] });
+  if (value.length > MAX_INTAKE_URL_LENGTH) return empty('unsupported');
   const bounded = value.trim();
-  if (bounded.length > MAX_INTAKE_URL_LENGTH || /\s/u.test(bounded)) return null;
-  const parsed = parseCredentialFreeHttpUrl(refangIntakeUrl(HTTP_PREFIX.test(bounded) ? bounded : `https://${bounded}`), MAX_INTAKE_URL_LENGTH);
-  return parsed && canonicalRegistrableDomain(parsed.hostname) ? parsed.hostname : null;
+  if (!bounded) return empty('missing');
+  if (/[\s\\\p{Cf}]/u.test(bounded)) return empty('unsupported');
+  const explicitScheme = HTTP_PREFIX.test(bounded);
+  if (!explicitScheme && !allowBareHostname) return empty('unsupported');
+  const refanged = refangIntakeUrl(explicitScheme ? bounded : `https://${bounded}`);
+  const parsed = parseCredentialFreeHttpUrl(refanged, MAX_INTAKE_URL_LENGTH);
+  const registrationDomain = parsed && canonicalRegistrableDomain(parsed.hostname);
+  if (!parsed || !registrationDomain || parsed.port) return empty('unsupported');
+  return admittedDestination(parsed, registrationDomain, [
+    ...(!explicitScheme ? ['assumed_https_for_hostname_parsing'] : []),
+    ...(refanged !== (explicitScheme ? bounded : `https://${bounded}`) ? ['refanged_scheme_or_authority'] : []),
+    ...(/[^\x00-\x7f]/u.test(bounded.split(/[/?#]/u).slice(0, explicitScheme ? 3 : 1).join('/')) ? ['unicode_hostname_to_ascii'] : []),
+  ]);
+}
+
+export function compareIntakeDestinations(displayed: IntakeDestinationProjection, destination: IntakeDestinationProjection): 'same_host' | 'different_host' | 'insufficient_evidence' {
+  return displayed.state !== 'parsed' || destination.state !== 'parsed' ? 'insufficient_evidence'
+    : displayed.hostname === destination.hostname ? 'same_host' : 'different_host';
+}
+
+function displayedHost(value: string): string | null {
+  return projectIntakeDestination(value, true).hostname;
 }
 
 /** No resolution or request occurs here; embedded targets remain supplied text. */
@@ -113,14 +139,17 @@ export function createLinkIntake() {
       exclude(reason); return;
     }
     if (url.port) { exclude('port'); return; }
-    if (!canonicalRegistrableDomain(url.hostname)) { exclude('host'); return; }
+    const registrationDomain = canonicalRegistrableDomain(url.hostname);
+    if (!registrationDomain) { exclude('host'); return; }
     const shown = displayedHost(displayed);
     const key = JSON.stringify([url.href, source, parentId, shown, location ?? null]);
     if (seen.has(key)) return;
     seen.add(key);
     const id = `link-${links.length + 1}`;
-    links.push({ id, origin: url.origin, hostname: url.hostname, registrationDomain: canonicalRegistrableDomain(url.hostname),
-      source, ...(location ? { location } : {}), parentId, displayedHostname: shown, displayedDestination: shown ? shown === url.hostname ? 'same_host' : 'different_host' : 'not_a_hostname',
+    // Compare the already admitted canonical URL, not its differently bounded raw spelling.
+    const compared = compareIntakeDestinations(projectIntakeDestination(displayed, true), admittedDestination(url, registrationDomain));
+    links.push({ id, origin: url.origin, hostname: url.hostname, registrationDomain,
+      source, ...(location ? { location } : {}), parentId, displayedHostname: shown, displayedDestination: compared === 'insufficient_evidence' ? 'not_a_hostname' : compared,
       hasPrivateLocation: url.pathname !== '/' || Boolean(url.search || url.hash), authorisation: reviewAuthorisationLink(url) });
     targets.push({ id, exactUrl: url.href });
     for (const [name, value] of url.searchParams) {

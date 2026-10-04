@@ -30,6 +30,55 @@ test('practice scenarios require deliberate replacement and keep provider outcom
   await verifyIsolation();
 });
 
+test('bounded practice examples preserve scope, reported mechanisms and source-reuse qualifications', async ({ page }) => {
+  const verifyIsolation = await isolateCasePractice(page);
+  await page.goto('/demo#case-practice');
+  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const scenario = page.getByRole('combobox', { name: 'Practice scenario', exact: true });
+  const select = async (id: string) => {
+    await scenario.selectOption(id);
+    await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
+    await expect(practice.getByRole('heading', { name: 'Practise a Case review', exact: true })).toBeFocused();
+  };
+  for (const [id, observation] of [
+    ['compromised-page', 'Separate ordinary root-page capture'],
+    ['hosted-object', 'Unrelated tenant with shared infrastructure'],
+    ['related-hosts', 'Service B identity claim'],
+    ['ad-redirect', 'Replacement and advertisement remain unresolved'],
+    ['conditional-presentation', 'Different desktop root capture'],
+    ['requested-amendment', 'Logo-only supplied image account'],
+  ]) {
+    await select(id!);
+    await expect(practice.getByText(observation!, { exact: true }).first()).toBeVisible();
+  }
+  await select('identity-actions');
+  await practice.getByText('Review the supplied action mechanisms', { exact: true }).click();
+  const mechanisms = practice.getByRole('list', { name: 'Supplied identity action mechanisms', exact: true });
+  await expect(mechanisms.getByRole('listitem')).toHaveCount(7);
+  await expect(mechanisms).toContainText('session · imported record');
+  await expect(mechanisms).toContainText('support call · reported action');
+  await expect(mechanisms).toContainText('occurrence time unknown');
+  await select('trust-claim');
+  await practice.getByRole('button', { name: '2. Record a conclusion', exact: true }).click();
+  await practice.getByText('Compare explanations', { exact: true }).click();
+  await expect(practice.getByRole('list', { name: 'Evidence across explanations', exact: true }).getByRole('listitem')).toHaveCount(2);
+  await expect(practice).toContainText('organisation-existence record do not decide campaign authority or fraud');
+  await select('dependent-sources');
+  await practice.getByText('Review source reuse and disclosure', { exact: true }).click();
+  await expect(practice.getByText('Selected evidence has retained shared-source or derivation context.', { exact: false }).first()).toBeVisible();
+  await practice.getByText('Evidence relationships and shared sources', { exact: true }).click();
+  await expect(practice.getByText('A later result may reuse your submitted report.', { exact: false })).toBeVisible();
+  await expect(practice.getByRole('list', { name: 'Analyst-declared evidence relationships', exact: true }).getByRole('listitem')).toHaveCount(1);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    await page.setViewportSize({ width: 320, height: 800 });
+    await expect(practice).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  }
+  expect((await new AxeBuilder({ page }).include('.case-practice').analyze()).violations).toEqual([]);
+  await verifyIsolation();
+});
+
 async function isolateCasePractice(page: Page) {
   const requests: string[] = [];
   page.on('request', request => {

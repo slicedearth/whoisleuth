@@ -19,6 +19,8 @@ export type * from './case-response-packet-types.mts';
 // no network requests, mailto links, submissions, or provider side effects.
 
 import { assertPacketAmendmentSelection } from './case-requested-evidence.mts';
+import { correctionDelivery, CASE_DELIVERY_RECEIPT_LIMITATION } from './case-packet-correction.mts';
+import { caseSelectedEvidenceSourceLimitations } from './case-evidence-links.mts';
 import { sameCaseResponseObject } from './case-response-object.mts';
 import {
   assertBoundedJsonStructure,
@@ -312,6 +314,8 @@ function assertAmendmentEvidence(caseRecord: CaseRecord, input: CaseResponsePack
   const selected = new Set(Array.isArray(input.selectedEvidencePinIds) ? input.selectedEvidencePinIds : []);
   assertPacketAmendmentSelection(caseRecord.actions, action?.id ?? null,
     new Set(caseRecord.evidencePins.filter(pin => selected.has(pin.id)).map(pin => pin.id)));
+  if (action?.correction) correctionDelivery(caseRecord.actions, action, { caseId: caseRecord.id, target: caseRecord.domain,
+    profile: responsePacketProfile(input.profile).id, selectedPinIds: new Set(caseRecord.evidencePins.filter(pin => selected.has(pin.id)).map(pin => pin.id)) });
 }
 
 function packetActionLineage(caseRecord: CaseRecord, input: CaseResponsePacketInput) {
@@ -650,7 +654,7 @@ export function buildResponsePacketProfilePreview(
     id: profile.id,
     label: profile.label,
     audience: profile.audience,
-    subject: `${profile.subjectPrefix}: ${caseRecord.domain} (${category})`,
+    subject: `${selectedPacketAction(caseRecord, input)?.correction ? 'Correction or retraction request' : profile.subjectPrefix}: ${caseRecord.domain} (${category})`,
     checklist: [...profile.checklist],
     evidenceOrder: [...profile.evidenceOrder],
     includedEvidence: [...profile.includedEvidence],
@@ -824,6 +828,7 @@ function normalizeActionHistory(caseRecord: CaseRecord, input: CaseResponsePacke
       actionId: action.id,
       type: text(action.type, 80),
       ...(action.amendment ? { amendment: structuredClone(action.amendment) } : {}),
+      ...(action.correction ? { correction: structuredClone(action.correction) } : {}),
       ...(action.responseObjects !== undefined ? { responseObjects: structuredClone(action.responseObjects) } : {}),
       recipient: text(action.recipient, 320),
       contactSource: text(action.contactSource, 120),
@@ -839,6 +844,7 @@ function normalizeActionHistory(caseRecord: CaseRecord, input: CaseResponsePacke
       transitions: action.history.map((event) => ({
         id: event.id,
         ...(event.evidenceRequest ? { evidenceRequest: structuredClone(event.evidenceRequest) } : {}),
+        ...(event.packetReceipt ? { packetReceipt: structuredClone(event.packetReceipt) } : {}),
         ...(event.responseObjects !== undefined ? { responseObjects: structuredClone(event.responseObjects) } : {}),
         ...(event.objectOutcome ? { objectOutcome: event.objectOutcome } : {}),
         previousState: event.previousState,
@@ -961,6 +967,7 @@ export function buildCaseResponseReviewInputs(
   return {
     contract: CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
     version: CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+    sourceQualifications: caseSelectedEvidenceSourceLimitations(caseRecord.evidencePins, caseRecord.evidenceLinks, selectedEvidence.map(pin => pin.id)),
     profile: {
       id: profile.id,
       label: profile.label,
@@ -1118,6 +1125,9 @@ export async function buildCaseResponsePacket(
       ? 'This packet is bound to explicit confirmations for the exact reviewed-input digest. It still requires deliberate manual use.'
       : 'This packet is a local draft with cautions and is not authorised for external use by WHOISleuth.',
     'WHOISleuth did not submit this packet or verify that any listed contact is monitored.',
+    ...reviewMaterial.sourceQualifications,
+    ...(selectedPacketAction(caseRecord, input)?.correction ? [CASE_DELIVERY_RECEIPT_LIMITATION,
+      'This is a new correction or retraction request. It does not undo the original delivery, establish recipient acceptance or restoration, or replace independent recheck.'] : []),
     ...(!contacts.length ? ['No escalation contact was included.'] : []),
     ...(age.refreshRecommended ? ['The selected observation is over seven days old or appears to be in the future. Refresh evidence before submission.'] : []),
   ];

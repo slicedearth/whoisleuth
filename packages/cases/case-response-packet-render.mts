@@ -13,6 +13,7 @@ export function renderCaseResponsePacket(packet: CaseResponsePacket): { markdown
     provenance: { limitations, evidencePinCount, decisionCount, assertionCount, observationAge: age },
     integrity: { digestSha256 },
   } = packet;
+  const selectedCorrection = escalationHistory.find(action => action.actionId === packet.actionBinding.selectedActionId)?.correction;
   const lines = [
     `# ${escapeMarkdown(profile.label)} packet`,
     '',
@@ -24,7 +25,7 @@ export function renderCaseResponsePacket(packet: CaseResponsePacket): { markdown
     `**Audience:** ${escapeMarkdown(profile.audience)}`,
     `**Suggested subject:** ${escapeMarkdown(profile.subject)}`,
     '',
-    '## Observed harm',
+    selectedCorrection ? '## Retained incident context (not a renewed allegation)' : '## Observed harm',
     '',
     escapeMarkdown(observedHarm),
     '',
@@ -58,9 +59,14 @@ export function renderCaseResponsePacket(packet: CaseResponsePacket): { markdown
           ...(action.outcomeDetail ? [`  - Outcome detail: ${escapeMarkdown(action.outcomeDetail)}`] : []),
           ...(action.originActionId ? [`  - Originating action: ${escapeMarkdown(action.originActionId)}`] : []),
           ...(action.amendment ? [`  - Amendment of submitted packet SHA-256: ${action.amendment.packetDigestSha256}`, `  - Prepared request events: ${action.amendment.requestEventIds.map(escapeMarkdown).join(', ')}`] : []),
+          ...(action.correction ? [`  - ${action.correction.purpose === 'correction' ? 'Correction request' : 'Retraction request'} for delivery event ${escapeMarkdown(action.correction.deliveryEventId)}; original packet v${action.correction.packetVersion} SHA-256: ${action.correction.packetDigestSha256}`,
+            `  - Analyst reason: ${escapeMarkdown(action.correction.reason)}`, `  - Previous statement: ${escapeMarkdown(action.correction.previousStatement)}`,
+            `  - Corrected statement: ${escapeMarkdown(action.correction.correctedStatement || 'Request to retract the previous statement')}`,
+            `  - Corrected evidence pins: ${action.correction.evidencePinIds.map(escapeMarkdown).join(', ')}`] : []),
           ...action.transitions.flatMap((event) => [
             `  - ${event.occurredAt}: ${escapeMarkdown(event.previousState ?? 'none')} → ${escapeMarkdown(event.nextState)} · ${escapeMarkdown(event.sourceClass)} · ${escapeMarkdown(event.provenance)}${event.providerOutcome ? ` · ${escapeMarkdown(event.providerOutcome.replaceAll('_', ' '))}` : ''}${event.applied ? '' : ' · retained conflict'}`,
             ...(event.reference ? [`    - Reference: ${escapeMarkdown(event.reference)}`] : []),
+            ...(event.packetReceipt ? [`    - Exact local packet receipt: v${event.packetReceipt.packetVersion} · ${event.packetReceipt.packetDigestSha256} · ${escapeMarkdown(event.packetReceipt.recipient)} · ${escapeMarkdown(event.packetReceipt.profile)} · generated ${event.packetReceipt.packetGeneratedAt}`] : []),
             ...(event.evidencePinId ? [`    - Evidence pin: ${escapeMarkdown(event.evidencePinId)}`] : []),
             ...(event.evidenceRequest ? [
               `    - Requested evidence (${event.evidenceRequest.state}): ${escapeMarkdown(event.evidenceRequest.summary)}`,
@@ -132,16 +138,22 @@ export function renderCaseResponsePacket(packet: CaseResponsePacket): { markdown
     ...profile.followUpFields.map((item) => `- Follow-up field: ${escapeMarkdown(item)}`),
   ];
   const markdown = `${lines.join('\n').trim()}\n`;
+  const correction = escalationHistory.find(action => action.actionId === packet.actionBinding.selectedActionId)?.correction;
   const email = [
     `Subject: ${profile.subject}`,
     '',
     'Hello,',
     '',
-    `I am reporting observed ${category} activity involving ${caseRecord.domain}.`,
+    correction ? `I am requesting ${correction.purpose === 'correction' ? 'a correction' : 'retraction or withdrawal'} of a previous statement involving ${caseRecord.domain}.`
+      : `I am reporting observed ${category} activity involving ${caseRecord.domain}.`,
+    ...(correction ? [`Original delivery event: ${correction.deliveryEventId}`, `Original canonical packet v${correction.packetVersion} SHA-256: ${correction.packetDigestSha256}`,
+      `Analyst reason: ${correction.reason}`, `Previous statement: ${correction.previousStatement}`,
+      `Corrected statement: ${correction.correctedStatement || 'Please retract the previous statement.'}`,
+      `Corrected evidence references: ${correction.evidencePinIds.join(', ')}`, 'This new request does not establish delivery, recipient acceptance, reversal, restoration or independent recheck.', ''] : []),
     `Affected party: ${affectedParty}`,
     `Observed at (UTC): ${observedAt}`,
     '',
-    'Observed harm:',
+    correction ? 'Retained incident context (not a renewed allegation):' : 'Observed harm:',
     observedHarm,
     '',
     'Exact URLs:',
@@ -164,6 +176,7 @@ export function renderCaseResponsePacket(packet: CaseResponsePacket): { markdown
       : []),
     '',
     'Please review this report under the applicable abuse and acceptable-use policies.',
+    ...limitations,
     '',
     authorisation.status === 'authorised'
       ? 'This locally prepared packet is bound to explicit review confirmations. It was not submitted automatically and does not promise any provider outcome.'

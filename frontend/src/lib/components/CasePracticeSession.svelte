@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, tick, untrack } from 'svelte';
-  import { createCasePracticeSession, CASE_PRACTICE_OBSERVED_AT, CASE_PRACTICE_INTAKE_TEXT, reviewCasePracticeInput, previewCasePracticeContainment, casePracticeDefinition, casePracticeRoutes, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeFeedback, type CasePracticeScenario } from '$lib/analysis/case-practice.ts';
+  import { createCasePracticeSession, CASE_PRACTICE_OBSERVED_AT, CASE_PRACTICE_INTAKE_TEXT, reviewCasePracticeInput, previewCasePracticeContainment, casePracticeDefinition, casePracticeRoutes, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeFeedback, casePracticeIdentityReview, type CasePracticeScenario } from '$lib/analysis/case-practice.ts';
+  import { caseSelectedEvidenceSourceLimitations } from '../../../../packages/cases/case-evidence-links.mts';
   import { provideDocumentCaseDraftStorage } from '$lib/controllers/case-draft.svelte.ts';
   import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft.ts';
@@ -9,6 +10,7 @@
   import CaseRecheckReview from './CaseRecheckReview.svelte';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CaseRequestedEvidence from './CaseRequestedEvidence.svelte';
+  import CaseAssessmentComparison from './CaseAssessmentComparison.svelte';
   import '$lib/components/case-response-stage.css';
 
   let { onreset, scenario }: { onreset: () => void; scenario: CasePracticeScenario } = $props();
@@ -21,6 +23,8 @@
   // same audience projections used by the saved-workspace workflow.
   let record = $state.raw(session.read());
   const feedback = $derived(casePracticeFeedback(record, initialPinIds, scenario));
+  const identityReview = $derived(scenario === 'identity-actions' ? casePracticeIdentityReview() : null);
+  const sourceQualifications = $derived(caseSelectedEvidenceSourceLimitations(record.evidencePins, record.evidenceLinks, record.evidencePins.map(pin => pin.id)));
   let step = $state('evidence');
   let message = $state('');
   let mutationBusy = $state(false);
@@ -104,6 +108,16 @@
     <h3 id="practice-evidence" tabindex="-1">Pin a fact with its source</h3>
     <p>{definition.observation} Pin the relevant observation with its source and time <time datetime={CASE_PRACTICE_OBSERVED_AT}>1 September 2026, 12:00 UTC</time>.</p>
     {#each record.evidencePins.filter((_, index) => index !== 1) as pin}<CaseEvidenceFact {pin} />{/each}
+    {#if identityReview}<details class="practice-local"><summary>Review the supplied action mechanisms</summary>
+      <p>{identityReview.review.summary} This uses the existing incident-sequence review. The selected order is not proof of causation, and reported actions are not verified account effects.</p>
+      <ol aria-label="Supplied identity action mechanisms">{#each identityReview.stages as stage}<li><strong>{stage.id.replaceAll('-', ' ')} · {stage.basis.replaceAll('_', ' ')}</strong><p>{stage.description}</p><p>{stage.source} · occurrence time {stage.occurredAt ?? 'unknown'}</p></li>{/each}</ol>
+      <p>No credentials, codes, tokens, authentication traces or personal account identifiers are part of this exercise.</p>
+    </details>{/if}
+    {#if scenario === 'dependent-sources'}<details class="practice-local"><summary>Review source reuse and disclosure</summary>
+      <p>{record.evidencePins.length} retained evidence records are not a count of independent sources. The supplied provider response declares reuse; the other observation and unknown-method result retain their own attribution.</p>
+      {#each sourceQualifications as limitation}<p>{limitation}</p>{:else}<p>No known shared-source relationship is retained. That does not establish independence.</p>{/each}
+      <p>New response and internal-handoff disclosures use a fixed qualification when relevant; private relationship identities and basis text are not automatically included. No export occurs here.</p>
+    </details>{/if}
     {#if scenario === 'credential-form'}
       <details class="practice-local"><summary>Try source-linked offline review</summary>
         <p>Review this fictional text for literal IPs and labelled hashes, then inspect its supplied advertisement and mobile context.</p>
@@ -128,6 +142,7 @@
     <p>Select a reviewed disposition, link the evidence and explain the uncertainty. {definition.assessment}</p>
     <details><summary>Compare an adequate and an inadequate report</summary><p><strong>Adequate:</strong> {definition.adequate}</p><p><strong>Inadequate:</strong> {definition.inadequate}</p><p>The exercise supports evidence pins, conclusions and rechecks. Other scenario-specific actions described here are guidance unless an interactive response step is provided.</p>{#each routes as route}<p><strong>{route.platformLabel}: {route.label}</strong> · reviewed {route.reviewedAt}, recheck before {route.reviewAfter}. The official reference is available in Resources reporting guidance. {route.privacyNote}</p>{/each}</details>
     <CaseAssessmentStage {record} mode="quick" {mutationBusy} {persist} onmessage={value => message = value} />
+    {#if scenario === 'trust-claim'}<CaseAssessmentComparison record={{ ...record, assertions: record.assertions.filter(assertion => assertion.kind === 'hypothesis') }} />{/if}
   </div>
   {#if scenario === 'credential-form'}
     <div hidden={step !== 'response'} class="practice-response">

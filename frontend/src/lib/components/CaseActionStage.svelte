@@ -15,6 +15,8 @@
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   import CaseActionReceipt from './CaseActionReceipt.svelte';
+  import CasePacketCorrection from './CasePacketCorrection.svelte';
+  import type { CaseDeliveryPacketReceipt } from '../../../../packages/cases/case-packet-correction.mts';
   import CaseRequestedEvidence from './CaseRequestedEvidence.svelte';
   import CaseResponseObjectSelect from './CaseResponseObjectSelect.svelte';
   import { selectedCaseResponseObject, CASE_RESPONSE_OBJECT_OUTCOMES, type CaseResponseObjectOutcome } from '../../../../packages/cases/case-response-object.mts';
@@ -41,8 +43,8 @@
     document.getElementById(`case-action-route-time-${record.id}`)?.focus();
   }
 
-  export async function prepareDeliveryRecord(actionId: string, digestSha256: string): Promise<boolean> {
-    return await receipt?.prepareDeliveryRecord(actionId, digestSha256) ?? false;
+  export async function prepareDeliveryRecord(actionId: string, digestSha256: string, packetReceipt?: CaseDeliveryPacketReceipt, actionSignature?: string, responseContext?: string): Promise<boolean> {
+    return await receipt?.prepareDeliveryRecord(actionId, digestSha256, packetReceipt, actionSignature, responseContext) ?? false;
   }
 
   export async function selectReceipt(actionId: string): Promise<boolean> {
@@ -289,6 +291,7 @@
           {#if action.originActionId}<small>Originating action: {action.originActionId}</small>{/if}
           <small>Object binding: {action.responseObjects?.length ? action.responseObjects.map(object => `${object.kind.replaceAll('_', ' ')}: ${object.identifier}`).join('; ') : 'Unknown'}</small>
           {#if action.amendment}<small>Amends submitted packet SHA-256: {action.amendment.packetDigestSha256}</small>{/if}
+          {#if action.correction}<details><summary>{action.correction.purpose === 'correction' ? 'Correction request' : 'Retraction request'} · original delivery</summary><p>Event {action.correction.deliveryEventId} · packet v{action.correction.packetVersion} · SHA-256 {action.correction.packetDigestSha256}</p><p>Reason: {action.correction.reason}</p><p>Previous statement: {action.correction.previousStatement}</p><p>Corrected statement: {action.correction.correctedStatement || 'Request to retract the previous statement'}</p><CaseLinkedEvidence pins={record.evidencePins} ids={[...action.correction.evidencePinIds]} /><p>Preparation does not undo the original delivery or establish acceptance, restoration or independent recheck.</p></details>{/if}
           {#if action.reference}<p>Latest reference: {action.reference}</p>{/if}
           {#if action.providerOutcome}<p>Latest typed provider outcome: {action.providerOutcome.replaceAll('_', ' ')}{action.outcome ? ` · ${action.outcome}` : ''}</p>{:else if action.outcome}<p>Recorded legacy outcome detail: {action.outcome}</p>{/if}
           <ol class="transition-timeline" aria-label={`Transitions for ${action.recipient}`}>
@@ -299,6 +302,7 @@
                 <small>Event ID {event.id} · {event.applied ? 'applied to projection' : 'retained concurrent conflict'}</small>
                 {#if event.providerOutcome}<p>Provider outcome: {event.providerOutcome.replaceAll('_', ' ')}{event.outcomeDetail ? ` · ${event.outcomeDetail}` : ''}</p>{:else if event.outcomeDetail}<p>Recorded outcome detail: {event.outcomeDetail}</p>{/if}
                 {#if event.reference}<p>Reference: {event.reference}</p>{/if}
+                {#if event.packetReceipt}<small>Retained packet v{event.packetReceipt.packetVersion} · generated {event.packetReceipt.packetGeneratedAt} · recipient {event.packetReceipt.recipient} · audience {event.packetReceipt.profile}. Local recorded receipt, not external acceptance or authenticated authorship.</small>{/if}
                 {#if event.responseObjects?.length}<small>Event scope: {event.responseObjects.map(object => `${object.kind.replaceAll('_', ' ')}: ${object.identifier}`).join('; ')}</small>{/if}
                 {#if event.objectOutcome}<p>Reported object outcome: {event.objectOutcome.replaceAll('_', ' ')} · {event.sourceClass}. Not independently verified by this event.</p>{/if}
                 {#if event.evidencePinId}<CaseLinkedEvidence pins={record.evidencePins} ids={[event.evidencePinId]} />{/if}
@@ -323,6 +327,7 @@
     <div class="response-form">
       <CaseActionReceipt bind:this={receipt} {record} {mode} {mutationBusy} {persist} onreviewrecipient={reviewRecipient} metadata={receiptMetadata} />
       <CaseRequestedEvidence bind:this={requestedEvidence} {record} {mutationBusy} {persist} onamendment={async id => { await selectReceipt(id); await reviewRecipient(id); }} />
+      <CasePacketCorrection {record} {mutationBusy} {persist} oncreated={async id => { await selectReceipt(id); await reviewRecipient(id); }} />
       {#if mode === 'advanced'}
         <CaseDraftRecovery draft={transitionDraft} />
         {#if record.actions.length}<label class="field">Action for transition<select value={transitionDraft.value.transitionActionId} onchange={async (event) => { const select = event.currentTarget; await selectTransitionAction(select.value); select.value = transitionDraft.value.transitionActionId; }}><option value="">Select an action</option>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>{/if}

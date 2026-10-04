@@ -41,6 +41,15 @@ the requested-evidence exercise prepares a drafting amendment. Changing scenario
 requires confirming that its Case and drafts should be discarded. Feedback
 checks retained relationships and states, not the quality of free-text reasoning.
 
+Choose a compromised-page or shared-form scenario to practise exact object scope;
+the related-host scenario keeps different affected identities and observations
+separate. The changing landing-page exercise leaves the ad and replacement URL
+open to review. Conditional captures retain their different paths and conditions.
+Other examples distinguish reported account actions, an organisation's existence
+from its claimed campaign endorsement, insufficient logo/edge evidence, and a
+later provider result that reuses a submitted report. Inspect the evidence and
+its qualifications before recording a conclusion.
+
 ## Dashboard
 
 Dashboard is the authenticated starting point. It waits for the required
@@ -177,6 +186,15 @@ Coverage distinguishes encrypted, unsupported and partially decoded content;
 no document scripts, macros or external resources run. Select HAR to inspect
 request order, origins, statuses and timings without replaying requests. The
 minimised report excludes headers, cookies, bodies and private URL components.
+
+Plain-text review also offers possible phone numbers for explicit selection.
+Keep the original spelling, declared source time and whether the text was
+transcribed or OCR-derived. A contact role describes the supplied claim, not
+verified ownership. Unselected candidates are not saved. For an ad or search
+result, compare a displayed destination with separately supplied destination
+evidence; this does not open either link or reconstruct an unobserved redirect.
+See [selected-input review](offline-intake-context.md) for supported formats,
+source spans and disclosure controls.
 
 Select **Identity events** for an Entra sign-in export (`value` array) or an Okta
 System Log array. The preview replaces actor identifiers with labels local to
@@ -549,6 +567,12 @@ from another, or shares its source, with an analyst-supplied basis. Shared sourc
 labels, collection checkpoints and imported-content identities are listed
 separately. A relationship can be withdrawn with a reason; its original record
 remains. These declarations do not add confidence or establish independence.
+If a later flag reuses your submitted report, record that known relationship.
+If its method is unknown, keep independence unknown rather than inferring either
+corroboration or dependence. Separately documented new observations retain their
+own sources and times. Selected response and internal handoff material carries
+the relevant shared-source qualification without copying private relationship
+notes into an unrelated recipient's packet.
 
 **Copy citation** on a retained pin or Lookup checkpoint copies only that fact,
 its source, observation time and completeness, not surrounding notes or raw data.
@@ -803,6 +827,20 @@ pins in its response packet before authorising it. Preparation is not delivery;
 record the new packet's delivery separately. The original digest and request
 history remain unchanged. Case exports, reports and CLI Case packs preserve this
 history; public Case packs exclude it.
+
+For a self-discovered mistake, prepare a **correction or withdrawal request**
+against one exact recorded delivery. Select its retained packet receipt, state
+the assertion being changed and the reason, choose supporting evidence, and
+keep the affected objects within the original delivery's scope. Review the
+recipient, authority and disclosure again before preparing the new packet.
+This path is separate from a provider-requested amendment.
+
+Older delivery records that contain only a digest cannot establish the original
+packet's version, recipient and object scope. They remain visible, but cannot
+authorise an exact-linked correction. The original delivery and packet digest
+stay unchanged when a new draft is created, cancelled or abandoned. Record any
+later delivery separately; a prepared withdrawal does not mean it was sent or
+accepted.
 
 A retained exact Incident URL can also be handed to the [optional capture companion](../packages/web-capture/README.md).
 The browser validates the selected manifest and can

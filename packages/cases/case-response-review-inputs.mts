@@ -1,5 +1,8 @@
 // Exact, bounded validation of current and published response-review inputs.
 import { readCaseEvidenceRequest, readCasePacketAmendment, assertEvidenceRequestEvent, assertEvidenceRequestHistory, assertPacketAmendmentSelection, type CaseEvidenceRequest, type CaseAmendmentAction } from './case-requested-evidence.mts';
+import { readCaseDeliveryPacketReceipt, readCasePacketCorrection, assertDeliveryPacketReceipt, correctionDelivery } from './case-packet-correction.mts';
+import { CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION } from './case-evidence-links.mts';
+import type { CaseActionRecord, CaseActionTransitionEvent } from './case-response-records.mts';
 
 import {
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
@@ -72,6 +75,7 @@ const CASE_RESPONSE_REVIEW_INPUT_KEYS = Object.freeze([
   'escalationHistoryOmitted',
   'escalationHistoryLimitations',
   'responseLifecycle',
+  'sourceQualifications',
 ] as const);
 
 const PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUT_KEYS = Object.freeze(
@@ -216,9 +220,12 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
   const hasActionBinding = version >= PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION;
   const source = exactReviewRecord(
     value,
-    hasActionBinding ? CASE_RESPONSE_REVIEW_INPUT_KEYS : PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUT_KEYS,
+    (hasActionBinding ? CASE_RESPONSE_REVIEW_INPUT_KEYS : PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUT_KEYS).filter(key => version >= 7 || key !== 'sourceQualifications'),
     'Case-response review inputs',
   );
+  if (version >= 7) for (const qualification of boundedReviewArray(source.sourceQualifications, 1, 'Selected evidence source qualifications')) {
+    if (qualification !== CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION) throw new TypeError('Unknown selected-source qualification.');
+  }
   const profile = exactReviewRecord(source.profile, [
     'id', 'label', 'audience', 'subject', 'checklist', 'includedEvidence',
     'excludedEvidence', 'redactions',
@@ -397,9 +404,10 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
       ...(hasPlatformRoutes ? ['routeReviewAfter'] : []),
       'providerOutcome', 'outcomeDetail', 'originActionId', 'historyOmitted',
       'historyLimitations', 'transitions', 'createdAt', 'updatedAt',
-    ], 'Case-response escalation action', [...(version >= 5 ? ['amendment'] : []), ...(version >= 6 ? ['responseObjects'] : [])]);
+    ], 'Case-response escalation action', [...(version >= 5 ? ['amendment'] : []), ...(version >= 6 ? ['responseObjects'] : []), ...(version >= 7 ? ['correction'] : [])]);
     readCaseResponseObjects(action.responseObjects);
     readCasePacketAmendment(action.amendment);
+    if (readCasePacketCorrection(action.correction) && action.amendment) throw new TypeError('Correction and provider amendment must remain separate.');
     for (const key of ['actionId', 'recipient', 'contactSource', 'createdAt', 'updatedAt'] as const) {
       reviewText(action[key], MAX_RESPONSE_VALUE_LENGTH, `Case-response action ${key}`);
     }
@@ -423,7 +431,11 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
         'id', 'previousState', 'nextState', 'occurredAt', 'sourceClass', 'provenance',
         'reference', 'evidencePinId', 'limitations', 'providerOutcome', 'outcomeDetail',
         'originActionId', 'applied',
-      ], 'Case-response transition', [...(version >= 5 ? ['evidenceRequest'] : []), ...(version >= 6 ? ['responseObjects', 'objectOutcome'] : [])]);
+      ], 'Case-response transition', [...(version >= 5 ? ['evidenceRequest'] : []), ...(version >= 6 ? ['responseObjects', 'objectOutcome'] : []), ...(version >= 7 ? ['packetReceipt'] : [])]);
+      const receipt = readCaseDeliveryPacketReceipt(transition.packetReceipt);
+      assertDeliveryPacketReceipt(receipt, transition as Partial<CaseActionTransitionEvent>, action.actionId as string);
+      if (receipt && (receipt.caseId !== (source.case as Record<string, unknown>).id || receipt.target !== (source.case as Record<string, unknown>).domain
+        || receipt.recipient !== action.recipient)) throw new TypeError('The delivery receipt must retain the same Case, target and recipient.');
       const responseObjects = readCaseResponseObjects(transition.responseObjects);
       const objectOutcome = readCaseResponseObjectOutcome(transition.objectOutcome);
       if (objectOutcome) {
@@ -460,6 +472,13 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
     id: action.actionId, history: action.transitions, originActionId: action.originActionId, amendment: action.amendment,
   } as CaseAmendmentAction)), currentLineageActionIds?.[0] ?? null,
   new Set((source.selectedEvidence as { id: string }[]).map(pin => pin.id)));
+  if (version >= 7) {
+    const actions = (source.escalationHistory as Record<string, unknown>[]).map(action => ({ ...action, id: action.actionId, history: action.transitions })) as unknown as CaseActionRecord[];
+    const selected = actions.find(action => action.id === currentLineageActionIds?.[0]);
+    if (selected?.correction) correctionDelivery(actions, selected, { caseId: (source.case as Record<string, unknown>).id as string,
+      target: (source.case as Record<string, unknown>).domain as string, profile: profile.id as string,
+      selectedPinIds: new Set((source.selectedEvidence as { id: string }[]).map(pin => pin.id)) });
+  }
   reviewStrings(source.escalationHistoryLimitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response escalation limitations');
   validateReviewLifecycle(source.responseLifecycle, version);
 

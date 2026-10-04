@@ -215,11 +215,11 @@
 
   async function preparePacketDeliveryRecord(exported: Parameters<ComponentProps<typeof CaseResponsePacketWorkspace>['onpacketexported']>[0]) {
     const action = record.actions.find((item) => item.id === exported.actionId);
-    if (record.id !== exported.caseId || !action || !actionStage || JSON.stringify(action) !== exported.actionSignature) {
+    if (record.id !== exported.caseId || !action || !actionStage || JSON.stringify(action) !== exported.actionSignature || JSON.stringify(record) !== exported.responseContext) {
       onmessage('The packet was exported, but its Case action has changed or is no longer available. Review and export the current packet before recording delivery.');
       return;
     }
-    if (!await actionStage.prepareDeliveryRecord(action.id, exported.digestSha256)) {
+    if (!await actionStage.prepareDeliveryRecord(action.id, exported.digestSha256, exported.packetReceipt, exported.actionSignature, exported.responseContext)) {
       onmessage('The packet was exported, but the current receipt draft could not be confirmed for recovery. Keep this form open and review its recovery status before preparing another receipt.');
       return;
     }

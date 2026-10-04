@@ -12,6 +12,8 @@
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseResponseObjectSelect from './CaseResponseObjectSelect.svelte';
+  import type { CaseDeliveryPacketReceipt } from '../../../../packages/cases/case-packet-correction.mts';
+  import { createCasePacketDeliveryAuthority } from '$lib/controllers/case-packet-delivery.ts';
   import { CASE_RESPONSE_OBJECT_OUTCOMES, selectedCaseResponseObject, type CaseResponseObjectOutcome } from '../../../../packages/cases/case-response-object.mts';
 
   let { record, mode, mutationBusy, persist, onreviewrecipient, metadata }: {
@@ -23,6 +25,7 @@
     metadata: Snippet<[boolean]>;
   } = $props();
 
+  const deliveryAuthority = createCasePacketDeliveryAuthority();
   const quickActionDraft = createCaseDraft(() => record.id, 'action-receipt', {
     quickActionId: '',
     quickActionReference: '',
@@ -31,17 +34,19 @@
     quickOccurredAt: '',
     quickEvidencePinId: '',
     quickLimitations: '', responseObjects: [] as string[], objectOutcome: '' as '' | CaseResponseObjectOutcome
-  });
+  }, {}, deliveryAuthority.invalidate);
   const quickAction = $derived(record.actions.find((action) => action.id === quickActionDraft.value.quickActionId)
     ?? (quickActionDraft.value.quickActionId ? null : record.actions.find((action) => action.state !== 'terminal') ?? record.actions.at(-1))
     ?? null);
   $effect(() => { if (!quickActionDraft.value.quickActionId && quickAction) quickActionDraft.value.quickActionId = quickAction.id; });
 
   const routeReviewClock = $derived(new Date($reviewClock).toISOString());
+  $effect(() => { deliveryAuthority.reconcile(record); });
   const quickRouteFreshness = $derived(quickAction
     ? responseRouteFreshness(quickAction.routeObservedAt, quickAction.routeReviewAfter, routeReviewClock) : 'unknown');
   function clearQuickEvent() {
     quickActionDraft.value.quickActionReference = '';
+    deliveryAuthority.invalidate();
     quickActionDraft.value.quickProviderOutcome = '';
     quickActionDraft.value.quickOutcomeDetail = '';
     quickActionDraft.value.quickOccurredAt = '';
@@ -83,6 +88,13 @@
             : action.state === 'submitted' && quickActionDraft.value.quickProviderOutcome !== 'no_response' ? 'acknowledged'
               : 'terminal';
     const recordsProviderOutcome = action.state === 'submitted' || action.state === 'acknowledged';
+    let packetReceipt: CaseDeliveryPacketReceipt | undefined;
+    let expectedResponseContext: string | undefined;
+    try {
+      if (nextState === 'submitted' && (deliveryAuthority.hasAuthority() || action.correction)) {
+        ({ packetReceipt, expectedResponseContext } = deliveryAuthority.capture(record, action, quickActionDraft.value.quickActionReference));
+      }
+    } catch (cause) { selectionError = cause instanceof Error ? cause.message : 'Review the retained packet receipt.'; return; }
     const sourceClass: CaseActionEventSourceClass = recordsProviderOutcome && quickActionDraft.value.quickProviderOutcome !== 'no_response'
       ? 'provider'
       : 'analyst';
@@ -93,6 +105,7 @@
             : sourceClass === 'provider' ? 'provider response recorded by analyst'
               : 'analyst follow-up review';
     if (!await quickActionDraft.persist(persist, {
+      ...(packetReceipt ? { expectedResponseContext: expectedResponseContext! } : {}),
       actionUpdate: {
         id: action.id,
         transition: {
@@ -106,6 +119,7 @@
           providerOutcome: recordsProviderOutcome ? quickActionDraft.value.quickProviderOutcome || null : null,
           outcomeDetail: recordsProviderOutcome ? quickActionDraft.value.quickOutcomeDetail || null : null,
           originActionId: action.originActionId,
+          ...(packetReceipt ? { packetReceipt, responseObjects: packetReceipt.responseObjects } : {}),
           ...(recordsProviderOutcome && responseObjects.length ? { responseObjects } : {}),
           ...(recordsProviderOutcome && quickActionDraft.value.objectOutcome ? { objectOutcome: quickActionDraft.value.objectOutcome } : {}),
         },
@@ -114,10 +128,17 @@
     clearQuickEvent();
   }
 
-  export async function prepareDeliveryRecord(actionId: string, digestSha256: string): Promise<boolean> {
+  export async function prepareDeliveryRecord(actionId: string, digestSha256: string, packetReceipt?: CaseDeliveryPacketReceipt, actionSignature?: string, responseContext?: string): Promise<boolean> {
     if (!await selectQuickAction(actionId)) return false;
+    const action = record.actions.find(action => action.id === actionId);
+    if (!action || (actionSignature && JSON.stringify(action) !== actionSignature) || (responseContext && JSON.stringify(record) !== responseContext)) return false;
     quickActionDraft.changed();
     quickActionDraft.value.quickActionReference = `response-packet-sha256:${digestSha256}`;
+    if (packetReceipt) {
+      if (!responseContext) return false;
+      try { deliveryAuthority.bind(record, actionId, packetReceipt, digestSha256); }
+      catch (cause) { selectionError = cause instanceof Error ? cause.message : 'The exact delivery receipt could not be prepared.'; return false; }
+    }
     return true;
   }
 
@@ -137,6 +158,7 @@
     {#if !['submitted', 'acknowledged', 'terminal'].includes(quickAction.state)}<button class="btn" type="button" onclick={() => void onreviewrecipient(quickAction.id)} disabled={mutationBusy}>Review recipient and schedule</button>{/if}
     {#if quickAction.state === 'authorised'}
       <label class="field">Delivery reference<input bind:value={quickActionDraft.value.quickActionReference} maxlength="500" placeholder="Provider reference, ticket, or response-packet digest"></label>
+      {#if quickAction.correction}<p class="notice">Before recording a separate actual delivery, prepare and export a freshly authorised correction packet, then choose Continue to record delivery. Restored draft text does not restore review authority.</p>{/if}
     {:else if quickAction.state === 'submitted' || quickAction.state === 'acknowledged'}
       <label class="field">Provider outcome<select bind:value={quickActionDraft.value.quickProviderOutcome}><option value="">Select the observed response</option>{#each CASE_PROVIDER_OUTCOMES.filter((value) => value !== 'withdrawn' && !(quickAction.state === 'acknowledged' && value === 'no_response')) as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
       <label class="field">Reference<input bind:value={quickActionDraft.value.quickActionReference} maxlength="500" placeholder="Ticket, message, or provider reference"></label>

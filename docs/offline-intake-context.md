@@ -29,6 +29,52 @@ no further indicators exist.
 Version-1 reports remain readable without invented indicator coverage. Their
 original source digests do not acquire new observations retrospectively.
 
+### Supplied phone candidates
+
+Plain-text intake can also identify possible telephone numbers, including a
+support number in a supplied snippet with no link. Candidates are review leads:
+they do not authenticate a caller, identify an operator or establish wrongdoing.
+No number is dialled, resolved or checked against a reputation service.
+
+Review and select each observation deliberately before including it in a saved
+review. Unselected candidates remain transient. The selected observation keeps
+its original spelling, source digest and exact text range, not the surrounding
+snippet. Text ranges use zero-based, end-exclusive UTF-16 code-unit offsets;
+supplementary characters occupy two units. A declared source time is separate
+from the local review time. Identify manual transcription or OCR-derived text
+when that is how the supplied text was obtained.
+
+An advertised support contact and a sender or caller-ID claim describe different
+roles; neither verifies ownership. International formatting can be compared only
+where its prefix and supported separators permit a defensible normalisation.
+National-format numbers, conflicting country context and unsupported characters
+remain uncertain. Extensions are separate, not appended to the destination.
+Dates, identifiers and unsupported forms must not be treated as verified numbers.
+
+Selected numbers can still be private contacts. Review the selected content
+before saving or sharing it. Ordinary public/trusted Case projections do not
+include the private intake attachment; domain-focused interchange does not invent
+a telephone mapping. A missing exported phone observation is not evidence that
+none was supplied.
+
+### Compare a displayed claim with a supplied destination
+
+Use the intake's manual destination comparison when supplied ad, search or
+screenshot material shows one destination and a separate source supplies another.
+Identify each source, any known observation time, and whether its text is a claim,
+transcription or supplied observation. The comparison uses the same safe hostname
+parsing as an HTML link's displayed-host comparison.
+
+Review the exact hostname and registrable boundary. A hostname such as
+`store.example.test.attacker.invalid` is not `store.example.test`. Legitimate
+tracking destinations can also differ. Missing, malformed or credential-bearing
+input leaves insufficient evidence rather than inventing a redirect chain.
+
+Exact entered URLs stay in the private transient view. Retained output uses the
+minimised hostname/origin projection and supplied qualifications, not private
+paths, query values or fragments. Comparing the pair never follows either URL
+and does not establish that a redirect occurred.
+
 ## Optional distribution declarations
 
 After reviewing input in Lookup or a Case, open **Declare distribution
@@ -67,6 +113,46 @@ URLs in labels. All declarations are included in the downloaded or deliberately
 retained review. The Case summary pin contains counts and the report identity,
 not the indicator values or declaration text. Retaining original input remains
 a separate choice.
+
+### Select phone observations in the CLI
+
+First run `whoisleuth intake text selected.txt --json`. Standard error shows a
+candidate count, the full source digest, UTF-16 ranges and uncertainty, but not
+the numbers themselves. JSON output excludes unselected candidates. `--quiet`
+suppresses this discovery guidance. Inspect the corresponding text in your
+selected file before choosing a range.
+
+A version-2 context file binds selections to those exact input bytes. For
+example, a file containing `Support: +1 202 555 0107` followed by one LF newline
+has this selection:
+
+```json
+{
+  "schema": "whoisleuth.intake-context",
+  "version": 2,
+  "context": null,
+  "review": {
+    "sourceDigestSha256": "sha256:4ff4224ff4ed496fb67fa2ccb25f87b284d1d291f8e79b57646d6c32700eeb52",
+    "phones": [{
+      "start": 9,
+      "end": 24,
+      "declaration": {
+        "sourceLabel": "Selected support snippet",
+        "observedAt": null,
+        "basis": "supplied_text",
+        "role": "advertised_support_contact",
+        "countryCallingCode": null
+      }
+    }],
+    "destinationPair": null
+  }
+}
+```
+
+Run the earlier `--intake-context context.json` command to include that selected
+observation. A changed file or incorrect range is rejected; obtain its current
+digest and review it again. `context` can also carry the existing distribution
+declaration. Version-1 context files remain supported.
 
 ## Selected internal containment handoff
 

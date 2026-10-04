@@ -91,7 +91,7 @@
 </section>
 
 <section id="practice" class="resource-section" aria-labelledby="practice-title">
-  <div class="section-intro"><h2 id="practice-title">Practise with fictional evidence</h2><p>Try three short exercises or <a href="/demo#case-practice">work through a Case from evidence review to recheck</a>.</p></div>
+  <div class="section-intro"><h2 id="practice-title">Practise with fictional evidence</h2><p>Try three short exercises or <a href="/demo#case-practice">work through a Case from evidence review to recheck</a>. Case scenarios include exact-page scope, shared platforms, conflicting captures, account actions and source reuse.</p></div>
   {#if !practiceOpen}<button class="primary" type="button" onpointerenter={preloadPractice} onfocus={preloadPractice} onclick={() => practiceOpen = true}>Open offline practice</button>{/if}
   {#if practiceOpen}<DeferredSurface load={() => import('$lib/components/OfflineInvestigationScenarios.svelte')} props={{}} loadingLabel="Loading offline practice." unavailableLabel="Offline practice could not be loaded." />{/if}
 </section>

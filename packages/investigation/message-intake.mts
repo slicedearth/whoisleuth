@@ -3,6 +3,7 @@ import { parse, defaultTreeAdapter, type DefaultTreeAdapterTypes } from 'parse5'
 import { sha256ArtifactBytes } from '../evidence/artifact-integrity.mts';
 import { createLinkIntake } from './link-intake.mts';
 import { createIndicatorIntake, MAX_INTAKE_INDICATOR_TEXT } from './intake-indicators.mts';
+import { reviewPhoneCandidates } from './intake-phones.mts';
 import { AUTHENTICATION_METHODS, addressDomains, authenticationServiceDomains,
   dkimSigningDomains } from './mail-header-identity.mts';
 import { createIntakeReport } from './intake-report.mts';
@@ -169,8 +170,9 @@ export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeK
   if (result.bounded) bounds.add('Link extraction');
   const indicatorResult = indicators.result();
   if (indicatorResult.indicatorCoverage.state === 'partial') bounds.add('Indicator extraction');
+  const phoneReview = kind === 'text' ? reviewPhoneCandidates(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes), base.source.digestSha256) : undefined;
   return { report: { ...base,
     coverage: { state: bounds.size || unreviewedAttachments || partialAuthentication ? 'partial' : 'reviewed', reviewedParts, unreviewedAttachments, rejectedLinks: result.rejected, boundsReached: [...bounds] },
     identities, authenticationClaims, authenticationReview: { headers: authenticationHeaders, omittedHeaders: omittedAuthenticationHeaders }, messageParts,
-    ...indicatorResult, links: result.links, actionHints: [...actionHints] }, targets: result.targets };
+    ...indicatorResult, links: result.links, actionHints: [...actionHints] }, targets: result.targets, ...(phoneReview ? { phoneReview } : {}) };
 }

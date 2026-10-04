@@ -1072,7 +1072,7 @@ const SHARED_COMMAND_OPTIONS = [
     "option": "--intake-context",
     "scope": "command",
     "usage": "--intake-context \u003cfile>",
-    "description": "Read one selected version-1 distribution-context JSON file. Declarations do not verify distribution or capture conditions.",
+    "description": "Read one selected version-1 distribution declaration or version-2 digest-bound phone/destination selection file. Declarations remain attributed claims.",
     "values": [],
     "repeatable": false,
     "ranges": [],
@@ -4257,15 +4257,15 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "intake",
       "summary": "Review selected files and identity events offline",
-      "description": "Review message identities, source-linked literal IPs and labelled hashes, document links, QR destinations, HTTP archives or selected identity events locally. Add --intake-context for explicit distribution declarations.",
+      "description": "Review selected messages, indicators, document links, QR destinations, HTTP archives or identity events locally. Plain text offers phone candidates; --intake-context adds explicit selections and source declarations.",
       "group": "investigate",
       "common": true,
       "usage": "whoisleuth intake \u003ctext|email|calendar|qr|pdf|docx|har|identity> [\u003csource>] [--json] [--reported-action \u003creported-action>] [--trusted-auth-header \u003cvalue>] [--intake-context \u003cfile>] [--strict-exit] [--quiet] [--no-color]",
       "example": "whoisleuth intake email message.eml --json",
-      "boundary": "Offline only: no destination, embedded command or QR payload is opened or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Literal IPs and labelled hashes are bounded text observations, not lookup targets or verdicts; headers, URL contents, QR, HAR and identity-event fields are not scanned for them. Optional --intake-context reads one separate file up to 8 KiB, not stdin; its analyst-declared channel, source, time and labels are retained in output. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.",
+      "boundary": "Offline only: no destination, embedded command, phone number or QR payload is opened, contacted or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Literal IPs and labelled hashes are bounded text observations, not lookup targets or verdicts; headers, URL contents, QR, HAR and identity-event fields are not scanned for them. Plain-text phone discovery writes only counts, source digest, ranges and status to stderr; --quiet suppresses it. Optional --intake-context reads one separate file up to 8 KiB, not stdin. Version 1 carries distribution declarations; version 2 can also bind explicit phone selections and a supplied destination pair to the exact input digest. Selected phone strings and source declarations enter output; unselected candidates and exact private URLs do not. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded distribution-declaration file. No collection or automatic Case write."
+        "scope": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic Case write."
       },
       "inputs": [
         {
@@ -4317,7 +4317,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002eidentity-events.input"
       ],
       "inputLimits": [
-        "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded distribution-declaration file. No collection or automatic Case write.",
+        "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic Case write.",
         "kind: 1-1 enum value",
         "source: 0-1 file value"
       ],
@@ -4542,7 +4542,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:\u003cdigest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads exact Case schemas 15 or 16 or 17 or 18. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 18."
+        "scope": "Reads exact Case schemas 15 or 16 or 17 or 18 or 19. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 19."
       },
       "inputs": [
         {
@@ -4600,7 +4600,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-export"
       ],
       "inputLimits": [
-        "Reads exact Case schemas 15 or 16 or 17 or 18. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 18.",
+        "Reads exact Case schemas 15 or 16 or 17 or 18 or 19. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 19.",
         "operation: 1-1 enum value",
         "source: 0-1 file value"
       ],
@@ -4736,7 +4736,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "case-pack",
       "summary": "Build a reviewed case package",
-      "description": "Package browser-created Case records from schemas 15 or 16 or 17 or 18 as a reviewed, audience-specific Case-pack v2 with current schema 18.",
+      "description": "Package browser-created Case records from schemas 15 or 16 or 17 or 18 or 19 as a reviewed, audience-specific Case-pack v2 with current schema 19.",
       "group": "respond",
       "common": true,
       "usage": "whoisleuth case-pack [\u003csource>] --audience \u003cinternal|trusted|public> --reviewed [--json] [--quiet] [--no-color]",
@@ -4744,7 +4744,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "The command creates a separate offline package without changing the source or durable Cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, Case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 and writes a separate audience-specific Case-pack v2."
+        "scope": "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 or 19 and writes a separate audience-specific Case-pack v2."
       },
       "inputs": [
         {
@@ -4775,7 +4775,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-report"
       ],
       "inputLimits": [
-        "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 and writes a separate audience-specific Case-pack v2.",
+        "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 or 19 and writes a separate audience-specific Case-pack v2.",
         "source: 0-1 file value"
       ],
       "outputLimits": [

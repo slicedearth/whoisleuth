@@ -2,6 +2,8 @@
   import type {
     MessageIntakeReport,
     IntakeDistributionContext,
+    IntakePhoneReview,
+    CurrentMessageIntakeReport,
   } from '../../../../packages/contracts/message-intake.mts';
   import { INTAKE_DISTRIBUTION_CHANNELS } from '../../../../packages/contracts/message-intake.mts';
   import {
@@ -12,16 +14,21 @@
   import CopyButton from './CopyButton.svelte';
   import Pagination from './Pagination.svelte';
   import EvidenceTimestamp from './EvidenceTimestamp.svelte';
+  import IntakeSelectedEvidence from './IntakeSelectedEvidence.svelte';
   let {
     report,
     disabled = false,
     onchange,
     onpending,
+    phoneReview,
+    onreviewchange,
   }: {
     report: MessageIntakeReport;
     disabled?: boolean;
     onchange: (context: IntakeDistributionContext | null) => void;
     onpending: (pending: boolean) => void;
+    phoneReview?: IntakePhoneReview | undefined;
+    onreviewchange: (report: CurrentMessageIntakeReport) => void;
   } = $props();
   let page = $state(1),
     channel = $state<IntakeDistributionContext['channel']>('unknown');
@@ -32,6 +39,7 @@
     vantageLabel = $state('');
   let error = $state(''),
     pending = $state(false);
+  let selectionPending = $state(false);
   const indicators = $derived(intakeIndicators(report));
   const context = $derived(report.schemaVersion === 2 ? report.distributionContext : null);
   function changed() {
@@ -52,7 +60,7 @@
       });
       onchange(value);
       pending = false;
-      onpending(false);
+      onpending(selectionPending);
       error = '';
     } catch (cause) {
       error =
@@ -62,7 +70,7 @@
   function remove() {
     onchange(null);
     pending = false;
-    onpending(false);
+    onpending(selectionPending);
     error = '';
     sourceLabel = '';
     observedAt = '';
@@ -192,6 +200,7 @@
         establish independent collection.</p
       ></section
     >{/if}
+  <IntakeSelectedEvidence {report} {phoneReview} {disabled} onchange={onreviewchange} onpending={value => { selectionPending = value; onpending(pending || value); }} />
 </section>
 
 <style>

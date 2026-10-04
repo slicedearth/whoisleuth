@@ -8,6 +8,7 @@ import {
 import { selectExistingCase, type CaseOpenSelection } from './case-selection.mts';
 import { emptyCaseWorkflowMetadata, updateCaseWorkflowMetadata } from './case-workflow-metadata.mts';
 import { assertCaseResponseObject, readCaseResponseObject, readCaseResponseObjects, sameCaseResponseObject } from './case-response-object.mts';
+import { correctionDelivery, readCasePacketCorrection, readCaseDeliveryPacketReceipt } from './case-packet-correction.mts';
 import { readCaseWorkflowFields } from './case-workflow-migration.mts';
 import {
   appendCaseAction,
@@ -157,6 +158,8 @@ export function normalizeCase(
   const evidencePins = normalizeCaseEvidencePins(record.evidencePins, updatedAt, timestampOptions);
   const pinIds = new Set(evidencePins.map((item) => item.id));
   const actions = normalizeCaseActions(record.actions, updatedAt, { ...timestampOptions, validEvidencePinIds: pinIds });
+  for (const action of actions) for (const event of action.history) if (event.packetReceipt
+    && (event.packetReceipt.caseId !== record.id || event.packetReceipt.target !== domain)) throw new TypeError('The packet receipt belongs to a different Case or target.');
   const assertions = normalizeCaseAssertions(record.assertions, updatedAt, pinIds, timestampOptions);
   const sightings = normalizeCaseSightings(record.sightings, updatedAt, pinIds, timestampOptions);
   const sightingIds = new Set(sightings.map((item) => item.id));
@@ -374,6 +377,7 @@ export function updateCase(
   if (index < 0) throw new Error('That case no longer exists.');
   const current = cases[index];
   if (!current) throw new Error('That case no longer exists.');
+  if (patch.expectedResponseContext !== undefined && patch.expectedResponseContext !== JSON.stringify(current)) throw new TypeError('The Case response context changed after preview. Review the current delivery, scope and evidence before creating this draft.');
   const workflowMetadata = updateCaseWorkflowMetadata(current.workflowMetadata
     ?? readCaseWorkflowFields(current, current.domain, current.assertions).workflowMetadata, patch, current.domain, now);
   const scopedCase = { ...current, workflowMetadata };
@@ -425,6 +429,15 @@ export function updateCase(
     evidencePins = appendCaseEvidencePin(evidencePins, patch.evidencePin, now);
   }
   const pinIds = new Set(evidencePins.map((item) => item.id));
+  const correctionInput = patch.action !== undefined ? objectRecord(patch.action) : patch.actionUpdate !== undefined
+    ? { ...current.actions.find(action => action.id === objectRecord(patch.actionUpdate).id), ...objectRecord(patch.actionUpdate) } : null;
+  if (correctionInput?.correction !== undefined) correctionDelivery(current.actions, {
+    originActionId: typeof correctionInput.originActionId === 'string' ? correctionInput.originActionId : null,
+    recipient: typeof correctionInput.recipient === 'string' ? correctionInput.recipient : '',
+    responseObjects: readCaseResponseObjects(correctionInput.responseObjects), correction: readCasePacketCorrection(correctionInput.correction),
+  }, { caseId: current.id, target: current.domain, selectedPinIds: pinIds });
+  const transitionReceipt = readCaseDeliveryPacketReceipt(objectRecord(objectRecord(patch.actionUpdate).transition).packetReceipt);
+  if (transitionReceipt && (transitionReceipt.caseId !== current.id || transitionReceipt.target !== current.domain)) throw new TypeError('The packet receipt belongs to a different Case or target.');
   let decisions = current.decisions;
   if (patch.decision !== undefined) {
     decisions = appendCaseDecision(current.decisions, patch.decision, now, pinIds);
@@ -435,6 +448,14 @@ export function updateCase(
   }
   if (patch.actionUpdate !== undefined) {
     actions = updateCaseAction(actions, patch.actionUpdate, now, pinIds);
+  }
+  if (correctionInput?.correction !== undefined || transitionReceipt) {
+    for (const original of current.actions) {
+      const retained = actions.find(action => action.id === original.id);
+      if (!retained || original.history.some(event => !retained.history.some(next => JSON.stringify(next) === JSON.stringify(event)))
+        || (patch.action !== undefined && JSON.stringify(retained) !== JSON.stringify(original))) throw new TypeError('This linked operation would omit or change historical delivery records within the Case bounds. No correction or receipt was retained.');
+    }
+    if (transitionReceipt && !actions.find(action => action.id === transitionReceipt.actionId)?.history.some(event => JSON.stringify(event.packetReceipt) === JSON.stringify(transitionReceipt))) throw new TypeError('The exact delivery receipt exceeds the retained history bounds. No delivery was recorded.');
   }
   let assertions = current.assertions;
   if (patch.assertion !== undefined) {

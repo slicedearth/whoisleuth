@@ -208,6 +208,15 @@ included in the output, not verified as delivery or capture conditions. See
 [selected-input indicators and declarations](offline-intake-context.md) for the
 exact schema, privacy exclusions and extraction bounds.
 
+Plain-text phone discovery reports only candidate counts, the source digest and
+UTF-16 selection ranges to standard error; unselected numbers do not enter JSON
+output. Use a version-2 `--intake-context` file to select exact ranges and declare
+their source, basis, role and known time. The same optional file can supply a
+displayed/destination pair for local hostname comparison. See the
+[selection example](offline-intake-context.md#select-phone-observations-in-the-cli).
+`--quiet` suppresses discovery guidance, and `--strict-exit` reports partial
+phone coverage as well as other incomplete intake work.
+
 ### Local IP-location database review
 
 `review-evidence query.json --mmdb selected.mmdb --json --strict-exit` reads
@@ -343,6 +352,17 @@ After submission, a typed `objectOutcome` such as `removed`, `restricted`,
 `suspended`, `delisted`, `restored` or `disputed` requires explicit event
 `responseObjects`: a partial receipt never applies to all objects by default.
 Acknowledgement is a workflow event, not independently observed remediation.
+
+A self-initiated correction uses a new `case action`, with `originActionId`
+identifying the original action and `responseObjects` selecting a subset of that
+delivery's exact objects. Its `correction` block identifies one delivery event,
+packet digest/version and profile, plus the purpose (`correction` or
+`retraction_request`), reason, previous and corrected statements, and retained
+evidence-pin IDs. This is separate from `amendment`, which still requires an
+actual provider-request event. The correction must match a retained typed packet
+receipt on the selected delivery; a historical free-text digest alone is
+insufficient. The usual recipient, authority and disclosure review then applies
+to the new draft. The original packet and delivery remain unchanged.
 
 `case recheck-question` saves `statement` and `recheck` comparison conditions.
 Pins, questions and recheck input can retain one `responseObject`; exact-object

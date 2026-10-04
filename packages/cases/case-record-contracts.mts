@@ -230,6 +230,7 @@ type CaseEditExpectations = {
   expectedDisposition?: CaseDisposition;
   expectedReviewReasonCode?: string | null;
   expectedTags?: readonly string[];
+  expectedResponseContext?: string;
   expectedCaseTypes?: readonly CaseTypeId[];
 };
 export type CasePatch = Omit<Partial<CaseInput>, 'domain'> & CaseEditExpectations;
@@ -239,7 +240,7 @@ export type CasePatch = Omit<Partial<CaseInput>, 'domain'> & CaseEditExpectation
 type AuthoredFields<T> = Partial<Omit<T, 'id' | 'createdAt' | 'updatedAt'>>;
 type ActionMetadata = Pick<CaseActionRecord,
   'type' | 'recipient' | 'contactSource' | 'routeObservedAt' | 'routeReviewAfter'
-  | 'contactLimitations' | 'dueAt' | 'followUpAt' | 'originActionId' | 'amendment'>;
+  | 'contactLimitations' | 'dueAt' | 'followUpAt' | 'originActionId' | 'amendment' | 'correction' | 'responseObjects'>;
 export type CaseResponseMutation = CaseEditExpectations & {
   title?: string;
   status?: CaseStatus;

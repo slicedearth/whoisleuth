@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
 import { readCaseEvidenceRequest, readCasePacketAmendment, assertEvidenceRequestEvent, assertEvidenceRequestHistory, assertPacketAmendmentSelection, type CaseEvidenceRequest, type CaseAmendmentAction } from '../../packages/cases/case-requested-evidence.mts';
+import { readCaseDeliveryPacketReceipt, readCasePacketCorrection, assertDeliveryPacketReceipt, correctionDelivery } from '../../packages/cases/case-packet-correction.mts';
+import { CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION } from '../../packages/cases/case-evidence-links.mts';
+import { OBJECT_RESPONSE_CASE_PACKET_VERSION, OBJECT_RESPONSE_CASE_REVIEW_INPUTS_VERSION } from '../../packages/contracts/case-portability.mts';
+import type { CaseActionRecord, CaseActionTransitionEvent } from '../../packages/cases/case-response-records.mts';
 
 import { canonicalArtifactJsonV2 } from '../../packages/evidence/artifact-integrity.mts';
 import { EVIDENCE_FOLLOW_UP_CASE_RESPONSE_PACKET_VERSION, EVIDENCE_FOLLOW_UP_CASE_RESPONSE_REVIEW_INPUTS_VERSION } from '../../packages/contracts/case-portability.mts';
@@ -276,6 +280,7 @@ function validateVersionedCaseResponsePacket(
     | typeof PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION
     | typeof LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION
     | typeof EVIDENCE_FOLLOW_UP_CASE_RESPONSE_PACKET_VERSION
+    | typeof OBJECT_RESPONSE_CASE_PACKET_VERSION
     | typeof CASE_RESPONSE_PACKET_VERSION,
 ): void {
   const hasPlatformRoutes = version >= PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION;
@@ -326,7 +331,8 @@ function validateVersionedCaseResponsePacket(
   }) || new Set(urls).size !== urls.length) fail('Case-response abusive URLs');
   text(incident.observedHarm, 'Case-response observed harm', 2_000);
   iso(incident.observedAt, 'Case-response observedAt');
-  if (profile.subject !== `${selectedProfile?.subjectPrefix}: ${caseRecord.domain} (${incident.category})`) fail('Case-response profile subject');
+  if (profile.subject !== `${selectedProfile?.subjectPrefix}: ${caseRecord.domain} (${incident.category})`
+    && (version < 13 || profile.subject !== `Correction or retraction request: ${caseRecord.domain} (${incident.category})`)) fail('Case-response profile subject');
 
   const contacts = array(root.contacts, 'Case-response contacts', MAX_RESPONSE_CONTACTS);
   const contactKeys = new Set<string>();
@@ -580,9 +586,10 @@ function validateVersionedCaseResponsePacket(
       'historyLimitations', 'transitions', 'createdAt', 'updatedAt',
       ...(hasActionBinding ? ['routeObservedAt'] : []),
       ...(hasPlatformRoutes ? ['routeReviewAfter'] : []),
-    ], [...(Number(root.schemaVersion) >= 11 ? ['amendment'] : []), ...(version >= 12 ? ['responseObjects'] : [])], 'Case-response escalation action');
+    ], [...(Number(root.schemaVersion) >= 11 ? ['amendment'] : []), ...(version >= 12 ? ['responseObjects'] : []), ...(version >= 13 ? ['correction'] : [])], 'Case-response escalation action');
     readCaseResponseObjects(action.responseObjects);
     readCasePacketAmendment(action.amendment);
+    if (readCasePacketCorrection(action.correction) && action.amendment) throw new TypeError('Correction and provider amendment must remain separate.');
     const actionId = text(action.actionId, 'Case-response action id', 64);
     if (actionIds.has(actionId)) fail('Case-response action identity');
     actionIds.add(actionId);
@@ -610,7 +617,10 @@ function validateVersionedCaseResponsePacket(
     let previousTime = Number.NEGATIVE_INFINITY;
     let previousEventId = '';
     for (const eventCandidate of transitions) {
-      const event = exactOptional(eventCandidate, ['id', 'previousState', 'nextState', 'occurredAt', 'sourceClass', 'provenance', 'reference', 'evidencePinId', 'limitations', 'providerOutcome', 'outcomeDetail', 'originActionId', 'applied'], [...(Number(root.schemaVersion) >= 11 ? ['evidenceRequest'] : []), ...(version >= 12 ? ['responseObjects', 'objectOutcome'] : [])], 'Case-response action transition');
+      const event = exactOptional(eventCandidate, ['id', 'previousState', 'nextState', 'occurredAt', 'sourceClass', 'provenance', 'reference', 'evidencePinId', 'limitations', 'providerOutcome', 'outcomeDetail', 'originActionId', 'applied'], [...(Number(root.schemaVersion) >= 11 ? ['evidenceRequest'] : []), ...(version >= 12 ? ['responseObjects', 'objectOutcome'] : []), ...(version >= 13 ? ['packetReceipt'] : [])], 'Case-response action transition');
+      const receipt = readCaseDeliveryPacketReceipt(event.packetReceipt);
+      assertDeliveryPacketReceipt(receipt, event as Partial<CaseActionTransitionEvent>, actionId);
+      if (receipt && (receipt.caseId !== caseRecord.id || receipt.target !== caseRecord.domain || receipt.recipient !== action.recipient)) fail('Case-response receipt Case, target or recipient');
       const responseObjects = readCaseResponseObjects(event.responseObjects);
       const objectOutcome = readCaseResponseObjectOutcome(event.objectOutcome);
       if (objectOutcome) {
@@ -695,6 +705,13 @@ function validateVersionedCaseResponsePacket(
     const action = candidate as UnknownRecord;
     return { id: action.actionId, history: action.transitions, originActionId: action.originActionId, amendment: action.amendment } as CaseAmendmentAction;
   }), selectedActionId, evidenceIds);
+  if (version >= 13) {
+    const actions = history.map(candidate => { const action = candidate as UnknownRecord; return { ...action, id: action.actionId, history: action.transitions }; }) as unknown as CaseActionRecord[];
+    const selected = actions.find(action => action.id === selectedActionId);
+    if (selected?.correction) correctionDelivery(actions, selected, { caseId: caseRecord.id as string, target: caseRecord.domain as string, profile: profile.id as string, selectedPinIds: evidenceIds });
+    const expectedPrefix = selected?.correction ? 'Correction or retraction request' : selectedProfile?.subjectPrefix;
+    if (profile.subject !== `${expectedPrefix}: ${caseRecord.domain} (${incident.category})`) fail('Case-response correction subject');
+  }
 
   const lifecycle = exact(root.responseLifecycle, ['providerOutcomeState', 'latestProviderOutcome', 'observedChangeState', 'latestObservedEffect', 'latestObservedChangeAt', 'closure', 'limitations'], 'Case-response lifecycle');
   const providerOutcomeState = enumeration(lifecycle.providerOutcomeState, ['available', 'missing', 'ambiguous'], 'Case-response lifecycle provider state');
@@ -770,6 +787,7 @@ function validateVersionedCaseResponsePacket(
     contract: CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
     version: version === CASE_RESPONSE_PACKET_VERSION
       ? CASE_RESPONSE_REVIEW_INPUTS_VERSION
+      : version === OBJECT_RESPONSE_CASE_PACKET_VERSION ? OBJECT_RESPONSE_CASE_REVIEW_INPUTS_VERSION
       : version === EVIDENCE_FOLLOW_UP_CASE_RESPONSE_PACKET_VERSION ? EVIDENCE_FOLLOW_UP_CASE_RESPONSE_REVIEW_INPUTS_VERSION
       : version === LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION ? LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION
       : hasPlatformRoutes ? PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION
@@ -796,6 +814,7 @@ function validateVersionedCaseResponsePacket(
     escalationHistoryOmitted: root.escalationHistoryOmitted,
     escalationHistoryLimitations: root.escalationHistoryLimitations,
     responseLifecycle: root.responseLifecycle,
+    ...(version >= 13 ? { sourceQualifications: strings((root.provenance as UnknownRecord).limitations, 'Case-response limitations', 8, 600).filter(value => value === CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION) } : {}),
   };
   const expectedReviewDigest = createHash('sha256')
     .update(canonicalArtifactJsonV2(reviewedInputs))
@@ -820,6 +839,7 @@ function validateVersionedCaseResponsePacket(
 }
 
 export function validateCaseResponsePacket(value: UnknownRecord): void {
+  if (value.schemaVersion === OBJECT_RESPONSE_CASE_PACKET_VERSION) return validateVersionedCaseResponsePacket(value, OBJECT_RESPONSE_CASE_PACKET_VERSION);
   if (value.schemaVersion === EVIDENCE_FOLLOW_UP_CASE_RESPONSE_PACKET_VERSION) return validateVersionedCaseResponsePacket(value, EVIDENCE_FOLLOW_UP_CASE_RESPONSE_PACKET_VERSION);
   if (value.schemaVersion === LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION) return validateVersionedCaseResponsePacket(value, LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION);
   if (value.schemaVersion === PUBLIC_CASE_RESPONSE_PACKET_VERSION) return validateCaseResponsePacketV6(value);

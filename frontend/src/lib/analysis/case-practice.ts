@@ -9,6 +9,7 @@ import { buildCaseResponseReviewInputs } from '../../../../packages/cases/case-r
 import { caseIncidentTargets } from '../../../../packages/cases/case-workflow-metadata.mts';
 import { caseRecheckAnswerContext } from '../../../../packages/cases/case-recheck-model.mts';
 import { PLATFORM_REPORTING_ROUTES } from '../../../../packages/cases/platform-reporting-routes.mts';
+import { readIncidentStages, reviewIncidentSequence } from '../../../../packages/investigation/incident-sequence-review.mts';
 
 export const CASE_PRACTICE_OBSERVED_AT = '2026-09-01T12:00:00.000Z';
 export const CASE_PRACTICE_LATER_AT = '2026-09-02T12:00:00.000Z';
@@ -56,7 +57,7 @@ export const CASE_PRACTICE_SCENARIOS = [
     inadequate: '“The name looks wrong: delete everything.” This lacks behaviour evidence, exact scope, authority and a distinct distribution object.' },
   { id: 'compromised-page', title: 'An unexpected page on a legitimate site',
     observation: 'A supplied capture of https://publisher.example/old-guide requests account credentials. A separate reviewed baseline shows ordinary articles elsewhere on that legitimate site. Compromise is suspected, not established.',
-    assessment: 'Use the exact old-guide page and published security/hosting scope. A legitimate parent domain does not make this page safe; one page does not justify accusing every service on the domain.',
+    assessment: 'Use the exact old-guide page and published security/hosting scope. Registration age, valid TLS and provider reputation do not establish that this URL is safe. Control remains unknown unless an analyst records an evidence-supported assessment; one page does not justify accusing every service on the domain.',
     recheck: 'A later review failed before the exact path could be checked; the rest of the site was not reviewed.',
     question: 'Does the old-guide page still request credentials?', conditions: 'Exact old-guide path, same unauthenticated desktop viewport.',
     source: 'Fictional exact-page capture', urls: ['https://publisher.example/old-guide'], routes: [],
@@ -88,10 +89,10 @@ export const CASE_PRACTICE_SCENARIOS = [
     inadequate: '“A cheap item proves counterfeiting; use copyright for a refund.” This conflates evidence, rights authority and consumer remedies.' },
   { id: 'ad-redirect', title: 'An ad whose landing page changes',
     observation: 'A supplied advertisement has creative identifier seven and leads through one observed redirect to an offer page. One intermediate hop was not captured. The destination later changes.',
-    assessment: 'Retain the exact ad, displayed advertiser, redirect observations and landing page separately. Unknown hops remain unknown; disappearance of the destination does not resolve distribution.',
+    assessment: 'Retain the exact ad, displayed advertiser, redirect observations and landing page separately. Unknown hops remain unknown; disappearance of the destination does not resolve distribution. Report counts, suspension and provider closure do not measure campaign elimination or reduced harm.',
     recheck: 'The later ad review did not complete; the distribution object is unresolved.',
     question: 'Does the same ad still lead to the offer?', conditions: 'Same supplied ad context and device; no automated ad clicking.',
-    source: 'Fictional ad creative and navigation record', urls: ['https://distribution.example/ad/7', 'https://landing.example/offer'], routes: ['google-ad-report'],
+    source: 'Fictional ad creative and navigation record', urls: ['https://distribution.example/ad/7', 'https://landing.example/offer', 'https://replacement.example/offer'], routes: ['google-ad-report'],
     adequate: 'Identify the actual ad in the platform process and include only observed hops; retain a separate unresolved ad follow-up.',
     inadequate: '“The destination is gone, so the ad is fixed.” This does not establish the ad’s later state.' },
   { id: 'social-payment', title: 'A profile leading to a payment lure',
@@ -128,7 +129,7 @@ export const CASE_PRACTICE_SCENARIOS = [
     inadequate: '“Desktop is clean, so the QR report is false.” It compares different conditions.' },
   { id: 'hosted-object', title: 'A credential request in a shared hosted form',
     observation: 'A supplied shared-form object asks for a password. Its tenant and object identifier are known; the rest of the platform was not reviewed and no form response was submitted.',
-    assessment: 'Identify the exact file, form or tenant object, not the provider’s entire domain. Use the official viewer/editor reporting instructions only after verifying the platform.',
+    assessment: 'Identify the exact file, form or tenant object, not the provider’s entire domain. Unrelated tenants can share an IP, nameserver, certificate and page template. A platform or redirect is not automatically the registrant, final destination or responsible origin. Use scoped reporting instructions only after verifying the platform.',
     recheck: 'The exact object could not be reviewed later; platform availability does not answer the object question.',
     question: 'Does the exact hosted object still request credentials?', conditions: 'Same supplied object and access role without signing in or submitting responses.',
     source: 'Fictional shared-form capture', urls: ['https://hosted.example/forms/object-seven'], routes: ['google-drive-report'],
@@ -174,6 +175,30 @@ export const CASE_PRACTICE_SCENARIOS = [
     source: 'Fictional minimised incoming notice', urls: [], routes: [],
     adequate: 'Record an unverified analyst-supplied notice, its reference and an out-of-band review task without retaining message data.',
     inadequate: '“Pay or sign in to avoid removal.” This acts on unverified authority and risks exposing credentials.' },
+  { id: 'identity-actions', title: 'Reported account and device actions',
+    observation: 'Supplied fictional accounts describe a password entry, repeated approval prompts, device-code entry, alleged session theft, application consent, installation and a support call. These are separate mechanisms with different evidence gaps; no credentials, tokens or account identifiers are retained.',
+    assessment: 'Separate a displayed instruction, a reported action and an observed account result. A page without a password form is not necessarily safe. Account exposure and recovery remain unconfirmed unless supported by separately reviewed evidence.',
+    recheck: 'The requested account-event review is unavailable; page removal does not establish revoked sessions, grants or completed device recovery.',
+    question: 'Are the reported account effects supported by authorised evidence?', conditions: 'Review the supplied account and device timeline through an independently known route; no authentication or live interaction in this exercise.',
+    source: 'Fictional minimised incident accounts', urls: ['https://identity.example/instruction'], routes: [],
+    adequate: 'Retain each mechanism, evidence basis, source and missing result; record conditional recovery follow-ups without recording sensitive authentication material.',
+    inadequate: '“No password field means no exposure.” This overlooks approval, device-code, consent, session and local-execution mechanisms.' },
+  { id: 'trust-claim', title: 'An existing organisation and an unsupported campaign claim',
+    observation: 'A supplied directory entry records an organisation. A separate offer page claims a partnership; its supplied text and image describe different organisers. No authority for the offer or partnership has been established.',
+    assessment: 'Organisation existence, campaign authority and text/image agreement are different questions. Keep the supplied claims and their sources separate. A contradiction calls for review, not an automatic fraud finding.',
+    recheck: 'The independent partnership confirmation is unavailable; neither the directory entry nor a repeated logo answers that question.',
+    question: 'Does an authorised source confirm this exact campaign relationship?', conditions: 'Exact claimed campaign and reference period; use supplied evidence only and leave missing authority unresolved.',
+    source: 'Fictional supplied offer-page text', urls: ['https://offer.example/campaign'], routes: [],
+    adequate: 'Cite the directory entry only for its stated scope, retain the conflicting page accounts and record the unconfirmed relationship explicitly.',
+    inadequate: '“The organisation exists, so the campaign must be official.” Existence does not establish authority for a separate offer or partnership.' },
+  { id: 'dependent-sources', title: 'A submitted report and a later provider result',
+    observation: 'An analyst supplied a report. A later provider response explicitly says it reused that report. A separately documented page observation has its own source and time; another provider result does not explain its method.',
+    assessment: 'Retain known reuse without calling it independent corroboration. Separately documented observations keep their own attribution, while unknown provider methods remain unknown. Who submitted material alone establishes neither dependence nor independence.',
+    recheck: 'A later exact-page capture failed. A missing provider verdict establishes neither safety nor a prohibition on preparing a qualified draft.',
+    question: 'Is a complete later exact-page observation available?', conditions: 'Exact supplied page and comparable conditions; repeating the report is not another observation.',
+    source: 'Fictional original analyst report', urls: ['https://reported.example/offer'], routes: [],
+    adequate: 'Record the provider’s stated reuse, retain the distinct observation separately and carry source qualifications into any selected handoff.',
+    inadequate: '“My report and the response are two independent confirmations.” This counts a documented reuse as new support.' },
   { id: 'contradictory-sources', title: 'Two sources disagree',
     observation: 'A complete fictional capture shows a credential form. A separate supplied review says no form was seen; its path and viewport were not recorded.',
     assessment: 'Link both sources to the conclusion. Their scope differs, so do not silently pick a winner or count them as independent corroboration.',
@@ -210,14 +235,88 @@ export function casePracticeFeedback(record: CaseRecord, initialPinIds: readonly
   ];
 }
 
+/** Small supplied incident examples, not collected events or a mechanism classifier. */
+export function casePracticeIdentityReview() {
+  const examples = [
+    ['password', 'credential_entry', 'reported_action', 'A reporter says a password was entered; the account result is unconfirmed.'],
+    ['approval', 'identity_prompt', 'retained_observation', 'A supplied screen requests repeated sign-in approvals; no completed approval event is retained.'],
+    ['device-code', 'identity_prompt', 'reported_action', 'A reporter says a device code was entered; authorisation and account effects are unknown.'],
+    ['session', 'other', 'imported_record', 'A supplied incident note alleges session theft; no account telemetry establishes that allegation.'],
+    ['consent', 'consent', 'reported_action', 'A reporter says application consent was granted; the granted scope and later access are unconfirmed.'],
+    ['installation', 'local_execution', 'reported_action', 'A reporter says software was installed; execution and device effects have not been independently observed.'],
+    ['support-call', 'other', 'reported_action', 'A reporter says a support call requested installation; the caller’s authority and any resulting action are unknown.'],
+  ] as const;
+  const stages = readIncidentStages(examples.map(([id, kind, basis, description]) => ({
+    id, kind, basis, description, occurredAt: id === 'approval' ? CASE_PRACTICE_OBSERVED_AT : null,
+    hostname: id === 'approval' ? 'identity.example' : null, source: `Fictional supplied ${id} account`,
+    reference: `practice-${id}`, referenceSha256: null, completeness: 'partial',
+    limitations: ['Supplied minimised context only. No credentials, codes, tokens, authentication traces or personal account identifiers are retained.'],
+  })));
+  return { stages, review: reviewIncidentSequence(stages, CASE_PRACTICE_LATER_AT) };
+}
+
+function addPracticeScopeEvidence(record: CaseRecord, scenario: CasePracticeScenario): CaseRecord {
+  type Fact = { label: string; value: string; source: string; hostname?: string; observedAt?: string | null; limitation: string };
+  const facts: Partial<Record<CasePracticeScenario, Fact[]>> = {
+    'compromised-page': [{ label: 'Separate ordinary root-page capture', value: 'The supplied https://publisher.example/ root shows ordinary articles. No old-guide path was examined in this root capture.', source: 'Fictional root-page capture', hostname: 'publisher.example', limitation: 'Root content, age and TLS do not establish the exact affected path’s safety or who controls it.' },
+      { label: 'Control assessment remains unresolved', value: 'The analyst suspects an unauthorised page change but has no verified site-control evidence.', source: 'Fictional analyst assessment', observedAt: null, limitation: 'A hypothesis, not verified compromise, ownership or origin responsibility.' }],
+    'hosted-object': [{ label: 'Unrelated tenant with shared infrastructure', value: 'A supplied unrelated tenant shows ordinary content on the same platform. Both tenants share an edge address, nameserver, certificate and template.', source: 'Fictional unrelated tenant capture', hostname: 'hosted.example', limitation: 'Shared platform context does not establish common control; the unrelated tenant is outside the affected response scope.' },
+      { label: 'Redirect and destination remain distinct', value: 'The supplied hosted object points through a redirect service to a landing page. Registrant identity and origin responsibility are not established.', source: 'Fictional supplied navigation summary', limitation: 'No live navigation occurred; an intermediate service is not automatically the final destination or responsible origin.' }],
+    'related-hosts': [{ label: 'Service A identity claim', value: 'The supplied accounts.parent.example/service-a capture claims to represent fictional Service A.', source: 'Fictional Service A capture', hostname: 'accounts.parent.example', limitation: 'Association records the supplied affected identity, not common control of sibling hosts.' },
+      { label: 'Service B identity claim', value: 'The later supplied jobs.parent.example/service-b capture claims to represent fictional Service B.', source: 'Fictional Service B capture', hostname: 'jobs.parent.example', observedAt: CASE_PRACTICE_LATER_AT, limitation: 'A separate affected identity and time; the Service A evidence remains unchanged.' }],
+    'ad-redirect': [{ label: 'Earlier landing page no longer reproduced', value: 'A supplied complete later capture of the earlier landing URL shows ordinary text under the stated comparable conditions.', source: 'Fictional later landing-page capture', hostname: 'landing.example', observedAt: CASE_PRACTICE_LATER_AT, limitation: 'This observation concerns only the earlier landing page, not the advertisement, replacement or harm reduction.' },
+      { label: 'Replacement and advertisement remain unresolved', value: 'A supplied report names https://replacement.example/offer. Neither that replacement nor the advertisement was independently rechecked.', source: 'Fictional replacement report', observedAt: null, limitation: 'A reported replacement is not a verified navigation event, removal finding or campaign outcome.' }],
+    'conditional-presentation': [{ label: 'Supplied mobile exact-path capture', value: 'The supplied mobile capture shows an offer at https://conditional.example/offer in the declared location context.', source: 'Fictional mobile exact-path capture', hostname: 'conditional.example', limitation: 'Supplied viewport, location and path conditions are declared, not independently verified.' },
+      { label: 'Different desktop root capture', value: 'A supplied desktop capture at https://conditional.example/ shows ordinary text in another location.', source: 'Fictional desktop root capture', hostname: 'conditional.example', observedAt: CASE_PRACTICE_LATER_AT, limitation: 'Different path, viewport and location: this cannot refute the earlier exact-path mobile observation.' }],
+    'requested-amendment': [{ label: 'Logo-only supplied image account', value: 'A supplied image shows a logo but no observed credential request or submission.', source: 'Fictional minimised image account', limitation: 'A logo alone does not establish credential collection, authority or wrongdoing. The original and any annotation must remain separate.' },
+      { label: 'Observed edge, origin not established', value: 'The supplied network summary names an edge address; no origin host or responsible operator was established.', source: 'Fictional network summary', limitation: 'An edge or CDN address does not establish origin responsibility. Provider evidence requests remain distinct from prepared or delivered evidence.' }],
+    'trust-claim': [{ label: 'Organisation-existence scope', value: 'A supplied directory entry records fictional organisation A. It does not mention the offer or a partnership.', source: 'Fictional directory excerpt', limitation: 'A record of organisation existence is not confirmation of this campaign or relationship.' },
+      { label: 'Supplied campaign text claim', value: 'The supplied page text describes fictional organisation A as the organiser.', source: 'Fictional page text capture', hostname: 'offer.example', limitation: 'Publisher-authored campaign claim; authority has not been independently verified.' },
+      { label: 'Different organiser in supplied image', value: 'The supplied image account names fictional organisation B as the organiser of the same offer.', source: 'Fictional image account', hostname: 'offer.example', limitation: 'Keep the conflicting account; textual or visual disagreement is not an automatic fraud finding.' }],
+    'dependent-sources': [{ label: 'Provider explicitly reused the report', value: 'The supplied provider response states that it used the original analyst report without a new page observation.', source: 'Fictional provider response', observedAt: CASE_PRACTICE_LATER_AT, limitation: 'Documented report reuse, not a separately collected observation.' },
+      { label: 'Separately documented page observation', value: 'A separately supplied capture describes the exact offer page at its stated observation time.', source: 'Fictional separate page capture', hostname: 'reported.example', limitation: 'Its separate source and time are retained; submission history alone does not verify independence.' },
+      { label: 'Provider collection method unknown', value: 'Another supplied provider result does not describe how it obtained its finding.', source: 'Fictional opaque-method provider result', observedAt: null, limitation: 'Neither dependence nor independence can be inferred from the provider name or submitter.' }],
+  };
+  const selected = facts[scenario] ?? [];
+  if (selected.length) record = updateCase([record], record.id, { evidencePins: selected.map(fact => ({
+    label: fact.label, value: fact.value, source: fact.source, observedAt: fact.observedAt === undefined ? CASE_PRACTICE_OBSERVED_AT : fact.observedAt,
+    ...(fact.hostname ? { observationHostname: fact.hostname } : {}), completeness: 'partial', sourceState: 'reviewed', limitations: [fact.limitation],
+  })) }, CASE_PRACTICE_LATER_AT).record;
+  if (scenario === 'identity-actions') record = updateCase([record], record.id, { evidencePins: casePracticeIdentityReview().stages.map(stage => ({
+    label: `${stage.id} context`, value: stage.description, source: stage.source, observedAt: stage.occurredAt,
+    completeness: stage.completeness, sourceState: 'reviewed', limitations: [...stage.limitations],
+  })) }, CASE_PRACTICE_LATER_AT).record;
+  if (scenario === 'related-hosts') record = updateCase([record], record.id, { brandProfileIds: ['practice-service-a', 'practice-service-b'] }, CASE_PRACTICE_LATER_AT).record;
+  if (scenario === 'trust-claim') {
+    const textPin = record.evidencePins.find(pin => pin.label === 'Supplied campaign text claim')!;
+    const imagePin = record.evidencePins.find(pin => pin.label === 'Different organiser in supplied image')!;
+    for (const [statement, textStance, imageStance] of [
+      ['The displayed campaign relationship may be authorised.', 'supports', 'unresolved'],
+      ['The displayed campaign relationship may be misattributed.', 'unresolved', 'supports'],
+    ] as const) record = updateCase([record], record.id, { assertion: { kind: 'hypothesis', statement, state: 'open',
+      rationale: 'These are competing analyst explanations. The supplied claims and organisation-existence record do not decide campaign authority or fraud.',
+      evidenceRelations: [{ evidencePinId: textPin.id, stance: textStance }, { evidencePinId: imagePin.id, stance: imageStance }],
+    } }, CASE_PRACTICE_LATER_AT).record;
+  }
+  if (scenario === 'dependent-sources') record = updateCase([record], record.id, { evidenceLink: {
+    fromPinId: record.evidencePins.find(pin => pin.label === 'Provider explicitly reused the report')!.id,
+    toPinId: record.evidencePins[0]!.id, kind: 'derived_from', basis: 'The supplied provider response explicitly describes reuse of the original report; no new observation was claimed.',
+  } }, CASE_PRACTICE_LATER_AT).record;
+  return record;
+}
+
 /** Fixed fictional material, never loaded from a saved workspace or target. */
 export function createCasePracticeRecord(scenario: CasePracticeScenario = 'credential-form'): CaseRecord {
   const definition = casePracticeDefinition(scenario);
   const domain = definition.urls.length ? new URL(definition.urls[0]!).hostname : 'case-practice.example';
   const initial = createCase({ domain, title: definition.title,
     note: 'Practice material only. No domain was contacted and no external report was submitted.' }, CASE_PRACTICE_OBSERVED_AT);
+  const primaryLabel = scenario === 'requested-amendment' ? 'Original request and delivery context'
+    : scenario === 'identity-actions' ? 'Supplied incident accounts'
+      : scenario === 'dependent-sources' ? 'Original supplied report'
+        : scenario === 'trust-claim' ? 'Supplied campaign claim summary' : 'Earlier page';
   const observed = updateCase([initial], initial.id, { evidencePins: [
-    { label: scenario === 'requested-amendment' ? 'Original request and delivery context' : 'Earlier page', value: definition.observation,
+    { label: primaryLabel, value: definition.observation,
       source: definition.source, observedAt: CASE_PRACTICE_OBSERVED_AT, observationHostname: initial.domain,
       completeness: 'complete', sourceState: 'complete', limitations: [definition.assessment, 'Complete supplied summary, not comprehensive collection or proof of an allegation.'] },
     { label: 'Later capture did not complete', value: definition.recheck,
@@ -277,7 +376,7 @@ export function createCasePracticeRecord(scenario: CasePracticeScenario = 'crede
         dueAt: null, state: 'requested', evidencePinIds: [], rationale: '', previousEventIds: [] },
     } } }, CASE_PRACTICE_LATER_AT).record;
   }
-  return result;
+  return addPracticeScopeEvidence(result, scenario);
 }
 
 const JOURNEY_SOURCE = 'Fictional practice recipient';

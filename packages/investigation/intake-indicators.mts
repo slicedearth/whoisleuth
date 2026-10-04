@@ -9,7 +9,7 @@ import {
 
 export const MAX_INTAKE_INDICATOR_TEXT = 2 * 1024 * 1024;
 
-function minimiseIndicatorToken(token: string): string {
+export function minimiseIndicatorToken(token: string): string {
   if (token.includes('//') || token.includes('@')) return ' ';
   const unwrapped = token.replace(/^[([{,;]+|[)\]},;.!?]+$/gu, '');
   // A bare IPv6 address or explicit hash label is an observation, not a URI.

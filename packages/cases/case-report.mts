@@ -25,6 +25,8 @@ import {
 import { buildCaseResponseLifecycleSummary, CASE_EVIDENCE_RELATION_STANCES } from './case-response-model.mts';
 import { normalizeCaseBrandProfileIds } from './case-brand-profile-references.mts';
 import { EVIDENCE_FOLLOW_UP_CASE_REPORT_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { OBJECT_RESPONSE_CASE_REPORT_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { CASE_DELIVERY_RECEIPT_LIMITATION } from './case-packet-correction.mts';
 import { CASE_RECHECK_CONDITIONS } from './case-recheck-model.mts';
 import { escapeCaseMarkdownInline as escapeMarkdownInline } from './case-markdown.mts';
 import {
@@ -382,6 +384,7 @@ export function buildCaseReportVerificationProjection(
 ) {
   const generated = buildCaseReport(caseRecord, options).json;
   if (schemaVersion === CASE_REPORT_SCHEMA_VERSION) return generated;
+  if (schemaVersion === OBJECT_RESPONSE_CASE_REPORT_SCHEMA_VERSION) return { ...generated, schemaVersion };
   if (schemaVersion === EVIDENCE_FOLLOW_UP_CASE_REPORT_SCHEMA_VERSION) return { ...generated, schemaVersion };
   if (caseRecord.evidenceHistory.some(snapshot => snapshot.webCollectionQuality !== undefined)) {
     throw new TypeError('Published report formats cannot declare newer collection-quality fields.');
@@ -673,6 +676,11 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
       if (action.routeReviewAfter) lines.push(`  Route review due: ${escapeMarkdownInline(action.routeReviewAfter)}`);
       if (action.originActionId) lines.push(`  Originating action: ${escapeMarkdownInline(action.originActionId)}`);
       if (action.amendment) lines.push(`  Amendment of submitted packet SHA-256: ${action.amendment.packetDigestSha256}; request events: ${action.amendment.requestEventIds.map(escapeMarkdownInline).join(', ')}`);
+      if (action.correction) lines.push(`  ${action.correction.purpose === 'correction' ? 'Correction request' : 'Retraction request'} for delivery event ${escapeMarkdownInline(action.correction.deliveryEventId)}; packet v${action.correction.packetVersion} SHA-256: ${action.correction.packetDigestSha256}`,
+        `  Reason: ${escapeMarkdownInline(action.correction.reason)}`, `  Previous statement: ${escapeMarkdownInline(action.correction.previousStatement)}`,
+        `  Corrected statement: ${escapeMarkdownInline(action.correction.correctedStatement || 'Request to retract the previous statement')}`,
+        `  Corrected evidence pins: ${action.correction.evidencePinIds.map(escapeMarkdownInline).join(', ')}`,
+        '  Preparation is not delivery, recipient acceptance, restoration or independent recheck.');
       for (const event of action.history) if (event.evidenceRequest) {
         const request = event.evidenceRequest;
         lines.push(`  Requested evidence [${request.state}]: ${escapeMarkdownInline(request.summary)}; deadline: ${request.dueAt ?? 'not stated'}; original packet: ${request.packetDigestSha256}${event.applied ? '' : ' (retained conflict)'}`,
@@ -690,6 +698,8 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
         if (event.responseObjects?.length) lines.push(`    Objects at this event: ${event.responseObjects.map(object => `${escapeMarkdownInline(object.kind)} · ${escapeMarkdownInline(object.identifier)}`).join('; ')}`);
         if (event.objectOutcome) lines.push(`    Source-reported object outcome: ${escapeMarkdownInline(event.objectOutcome)}; not independent verification or causation.`);
         if (event.reference) lines.push(`    Event reference: ${escapeMarkdownInline(event.reference)}`);
+        if (event.packetReceipt) lines.push(`    Retained packet v${event.packetReceipt.packetVersion}: ${event.packetReceipt.packetDigestSha256}; recipient ${escapeMarkdownInline(event.packetReceipt.recipient)}; audience ${escapeMarkdownInline(event.packetReceipt.profile)}; generated ${event.packetReceipt.packetGeneratedAt}`,
+          `    ${CASE_DELIVERY_RECEIPT_LIMITATION}`);
         if (event.evidencePinId) lines.push(`    Evidence pin: ${escapeMarkdownInline(event.evidencePinId)}`);
         if (event.limitations.length) lines.push(`    Limitations: ${escapeMarkdownInline(event.limitations.join('; '))}`);
       }

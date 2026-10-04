@@ -14,7 +14,8 @@ import {
   MAX_CONTAINMENT_ASSERTIONS,
   type ContainmentSelection,
 } from '../packages/cases/case-containment-handoff.mts';
-import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import { CASE_SCHEMA_VERSION, MAX_RESPONSE_LIMITATIONS } from '../packages/contracts/case-portability.mts';
+import { CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION } from '../packages/cases/case-evidence-links.mts';
 import {
   buildOfflineEvidenceReview,
   formatOfflineEvidenceReview,
@@ -110,6 +111,26 @@ test('containment selects existing assertions and exact supporting pins without 
     /authorised account, session and application-grant evidence/u,
   );
   assert.deepEqual(record, original);
+});
+
+test('containment carries an audience-safe source qualification without losing pin limitations or leaking relationship details', () => {
+  const { record, selection } = retained();
+  const [selected, unselected] = record.evidencePins;
+  selected!.limitations = Array.from({ length: MAX_RESPONSE_LIMITATIONS }, (_, index) => `Retained source limitation ${index + 1}.`);
+  const linked = updateCase([record], record.id, { evidenceLink: { fromPinId: selected!.id, toPinId: unselected!.id,
+    kind: 'derived_from', basis: 'private-attribution-basis' } }, NOW).record;
+  const before = structuredClone(linked);
+  for (const audience of ['internal', 'trusted'] as const) {
+    const report = buildCaseContainmentHandoff(linked, { ...selection, audience }, NOW, true);
+    assert.ok(report.limitations.includes(CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION));
+    assert.deepEqual(report.evidencePins[0]!.limitations, selected!.limitations);
+    assert.match(formatCaseContainmentHandoff(report), /Multiple references do not establish independent observations/u);
+    for (const privateValue of ['private-attribution-basis', unselected!.id, linked.evidenceLinks![0]!.id]) assert.equal(JSON.stringify(report).includes(privateValue), false);
+  }
+  const publicPreview = previewCaseContainmentHandoff(linked, { ...selection, audience: 'public' }, NOW);
+  assert.equal(publicPreview.limitations.includes(CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION), false);
+  assert.deepEqual(publicPreview.evidencePins, []);
+  assert.deepEqual(linked, before);
 });
 
 test('audience preview applies canonical policy and public output excludes internal statements and pin values', () => {

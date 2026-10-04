@@ -47,6 +47,8 @@ export function createCaseDraftRecovery(options: Readonly<{
   resetFields: () => void;
   storage: DraftStorage;
   retention?: 'workspace' | 'document';
+  /** Clear transient permission when the buffer is recovered, replaced or committed. */
+  onInvalidate?: () => void;
   notify: (state: CaseDraftRecoveryState, unprotected: boolean) => void;
   uuid?: () => string;
 }>) {
@@ -66,6 +68,7 @@ export function createCaseDraftRecovery(options: Readonly<{
   };
   const failure = (cause: unknown) => {
     if (state.status === 'unknown' || failedLocalMutationOutcome(cause) === 'unknown') {
+      options.onInvalidate?.();
       clearTimeout(timer);
       emit({ status: 'unknown', message: 'The write may have succeeded, but could not be confirmed. Keep this form open to copy any unsaved text, then reload and review saved records before another change.' });
     } else emit({ status: 'error', message: options.retention === 'document'
@@ -122,6 +125,7 @@ export function createCaseDraftRecovery(options: Readonly<{
 
   async function restore(candidate: CaseDraftRecord) {
     if (state.edited || state.busy || state.status === 'unknown') return;
+    options.onInvalidate?.();
     const revision = editRevision;
     emit({ busy: true });
     try {
@@ -138,6 +142,7 @@ export function createCaseDraftRecovery(options: Readonly<{
 
   async function discard(candidate?: CaseDraftRecord) {
     if (state.busy || submitting || state.status === 'unknown') return;
+    options.onInvalidate?.();
     const revision = editRevision;
     clearTimeout(timer); emit({ busy: true });
     try {
@@ -160,6 +165,7 @@ export function createCaseDraftRecovery(options: Readonly<{
 
   async function leaveForm(): Promise<boolean> {
     if (submitting || state.busy || state.status === 'unknown') return false;
+    options.onInvalidate?.();
     const revision = editRevision;
     emit({ busy: true });
     try {
@@ -188,6 +194,7 @@ export function createCaseDraftRecovery(options: Readonly<{
       const receipt = identity;
       const committed = await write(receipt);
       if (committed) {
+        options.onInvalidate?.();
         identity = null;
         storedRevision = submittedRevision;
         emit({ edited: editRevision !== submittedRevision, status: 'idle', message: 'Added to the Case. The submitted recovery copy was removed.' });
@@ -203,6 +210,6 @@ export function createCaseDraftRecovery(options: Readonly<{
   return {
     changed, refresh, flush, restore, discard, leaveForm, submit,
     capture: () => { const revision = editRevision; return () => revision === editRevision && !destroyed; },
-    destroy: () => { destroyed = true; clearTimeout(timer); },
+    destroy: () => { options.onInvalidate?.(); destroyed = true; clearTimeout(timer); },
   };
 }

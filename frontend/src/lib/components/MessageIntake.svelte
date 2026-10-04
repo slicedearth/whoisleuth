@@ -45,7 +45,7 @@
       const reviewed = await runMessageIntakeWorker({ kind, file: selected, reviewedAt: new Date().toISOString() }, current.signal);
       if (current.signal.aborted) return;
       result = reviewed; reviewedFile = selected;
-      message = `${reviewed.report.identityEventReview ? `Identity events: ${reviewed.report.identityEventReview.events.length}` : `Extracted links: ${reviewed.report.links.length}`}. Nothing was opened or saved.`;
+      message = `${reviewed.report.identityEventReview ? `Identity events: ${reviewed.report.identityEventReview.events.length}` : `Extracted links: ${reviewed.report.links.length}${reviewed.phoneReview ? `; transient phone candidates: ${reviewed.phoneReview.candidates.length}` : ''}`}. Nothing was opened or saved.`;
       await tick(); if (!current.signal.aborted) heading?.focus();
     } catch (cause) { if (!current.signal.aborted) error = cause instanceof Error ? cause.message : 'The selected input could not be reviewed.'; }
     finally { if (controller === current) { controller = null; busy = false; } }
@@ -102,7 +102,7 @@
         {/each}
       </ol>
       {#if report.links.length > PAGE_SIZE}<Pagination currentPage={page} pageCount={Math.ceil(report.links.length / PAGE_SIZE)} setPage={next => page = next} ariaLabel="Extracted destination pages" />{/if}
-      {#key report.source.digestSha256}<IntakeContextEvidence {report} disabled={disabled || saving} onpending={pending => contextPending = pending} onchange={context => { if (result && !saving && !disabled) result = { ...result, report: withIntakeDistributionContext(result.report, context) }; }} />{/key}
+      {#key report.source.digestSha256}<IntakeContextEvidence {report} phoneReview={result.phoneReview} disabled={disabled || saving} onpending={pending => contextPending = pending} onchange={context => { if (result && !saving && !disabled) result = { ...result, report: withIntakeDistributionContext(result.report, context) }; }} onreviewchange={updated => { if (result && !saving && !disabled) result = { ...result, report: updated }; }} />{/key}
       {#key report.source.digestSha256}<SelectedInputEvidence {report} headingTag={subheadingTag} />{/key}
       {#if report.identityEventReview}{#key report.source.digestSha256}<IdentityEventEvidence review={report.identityEventReview} headingTag={subheadingTag} disabled={disabled || saving} onchange={identityEventReview => { if (result && !saving && !disabled) result = { ...result, report: { ...result.report, identityEventReview } }; }} />{/key}{/if}
       {#if report.identities.length || report.authenticationClaims.length || report.actionHints.length}
@@ -119,7 +119,7 @@
       <div class="actions">{#if onsave}<button type="button" class="btn primary" disabled={saving || disabled || contextPending} onclick={() => void save()}>{saving ? 'Saving…' : 'Save review in Case'}</button>{/if}
         <button type="button" class="btn" disabled={contextPending} onclick={() => downloadLocalFile(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }), 'message-review.json')}>Download review</button>
       </div>
-      {#if onsave}<label class="retain"><input type="checkbox" bind:checked={retainOriginal} disabled={saving || disabled}>Also retain the private original, which may contain message bodies, documents, credentials, addresses and exact links</label>{/if}
+      {#if onsave}<label class="retain"><input type="checkbox" bind:checked={retainOriginal} disabled={saving || disabled}>Also retain the private original, which may contain message bodies, documents, credentials, unselected contact numbers, addresses and exact links</label>{/if}
       <details><summary>Review coverage and source identity</summary><EvidenceTimestamp value={report.reviewedAt} label="review time" /><p>The original’s hash identifies the selected bytes, not its publisher or authenticity.</p><code>{report.source.digestSha256}</code><p>Selected content is reviewed locally. Links, external resources and HAR requests are not opened or replayed. Document review identifies the pages or parts used; encrypted and unsupported content remains explicit.</p>
         {#if report.messageParts.length}<ul>{#each report.messageParts as part}<li>Message part {part.part}{part.parentPart ? ` inside part ${part.parentPart}` : ' (outer message)'} · {part.byteLength} bytes · <code>{part.digestSha256}</code></li>{/each}</ul>{/if}
       </details>

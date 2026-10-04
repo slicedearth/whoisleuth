@@ -131,3 +131,24 @@ export function caseEvidenceSharedContext(pins: readonly CaseEvidencePin[]) {
   }
   return [...groups.values()].filter(group => group.pinIds.length > 1);
 }
+
+export const CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION = 'Selected evidence has retained shared-source or derivation context. Multiple references do not establish independent observations; underlying reporting or collection methods may remain unknown. Relationship details are not included in this output.';
+
+/** Qualify a narrow disclosure without exposing relationship identities or private basis text. */
+export function caseSelectedEvidenceSourceLimitations(
+  pins: readonly CaseEvidencePin[],
+  links: readonly CaseEvidenceLink[] | undefined,
+  selectedPinIds: readonly string[],
+): string[] {
+  array(pins, 'Retained evidence pins', MAX_CASE_EVIDENCE_PINS);
+  array(links ?? [], 'Retained evidence relationships', MAX_CASE_EVIDENCE_LINKS);
+  array(selectedPinIds, 'Selected evidence pins', MAX_CASE_EVIDENCE_PINS);
+  const requested = new Set(selectedPinIds);
+  const selectedPins = pins.filter(pin => requested.has(pin.id));
+  const selected = new Set(selectedPins.map(pin => pin.id));
+  if (!selected.size) return [];
+  const declared = links?.some(link => !link.withdrawal
+    && (selected.has(link.fromPinId) || selected.has(link.toPinId)));
+  return declared || caseEvidenceSharedContext(selectedPins).length
+    ? [CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION] : [];
+}

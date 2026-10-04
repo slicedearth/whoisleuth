@@ -54,7 +54,8 @@ Save time-bounded keyword campaigns, preview matching rules, and explicitly
 review retained editions from an optional feed service.
 
 [Offline intake](docs/offline-intake-context.md) extracts source-linked addresses
-and labelled hashes from selected material. Cases can compare retained text and
+and labelled hashes from selected material, with explicit phone selection and
+displayed-destination comparison for supplied text. Cases can compare retained text and
 images, preserve declared registration boundaries, prepare an audience-reviewed
 internal handoff, and print a record summary. These reviews do not collect or
 submit anything automatically.
