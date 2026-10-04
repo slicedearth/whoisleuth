@@ -7,6 +7,7 @@ import { readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
 import { requireJsonRecord as record } from './maintainer-tool-helpers.mts';
 import type { RunInstalledCli } from './installed-cli-check.mts';
 import { CLI_INVESTIGATION_RUN_SCHEMA, CLI_INVESTIGATION_RUN_VERSION, MAX_INVESTIGATION_RUN_BYTES } from '../packages/contracts/investigation-run.mts';
+import { checkInstalledDomainFeed } from './cli-domain-feed-package-check.mts';
 
 /** Offline resumption, retained artefact reuse and independent review approval. */
 export async function checkInstalledCliWorkflows(repositoryRoot: string, temporaryRoot: string, run: RunInstalledCli): Promise<void> {
@@ -57,6 +58,7 @@ export async function checkInstalledCliWorkflows(repositoryRoot: string, tempora
   }
   await checkInstalledIntakeAndContext(repositoryRoot, temporaryRoot, run);
   await checkInstalledLocalMmdb(repositoryRoot, temporaryRoot, run);
+  await checkInstalledDomainFeed(temporaryRoot, run);
 }
 
 /** Exercise the compiled reader's self-module worker without a database download. */

@@ -1,7 +1,22 @@
 import { INVESTIGATION_PLAN_RECIPES, RUNNABLE_INVESTIGATION_PLAN_RECIPES } from './investigation-recipes.mts';
-import { positional, OPTIONAL_FILE_POSITIONAL, constraint, commandSeed, integer, BASE_INTEGER_RANGE, file } from './command-definition.mts';
+import { positional, OPTIONAL_FILE_POSITIONAL, constraint, commandSeed, integer, BASE_INTEGER_RANGE, file, optionDefinition } from './command-definition.mts';
+import { DOMAIN_FEED_CATALOGUE } from '../packages/monitoring/domain-feed.mts';
 
 export const WORKFLOW_COMMAND_DEFINITIONS = Object.freeze({
+  'domain-feed': commandSeed({
+    reference: { description: 'Review exact hosts or literal terms in a selected local plain-domain feed.',
+      example: 'whoisleuth domain-feed review tif-mini feed.txt --select host:candidate.example --json',
+      boundary: 'Always available offline. Reads one explicit local regular file; never downloads a feed, performs a Lookup, changes scores, retains candidates or enables a schedule. Streams at most 256 MiB and 10 million physical rows with 1,024-byte lines and a ten-minute deadline; retains at most 200 matched hosts. Repeat --select host:<hostname> or term:<literal> for at most 200 exact hosts and 20 literal terms of 3–80 characters. Matching never treats a parent as equivalent or executes a regular expression. Review emits the full raw-byte digest, separate declared file/local clocks, unknown per-host clocks and omissions. watch-input also requires a candidate-watch-input v1 context file with an empty candidates array, and emits that existing format for a separate watchlist-review plan/export. Inclusion is not a maliciousness, activity, ownership or availability verdict.' },
+    collection: { scope: 'Local raw file: 256 MiB, 10 million physical rows, 1,024 bytes per line, ten minutes; 200 retained hosts, 20 literal terms, no requests.' },
+    summary: 'Review a selected local plain-domain feed', options: ['--select', '--json', '--quiet', '--no-color'],
+    optionOverrides: { '--select': optionDefinition('text', 'Select host:<exact-hostname> or term:<literal-text>; repeat for separate explicit selectors.', { occurrence: 'repeatable', acceptsOptionLikeValue: true }) },
+    positionals: Object.freeze([positional('operation', 'enum', 1, 1, ['review', 'watch-input']),
+      positional('feed', 'enum', 1, 1, DOMAIN_FEED_CATALOGUE.map(feed => feed.id)), positional('source', 'file', 1, 1), positional('context', 'file', 0, 1)]),
+    constraints: Object.freeze([constraint({ kind: 'required', options: ['--select'] })]),
+    handlerOwner: 'workflow', networkEffect: 'offline', common: false,
+    schemaIdentifiers: Object.freeze(['whoisleuth.candidate-watch-input']), primaryArtefacts: Object.freeze(['Bounded feed inclusion review', 'Explicit candidate watch selection']),
+    planSupport: true, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
+  }),
   'watchlist-review': commandSeed({
     reference: { description: 'Preview or export an explicit candidate selection to a local watchlist.', example: 'whoisleuth watchlist-review plan selection.json --json',
       boundary: 'Reads bounded local JSON only. Plan shows exact domains, duplicates, per-domain outcomes, destination and review priority with zero additional requests. Export emits Watchlist schema 5 without creating a scan or baseline. Neither mode enables collection or scheduling.' },

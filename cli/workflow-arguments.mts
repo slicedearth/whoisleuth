@@ -8,6 +8,7 @@ import type { WorkflowArtifactBinding } from '../packages/contracts/investigatio
 import { type CliFailPolicy } from './fail-policy.mts';
 import { commandDefaultNumber } from './command-reference.mts';
 import { WORKFLOW_COMMAND_DEFINITIONS } from './workflow-command-definitions.mts';
+import { parseDomainFeedSelectors } from './domain-feed.mts';
 import {
   terminalOptions,
   jsonOutput,
@@ -27,6 +28,15 @@ type MonitorOnceArguments = {
 } & TerminalOptions;
 
 type WatchlistReviewArguments = { action: 'watchlist-review'; operation: 'plan' | 'export'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions;
+type DomainFeedArguments = { action: 'domain-feed'; operation: 'review' | 'watch-input'; feedId: string; source: string; contextSource: string | null;
+  selection: ReturnType<typeof parseDomainFeedSelectors>; output: 'terminal' | 'json' } & TerminalOptions;
+function parseDomainFeedArguments(parsed: ParsedCommandArguments<DomainFeedArguments['action']>): DomainFeedArguments {
+  const operation = parsed.positionalValue('operation') as DomainFeedArguments['operation'];
+  const contextSource = parsed.positionalValue('context');
+  if ((operation === 'watch-input') !== Boolean(contextSource)) throw new CliUsageError('watch-input requires one existing candidate-watch-input context file; review does not accept a context file.');
+  return { action: 'domain-feed', operation, feedId: parsed.positionalValue('feed')!, source: parsed.positionalValue('source')!, contextSource,
+    selection: parseDomainFeedSelectors(parsed.optionValues('--select')), output: jsonOutput(parsed), ...terminalOptions(parsed) };
+}
 function parseWatchlistReviewArguments(parsed: ParsedCommandArguments<WatchlistReviewArguments['action']>): WatchlistReviewArguments {
   return { action: 'watchlist-review', operation: parsed.positionalValue('operation') as 'plan' | 'export', source: parsed.positionalValue('source'), output: jsonOutput(parsed), ...terminalOptions(parsed) };
 }
@@ -148,6 +158,7 @@ function parseWorkflowRunArguments(parsed: ParsedCommandArguments<WorkflowRunArg
 }
 
 export const WORKFLOW_ARGUMENT_PARSERS = Object.freeze({
+  'domain-feed': parseDomainFeedArguments,
   'watchlist-review': parseWatchlistReviewArguments,
   'monitor-once': parseMonitorOnceArguments,
   'workflow-plan': parseWorkflowPlanArguments,

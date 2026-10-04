@@ -34,11 +34,15 @@ import type { BoundedTextStream } from './bulk.mts';
 import type { TerminalEnvironment } from './terminal-presentation.mts';
 import { boundedInteractiveAnswer, canReadInteractiveLine, readBoundedInteractiveLine } from './terminal-input.mts';
 import { WORKFLOW_INLINE_COMMANDS } from './inline-command-families.mts';
-import { reviewCandidateWatchInput } from './watchlist-review.mts';
+import { reviewCandidateWatchInput, parseCandidateWatchInput } from './watchlist-review.mts';
+import { readDomainFeedFile } from './domain-feed.mts';
+import { scanDomainFeed, buildDomainFeedWatchInput, normalizeDomainFeedSelection } from '../packages/monitoring/domain-feed.mts';
+import type { CandidateWatchInput } from '../packages/workspace/candidate-watch-handoff.mts';
 import { MAX_WATCHLIST_IMPORT_BYTES } from '../packages/contracts/workspace-portability.mts';
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
 
 export type WorkflowCommandDependencies = {
+  readDomainFeedInput?: (source: string, signal?: AbortSignal) => AsyncIterable<Uint8Array>;
   stdin?: BoundedTextStream;
   environment?: TerminalEnvironment;
   signal?: AbortSignal;
@@ -58,6 +62,24 @@ type WorkflowCommandArguments = Extract<CliArguments, { action: WorkflowInlineCo
 async function runWatchlistReviewCommand(args: Extract<WorkflowCommandArguments, { action: 'watchlist-review' }>, dependencies: WorkflowCommandDependencies, context: CliWorkflowContext): Promise<number> {
   const raw = dependencies.readArtifactInput ? await dependencies.readArtifactInput(args.source) : await context.readInput(args.source, MAX_WATCHLIST_IMPORT_BYTES, 'Candidate watch selection');
   const document = reviewCandidateWatchInput(raw, args.operation, context.now());
+  if (!args.quiet) context.writeStdout(formatJsonDocument(document));
+  return EXIT_CODES.SUCCESS;
+}
+
+async function runDomainFeedCommand(args: Extract<WorkflowCommandArguments, { action: 'domain-feed' }>, dependencies: WorkflowCommandDependencies, context: CliWorkflowContext): Promise<number> {
+  context.setFailureLabel('Offline domain-feed review');
+  const handoff = args.contextSource ? parseCandidateWatchInput(dependencies.readArtifactInput
+    ? await dependencies.readArtifactInput(args.contextSource)
+    : await context.readInput(args.contextSource, MAX_WATCHLIST_IMPORT_BYTES, 'Candidate watch context')) : null;
+  const watchSelection = handoff?.selection as CandidateWatchInput | undefined;
+  if (watchSelection && watchSelection.candidates.length) throw new CliUsageError('The watch-input context must have an empty candidates array; only reviewed feed matches may be nominated.');
+  const selection = normalizeDomainFeedSelection({ ...args.selection, brandProfileId: watchSelection?.brandProfileId ?? null });
+  const review = await scanDomainFeed((dependencies.readDomainFeedInput ?? readDomainFeedFile)(args.source, dependencies.signal), {
+    feedId: args.feedId, selection, importedAt: context.now(), ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+  });
+  const document = watchSelection && handoff
+    ? buildDomainFeedWatchInput(review, review.matches.map(match => match.domain), watchSelection, handoff.watchlists)
+    : review;
   if (!args.quiet) context.writeStdout(formatJsonDocument(document));
   return EXIT_CODES.SUCCESS;
 }
@@ -243,6 +265,7 @@ async function runWorkflowRecipeCommand(
 }
 
 const WORKFLOW_COMMAND_HANDLERS = Object.freeze({
+  'domain-feed': runDomainFeedCommand,
   'watchlist-review': runWatchlistReviewCommand,
   'monitor-once': runMonitorOnceCommand,
   'workflow-plan': runWorkflowPlanCommand,
