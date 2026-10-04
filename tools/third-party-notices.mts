@@ -120,6 +120,30 @@ export function packageNameFromInstallPath(installPath: string): string {
   return boundedToken(packageName, 'Package name', 214);
 }
 
+function lockedPackageLocation(packages: JsonRecord, installPath: string) {
+  boundedSafeRelativePath(installPath, 'Package install path', 1024);
+  const segments = installPath.split('/');
+  const index = segments.indexOf('node_modules');
+  if (index < 0) throw new TypeError('Package install path must remain inside node_modules.');
+  const workspace = segments.slice(0, index).join('/');
+  if (workspace && (!Object.hasOwn(packages, workspace)
+    || record(packages[workspace], 'Locked workspace').link === true)) {
+    throw new TypeError('Package install path has no locked workspace owner.');
+  }
+  return {
+    name: packageNameFromInstallPath(segments.slice(index).join('/')),
+    nodeModulesPath: segments.slice(0, index + 1).join('/'),
+  };
+}
+
+async function installedPackageDirectory(repositoryRoot: string, nodeModulesPath: string, installPath: string) {
+  const nodeModulesRoot = await realpath(path.join(repositoryRoot, nodeModulesPath));
+  if (!pathIsWithin(repositoryRoot, nodeModulesRoot)) throw new TypeError('node_modules resolves outside the repository root.');
+  const directory = await realpath(path.join(repositoryRoot, installPath));
+  if (!pathIsWithin(nodeModulesRoot, directory)) throw new TypeError('Package resolves outside its node_modules directory.');
+  return directory;
+}
+
 export function resolveInstalledDependency(
   packages: JsonRecord,
   fromInstallPath: string,
@@ -213,10 +237,10 @@ export function collectProductionPackages(
   const collected = new Map<string, ProductionPackage>();
 
   for (const [installPath, rawPackage] of Object.entries(packages)) {
-    if (!installPath.startsWith('node_modules/') || (selectedPaths && !selectedPaths.has(installPath))) continue;
+    if (!/(?:^|\/)node_modules\//u.test(installPath) || (selectedPaths && !selectedPaths.has(installPath))) continue;
     const packageEntry = record(rawPackage, `package-lock.json package ${installPath}`);
     if (packageEntry.link === true) continue;
-    const name = packageNameFromInstallPath(installPath);
+    const { name } = lockedPackageLocation(packages, installPath);
     const version = boundedToken(packageEntry.version, `${name} version`, 128);
     const identifier = `${name}@${version}`;
     if (packageEntry.dev === true && !selectedPaths && !bundled.has(identifier)) continue;
@@ -318,7 +342,7 @@ async function workerModuleDependencies(repositoryRoot: string, modules: readonl
   if (modules.length > 4_096) throw new TypeError('Worker licence module inventory exceeds its bound.');
   if (!modules.length) return [];
   const root = await realpath(repositoryRoot);
-  const nodeModulesRoot = await realpath(path.join(root, 'node_modules'));
+  const packages = record(record(await readBoundedJson(path.join(root, 'package-lock.json')), 'Lockfile').packages, 'Locked packages');
   const installPaths = new Set<string>();
   for (const id of modules) {
     if (id.length > 4_096) throw new TypeError('Worker licence module path exceeds its bound.');
@@ -327,14 +351,13 @@ async function workerModuleDependencies(repositoryRoot: string, modules: readonl
     const parts = relative.split('/');
     const nodeModules = parts.lastIndexOf('node_modules');
     const installPath = parts.slice(0, nodeModules + (parts[nodeModules + 1]?.startsWith('@') ? 3 : 2)).join('/');
-    packageNameFromInstallPath(installPath);
+    lockedPackageLocation(packages, installPath);
     installPaths.add(installPath);
     if (installPaths.size > MAX_NOTICE_PACKAGES) throw new TypeError('Worker licence package inventory exceeds its bound.');
   }
   return Promise.all([...installPaths].sort(compareCodeUnits).map(async (installPath) => {
-    const name = packageNameFromInstallPath(installPath);
-    const directory = await realpath(path.join(root, installPath));
-    if (!pathIsWithin(nodeModulesRoot, directory)) throw new TypeError('Worker package resolves outside node_modules.');
+    const { name, nodeModulesPath } = lockedPackageLocation(packages, installPath);
+    const directory = await installedPackageDirectory(root, nodeModulesPath, installPath);
     const manifest = record(await readBoundedJson(path.join(directory, 'package.json')), 'Worker package');
     if (manifest.name !== name) throw new TypeError('Worker package identity is inconsistent.');
     return { name, version: boundedToken(manifest.version, 'Worker package version', 128) };
@@ -385,14 +408,11 @@ async function directoryNames(directory: string): Promise<string[]> {
 
 async function packageNoticeDocuments(
   repositoryRoot: string,
-  nodeModulesRoot: string,
+  packages: JsonRecord,
   packageEntry: ProductionPackage,
 ) {
-  const requestedDirectory = path.resolve(repositoryRoot, packageEntry.installPath);
-  const directory = await realpath(requestedDirectory);
-  if (!pathIsWithin(nodeModulesRoot, directory)) {
-    throw new TypeError(`${packageEntry.name} resolves outside the repository node_modules directory.`);
-  }
+  const { nodeModulesPath } = lockedPackageLocation(packages, packageEntry.installPath);
+  const directory = await installedPackageDirectory(repositoryRoot, nodeModulesPath, packageEntry.installPath);
   const directoryEntries = await directoryNames(directory);
   const filenames = directoryEntries
     .filter((filename) => NOTICE_FILENAME_RE.test(filename))
@@ -442,10 +462,7 @@ export async function buildThirdPartyNotices(
   const lockfile = options.lockfileValue
     ?? await readBoundedJson(path.join(realRepositoryRoot, 'package-lock.json'));
   const packages = collectProductionPackages(lockfile, options);
-  const nodeModulesRoot = await realpath(path.join(realRepositoryRoot, 'node_modules'));
-  if (!pathIsWithin(realRepositoryRoot, nodeModulesRoot)) {
-    throw new TypeError('node_modules resolves outside the repository root.');
-  }
+  const lockedPackages = record(record(lockfile, 'Lockfile').packages, 'Locked packages');
   const prefix = [
     `WHOISleuth ${options.scopeLabel ?? 'website'} third-party ${options.directDependencyNames ? 'production dependency' : 'dependency'} notices`,
     '',
@@ -475,7 +492,7 @@ export async function buildThirdPartyNotices(
     // Actual bundled code still requires its installed licence documents.
     const documents = packageEntry.optionalPlatform && !bundled ? [{ source: 'locked optional platform package metadata',
       text: `This optional platform package declares ${packageEntry.license}. It is installed separately on supported platforms, not included in this artefact. Its installed package provides its own licence notices.` }]
-      : await packageNoticeDocuments(realRepositoryRoot, nodeModulesRoot, packageEntry);
+      : await packageNoticeDocuments(realRepositoryRoot, lockedPackages, packageEntry);
     const block = [
       '='.repeat(80),
       `${packageEntry.name}@${packageEntry.version}`,
