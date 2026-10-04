@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import DomainFeedCandidateIntake from './DomainFeedCandidateIntake.svelte';
   import { formatEvidenceDate } from '$lib/analysis/evidence-time';
   import { loadWatchlists, addCandidateWatchlist, type Watchlists } from '$lib/watchlists';
   import { loadAnalystReviewState } from '$lib/analyst-review-state';
@@ -271,6 +272,7 @@
   {#if !ready}<p
       >Saved watch and review context is unavailable or loading. Mutations remain disabled.</p
     >{/if}
+  <DomainFeedCandidateIntake {active} {onrefresh} disabled={disabled || !ready || busy} />
   <label
     >Candidate filter<select bind:value={filter}
       ><option value="all">All retained candidates</option><option value="new"

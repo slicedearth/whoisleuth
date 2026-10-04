@@ -5,6 +5,7 @@ export function runBrowserWorkerOperation<Request, Result>(request: Request, opt
   createWorker: () => Worker;
   readResponse: (value: unknown) => Result;
   signal?: AbortSignal;
+  timeoutMs?: number;
   transfer?: readonly Transferable[];
   messages: Readonly<{
     cancelled: string;
@@ -21,7 +22,9 @@ export function runBrowserWorkerOperation<Request, Result>(request: Request, opt
     try { worker = options.createWorker(); }
     catch { reject(new Error(messages.unavailable)); return; }
     let settled = false;
-    const timer = setTimeout(() => fail(new Error(messages.timeout)), BROWSER_WORKER_OPERATION_TIMEOUT_MS);
+    const timeoutMs = Number.isSafeInteger(options.timeoutMs) && options.timeoutMs! > 0 && options.timeoutMs! <= 600_000
+      ? options.timeoutMs! : BROWSER_WORKER_OPERATION_TIMEOUT_MS;
+    const timer = setTimeout(() => fail(new Error(messages.timeout)), timeoutMs);
     function cleanup() {
       settled = true;
       clearTimeout(timer);
