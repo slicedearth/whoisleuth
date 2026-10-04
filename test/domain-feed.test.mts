@@ -151,6 +151,21 @@ test('explicit branded exact hosts survive canonical candidate and Brand Profile
   assert.equal(candidate.matches[0]!.term, 'exact.example');
   const profile = normalizeBrandProfile({ id: 'review-profile', name: 'Example review', createdAt: NOW, updatedAt: NOW, candidateObservations: [candidate] }, { nowIso: NOW })!;
   assert.deepEqual(profile.candidateObservations[0], candidate);
+  const longest = `${'a'.repeat(63)}.${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(53)}.example`;
+  assert.equal(longest.length, 253);
+  const longReview = await scan(longest, { selection: normalizeDomainFeedSelection({ hosts: [longest], brandProfileId: 'review-profile' }) });
+  const longCandidate = normalizeCandidateObservation(longReview.matches[0]!.candidate)!;
+  assert.equal(longCandidate.matches[0]!.term, longest);
+  const longProfile = normalizeBrandProfile({ id: 'review-profile', name: 'Example review', createdAt: NOW, updatedAt: NOW, candidateObservations: [longCandidate] }, { nowIso: NOW })!;
+  assert.equal(longProfile.candidateObservations[0]!.matches[0]!.term, longest);
+});
+
+test('literal Unicode terms do not silently expand to canonical punycode variants', async () => {
+  const result = await scan('例え.example', { selection: normalizeDomainFeedSelection({ terms: ['例え.', 'r8j'] }) });
+  assert.equal(result.matches[0]!.domain, 'xn--r8jz45g.example');
+  assert.deepEqual(result.matches[0]!.terms, ['r8j']);
+  assert.ok(result.limitations.some(value => value.includes('canonical ASCII/punycode')));
+  assert.match(domainFeedDefinition('nrd7').label, /excluding today/u);
 });
 
 test('feed review composes with existing candidate-watch input without changing scores, availability or baseline', async () => {

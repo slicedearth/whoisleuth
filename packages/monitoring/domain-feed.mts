@@ -14,7 +14,7 @@ const catalogue = [
   ['tif-full', 'Threat Intelligence Feeds — full', 'threat-intelligence', 'dns-blocklists', 'wildcard/tif-onlydomains.txt'],
   ['tif-medium', 'Threat Intelligence Feeds — medium', 'threat-intelligence', 'dns-blocklists', 'wildcard/tif.medium-onlydomains.txt'],
   ['tif-mini', 'Threat Intelligence Feeds — mini', 'threat-intelligence', 'dns-blocklists', 'wildcard/tif.mini-onlydomains.txt'],
-  ['nrd7', 'Newly registered domains — days 0–7', 'recent-domain', 'nrd', 'domains/nrd7.txt'],
+  ['nrd7', 'Newly registered domains — seven-day cohort excluding today', 'recent-domain', 'nrd', 'domains/nrd7.txt'],
   ['nrd14-8', 'Newly registered domains — days 8–14', 'recent-domain', 'nrd', 'domains/nrd14-8.txt'],
   ['nrd21-15', 'Newly registered domains — days 15–21', 'recent-domain', 'nrd', 'domains/nrd21-15.txt'],
   ['nrd28-22', 'Newly registered domains — days 22–28', 'recent-domain', 'nrd', 'domains/nrd28-22.txt'],
@@ -38,6 +38,7 @@ export const DOMAIN_FEED_LIMITATIONS = Object.freeze([
   'The raw-file SHA-256 identifies the scanned bytes; it does not authenticate the publisher or establish freshness.',
   'File publication comments are declarations, not per-host observation clocks. Source first and last observation times remain unknown.',
   'Exact hosts and literal terms only; no parent-domain equivalence, regular expressions, lookup, score change or collection authority.',
+  'Literal terms are compared with lowercased canonical ASCII/punycode hostname text; Unicode terms are not expanded into IDN variants.',
 ]);
 const CONTROL = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u;
 
