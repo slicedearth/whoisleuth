@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { prepareCaseReportPreview, caseReportPreviewIsCurrent } from '../packages/cases/case-report-preview.mts';
+import { prepareCaseReportPreview, caseReportPreviewIsCurrent, caseReportPrintBlocks } from '../packages/cases/case-report-preview.mts';
 import { updateCase } from '../packages/cases/case-record-operations.mts';
 import { currentCaseFixture, CURRENT_CASE_TIME } from './support/current-case.mts';
 
@@ -47,4 +47,34 @@ test('preview exposes every imported restriction without treating unknown markin
   assert.equal(preview.strictestMarking, 'TLP:RED');
   assert.deepEqual(preview.unknownMarkings, ['Source-specific restriction']);
   for (const marking of preview.markings) assert.ok(preview.files.json.content.includes(marking));
+  const printed = JSON.stringify(caseReportPrintBlocks(preview));
+  for (const marking of preview.markings) assert.ok(printed.includes(marking));
+});
+
+test('ordinary printing formats only immutable prepared bytes with complete headings, literal Unicode and safe table cells', () => {
+  const note = '東京 | **literal** <script>not executable</script> \\ retained\\path ' + 'LongUnicode語'.repeat(120);
+  const record = updateCase([currentCaseFixture()], 'case-example', { note, evidencePin: {
+    label: 'Selected | source', value: 'Observed <form> & literal **stars**', source: 'Independent source | one',
+    observedAt: null, completeness: 'partial', limitations: ['Observation time unknown; omitted fields are not absence.'],
+  } }, CURRENT_CASE_TIME).record;
+  record.title = 'Unicode incident 東京 | literal boundary';
+  const preview = prepareCaseReportPreview(record, { ...options, includeNotes: true }, CURRENT_CASE_TIME);
+  const blocks = caseReportPrintBlocks(preview), text = JSON.stringify(blocks);
+  const headings = blocks.filter(block => block.kind === 'heading').map(block => block.text);
+  assert.ok(headings.includes('Status')); assert.ok(headings.includes('Analyst Notes'));
+  assert.ok(headings.includes('Limitations & Provenance'));
+  assert.ok(headings.includes('Independent remediation review and closure'));
+  assert.ok(text.includes(note.replaceAll('\\', '\\\\'))); // JSON escapes, not changed evidence.
+  assert.ok(text.includes('Independent source | one'));
+  assert.ok(text.includes('Observed <form> & literal **stars**'));
+  assert.ok(text.includes(CURRENT_CASE_TIME));
+  assert.ok(text.includes('Snapshot hostnames are excluded'));
+  assert.ok(text.includes('does not establish independent remediation'));
+  for (const block of blocks) if (block.kind === 'table') assert.ok(block.rows.every(row => row.length === block.headers.length));
+  assert.ok(Object.isFrozen(preview)); assert.ok(Object.isFrozen(preview.report.json.analystResponse.evidencePins));
+  assert.ok(Object.isFrozen(blocks));
+  assert.throws(() => preview.report.json.case.title = 'Changed after review.', TypeError);
+  record.notes[0]!.body = 'Changed source note.';
+  assert.equal(JSON.stringify(caseReportPrintBlocks(preview)), text);
+  assert.equal(caseReportPreviewIsCurrent(preview, record, preview.options), false);
 });

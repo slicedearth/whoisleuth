@@ -49,7 +49,7 @@ describe('contextual evidence review', () => {
   });
   test('rejects future formats, unknown fields, duplicated keys, excessive bytes and malformed nested evidence', () => {
     for (const input of contextInputs()) {
-      assert.throws(() => reviewContextInput({ ...input, version: 2 }, NOW), /Unsupported/u);
+      assert.throws(() => reviewContextInput({ ...input, version: 3 }, NOW), /Unsupported/u);
       assert.throws(() => reviewContextInput({ ...input, extra: true }, NOW), /structure/u);
       assert.throws(() => reviewContextInput({ ...input, evidence: null }, NOW));
     }

@@ -9,6 +9,7 @@ import {
   buildBrowserSupportDiagnostics,
   formatBrowserSupportDiagnostics,
 } from '../frontend/src/lib/browser-support-diagnostics.ts';
+import { browserWorkspaceLocksAvailable } from '../frontend/src/lib/browser-workspace-directory.ts';
 
 test('theme preferences accept only the bounded public vocabulary', () => {
   assert.equal(normalizeThemePreference('dark'), 'dark');
@@ -47,6 +48,7 @@ test('support diagnostics retain only the fixed build, viewport, theme and capab
     storageManagerAvailable: true,
     webCryptoAvailable: true,
     clipboardAvailable: false,
+    webLocksAvailable: false,
   });
   assert.deepEqual(Object.keys(report), [
     'product', 'applicationVersion', 'buildRevision', 'viewportClass',
@@ -54,6 +56,16 @@ test('support diagnostics retain only the fixed build, viewport, theme and capab
   ]);
   assert.equal(report.buildRevision, 'abcdef123456');
   assert.equal(report.viewportClass, 'compact');
+  assert.equal(report.capabilities.webLocks, false);
   const output = formatBrowserSupportDiagnostics(report);
   assert.doesNotMatch(output, /target|case|evidence|url|user.?agent|storage.?content/iu);
+});
+
+test('Web Locks diagnostics check availability without acquiring a lock or opening storage', () => {
+  let requests = 0;
+  const locks = { request: () => { requests++; throw new Error('A diagnostic must not acquire a lock.'); } };
+  assert.equal(browserWorkspaceLocksAvailable(locks), true);
+  for (const unavailable of [null, {}, { request: null }]) assert.equal(browserWorkspaceLocksAvailable(unavailable), false);
+  assert.equal(browserWorkspaceLocksAvailable(), typeof globalThis.navigator?.locks?.request === 'function');
+  assert.equal(requests, 0);
 });

@@ -49,8 +49,15 @@ WHOISleuth uses three analyst jobs: **Investigate**, **Respond** and **Assure**.
 | **Monitor** | Review changes, watchlists, follow-ups and local rules. |
 
 [Candidate review](docs/brand-candidate-review.md) connects explicit Discover
-selections to local Brand review and per-domain Watchlist reasons/priorities,
-without enabling collection or inventing a Lookup baseline.
+and feed selections to local Brand review and per-domain Watchlist priorities.
+Save time-bounded keyword campaigns, preview matching rules, and explicitly
+review retained editions from an optional feed service.
+
+[Offline intake](docs/offline-intake-context.md) extracts source-linked addresses
+and labelled hashes from selected material. Cases can compare retained text and
+images, preserve declared registration boundaries, prepare an audience-reviewed
+internal handoff, and print a record summary. These reviews do not collect or
+submit anything automatically.
 
 The public [Resources hub](https://www.whoisleuth.com/resources) is the shortest
 user guide. [Application documentation](docs/application-guide.md) covers the

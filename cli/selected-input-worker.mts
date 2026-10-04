@@ -3,6 +3,7 @@ import { reviewSelectedInput } from '../packages/investigation/selected-input-re
 import { assertMessageBytes } from '../packages/investigation/intake-report.mts';
 import { DOCUMENT_REVIEW_DEADLINE_MS } from '../packages/contracts/document-intake.mts';
 import { MESSAGE_INTAKE_SCHEMA, MESSAGE_INTAKE_VERSION, type MessageIntakeKind, type MessageIntakeResult } from '../packages/contracts/message-intake.mts';
+import { validateIntakeExtensions } from '../packages/investigation/intake-context.mts';
 
 type Request = Readonly<{ bytes: Uint8Array; kind: MessageIntakeKind; reviewedAt: string }>;
 type Response = Readonly<{ result: MessageIntakeResult }> | Readonly<{ error: true }>;
@@ -34,7 +35,10 @@ export async function reviewSelectedInputInWorker(bytes: Uint8Array, kind: Messa
       const abort = () => finish(undefined, new Error('Selected input review was cancelled. Nothing was saved.'));
       const timer = setTimeout(() => finish(undefined, new Error('Selected input review exceeded its processing deadline. Nothing was saved.')), DOCUMENT_REVIEW_DEADLINE_MS);
       worker.once('message', (reply: Response) => {
-        if (reply && typeof reply === 'object' && 'result' in reply && reply.result?.report.schema === MESSAGE_INTAKE_SCHEMA && reply.result.report.schemaVersion === MESSAGE_INTAKE_VERSION) finish(reply.result);
+        if (reply && typeof reply === 'object' && 'result' in reply && reply.result?.report.schema === MESSAGE_INTAKE_SCHEMA && reply.result.report.schemaVersion === MESSAGE_INTAKE_VERSION) {
+          try { validateIntakeExtensions(reply.result.report); finish(reply.result); }
+          catch { finish(undefined, new Error('Selected input returned an unsupported review. Nothing was retained.')); }
+        }
         else finish();
       });
       worker.once('error', () => finish()); worker.once('exit', () => finish());

@@ -85,6 +85,15 @@ test('worker replies cannot change the explicitly selected host or Brand context
   assert.equal(worker.terminated, 1);
 });
 
+test('worker replies cannot omit an explicit negative selector even when the returned host still matches', async () => {
+  const worker = new ControlledWorker();
+  const selected = { ...request, selection: normalizeDomainFeedSelection({ ...request.selection, negativeTerms: ['excluded'] }) };
+  const pending = assert.rejects(runDomainFeedWorker(selected, { createWorker: worker.factory }), /unexpected feed result/u);
+  worker.reply(await runDomainFeedWorkerOperation(request));
+  await pending;
+  assert.equal(worker.terminated, 1);
+});
+
 test('native feed worker accepts one operation and no durable state', async () => {
   const original = Object.getOwnPropertyDescriptor(globalThis, 'self');
   const replies: DomainFeedWorkerResponse[] = [];

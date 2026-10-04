@@ -55,7 +55,11 @@ test('public resources expose a bounded unique set of useful investigation topic
       assert.equal(url.protocol, 'https:');
       assert.equal(referenceHosts.has(url.hostname), true);
     }
-    assert.equal(resource.demoHref, '/demo');
+    const demo = new URL(resource.demoHref, WHOISLEUTH_SITE_ORIGIN);
+    assert.equal(demo.origin, WHOISLEUTH_SITE_ORIGIN);
+    assert.equal(demo.pathname, '/demo');
+    assert.ok(['', '#case-practice'].includes(demo.hash));
+    assert.equal(demo.search, '');
     assert.match(resource.guideHref, /^\/resources#[a-z0-9-]+$/u);
     assert.match(resource.repositoryDoc, /^docs\/[a-z0-9-]+\.md$/u);
   }
@@ -67,6 +71,12 @@ test('public resource lookup is exact, neutral for invalid input, and does not i
   assert.equal(publicResource('RDAP-vs-WHOIS'), null);
   assert.equal(publicResource('../privacy'), null);
   assert.equal(publicResource(null), null);
+});
+
+test('evidence and response walkthroughs link to the existing isolated Case practice', () => {
+  for (const slug of ['domain-investigation-workflow', 'reporting-and-takedown-guidance']) assert.equal(publicResource(slug)?.demoHref, '/demo#case-practice');
+  const repositoryRoot = join(import.meta.dirname, '..');
+  for (const resource of PUBLIC_RESOURCES) assert.equal(existsSync(join(repositoryRoot, resource.repositoryDoc)), true);
 });
 
 test('public resource copy remains bounded, plain text, and precise', () => {

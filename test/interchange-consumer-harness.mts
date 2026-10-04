@@ -449,11 +449,12 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     );
     return 2;
   }
+  const python = args[1];
   try {
     assert.equal(await schemaTreeSha256(), SCHEMA_TREE_SHA256);
     const fixtures = await consumerFixtures(),
       originals = JSON.stringify(fixtures);
-    const reply = runConsumer(args[1], fixtures);
+    const reply = runConsumer(python, fixtures);
     assert.deepEqual(reply.versions, REVIEWED_CONSUMER_VERSIONS);
     assert.equal(reply.networkGuardPassed, true);
     assert.equal(reply.networkRefusals, 0);
@@ -475,7 +476,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       originals,
       'Consumer work must never overwrite the original exports.',
     );
-    assert.throws(() => runConsumer(args[1], fixtures, 1), /timed out/u);
+    assert.throws(() => runConsumer(python, fixtures, 1), /timed out/u);
     const stixResults = reply.results.filter(
       (_, index) => fixtures[index]!.format === 'stix' && !fixtures[index]!.negative,
     );

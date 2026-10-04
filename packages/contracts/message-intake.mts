@@ -4,7 +4,8 @@ import type { HarReview } from './har-review.mts';
 import type { IdentityEventReview } from './identity-events.mts';
 
 export const MESSAGE_INTAKE_SCHEMA = 'whoisleuth.message-intake';
-export const MESSAGE_INTAKE_VERSION = 1;
+export const MESSAGE_INTAKE_VERSION = 2;
+export const MESSAGE_INTAKE_LEGACY_VERSION = 1;
 export const MESSAGE_INTAKE_KINDS = ['text', 'email', 'calendar', 'qr', 'pdf', 'docx', 'har', 'identity'] as const;
 export type MessageIntakeKind = typeof MESSAGE_INTAKE_KINDS[number];
 export const MESSAGE_INTAKE_INPUTS = {
@@ -36,6 +37,26 @@ export const MAX_INTAKE_LINKS = 512;
 export const MAX_INTAKE_URL_LENGTH = 8_192;
 export const MAX_EMBEDDED_LINK_DEPTH = 8;
 export const MAX_AUTH_SCOPES = 64;
+export const MAX_INTAKE_INDICATORS = 512;
+export const MAX_INTAKE_INDICATOR_CANDIDATES = 4_096;
+export const INTAKE_DISTRIBUTION_CHANNELS = ['email', 'sms', 'messaging', 'social', 'advertisement', 'website', 'document', 'other', 'unknown'] as const;
+export type IntakeDistributionContext = Readonly<{
+  channel: typeof INTAKE_DISTRIBUTION_CHANNELS[number];
+  observedAt: string | null;
+  sourceLabel: string;
+  reference: string | null;
+  observerLabel: string | null;
+  vantageLabel: string | null;
+}>;
+export type IntakeIndicatorLocation = Readonly<{ partId: string; page: number | null }>;
+export type IntakeIndicator = Readonly<{
+  id: string;
+  kind: 'ipv4' | 'ipv6' | 'md5' | 'sha1' | 'sha256';
+  value: string;
+  source: 'text' | 'calendar' | 'document_text';
+  location: IntakeIndicatorLocation;
+  basis: 'literal_text';
+}>;
 
 export type AuthorisationLinkReview = Readonly<{
   kind: 'authorisation_parameters' | 'device_code_reference';
@@ -66,9 +87,8 @@ export const MESSAGE_ACTION_HINTS = ['clipboard_instruction', 'shell_instruction
 export type MessageActionHint = typeof MESSAGE_ACTION_HINTS[number];
 export type MessageIdentity = Readonly<{ part: number; role: 'from' | 'reply_to' | 'return_path' | 'dkim' | 'authentication_service'; domain: string }>;
 export type MessageAuthenticationClaim = Readonly<{ part: number; method: 'spf' | 'dkim' | 'dmarc' | 'arc'; result: string }>;
-export type MessageIntakeReport = Readonly<{
+type MessageIntakeReportFields = Readonly<{
   schema: typeof MESSAGE_INTAKE_SCHEMA;
-  schemaVersion: typeof MESSAGE_INTAKE_VERSION;
   reviewedAt: string;
   source: Readonly<{ kind: MessageIntakeKind; digestSha256: string; byteLength: number }>;
   coverage: Readonly<{ state: 'reviewed' | 'partial'; reviewedParts: number; unreviewedAttachments: number; rejectedLinks: number; boundsReached: readonly string[] }>;
@@ -83,4 +103,12 @@ export type MessageIntakeReport = Readonly<{
   actionHints: readonly MessageActionHint[];
   identityRecovery: Readonly<{ reportedActions: readonly IdentityAction[]; nextSteps: readonly IdentityReviewStep[] }>;
 }>;
+export type LegacyMessageIntakeReport = MessageIntakeReportFields & Readonly<{ schemaVersion: typeof MESSAGE_INTAKE_LEGACY_VERSION }>;
+export type CurrentMessageIntakeReport = MessageIntakeReportFields & Readonly<{
+  schemaVersion: typeof MESSAGE_INTAKE_VERSION;
+  indicators: readonly IntakeIndicator[];
+  indicatorCoverage: Readonly<{ state: 'reviewed' | 'partial' | 'not_reviewed'; candidatesReviewed: number }>;
+  distributionContext: IntakeDistributionContext | null;
+}>;
+export type MessageIntakeReport = LegacyMessageIntakeReport | CurrentMessageIntakeReport;
 export type MessageIntakeResult = Readonly<{ report: MessageIntakeReport; targets: readonly IntakeTarget[] }>;

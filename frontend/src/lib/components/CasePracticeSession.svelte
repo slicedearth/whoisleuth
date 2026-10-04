@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, tick, untrack } from 'svelte';
-  import { createCasePracticeSession, CASE_PRACTICE_OBSERVED_AT, casePracticeDefinition, casePracticeRoutes, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeFeedback, type CasePracticeScenario } from '$lib/analysis/case-practice.ts';
+  import { createCasePracticeSession, CASE_PRACTICE_OBSERVED_AT, CASE_PRACTICE_INTAKE_TEXT, reviewCasePracticeInput, previewCasePracticeContainment, casePracticeDefinition, casePracticeRoutes, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeFeedback, type CasePracticeScenario } from '$lib/analysis/case-practice.ts';
   import { provideDocumentCaseDraftStorage } from '$lib/controllers/case-draft.svelte.ts';
   import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft.ts';
@@ -17,7 +17,9 @@
   const routes = $derived(casePracticeRoutes(scenario));
   const initialPinIds = session.read().evidencePins.map(pin => pin.id);
   provideDocumentCaseDraftStorage(session.storage);
-  let record = $state(session.read());
+  // Session operations replace detached records; keep them cloneable for the
+  // same audience projections used by the saved-workspace workflow.
+  let record = $state.raw(session.read());
   const feedback = $derived(casePracticeFeedback(record, initialPinIds, scenario));
   let step = $state('evidence');
   let message = $state('');
@@ -31,6 +33,13 @@
   let pageCopyReviewed = $state(false);
   let adCopyReviewed = $state(false);
   let reviewedSignature = $state('');
+  let sourceReview = $state.raw<Awaited<ReturnType<typeof reviewCasePracticeInput>> | null>(null);
+  let containment = $state.raw<Awaited<ReturnType<typeof previewCasePracticeContainment>> | null>(null);
+  let practiceAudience = $state<'internal' | 'trusted' | 'public'>('internal'), includeSupportingPin = $state(true), localReviewBusy = $state(false);
+  let sourceHeading = $state<HTMLHeadingElement>(), containmentHeading = $state<HTMLHeadingElement>();
+  const localReviewScope = $derived(JSON.stringify([record.id, record.updatedAt, record.assertions, record.evidencePins, practiceAudience, includeSupportingPin]));
+  let reviewedScope = $state('');
+  $effect(() => { if (reviewedScope !== localReviewScope) { sourceReview = null; containment = null; } });
   $effect(() => { materialSignature; pageCopyReviewed = false; adCopyReviewed = false; reviewedSignature = ''; });
   onDestroy(() => { live = false; session.close(); });
 
@@ -65,6 +74,26 @@
     } catch (cause) { message = cause instanceof Error ? cause.message : 'The practice step could not be recorded.'; }
     finally { mutationBusy = false; await tick(); if (live) restoreSubmittedFocus(origin, document.getElementById('practice-response'), owner); }
   }
+  async function reviewSupplied(kind: 'source' | 'containment') {
+    if (!live || localReviewBusy || mutationBusy) return;
+    localReviewBusy = true;
+    const selectedScope = localReviewScope;
+    try {
+      if (kind === 'source') {
+        const reviewed = await reviewCasePracticeInput(record);
+        if (!live || selectedScope !== localReviewScope) return;
+        sourceReview = reviewed;
+      } else {
+        const reviewed = await previewCasePracticeContainment(record, practiceAudience, includeSupportingPin);
+        if (!live || selectedScope !== localReviewScope) return;
+        containment = reviewed;
+      }
+      reviewedScope = selectedScope;
+      message = 'Reviewed fixed fictional material locally. No saved-work access, collection, export or follow-up state change occurred.';
+      await tick(); if (live) (kind === 'source' ? sourceHeading : containmentHeading)?.focus();
+    } catch { if (live) message = 'The fictional review could not be prepared. Nothing was collected or saved.'; }
+    finally { if (live) localReviewBusy = false; }
+  }
 </script>
 
 <section class="case-practice" aria-labelledby="case-practice-title">
@@ -75,6 +104,22 @@
     <h3 id="practice-evidence" tabindex="-1">Pin a fact with its source</h3>
     <p>{definition.observation} Pin the relevant observation with its source and time <time datetime={CASE_PRACTICE_OBSERVED_AT}>1 September 2026, 12:00 UTC</time>.</p>
     {#each record.evidencePins.filter((_, index) => index !== 1) as pin}<CaseEvidenceFact {pin} />{/each}
+    {#if scenario === 'credential-form'}
+      <details class="practice-local"><summary>Try source-linked offline review</summary>
+        <p>Review this fictional text for literal IPs and labelled hashes, then inspect its supplied advertisement and mobile context.</p>
+        <pre>{CASE_PRACTICE_INTAKE_TEXT}</pre>
+        <button class="btn" type="button" disabled={localReviewBusy || mutationBusy} onclick={() => void reviewSupplied('source')}>Review supplied text and context</button>
+        {#if sourceReview}<section aria-label="Fictional source-linked review"><h4 bind:this={sourceHeading} tabindex="-1">Source-linked review</h4>
+          <p>{sourceReview.intake.indicators.length} literal indicators · {sourceReview.intake.indicatorCoverage.state} · no target request.</p>
+          <ul>{#each sourceReview.intake.indicators as indicator}<li>{indicator.kind}: <code>{indicator.value}</code> · {indicator.location.partId}</li>{/each}</ul>
+          <p>Source bytes: <code>{sourceReview.intake.source.digestSha256}</code></p>
+          <p>Declared distribution: {sourceReview.intake.distributionContext?.channel} · {sourceReview.intake.distributionContext?.vantageLabel}. This is a supplied claim, not verified capture conditions.</p>
+          <h5>Declared history review boundary</h5><p>{sourceReview.history.summary}</p>
+          <p>The review boundary links the existing fictional pin. No registration snapshots are invented, and earlier evidence and decisions remain unchanged.</p>
+          <details><summary>Inspect the source-linked review reports</summary><pre>{JSON.stringify(sourceReview, null, 2)}</pre></details>
+        </section>{/if}
+      </details>
+    {/if}
     {#if scenario === 'provider-resolved'}<p>Provider-reported outcome: <strong>{record.actions[0]!.providerOutcome?.replaceAll('_', ' ')}</strong>. No independent recheck is pre-recorded.</p>{/if}
     <CaseObservationStage {record} mode="quick" {mutationBusy} {persist} />
   </div>
@@ -88,6 +133,18 @@
     <div hidden={step !== 'response'} class="practice-response">
       <h3 id="practice-response" tabindex="-1">Separate page response from advertisement distribution</h3>
       <p>The supplied lure leads to a copied offer and credential form. The reference prose has no logo or brand name. Copyright authority is unverified; this exercise makes no rights declaration. No actual packet export or provider submission occurs.</p>
+      <details class="practice-local"><summary>Preview the separate internal follow-up</summary>
+        <p>Use the existing retained question and its linked fictional pin. This preview uses the normal audience projection but cannot save, download, send a task or apply a control.</p>
+        <label>Practice handoff audience<select bind:value={practiceAudience} disabled={localReviewBusy}><option value="internal">Internal</option><option value="trusted">Trusted recipient</option><option value="public">Public preview</option></select></label>
+        <label><input type="checkbox" bind:checked={includeSupportingPin} disabled={localReviewBusy}>Include the linked supporting pin</label>
+        <button class="btn" type="button" disabled={localReviewBusy || mutationBusy} onclick={() => void reviewSupplied('containment')}>Preview fictional internal handoff</button>
+        {#if containment}<section aria-label="Fictional containment disclosure"><h4 bind:this={containmentHeading} tabindex="-1">Fictional containment disclosure</h4>
+          <p>{containment.assertions.length} selected request · {containment.evidencePins.length} supporting pin · {containment.state}.</p>
+          {#each containment.assertions as request}<p>{request.statement} · recorded state {request.state}. {#each request.evidence as link}{link.stance}: {link.state.replaceAll('_', ' ')}. {/each}</p>{/each}
+          <p>Public preview excludes internal requests and pins. Provider resolution and Case status do not close open requests.</p>
+          <details><summary>Inspect exact fictional containment disclosure</summary><pre>{JSON.stringify(containment, null, 2)}</pre></details>
+        </section>{/if}
+      </details>
       {#if !materials.length}<p>First record an evidence-linked conclusion, then prepare the two reserved fictional recipients.</p><button class="btn" type="button" onclick={() => advanceJourney('prepare')}>Prepare fictional recipient copies</button>
       {:else}
         {#each materials as material, index}<section aria-label={`${index === 0 ? 'Page' : 'Advertisement'} recipient material`}><h4>{index === 0 ? 'Page security scope' : 'Advertisement distribution scope'}</h4><p>Recipient: <code>{material.recipientRoute?.contact}</code>. Exact object: <code>{material.incident.abusiveUrls[0]}</code></p><p>{material.selectedEvidence.length} selected evidence references. These contain metadata, not pin values or file bytes. The final writer’s creation time, authorisation, provenance and integrity envelope are not simulated by this preview.</p><details><summary>Inspect exact fictional recipient material</summary><pre>{JSON.stringify(material, null, 2)}</pre></details></section>{/each}
@@ -119,6 +176,7 @@
 
 <style>
   .case-practice>[hidden]{display:none}
+  .practice-local{min-width:0;padding-block:12px}.practice-local summary{cursor:pointer;min-height:44px}.practice-local pre{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--text-xs)}.practice-local code{overflow-wrap:anywhere}.practice-local button,.practice-local select{max-width:100%;white-space:normal}.practice-local label{display:flex;flex-wrap:wrap;gap:8px;margin-block:10px}.practice-local select{min-width:0}
   .practice-response{display:grid;gap:12px;min-width:0}.practice-response section{padding-block:12px;border-top:1px solid var(--border);min-width:0}.practice-response pre{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}.practice-response code{overflow-wrap:anywhere}.practice-response label{display:flex;align-items:start;gap:8px;line-height:1.5}.practice-response input{flex:none;width:auto}
   .case-practice{display:grid;gap:18px;min-width:0}.case-practice header{display:flex;flex-wrap:wrap;align-items:start;justify-content:space-between;gap:16px}.case-practice header>div{flex:1 1 32rem;min-width:0}.case-practice h2{margin:0}.case-practice p{max-width:85ch;line-height:1.65;overflow-wrap:anywhere}.case-practice header p{margin-bottom:0;color:var(--muted)}nav{display:flex;flex-wrap:wrap;gap:8px}nav button[aria-current]{border-color:var(--interface-accent);background:rgb(var(--interface-accent-rgb)/.08);color:var(--interface-accent)}.practice-status{margin:0;color:var(--muted);min-height:1.5em}.practice-check{padding-top:16px;border-top:1px solid var(--border)}.practice-check summary{min-height:44px}.practice-check li{margin-block:8px;line-height:1.5}
   @media(max-width:560px){nav button,header>button{width:100%}.case-practice{gap:12px}}

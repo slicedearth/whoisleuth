@@ -5,6 +5,7 @@ import { MAX_CANDIDATE_MATCHES, normalizeCandidateObservation, type BrandCandida
 import { planCandidateWatchHandoff, type CandidateWatchInput } from '../workspace/candidate-watch-handoff.mts';
 import { CANDIDATE_WATCH_INPUT_SCHEMA, CANDIDATE_WATCH_INPUT_VERSION } from '../contracts/candidate-watch-review.mts';
 import { assertWorkspaceInputGraph, ordinaryWorkspaceRecord } from '../workspace/hostile-input.mts';
+import { matchBrandKeywordTerms, normalizeBrandKeywordTerms } from '../workspace/brand-keyword-campaign.mts';
 
 export const DOMAIN_FEED_LIMITS = Object.freeze({ bytes: 256 * 1024 * 1024, rows: 10_000_000,
   lineBytes: 1024, durationMs: 10 * 60 * 1000, matches: 200, hosts: 200, terms: 20, batch: 256 });
@@ -48,25 +49,23 @@ export function strictDomainFeedHostname(value: unknown): string {
     || !/^[\p{L}\p{N}\p{M}.-]+$/u.test(value) || value.endsWith('.') || !value.includes('.')) return '';
   return normalizeDomain(value);
 }
-export type DomainFeedSelection = Readonly<{ hosts: readonly string[]; terms: readonly string[]; brandProfileId: string | null }>;
-export function normalizeDomainFeedSelection(value: { hosts?: readonly string[]; terms?: readonly string[]; brandProfileId?: string | null }): DomainFeedSelection {
+export type DomainFeedSelection = Readonly<{ hosts: readonly string[]; terms: readonly string[]; negativeTerms?: readonly string[]; brandProfileId: string | null }>;
+export function normalizeDomainFeedSelection(value: { hosts?: readonly string[]; terms?: readonly string[]; negativeTerms?: readonly string[]; brandProfileId?: string | null }): DomainFeedSelection {
   assertWorkspaceInputGraph(value, 'Domain feed selection');
-  if (!value || typeof value !== 'object' || Object.keys(value).some(key => !['hosts', 'terms', 'brandProfileId'].includes(key)))
+  if (!value || typeof value !== 'object' || Object.keys(value).some(key => !['hosts', 'terms', 'negativeTerms', 'brandProfileId'].includes(key)))
     throw new TypeError('Use only exact hosts, literal terms and optional Brand context.');
   const hosts = value.hosts ?? [], terms = value.terms ?? [];
   if (!Array.isArray(hosts) || hosts.length > DOMAIN_FEED_LIMITS.hosts || !Array.isArray(terms) || terms.length > DOMAIN_FEED_LIMITS.terms)
     throw new RangeError('Feed selection is limited to 200 exact hosts and 20 literal terms.');
   const canonicalHosts = hosts.map(strictDomainFeedHostname);
   if (canonicalHosts.some(host => !host)) throw new TypeError('Feed hosts must be literal plain domain names.');
-  const canonicalTerms = terms.map(term => {
-    if (typeof term !== 'string' || term.length < 3 || term.length > 80 || term !== term.trim() || CONTROL.test(term))
-      throw new TypeError('Literal feed terms must contain 3–80 characters without controls or surrounding spaces.');
-    return term.toLowerCase();
-  });
+  const canonicalTerms = normalizeBrandKeywordTerms(terms);
+  const negativeTerms = Object.hasOwn(value, 'negativeTerms') ? normalizeBrandKeywordTerms(value.negativeTerms) : undefined;
   const brandProfileId = value.brandProfileId ?? null;
   if (brandProfileId !== null && (typeof brandProfileId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(brandProfileId)))
     throw new TypeError('The selected Brand context identifier is invalid.');
-  return Object.freeze({ hosts: Object.freeze([...new Set(canonicalHosts)]), terms: Object.freeze([...new Set(canonicalTerms)]), brandProfileId });
+  return Object.freeze({ hosts: Object.freeze([...new Set(canonicalHosts)]), terms: Object.freeze([...canonicalTerms]),
+    ...(negativeTerms ? { negativeTerms: Object.freeze([...negativeTerms]) } : {}), brandProfileId });
 }
 export type DomainFeedSnapshotMetadata = Readonly<{ feedId: string; revision: string; importedAt: string;
   acquiredAt: string | null; declaredPublishedAt: string | null; declaredVersion: string | null; bytes: number; rows: number }>;
@@ -93,8 +92,8 @@ function snapshotMetadata(value: DomainFeedSnapshotMetadata): DomainFeedSnapshot
 export function projectDomainFeedMatch(domain: string, metadata: DomainFeedSnapshotMetadata, input: DomainFeedSelection): DomainFeedMatch | null {
   const host = strictDomainFeedHostname(domain), snapshot = snapshotMetadata(metadata), selection = normalizeDomainFeedSelection(input);
   if (!host) throw new TypeError('A feed match must be a plain hostname.');
-  const exactHost = selection.hosts.includes(host), terms = selection.terms.filter(term => host.includes(term));
-  if (!exactHost && !terms.length) return null;
+  const exactHost = selection.hosts.includes(host), { terms, excludedTerms } = matchBrandKeywordTerms(host, selection.terms, selection.negativeTerms);
+  if ((!exactHost && !terms.length) || excludedTerms.length) return null;
   const candidate: BrandCandidateObservation = { domain: host,
     matches: selection.brandProfileId ? [...(exactHost ? [{ brandProfileId: selection.brandProfileId,
       ruleKey: `feed-host:${sha256IdentityHex(new TextEncoder().encode(host)).slice(0, 32)}`,
@@ -205,7 +204,8 @@ export async function scanDomainFeed(chunks: AsyncIterable<Uint8Array>, options:
     const domain = strictDomainFeedHostname(text);
     if (!domain) throw new TypeError('Feed rows must contain only plain domain names; no review was produced.');
     rows++;
-    if (hosts.has(domain) || selection.terms.some(term => domain.includes(term))) {
+    if ((hosts.has(domain) || selection.terms.some(term => domain.includes(term)))
+      && !selection.negativeTerms?.some(term => domain.includes(term))) {
       matched++;
       if (retained.size < DOMAIN_FEED_LIMITS.matches) retained.add(domain);
       else if (!retained.has(domain)) truncated = true;

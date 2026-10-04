@@ -1,4 +1,5 @@
-import { DOMAIN_FEED_CATALOGUE, normalizeDomainFeedReview, projectDomainFeedMatch, type DomainFeedMatch, type DomainFeedReview, type DomainFeedSelection } from '../../../packages/monitoring/domain-feed.mts';
+import { DOMAIN_FEED_CATALOGUE, normalizeDomainFeedReview, normalizeDomainFeedSelection, projectDomainFeedMatch, type DomainFeedMatch, type DomainFeedReview, type DomainFeedSelection } from '../../../packages/monitoring/domain-feed.mts';
+import { domainFeedSelectionDigest, normalizeDomainFeedCursor, normalizeDomainFeedHistoryPage, type DomainFeedCursor, type DomainFeedHistoryPage } from '../../../packages/monitoring/domain-feed-history.mts';
 import { requestJsonCapped, STANDARD_JSON_RESPONSE_BYTES } from './bounded-json-response.ts';
 
 export type DomainFeedServiceStatus = Readonly<{
@@ -13,6 +14,7 @@ export type PreparedDomainFeedReview = Readonly<{
   limitations: readonly string[];
   warnings: readonly string[];
 }>;
+export type PreparedDomainFeedHistory = Readonly<{ history: DomainFeedHistoryPage; prepared: PreparedDomainFeedReview | null }>;
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -39,9 +41,27 @@ export async function loadDomainFeedServiceStatus(signal: AbortSignal, fetchImpl
   return { enabled: value.enabled, feeds };
 }
 
+function remoteSelection(selection: DomainFeedSelection) {
+  const normal = normalizeDomainFeedSelection(selection);
+  if (!normal.hosts.length && !normal.terms.length) throw new TypeError('Select at least one exact host or positive literal term.');
+  return { hosts: normal.hosts, terms: normal.terms, ...(normal.negativeTerms ? { negativeTerms: normal.negativeTerms } : {}) };
+}
+
+/** Cache acquisition time is retained on the source review; first local observation is explicit. */
+function projectLocalFeedReview(review: DomainFeedReview, selection: DomainFeedSelection, reviewedAt?: string): readonly DomainFeedMatch[] {
+  if (review.selection.brandProfileId !== null || domainFeedSelectionDigest(review.selection) !== domainFeedSelectionDigest(selection))
+    throw new Error('The service returned a result outside the explicit selection.');
+  const localObservedAt = reviewedAt ?? new Date().toISOString();
+  return review.matches.map((match) => {
+    const projected = projectDomainFeedMatch(match.domain, { ...review, importedAt: localObservedAt }, selection);
+    if (!projected) throw new Error('The service returned a domain outside the explicit selection.');
+    return projected;
+  });
+}
+
 export async function queryDomainFeedService(feedId: string, selection: DomainFeedSelection, signal: AbortSignal, fetchImpl?: typeof fetch, reviewedAt?: string): Promise<PreparedDomainFeedReview[]> {
   // Brand identity remains local; the backend receives only explicit matching inputs.
-  const value = record(await request({ operation: 'query', feedIds: [feedId], selection: { hosts: selection.hosts, terms: selection.terms } }, signal, fetchImpl));
+  const value = record(await request({ operation: 'query', feedIds: [feedId], selection: remoteSelection(selection) }, signal, fetchImpl));
   if (!value || value.enabled !== true || !Array.isArray(value.feeds) || value.feeds.length !== 1 || !Array.isArray(value.limitations) || value.limitations.length > 20 || value.limitations.some((item) => typeof item !== 'string' || item.length > 300)) throw new Error('The feed service returned an unreadable query result.');
   const result = record(value.feeds[0]);
   if (!result || result.feedId !== feedId || typeof result.stale !== 'boolean'
@@ -49,16 +69,25 @@ export async function queryDomainFeedService(feedId: string, selection: DomainFe
     || result.review === null) throw new Error('The selected feed cache is unavailable. No absence is inferred.');
   const review = normalizeDomainFeedReview(result.review);
   if (!review || review.feedId !== feedId) throw new Error('The feed service returned an unexpected feed result.');
-  if (review.selection.brandProfileId !== null || JSON.stringify(review.selection.hosts) !== JSON.stringify(selection.hosts)
-    || JSON.stringify(review.selection.terms) !== JSON.stringify(selection.terms)) throw new Error('The service returned a result outside the explicit selection.');
-  const localObservedAt = reviewedAt ?? new Date().toISOString();
-  const matches = review.matches.map((match) => {
-    const projected = projectDomainFeedMatch(match.domain, { ...review, importedAt: localObservedAt }, selection);
-    if (!projected) throw new Error('The service returned a domain outside the explicit selection.');
-    return projected;
-  });
+  const matches = projectLocalFeedReview(review, selection, reviewedAt);
   return [{ review, candidates: matches, limitations: [...review.limitations, ...value.limitations as string[]], warnings: [
     ...(result.stale ? ['The retained feed cache is stale. Check the source date before using these candidates.'] : []),
-    ...(result.error !== null ? ['The latest refresh failed. These candidates come from the last retained snapshot.'] : []),
+    ...(result.error !== null ? ['The latest refresh could not be confirmed. These candidates come from the retained snapshot.'] : []),
   ] }];
+}
+
+export async function queryDomainFeedHistory(feedId: string, selection: DomainFeedSelection, cursor: DomainFeedCursor | null,
+  signal: AbortSignal, fetchImpl?: typeof fetch, reviewedAt?: string): Promise<PreparedDomainFeedHistory> {
+  const selected = remoteSelection(selection), previous = cursor ? normalizeDomainFeedCursor(cursor, feedId, selection) : null;
+  const value = record(await request({ operation: 'history', feedIds: [feedId], selection: selected, cursor: previous }, signal, fetchImpl));
+  if (!value || value.enabled !== true || !Object.hasOwn(value, 'history')) throw new Error('Retained feed history is unavailable. No gap or absence is inferred.');
+  const history = normalizeDomainFeedHistoryPage(value.history, feedId, selection);
+  if (!previous && (history.sequence !== history.editions[0]!.sequence || history.through !== history.editions.at(-1)!.sequence))
+    throw new Error('The history reply did not begin at the oldest available retained edition.');
+  if (previous && (history.epoch !== previous.epoch || history.sequence !== previous.sequence
+    || (previous.sequence <= previous.through ? history.through !== previous.through : history.through < previous.through)
+    || (history.review && history.review.matches.some(match => match.domain <= previous.after)))) throw new Error('The history reply does not continue the explicitly reviewed cursor.');
+  return { history, prepared: history.review ? { review: history.review,
+    candidates: projectLocalFeedReview(history.review, selection, reviewedAt), limitations: history.review.limitations,
+    warnings: ['This is retained historical feed membership, not current target status or continuous source coverage.'] } : null };
 }

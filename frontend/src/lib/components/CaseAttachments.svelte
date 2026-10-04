@@ -11,6 +11,7 @@
   import { trackTransientCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import ArtifactPreview from './ArtifactPreview.svelte';
   import CaseImageReview from './CaseImageReview.svelte';
+  import CaseTextComparison from './CaseTextComparison.svelte';
   import EvidenceFileExport from './EvidenceFileExport.svelte';
 
   let { record, mutationBusy, persistOperation, onmessage }: {
@@ -123,6 +124,7 @@
       </section>
     {/if}
     {#if error}<p class="file-error" role="alert">{error}</p>{/if}
+    {#key record.id}<CaseTextComparison {record} />{/key}
     {#if record.attachments?.length}
       <details class="file-export-selection"><summary>Select files for export</summary>
         <p>Include selected files with their declared sources and observation times. Edited images include their parent fingerprint and edit types, not the parent pixels. Case records, filenames and edit coordinates stay in the separate JSON backup.</p>

@@ -29,6 +29,7 @@ import { workspacePreferenceStorage } from './browser-workspace-context.ts';
 import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
 import { candidateMaterialFingerprint, mergeCandidateObservations, normalizeCandidateObservation, normalizeCandidateObservations, reviseCandidateException, type BrandCandidateObservation, type BrandCandidateException } from '../../../packages/workspace/brand-candidate-workflow.mts';
 import { candidateReviewItem } from '../../../packages/monitoring/brand-candidate-review.mts';
+import { reviseBrandKeywordCampaign, attributeKeywordCampaignCandidate, type BrandKeywordCampaignInput } from '../../../packages/workspace/brand-keyword-campaign.mts';
 import { setAnalystReviewDecision, type AnalystReviewItem, type AnalystReviewStateStore } from '../../../packages/monitoring/analyst-review-state.mts';
 export { MAX_PROFILE_IMPORT_BYTES } from '../../../packages/contracts/workspace-portability.mts';
 
@@ -76,15 +77,21 @@ export async function loadProfiles(): Promise<BrandProfile[]> {
 }
 
 /** Explicit retained review selection; no collection runs and concurrent additions merge. */
-export async function retainBrandCandidates(profileId: string, candidates: readonly BrandCandidateObservation[]) {
+export async function retainBrandCandidates(profileId: string, candidates: readonly BrandCandidateObservation[], campaignContext?: Readonly<{ id: string; revision: number }>) {
   if (candidates.length > 200) throw new RangeError('Retain at most 200 selected candidate domains per Brand.');
   return updateBrowserLocalData('brand_profiles', current => {
     const profiles = [...current], index = profiles.findIndex(profile => profile.id === profileId), profile = profiles[index];
     if (!profile) throw new LocalRecordConflictError('Brand Profile');
+    const campaign = campaignContext ? profile.keywordCampaigns?.find(value => value.id === campaignContext.id) : null;
+    if (campaignContext && (!campaign || campaign.revision !== campaignContext.revision)) throw new LocalRecordConflictError('keyword campaign revision');
     const byDomain = new Map(profile.candidateObservations.map(candidate => [candidate.domain, candidate]));
     const outcomes: Array<{ domain: string; state: 'retained' | 'rejected'; reason: string }> = [];
     for (const input of candidates) {
       const candidate = normalizeCandidateObservation(input);
+      if (campaign && candidate) {
+        const expected = attributeKeywordCampaignCandidate(candidate, campaign, profileId, new Date().toISOString());
+        if (JSON.stringify(candidate.matches) !== JSON.stringify(expected.matches)) throw new LocalRecordConflictError('campaign nomination');
+      }
       if (!candidate || !candidate.matches.some(match => match.brandProfileId === profileId)) { outcomes.push({ domain: input.domain, state: 'rejected', reason: 'No exact selected Brand match context.' }); continue; }
       if (!byDomain.has(candidate.domain) && byDomain.size >= 200) { outcomes.push({ domain: candidate.domain, state: 'rejected', reason: 'This Brand candidate capacity is exhausted.' }); continue; }
       byDomain.set(candidate.domain, mergeCandidateObservations(byDomain.get(candidate.domain), candidate)!);
@@ -92,6 +99,19 @@ export async function retainBrandCandidates(profileId: string, candidates: reado
     }
     profiles[index] = normalizeProfile({ ...profile, candidateObservations: normalizeCandidateObservations([...byDomain.values()]) }, profile, true);
     return { document: boundedProfiles(profiles), result: outcomes };
+  });
+}
+
+/** Revision-owned local intent; never requests a feed or changes a Watchlist. */
+export async function saveBrandKeywordCampaign(profileId: string, input: BrandKeywordCampaignInput, expectedRevision: number | null, now = new Date().toISOString()) {
+  return updateBrowserLocalData('brand_profiles', current => {
+    const profiles = [...current], index = profiles.findIndex(profile => profile.id === profileId), profile = profiles[index];
+    if (!profile) throw new LocalRecordConflictError('Brand Profile');
+    const campaigns = profile.keywordCampaigns ?? [];
+    const existing = campaigns.find(campaign => campaign.id === input.id) ?? null;
+    const campaign = reviseBrandKeywordCampaign(existing, input, expectedRevision, now);
+    profiles[index] = normalizeProfile({ ...profile, keywordCampaigns: [...campaigns.filter(value => value.id !== campaign.id), campaign] }, profile, true);
+    return { document: boundedProfiles(profiles), result: campaign };
   });
 }
 

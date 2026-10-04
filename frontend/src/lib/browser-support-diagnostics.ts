@@ -1,3 +1,5 @@
+import { browserWorkspaceLocksAvailable } from './browser-workspace-directory.ts';
+
 export type BrowserSupportDiagnosticInput = Readonly<{
   applicationVersion: string;
   buildRevision: string;
@@ -9,6 +11,7 @@ export type BrowserSupportDiagnosticInput = Readonly<{
   storageManagerAvailable: boolean;
   webCryptoAvailable: boolean;
   clipboardAvailable: boolean;
+  webLocksAvailable: boolean;
 }>;
 
 export function browserViewportClass(width: number): 'compact' | 'standard' | 'wide' {
@@ -37,6 +40,7 @@ export function buildBrowserSupportDiagnostics(input: BrowserSupportDiagnosticIn
       storageManager: input.storageManagerAvailable,
       webCrypto: input.webCryptoAvailable,
       clipboardWrite: input.clipboardAvailable,
+      webLocks: input.webLocksAvailable,
     }),
   });
 }
@@ -57,6 +61,7 @@ export function captureBrowserSupportDiagnostics(
     storageManagerAvailable: typeof navigator.storage !== 'undefined',
     webCryptoAvailable: typeof globalThis.crypto?.subtle !== 'undefined',
     clipboardAvailable: typeof navigator.clipboard?.writeText === 'function',
+    webLocksAvailable: browserWorkspaceLocksAvailable(),
   });
 }
 

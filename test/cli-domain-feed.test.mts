@@ -81,3 +81,18 @@ test('watch-input cannot smuggle unreviewed candidates through an existing conte
   });
   assert.equal(result.code, 2); assert.equal(result.stdout, ''); assert.equal(reads, 0); assert.match(result.stderr, /empty candidates/u);
 });
+
+test('CLI negative selectors veto before the bound and cannot select a feed alone', async () => {
+  const result = await run(['domain-feed', 'review', 'nrd7', 'feed.txt', '--select', 'term:launch', '--select', 'exclude:excluded', '--json'], {
+    readDomainFeedInput: () => ({ async *[Symbol.asyncIterator]() {
+      yield new TextEncoder().encode(`${Array.from({ length: 220 }, (_, i) => `excluded-launch-${i}.example`).join('\n')}\nlaunch.example\n`);
+    } }),
+  });
+  assert.equal(result.code, 0, result.stderr); assert.equal(result.stderr, '');
+  const review = JSON.parse(result.stdout);
+  assert.deepEqual(review.selection.negativeTerms, ['excluded']);
+  assert.deepEqual(review.matches.map((value: { domain: string }) => value.domain), ['launch.example']);
+  assert.equal(review.truncated, false);
+  assert.match(commandHelp('domain-feed'), /exclude:<literal>/u);
+  assert.throws(() => parseCliArguments(['domain-feed', 'review', 'nrd7', 'feed.txt', '--select', 'exclude:launch']), /exact host or literal term/u);
+});

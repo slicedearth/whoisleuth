@@ -542,6 +542,49 @@ test.describe('case report export', () => {
     );
   });
 
+  test('ordinary report print uses the complete prepared report and restores focus after cancellation', async ({ page }, testInfo) => {
+    const note = 'Unicode 東京 | literal <script>not executable</script> ' + 'LongEvidence語'.repeat(100);
+    await openSeededTimelineCase(page, 'print-report.invalid', [caseRecord({
+      id: 'print-report', domain: 'print-report.invalid', notes: [{ createdAt: '2026-06-01T00:00:00.000Z', body: note }],
+      evidenceHistory: [snapshot({ id: 'print-one', capturedAt: '2026-06-01T00:00:00.000Z' }), snapshot({ id: 'print-two', capturedAt: '2026-07-01T00:00:00.000Z' })],
+    })], CASE_SCHEMA_VERSION);
+    await openCaseSection(page, 'Response');
+    const controls = page.locator('.export-controls'), trigger = controls.getByRole('button', { name: 'Preview report', exact: true });
+    await controls.getByRole('checkbox', { name: /^Include analyst notes/u }).check();
+    await trigger.click();
+    const preview = page.getByRole('dialog', { name: 'Case report preview', exact: true });
+    const printable = preview.getByRole('article', { name: 'Complete prepared ordinary Case report', includeHidden: true });
+    await expect(printable).toHaveCount(1); await expect(printable).toBeHidden();
+    await page.evaluate(() => { window.print = () => { Reflect.set(window, 'ordinaryReportPrintCalls', Number(Reflect.get(window, 'ordinaryReportPrintCalls') ?? 0) + 1); window.dispatchEvent(new Event('beforeprint')); }; });
+    const print = preview.getByRole('button', { name: 'Print or save PDF', exact: true });
+    await print.focus(); await page.keyboard.press('Enter');
+    await expect(preview).toHaveClass(/print-approved/u);
+    expect(await page.evaluate(() => Reflect.get(window, 'ordinaryReportPrintCalls'))).toBe(1);
+    await page.emulateMedia({ media: 'print' });
+    await expect(printable).toBeVisible();
+    await expect(printable.getByRole('heading', { name: 'Evidence Timeline', exact: true })).toBeVisible();
+    await expect(printable.getByRole('heading', { name: 'Analyst Notes', exact: true })).toBeVisible();
+    await expect(printable.getByRole('heading', { name: 'Limitations & Provenance', exact: true })).toBeVisible();
+    await expect(printable).toContainText(note);
+    await expect(printable).toContainText('Snapshot hostnames are excluded');
+    await expect(printable).toContainText('2026-06-01T00:00:00.000Z');
+    if (captureVisualEvidenceEnabled()) await printable.screenshot({ path: testInfo.outputPath('ordinary-case-print.png') });
+    await expect(printable.locator('script')).toHaveCount(0);
+    expect(await printable.locator('table').count()).toBeGreaterThan(0);
+    expect(await printable.evaluate(element => [...element.querySelectorAll('pre,details')].every(item => item.getClientRects().length === 0))).toBe(true);
+    await page.emulateMedia({ media: 'screen' });
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    await expect(print).toBeFocused(); await expect(preview).not.toHaveClass(/print-approved/u);
+    await preview.getByRole('button', { name: 'Close report preview', exact: true }).click();
+    await expect(trigger).toBeFocused();
+    // Regeneration after changed note selection never reuses the earlier print.
+    await controls.getByRole('checkbox', { name: /^Include analyst notes/u }).uncheck(); await trigger.click();
+    await preview.getByRole('button', { name: 'Print or save PDF', exact: true }).click(); await page.emulateMedia({ media: 'print' });
+    await expect(printable).not.toContainText(note); await expect(printable.getByRole('heading', { name: 'Analyst Notes', exact: true })).toHaveCount(0);
+    await page.emulateMedia({ media: 'screen' }); await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    await preview.getByRole('button', { name: 'Close report preview', exact: true }).click(); await expect(trigger).toBeFocused();
+  });
+
   test('export Markdown for a case with correct filename and content', async ({ page }) => {
     await openSeededTimelineCase(page, 'export-md.invalid', [
       caseRecord({

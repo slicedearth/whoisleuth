@@ -160,18 +160,20 @@ test('explicit hosted cache query retains locally attributed nominations without
     const body = route.request().postDataJSON() as Record<string, unknown>;
     requests.push(body);
     await route.fulfill({ json: body.operation === 'status'
-      ? { enabled: true, feeds: [{ feedId: 'tif-mini', cached: true, stale: true, error: null, metadata: serverReview, checkedAt: NOW }] }
+      ? { enabled: true, feeds: [{ feedId: 'tif-mini', cached: true, stale: true, error: 'Latest refresh could not be confirmed; retained snapshot is available.', metadata: serverReview, checkedAt: NOW }] }
       : { enabled: true, feeds: [{ feedId: 'tif-mini', stale: true, review: serverReview, error: 'Latest refresh failed; retained snapshot is available.' }], limitations: ['Cache lookup is not target collection.'] } });
   });
   const { intake } = await seed(page);
   await intake.getByLabel('Exact hostnames').fill('login.product.example');
   await intake.getByText('Optional hosted feed cache', { exact: true }).click();
   await expect(intake.getByRole('button', { name: 'Query selected feed cache' })).toBeEnabled();
+  await expect(intake).toContainText('The latest refresh could not be confirmed. A retained snapshot, if available, can still be reviewed.');
+  await expect(intake).not.toContainText('The latest refresh failed.');
   expect(requests).toEqual([{ operation: 'status' }]);
   await intake.getByRole('button', { name: 'Query selected feed cache' }).click();
   await expect(intake.getByRole('heading', { name: 'Staged feed nominations' })).toBeVisible();
   await expect(intake).toContainText('The retained feed cache is stale');
-  await expect(intake.getByText('The latest refresh failed. These candidates come from the last retained snapshot.', { exact: true })).toBeVisible();
+  await expect(intake.getByText('The latest refresh could not be confirmed. These candidates come from the retained snapshot.', { exact: true })).toBeVisible();
   expect(requests[1]).toEqual({ operation: 'query', feedIds: ['tif-mini'], selection: { hosts: ['login.product.example'], terms: [] } });
   const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
   expect(before.records[0]!.value.candidateObservations).toEqual([]);

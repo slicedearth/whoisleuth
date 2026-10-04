@@ -12,6 +12,8 @@
   import MailAuthenticationReview from './MailAuthenticationReview.svelte';
   import SelectedInputEvidence from './SelectedInputEvidence.svelte';
   import IdentityEventEvidence from './IdentityEventEvidence.svelte';
+  import IntakeContextEvidence from './IntakeContextEvidence.svelte';
+  import { withIntakeDistributionContext } from '../../../../packages/investigation/intake-context.mts';
 
   let { onselect, onsave, reviewContent, disabled = false, headingLevel = 3 }: {
     onselect: (target: string) => void | Promise<void>;
@@ -25,11 +27,12 @@
   let result = $state.raw<MessageIntakeResult | null>(null);
   let busy = $state(false), saving = $state(false), error = $state(''), message = $state(''), retainOriginal = $state(false), page = $state(1);
   let heading = $state<HTMLElement>();
+  let contextPending = $state(false);
   const subheadingTag = $derived(headingLevel === 2 ? 'h3' : 'h4');
   let controller: AbortController | null = null;
   const PAGE_SIZE = 10;
   const links = $derived(result?.report.links.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) ?? []);
-  function clearReview() { controller?.abort(); controller = null; busy = false; result = null; reviewedFile = null; error = ''; message = ''; retainOriginal = false; page = 1; }
+  function clearReview() { controller?.abort(); controller = null; busy = false; result = null; reviewedFile = null; error = ''; message = ''; retainOriginal = false; page = 1; contextPending = false; }
   function changeKind() { clearReview(); file = null; }
   onDestroy(() => controller?.abort());
   async function review() {
@@ -48,7 +51,7 @@
     finally { if (controller === current) { controller = null; busy = false; } }
   }
   async function save() {
-    if (!onsave || !result || !reviewedFile || saving || disabled) return;
+    if (!onsave || !result || !reviewedFile || saving || disabled || contextPending) return;
     saving = true;
     try { if (await onsave(result, reviewedFile, retainOriginal)) message = `Saved the review${retainOriginal ? ' and private original' : ''} in this Case.`; }
     catch (cause) { error = cause instanceof Error ? cause.message : 'The review could not be saved.'; }
@@ -59,7 +62,7 @@
 <details class="intake">
   <summary>Review a message, link or selected file</summary>
   <div class="body">
-    <p>Extract destinations locally before choosing what to investigate. Supplied links and attachments are not opened.</p>
+    <p>Review destinations, literal IPs and labelled hashes locally before choosing what to investigate. Add supplied distribution context only when needed. Links and attachments are not opened.</p>
     <fieldset disabled={busy || saving || disabled}>
       <legend class="sr-only">Selected input</legend>
       <label>Input type<select bind:value={kind} onchange={changeKind}>{#each MESSAGE_INTAKE_KINDS as value}<option value={value}>{MESSAGE_INTAKE_INPUTS[value].label}</option>{/each}</select></label>
@@ -99,6 +102,7 @@
         {/each}
       </ol>
       {#if report.links.length > PAGE_SIZE}<Pagination currentPage={page} pageCount={Math.ceil(report.links.length / PAGE_SIZE)} setPage={next => page = next} ariaLabel="Extracted destination pages" />{/if}
+      {#key report.source.digestSha256}<IntakeContextEvidence {report} disabled={disabled || saving} onpending={pending => contextPending = pending} onchange={context => { if (result && !saving && !disabled) result = { ...result, report: withIntakeDistributionContext(result.report, context) }; }} />{/key}
       {#key report.source.digestSha256}<SelectedInputEvidence {report} headingTag={subheadingTag} />{/key}
       {#if report.identityEventReview}{#key report.source.digestSha256}<IdentityEventEvidence review={report.identityEventReview} headingTag={subheadingTag} disabled={disabled || saving} onchange={identityEventReview => { if (result && !saving && !disabled) result = { ...result, report: { ...result.report, identityEventReview } }; }} />{/key}{/if}
       {#if report.identities.length || report.authenticationClaims.length || report.actionHints.length}
@@ -112,8 +116,8 @@
           {#key report.source.digestSha256}<MailAuthenticationReview headingTag={subheadingTag} review={report.authenticationReview} disabled={disabled || saving} onchange={authenticationReview => { if (result && !saving && !disabled) result = { ...result, report: { ...result.report, authenticationReview } }; }} />{/key}
         </details>
       {/if}
-      <div class="actions">{#if onsave}<button type="button" class="btn primary" disabled={saving || disabled} onclick={() => void save()}>{saving ? 'Saving…' : 'Save review in Case'}</button>{/if}
-        <button type="button" class="btn" onclick={() => downloadLocalFile(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }), 'message-review.json')}>Download review</button>
+      <div class="actions">{#if onsave}<button type="button" class="btn primary" disabled={saving || disabled || contextPending} onclick={() => void save()}>{saving ? 'Saving…' : 'Save review in Case'}</button>{/if}
+        <button type="button" class="btn" disabled={contextPending} onclick={() => downloadLocalFile(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }), 'message-review.json')}>Download review</button>
       </div>
       {#if onsave}<label class="retain"><input type="checkbox" bind:checked={retainOriginal} disabled={saving || disabled}>Also retain the private original, which may contain message bodies, documents, credentials, addresses and exact links</label>{/if}
       <details><summary>Review coverage and source identity</summary><EvidenceTimestamp value={report.reviewedAt} label="review time" /><p>The original’s hash identifies the selected bytes, not its publisher or authenticity.</p><code>{report.source.digestSha256}</code><p>Selected content is reviewed locally. Links, external resources and HAR requests are not opened or replayed. Document review identifies the pages or parts used; encrypted and unsupported content remains explicit.</p>

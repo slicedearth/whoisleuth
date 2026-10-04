@@ -53,6 +53,46 @@ async function isolateCasePractice(page: Page) {
   };
 }
 
+test('source-linked and containment practice uses real offline reviews without saved-work access', async ({ page }) => {
+  const verifyIsolation = await isolateCasePractice(page);
+  await page.goto('/resources/domain-investigation-workflow');
+  await page.getByRole('link', { name: 'Practise supplied evidence and handoff review', exact: true }).click();
+  await expect(page).toHaveURL(/\/demo#case-practice$/u);
+  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  await practice.getByText('Try source-linked offline review', { exact: true }).click();
+  await practice.getByRole('button', { name: 'Review supplied text and context', exact: true }).click();
+  const source = practice.getByRole('region', { name: 'Fictional source-linked review', exact: true });
+  await expect(source.getByRole('heading', { name: 'Source-linked review', exact: true })).toBeFocused();
+  await expect(source).toContainText('2 literal indicators');
+  await source.getByText('Inspect the source-linked review reports', { exact: true }).click();
+  const review = JSON.parse(await source.locator('pre').innerText());
+  expect(review.intake.indicators.map((item: { kind: string }) => item.kind)).toEqual(['sha256', 'ipv4']);
+  expect(review.intake.distributionContext.channel).toBe('advertisement');
+  expect(review.history.state).toBe('partial');
+  await practice.getByRole('button', { name: '4. Rehearse separate response scopes', exact: true }).click();
+  await practice.getByText('Preview the separate internal follow-up', { exact: true }).click();
+  await practice.getByRole('button', { name: 'Preview fictional internal handoff', exact: true }).click();
+  const disclosure = practice.getByRole('region', { name: 'Fictional containment disclosure', exact: true });
+  await expect(disclosure.getByRole('heading', { name: 'Fictional containment disclosure', exact: true })).toBeFocused();
+  await disclosure.getByText('Inspect exact fictional containment disclosure', { exact: true }).click();
+  const handoff = JSON.parse(await disclosure.locator('pre').innerText());
+  expect(handoff.assertions).toHaveLength(1); expect(handoff.assertions[0].state).toBe('open'); expect(handoff.evidencePins).toHaveLength(1);
+  await practice.getByLabel('Include the linked supporting pin', { exact: true }).uncheck();
+  await expect(disclosure).toHaveCount(0);
+  await practice.getByRole('button', { name: 'Preview fictional internal handoff', exact: true }).click();
+  await expect(disclosure).toContainText('not selected');
+  await practice.getByRole('combobox', { name: 'Practice handoff audience', exact: true }).selectOption('public');
+  await practice.getByRole('button', { name: 'Preview fictional internal handoff', exact: true }).click();
+  await expect(disclosure).toContainText('0 selected request');
+  await expect(disclosure).not.toContainText('Is the credential form still present?');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme); await page.setViewportSize({ width: 320, height: 800 });
+    await expect(disclosure).toBeVisible(); await expectNoHorizontalOverflow(page);
+  }
+  expect((await new AxeBuilder({ page }).include('.case-practice').analyze()).violations).toEqual([]);
+  await verifyIsolation();
+});
+
 test('requested-evidence practice creates only a drafting amendment without saved-work access', async ({ page }) => {
   const verifyIsolation = await isolateCasePractice(page);
   await page.goto('/demo#case-practice');

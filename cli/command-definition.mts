@@ -244,6 +244,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--json': flag('Write structured JSON to stdout or the selected output file.'),
   '--reported-action': optionDefinition('enum', 'Record an analyst-reported identity action; repeat for separate actions.', { values: IDENTITY_ACTIONS.map(action => action.id), occurrence: 'repeatable' }),
   '--trusted-auth-header': optionDefinition('text', 'Select a recognised receiver header by part:header-index. This records analyst trust, not independent authentication; repeat for separate headers.', { occurrence: 'repeatable' }),
+  '--intake-context': optionDefinition('file', 'Read one selected version-1 distribution-context JSON file. Declarations do not verify distribution or capture conditions.'),
   '--package': flag('Verify a portable evidence ZIP or encrypted package rather than a single report.'),
   '--folder': file('Verify the evidence package within this selected folder.'),
   '--quiet': flag('Suppress ordinary terminal presentation.', 'idempotent'),

@@ -6,6 +6,8 @@ import { scanDomainFeed, buildDomainFeedReview, normalizeDomainFeedSelection, do
 import { safeFetchDetailed } from '../safe-fetch.mts';
 import { DOMAIN_FEED_STALE_MS, DOMAIN_FEED_MAX_RESULTS } from './domain-feed-config.mts';
 import { normalizeExplicitIsoTimestamp } from '../../packages/evidence/observation.mts';
+import { readFeedHistory, retainFeedHistory } from './domain-feed-history.mts';
+import { domainFeedSelectionDigest, normalizeDomainFeedCursor, type DomainFeedCursor, type DomainFeedHistoryPage } from '../../packages/monitoring/domain-feed-history.mts';
 
 const DOMAIN_FEED_DATABASE_BYTES = 512 * 1024 * 1024;
 const DOMAIN_FEED_CACHE_BYTES = 5 * 1024 * 1024 * 1024;
@@ -65,7 +67,7 @@ async function openSnapshot(directory: string, feedId: string): Promise<Database
     || (process.getuid && info.uid !== process.getuid()) || info.size > DOMAIN_FEED_DATABASE_BYTES) throw new Error('Invalid cache snapshot.');
   const database = new DatabaseSync(filename, { readOnly: true, allowExtension: false, defensive: true, timeout: 0 });
   try {
-    if (database.prepare('PRAGMA user_version').get()?.user_version !== 1) throw new Error('Unsupported cache version.');
+    if (![1, 2].includes(Number(database.prepare('PRAGMA user_version').get()?.user_version))) throw new Error('Unsupported cache version.');
     database.exec('PRAGMA trusted_schema=OFF; PRAGMA query_only=ON; PRAGMA cache_size=-8192; PRAGMA hard_heap_limit=67108864;');
     return database;
   } catch (error) { database.close(); throw error; }
@@ -109,19 +111,58 @@ async function queryDomainFeedCache(directory: string, feedId: string, selection
     const saved = readCacheMetadata(database);
     if (saved.snapshot.feedId !== feedId) throw new Error('Cache source identity mismatch.');
     const normalized = normalizeDomainFeedSelection(selection);
-    const clauses: string[] = [];
-    const parameters: string[] = [];
-    for (const host of normalized.hosts) { clauses.push('domain = ?'); parameters.push(host); }
-    for (const term of normalized.terms) { clauses.push('instr(domain, ?) > 0'); parameters.push(term); }
-    if (clauses.length === 0) throw new Error('A literal selection is required.');
     // Query work runs in a deadline-owned worker, including literal substring scans.
     if (!Number.isInteger(limit) || limit < 1 || limit > DOMAIN_FEED_MAX_RESULTS) throw new Error('Invalid result bound.');
-    const rows = database.prepare(`SELECT domain FROM domains WHERE ${clauses.join(' OR ')} ORDER BY domain LIMIT ${limit + 1}`).all(...parameters);
+    const { where, parameters } = feedSelectionSql(normalized);
+    const rows = database.prepare(`SELECT domain FROM domains WHERE ${where} ORDER BY domain LIMIT ${limit + 1}`).all(...parameters);
     const domains = rows.slice(0, limit).map(row => String(row.domain));
     const truncated = rows.length > limit;
     const review = buildDomainFeedReview(saved.snapshot, normalized, domains, { matched: null, omitted: null, truncated });
     const stale = isStale(saved, now);
     return { stale, review, error: null };
+  } finally { database.close(); }
+}
+
+function feedSelectionSql(selection: DomainFeedSelection) {
+  const clauses: string[] = [], parameters: string[] = [];
+  for (const host of selection.hosts) { clauses.push('domain = ?'); parameters.push(host); }
+  for (const term of selection.terms) { clauses.push('instr(domain, ?) > 0'); parameters.push(term); }
+  if (!clauses.length) throw new Error('A literal selection is required.');
+  let where = `(${clauses.join(' OR ')})`;
+  for (const term of selection.negativeTerms ?? []) {
+    where += ' AND instr(domain, ?) = 0'; parameters.push(term);
+  }
+  return { where, parameters };
+}
+
+async function queryDomainFeedHistory(directory: string, feedId: string, input: DomainFeedSelection, cursor: DomainFeedCursor | null): Promise<DomainFeedHistoryPage> {
+  const selection = normalizeDomainFeedSelection(input), database = await openSnapshot(directory, feedId);
+  if (!database) throw new Error('No retained snapshot is available.');
+  try {
+    const current = readCacheMetadata(database).snapshot;
+    if (current.feedId !== feedId) throw new Error('Cache source identity mismatch.');
+    const history = readFeedHistory(database, current);
+    if (!history.epoch) throw new Error('This cache predates edition history. A successful refresh is required.');
+    const latest = history.editions.at(-1)!.sequence;
+    const previous = cursor ? normalizeDomainFeedCursor(cursor, feedId, selection) : null;
+    if (previous && (previous.epoch !== history.epoch || previous.through > latest)) throw new Error('Feed history was replaced. Review the retained range explicitly.');
+    const through = previous && previous.sequence <= previous.through ? previous.through : latest;
+    const sequence = previous?.sequence ?? history.editions[0]!.sequence;
+    const next: DomainFeedCursor = { schemaVersion: 1, feedId, epoch: history.epoch, through, sequence, after: previous?.after ?? '', selectionDigest: domainFeedSelectionDigest(selection) };
+    const base = { feedId, epoch: history.epoch, through, sequence, editions: history.editions, attempts: [],
+      earlierEditionsUnavailable: history.editions[0]!.sequence > 1 };
+    if (sequence > through) return { ...base, state: 'complete', review: null, nextCursor: next };
+    const edition = history.editions.find(item => item.sequence === sequence);
+    if (!edition?.membershipRetained) return { ...base, state: 'gap', review: null,
+      nextCursor: { ...next, sequence: edition ? sequence + 1 : Math.min(history.editions[0]!.sequence, through + 1), after: '' } };
+    const { where, parameters } = feedSelectionSql(selection);
+    const isCurrent = sequence === latest;
+    const rows = database.prepare(`SELECT domain FROM ${isCurrent ? 'domains' : 'past_domains'} WHERE ${isCurrent ? '' : 'sequence = ? AND '}${where} AND domain > ? ORDER BY domain LIMIT ${DOMAIN_FEED_MAX_RESULTS + 1}`)
+      .all(...(isCurrent ? [] : [sequence]), ...parameters, next.after);
+    const domains = rows.slice(0, DOMAIN_FEED_MAX_RESULTS).map(row => String(row.domain));
+    const truncated = rows.length > DOMAIN_FEED_MAX_RESULTS;
+    return { ...base, state: 'review', review: buildDomainFeedReview(edition.metadata, selection, domains, { matched: null, omitted: null, truncated }),
+      nextCursor: { ...next, sequence: truncated ? sequence : sequence + 1, after: truncated ? domains.at(-1)! : '' } };
   } finally { database.close(); }
 }
 
@@ -153,15 +194,22 @@ async function refreshDomainFeedCache(options: { directory: string; feedId: stri
   if (path.dirname(options.stagingFilename) !== options.directory || !/^[a-z0-9-]+\.[a-f0-9-]+\.pending\.sqlite$/u.test(path.basename(options.stagingFilename))) throw new Error('Invalid staging path.');
   const existingBytes = await prepareDomainFeedCache(options.directory);
   const previous = await openSnapshot(options.directory, options.feedId);
-  let retained: CacheMetadata | null = null;
-  try { if (previous) retained = readCacheMetadata(previous); } finally { previous?.close(); }
+  let retained: CacheMetadata | null = null, historyReady = false;
+  try {
+    if (previous) {
+      retained = readCacheMetadata(previous);
+      historyReady = previous.prepare('PRAGMA user_version').get()?.user_version === 2;
+    }
+  } finally { previous?.close(); }
   const headers = new Headers({ accept: 'text/plain', 'accept-encoding': 'identity' });
-  if (retained?.etag) headers.set('if-none-match', retained.etag);
-  if (retained?.modified) headers.set('if-modified-since', retained.modified);
+  // A legacy snapshot needs one complete, staged refresh to gain edition history.
+  // Do not allow repeated conditional responses to prevent that migration.
+  if (historyReady && retained?.etag) headers.set('if-none-match', retained.etag);
+  if (historyReady && retained?.modified) headers.set('if-modified-since', retained.modified);
   const definition = domainFeedDefinition(options.feedId)!;
   const fetchFeed = options.fetch ?? (async (url, init) => (await safeFetchDetailed(url, init, { maxRedirects: 0 })).response);
   const response = await fetchFeed(definition.url, { headers, signal, redirect: 'manual', credentials: 'omit', referrerPolicy: 'no-referrer' });
-  if (response.status === 304 && retained) {
+  if (response.status === 304 && retained && historyReady) {
     await response.body?.cancel().catch(() => {});
     signal.throwIfAborted();
     const database = new DatabaseSync(filename, { allowExtension: false, defensive: true, timeout: 0 });
@@ -193,9 +241,14 @@ async function refreshDomainFeedCache(options: { directory: string; feedId: stri
     const review = await scanDomainFeed(responseChunks(response, signal), { feedId: options.feedId, selection: normalizeDomainFeedSelection({}),
       importedAt: new Date(now()).toISOString(), signal, onDomains: async domains => { for (const domain of domains) insert.run(domain); } });
     const acquiredAt = new Date(now()).toISOString();
-    const snapshot: DomainFeedSnapshotMetadata = { feedId: review.feedId, revision: review.revision, importedAt: review.importedAt,
+    let snapshot: DomainFeedSnapshotMetadata = { feedId: review.feedId, revision: review.revision, importedAt: review.importedAt,
       acquiredAt, declaredPublishedAt: review.declaredPublishedAt, declaredVersion: review.declaredVersion,
       bytes: review.bytes, rows: review.rows };
+    if (retained?.snapshot.declaredPublishedAt && snapshot.declaredPublishedAt
+      && Date.parse(snapshot.declaredPublishedAt) < Date.parse(retained.snapshot.declaredPublishedAt)) throw new Error('Feed publication clock moved backwards; last-good snapshot is retained.');
+    const previousHistory = await openSnapshot(options.directory, options.feedId);
+    try { snapshot = retainFeedHistory(database, snapshot, previousHistory, retained?.snapshot ?? null, pageLimit, signal); }
+    finally { previousHistory?.close(); }
     database.prepare('INSERT INTO metadata(id,value) VALUES(1,?)').run(JSON.stringify({ snapshot, checkedAt: new Date(now()).toISOString(),
       etag: conditionalHeader(response.headers.get('etag')), modified: conditionalHeader(response.headers.get('last-modified')) }));
     database.exec('COMMIT');
@@ -203,7 +256,7 @@ async function refreshDomainFeedCache(options: { directory: string; feedId: stri
     signal.throwIfAborted();
     await prepareDomainFeedCache(options.directory);
     await rename(options.stagingFilename, filename);
-    return { changed: true };
+    return { changed: retained?.snapshot.revision !== snapshot.revision };
   } finally {
     database?.close();
     await response.body?.cancel().catch(() => {});
@@ -212,6 +265,6 @@ async function refreshDomainFeedCache(options: { directory: string; feedId: stri
 }
 
 export { DOMAIN_FEED_DATABASE_BYTES, DOMAIN_FEED_CACHE_BYTES, DOMAIN_FEED_REFRESH_TIMEOUT_MS, prepareDomainFeedCache,
-  domainFeedCacheStatus, queryDomainFeedCache, refreshDomainFeedCache };
+  domainFeedCacheStatus, queryDomainFeedCache, queryDomainFeedHistory, refreshDomainFeedCache };
 export { createOwnedFeedFile, removeOwnedFeedFile };
 export type { FeedFetch, FeedCacheStatus, FeedFileIdentity };

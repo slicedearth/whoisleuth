@@ -81,6 +81,7 @@ type IntakeArguments = {
   kind: import('../packages/contracts/message-intake.mts').MessageIntakeKind;
   reportedActions: readonly import('../packages/contracts/message-intake.mts').IdentityAction[];
   trustedAuthHeaders?: readonly string[];
+  intakeContextSource?: string;
   source: string | null;
   output: 'terminal' | 'json';
   strictExit: boolean;
@@ -222,6 +223,7 @@ export const REVIEW_ARGUMENT_PARSERS = Object.freeze({
     reportedActions: parsed.optionValues(
       '--reported-action',
     ) as readonly import('../packages/contracts/message-intake.mts').IdentityAction[],
+    ...(parsed.hasOption('--intake-context') ? { intakeContextSource: parsed.optionValue('--intake-context')! } : {}),
     ...(parsed.hasOption('--trusted-auth-header')
       ? { trustedAuthHeaders: parsed.optionValues('--trusted-auth-header') }
       : {}),

@@ -8,6 +8,8 @@ import { parseDomainFeedOperation } from './domain-feed-client.mts';
 import { DOMAIN_FEED_REFRESH_TIMEOUT_MS, prepareDomainFeedCache, createOwnedFeedFile, removeOwnedFeedFile,
   type FeedFileIdentity } from './domain-feed-cache.mts';
 import type { DomainFeedWorkerTask } from './domain-feed-worker.mts';
+import { recordDomainFeedRefresh } from './domain-feed-refresh-history.mts';
+import type { DomainFeedRefreshOutcome } from '../../packages/monitoring/domain-feed-history.mts';
 
 type FeedWorker = (task: DomainFeedWorkerTask, signal: AbortSignal, timeoutMs: number) => Promise<unknown>;
 class FeedServiceInputError extends Error {
@@ -96,7 +98,7 @@ async function startDomainFeedService(options: { directory: string; token: strin
     if (Date.now() - windowStarted >= 60_000) { windowStarted = Date.now(); requests = 0; }
     if (++requests > 60) return send(429, { error: 'Service request rate exceeded.' });
     if (!acceptsDomainFeedBearer(request.headers.authorization, options.token)) return send(401, { error: 'Service authentication required.' });
-    if (request.method !== 'POST' || !['/status', '/query'].includes(request.url ?? '')) return send(404, { error: 'Unknown service operation.' });
+    if (request.method !== 'POST' || !['/status', '/query', '/history'].includes(request.url ?? '')) return send(404, { error: 'Unknown service operation.' });
     if (activeQueries >= 2) return send(429, { error: 'Service query concurrency exceeded.' });
     activeQueries += 1;
     const controller = new AbortController();
@@ -108,13 +110,13 @@ async function startDomainFeedService(options: { directory: string; token: strin
     try {
       const body = await readServiceBody(request, signal);
       if (!body || typeof body !== 'object' || Array.isArray(body) || Object.hasOwn(body, 'operation')) throw new Error('Invalid service request.');
-      const operation = request.url === '/status' ? parseDomainFeedOperation({ ...body, operation: 'status' })
-        : parseDomainFeedOperation({ ...body, operation: 'query' });
-      const selected = operation.operation === 'query' ? operation.feedIds : feedIds;
+      const operation = parseDomainFeedOperation({ ...body, operation: request.url!.slice(1) });
+      const selected = operation.operation === 'status' ? feedIds : operation.feedIds;
       if (selected.some(id => !feedIds.includes(id))) return send(400, { error: 'Feed is not selected by this service.' });
       admitted = true;
       const reply = await runWorker({ directory: options.directory, feedIds: selected, operation: operation.operation,
-        ...(operation.operation === 'query' ? { selection: operation.selection } : {}) }, signal, DOMAIN_FEED_QUERY_TIMEOUT_MS);
+        ...(operation.operation !== 'status' ? { selection: operation.selection } : {}),
+        ...(operation.operation === 'history' ? { cursor: operation.cursor } : {}) }, signal, DOMAIN_FEED_QUERY_TIMEOUT_MS);
       if (reply && typeof reply === 'object' && Array.isArray((reply as { feeds?: unknown }).feeds)) {
         for (const feed of (reply as { feeds: Array<{ feedId: string; error: string | null }> }).feeds) feed.error = failures.get(feed.feedId) ?? feed.error;
       }
@@ -144,12 +146,14 @@ async function startDomainFeedService(options: { directory: string; token: strin
     activeRefresh = (async () => {
       let stagingIdentity: FeedFileIdentity | null = null;
       let completed = false;
+      let outcome: DomainFeedRefreshOutcome = 'failed';
       try {
         stagingIdentity = await createOwnedFeedFile(stagingFilename);
-        await runWorker({ operation: 'refresh', directory: options.directory, feedIds: [feedId], stagingFilename, stagingIdentity }, lifetime.signal, DOMAIN_FEED_REFRESH_TIMEOUT_MS + 5000);
+        const result = await runWorker({ operation: 'refresh', directory: options.directory, feedIds: [feedId], stagingFilename, stagingIdentity }, lifetime.signal, DOMAIN_FEED_REFRESH_TIMEOUT_MS + 5000);
+        outcome = result && typeof result === 'object' && (result as { changed?: unknown }).changed === false ? 'unchanged' : 'updated';
         failures.delete(feedId);
         completed = true;
-      } catch { failures.set(feedId, 'Latest refresh failed; last-good snapshot, if present, is retained.'); }
+      } catch { outcome = lifetime.signal.aborted ? 'interrupted' : 'failed'; failures.set(feedId, 'Latest refresh failed; last-good snapshot, if present, is retained.'); }
       finally {
         try { if (stagingIdentity) await removeOwnedFile(stagingFilename, stagingIdentity); }
         catch {
@@ -157,7 +161,12 @@ async function startDomainFeedService(options: { directory: string; token: strin
             ? 'Latest refresh completed, but temporary-file cleanup failed. Retained snapshot remains available; operator review is needed.'
             : 'Latest refresh and temporary-file cleanup failed; last-good snapshot, if present, is retained. Operator review is needed.');
           completed = false;
-        } finally { refreshing.delete(feedId); }
+          outcome = 'cleanup-failed';
+        } finally {
+          try { await recordDomainFeedRefresh(options.directory, feedId, outcome); }
+          catch { completed = false; failures.set(feedId, 'Refresh history could not be saved. Retained snapshots remain available; operator review is needed.'); }
+          finally { refreshing.delete(feedId); }
+        }
       }
       return completed;
     })().finally(() => { activeRefresh = null; });

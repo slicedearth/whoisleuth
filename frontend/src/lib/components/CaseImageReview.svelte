@@ -135,6 +135,14 @@
   }
 </script>
 
+{#snippet identity(image: CaseAttachment)}
+  <details class="image-identity"><summary>File identity and editing history</summary>
+    <p>SHA-256 <code>{image.digestSha256}</code> · {image.byteLength.toLocaleString()} bytes</p>
+    {#if image.derivation}<p>Declared immediate parent: <code>{image.derivation.source.digestSha256}</code> · {image.derivation.source.byteLength.toLocaleString()} bytes. Method: {image.derivation.method}. The parent may itself be edited.</p>
+    {:else}<p>No editing declaration is retained for this file.</p>{/if}
+  </details>
+{/snippet}
+
 <section class="image-review" bind:this={root} tabindex="-1" aria-label={`Image review: ${attachment.fileName}`}>
   <h4>Compare and edit retained images</h4>
   <p>Compare images with their source context. Browser, locale and capture viewport are not recorded with these file references.</p>
@@ -151,6 +159,7 @@
     <section class="image-column" aria-label="Selected source image">
       <h5>{attachment.derivation ? 'Retained derivative' : 'Retained original'} · {attachment.fileName}</h5>
       <p>{attachment.source ?? 'Source not declared'} · <EvidenceTimestamp value={attachment.observedAt} label="source observation time" unavailable="Observation time unknown" /></p>
+      {@render identity(attachment)}
       <ArtifactPreview {file} mediaType="image/png" label={attachment.fileName} focusOnReady={false} onready={imageReady}
         {regions} onselect={picking && !busy ? chooseRegion : undefined} />
       {#if regions.length}<p>Marked rectangles are edit instructions; this preview still shows the source pixels.</p>{/if}
@@ -158,6 +167,7 @@
     {#if right}<section class="image-column" aria-label={prepared ? 'Prepared edited image' : 'Comparison image'}>
       <h5>{prepared ? 'Edited PNG · not saved' : right.attachment.derivation ? 'Retained derivative' : 'Retained original'} · {right.attachment.fileName}</h5>
       <p>{right.attachment.source ?? 'Source not declared'} · <EvidenceTimestamp value={right.attachment.observedAt} label="comparison observation time" unavailable="Observation time unknown" /></p>
+      {@render identity(right.attachment)}
       <ArtifactPreview file={right.file} mediaType="image/png" label={right.attachment.fileName} focusOnReady={false} />
     </section>{/if}
   </div>
@@ -199,6 +209,7 @@
 </section>
 
 <style>
+  .image-identity{min-width:0}.image-identity summary{cursor:pointer;font-size:var(--text-xs)}.image-identity code{overflow-wrap:anywhere;white-space:normal}
   .image-review,.image-edit{display:grid;gap:12px;min-width:0}.image-review:focus{outline:2px solid var(--focus);outline-offset:3px}h4,h5,p{margin:0;overflow-wrap:anywhere}h4,h5{font:650 var(--text-sm)/1.5 var(--font-sans)}p{color:var(--muted);font:400 var(--text-xs)/1.55 var(--font-sans)}
   label{display:grid;gap:5px;min-width:0;font-size:var(--text-xs)}input,select{min-width:0;width:100%}.image-pair{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}.image-pair.paired{grid-template-columns:repeat(auto-fit,minmax(min(100%,24rem),1fr))}.image-column{min-width:0;display:grid;gap:5px}
   .image-edit{border-top:1px solid var(--border);padding-top:14px}fieldset{min-width:0;padding:0;border:0;display:grid;gap:12px}legend{font-size:var(--text-xs);padding:0 0 8px}.region-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,8rem),1fr));gap:10px}.image-actions{display:flex;flex-wrap:wrap;gap:8px}.image-actions button{max-width:100%;white-space:normal}.region-list{padding-left:1.5em;margin:0;font-size:var(--text-xs)}.region-list li{margin:6px 0;overflow-wrap:anywhere}.region-list button{margin-left:10px}

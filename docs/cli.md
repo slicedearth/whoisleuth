@@ -110,6 +110,12 @@ Only `bulk` accepts multiple targets.
 
 For a downloaded plain-domain feed, use
 `whoisleuth domain-feed review nrd7 feed.txt --select term:example --json`.
+Repeat `--select exclude:literal` to veto a literal substring before the result
+bound, including for exact-host selections. At most 20 positive and 20 negative
+terms of 3–80 characters are supported; at least one positive term or exact host
+is required. Matching uses canonical ASCII/punycode text without token, typo,
+confusable or regular-expression expansion. These offline selectors do not infer
+saved browser campaign identity or default priority.
 This is an offline literal match, not a feed download or target Lookup. The
 [candidate-review guide](https://github.com/slicedearth/whoisleuth/blob/main/docs/brand-candidate-review.md#review-a-domain-feed) covers
 source attribution and the separate Watchlist handoff.
@@ -187,6 +193,21 @@ Excluded links and unsupported QR payloads make the review partial, with
 category counts rather than private payload text. Bare QR hostnames are not
 automatically treated as URLs.
 
+Current message-intake reports also retain bounded literal IPv4/IPv6 and
+explicitly labelled MD5, SHA-1 and SHA-256 observations from supported body and
+document text. Each observation links to its selected source part and digest;
+it is not a Lookup target, file identification or threat verdict. Complete URLs,
+message headers, QR payloads, HAR and identity-event fields are excluded from
+this text scan. Historical version-1 reports do not acquire new observations.
+
+Use `intake text selected.txt --intake-context context.json --json` to add an
+explicit analyst-supplied distribution declaration. The separate context file
+is limited to 8 KiB and cannot use stdin. Its channel, non-sensitive source
+label and optional declared time, reference, observer and vantage labels are
+included in the output, not verified as delivery or capture conditions. See
+[selected-input indicators and declarations](offline-intake-context.md) for the
+exact schema, privacy exclusions and extraction bounds.
+
 ### Local IP-location database review
 
 `review-evidence query.json --mmdb selected.mmdb --json --strict-exit` reads
@@ -240,6 +261,21 @@ for source-qualified incident sequences, retained domain history, platform-objec
 comparison and connector provenance. These workflows are offline; partial
 context reviews return 4 when `--strict-exit` is selected. Browser-generated
 reusable inputs use the same validators.
+
+Domain-history input version 2 adds analyst-declared registration, deletion,
+re-registration, transfer or review boundaries linked to retained snapshot or
+pin IDs. Version 1 remains supported with its original output. Boundaries prompt
+reassessment; they do not establish ownership or discard prior evidence.
+
+`review-evidence containment.json --json --strict-exit` accepts a
+`whoisleuth.internal-containment.input` version-1 document containing a supported
+Case export, selected next-step assertion and linked pin IDs, internal or trusted
+audience, recipient role and an explicit disclosure-review acknowledgement.
+It exports only that selected handoff, never writes the Case or performs a
+control. Missing or unselected supporting context stays partial (exit 4 under
+`--strict-exit`), and a resolved Case or provider outcome does not close an open
+internal follow-up. See [internal containment](offline-intake-context.md#selected-internal-containment-handoff)
+for the complete input and audience limitations.
 
 ### Message-header review
 

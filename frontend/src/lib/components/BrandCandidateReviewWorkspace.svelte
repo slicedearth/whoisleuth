@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import DomainFeedCandidateIntake from './DomainFeedCandidateIntake.svelte';
+  import BrandKeywordCampaigns from './BrandKeywordCampaigns.svelte';
+  import { keywordCampaignDefaultPriority } from '../../../../packages/workspace/brand-keyword-campaign.mts';
   import { formatEvidenceDate } from '$lib/analysis/evidence-time';
   import { loadWatchlists, addCandidateWatchlist, type Watchlists } from '$lib/watchlists';
   import { loadAnalystReviewState } from '$lib/analyst-review-state';
@@ -49,11 +51,14 @@
       'irrelevant_match',
     );
   let replaceExistingContext = $state(false);
+  let priorityEdited = $state(false);
   let now = $state(new Date().toISOString());
   let actionStatus = $state<HTMLParagraphElement>();
   const rows = $derived(projectBrandCandidateReview(active, watchlists, reviewState, now));
   const visible = $derived(rows.filter((row) => filter === 'all' || row.status === filter));
   const chosen = $derived(rows.filter((row) => selected.has(row.candidate.domain)));
+  const campaignDefault = $derived(keywordCampaignDefaultPriority(chosen.map(row => row.candidate), active.id, active.keywordCampaigns ?? []));
+  $effect(() => { if (!priorityEdited) priority = campaignDefault ?? 'unassigned'; });
   const exceptionRow = $derived(rows.find((row) => row.candidate.domain === exceptionDomain));
   const input = $derived({
     name,
@@ -102,6 +107,8 @@
       exceptionRule = '';
       reason = '';
       reviewDate = '';
+      priorityEdited = false;
+      priority = 'unassigned';
     }
   });
   function toggle(domain: string, checked: boolean) {
@@ -273,6 +280,7 @@
   {#if !ready}<p
       >Saved watch and review context is unavailable or loading. Mutations remain disabled.</p
     >{/if}
+  <BrandKeywordCampaigns {active} {onrefresh} disabled={disabled || busy} />
   <DomainFeedCandidateIntake {active} {onrefresh} disabled={disabled || !ready || busy} />
   <label
     >Candidate filter<select bind:value={filter}
@@ -382,11 +390,14 @@
     >
     <label>Destination watchlist<input bind:value={name} maxlength="100" /></label>
     <label
-      >Analyst review priority<select bind:value={priority}
+      >Analyst review priority<select bind:value={priority} onchange={() => { priorityEdited = true; }}
         >{#each WATCH_PRIORITIES as option}<option value={option.value}>{option.label}</option
           >{/each}</select
       ></label
     >
+    {#if campaignDefault !== null}<p>Retained campaign revisions suggest {campaignDefault}; this is a draft default only. Manual Watchlist priorities stay unchanged unless explicitly replaced.</p>
+      {#if priorityEdited}<button class="btn" onclick={() => { priorityEdited = false; }}>Use retained campaign default</button>{/if}
+    {:else if chosen.length}<p>No single retained campaign default applies to this selection. Mixed, manual or unavailable revisions do not infer a priority.</p>{/if}
     <label
       ><input type="checkbox" bind:checked={replaceExistingContext} /> Explicitly replace priority/reason
       in existing selected Brand contexts</label

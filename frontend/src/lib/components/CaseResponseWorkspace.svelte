@@ -319,7 +319,7 @@
       </div>
       <div class="case-section" role="group" hidden={activeSection !== 'response'} aria-label="Case response workspace">
       <CaseResponseQueue {record} {mutationBusy} onaction={openQueuedAction} onrecheck={openQueuedRecheck} onrequest={openRequestedEvidence} />
-      <CaseIdentityReview {record} {mutationBusy} {persist} />
+      <CaseIdentityReview {record} {mutationBusy} {persist} {persistOperation} />
       <CaseActionStage bind:this={actionStage} {record} {mutationBusy} {persist} mode={presentationMode} onadvanced={() => void openAdvancedStage('response_decision')} />
       <CaseResponsePacketWorkspace
         {record}

@@ -297,6 +297,12 @@ use. Schema 4 still requires its original explicit row context.
 Brand Profiles can retain up to 100 profiles in a 4-MiB collection; profile-file
 imports allow 32 MiB, including formatting and export metadata. Imports also
 enforce record, nesting and text limits.
+Keyword campaigns live in the same Brand records: up to 20 campaigns per Brand,
+20 positive and 20 negative literals per revision, and eight previous revisions
+with an older-omission count. The aggregate byte budget still applies. Edits use
+an exact saved-revision guard; imports reject conflicting copies of one revision.
+Earlier Brand schemas remain readable without invented campaign intent. Saving
+or reaching a campaign's start/end time does not request a feed or enable collection.
 
 Cases retain up to 500 records in a 4-MiB collection. Case-file imports allow
 16 MiB for formatting and export metadata, without increasing the stored-data

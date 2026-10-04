@@ -13,6 +13,37 @@ import { PLATFORM_REPORTING_ROUTES } from '../../../../packages/cases/platform-r
 export const CASE_PRACTICE_OBSERVED_AT = '2026-09-01T12:00:00.000Z';
 export const CASE_PRACTICE_LATER_AT = '2026-09-02T12:00:00.000Z';
 export const CASE_PRACTICE_JOURNEY_AT = '2026-09-03T12:00:00.000Z';
+export const CASE_PRACTICE_INTAKE_TEXT = `Reported destination: https://case-practice.example/offer?campaign=fictional
+Literal address: 192.0.2.17
+SHA256: ${'a'.repeat(64)}`;
+
+/** Fixed supplied text; these reviews never read the saved workspace or collect a target. */
+export async function reviewCasePracticeInput(record: CaseRecord) {
+  const source = record.evidencePins[0];
+  if (record.domain !== 'case-practice.example' || !source) throw new TypeError('Use the supplied offer-page practice record.');
+  const [{ reviewMessageInput }, { withIntakeDistributionContext }, { reviewDomainHistory }] = await Promise.all([
+    import('../../../../packages/investigation/message-intake.mts'),
+    import('../../../../packages/investigation/intake-context.mts'),
+    import('../../../../packages/investigation/domain-history-review.mts'),
+  ]);
+  const reviewed = await reviewMessageInput(new TextEncoder().encode(CASE_PRACTICE_INTAKE_TEXT), 'text', CASE_PRACTICE_LATER_AT);
+  const intake = withIntakeDistributionContext(reviewed.report, { channel: 'advertisement', observedAt: CASE_PRACTICE_OBSERVED_AT,
+    sourceLabel: 'Fictional reporter account', reference: 'PRACTICE-7', observerLabel: 'Fictional reviewer', vantageLabel: 'Reported mobile viewport' });
+  const history = reviewDomainHistory(record, { expectedChanges: [], retiredDependencies: [], registrationBoundaries: [{
+    kind: 'review_boundary', occurredAt: CASE_PRACTICE_LATER_AT, source: 'Fictional relevance review',
+    rationale: 'Reassess earlier relevance without asserting a deletion, re-registration or new owner.', snapshotIds: [], evidencePinIds: [source.id],
+  }] }, CASE_PRACTICE_LATER_AT, 2);
+  return { intake, history };
+}
+
+export async function previewCasePracticeContainment(record: CaseRecord, audience: 'internal' | 'trusted' | 'public', includeSupportingPin: boolean) {
+  const source = record.evidencePins[0];
+  const followUp = record.assertions.find(item => item.kind === 'next_step' && item.recheck?.baselinePinId === source?.id);
+  if (!source || !followUp) throw new TypeError('The supplied practice follow-up is unavailable.');
+  const { previewCaseContainmentHandoff } = await import('../../../../packages/cases/case-containment-handoff.mts');
+  return previewCaseContainmentHandoff(record, { audience, recipientRole: 'security_operations', assertionIds: [followUp.id],
+    evidencePinIds: includeSupportingPin ? [source.id] : [] }, CASE_PRACTICE_JOURNEY_AT);
+}
 
 export const CASE_PRACTICE_SCENARIOS = [
   { id: 'credential-form', title: 'An ordinary-looking sign-in page',
@@ -195,6 +226,7 @@ export function createCasePracticeRecord(scenario: CasePracticeScenario = 'crede
   ] }, CASE_PRACTICE_LATER_AT);
   let result = updateCase(observed.cases, initial.id, { assertion: { kind: 'next_step',
       statement: definition.question, state: 'open',
+    ...(scenario === 'credential-form' ? { evidenceRelations: [{ evidencePinId: observed.record.evidencePins[0]!.id, stance: 'unresolved' }] } : {}),
     recheck: { targetHostname: initial.domain, baselinePinId: observed.record.evidencePins[0]!.id,
       conditions: definition.conditions },
   } }, CASE_PRACTICE_LATER_AT).record;

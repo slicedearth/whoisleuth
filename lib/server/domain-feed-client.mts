@@ -6,9 +6,11 @@ import { domainFeedConnection, selectedDomainFeeds, DOMAIN_FEED_BODY_BYTES, DOMA
   DOMAIN_FEED_QUERY_TIMEOUT_MS, type FeedEnvironment } from './domain-feed-config.mts';
 import { DOMAIN_FEED_SERVICE_LIMITATIONS, DOMAIN_FEED_MAX_RESULTS, domainFeedResultAllocation } from './domain-feed-config.mts';
 import { normalizeExplicitIsoTimestamp } from '../../packages/evidence/observation.mts';
+import { normalizeDomainFeedCursor, normalizeDomainFeedHistoryPage, type DomainFeedCursor } from '../../packages/monitoring/domain-feed-history.mts';
 
 type DomainFeedOperation = Readonly<{ operation: 'status' }> | Readonly<{ operation: 'query'; feedIds: string[];
-  selection: ReturnType<typeof normalizeDomainFeedSelection> }>;
+  selection: ReturnType<typeof normalizeDomainFeedSelection> }> | Readonly<{ operation: 'history'; feedIds: string[];
+  selection: ReturnType<typeof normalizeDomainFeedSelection>; cursor: DomainFeedCursor | null }>;
 type DomainFeedTransport = (url: string, init: RequestInit) => Promise<Response>;
 
 function containsDecodedCredential(value: unknown, credentials: readonly string[]): boolean {
@@ -21,12 +23,19 @@ function parseDomainFeedOperation(value: unknown): DomainFeedOperation {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Buffer.byteLength(JSON.stringify(value)) > DOMAIN_FEED_BODY_BYTES) throw new Error('Invalid domain feed request.');
   const record = value as Record<string, unknown>;
   if (record.operation === 'status' && Object.keys(record).length === 1) return { operation: 'status' };
-  if (record.operation !== 'query' || Object.keys(record).sort().join(',') !== 'feedIds,operation,selection') throw new Error('Invalid domain feed request.');
+  if (!['query', 'history'].includes(String(record.operation)) || Object.keys(record).sort().join(',') !==
+    (record.operation === 'history' ? 'cursor,feedIds,operation,selection' : 'feedIds,operation,selection')) throw new Error('Invalid domain feed request.');
   if (!record.selection || typeof record.selection !== 'object' || Array.isArray(record.selection)
-    || Object.keys(record.selection).some(key => !['hosts', 'terms'].includes(key))) throw new Error('Only literal hosts and terms may be sent.');
+    || Object.keys(record.selection).some(key => !['hosts', 'terms', 'negativeTerms'].includes(key))) throw new Error('Only literal hosts and terms may be sent.');
   const selection = normalizeDomainFeedSelection(record.selection as { hosts?: string[]; terms?: string[] });
   if (selection.hosts.length + selection.terms.length === 0) throw new Error('Select at least one literal host or term.');
-  return { operation: 'query', feedIds: selectedDomainFeeds(record.feedIds), selection };
+  const feedIds = selectedDomainFeeds(record.feedIds);
+  if (record.operation === 'history') {
+    if (feedIds.length !== 1) throw new Error('Review one retained source history at a time.');
+    return { operation: 'history', feedIds, selection,
+      cursor: record.cursor === null ? null : normalizeDomainFeedCursor(record.cursor, feedIds[0]!, selection) };
+  }
+  return { operation: 'query', feedIds, selection };
 }
 
 async function domainFeedTransport(url: string, init: RequestInit): Promise<Response> {
@@ -40,6 +49,13 @@ async function domainFeedTransport(url: string, init: RequestInit): Promise<Resp
 function validateDomainFeedReply(value: unknown, operation: DomainFeedOperation): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid feed service reply.');
   const record = value as Record<string, unknown>;
+  if (operation.operation === 'history') {
+    if (Object.keys(record).sort().join(',') !== 'enabled,history' || record.enabled !== true) throw new Error('Invalid feed history reply.');
+    const history = normalizeDomainFeedHistoryPage(record.history, operation.feedIds[0]!, operation.selection);
+    if (operation.cursor && (history.epoch !== operation.cursor.epoch || history.sequence !== operation.cursor.sequence
+      || (operation.cursor.sequence <= operation.cursor.through && history.through !== operation.cursor.through))) throw new Error('Unexpected feed history progress.');
+    return { enabled: true, history };
+  }
   if (Object.keys(record).sort().join(',') !== (operation.operation === 'status' ? 'enabled,feeds' : 'enabled,feeds,limitations')) throw new Error('Invalid feed service reply.');
   if (record.enabled !== true || !Array.isArray(record.feeds) || record.feeds.length < 1 || record.feeds.length > 11) throw new Error('Invalid feed service reply.');
   const seen = new Set<string>();
@@ -62,7 +78,7 @@ function validateDomainFeedReply(value: unknown, operation: DomainFeedOperation)
         if (review.matches.length > domainFeedResultAllocation(operation.feedIds.length) || retainedMatches > DOMAIN_FEED_MAX_RESULTS) throw new Error('Feed result allocation exceeded.');
       }
       feeds.push({ feedId: feed.feedId, stale: feed.stale, review, error: feed.error === null ? null : review
-        ? 'Latest refresh failed; the returned retained snapshot may be stale.' : 'Retained feed snapshot is unavailable.' });
+        ? 'Latest refresh could not be confirmed; review the retained snapshot date.' : 'Retained feed snapshot is unavailable.' });
     } else {
       if (typeof feed.cached !== 'boolean' || feed.cached !== (feed.metadata !== null)) throw new Error('Invalid cache status.');
       if (feed.cached !== (feed.checkedAt !== null)) throw new Error('Invalid cache check state.');
@@ -74,7 +90,7 @@ function validateDomainFeedReply(value: unknown, operation: DomainFeedOperation)
         if (checked.feedId !== feed.feedId) throw new Error('Feed identity mismatch.');
       }
       feeds.push({ feedId: feed.feedId, cached: feed.cached, stale: feed.stale, metadata: feed.metadata, checkedAt: feed.checkedAt,
-        error: feed.error === null ? null : feed.cached ? 'Latest refresh failed; last-good snapshot is retained.' : 'No usable retained snapshot is available.' });
+        error: feed.error === null ? null : feed.cached ? 'Latest refresh could not be confirmed; last-good snapshot is retained.' : 'No usable retained snapshot is available.' });
     }
   }
   if (operation.operation === 'query' && (seen.size !== operation.feedIds.length || !Array.isArray(record.limitations)
@@ -94,7 +110,8 @@ async function executeDomainFeedOperation(operation: DomainFeedOperation, option
   try {
     const response = await (options.transport ?? domainFeedTransport)(`${configuration.url}/${operation.operation}`, {
       method: 'POST', headers, body: JSON.stringify(operation.operation === 'status' ? {} : { feedIds: operation.feedIds,
-        selection: { hosts: operation.selection.hosts, terms: operation.selection.terms } }), signal, redirect: 'manual', credentials: 'omit', referrerPolicy: 'no-referrer',
+        selection: { ...operation.selection, brandProfileId: undefined },
+        ...(operation.operation === 'history' ? { cursor: operation.cursor } : {}) }), signal, redirect: 'manual', credentials: 'omit', referrerPolicy: 'no-referrer',
     });
     if (response.status !== 200 || response.redirected || !response.headers.get('content-type')?.startsWith('application/json')) {
       await response.body?.cancel().catch(() => {});

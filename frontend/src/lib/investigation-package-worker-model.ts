@@ -12,6 +12,7 @@ import { assertBagItSelection, inspectBagItEntries, readBagItZip, MAX_BAGIT_ZIP_
 import { compareLocalPngs } from './image-change.ts';
 import { readImageDerivationDeclaration, type ImageRegion } from '../../../packages/evidence/image-regions.mts';
 import type { ImageChange } from '../../../packages/comparison/image-change.mts';
+import { compareTextPassages, TEXT_COMPARISON_BYTES, type TextPassageComparison } from '../../../packages/comparison/text-passages.mts';
 
 export type SelectedInvestigationFile = Readonly<{
   file: Blob;
@@ -32,6 +33,7 @@ export type BrowserCaptureAttachmentReview = ReturnType<typeof readWebCaptureMan
   unusedIds: readonly string[];
 }>;
 export type InvestigationPackageInputs = {
+  textCompare: { left: Blob; right: Blob };
   imageCompare: { left: Blob; right: Blob; masks: readonly ImageRegion[] };
   build: { files: readonly SelectedInvestigationFile[]; workflow: string; generatedAt: string; applicationVersion: string; passphrase?: string };
   folder: Omit<InvestigationPackageInputs['build'], 'passphrase'>;
@@ -44,7 +46,7 @@ export type InvestigationPackageInputs = {
   inspectFolder: { files: readonly InvestigationFolderFile[] };
   capture: { manifest: Blob; files: readonly Blob[] };
 };
-export type InvestigationPackageResults = { imageCompare: ImageChange; build: BuildResult; folder: BrowserInvestigationFolder; capsule: BuildResult; inspect: BrowserInvestigationPackageReview; inspectFolder: BrowserInvestigationPackageReview; capture: BrowserCaptureAttachmentReview;
+export type InvestigationPackageResults = { textCompare: TextPassageComparison; imageCompare: ImageChange; build: BuildResult; folder: BrowserInvestigationFolder; capsule: BuildResult; inspect: BrowserInvestigationPackageReview; inspectFolder: BrowserInvestigationPackageReview; capture: BrowserCaptureAttachmentReview;
   bagitBuild: BuildResult; bagitFolder: BrowserInvestigationFolder; bagitInspect: BrowserBagItReview; bagitInspectFolder: BrowserBagItReview };
 export type InvestigationPackageKind = keyof InvestigationPackageInputs;
 export type InvestigationPackageRequest = { [Kind in InvestigationPackageKind]: { kind: Kind; input: InvestigationPackageInputs[Kind] } }[InvestigationPackageKind];
@@ -83,6 +85,12 @@ export function assertInvestigationFolderSelection(files: readonly Investigation
 export async function runInvestigationPackageOperation(request: InvestigationPackageRequest): Promise<InvestigationPackageResponse> {
   try {
     if (!request?.input) throw new TypeError('Missing package input.');
+    if (request.kind === 'textCompare') {
+      const { left, right } = request.input;
+      if (!(left instanceof Blob) || !(right instanceof Blob) || !left.size || !right.size
+        || left.size > TEXT_COMPARISON_BYTES || right.size > TEXT_COMPARISON_BYTES) throw new TypeError('Select two bounded UTF-8 text files.');
+      return { kind: 'textCompare', result: await compareTextPassages(new Uint8Array(await left.arrayBuffer()), new Uint8Array(await right.arrayBuffer())) };
+    }
     if (request.kind === 'imageCompare') return { kind: 'imageCompare', result: await compareLocalPngs(request.input.left, request.input.right, request.input.masks) };
     if (request.kind === 'bagitInspect' || request.kind === 'bagitInspectFolder') {
       let files: ReadonlyMap<string, Uint8Array>;
@@ -195,6 +203,7 @@ export async function runInvestigationPackageOperation(request: InvestigationPac
     throw new TypeError('Unsupported package operation.');
   } catch {
     if (request?.kind === 'imageCompare') return { kind: 'error', detail: 'These PNGs or excluded regions could not be compared within the supported image bounds. No file was changed.' };
+    if (request?.kind === 'textCompare') return { kind: 'error', detail: 'These files could not be compared as bounded UTF-8 text. No file was changed.' };
     if (request?.kind?.startsWith('bagit')) return { kind: 'error', detail: 'BagIt processing could not finish. Select a BagIt 1.0 ZIP or folder with UTF-8 tags, safe relative paths and supported file limits. Empty payload folders must be selected as a ZIP. Nothing was fetched or saved.' };
     const unlocking = request?.kind === 'inspect' && typeof request.input?.passphrase === 'string';
     return { kind: 'error', detail: unlocking

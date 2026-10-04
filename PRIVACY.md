@@ -115,6 +115,12 @@ Watchlist records. File publication time and local import time do not establish
 when an individual domain was registered or observed. The original file, its
 filename and its path are not retained by this import.
 
+Brand feed campaigns retain literal positive and negative keywords, review
+windows, pause/expiry settings, default priority and immutable rule revisions in
+the Brand Profile. Candidate previews remain transient until explicitly saved.
+Campaign identity, revision and priority remain browser-local when querying the
+optional feed service.
+
 Lesson-based template revisions retain authored guidance, applicability, reason,
 source-template identity and content hashes of the source template and selected
 lesson. They do not copy the Case identity or note text automatically. These
@@ -160,6 +166,12 @@ not overwritten. Unsaved image edits are not recovery drafts. Removing a source
 can leave its derivative and fingerprint without the original bytes.
 Changed-pixel results and comparison exclusions stay in page memory. Exclusions
 do not redact files. Comparing another capture does not save or import it.
+
+Retained plain-text comparison verifies the selected originals and compares
+bounded word sequences in a local worker. Original-byte digests, counts and
+matched excerpts stay in page memory; no file is fetched, uploaded or rewritten.
+Printing an ordinary Case report uses the exact prepared audience/options
+projection. The operating system handles the print or PDF destination.
 
 Unfinished Case response forms are saved automatically as bounded recovery
 drafts in the selected workspace. They remain separate from submitted Case
@@ -410,11 +422,16 @@ provider miss, failure or quota response is not evidence of safety.
 
 Optional domain-feed search is disabled until an operator configures the
 separate feed service. An explicit search sends only selected feed identifiers,
-exact hostnames and literal search terms through the authenticated application
+exact hostnames and literal positive/negative search terms through the authenticated application
 backend to that service. It does not send the Brand Profile, Case, browser
 workspace or session cookie to the service. Connection credentials remain
 server-side. The service retains public feed snapshots and metadata, not search
 queries; its hosting or tunnel operator may apply separate request logging.
+Explicit history review also sends a source cursor with an epoch, edition range,
+last reviewed hostname and rule digest. The service retains up to eight edition
+metadata records per source, previous membership within its storage budget and
+64 timestamped refresh outcomes. Missing membership is reported as a gap.
+Cursor downloads contain the source cursor, not Brand identity or Case data.
 Feed refreshes contact only the selected catalogue sources, without sharing
 analyst search terms. Disabling the connection does not delete its cache;
 deletion is a separate operator action. Feed membership and a missing match
@@ -564,6 +581,21 @@ Lookup without starting collection. Saving a review in a Case is explicit;
 retaining the unredacted original requires a separate choice. Reported account
 actions can be recorded as analyst claims and select recovery guidance. They
 do not establish account compromise.
+
+Text, message, calendar and extracted document text can also retain literal IPs
+and explicitly labelled hashes with their source-part digest. Complete URLs,
+message headers, HAR and identity-event objects are not scanned for these values.
+Optional distribution, observer, vantage and reference labels are analyst
+declarations included only in an explicitly downloaded or retained review;
+ordinary Case summary pins include counts and digests, not those values.
+
+Internal containment handoffs contain only selected retained follow-up
+assertions and linked pins after audience projection and explicit disclosure
+review. They may still contain sensitive analyst text and exact scope; public
+preview excludes these requests and cannot be exported as a containment handoff.
+The handoff performs no action and does not resolve open requests. Registration
+history boundaries are separately declared references to retained Case evidence,
+not verified ownership events, and leave historical decisions unchanged.
 
 The isolated `dnssec-validate` and `mail-transport` commands require a selected
 literal public resolver, local trust-anchor document and explicit

@@ -43,7 +43,7 @@ test('failed refresh does not discard a valid last-good snapshot or forward priv
     enabled: true, feeds: [{ feedId: 'tif-mini', stale: false, review: await review(), error: 'private upstream detail' }], limitations: [],
   }));
   assert.equal(result[0]!.candidates.length, 1);
-  assert.deepEqual(result[0]!.warnings, ['The latest refresh failed. These candidates come from the last retained snapshot.']);
+  assert.deepEqual(result[0]!.warnings, ['The latest refresh could not be confirmed. These candidates come from the retained snapshot.']);
   assert.doesNotMatch(JSON.stringify(result), /private upstream detail/u);
 });
 
@@ -68,4 +68,22 @@ test('cancelled service requests never fetch and response byte ceilings precede 
   await assert.rejects(loadDomainFeedServiceStatus(cancelled.signal, async () => { fetched = true; return Response.json({ enabled: false, feeds: [] }); }), /cancelled/u);
   assert.equal(fetched, false);
   await assert.rejects(loadDomainFeedServiceStatus(new AbortController().signal, async () => new Response('x', { headers: { 'Content-Type': 'application/json', 'Content-Length': String(3 * 1024 * 1024) } })), /exceeded.*bytes/u);
+});
+
+test('negative selectors are explicitly sent without Brand identity and must round-trip exactly', async () => {
+  const selected = normalizeDomainFeedSelection({ terms: ['launch'], negativeTerms: ['excluded'], brandProfileId: 'local-example-profile' });
+  const remote = await scanDomainFeed((async function* () { yield new TextEncoder().encode('launch.example\nexcluded-launch.example\n'); })(), {
+    feedId: 'nrd7', selection: normalizeDomainFeedSelection({ terms: ['launch'], negativeTerms: ['excluded'] }), importedAt,
+  });
+  let sent: unknown;
+  const result = await queryDomainFeedService('nrd7', selected, new AbortController().signal, async (_input, init) => {
+    sent = JSON.parse(init!.body as string);
+    return Response.json({ enabled: true, feeds: [{ feedId: 'nrd7', stale: false, error: null, review: remote }], limitations: [] });
+  });
+  assert.deepEqual(sent, { operation: 'query', feedIds: ['nrd7'], selection: { hosts: [], terms: ['launch'], negativeTerms: ['excluded'] } });
+  assert.equal(result[0]!.candidates.length, 1);
+  const mismatch = normalizeDomainFeedSelection({ ...selected, negativeTerms: ['different'] });
+  await assert.rejects(queryDomainFeedService('nrd7', mismatch, new AbortController().signal, async () => Response.json({
+    enabled: true, feeds: [{ feedId: 'nrd7', stale: false, error: null, review: remote }], limitations: [],
+  })), /outside the explicit selection/u);
 });

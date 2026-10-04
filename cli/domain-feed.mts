@@ -4,13 +4,14 @@ import { DOMAIN_FEED_LIMITS, normalizeDomainFeedSelection, type DomainFeedSelect
 import { CliUsageError } from './errors.mts';
 
 export function parseDomainFeedSelectors(values: readonly string[]): DomainFeedSelection {
-  const hosts: string[] = [], terms: string[] = [];
+  const hosts: string[] = [], terms: string[] = [], negativeTerms: string[] = [];
   for (const value of values) {
     if (value.startsWith('host:')) hosts.push(value.slice(5));
     else if (value.startsWith('term:')) terms.push(value.slice(5));
-    else throw new CliUsageError('--select requires host:<plain-hostname> or term:<literal-text>.');
+    else if (value.startsWith('exclude:')) negativeTerms.push(value.slice(8));
+    else throw new CliUsageError('--select requires host:<plain-hostname>, term:<literal-text> or exclude:<literal-text>.');
   }
-  const selection = normalizeDomainFeedSelection({ hosts, terms });
+  const selection = normalizeDomainFeedSelection({ hosts, terms, ...(negativeTerms.length ? { negativeTerms } : {}) });
   if (!selection.hosts.length && !selection.terms.length) throw new CliUsageError('Select at least one exact host or literal term.');
   return selection;
 }

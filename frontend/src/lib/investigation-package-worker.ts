@@ -19,7 +19,9 @@ export function runInvestigationPackageWorker<Kind extends InvestigationPackageK
       const reply = value as InvestigationPackageResponse | null;
       if (reply?.kind === 'error') throw new Error(reply.detail);
       if (reply?.kind !== kind) throw new Error('Evidence package processing returned an unexpected result.');
-      if (reply.kind === 'imageCompare') {
+      if (reply.kind === 'textCompare') {
+        if (reply.result?.method !== 'normalised-word-runs-v1' || !Array.isArray(reply.result.passages) || reply.result.passages.length > 256) throw new Error('Text comparison returned an unexpected result.');
+      } else if (reply.kind === 'imageCompare') {
         if (reply.result?.method !== 'rgba-white-pixel-grid-v1' || !Array.isArray(reply.result.tiles) || reply.result.tiles.length > 1024) throw new Error('Image comparison returned an unexpected result.');
       } else if (reply.kind === 'capture') {
         if (!reply.result?.document || !Array.isArray(reply.result.captures) || !Array.isArray(reply.result.artifacts) || !Array.isArray(reply.result.matches)

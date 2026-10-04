@@ -556,6 +556,11 @@ its source, observation time and completeness, not surrounding notes or raw data
 before an ordinary Case report download. Previewed downloads use the same
 prepared bytes; changing the Case or options requires a fresh preview. These
 reports are separate from authorised response packets.
+**Print or save PDF** formats the complete prepared ordinary report, with
+all sections expanded, selected notes, imported restrictions, source identities
+and omission warnings intact. Long values wrap safely; ISO times ending in Z
+remain UTC and unknown source times remain unknown. The print dialog does not
+confirm saving or delivery, and report data digests are not PDF-byte hashes.
 Due reviews refresh while the view is open without changing observation times.
 Section links support
 browser back and forward and remember reading positions while that Case remains
@@ -848,6 +853,13 @@ separate workspace**. Create a destination, then restore the downloaded evidence
 packages or original files. The active workspace is not switched or modified.
 Section checksums and Case identities are compared with the selected backup;
 every referenced file must match before recovery is reported as verified.
+The paged **Original-file recovery checklist** shows each missing or unverified
+exact SHA-256 and byte length, plus the independent Case provenance references
+for shared bytes. Filenames are locating hints only: renamed exact bytes match;
+same-name different bytes do not. An unreadable storage group is labelled
+unverified rather than absent. Copy a digest with the keyboard-operated copy
+control, then restore bounded groups until the checklist is empty. The checklist
+is transient and clears when the rehearsal is kept, deleted or closed.
 Migrated formats are labelled for review rather than claimed byte-equivalent.
 Preferences are reviewed but not applied. Keep the rehearsal workspace, or
 explicitly delete it after checking the result. Leaving the page preserves it.
@@ -863,6 +875,16 @@ filenames and edit coordinates stay in the separate JSON backup. Where supported
 folder you choose. Otherwise, extract the ZIP locally. Neither option is a
 complete workspace backup. **Review evidence folder** on Dashboard checks the
 same manifest and files without importing them or granting ongoing access.
+
+Open **Compare retained text** and choose two retained UTF-8 `.txt` or `.text` files,
+up to 1 MiB and 65,536 words each. It finds shared runs of at least five words
+after NFC Unicode normalisation and lowercasing. Review the original excerpts,
+character offsets, matched-word counts, source labels and full-file digests.
+The first 256 passages are paged; further passages are counted explicitly.
+Long excerpts show a labelled preview while preserving the complete source
+range and match counts. The complete original stays available in Retained files.
+Correspondence is not proof of authorship or infringement. This browser-only
+review neither rewrites the files nor adds a Case decision automatically.
 
 Preview a retained PNG to compare it with another retained image. Source,
 observation time, dimensions and byte identity remain separate; an appearance
@@ -921,6 +943,23 @@ content and key relationship; it does not establish evidence accuracy, signer
 identity or target safety.
 
 ## Understanding evidence
+
+### Reopening an acquisition decision
+
+In Lookup's **Acquisition due diligence → Analyst decision workspace**, select
+**Reopen acquisition review** and choose the original JSON (up to 15 MiB).
+The supported version, bounded structure, full canonical digest, current target
+and synthetic/manual context are checked before a historical preview appears.
+Cancel keeps the current manual edits and Lookup evidence unchanged.
+
+**Accept historical manual fields** restores only the decision, rationale and
+selected checks. It does not replace fresh Lookup evidence or promote an older
+observation time. Keep the original packet for its historical provenance.
+Before preparing a newly dated reviewed packet, explicitly reconfirm the
+decision and selected checks against the current evidence; changing either the
+evidence or manual fields invalidates that confirmation. A download is prepared,
+not confirmed durably saved. There is no automatic lookup, purchase, contact or
+submission, and synthetic packets remain demonstration-only.
 
 ### Source states
 

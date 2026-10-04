@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer';
 
 import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 import { CONTEXT_INPUT_SCHEMAS, reviewContextInput } from '../packages/investigation/context-review.mts';
-import { CONTEXT_REVIEW_KINDS, type ContextReviewKind } from '../packages/contracts/context-review.mts';
+import { CONTEXT_REVIEW_KINDS, DOMAIN_HISTORY_INPUT_SCHEMA, DOMAIN_HISTORY_INPUT_VERSION, type ContextReviewKind } from '../packages/contracts/context-review.mts';
 
 import {
   normalizeEncryptedDnsAdapter,
@@ -36,6 +36,7 @@ import { LOCAL_MMDB_QUERY_SCHEMA, LOCAL_MMDB_QUERY_VERSION, LOCAL_MMDB_REVIEW_SC
 import { INFRASTRUCTURE_OBSERVATION_SCHEMA, MAX_INFRASTRUCTURE_OBSERVATION_BYTES, infrastructureObservationFacts, compareInfrastructureObservations } from '../packages/investigation/infrastructure-observation.mts';
 import { exact } from '../packages/evidence/artifact-structure.mts';
 import { INFRASTRUCTURE_COMPARISON_INPUT_SCHEMA, MAX_INFRASTRUCTURE_COMPARISON_INPUT_BYTES } from '../packages/contracts/external-observation-interchange.mts';
+import { CASE_CONTAINMENT_INPUT_SCHEMA, readCaseContainmentInput, formatCaseContainmentHandoff, type CaseContainmentHandoff } from '../packages/cases/case-containment-handoff.mts';
 
 const OFFLINE_EVIDENCE_REVIEW_SCHEMA = 'whoisleuth.cli.offline-evidence-review';
 const OFFLINE_EVIDENCE_REVIEW_VERSION = 1;
@@ -68,7 +69,8 @@ function parseInput(value: unknown): UnknownRecord {
   }
   const document = record(parsed);
   if (typeof document.schema !== 'string' || document.version !== 1
-    && !(document.schema === LOCAL_MMDB_QUERY_SCHEMA && document.version === LOCAL_MMDB_QUERY_VERSION)) {
+    && !(document.schema === LOCAL_MMDB_QUERY_SCHEMA && document.version === LOCAL_MMDB_QUERY_VERSION)
+    && !(document.schema === DOMAIN_HISTORY_INPUT_SCHEMA && document.version === DOMAIN_HISTORY_INPUT_VERSION)) {
     throw new CliUsageError('Offline evidence review requires a supported versioned input schema.');
   }
   return document;
@@ -77,9 +79,11 @@ function parseInput(value: unknown): UnknownRecord {
 function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toISOString()) {
   const input = parseInput(value);
   if (input.schema === LOCAL_MMDB_QUERY_SCHEMA) throw new CliUsageError('Local MMDB review requires --mmdb <database-file>.');
-  let kind: 'infrastructure' | 'infrastructure_comparison' | 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store' | ContextReviewKind;
+  let kind: 'internal_containment' | 'infrastructure' | 'infrastructure_comparison' | 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store' | ContextReviewKind;
   let result: unknown;
-  if (input.schema === INFRASTRUCTURE_OBSERVATION_SCHEMA) {
+  if (input.schema === CASE_CONTAINMENT_INPUT_SCHEMA) {
+    kind = 'internal_containment'; result = readCaseContainmentInput(input, generatedAt);
+  } else if (input.schema === INFRASTRUCTURE_OBSERVATION_SCHEMA) {
     if (typeof value === 'string' && new TextEncoder().encode(value).byteLength > MAX_INFRASTRUCTURE_OBSERVATION_BYTES) throw new TypeError('Infrastructure snapshot input exceeds its byte bound.');
     kind = 'infrastructure';
     const retained = infrastructureObservationFacts(input);
@@ -206,6 +210,7 @@ async function buildOfflineEvidenceReviewWithLocalResources(
 }
 
 function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvidenceReview>): string {
+  if (document.kind === 'internal_containment') return formatCaseContainmentHandoff(document.result as CaseContainmentHandoff);
   const result = record(document.result);
   if (document.kind === 'geoip' && result.schema === LOCAL_MMDB_REVIEW_SCHEMA && result.version !== LOCAL_MMDB_REVIEW_VERSION) {
     throw new CliUsageError('Offline evidence review does not support this MMDB result version.');

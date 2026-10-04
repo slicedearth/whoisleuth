@@ -45,6 +45,7 @@ import { createScheduledWatchlist } from '../packages/monitoring/scheduled-monit
 import { reviewCandidateWatchInput, parseCandidateWatchInput } from '../cli/watchlist-review.mts';
 import { runCli } from '../cli/runner.mts';
 import { mergeHostedWatchlist } from '../frontend/src/lib/watchlists.ts';
+import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 
 const fixtureText = readFileSync(
   new URL('./fixtures/brand-candidate-workflow/candidate-watch-input-v1.json', import.meta.url),
@@ -431,7 +432,7 @@ test('conflicting duplicate exception revisions reject both import orders withou
   const conflicting = { ...saved, reason: 'A conflicting exact review decision.' };
   for (const entries of [[saved, conflicting], [conflicting, saved]]) {
     assert.throws(() => normalizeCandidateExceptions(entries), /conflicting decisions/);
-    assert.throws(() => mergeBrandProfiles(local, { schema: 'whoisleuth.brand-profiles', version: 10, profiles: [{ ...brand, updatedAt: LATER, candidateExceptions: entries }] }), /conflicting decisions/);
+    assert.throws(() => mergeBrandProfiles(local, { schema: 'whoisleuth.brand-profiles', version: BRAND_PROFILE_SCHEMA_VERSION, profiles: [{ ...brand, updatedAt: LATER, candidateExceptions: entries }] }), /conflicting decisions/);
     assert.deepEqual(local, retained);
   }
   assert.deepEqual(normalizeCandidateExceptions([saved, structuredClone(saved)]), [saved]);

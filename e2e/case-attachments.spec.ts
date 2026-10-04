@@ -8,6 +8,44 @@ import { openCaseSection } from './console-navigation';
 import { readBrowserLocalCollection, failNextBrowserLocalManifestWrite, failNextBrowserLocalCollectionReadAfterWrite, expectNoHorizontalOverflow, useTheme } from './helpers';
 import { FILE_BYTES, FILE_NAME, openRetainedFiles, selectOriginal, storedFiles, failNextFileWrite } from './case-attachment-fixtures';
 
+test('retained text comparison preserves original bytes, source locations and saved records', async ({ page }, testInfo) => {
+  await openCasesView(page); await createCase(page, 'text-comparison.example');
+  const files = await openRetainedFiles(page);
+  const inputs = [
+    { name: 'reference.txt', mimeType: 'text/plain', buffer: Buffer.from('Our original offer includes helpful support every day.') },
+    { name: 'candidate.txt', mimeType: 'text/plain', buffer: Buffer.from('New: OUR ORIGINAL OFFER INCLUDES HELPFUL SUPPORT EVERY DAY. Apply below.') },
+  ];
+  await files.getByLabel('Choose original files', { exact: true }).setInputFiles(inputs);
+  await expect(files.getByRole('heading', { name: '2 selected · not saved', exact: true })).toBeVisible();
+  await files.getByLabel('Source', { exact: true }).fill('Supplied text fixture');
+  await files.getByRole('button', { name: 'Retain selected files', exact: true }).click();
+  await expect(files.getByRole('button', { name: 'Download original candidate.txt', exact: true })).toBeVisible();
+  const before = await readBrowserLocalCollection(page, 'cases'), originalBytes = await storedFiles(page);
+  const comparison = files.locator('.text-comparison');
+  await comparison.getByText('Compare retained text', { exact: true }).click();
+  await comparison.getByRole('combobox', { name: 'Reference text', exact: true }).selectOption({ label: 'reference.txt' });
+  await comparison.getByRole('combobox', { name: 'Candidate text', exact: true }).selectOption({ label: 'candidate.txt' });
+  const compare = comparison.getByRole('button', { name: 'Compare text passages', exact: true });
+  await compare.focus(); await page.keyboard.press('Enter');
+  await expect(comparison.getByRole('heading', { name: '1 shared passage', exact: true })).toBeFocused();
+  await expect(comparison.getByRole('status')).toContainText('8 of 11 candidate words and 8 of 8 reference words');
+  await expect(comparison.getByRole('heading', { name: `Reference · characters 0–${inputs[0]!.buffer.toString().indexOf('.')}`, exact: true })).toBeVisible();
+  await comparison.getByText('Sources and comparison method', { exact: true }).click();
+  for (const input of inputs) await expect(comparison.locator('code').filter({ hasText: createHash('sha256').update(input.buffer).digest('hex') })).toBeVisible();
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1280, 2560]) {
+      await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
+      await comparison.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`text-comparison-${theme}-${width}.png`) });
+    }
+    expect((await new AxeBuilder({ page }).include('.text-comparison').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+  }
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await storedFiles(page)).toEqual(originalBytes);
+  await comparison.getByRole('combobox', { name: 'Candidate text', exact: true }).selectOption({ label: 'reference.txt' });
+  await expect(compare).toBeDisabled(); await expect(comparison.getByRole('heading', { name: '1 shared passage', exact: true })).toHaveCount(0);
+});
+
 test('selected originals require a deliberate atomic save and preserve drafts across failure and section changes', async ({ page }, testInfo) => {
   await openCasesView(page); await createCase(page, 'attachment.example');
   const before = await readBrowserLocalCollection(page, 'cases');

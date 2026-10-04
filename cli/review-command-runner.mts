@@ -328,7 +328,7 @@ async function runOfflineEvidenceReviewCommand(
       || (result.counts && typeof result.counts === 'object' && !Array.isArray(result.counts)
         && ['different', 'missing', 'unexpected', 'incomplete'].some((key) => Number((result.counts as Record<string, unknown>)[key]) > 0))
     );
-    const contextPartial = (CONTEXT_REVIEW_KINDS as readonly string[]).includes(document.kind) && result.state === 'partial';
+    const contextPartial = ((CONTEXT_REVIEW_KINDS as readonly string[]).includes(document.kind) || document.kind === 'internal_containment') && result.state === 'partial';
     const mmdbIncomplete = result.schema === LOCAL_MMDB_REVIEW_SCHEMA && result.version === LOCAL_MMDB_REVIEW_VERSION && result.completeness !== 'complete';
     const infrastructureIncomplete = document.kind === 'infrastructure' ? result.state !== 'complete'
       : document.kind === 'infrastructure_comparison' && result.state !== 'compared';

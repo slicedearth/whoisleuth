@@ -55,11 +55,20 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
     id: 'domain-feed-query-disclosure',
     clauses: [
       /Optional domain-feed search is disabled until an operator configures the separate feed service/iu,
-      /selected feed identifiers, exact hostnames and literal search terms/iu,
+      /selected feed identifiers.*exact hostnames.*positive.*negative.*search terms/iu,
       /does not send the Brand Profile, Case, browser workspace or session cookie to the service/iu,
       /Connection credentials remain server-side/iu,
       /retains public feed snapshots and metadata, not search queries/iu,
       /Disabling the connection does not delete its cache/iu,
+    ],
+  },
+  {
+    id: 'domain-feed-history-disclosure',
+    clauses: [
+      /Explicit history review.*source cursor.*epoch.*edition range.*last reviewed hostname.*rule digest/iu,
+      /up to eight edition metadata records per source.*previous membership.*storage budget.*64 timestamped refresh outcomes/iu,
+      /Missing membership is reported as a gap/iu,
+      /Cursor downloads contain the source cursor, not Brand identity or Case data/iu,
     ],
   },
   {

@@ -14,6 +14,7 @@ import { refreshDomainFeedCache, queryDomainFeedCache, domainFeedCacheStatus, pr
   createOwnedFeedFile, removeOwnedFeedFile } from '../lib/server/domain-feed-cache.mts';
 import { startDomainFeedService, executeDomainFeedWorker } from '../lib/server/domain-feed-service.mts';
 import { parseDomainFeedOperation, executeDomainFeedOperation, validateDomainFeedReply } from '../lib/server/domain-feed-client.mts';
+import { readDomainFeedRefreshes } from '../lib/server/domain-feed-refresh-history.mts';
 
 const TOKEN = 'fixture'.repeat(8);
 const NOW = Date.parse('2026-10-04T00:00:00.000Z');
@@ -318,7 +319,8 @@ test('service cache has one process owner and shutdown joins an interrupted refr
   await assert.rejects(startDomainFeedService({ directory, token: TOKEN, feedIds: [FEED], automaticRefresh: false }), /EEXIST/u);
   const refreshing = service.refresh(FEED); await workerStarted;
   await service.close(); assert.equal(await refreshing, false);
-  assert.deepEqual(await readdir(directory), []);
+  assert.deepEqual(await readdir(directory), ['feed-history.sqlite']);
+  assert.equal((await readDomainFeedRefreshes(directory, FEED))[0]?.outcome, 'interrupted');
 }));
 
 test('pre-existing staging output is never deleted when exclusive ownership fails', async () => temporary(async directory => {

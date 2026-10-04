@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { buildWorkspaceArchive, mergeReadyWorkspaceArchiveData, prepareWorkspaceArchive, readWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
-import { compareRecoveredWorkspace, matchRecoveryFiles, workspaceAttachmentGroups } from '../packages/workspace/workspace-recovery.mts';
+import { compareRecoveredWorkspace, inspectRecoveryFiles, matchRecoveryFiles, workspaceAttachmentGroups } from '../packages/workspace/workspace-recovery.mts';
+import { plaintextLocalBinaryCodec } from '../frontend/src/lib/browser-local-binaries.ts';
+import type { CaseAttachment } from '../packages/cases/case-attachment-model.mts';
 import { createCase } from '../packages/cases/case-model.mts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../packages/contracts/selected-file-limits.mts';
 import { openWorkspaceRecovery } from '../frontend/src/lib/workspace-recovery.ts';
@@ -18,6 +20,61 @@ async function fixture() {
   const second = { ...createCase({ domain: 'second.example' }, NOW), id: 'case-two', attachments: [{ ...attachment('other-provenance'), source: 'A separate observation' }] };
   return readWorkspaceArchive(await buildWorkspaceArchive({ cases: [first, second] }, { generatedAt: NOW }));
 }
+
+test('recovery checklist counts shared content once while retaining independent source references', async () => {
+  const source = await fixture();
+  const initial = await inspectRecoveryFiles(source, async () => new Map());
+  assert.deepEqual([initial.expected, initial.missing, initial.unverified], [1, 1, 0]);
+  assert.equal(initial.checklist[0]!.byteLength, BODY.byteLength);
+  assert.equal(initial.checklist[0]!.digestSha256, DIGEST);
+  assert.deepEqual(initial.checklist[0]!.references.map(item => [item.caseId, item.attachment.id, item.attachment.source]),
+    [['case-one', 'original-one', 'Analyst-retained source'], ['case-two', 'other-provenance', 'A separate observation']]);
+  const unreadable = await inspectRecoveryFiles(source, async () => { throw new Error('Private storage detail'); });
+  assert.deepEqual([unreadable.missing, unreadable.unverified], [0, 1]);
+  assert.equal(unreadable.checklist[0]!.state, 'unverified');
+  assert.ok(!JSON.stringify(unreadable).includes('Private storage detail'));
+});
+
+test('partial multi-group recovery completes only with exact bytes through the existing binary codec', async () => {
+  const source = await fixture();
+  const rows = (source.sections.find(item => item.id === 'cases')!.data as { cases: { attachments: ReturnType<typeof attachment>[] }[] }).cases;
+  const bodies = Array.from({ length: MAX_SELECTED_FILES + 1 }, (_, index) => new Blob([`Unique original ${index}`]));
+  const references = await Promise.all(bodies.map(async (file, index) => attachment(`original-${index}`,
+    `sha256:${createHash('sha256').update(Buffer.from(await file.arrayBuffer())).digest('hex')}`, file.size)));
+  rows[0]!.attachments = references.slice(0, MAX_SELECTED_FILES);
+  rows[1]!.attachments = references.slice(MAX_SELECTED_FILES);
+  const cache = new Map<string, ArrayBuffer>();
+  const groups = workspaceAttachmentGroups(source);
+  const retain = async (files: readonly Blob[]) => {
+    const matched = await matchRecoveryFiles(groups, files); // Reject the whole operation before any cache write.
+    for (const item of matched) cache.set(item.reference.digestSha256, await plaintextLocalBinaryCodec.encode({
+      collection: 'cases', lookupKey: item.reference.digestSha256, ...item }));
+  };
+  const read = async (group: readonly CaseAttachment[]) => {
+    const files = new Map<string, Blob>();
+    for (const reference of group) {
+      const payload = cache.get(reference.digestSha256);
+      if (payload) files.set(reference.digestSha256, await plaintextLocalBinaryCodec.decode({
+        collection: 'cases', lookupKey: reference.digestSha256,
+        reference: { digestSha256: reference.digestSha256, byteLength: reference.byteLength }, payload }));
+    }
+    return files;
+  };
+  await retain(bodies.slice(0, MAX_SELECTED_FILES));
+  const partial = await inspectRecoveryFiles(source, read);
+  assert.deepEqual([partial.verified, partial.missing, partial.unverified], [MAX_SELECTED_FILES, 1, 0]);
+  assert.equal(partial.checklist[0]!.digestSha256, references.at(-1)!.digestSha256);
+  const before = cache.size;
+  await assert.rejects(retain([bodies.at(-1)!, new File(['Different bytes'], references.at(-1)!.fileName)]), /does not match/);
+  assert.equal(cache.size, before);
+  await retain([new File([bodies.at(-1)!], 'renamed-exact-original.bin')]);
+  const complete = await inspectRecoveryFiles(source, read);
+  assert.deepEqual([complete.verified, complete.missing, complete.unverified, complete.checklist.length], [MAX_SELECTED_FILES + 1, 0, 0, 0]);
+  new Uint8Array(cache.get(references[0]!.digestSha256)!).fill(0);
+  const corrupt = await inspectRecoveryFiles(source, read);
+  assert.equal(corrupt.missing, 0);
+  assert.equal(corrupt.unverified, MAX_SELECTED_FILES);
+});
 
 test('all supported archive sections use one merge owner and current data round trips independently', async () => {
   const source = await fixture();

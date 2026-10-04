@@ -19,12 +19,13 @@ export const BRAND_PROFILE_SCHEMA = 'whoisleuth.brand-profiles';
 export const PUBLIC_BRAND_PROFILE_SCHEMA_VERSION = 6;
 // Historical readers retain a fixed published identity when the writer moves.
 export const PUBLISHED_V2_2_BRAND_PROFILE_SCHEMA_VERSION = 7;
-export const BRAND_PROFILE_SCHEMA_VERSION = 10;
+export const BRAND_PROFILE_SCHEMA_VERSION = 11;
 export const BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS = Object.freeze([
   PUBLIC_BRAND_PROFILE_SCHEMA_VERSION,
   PUBLISHED_V2_2_BRAND_PROFILE_SCHEMA_VERSION,
   8,
   9,
+  10,
   BRAND_PROFILE_SCHEMA_VERSION,
 ]);
 export const SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS = BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS;
@@ -40,6 +41,10 @@ export const MAX_CANDIDATE_SOURCES = 12;
 export const MAX_CANDIDATE_TEXT = 300;
 export const MAX_CANDIDATE_EXCEPTIONS = 200;
 export const MAX_CANDIDATE_EXCEPTION_HISTORY = 8;
+export const MAX_BRAND_KEYWORD_CAMPAIGNS = 20;
+export const MAX_BRAND_KEYWORD_CAMPAIGN_HISTORY = 8;
+export const MAX_BRAND_KEYWORD_TERMS = 20;
+export const MAX_BRAND_KEYWORD_TERM_LENGTH = 80;
 export const MAX_WATCH_CONTEXTS = 20;
 export const MAX_PROFILE_TEXT_LENGTH = 200;
 export const MAX_PROFILE_DOMAIN_LENGTH = 253;
@@ -222,6 +227,7 @@ export const WORKSPACE_PORTABILITY_IDENTITY_CONSTANTS = Object.freeze([
 export const WORKSPACE_PORTABILITY_BOUND_CONSTANTS = Object.freeze([
   'MAX_PROFILES', 'MAX_PROFILE_VALUES', 'MAX_PROFILE_VALUE_INPUTS', 'MAX_PROFILE_STORE_BYTES', 'MAX_PROFILE_IMPORT_BYTES',
   'MAX_PROFILE_NAME_LENGTH', 'MAX_PROFILE_TEXT_LENGTH', 'MAX_PROFILE_DOMAIN_LENGTH', 'MAX_PROFILE_URL_LENGTH', 'MAX_PROFILE_TLD_LENGTH',
+  'MAX_BRAND_KEYWORD_CAMPAIGNS', 'MAX_BRAND_KEYWORD_CAMPAIGN_HISTORY', 'MAX_BRAND_KEYWORD_TERMS', 'MAX_BRAND_KEYWORD_TERM_LENGTH',
   'MAX_OFFICIAL_CHANNELS', 'MAX_RIGHTS_REFERENCES', 'MAX_DKIM_SELECTOR_LENGTH',
   'MAX_DKIM_SELECTORS', 'MAX_PROTECTION_ATTESTATIONS', 'MAX_DESIRED_POSTURE_BASELINES', 'MAX_DESIRED_POSTURE_RECORDS',
   'MAX_DESIRED_POSTURE_SUPPRESSIONS', 'MAX_DESIRED_POSTURE_OBSERVATIONS', 'MAX_DESIRED_POSTURE_CHANGE_WINDOWS',
@@ -278,7 +284,7 @@ export const BRAND_PROFILE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   supportedVersions: BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_PROFILE_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Versions 6–9 remain readable without invented candidate provenance. Version 10 retains bounded candidate observations and exact expiring rule exceptions while preserving independent page-fingerprint algorithms.',
+  note: 'Versions 6–10 remain readable without invented keyword campaigns. Version 11 adds bounded, revisioned, time-limited Brand keyword intent without collection authority; candidate provenance and independent page-fingerprint algorithms remain intact.',
 });
 export const CAMPAIGN_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.campaigns', kind: 'browser_store', schema: null, currentVersion: CAMPAIGN_SCHEMA_VERSION,
@@ -513,6 +519,10 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
       { id: 'candidate-sources', path: 'profiles[].candidateObservations[].sources', maximum: MAX_CANDIDATE_SOURCES, handling: 'reject' },
       { id: 'candidate-exceptions', path: 'profiles[].candidateExceptions', maximum: MAX_CANDIDATE_EXCEPTIONS, handling: 'truncate' },
       { id: 'exception-history', path: 'profiles[].candidateExceptions[].history', maximum: MAX_CANDIDATE_EXCEPTION_HISTORY, handling: 'truncate' },
+      { id: 'keyword-campaigns', path: 'profiles[].keywordCampaigns', maximum: MAX_BRAND_KEYWORD_CAMPAIGNS, handling: 'reject' },
+      { id: 'keyword-campaign-history', path: 'profiles[].keywordCampaigns[].history', maximum: MAX_BRAND_KEYWORD_CAMPAIGN_HISTORY, handling: 'reject' },
+      { id: 'keyword-positive-terms', path: 'profiles[].keywordCampaigns[].positiveTerms', maximum: MAX_BRAND_KEYWORD_TERMS, handling: 'reject' },
+      { id: 'keyword-negative-terms', path: 'profiles[].keywordCampaigns[].negativeTerms', maximum: MAX_BRAND_KEYWORD_TERMS, handling: 'reject' },
     ],
     portable: {
       descriptor: BRAND_PROFILE_EXPORT_COMPATIBILITY,
@@ -745,6 +755,8 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
 ]);
 
 const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly Pick<SchemaLifecycleFixture, 'id' | 'path' | 'bytes' | 'sha256' | 'schema' | 'version'>[] = Object.freeze([
+  { id: 'workspace.browser.brand.v11', path: 'test/fixtures/workspace-lifecycle/browser-brand-v11.json', bytes: 38, sha256: 'c727cd501774f0f89a39f399a01216065b6ed7048bfed97bbcdaf10e651a7133', schema: 'whoisleuth.browser.brand-profile-store', version: 11 },
+  { id: 'workspace.portable.brand.v11', path: 'test/fixtures/workspace-lifecycle/portable-brand-v11.json', bytes: 123, sha256: 'c5023e1eebe187cf355c4fb53b7d8a755dc0ffb01a3deeb9b9dd7032007933d9', schema: 'whoisleuth.brand-profiles', version: 11 },
   { id: 'workspace.browser.watchlist.v6', path: 'test/fixtures/workspace-lifecycle/browser-watchlist-v6.json', bytes: 76, sha256: '16df0f813b17f1765862f5c2ff41c2db9c7d6d76e75f24746aa6d75b59d3f02e', schema: 'whoisleuth.browser.watchlist-store', version: 6 },
   { id: 'workspace.portable.watchlist.v6', path: 'test/fixtures/workspace-lifecycle/portable-watchlist-v6.json', bytes: 120, sha256: 'ced22d0d16e839e0b4625f8799eef30a776908abf3af998de6fad5b549898987', schema: 'whoisleuth.watchlists', version: 6 },
   { id: 'workspace.browser.brand.v10', path: 'test/fixtures/workspace-lifecycle/browser-brand-v10.json', bytes: 38, sha256: 'bebf3a72ba57c06246e6169ebd9a597eb5b867508db85e1db0e3d763bc0839bc', schema: 'whoisleuth.browser.brand-profile-store', version: 10 },

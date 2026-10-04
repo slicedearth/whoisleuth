@@ -2,6 +2,7 @@ import PostalMime, { type Email } from 'postal-mime';
 import { parse, defaultTreeAdapter, type DefaultTreeAdapterTypes } from 'parse5';
 import { sha256ArtifactBytes } from '../evidence/artifact-integrity.mts';
 import { createLinkIntake } from './link-intake.mts';
+import { createIndicatorIntake, MAX_INTAKE_INDICATOR_TEXT } from './intake-indicators.mts';
 import { AUTHENTICATION_METHODS, addressDomains, authenticationServiceDomains,
   dkimSigningDomains } from './mail-header-identity.mts';
 import { createIntakeReport } from './intake-report.mts';
@@ -14,23 +15,25 @@ import { MAX_MESSAGE_INTAKE_BYTES,
   type IntakeLink, type MessageActionHint, type MessageIdentity, type MessageAuthenticationClaim,
   type MessageIntakeKind, type MessageIntakeResult } from '../contracts/message-intake.mts';
 
+const HTML_TEXT_BLOCK = /^(?:address|article|aside|blockquote|body|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|li|main|nav|ol|p|pre|section|table|tr|ul)$/u;
 
 /** All parsing is inert. Only HTTP(S) link targets are offered for deliberate collection. */
 export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeKind, reviewedAt: string, qrText?: readonly string[]): Promise<MessageIntakeResult> {
   const base = await createIntakeReport(bytes, kind, reviewedAt);
   if (!['text', 'email', 'calendar', 'qr'].includes(kind)) throw new TypeError('Use the selected-file intake entry point for this format.');
-  const links = createLinkIntake(), identities: MessageIdentity[] = [], authenticationClaims: MessageAuthenticationClaim[] = [];
+  const links = createLinkIntake(), indicators = createIndicatorIntake(), identities: MessageIdentity[] = [], authenticationClaims: MessageAuthenticationClaim[] = [];
   const actionHints = new Set<MessageActionHint>(), bounds = new Set<string>();
   const authenticationHeaders: MailAuthenticationHeader[] = [];
   const messageParts: Array<{ part: number; parentPart: number | null; digestSha256: string; byteLength: number }> = [];
   let omittedAuthenticationHeaders = 0;
   let partialAuthentication = false;
   let reviewedParts = 0, unreviewedAttachments = 0, decodedBytes = 0;
-  const text = (value: string, source: IntakeLink['source']) => {
+  const text = (value: string, source: 'text' | 'calendar', partId: string, includeIndicators = true) => {
     for (const hint of requestedActionHints(value)) actionHints.add(hint);
     links.addText(value, source);
+    if (includeIndicators) indicators.addText(value, source, { partId, page: null });
   };
-  function html(value: string) {
+  function html(value: string, partId: string) {
     // parse5 never renders, loads resources, or runs supplied script.
     let allocated = 0;
     const htmlBound = new Error('HTML work bound');
@@ -43,11 +46,25 @@ export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeK
         createCommentNode(...args) { admit(); return defaultTreeAdapter.createCommentNode(...args); },
       } });
     } catch (cause) { if (cause !== htmlBound) throw cause; bounds.add('HTML nodes'); return; }
-    const queue: DefaultTreeAdapterTypes.Node[] = [tree];
+    const queue: Array<DefaultTreeAdapterTypes.Node | null> = [tree];
+    const indicatorText: string[] = [];
+    let indicatorCharacters = 0, indicatorOverflow = false;
+    const appendIndicatorText = (value: string) => {
+      if (indicatorOverflow) return;
+      if (value.length > MAX_INTAKE_INDICATOR_TEXT - indicatorCharacters) {
+        indicatorOverflow = true;
+        indicatorText.length = 0;
+        indicators.markPartial();
+        return;
+      }
+      indicatorCharacters += value.length;
+      indicatorText.push(value);
+    };
     let nodes = 0;
     while (queue.length) {
-      if (++nodes > MAX_MESSAGE_HTML_NODES) { bounds.add('HTML nodes'); break; }
       const node = queue.pop()!;
+      if (node === null) { appendIndicatorText('\n'); continue; }
+      if (++nodes > MAX_MESSAGE_HTML_NODES) { bounds.add('HTML nodes'); break; }
       if ('tagName' in node) {
         const attrs = new Map(node.attrs.map(attr => [attr.name, attr.value]));
         if (node.tagName === 'a' && attrs.has('href')) {
@@ -63,19 +80,29 @@ export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeK
         if (node.tagName === 'form' && attrs.has('action')) links.add(attrs.get('action')!, 'html_form');
         if ((node.tagName === 'iframe' || node.tagName === 'frame') && attrs.has('src')) links.add(attrs.get('src')!, 'html_frame');
         if (node.tagName === 'script' || node.tagName === 'style') continue;
+        if (HTML_TEXT_BLOCK.test(node.tagName)) {
+          appendIndicatorText('\n');
+          queue.push(null);
+        } else if (node.tagName === 'br' || node.tagName === 'td' || node.tagName === 'th') appendIndicatorText(' ');
       }
-      if ('value' in node) text(node.value, 'text');
+      if ('value' in node) {
+        text(node.value, 'text', partId, false);
+        // Inline markup must not separate a credential label from its value.
+        // Block boundaries keep unrelated visible paragraphs independently usable.
+        appendIndicatorText(node.value.replace(/\s+/gu, ' '));
+      }
       if ('childNodes' in node) for (let index = node.childNodes.length - 1; index >= 0; index--) queue.push(node.childNodes[index]!);
     }
+    if (!indicatorOverflow) indicators.addText(indicatorText.join(''), 'text', { partId, page: null });
   }
-  function calendar(value: string) {
+  function calendar(value: string, partId: string) {
     const unfolded = value.replace(/\r?\n[ \t]/gu, '');
     // No attendee names, addresses, descriptions or event identifiers enter the report.
     for (const line of unfolded.split(/\r?\n/u)) {
       const colon = line.indexOf(':');
       if (colon < 0) continue;
       const key = line.slice(0, colon).split(';', 1)[0]?.toUpperCase();
-      if (['URL', 'DESCRIPTION', 'LOCATION', 'X-ALT-DESC'].includes(key ?? '')) text(line.slice(colon + 1).replace(/\\n/giu, '\n').replace(/\\([,;\\])/gu, '$1'), 'calendar');
+      if (['URL', 'DESCRIPTION', 'LOCATION', 'X-ALT-DESC'].includes(key ?? '')) text(line.slice(colon + 1).replace(/\\n/giu, '\n').replace(/\\([,;\\])/gu, '$1'), 'calendar', partId);
     }
   }
   function identity(part: number, role: MessageIdentity['role'], domains: readonly string[]) {
@@ -110,13 +137,17 @@ export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeK
     const part = ++reviewedParts;
     messageParts.push({ part, parentPart, digestSha256: parentPart === null ? base.source.digestSha256 : await sha256ArtifactBytes(input), byteLength: input.byteLength });
     headers(mail, part);
-    if (mail.text) text(mail.text, 'text');
-    if (mail.html) html(mail.html);
+    if (mail.text) text(mail.text, 'text', `message-${part}`);
+    if (mail.html) html(mail.html, `message-${part}`);
     for (const attachment of mail.attachments) {
       if (reviewedParts >= MAX_MESSAGE_PARTS) { bounds.add('Message parts'); unreviewedAttachments++; continue; }
       const body = typeof attachment.content === 'string' ? new TextEncoder().encode(attachment.content) : new Uint8Array(attachment.content);
       if (attachment.mimeType === 'message/rfc822') await message(body, depth + 1, part);
-      else if (attachment.mimeType === 'text/calendar') { reviewedParts++; calendar(new TextDecoder().decode(body)); }
+      else if (attachment.mimeType === 'text/calendar') {
+        const calendarPart = ++reviewedParts;
+        messageParts.push({ part: calendarPart, parentPart: part, digestSha256: await sha256ArtifactBytes(body), byteLength: body.byteLength });
+        calendar(new TextDecoder().decode(body), `message-${calendarPart}`);
+      }
       else { unreviewedAttachments++; }
     }
   }
@@ -131,13 +162,15 @@ export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeK
   } else {
     reviewedParts = 1;
     const value = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-    if (kind === 'calendar') calendar(value); else text(value, 'text');
+    if (kind === 'calendar') calendar(value, 'input'); else text(value, 'text', 'input');
   }
   const result = links.result();
   for (const limitation of result.limitations) bounds.add(limitation);
   if (result.bounded) bounds.add('Link extraction');
+  const indicatorResult = indicators.result();
+  if (indicatorResult.indicatorCoverage.state === 'partial') bounds.add('Indicator extraction');
   return { report: { ...base,
     coverage: { state: bounds.size || unreviewedAttachments || partialAuthentication ? 'partial' : 'reviewed', reviewedParts, unreviewedAttachments, rejectedLinks: result.rejected, boundsReached: [...bounds] },
     identities, authenticationClaims, authenticationReview: { headers: authenticationHeaders, omittedHeaders: omittedAuthenticationHeaders }, messageParts,
-    links: result.links, actionHints: [...actionHints] }, targets: result.targets };
+    ...indicatorResult, links: result.links, actionHints: [...actionHints] }, targets: result.targets };
 }

@@ -79,6 +79,29 @@ test('literal terms are not regular expressions and exact host selection never i
   assert.equal(result.matches[0]!.candidate.matches.length, 0);
 });
 
+test('negative literals veto positive and exact selections before counting or the 200-candidate bound', async () => {
+  const selection = normalizeDomainFeedSelection({ hosts: ['excluded-exact.example'], terms: ['brand'], negativeTerms: ['EXCLUDED'], brandProfileId: 'example-brand' });
+  const raw = `${Array.from({ length: 250 }, (_, i) => `excluded-brand-${i}.example`).join('\n')}\nexcluded-exact.example\nbrand-kept.example\n`;
+  const result = await scan(raw, { selection });
+  assert.deepEqual(result.matches.map(value => value.domain), ['brand-kept.example']);
+  assert.equal(result.matched, 1); assert.equal(result.omitted, 0); assert.equal(result.truncated, false);
+  assert.equal(result.rows, 252); assert.deepEqual(result.selection.negativeTerms, ['excluded']);
+  assert.equal(projectDomainFeedMatch('excluded-exact.example', result, selection), null);
+  assert.deepEqual(normalizeDomainFeedReview(JSON.parse(JSON.stringify(result))), result);
+  assert.throws(() => normalizeDomainFeedSelection({ negativeTerms: Array(21).fill('excluded') }), /20/u);
+  assert.throws(() => normalizeDomainFeedSelection({ negativeTerms: ['ab'] }), /3–80/u);
+  assert.equal(Object.hasOwn(normalizeDomainFeedSelection({ terms: ['brand'] }), 'negativeTerms'), false);
+  await assert.rejects(scan('brand.example', { selection: normalizeDomainFeedSelection({ negativeTerms: ['excluded'] }) }), /at least one/u);
+});
+
+test('negative matching remains literal on canonical IDNs and a veto never bypasses malformed-tail validation', async () => {
+  const literal = await scan('brand.example', { selection: normalizeDomainFeedSelection({ terms: ['brand'], negativeTerms: ['.*x'] }) });
+  assert.equal(literal.matches.length, 1);
+  const idn = await scan('例え.example', { selection: normalizeDomainFeedSelection({ terms: ['example'], negativeTerms: ['r8j'] }) });
+  assert.equal(idn.matches.length, 0);
+  await assert.rejects(scan('excluded-brand.example\nhttps://bad.example', { selection: normalizeDomainFeedSelection({ terms: ['brand'], negativeTerms: ['excluded'] }) }), /plain domain/u);
+});
+
 test('malformed tails, invalid UTF-8, conflicting metadata and reduced bounds produce no usable partial result', async () => {
   for (const tail of ['https://bad.example/path', '||bad.example^', '0.0.0.0 bad.example', 'bad.example\u0000'])
     await assert.rejects(scan(`exact.example\n${tail}`), /plain domain|control/u);

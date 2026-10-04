@@ -2,6 +2,8 @@ import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { MAX_MESSAGE_INTAKE_BYTES, MESSAGE_INTAKE_INPUTS, type MessageIntakeReport } from '../packages/contracts/message-intake.mts';
 import { reviewSelectedInputInWorker } from './selected-input-worker.mts';
 import { reviewIdentityIncident } from '../packages/investigation/identity-incident-review.mts';
+import { intakeIndicators, intakeIndicatorSource } from '../packages/investigation/intake-indicators.mts';
+import { MAX_INTAKE_CONTEXT_BYTES, parseIntakeContextInput, withIntakeDistributionContext } from '../packages/investigation/intake-context.mts';
 import { selectReceiverTrust, authenticationHeaderLabel } from '../packages/investigation/mail-authentication-review.mts';
 import type { CliArguments } from './arguments.mts';
 import type { CliCommandContext } from './runner-types.mts';
@@ -33,6 +35,14 @@ export function formatMessageIntake(report: MessageIntakeReport): string {
       if (link.authorisation.redirectOrigin) lines.push(`  Supplied return origin: ${link.authorisation.redirectOrigin}`);
       if (link.authorisation.duplicateParameters.length) lines.push(`  Ambiguous parameters: ${link.authorisation.duplicateParameters.join(', ')}`);
     }
+  }
+  for (const indicator of intakeIndicators(report)) lines.push(`${indicator.id}: ${indicator.kind.toUpperCase()} ${indicator.value} · literal selected text · ${indicator.location.partId}${indicator.location.page ? ` page ${indicator.location.page}` : ''} · source ${intakeIndicatorSource(report, indicator)}`);
+  if (report.schemaVersion === 2) {
+    lines.push(`Indicator coverage: ${report.indicatorCoverage.state.replaceAll('_', ' ')}. Hashes require explicit algorithm labels; no indicator was resolved or reputation-checked.`);
+    const supplied = report.distributionContext;
+    if (supplied) lines.push(`Analyst-declared distribution: ${supplied.channel} · ${supplied.sourceLabel} · observed ${supplied.observedAt ?? 'unknown'}`,
+      `  Reference ${supplied.reference ?? 'not supplied'} · observer ${supplied.observerLabel ?? 'unknown'} · vantage ${supplied.vantageLabel ?? 'unknown'}`,
+      'Distribution, observation time and vantage are supplied claims, not verified capture conditions or independent collection.');
   }
   if (report.actionHints.length) lines.push(`Review wording: ${report.actionHints.map(value => value.replaceAll('_', ' ')).join(', ')}`);
   if (report.documentReview) {
@@ -78,7 +88,11 @@ export async function runIntakeCommand(args: Extract<CliArguments, { action: 'in
     let authenticationReview;
     try { authenticationReview = selectReceiverTrust(result.report.authenticationReview, args.trustedAuthHeaders ?? []); }
     catch (cause) { if (cause instanceof TypeError) throw new CliUsageError(cause.message); throw cause; }
-    const report = { ...result.report, authenticationReview, identityRecovery: reviewIdentityIncident({ reportedActions: args.reportedActions }) };
+    let report = { ...result.report, authenticationReview, identityRecovery: reviewIdentityIncident({ reportedActions: args.reportedActions }) };
+    if (args.intakeContextSource) {
+      if (args.intakeContextSource === '-') throw new CliUsageError('Distribution context requires a separate selected file, not stdin.');
+      report = withIntakeDistributionContext(report, parseIntakeContextInput(await context.readInput(args.intakeContextSource, MAX_INTAKE_CONTEXT_BYTES, 'Distribution context')));
+    }
     dependencies.signal?.throwIfAborted();
     if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report) : context.terminal(formatMessageIntake(report), args.color));
     return args.strictExit && report.coverage.state === 'partial' ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
