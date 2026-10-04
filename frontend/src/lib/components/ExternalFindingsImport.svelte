@@ -1,8 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { casePruningNotice } from '$lib/analysis/case-mutation-feedback.ts';
+  import { casePruningNotice } from '#lib/analysis/case-mutation-feedback.ts';
   import ExternalImportReview, { type ExternalImportPreview } from './ExternalImportReview.svelte';
-  import { parseBoundedJson } from '$lib/bounded-json';
+  import { parseBoundedJson } from '#lib/bounded-json.ts';
   import {
     EXTERNAL_FINDINGS_SCHEMA,
     MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
@@ -29,21 +29,21 @@
     convertExternalFindingsCsv,
     convertSupportedExternalFindings,
     type ExternalFindingConversionReport,
-  } from '$lib/analysis/external-findings-converters.ts';
+  } from '#lib/analysis/external-findings-converters.ts';
   import {
     WEB_CAPTURE_SUMMARY_SCHEMA,
     WEB_CAPTURE_MANIFEST_SCHEMA,
     parseWebCaptureManifest,
     parseWebCaptureSummary,
-  } from '$lib/analysis/web-capture-import.ts';
+  } from '#lib/analysis/web-capture-import.ts';
   import {
     MAX_WARC_IMPORT_BYTES,
     parseWarcEvidenceArchive,
-  } from '$lib/analysis/warc-evidence-import.ts';
+  } from '#lib/analysis/warc-evidence-import.ts';
   import {
     MAX_WACZ_IMPORT_BYTES,
     parseWaczEvidenceArchive,
-  } from '$lib/analysis/wacz-evidence-import.ts';
+  } from '#lib/analysis/wacz-evidence-import.ts';
 
   let {
     cases,

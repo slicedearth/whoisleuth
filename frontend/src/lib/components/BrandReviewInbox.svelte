@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import Pagination from './Pagination.svelte';
   import type { BrandReviewInbox } from '../analysis/brand-review-inbox.ts';
 

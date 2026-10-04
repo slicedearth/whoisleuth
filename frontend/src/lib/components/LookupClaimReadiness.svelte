@@ -3,8 +3,8 @@
     LookupClaimReadiness,
     LookupClaimId,
     LookupClaimReadinessState,
-  } from '$lib/analysis/lookup-claim-readiness.ts';
-  import type { LookupReviewActionModel } from '$lib/analysis/lookup-review-action-model.ts';
+  } from '#lib/analysis/lookup-claim-readiness.ts';
+  import type { LookupReviewActionModel } from '#lib/analysis/lookup-review-action-model.ts';
 
   let {
     readiness,

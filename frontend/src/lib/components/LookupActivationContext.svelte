@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ActivationContext } from '$lib/analysis/activation-context.ts';
+  import type { ActivationContext } from '#lib/analysis/activation-context.ts';
 
   let { context }: { context: ActivationContext } = $props();
 </script>

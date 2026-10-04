@@ -1,10 +1,10 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
-  import type { CaseRecord } from '$lib/cases';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
   import { prepareCaseReportPreview, caseReportPreviewIsCurrent, type CaseReportPreview as ReportPreview } from '../../../../packages/cases/case-report-preview.mts';
   import CaseReportPreview from './CaseReportPreview.svelte';
-  import { buildCaseSightingStixExport } from '$lib/analysis/case-sighting-stix-export.ts';
+  import { buildCaseSightingStixExport } from '#lib/analysis/case-sighting-stix-export.ts';
 
   let {
     record,

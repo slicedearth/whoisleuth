@@ -2,11 +2,11 @@
   import LookupEvidenceSection from './LookupEvidenceSection.svelte';
   import LookupFamilySummary from './LookupFamilySummary.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
-  import type { LookupSectionControls } from '$lib/controllers/lookup-section-navigation.ts';
-  import type { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
+  import type { LookupSectionControls } from '#lib/controllers/lookup-section-navigation.ts';
+  import type { buildLookupRouteAnalysis } from '#lib/analysis/lookup-route-analysis.ts';
   import type { LookupVisualView } from './LookupVisualWorkspace.svelte';
   import type { lookupSectionSurfaces } from './lookup-section-surfaces.ts';
-  import { projectEvidenceTopology } from '$lib/analysis/evidence-topology.ts';
+  import { projectEvidenceTopology } from '#lib/analysis/evidence-topology.ts';
 
   type Analysis = ReturnType<typeof buildLookupRouteAnalysis>;
   let {

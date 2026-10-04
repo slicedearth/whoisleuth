@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack, tick } from 'svelte';
-  import { decodeArtifactPng, readArtifactTextPage } from '$lib/artifact-preview.ts';
+  import { decodeArtifactPng, readArtifactTextPage } from '#lib/artifact-preview.ts';
   import type { ImageDimensions, ImageRegion } from '../../../../packages/evidence/image-regions.mts';
 
   let { file, mediaType, label, focusOnReady = true, onready, onselect, regions = [] }: {

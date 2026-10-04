@@ -1,10 +1,10 @@
 <script lang="ts">
-  import Pagination from '$lib/components/Pagination.svelte';
+  import Pagination from '#lib/components/Pagination.svelte';
   import {
     filterBulkPeerOutlierRows,
     MAX_BULK_PEER_OUTLIER_FILTER_LENGTH,
     type BulkPeerOutlierMatrix,
-  } from '$lib/analysis/bulk-peer-outliers.ts';
+  } from '#lib/analysis/bulk-peer-outliers.ts';
 
   let {
     matrix,

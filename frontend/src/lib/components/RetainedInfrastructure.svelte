@@ -1,10 +1,10 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { INFRASTRUCTURE_ENTITY_TYPES, type InfrastructureEntityType, type InvestigationInfrastructure } from '$lib/analysis/investigation-infrastructure.ts';
-  import { MAX_INVESTIGATION_SEARCH_QUERY_LENGTH } from '$lib/analysis/investigation-search.ts';
-  import type { InvestigationStoreName } from '$lib/analysis/investigation-projection.ts';
-  import type { InvestigationSearchSession } from '$lib/investigation-search-session';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { INFRASTRUCTURE_ENTITY_TYPES, type InfrastructureEntityType, type InvestigationInfrastructure } from '#lib/analysis/investigation-infrastructure.ts';
+  import { MAX_INVESTIGATION_SEARCH_QUERY_LENGTH } from '#lib/analysis/investigation-search.ts';
+  import type { InvestigationStoreName } from '#lib/analysis/investigation-projection.ts';
+  import type { InvestigationSearchSession } from '#lib/investigation-search-session.ts';
   import Pagination from './Pagination.svelte';
   import InvestigationHistory from './InvestigationHistory.svelte';
   import InfrastructureRelationships from './InfrastructureRelationships.svelte';

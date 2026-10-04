@@ -42,7 +42,6 @@ const SOURCE_FILES = [
   'package-lock.json',
   'tsconfig.json',
   'frontend/package.json',
-  'frontend/svelte.config.ts',
   'frontend/tsconfig.json',
   'frontend/vite.config.ts',
 ];
@@ -457,7 +456,7 @@ describe('frontend build integrity', () => {
   test('new configuration dependencies are discovered and unresolved or linked helpers fail closed', (context) => {
     const root = fixtureRepository(context);
     recordFrontendBuildIntegrity(root, ENVIRONMENT);
-    write(root, 'frontend/svelte.config.ts', 'import "../tools/new-helper.mts";\n');
+    write(root, 'frontend/vite.config.ts', 'import "../tools/new-helper.mts";\n');
     assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /import is unresolved/u);
     write(root, 'tools/new-helper.mts', 'export const value = true;\n');
     assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /stale or mixed/u);

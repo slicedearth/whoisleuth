@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { HANDOFF_SOURCE_LABELS } from '$lib/candidate-handoff-core';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { HANDOFF_SOURCE_LABELS } from '#lib/candidate-handoff-core.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { goto } from '$app/navigation';
   import { getContext, onMount, tick } from 'svelte';
-  import DiscoverCandidateResults from '$lib/components/DiscoverCandidateResults.svelte';
-  import DiscoverCtHistory from '$lib/components/DiscoverCtHistory.svelte';
-  import DiscoverCertificateGroups from '$lib/components/DiscoverCertificateGroups.svelte';
-  import DiscoverIdnPolicyReview from '$lib/components/DiscoverIdnPolicyReview.svelte';
-  import DiscoverGenerationOptions from '$lib/components/DiscoverGenerationOptions.svelte';
-  import PageHeading from '$lib/components/PageHeading.svelte';
-  import Pagination from '$lib/components/Pagination.svelte';
+  import DiscoverCandidateResults from '#lib/components/DiscoverCandidateResults.svelte';
+  import DiscoverCtHistory from '#lib/components/DiscoverCtHistory.svelte';
+  import DiscoverCertificateGroups from '#lib/components/DiscoverCertificateGroups.svelte';
+  import DiscoverIdnPolicyReview from '#lib/components/DiscoverIdnPolicyReview.svelte';
+  import DiscoverGenerationOptions from '#lib/components/DiscoverGenerationOptions.svelte';
+  import PageHeading from '#lib/components/PageHeading.svelte';
+  import Pagination from '#lib/components/Pagination.svelte';
   import {
     DEFAULT_GENERATION_PRESET,
     DEFAULT_CUSTOM_MUTATION_FAMILY_IDS,
@@ -29,43 +29,43 @@
     MUTATION_LABELS,
     normalizeCustomDictionaryTerms,
     normalizeGenerationTlds,
-  } from '$lib/analysis/typosquat-generator.ts';
+  } from '#lib/analysis/typosquat-generator.ts';
   import { publicSuffixForAsciiHostname } from '../../../../../packages/analysis/registrable-domain.mts';
-  import { activeProfile, retainBrandCandidates, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
+  import { activeProfile, retainBrandCandidates, type ActiveBrandProfileSourceState, type BrandProfile } from '#lib/brand-profiles.ts';
   import { discoveryCandidateObservation, scopedCandidateExclusion } from '../../../../../packages/monitoring/brand-candidate-review.mts';
-  import { partitionBrandCandidates } from '$lib/analysis/brand-profile-signals.ts';
-  import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
+  import { partitionBrandCandidates } from '#lib/analysis/brand-profile-signals.ts';
+  import { saveCandidateHandoff, type Candidate } from '#lib/candidate-handoff.ts';
   import {
     LARGE_JSON_RESPONSE_BYTES,
     requestJsonCapped,
     STANDARD_JSON_RESPONSE_BYTES,
-  } from '$lib/bounded-json-response';
-  import { normalizeCtResponse, ctCandidateMatchesFilter, type CtCertificateGroup } from '$lib/analysis/ct-results.ts';
+  } from '#lib/bounded-json-response.ts';
+  import { normalizeCtResponse, ctCandidateMatchesFilter, type CtCertificateGroup } from '#lib/analysis/ct-results.ts';
   import {
     candidateReviewCues as buildCandidateReviewCues,
     sortDiscoverCandidates,
     type CandidateMetadata,
     type CandidateSort,
-  } from '$lib/analysis/discover-candidate-sort.ts';
-  import { MAX_CT_QUERY_LENGTH, normalizeCtQuery } from '$lib/analysis/ct-query.ts';
-  import type { CtHistoryObservationState } from '$lib/analysis/ct-history.ts';
-  import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
+  } from '#lib/analysis/discover-candidate-sort.ts';
+  import { MAX_CT_QUERY_LENGTH, normalizeCtQuery } from '#lib/analysis/ct-query.ts';
+  import type { CtHistoryObservationState } from '#lib/analysis/ct-history.ts';
+  import { analyzeDomainIdn } from '#lib/analysis/idn-confusables.ts';
   import {
     normalizeRdapNameserverSearchResponse,
     type RdapNameserverSearchView,
-  } from '$lib/analysis/rdap-nameserver-search.ts';
-  import { clearCtHistory, loadCtHistory, removeCtHistory, saveCtHistorySearch, type CtHistoryEntry, type CtHistoryStore } from '$lib/ct-history';
-  import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
+  } from '#lib/analysis/rdap-nameserver-search.ts';
+  import { clearCtHistory, loadCtHistory, removeCtHistory, saveCtHistorySearch, type CtHistoryEntry, type CtHistoryStore } from '#lib/ct-history.ts';
+  import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '#lib/capabilities.ts';
   import {
     MAX_INVESTIGATION_GUIDE_REVIEW_DOMAINS,
     normalizeInvestigationGuideDomain,
-  } from '$lib/analysis/investigation-guide.ts';
+  } from '#lib/analysis/investigation-guide.ts';
   import {
     loadInvestigationGuide,
     selectInvestigationGuideReviewDomains,
     updateInvestigationGuideOutcome,
-  } from '$lib/investigation-guide';
-  import { unavailableLocalContextLabels } from '$lib/local-context-load.ts';
+  } from '#lib/investigation-guide.ts';
+  import { unavailableLocalContextLabels } from '#lib/local-context-load.ts';
 
   type Mode = 'typosquat' | 'keyword' | 'certificate-transparency' | 'nameserver';
   type GenerationPresetId = 'common' | 'impersonation' | 'all' | 'custom';

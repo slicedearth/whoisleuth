@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import type { SelectedInvestigationFile } from '$lib/investigation-package-worker-model.ts';
-  import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
-  import { chooseEvidenceFolderParent, supportsEvidenceFolderWrite, writeBrowserInvestigationFolder } from '$lib/investigation-folder.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import type { SelectedInvestigationFile } from '#lib/investigation-package-worker-model.ts';
+  import { runInvestigationPackageWorker } from '#lib/investigation-package-worker.ts';
+  import { chooseEvidenceFolderParent, supportsEvidenceFolderWrite, writeBrowserInvestigationFolder } from '#lib/investigation-folder.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import EvidencePackageEncryption from './EvidencePackageEncryption.svelte';
 
   let { getFiles, workflow, disabled = false, onbusy = () => {}, onmessage, requireEncryption = false, validateSelection, allowBagIt = false }: {

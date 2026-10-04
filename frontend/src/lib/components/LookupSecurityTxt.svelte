@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { buildDisclosurePolicyHealth } from '$lib/analysis/disclosure-policy-health.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { buildDisclosurePolicyHealth } from '#lib/analysis/disclosure-policy-health.ts';
   let {
     state = 'unavailable',
     detail = '',

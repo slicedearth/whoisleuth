@@ -6,7 +6,7 @@
     RIGHTS_REFERENCE_KINDS,
     type OfficialChannel,
     type RightsReference,
-  } from '$lib/analysis/brand-profile-model.ts';
+  } from '#lib/analysis/brand-profile-model.ts';
 
   let {
     officialChannels,

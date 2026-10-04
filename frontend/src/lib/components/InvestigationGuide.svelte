@@ -1,20 +1,20 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { caseWorkspaceHref as caseSectionHref } from '$lib/analysis/case-response-stage.ts';
+  import { caseWorkspaceHref as caseSectionHref } from '#lib/analysis/case-response-stage.ts';
   import { page } from '$app/state';
   import { onMount, tick } from 'svelte';
-  import { loadLocalInvestigationProjection } from '$lib/investigation-search';
-  import { investigationGuideEvidenceContext, investigationGuideCaseContext } from '$lib/analysis/investigation-guide-context.ts';
-  import { readSelectedConsoleCase, selectConsoleCase, subscribeSelectedConsoleCase } from '$lib/console-workflow-state.ts';
-  import { activeProfile } from '$lib/brand-profiles';
-  import { loadCases, type CaseRecord } from '$lib/cases';
-import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data-content.ts';
-  import type { BrandProfile } from '$lib/analysis/brand-profile-model.ts';
-  import { buildInvestigationHandoffReadiness } from '$lib/analysis/investigation-handoff-readiness.ts';
-  import { buildGuidedCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
-  import CollectionPreflight from '$lib/components/CollectionPreflight.svelte';
-  import { normalizeInvestigationGuideDomain } from '$lib/analysis/investigation-guide.ts';
-  import { casesNavigation, toolNavigation } from '$lib/workspaces';
+  import { loadLocalInvestigationProjection } from '#lib/investigation-search.ts';
+  import { investigationGuideEvidenceContext, investigationGuideCaseContext } from '#lib/analysis/investigation-guide-context.ts';
+  import { readSelectedConsoleCase, selectConsoleCase, subscribeSelectedConsoleCase } from '#lib/console-workflow-state.ts';
+  import { activeProfile } from '#lib/brand-profiles.ts';
+  import { loadCases, type CaseRecord } from '#lib/cases.ts';
+import { isExpectedBrowserLocalDataFailure } from '#lib/browser-local-data-content.ts';
+  import type { BrandProfile } from '#lib/analysis/brand-profile-model.ts';
+  import { buildInvestigationHandoffReadiness } from '#lib/analysis/investigation-handoff-readiness.ts';
+  import { buildGuidedCollectionPreflight } from '#lib/analysis/collection-preflight.ts';
+  import CollectionPreflight from '#lib/components/CollectionPreflight.svelte';
+  import { normalizeInvestigationGuideDomain } from '#lib/analysis/investigation-guide.ts';
+  import { casesNavigation, toolNavigation } from '#lib/workspaces.ts';
   import {
     approveInvestigationGuideCollection,
     clearInvestigationGuide,
@@ -35,7 +35,7 @@ import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data-conte
     updateInvestigationGuideOutcome,
     type InvestigationGuide,
     type InvestigationRecipeStage,
-  } from '$lib/investigation-guide';
+  } from '#lib/investigation-guide.ts';
   let { revealOnMount = false }: { revealOnMount?: boolean } = $props();
   const toolLabels = new Map(toolNavigation.map((tool) => [tool.href, tool.label]));
   const targetLabels = new Map([

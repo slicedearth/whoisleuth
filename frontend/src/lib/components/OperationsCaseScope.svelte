@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { CaseRecord } from '$lib/cases';
-  import type { OperationsReportSourceState } from '$lib/analysis/brand-protection-operations-report.ts';
-  import { buildOperationsScopeReview } from '$lib/analysis/operations-contributors.ts';
-  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { OperationsReportSourceState } from '#lib/analysis/brand-protection-operations-report.ts';
+  import { buildOperationsScopeReview } from '#lib/analysis/operations-contributors.ts';
+  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import CaseIncidentCoverage from './CaseIncidentCoverage.svelte';
 
   let { records, sourceState, campaignDomains }: {

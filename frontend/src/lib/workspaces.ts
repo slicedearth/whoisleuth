@@ -278,7 +278,7 @@ export const consoleNavigation = consoleNavigationGroups.flatMap((group) => grou
 export const referenceNavigation: readonly NavigationItem[] = [...referenceResources, ...publicResources];
 export const protectedDestinations = [...consoleNavigation, ...referenceResources];
 
-export function isNavigationItemActive(item: NavigationItem, currentUrl: URL): boolean {
+export function isNavigationItemActive(item: NavigationItem, currentUrl: Readonly<Pick<URL, 'origin' | 'pathname'>> & { searchParams: Pick<URLSearchParams, 'get'> }): boolean {
   const destination = new URL(item.href, currentUrl.origin);
   if (destination.pathname !== currentUrl.pathname) return false;
   if (item.activeQuery) {
@@ -300,7 +300,7 @@ export function isNavigationItemActive(item: NavigationItem, currentUrl: URL): b
   return [...destination.searchParams].every(([name, value]) => currentUrl.searchParams.get(name) === value);
 }
 
-export function isProtectedDestination(currentUrl: URL): boolean {
+export function isProtectedDestination(currentUrl: Readonly<Pick<URL, 'origin' | 'pathname'>>): boolean {
   return protectedDestinations.some((item) => (
     new URL(item.href, currentUrl.origin).pathname === currentUrl.pathname
   ));

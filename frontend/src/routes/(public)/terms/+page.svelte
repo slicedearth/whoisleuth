@@ -1,5 +1,5 @@
 <script lang="ts">
-  import PublicSeo from '$lib/components/PublicSeo.svelte';
+  import PublicSeo from '#lib/components/PublicSeo.svelte';
 </script>
 
 <PublicSeo

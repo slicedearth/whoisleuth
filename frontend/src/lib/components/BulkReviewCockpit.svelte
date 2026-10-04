@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { describeBulkSourceCoverage } from '$lib/analysis/bulk-source-coverage.ts';
-  import { officialRegistryLookupFor } from '$lib/analysis/registry-support.ts';
-  import BulkRiskSummary from '$lib/components/BulkRiskSummary.svelte';
+  import { describeBulkSourceCoverage } from '#lib/analysis/bulk-source-coverage.ts';
+  import { officialRegistryLookupFor } from '#lib/analysis/registry-support.ts';
+  import BulkRiskSummary from '#lib/components/BulkRiskSummary.svelte';
   import CasePicker from './CasePicker.svelte';
   import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
-  import type { CaseRecord } from '$lib/analysis/case-model.ts';
+  import type { CaseRecord } from '#lib/analysis/case-model.ts';
   import {
     nextBulkReviewIndex,
     type BulkReviewCockpitRow,
-  } from '$lib/analysis/bulk-review-cockpit.ts';
-  import type { BulkRetryPlan } from '$lib/analysis/bulk-retry-plan.ts';
+  } from '#lib/analysis/bulk-review-cockpit.ts';
+  import type { BulkRetryPlan } from '#lib/analysis/bulk-retry-plan.ts';
 
   let {
     rows,

@@ -2,10 +2,10 @@
   import { CASE_CLOSURE_REASONS } from '../../../../packages/cases/case-response-records.mts';
   import { caseLookupTarget } from '../../../../packages/cases/case-evidence-model.mts';
   import type { CaseRecord } from '../cases.ts';
-  import { buildCaseResponseLifecycleSummary } from '$lib/analysis/case-response-model.ts';
-  import { list } from '$lib/analysis/case-response-form-values.ts';
-  import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
-  import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
+  import { buildCaseResponseLifecycleSummary } from '#lib/analysis/case-response-model.ts';
+  import { list } from '#lib/analysis/case-response-form-values.ts';
+  import type { CaseResponsePresentation, PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
+  import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseRecheckReview from './CaseRecheckReview.svelte';
   import CaseRecheckQuestions from './CaseRecheckQuestions.svelte';

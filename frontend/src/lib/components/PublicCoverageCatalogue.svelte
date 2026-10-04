@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PUBLIC_COVERAGE } from '$lib/generated/public-coverage';
+  import { PUBLIC_COVERAGE } from '#lib/generated/public-coverage.ts';
 
   const scopes = Object.freeze([
     Object.freeze({ value: 'investigate', label: 'Investigate' }),

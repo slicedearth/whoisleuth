@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 2 October 2026.
+Last updated: 4 October 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -36,6 +36,14 @@ Missing, blocked, stale, malformed, partial, unavailable or unsupported evidence
 never becomes absence, safety, ownership, control, intent or remediation.
 
 ## Information processed
+
+Normal page and asset requests reach the website host. The browser framework
+also checks a same-origin application-version file when the page regains focus
+or becomes visible. Periodic version polling is disabled. These checks include
+ordinary connection metadata and any eligible first-party session cookie, but
+no target or workspace payload. The document's no-referrer policy omits its
+page URL, including investigation query parameters, from outgoing referrers.
+Version checks do not collect evidence or submit saved investigations.
 
 Depending on the selected operation, WHOISleuth can process:
 

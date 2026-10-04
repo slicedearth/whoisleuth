@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { StorefrontDraft } from '$lib/analysis/storefront-review-draft.ts';
+  import type { StorefrontDraft } from '#lib/analysis/storefront-review-draft.ts';
   import { STOREFRONT_FIELDS } from '../../../../packages/investigation/storefront-review.mts';
   let { draft = $bindable(), label }: { draft: StorefrontDraft; label: string } = $props();
 </script>

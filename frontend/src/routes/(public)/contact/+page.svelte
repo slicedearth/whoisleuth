@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
-  import PageHeading from '$lib/components/PageHeading.svelte';
-  import PublicSeo from '$lib/components/PublicSeo.svelte';
+  import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '#lib/bounded-json-response.ts';
+  import PageHeading from '#lib/components/PageHeading.svelte';
+  import PublicSeo from '#lib/components/PublicSeo.svelte';
   import { normalizeContactAddress } from '../../../../../lib/contact-address.mts';
   import { recipientMailto } from '../../../../../packages/evidence/email-recipient.mts';
 

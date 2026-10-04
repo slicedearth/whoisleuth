@@ -2,13 +2,13 @@
   import LookupEvidenceSection from './LookupEvidenceSection.svelte';
   import LookupFamilySummary from './LookupFamilySummary.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
-  import type { LookupSectionControls } from '$lib/controllers/lookup-section-navigation.ts';
-  import type { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
+  import type { LookupSectionControls } from '#lib/controllers/lookup-section-navigation.ts';
+  import type { buildLookupRouteAnalysis } from '#lib/analysis/lookup-route-analysis.ts';
   import type { Snippet } from 'svelte';
-  import type { LookupViewModel } from '$lib/analysis/lookup-response.ts';
-  import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
+  import type { LookupViewModel } from '#lib/analysis/lookup-response.ts';
+  import type { CheckpointFact } from '#lib/analysis/case-evidence-checkpoint.ts';
   import type { lookupSectionSurfaces } from './lookup-section-surfaces.ts';
-  import { boundedTechnologyText, stringList } from '$lib/analysis/lookup-display-model.ts';
+  import { boundedTechnologyText, stringList } from '#lib/analysis/lookup-display-model.ts';
 
   type Analysis = ReturnType<typeof buildLookupRouteAnalysis>;
   let {

@@ -23,7 +23,7 @@ export function indexRuntimeConsumers(
     for (const dependency of module.dependencies) {
       if (dependency.typeOnly === true || dependency.preCompilationOnly === true) continue;
       if (dependency.couldNotResolve) {
-        if (/^(?:\.|\$lib\/)/u.test(dependency.module))
+        if (/^(?:\.|#)/u.test(dependency.module))
           unresolved.push({ source: module.source, specifier: dependency.module });
         continue;
       }

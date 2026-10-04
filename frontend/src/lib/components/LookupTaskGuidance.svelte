@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { lookupTaskGuidance } from '$lib/analysis/lookup-task-guidance.ts';
-  import { LOOKUP_TASK_VIEWS, type LookupTaskView } from '$lib/analysis/lookup-presentation.ts';
+  import { lookupTaskGuidance } from '#lib/analysis/lookup-task-guidance.ts';
+  import { LOOKUP_TASK_VIEWS, type LookupTaskView } from '#lib/analysis/lookup-presentation.ts';
 
   let { task, lookupMode, ontask, onmode }: {
     task: LookupTaskView;

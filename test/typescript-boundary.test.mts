@@ -57,9 +57,9 @@ describe('repository TypeScript boundary', () => {
 
     const rootConfig = await readTypeScriptConfig('tsconfig.json');
     assert.ok(rootConfig.include?.includes('server.mts'), 'the Express runtime entry point must be checked directly');
-    assert.ok(rootConfig.include?.includes('frontend/svelte.config.ts'), 'the Svelte configuration must be checked directly');
 
     const frontendConfig = await readTypeScriptConfig('frontend/tsconfig.json');
+    assert.ok(frontendConfig.include?.includes('*.ts'), 'frontend root configuration must remain in its TypeScript project');
     assert.equal(frontendConfig.compilerOptions?.allowJs, true);
     assert.equal(
       frontendConfig.compilerOptions?.checkJs,

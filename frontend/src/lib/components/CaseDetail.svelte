@@ -2,19 +2,19 @@
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { tick } from 'svelte';
-  import PageHeading from '$lib/components/PageHeading.svelte';
-  import CaseRelationships from '$lib/components/CaseRelationships.svelte';
-  import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
-  import CaseReportExport from '$lib/components/CaseReportExport.svelte';
-  import CaseResponseWorkspace from '$lib/components/CaseResponseWorkspace.svelte';
-  import CaseBrandAssociations from '$lib/components/CaseBrandAssociations.svelte';
-  import { readCaseNavigationContext } from '$lib/console-workflow-state';
-  import { loadReviewSession } from '$lib/review-session';
-  import { handlesLocalLink } from '$lib/link-activation';
-  import { keepFocusBelow } from '$lib/visible-focus';
-  import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
-  import { CASE_WORKSPACE_SECTIONS, caseWorkspaceHref, caseWorkspaceSection, type CaseWorkspaceSection } from '$lib/analysis/case-response-stage.ts';
-  import type { BrandProfile } from '$lib/brand-profiles';
+  import PageHeading from '#lib/components/PageHeading.svelte';
+  import CaseRelationships from '#lib/components/CaseRelationships.svelte';
+  import EvidenceTimeline from '#lib/components/EvidenceTimeline.svelte';
+  import CaseReportExport from '#lib/components/CaseReportExport.svelte';
+  import CaseResponseWorkspace from '#lib/components/CaseResponseWorkspace.svelte';
+  import CaseBrandAssociations from '#lib/components/CaseBrandAssociations.svelte';
+  import { readCaseNavigationContext } from '#lib/console-workflow-state.ts';
+  import { loadReviewSession } from '#lib/review-session.ts';
+  import { handlesLocalLink } from '#lib/link-activation.ts';
+  import { keepFocusBelow } from '#lib/visible-focus.ts';
+  import { restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
+  import { CASE_WORKSPACE_SECTIONS, caseWorkspaceHref, caseWorkspaceSection, type CaseWorkspaceSection } from '#lib/analysis/case-response-stage.ts';
+  import type { BrandProfile } from '#lib/brand-profiles.ts';
   import {
     CASE_DISPOSITIONS,
     caseStatusOptionsForDirectEdit,
@@ -57,7 +57,7 @@
     brandProfiles: BrandProfile[];
     brandProfilesUnavailable: boolean;
   } = $props();
-  const activeSection = $derived(caseWorkspaceSection(page.url));
+  const activeSection = $derived(caseWorkspaceSection(new URL(page.url.href)));
   const returnContext = $derived(readCaseNavigationContext(record.id));
   let hasSavedReviewReturn = $state(false);
   $effect(() => {
@@ -88,7 +88,7 @@
     const generation = ++navigationGeneration;
     readingPositions.set(activeSection, window.scrollY);
     try {
-      await goto(caseWorkspaceHref(caseId, section), { noScroll: true, keepFocus: true });
+      await goto(caseWorkspaceHref(caseId, section), { reset: false });
       await tick();
       if (generation !== navigationGeneration || record.id !== caseId || activeSection !== section) return;
       const navigation = document.querySelector<HTMLElement>('[data-case-detail] .case-sections');

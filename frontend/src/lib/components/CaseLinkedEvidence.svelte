@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { CaseEvidencePin, CaseEvidenceRelationStance } from '$lib/cases';
-  import { caseEvidenceReferences } from '$lib/analysis/case-evidence-presentation.ts';
+  import type { CaseEvidencePin, CaseEvidenceRelationStance } from '#lib/cases.ts';
+  import { caseEvidenceReferences } from '#lib/analysis/case-evidence-presentation.ts';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   let { pins, ids, relations = [] }: {
     pins: readonly CaseEvidencePin[];

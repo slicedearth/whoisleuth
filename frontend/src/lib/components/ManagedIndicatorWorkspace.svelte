@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
-  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
+  import { createDraftRevision, restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
   import { buildManagedIndicatorRevision, compareManagedIndicatorRevisions, managedIndicatorState, parseManagedIndicatorJson, readManagedIndicatorSet, MAX_INDICATOR_REVIEW_BASIS, type ManagedIndicatorSet, type ManagedIndicatorChange } from '../../../../packages/interchange/managed-indicator-set.mts';
   import { exportManagedIndicators } from '../../../../packages/interchange/managed-indicator-export.mts';
   import { MAX_MANAGED_INDICATOR_SET_BYTES } from '../../../../packages/contracts/analyst-interchange.mts';

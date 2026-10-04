@@ -2,15 +2,15 @@
   import LookupEvidenceSection from './LookupEvidenceSection.svelte';
   import LookupFamilySummary from './LookupFamilySummary.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
-  import type { LookupSectionControls } from '$lib/controllers/lookup-section-navigation.ts';
-  import type { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
-  import type { LookupViewModel, LookupHttpResponse } from '$lib/analysis/lookup-response.ts';
+  import type { LookupSectionControls } from '#lib/controllers/lookup-section-navigation.ts';
+  import type { buildLookupRouteAnalysis } from '#lib/analysis/lookup-route-analysis.ts';
+  import type { LookupViewModel, LookupHttpResponse } from '#lib/analysis/lookup-response.ts';
   import type { lookupSectionSurfaces } from './lookup-section-surfaces.ts';
   import type {
     SourceRefreshCaseTarget,
     LookupSourceRefreshLedger,
     LookupFreshnessThresholds,
-  } from '$lib/analysis/lookup-source-refresh.ts';
+  } from '#lib/analysis/lookup-source-refresh.ts';
 
   type Analysis = ReturnType<typeof buildLookupRouteAnalysis>;
   let {

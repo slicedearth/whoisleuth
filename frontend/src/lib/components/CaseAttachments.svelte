@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
+  import type { CaseRecord } from '#lib/cases.ts';
   import type { CaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
   import { declareImageDerivation } from '../../../../packages/evidence/image-regions.mts';
-  import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
-  import { isoFromUtcInput, utcDateTimeInputAttributes } from '$lib/analysis/case-response-form-values.ts';
-  import { prepareCaseAttachmentFiles, readRetainedCaseFile, readRetainedCaseFiles, removeRetainedCaseAttachment, retainCaseAttachments, type SelectedCaseAttachment } from '$lib/case-attachments.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
-  import { supportsArtifactPreview } from '$lib/artifact-preview.ts';
-  import { trackTransientCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
+  import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
+  import { isoFromUtcInput, utcDateTimeInputAttributes } from '#lib/analysis/case-response-form-values.ts';
+  import { prepareCaseAttachmentFiles, readRetainedCaseFile, readRetainedCaseFiles, removeRetainedCaseAttachment, retainCaseAttachments, type SelectedCaseAttachment } from '#lib/case-attachments.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
+  import { supportsArtifactPreview } from '#lib/artifact-preview.ts';
+  import { trackTransientCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import ArtifactPreview from './ArtifactPreview.svelte';
   import CaseImageReview from './CaseImageReview.svelte';
   import CaseTextComparison from './CaseTextComparison.svelte';

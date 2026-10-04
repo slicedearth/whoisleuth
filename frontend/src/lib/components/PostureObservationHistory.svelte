@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { currentDesiredPostureObservation, desiredPostureObservations, type DesiredPostureBaseline } from '$lib/analysis/brand-profile-model.ts';
-  import { buildDesiredPostureHistory } from '$lib/analysis/owned-domain-posture-review.ts';
+  import { currentDesiredPostureObservation, desiredPostureObservations, type DesiredPostureBaseline } from '#lib/analysis/brand-profile-model.ts';
+  import { buildDesiredPostureHistory } from '#lib/analysis/owned-domain-posture-review.ts';
   import { POSTURE_SOURCE_LABELS } from '../../../../packages/evidence/domain-posture-context.mts';
-  import { reviewClock } from '$lib/review-clock.ts';
+  import { reviewClock } from '#lib/review-clock.ts';
 
   let { baseline }: { baseline: DesiredPostureBaseline } = $props();
   const observations = $derived(desiredPostureObservations(baseline));

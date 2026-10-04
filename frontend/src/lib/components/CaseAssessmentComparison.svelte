@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CaseRecord } from '$lib/cases';
+  import type { CaseRecord } from '#lib/cases.ts';
   import { compareCaseAssertions, type ComparedEvidenceRelationship } from '../../../../packages/cases/case-assessment-comparison.mts';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
 

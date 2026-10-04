@@ -1,7 +1,7 @@
 <script lang="ts">
-  import PublicExampleGallery from '$lib/components/PublicExampleGallery.svelte';
-  import PublicReferenceDocument from '$lib/components/PublicReferenceDocument.svelte';
-  import PublicSeo from '$lib/components/PublicSeo.svelte';
+  import PublicExampleGallery from '#lib/components/PublicExampleGallery.svelte';
+  import PublicReferenceDocument from '#lib/components/PublicReferenceDocument.svelte';
+  import PublicSeo from '#lib/components/PublicSeo.svelte';
 
   const pageSections = [
     { href: '#example-gallery-title', label: 'Example formats' },

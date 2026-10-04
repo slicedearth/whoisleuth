@@ -2,19 +2,19 @@
   import { onDestroy, tick } from 'svelte';
   import { WORKSPACE_ARCHIVE_SCHEMA, ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA } from '../../../../packages/contracts/case-portability.mts';
   import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, investigationFileMediaType, investigationImageParentIncluded } from '../../../../packages/investigation/investigation-manifest.mts';
-  import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
-  import type { BrowserInvestigationPackageReview, SelectedInvestigationFile } from '$lib/investigation-package-worker-model.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { runInvestigationPackageWorker } from '#lib/investigation-package-worker.ts';
+  import type { BrowserInvestigationPackageReview, SelectedInvestigationFile } from '#lib/investigation-package-worker-model.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import ArtifactPreview from './ArtifactPreview.svelte';
-  import { supportsArtifactPreview } from '$lib/artifact-preview.ts';
-  import { selectedInvestigationFolderFiles } from '$lib/investigation-folder.ts';
+  import { supportsArtifactPreview } from '#lib/artifact-preview.ts';
+  import { selectedInvestigationFolderFiles } from '#lib/investigation-folder.ts';
   import EvidenceFileExport from './EvidenceFileExport.svelte';
   import EvidencePackageInput from './EvidencePackageInput.svelte';
-  import { readPackagedCaseReview } from '$lib/case-review-package.ts';
+  import { readPackagedCaseReview } from '#lib/case-review-package.ts';
   import BagItEvidenceReview from './BagItEvidenceReview.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
-  import { LOOKUP_EVIDENCE_SCHEMA } from '$lib/analysis/evidence-export.ts';
-  import type { LookupEvidenceReplay } from '$lib/analysis/lookup-evidence-replay.ts';
+  import { LOOKUP_EVIDENCE_SCHEMA } from '#lib/analysis/evidence-export.ts';
+  import type { LookupEvidenceReplay } from '#lib/analysis/lookup-evidence-replay.ts';
 
   let { onworkspace }: { onworkspace?: (file: Blob) => Promise<void> } = $props();
   type Selection = SelectedInvestigationFile & { name: string; key: number };
@@ -41,7 +41,7 @@
     const generation = ++lookupGeneration;
     lookupTrigger = trigger; lookupPending = true; error = '';
     try {
-      const { readPackagedLookupReview } = await import('$lib/packaged-lookup-review.ts');
+      const { readPackagedLookupReview } = await import('#lib/packaged-lookup-review.ts');
       const result = await readPackagedLookupReview(current, id);
       if (generation === lookupGeneration && review === current) lookupReview = result;
     } catch (cause) {

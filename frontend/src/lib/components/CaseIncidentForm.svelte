@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { untrack } from 'svelte';
   import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
   import type { CaseRecord, CaseIncidentInput } from '../analysis/case-model.ts';

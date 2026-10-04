@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
-  import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
+  import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import { caseEvidenceLinkIssues, caseEvidenceSharedContext, type CaseEvidenceLink } from '../../../../packages/cases/case-evidence-links.mts';
   import { MAX_RESPONSE_RATIONALE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';

@@ -11,7 +11,7 @@ test('static identity variants derive from the shared interface vectors without 
     assert.doesNotMatch(svg, /<(?:image|script|foreignObject)\b|data:image|(?:xlink:)?href=|<!DOCTYPE|<!ENTITY/i);
   }
   const component = await readFile(new URL('../frontend/src/lib/components/BrandMark.svelte', import.meta.url), 'utf8');
-  assert.match(component, /from '\$lib\/brand-identity'/);
+  assert.match(component, /from '#lib\/brand-identity\.ts'/);
   assert.match(component, /aria-hidden="true"/);
   assert.match(component, /focusable="false"/);
   assert.match(component, /fill:var\(--brand-mark-primary\)/);
@@ -41,7 +41,7 @@ test('the favicon contains complete native-size PNG entries and public surfaces 
   assert.match(appHtml, /<link rel="icon" href="\/favicon\.ico" sizes="16x16 32x32 48x48 64x64">/);
   assert.match(appHtml, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg">/);
   assert.match(wordmark, /class="sr-only">WHOISleuth<\/span>/);
-  assert.match(wordmark, /from '\$lib\/brand-identity'/);
+  assert.match(wordmark, /from '#lib\/brand-identity\.ts'/);
   assert.match(social, /<image href="logo\.svg"/);
   const head = appHtml.indexOf('%sveltekit.head%');
   const theme = appHtml.indexOf('<script src="/theme-init.js"></script>');

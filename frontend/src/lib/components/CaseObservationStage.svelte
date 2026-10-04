@@ -5,11 +5,11 @@
     CASE_SIGHTING_STATES,
   } from '../../../../packages/cases/case-response-records.mts';
   import type { CaseRecord } from '../cases.ts';
-  import { buildCaseSightingChronology } from '$lib/analysis/case-sighting-chronology.ts';
-  import { isoFromUtcInput, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
-  import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
+  import { buildCaseSightingChronology } from '#lib/analysis/case-sighting-chronology.ts';
+  import { isoFromUtcInput, utcDateTimeInputAttributes, list } from '#lib/analysis/case-response-form-values.ts';
+  import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
-  import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
+  import type { CaseResponsePresentation, PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';

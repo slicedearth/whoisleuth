@@ -5,17 +5,17 @@
     CASE_PIN_COMPLETENESS,
   } from '../../../../packages/cases/case-response-records.mts';
   import type { CaseRecord } from '../cases.ts';
-  import { caseRecheckEvidence } from '$lib/analysis/case-evidence-presentation.ts';
+  import { caseRecheckEvidence } from '#lib/analysis/case-evidence-presentation.ts';
   import {
     isoFromUtcInput,
     utcDateTimeInputAttributes,
     list,
-  } from '$lib/analysis/case-response-form-values.ts';
+  } from '#lib/analysis/case-response-form-values.ts';
   import type {
     CaseResponsePresentation,
     PersistCaseResponse,
-  } from '$lib/analysis/case-response-stage.ts';
-  import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
+  } from '#lib/analysis/case-response-stage.ts';
+  import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseResponseObjectSelect from './CaseResponseObjectSelect.svelte';

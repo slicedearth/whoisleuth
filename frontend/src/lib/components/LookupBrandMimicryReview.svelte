@@ -2,7 +2,7 @@
   import type {
     BrandMimicryReview,
     BrandMimicryReviewState,
-  } from '$lib/analysis/brand-mimicry-review.ts';
+  } from '#lib/analysis/brand-mimicry-review.ts';
 
   let { review }: { review: BrandMimicryReview } = $props();
 

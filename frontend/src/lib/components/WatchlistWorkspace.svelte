@@ -1,10 +1,10 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import Pagination from '$lib/components/Pagination.svelte';
-  import EvidenceTimestamp from '$lib/components/EvidenceTimestamp.svelte';
-  import MonitorDomainTimeline from '$lib/components/MonitorDomainTimeline.svelte';
-  import WatchlistDomainMetadata from '$lib/components/WatchlistDomainMetadata.svelte';
-  import type { WatchBrandNames } from '$lib/analysis/watchlist-context-labels';
+  import Pagination from '#lib/components/Pagination.svelte';
+  import EvidenceTimestamp from '#lib/components/EvidenceTimestamp.svelte';
+  import MonitorDomainTimeline from '#lib/components/MonitorDomainTimeline.svelte';
+  import WatchlistDomainMetadata from '#lib/components/WatchlistDomainMetadata.svelte';
+  import type { WatchBrandNames } from '#lib/analysis/watchlist-context-labels.ts';
   import {
     fieldLabels,
     formatValue,
@@ -14,7 +14,7 @@
     type WatchlistEntry,
     type WatchlistEvent,
     type Watchlists,
-  } from '$lib/watchlists';
+  } from '#lib/watchlists.ts';
 
   let {
     watchlists,

@@ -2,7 +2,7 @@
   import type {
     BulkMailExposureReport,
     BulkMailExposureState,
-  } from '$lib/analysis/bulk-mail-exposure.ts';
+  } from '#lib/analysis/bulk-mail-exposure.ts';
 
   let {
     report,

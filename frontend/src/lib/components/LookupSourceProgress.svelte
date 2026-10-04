@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { LookupProgressUpdate } from '../../../../lib/lookup-progress-http.mts';
   import type { LookupProgressState } from '../../../../lib/lookup-progress.mts';
-  import { LOOKUP_SOURCE_LABELS } from '$lib/analysis/lookup-source-labels.ts';
+  import { LOOKUP_SOURCE_LABELS } from '#lib/analysis/lookup-source-labels.ts';
 
   let { progress }: { progress: LookupProgressUpdate | null } = $props();
   const snapshot = $derived(progress?.snapshot);

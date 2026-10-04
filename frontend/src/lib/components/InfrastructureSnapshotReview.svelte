@@ -1,11 +1,11 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import type { InvestigationSearchSession } from '$lib/investigation-search-session';
+  import type { InvestigationSearchSession } from '#lib/investigation-search-session.ts';
   import type { RetainedInfrastructureSnapshotReview } from '../../../../packages/investigation/retained-infrastructure-snapshots.mts';
   import { infrastructureCohortLabel, serialiseInfrastructureObservation } from '../../../../packages/investigation/infrastructure-observation.mts';
-  import { saveCandidateHandoff } from '$lib/candidate-handoff';
-  import { downloadLocalFile } from '$lib/download-local-file';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { saveCandidateHandoff } from '#lib/candidate-handoff.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import Pagination from './Pagination.svelte';
   let { session }: { session: InvestigationSearchSession } = $props();
   let response = $state.raw<RetainedInfrastructureSnapshotReview | null>(null);

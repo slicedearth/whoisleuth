@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onDestroy, onMount, tick, untrack } from 'svelte';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time';
-  import { retainBrandCandidates, type BrandProfile } from '$lib/brand-profiles';
-  import { runDomainFeedWorker } from '$lib/domain-feed-worker';
-  import { DomainFeedIntakeOperation } from '$lib/controllers/domain-feed-intake';
-  import { loadDomainFeedServiceStatus, queryDomainFeedService, type DomainFeedServiceStatus, type PreparedDomainFeedReview } from '$lib/domain-feed-client';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { retainBrandCandidates, type BrandProfile } from '#lib/brand-profiles.ts';
+  import { runDomainFeedWorker } from '#lib/domain-feed-worker.ts';
+  import { DomainFeedIntakeOperation } from '#lib/controllers/domain-feed-intake.ts';
+  import { loadDomainFeedServiceStatus, queryDomainFeedService, type DomainFeedServiceStatus, type PreparedDomainFeedReview } from '#lib/domain-feed-client.ts';
   import { DOMAIN_FEED_CATALOGUE, DOMAIN_FEED_LIMITS, normalizeDomainFeedSelection } from '../../../../packages/monitoring/domain-feed.mts';
   import { attributeKeywordCampaignCandidate, brandKeywordCampaignState, keywordCampaignFeedSelection } from '../../../../packages/workspace/brand-keyword-campaign.mts';
-  import { failedLocalMutationOutcome } from '$lib/local-mutation-outcome';
+  import { failedLocalMutationOutcome } from '#lib/local-mutation-outcome.ts';
   import DomainFeedHistoryReview from './DomainFeedHistoryReview.svelte';
   import type { BrandKeywordCampaign } from '../../../../packages/workspace/brand-keyword-campaign.mts';
 

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import PageHeading from '$lib/components/PageHeading.svelte';
-  import PublicSeo from '$lib/components/PublicSeo.svelte';
+  import PageHeading from '#lib/components/PageHeading.svelte';
+  import PublicSeo from '#lib/components/PublicSeo.svelte';
   import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../../packages/analysis/project-metadata.mts';
 </script>
 
@@ -28,7 +28,7 @@
 
   <article class="policy card" aria-labelledby="privacy-title">
     <h2 id="privacy-introduction">1. Introduction</h2>
-    <p id="privacy-title"><strong>Last updated: 2 October 2026.</strong></p>
+    <p id="privacy-title"><strong>Last updated: 4 October 2026.</strong></p>
     <p>WHOISleuth is local-first. Ordinary investigation state stays in this browser profile, and the service has no general user, Case, or workspace database. Network collection, local retention, export, and active review are separate deliberate actions.</p>
     <p>Only a deliberately started network-capable operation sends its declared bounded target or evidence fields. WHOISleuth does not automatically submit reports, contact recipients, acquire domains, apply defensive controls, or change external infrastructure. Missing, blocked, stale, malformed, partial, unavailable, or unsupported evidence never becomes absence, safety, ownership, control, intent, or remediation.</p>
     <p>This policy describes the public deployment. A self-hosted operator must adapt it when hosting, authentication, enabled providers, retention, or contact routes differ.</p>
@@ -36,6 +36,7 @@
     <p>The generated <a href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/docs/privacy-data-flow-catalogue.md`} target="_blank" rel="noopener">data-flow catalogue<span class="sr-only"> (opens in a new tab)</span></a> lists the exact recipients, retention classes and export boundaries for each capability.</p>
 
     <h2 id="privacy-information">2. Information processed</h2>
+    <p>Normal page and asset requests reach the website host. The browser framework also checks a same-origin application-version file when the page regains focus or becomes visible; periodic version polling is disabled. These checks include ordinary connection metadata and any eligible first-party session cookie, but no target or workspace payload. The document's no-referrer policy omits its page URL, including investigation query parameters, from outgoing referrers. Version checks do not collect evidence or submit saved investigations.</p>
     <p>Depending on the selected operation, WHOISleuth can process a domain, hostname, IP address, ASN, nameserver, certificate-search term, or other explicit technical target; public registry, registrar, WHOIS, DNS, routing, HTTP, TLS, certificate, security.txt, and provider evidence; analyst-supplied workspace records including Case classifications and exact incident links; imported evidence files; authentication and operation-control metadata; and local output selected by the operator.</p>
     <p>Public registration sources can expose contact names, organisations, addresses, email addresses, and telephone numbers. WHOISleuth relays or normalises what the selected source publishes rather than building a separate registrant database. Many sources redact those fields.</p>
     <p>The public synthetic demo uses fixed fictional evidence on reserved domains. It performs no live investigation request and writes no protected workspace data. The deployment has no individual user-account database and no advertising or behavioural audience measurement.</p>

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import ComparisonLedgerRows from '$lib/components/ComparisonLedgerRows.svelte';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import ComparisonLedgerRows from '#lib/components/ComparisonLedgerRows.svelte';
   import {
     buildComparisonLedgerDetails,
     buildComparisonLedgerIndex,
@@ -8,11 +8,11 @@
     type ComparisonLedgerDetails,
     type ComparisonLedgerIndexSide,
     type ComparisonLedgerMode,
-  } from '$lib/analysis/comparison-ledger.ts';
-  import type { CaseRecord } from '$lib/cases';
-  import type { WebsiteProfileSnapshot } from '$lib/website-snapshots';
-  import type { BulkSession } from '$lib/bulk-sessions';
-  import type { Watchlists } from '$lib/watchlists';
+  } from '#lib/analysis/comparison-ledger.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { WebsiteProfileSnapshot } from '#lib/website-snapshots.ts';
+  import type { BulkSession } from '#lib/bulk-sessions.ts';
+  import type { Watchlists } from '#lib/watchlists.ts';
 
   let {
     cases,

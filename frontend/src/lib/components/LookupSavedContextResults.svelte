@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { INVESTIGATION_ENTITY_LABELS as typeLabels } from '../../../../packages/investigation/investigation-entity.mts';
   import { onMount, tick } from 'svelte';
   import Pagination from './Pagination.svelte';
@@ -8,15 +8,15 @@
     isDeferredModuleLoadError,
     loadDeferredModule,
     reloadDeferredModulePage,
-  } from '$lib/deferred-module';
+  } from '#lib/deferred-module.ts';
   import {
     MAX_INVESTIGATION_CONTEXT_PREVIEW_RESULTS,
     type InvestigationContextPreview,
-  } from '$lib/analysis/investigation-context-preview.ts';
+  } from '#lib/analysis/investigation-context-preview.ts';
   import type {
     InvestigationSearchResult,
-  } from '$lib/analysis/investigation-search.ts';
-  import type { InvestigationSearchSession } from '$lib/investigation-search-session';
+  } from '#lib/analysis/investigation-search.ts';
+  import type { InvestigationSearchSession } from '#lib/investigation-search-session.ts';
 
   let { query }: { query: string } = $props();
   let loadState = $state<'loading' | 'ready' | 'unavailable'>('loading');
@@ -89,7 +89,7 @@
     void (async () => {
       try {
         const module = await loadDeferredModule(
-          () => import('$lib/investigation-search'),
+          () => import('#lib/investigation-search.ts'),
           { signal: controller.signal },
         );
         const loaded = await module.loadLocalInvestigationSearchSession(controller.signal);

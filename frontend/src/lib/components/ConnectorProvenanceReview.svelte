@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import { MAX_CONTEXT_INPUT_BYTES, type ContextReview } from '../../../../packages/contracts/context-review.mts';
-  import { runConnectorProvenanceWorker } from '$lib/connector-provenance-worker.ts';
-  import { readContextFile } from '$lib/context-review-input.ts';
+  import { runConnectorProvenanceWorker } from '#lib/connector-provenance-worker.ts';
+  import { readContextFile } from '#lib/context-review-input.ts';
   import CaseContextReport from './CaseContextReport.svelte';
   import LocalFileInput from './LocalFileInput.svelte';
-  import type { ContextReviewPresentation } from '$lib/analysis/context-review-presentation.ts';
+  import type { ContextReviewPresentation } from '#lib/analysis/context-review-presentation.ts';
   import './context-review.css';
   let { record, mutationBusy, persistOperation }: { record: CaseRecord; mutationBusy: boolean; persistOperation: PersistCaseOperation } = $props();
   let current = $state(''), previous = $state(''), report = $state.raw<ContextReview | null>(null), error = $state(''), loading = $state(false), generation = 0;

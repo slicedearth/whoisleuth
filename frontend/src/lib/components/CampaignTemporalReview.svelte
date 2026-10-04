@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import {
     buildCampaignTemporalExport,
     type CampaignTemporalLayer,
     type CampaignTemporalReview,
-  } from '$lib/analysis/campaign-temporal-review.ts';
-  import type { CampaignRecord } from '$lib/campaigns';
+  } from '#lib/analysis/campaign-temporal-review.ts';
+  import type { CampaignRecord } from '#lib/campaigns.ts';
 
   let { campaign, review, onmessage }:{
     campaign: CampaignRecord;

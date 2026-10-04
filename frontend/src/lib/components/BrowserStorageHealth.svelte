@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { onMount } from 'svelte';
-  import { readBrowserStorageHealth, requestBrowserPersistence, type BrowserStorageHealth } from '$lib/browser-storage-health.ts';
+  import { readBrowserStorageHealth, requestBrowserPersistence, type BrowserStorageHealth } from '#lib/browser-storage-health.ts';
   let { preparedAt = null }: { preparedAt?: string | null } = $props();
   let health = $state<BrowserStorageHealth>({ persisted: null, usage: null, quota: null, persistenceAvailable: false });
   let busy = $state(false);

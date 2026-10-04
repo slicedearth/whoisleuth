@@ -1,9 +1,9 @@
 <script lang="ts">
-  import VisualizationFrame from '$lib/components/VisualizationFrame.svelte';
+  import VisualizationFrame from '#lib/components/VisualizationFrame.svelte';
   import {
     projectWatchlistActivity,
     type WatchlistActivityInput,
-  } from '$lib/analysis/visualization-models.ts';
+  } from '#lib/analysis/visualization-models.ts';
 
   let { events }: { events: WatchlistActivityInput[] } = $props();
   const activity = $derived(projectWatchlistActivity(events));

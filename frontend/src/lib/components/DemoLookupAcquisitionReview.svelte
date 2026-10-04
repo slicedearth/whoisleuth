@@ -1,6 +1,6 @@
 <script lang="ts">
-  import LookupAcquisitionDueDiligence from '$lib/components/LookupAcquisitionDueDiligence.svelte';
-  import { buildAcquisitionDueDiligence } from '$lib/analysis/acquisition-due-diligence.ts';
+  import LookupAcquisitionDueDiligence from '#lib/components/LookupAcquisitionDueDiligence.svelte';
+  import { buildAcquisitionDueDiligence } from '#lib/analysis/acquisition-due-diligence.ts';
 
   let {
     target,

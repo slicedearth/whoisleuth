@@ -2,7 +2,7 @@
   import { readWorkspaceArchive, type WorkspaceArchiveDocument } from '../../../../packages/workspace/workspace-archive.mts';
   import { workspaceAttachmentGroups } from '../../../../packages/workspace/workspace-recovery.mts';
   import type { CaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
-  import { readRetainedCaseFiles } from '$lib/case-attachments.ts';
+  import { readRetainedCaseFiles } from '#lib/case-attachments.ts';
   import EvidenceFileExport from './EvidenceFileExport.svelte';
 
   let { archive }: { archive: WorkspaceArchiveDocument } = $props();

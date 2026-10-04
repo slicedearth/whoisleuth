@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { getContext, onDestroy, onMount, tick } from 'svelte';
-  import PageHeading from '$lib/components/PageHeading.svelte';
-  import BrandProfileList from '$lib/components/BrandProfileList.svelte';
-  import BrandProfileEditor from '$lib/components/BrandProfileEditor.svelte';
-  import BrandAllowlistManager from '$lib/components/BrandAllowlistManager.svelte';
-  import BrandReviewInbox from '$lib/components/BrandReviewInbox.svelte';
-  import BrandAssetRegisterSummary from '$lib/components/BrandAssetRegisterSummary.svelte';
-  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
+  import PageHeading from '#lib/components/PageHeading.svelte';
+  import BrandProfileList from '#lib/components/BrandProfileList.svelte';
+  import BrandProfileEditor from '#lib/components/BrandProfileEditor.svelte';
+  import BrandAllowlistManager from '#lib/components/BrandAllowlistManager.svelte';
+  import BrandReviewInbox from '#lib/components/BrandReviewInbox.svelte';
+  import BrandAssetRegisterSummary from '#lib/components/BrandAssetRegisterSummary.svelte';
+  import DeferredSurface from '#lib/components/DeferredSurface.svelte';
   import {
     activeProfileId,
     deleteProfile,
@@ -24,55 +24,55 @@
     upsertProfile,
     type BrandProfile,
     type BrandProfileSaveResult,
-  } from '$lib/brand-profiles';
-  import { LocalRecordConflictError } from '$lib/local-mutation-outcome';
-  import { createPageBaseline } from '$lib/analysis/page-baseline.ts';
-  import { loadCases, type CaseRecord } from '$lib/cases';
+  } from '#lib/brand-profiles.ts';
+  import { LocalRecordConflictError } from '#lib/local-mutation-outcome.ts';
+  import { createPageBaseline } from '#lib/analysis/page-baseline.ts';
+  import { loadCases, type CaseRecord } from '#lib/cases.ts';
   import {
     loadRelationshipObservations,
     type RelationshipObservation,
-  } from '$lib/relationship-observations';
-  import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
+  } from '#lib/relationship-observations.ts';
+  import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
   import type {
     DesiredPostureBaseline,
     ProtectionAttestation,
-  } from '$lib/analysis/brand-profile-model.ts';
+  } from '#lib/analysis/brand-profile-model.ts';
   import {
     brandPostureCollectionFingerprint,
     brandPostureObservationContext,
     currentDesiredPostureObservation,
     desiredPostureObservations,
     normalizeDesiredPostureObservationHistory,
-  } from '$lib/analysis/brand-profile-model.ts';
+  } from '#lib/analysis/brand-profile-model.ts';
   import {
     buildDesiredPostureObservation,
     officialDomainReviewBatch,
     type DomainPostureAuditResult as AuditResult,
-  } from '$lib/analysis/owned-domain-posture-review.ts';
+  } from '#lib/analysis/owned-domain-posture-review.ts';
   import {
     brandProfileDeletionImpact,
     buildBrandReviewInbox,
     type BrandReviewSourceState,
-  } from '$lib/analysis/brand-review-inbox.ts';
-  import { buildBrandAssetRegister } from '$lib/analysis/brand-asset-register.ts';
+  } from '#lib/analysis/brand-review-inbox.ts';
+  import { buildBrandAssetRegister } from '#lib/analysis/brand-asset-register.ts';
   import {
     clientHttpErrorMessage,
     parseAvailabilityCaptureResponse,
     parseDomainPostureHttpResponse,
     type DomainPostureHttpResponse,
-  } from '$lib/analysis/client-response-contracts';
-  import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '$lib/capabilities';
+  } from '#lib/analysis/client-response-contracts.ts';
+  import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '#lib/capabilities.ts';
   import {
     LARGE_JSON_RESPONSE_BYTES,
     requestJsonCapped,
     STANDARD_JSON_RESPONSE_BYTES,
-  } from '$lib/bounded-json-response';
-  import { preloadBestEffort } from '$lib/idle-preload';
-  import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
+  } from '#lib/bounded-json-response.ts';
+  import { preloadBestEffort } from '#lib/idle-preload.ts';
+  import { restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
   import {
     BrandProfileEditorController,
     type BrandProfileCommitIssue,
-  } from '$lib/controllers/brand-profile-editor.ts';
+  } from '#lib/controllers/brand-profile-editor.ts';
   const pageController = new AbortController();
   const preloadModule = (load: () => Promise<unknown>) =>
     preloadBestEffort(load, pageController.signal);
@@ -86,42 +86,42 @@
   const brandWorkbenches = {
     control: {
       label: 'Domain controls',
-      load: () => import('$lib/components/DomainControlCentre.svelte'),
+      load: () => import('#lib/components/DomainControlCentre.svelte'),
       retainDraft: false,
     },
     portfolio: {
       label: 'Compare owned domains',
-      load: () => import('$lib/components/BrandPortfolioPostureMatrix.svelte'),
+      load: () => import('#lib/components/BrandPortfolioPostureMatrix.svelte'),
       retainDraft: false,
     },
     posture: {
       label: 'Review current settings',
-      load: () => import('$lib/components/BrandPostureAudit.svelte'),
+      load: () => import('#lib/components/BrandPostureAudit.svelte'),
       retainDraft: false,
     },
     baselines: {
       label: 'Expected domain settings',
-      load: () => import('$lib/components/BrandDesiredPostureBaselines.svelte'),
+      load: () => import('#lib/components/BrandDesiredPostureBaselines.svelte'),
       retainDraft: true,
     },
     passport: {
       label: 'Portable domain settings',
-      load: () => import('$lib/components/BrandDomainControlPassport.svelte'),
+      load: () => import('#lib/components/BrandDomainControlPassport.svelte'),
       retainDraft: true,
     },
     certificates: {
       label: 'Certificate events',
-      load: () => import('$lib/components/BrandCertificateEventReplay.svelte'),
+      load: () => import('#lib/components/BrandCertificateEventReplay.svelte'),
       retainDraft: false,
     },
     attestations: {
       label: 'Reviewed account controls',
-      load: () => import('$lib/components/BrandProtectionAttestations.svelte'),
+      load: () => import('#lib/components/BrandProtectionAttestations.svelte'),
       retainDraft: true,
     },
     mail: {
       label: 'Mail reports',
-      load: () => import('$lib/components/MailReportWorkbench.svelte'),
+      load: () => import('#lib/components/MailReportWorkbench.svelte'),
       retainDraft: true,
     },
   } as const;
@@ -400,19 +400,19 @@
     }
   }
   function preloadBrandsView(next: BrandsView) {
-    if (next === 'assets') preloadModule(() => import('$lib/components/BrandAssetRegister.svelte'));
+    if (next === 'assets') preloadModule(() => import('#lib/components/BrandAssetRegister.svelte'));
   }
   async function selectBrandsView(next: BrandsView) {
     preloadBrandsView(next);
     if (next === brandsView) return;
-    const url = new URL(page.url);
+    const url = new URL(page.url.href);
     if (next === 'overview' && !brandWorkbench) url.searchParams.delete('view');
     else url.searchParams.set('view', next);
     if (next !== 'assets')
       for (const parameter of ['assetClass', 'assetSource', 'assetEvidence', 'assetPage'])
         url.searchParams.delete(parameter);
     url.hash = '';
-    await goto(`${url.pathname}${url.search}`, { noScroll: true, keepFocus: true });
+    await goto(`${url.pathname}${url.search}`, { reset: false });
   }
   async function chooseProfile() {
     profilesOpen = true;
@@ -424,7 +424,7 @@
     if (selected) preloadModule(brandWorkbenches[selected].load);
   }
   async function selectBrandWorkbench(next: string) {
-    const url = new URL(page.url);
+    const url = new URL(page.url.href);
     const selected = resolveBrandWorkbench(next);
     if (selected) preloadBrandWorkbench(selected);
     if (selected) url.searchParams.set('workbench', selected);
@@ -436,7 +436,7 @@
       url.searchParams.delete(parameter);
     url.hash =
       selected === 'baselines' && page.url.hash === '#desired-posture-baseline' ? page.url.hash : '';
-    await goto(`${url.pathname}${url.search}${url.hash}`, { noScroll: true, keepFocus: true });
+    await goto(`${url.pathname}${url.search}${url.hash}`, { reset: false });
   }
   function restoreBaselineMutationFocus(): boolean {
     const pending = baselineMutationFocus;
@@ -1165,12 +1165,12 @@
     {/if}
     <div hidden={brandsView!=='overview'}>
     <BrandReviewInbox inbox={brandReviewInbox} />
-    {#if candidateReviewProfile}<DeferredSurface load={()=>import('$lib/components/BrandCandidateReviewWorkspace.svelte')} props={{active:candidateReviewProfile,onrefresh:refreshProfiles,disabled:profileWriteDisabled||active?.id!==candidateReviewProfile.id||activePreferenceSourceState!=='ready'}} loadingLabel="Loading retained candidate review…" unavailableLabel="Retained candidate review could not be loaded. No candidate state was changed." placeholder="workspace" />{/if}
+    {#if candidateReviewProfile}<DeferredSurface load={()=>import('#lib/components/BrandCandidateReviewWorkspace.svelte')} props={{active:candidateReviewProfile,onrefresh:refreshProfiles,disabled:profileWriteDisabled||active?.id!==candidateReviewProfile.id||activePreferenceSourceState!=='ready'}} loadingLabel="Loading retained candidate review…" unavailableLabel="Retained candidate review could not be loaded. No candidate state was changed." placeholder="workspace" />{/if}
     <BrandAssetRegisterSummary projection={brandAssetRegister} />
     </div>
   </div>
   {#if brandsView==='assets'}
-    <DeferredSurface load={()=>import('$lib/components/BrandAssetRegister.svelte')} props={{projection:brandAssetRegister}} loadingLabel="Loading the selected Brand asset register." unavailableLabel="The Brand asset register could not be loaded. The profile list remains available." onready={deferredBrandReady} placeholder="workspace" />
+    <DeferredSurface load={()=>import('#lib/components/BrandAssetRegister.svelte')} props={{projection:brandAssetRegister}} loadingLabel="Loading the selected Brand asset register." unavailableLabel="The Brand asset register could not be loaded. The profile list remains available." onready={deferredBrandReady} placeholder="workspace" />
   {/if}
 </div>
 {/if}

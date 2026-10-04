@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { BRAND_MARK_VIEWBOX, BRAND_MARK_LENS, BRAND_MARK_LINKS, BRAND_MARK_NODES } from '$lib/brand-identity';
+  import { BRAND_MARK_VIEWBOX, BRAND_MARK_LENS, BRAND_MARK_LINKS, BRAND_MARK_NODES } from '#lib/brand-identity.ts';
 </script>
 
 <svg class="brand-mark" viewBox={BRAND_MARK_VIEWBOX} aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">

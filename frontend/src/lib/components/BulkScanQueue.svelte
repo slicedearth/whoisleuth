@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { buildBulkCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
-  import CollectionPreflight from '$lib/components/CollectionPreflight.svelte';
+  import { buildBulkCollectionPreflight } from '#lib/analysis/collection-preflight.ts';
+  import CollectionPreflight from '#lib/components/CollectionPreflight.svelte';
   import type {
     BulkPacing,
     BulkPacingOption,
     BulkProgressEstimate,
     BulkProgressOutcomes,
-  } from '$lib/analysis/bulk-pacing.ts';
-  import { MAX_DOMAIN_INPUT_CHARACTERS } from '$lib/analysis/utils.ts';
+  } from '#lib/analysis/bulk-pacing.ts';
+  import { MAX_DOMAIN_INPUT_CHARACTERS } from '#lib/analysis/utils.ts';
 
   type ScanMode = 'fast' | 'deep';
 

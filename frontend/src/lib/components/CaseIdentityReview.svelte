@@ -1,12 +1,12 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseResponse, PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseResponse, PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import { identityRecoveryFollowUp, reviewIdentityIncident } from '../../../../packages/investigation/identity-incident-review.mts';
-  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft.ts';
-  import { trackTransientCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
-  import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { createDraftRevision, restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
+  import { trackTransientCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
+  import { caseEvidenceChoiceName } from '#lib/analysis/case-evidence-presentation.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { IDENTITY_ACTIONS, type IdentityAction } from '../../../../packages/contracts/message-intake.mts';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   import CaseContainmentHandoff from './CaseContainmentHandoff.svelte';

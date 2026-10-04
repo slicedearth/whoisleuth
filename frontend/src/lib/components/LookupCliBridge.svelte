@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { lookupCliBridge } from '$lib/analysis/lookup-cli-bridge.ts';
+  import { lookupCliBridge } from '#lib/analysis/lookup-cli-bridge.ts';
   import CliCommandBuilder from './CliCommandBuilder.svelte';
   let { query, mode, selectedUrl, selectedSources }: { query: string; mode: 'fast' | 'deep'; selectedUrl: boolean; selectedSources: number } = $props();
   const seed = $derived.by(() => {

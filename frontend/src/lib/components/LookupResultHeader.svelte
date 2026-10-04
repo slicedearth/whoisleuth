@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { availabilityStatusDisplay } from '$lib/analysis/availability-status-display.ts';
-  import { handlesLocalLink } from '$lib/link-activation';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { availabilityStatusDisplay } from '#lib/analysis/availability-status-display.ts';
+  import { handlesLocalLink } from '#lib/link-activation.ts';
 
   let {
     title,

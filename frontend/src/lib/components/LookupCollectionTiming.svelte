@@ -2,10 +2,10 @@
   import type {
     LookupTiming,
     LookupTimingSource,
-  } from '$lib/analysis/lookup-response.ts';
-  import { formatCollectionDuration } from '$lib/analysis/lookup-display-shared.ts';
-  import { projectCollectionTiming } from '$lib/analysis/visualization-models.ts';
-  import { LOOKUP_SOURCE_LABELS as sourceLabels } from '$lib/analysis/lookup-source-labels.ts';
+  } from '#lib/analysis/lookup-response.ts';
+  import { formatCollectionDuration } from '#lib/analysis/lookup-display-shared.ts';
+  import { projectCollectionTiming } from '#lib/analysis/visualization-models.ts';
+  import { LOOKUP_SOURCE_LABELS as sourceLabels } from '#lib/analysis/lookup-source-labels.ts';
 
   let { timing, embedded = false }: { timing: LookupTiming; embedded?: boolean } = $props();
 

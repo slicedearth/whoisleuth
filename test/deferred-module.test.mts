@@ -50,10 +50,11 @@ describe('bounded deferred module loading', () => {
       await symlink(path.join(root, 'node_modules'), path.join(workspace, 'node_modules'), 'dir');
       await copyFile(path.join(root, 'frontend/src/lib/components/DeferredSurface.svelte'), path.join(workspace, 'DeferredSurface.svelte'));
       await copyFile(path.join(root, 'frontend/src/lib/deferred-module.ts'), path.join(workspace, 'deferred-module.ts'));
+      await writeFile(path.join(workspace, 'package.json'), JSON.stringify({ type: 'module', imports: { '#lib/*': './*' } }));
       await writeFile(path.join(workspace, 'tsconfig.json'), JSON.stringify({
         compilerOptions: { strict: true, target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler',
           noEmit: true, allowJs: true, checkJs: true, skipLibCheck: true, allowImportingTsExtensions: true,
-          types: ['svelte'], lib: ['ES2023', 'DOM', 'DOM.Iterable'], paths: { '$lib/*': ['./*'] } },
+          types: ['svelte'], lib: ['ES2023', 'DOM', 'DOM.Iterable'] },
         include: ['*.svelte', '*.ts'],
       }));
       await writeFile(path.join(workspace, 'Subject.svelte'), `<script lang="ts">

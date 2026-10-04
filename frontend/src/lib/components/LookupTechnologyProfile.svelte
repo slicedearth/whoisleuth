@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
-  import { formatDate } from '$lib/analysis/lookup-display-shared.ts';
-  import type { LookupTechnologyFinding, LookupBrowserLibraryFinding } from '$lib/analysis/lookup-page-profile-display.ts';
+  import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
+  import { formatDate } from '#lib/analysis/lookup-display-shared.ts';
+  import type { LookupTechnologyFinding, LookupBrowserLibraryFinding } from '#lib/analysis/lookup-page-profile-display.ts';
   import { readObservationTime } from '../../../../packages/evidence/observation.mts';
   import { TECHNOLOGY_EVIDENCE_ROLE_ORDER, type TechnologyEvidenceRole } from '../../../../lib/technology-evidence-role.mts';
 

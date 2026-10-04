@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { CaseRecord } from '$lib/cases';
-  import { evidenceTime } from '$lib/analysis/evidence-time.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import { evidenceTime } from '#lib/analysis/evidence-time.ts';
   import { currentCaseEvidence } from '../../../../packages/cases/case-evidence-model.mts';
   import {
     currentEvidenceSummary,
@@ -11,7 +11,7 @@
     formatSnapshotValue,
     scanDepthLabel,
     snapshotFieldGroups
-  } from '$lib/analysis/evidence-display.ts';
+  } from '#lib/analysis/evidence-display.ts';
 
   let { record }: { record: CaseRecord } = $props();
   let timelineExpanded = $state(true);

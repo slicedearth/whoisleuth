@@ -1,23 +1,23 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
-  import IntelligenceIcon, { type IntelligenceIconName } from '$lib/components/IntelligenceIcon.svelte';
-  import type { CaseRecord } from '$lib/cases';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
+  import IntelligenceIcon, { type IntelligenceIconName } from '#lib/components/IntelligenceIcon.svelte';
+  import type { CaseRecord } from '#lib/cases.ts';
   import {
     MAX_RELATIONSHIP_GRAPH_GROUP_CASES,
     MAX_RELATIONSHIP_GRAPH_HIDDEN,
     MAX_RELATIONSHIP_GRAPH_PINS,
     RELATIONSHIP_GRAPH_LABEL_LAYOUT,
     projectCaseRelationshipGraph,
-  } from '$lib/analysis/case-relationship-graph.ts';
+  } from '#lib/analysis/case-relationship-graph.ts';
   import type {
     CaseRelationshipGraphCaseNode,
     CaseRelationshipGraphEdge,
     CaseRelationshipGraphRelationshipNode,
-  } from '$lib/analysis/case-relationship-graph.ts';
-  import type { CaseRelationshipQuery, CaseRelationshipSummary } from '$lib/analysis/case-relationships.ts';
-  import { buildRelationshipGraphExport } from '$lib/analysis/case-relationship-graph-export.ts';
-  import { horizontalConnectionPath } from '$lib/analysis/evidence-topology.ts';
+  } from '#lib/analysis/case-relationship-graph.ts';
+  import type { CaseRelationshipQuery, CaseRelationshipSummary } from '#lib/analysis/case-relationships.ts';
+  import { buildRelationshipGraphExport } from '#lib/analysis/case-relationship-graph-export.ts';
+  import { horizontalConnectionPath } from '#lib/analysis/evidence-topology.ts';
 
   let {
     records,

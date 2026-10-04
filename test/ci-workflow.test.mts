@@ -1037,6 +1037,21 @@ describe('development toolchain compatibility', () => {
     assert.equal(satisfiesCaretAlternatives('6.0.3', '>=5'), false);
   });
 
+  test('uses workspace-local framework peers before hoisted copies and rejects incompatible local peers', () => {
+    const manifests = toolchainManifests();
+    const lockfile = { packages: { ...manifests.lockfile.packages,
+      'node_modules/@sveltejs/kit': { peerDependencies: { typescript: '^5.0.0' } },
+      'frontend/node_modules/@sveltejs/kit': { peerDependencies: { typescript: '^6.0.0' } },
+    } };
+    const input = { nvmrc: '24.19.0', runtimeVersion: '24.19.0', ...manifests, lockfile };
+    assert.deepEqual(buildToolchainCompatibilityReport(input).typeScriptPeerRanges[0], {
+      installPath: 'frontend/node_modules/@sveltejs/kit', range: '^6.0.0',
+    });
+    lockfile.packages['node_modules/@sveltejs/kit'].peerDependencies.typescript = '^6.0.0';
+    lockfile.packages['frontend/node_modules/@sveltejs/kit'].peerDependencies.typescript = '^7.0.0';
+    assert.throws(() => buildToolchainCompatibilityReport(input), /outside frontend\/node_modules\/@sveltejs\/kit's peer range/u);
+  });
+
   test('rejects runtime, Node.js types, TypeScript declaration and peer drift', () => {
     assert.throws(() => buildToolchainCompatibilityReport({
       nvmrc: '24.19.0', runtimeVersion: '26.4.0', ...toolchainManifests(),

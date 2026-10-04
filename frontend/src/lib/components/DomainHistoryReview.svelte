@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import { CASE_SCHEMA_VERSION } from '../../../../packages/contracts/case-portability.mts';
   import { MAX_CONTEXT_RECORDS, type ContextReview } from '../../../../packages/contracts/context-review.mts';
   import { DOMAIN_HISTORY_INPUT_SCHEMA, DOMAIN_HISTORY_INPUT_VERSION, DOMAIN_CHANGE_FAMILIES, REGISTRATION_BOUNDARY_KINDS, MAX_REGISTRATION_BOUNDARIES, readDomainHistoryDeclarations, reviewDomainHistory, type RegistrationBoundary, type DomainChangeFamily, type ExpectedDomainChange, type RetiredDependency } from '../../../../packages/investigation/domain-history-review.mts';

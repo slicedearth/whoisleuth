@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Pagination from '$lib/components/Pagination.svelte';
-  import type { CtHistoryObservationState } from '$lib/analysis/ct-history.ts';
+  import Pagination from '#lib/components/Pagination.svelte';
+  import type { CtHistoryObservationState } from '#lib/analysis/ct-history.ts';
 
   type CertificateEvidence = {
     certificateCount: number;

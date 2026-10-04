@@ -2,13 +2,13 @@
   import { onDestroy, tick } from 'svelte';
   import type { Snippet } from 'svelte';
   import { MAX_MESSAGE_INTAKE_BYTES, MESSAGE_INTAKE_KINDS, MESSAGE_INTAKE_INPUTS, type MessageIntakeKind, type MessageIntakeResult } from '../../../../packages/contracts/message-intake.mts';
-  import { runMessageIntakeWorker } from '$lib/message-intake-worker.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { runMessageIntakeWorker } from '#lib/message-intake-worker.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import Pagination from './Pagination.svelte';
   import LocalFileInput from './LocalFileInput.svelte';
   import CopyButton from './CopyButton.svelte';
   import EvidenceTimestamp from './EvidenceTimestamp.svelte';
-  import { defangedIndicator } from '$lib/analysis/evidence-copy.ts';
+  import { defangedIndicator } from '#lib/analysis/evidence-copy.ts';
   import MailAuthenticationReview from './MailAuthenticationReview.svelte';
   import SelectedInputEvidence from './SelectedInputEvidence.svelte';
   import IdentityEventEvidence from './IdentityEventEvidence.svelte';

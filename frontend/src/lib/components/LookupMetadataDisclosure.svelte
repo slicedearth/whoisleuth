@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { HomepageMetadataDisplay } from '$lib/analysis/lookup-homepage-metadata-display.ts';
+  import type { HomepageMetadataDisplay } from '#lib/analysis/lookup-homepage-metadata-display.ts';
 
   let { label, metadata }: { label: string; metadata: HomepageMetadataDisplay } = $props();
 </script>

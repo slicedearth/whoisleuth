@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { BulkDomainComparison } from '$lib/analysis/bulk-domain-comparison.ts';
+  import type { BulkDomainComparison } from '#lib/analysis/bulk-domain-comparison.ts';
 
   let {
     comparison,

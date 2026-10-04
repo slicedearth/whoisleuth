@@ -1,6 +1,6 @@
 <script lang="ts">
   import Pagination from './Pagination.svelte';
-  import type { CtCertificateGroup } from '$lib/analysis/ct-results.ts';
+  import type { CtCertificateGroup } from '#lib/analysis/ct-results.ts';
   const PAGE_SIZE = 12;
   let { groups, truncated = false }: { groups: readonly CtCertificateGroup[]; truncated?: boolean } = $props();
   let page = $state(1);

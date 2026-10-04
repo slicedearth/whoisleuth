@@ -1,25 +1,25 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { page } from '$app/state';
   import { beforeNavigate, goto } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
-  import { parseBoundedJson } from '$lib/bounded-json';
-import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
-  import { registerAnalystUndo } from '$lib/analyst-undo';
-  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
-  import { CalibrationExportWorkspace } from '$lib/controllers/calibration-export-workspace.ts';
-  import { hasUnprotectedCaseDrafts, trackTransientCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
-  import { preloadBestEffort } from '$lib/idle-preload';
-  import { readCaseNavigationContext, selectConsoleCase } from '$lib/console-workflow-state';
-  import { monitorRouteKey, monitorRouteTarget } from '$lib/controllers/monitor-route-controller.ts';
-  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
+  import { parseBoundedJson } from '#lib/bounded-json.ts';
+import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
+  import { registerAnalystUndo } from '#lib/analyst-undo.ts';
+  import { createDraftRevision, restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
+  import { CalibrationExportWorkspace } from '#lib/controllers/calibration-export-workspace.ts';
+  import { hasUnprotectedCaseDrafts, trackTransientCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
+  import { preloadBestEffort } from '#lib/idle-preload.ts';
+  import { readCaseNavigationContext, selectConsoleCase } from '#lib/console-workflow-state.ts';
+  import { monitorRouteKey, monitorRouteTarget } from '#lib/controllers/monitor-route-controller.ts';
+  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
   import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
   import type { CaseIncidentInput } from '../analysis/case-model.ts';
   import { filterCaseList } from '../../../../packages/cases/case-list-view.mts';
   import type { CaseViewFilters } from '../../../../packages/contracts/case-views-contract.mts';
-  import { loadInvestigationGuide } from '$lib/investigation-guide';
-  import { loadProfiles, type BrandProfile } from '$lib/brand-profiles';
-  import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
+  import { loadInvestigationGuide } from '#lib/investigation-guide.ts';
+  import { loadProfiles, type BrandProfile } from '#lib/brand-profiles.ts';
+  import type { ParentDomainCampaignSourceState } from '#lib/analysis/parent-domain-campaign-review.ts';
   import {
     addCaseBrandProfileAssociation,
     addCaseNote,
@@ -48,15 +48,15 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     statusLabel,
   } from '../../../../packages/cases/case-record-decisions.mts';
   import { MAX_CASE_IMPORT_BYTES } from '../../../../packages/contracts/case-portability.mts';
-  import LocalCollectionState from '$lib/components/LocalCollectionState.svelte';
-  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
-  import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
-  import CaseIncidentForm from '$lib/components/CaseIncidentForm.svelte';
-  import CaseFilters from '$lib/components/CaseFilters.svelte';
-  import CaseSavedViews from '$lib/components/CaseSavedViews.svelte';
-  import CaseList from '$lib/components/CaseList.svelte';
-  import CaseStorageReview from '$lib/components/CaseStorageReview.svelte';
-  import PageHeading from '$lib/components/PageHeading.svelte';
+  import LocalCollectionState from '#lib/components/LocalCollectionState.svelte';
+  import DeferredSurface from '#lib/components/DeferredSurface.svelte';
+  import CaseWorkspaceToolbar from '#lib/components/CaseWorkspaceToolbar.svelte';
+  import CaseIncidentForm from '#lib/components/CaseIncidentForm.svelte';
+  import CaseFilters from '#lib/components/CaseFilters.svelte';
+  import CaseSavedViews from '#lib/components/CaseSavedViews.svelte';
+  import CaseList from '#lib/components/CaseList.svelte';
+  import CaseStorageReview from '#lib/components/CaseStorageReview.svelte';
+  import PageHeading from '#lib/components/PageHeading.svelte';
   let { initialCases = null, initialMessage = '', onchange }: {
     initialCases?: CaseRecord[] | null;
     initialMessage?: string;
@@ -498,8 +498,8 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   }
   async function navigateCaseUrl(destination: string): Promise<boolean> {
     try {
-      await goto(destination, { noScroll: true, keepFocus: true });
-      return monitorRouteKey(page.url) === monitorRouteKey(new URL(destination, page.url));
+      await goto(destination, { reset: false });
+      return monitorRouteKey(new URL(page.url.href)) === monitorRouteKey(new URL(destination, page.url.href));
     } catch {
       if (!navigationCancelled) caseMessage = 'Could not open the requested Case view. Your current form remains available.';
       return false;
@@ -579,7 +579,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
         noteDraft = '';
       }
       await tick();
-      if (monitorRouteKey(page.url) !== routeKey)
+      if (monitorRouteKey(new URL(page.url.href)) !== routeKey)
         return;
       await focusCase(record);
       return;
@@ -595,7 +595,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
       guidedDomains = [...new Set([...carried, target.domain].filter(Boolean))];
       guidedDomainsTruncated = Boolean(guide?.reviewDomainsTruncated);
       await tick();
-      if (monitorRouteKey(page.url) === routeKey && target.restoreQueue)
+      if (monitorRouteKey(new URL(page.url.href)) === routeKey && target.restoreQueue)
         restoreGuidedQueueTarget();
     }
     else if (target.kind === 'domain') {
@@ -604,7 +604,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     }
   }
   $effect(() => {
-    const currentUrl = new URL(page.url);
+    const currentUrl = new URL(page.url.href);
     const routeKey = monitorRouteKey(currentUrl);
     cases;
     casesSourceState;
@@ -615,7 +615,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   onMount(() => {
     mounted = true;
     const preloadController = new AbortController();
-    preloadBestEffort(() => import('$lib/components/CaseDetail.svelte'), preloadController.signal);
+    preloadBestEffort(() => import('#lib/components/CaseDetail.svelte'), preloadController.signal);
     void refreshCases().catch(cause => {
       caseMessage = cause instanceof Error ? cause.message : 'Could not read saved Cases.';
     });
@@ -645,7 +645,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     {/if}
     {#if selectedCase}
       {#key selectedCase.id}
-        <DeferredSurface load={() => import('$lib/components/CaseDetail.svelte')}
+        <DeferredSurface load={() => import('#lib/components/CaseDetail.svelte')}
           loadingLabel="Opening Case…" unavailableLabel="The Case detail could not be loaded. Your saved Case has not changed."
           onready={() => selectedCase && focusCase(selectedCase)}
           props={{ record: selectedCase, allRecords: cases, tagDraft, setTagDraft: (value: string) => { tagRevision.changed(); tagDraft = value; },
@@ -656,7 +656,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
       {/key}
     {:else}
     {#if guidedDomains.length}
-      <DeferredSurface load={() => import('$lib/components/GuidedCaseQueue.svelte')}
+      <DeferredSurface load={() => import('#lib/components/GuidedCaseQueue.svelte')}
         loadingLabel="Loading guided Case queue…" unavailableLabel="The guided Case queue could not be loaded."
         onready={restoreGuidedQueueTarget}
         props={{ domains: guidedDomains, existingDomains: existingCaseDomains, truncated: guidedDomainsTruncated, openDomain: openGuidedCase }} />
@@ -667,7 +667,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
       {downloadCases} {reviewCalibrationDataset} {importCaseFile} message="" />
     <CaseIncidentForm records={cases} initialDomain={newDomain} create={createIncident} created={openCreatedIncident} ondirty={(dirty) => incidentDraftDirty = dirty} />
     {#if calibrationReview}
-      <DeferredSurface load={() => import('$lib/components/CalibrationExportReview.svelte')}
+      <DeferredSurface load={() => import('#lib/components/CalibrationExportReview.svelte')}
         loadingLabel="Loading calibration export review…" unavailableLabel="Calibration export review could not be loaded."
         props={{ preview: calibrationReview, busy: calibrationExportBusy, confirm: downloadCalibrationDataset,
           cancel: () => calibrationWorkspace.cancel() }} />
@@ -697,10 +697,10 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     <details class="advanced-case-tools">
       <summary>Advanced Case tools</summary>
       <button class="btn" type="button" aria-pressed={calibrationMode} onclick={() => { calibrationWorkspace.cancel(); calibrationMode = !calibrationMode; }}>{calibrationMode ? 'Finish selecting calibration Cases' : 'Select Cases for calibration export'}</button>
-      <DeferredSurface load={() => import('$lib/components/RiskCalibrationDashboard.svelte')} props={{}}
+      <DeferredSurface load={() => import('#lib/components/RiskCalibrationDashboard.svelte')} props={{}}
         loadingLabel="Loading risk-calibration reference…" unavailableLabel="Risk-calibration reference could not be loaded." />
     </details>
-    <DeferredSurface load={() => import('$lib/components/ExternalFindingsImport.svelte')}
+    <DeferredSurface load={() => import('#lib/components/ExternalFindingsImport.svelte')}
       loadingLabel="Loading external-findings import…" unavailableLabel="External-findings import could not be loaded."
       props={{ cases, oncomplete: refreshCases, oncommitted: installCommittedCaseSnapshot, onmessage: (value: string) => caseMessage = value }} />
     {/if}

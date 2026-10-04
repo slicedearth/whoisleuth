@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import { onDestroy } from 'svelte';
-  import { PUBLIC_EXAMPLES_INDEX } from '$lib/generated/public-examples-index';
-  import { PUBLIC_EXAMPLE_LOADERS, type PublicExampleId, type PublicExampleOutput } from '$lib/generated/public-examples';
+  import { PUBLIC_EXAMPLES_INDEX } from '#lib/generated/public-examples-index.ts';
+  import { PUBLIC_EXAMPLE_LOADERS, type PublicExampleId, type PublicExampleOutput } from '#lib/generated/public-examples.ts';
   import {
     DEFERRED_MODULE_RECOVERY_DETAIL,
     loadDeferredModule,
     reloadDeferredModulePage,
-  } from '$lib/deferred-module';
+  } from '#lib/deferred-module.ts';
 
   type ExampleOutput = PublicExampleOutput;
 

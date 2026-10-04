@@ -2,8 +2,8 @@
   import { caseLookupTarget } from '../../../../packages/cases/case-evidence-model.mts';
   import type { CaseRecord } from '../cases.ts';
   import { caseRecheckQuestions, readCaseRecheckContext } from '../../../../packages/cases/case-recheck-model.mts';
-  import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
-  import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
+  import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
+  import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseResponseObjectSelect from './CaseResponseObjectSelect.svelte';

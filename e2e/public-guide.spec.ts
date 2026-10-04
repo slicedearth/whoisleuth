@@ -5,6 +5,31 @@ import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
 import { PUBLIC_REFERENCE_DESTINATIONS } from '../frontend/src/lib/public-reference-navigation';
 import { glossaryTerms, guideFaqs, publicGuideGoals, resultStates, toolGuides, referenceGuides } from '../frontend/src/lib/public-guide';
 
+test('application version checks omit the current document URL and investigation payloads', async ({ page }) => {
+  const collections: string[] = [];
+  page.on('request', request => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(pathname)) collections.push(pathname);
+  });
+  await page.goto('/cli?q=private-review-marker#commands');
+  await expect(page.getByTestId('public-cli-catalogue')).toHaveAttribute('data-client-ready', 'true');
+  const requested = page.waitForRequest(request => new URL(request.url()).pathname === '/_app/version.json');
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  const request = await requested;
+  const url = new URL(request.url());
+  const headers = await request.allHeaders();
+  expect(url.origin).toBe(new URL(page.url()).origin);
+  expect(url.search).toBe('');
+  expect(url.hash).toBe('');
+  expect(request.method()).toBe('GET');
+  expect(request.postData()).toBeNull();
+  expect(headers.referer).toBeUndefined();
+  // A same-origin framework check still carries the eligible session cookie.
+  // Check its presence without printing authentication material on failure.
+  expect(Boolean(headers.cookie)).toBe(true);
+  expect(collections).toEqual([]);
+});
+
 test('missing-page artefact provides usable navigation without a client runtime', async ({ browser, request }, testInfo) => {
   const missing = await request.get('/missing-page?private=not-for-display');
   expect(missing.status()).toBe(404);

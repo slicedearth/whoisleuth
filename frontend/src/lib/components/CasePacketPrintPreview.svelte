@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { CaseResponsePacket } from '$lib/analysis/case-response-packet.ts';
+  import type { CaseResponsePacket } from '#lib/analysis/case-response-packet.ts';
   import './print-surface.css';
 
   let { packet, onvalidate, onclose }: {

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { evidenceStatusChipClass } from '$lib/analysis/evidence-status-tone.ts';
-  import type { WithheldThreatIntelligence } from '$lib/analysis/lookup-response.ts';
+  import { evidenceStatusChipClass } from '#lib/analysis/evidence-status-tone.ts';
+  import type { WithheldThreatIntelligence } from '#lib/analysis/lookup-response.ts';
 
   type JsonRecord = Record<string, unknown>;
   type RiskContext = {

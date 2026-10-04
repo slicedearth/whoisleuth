@@ -1,6 +1,6 @@
 <script lang="ts">
   import Pagination from './Pagination.svelte';
-  import type { CaseDecisionQualityReport } from '$lib/analysis/case-decision-quality.ts';
+  import type { CaseDecisionQualityReport } from '#lib/analysis/case-decision-quality.ts';
   const PAGE_SIZE = 24;
   let { report }: { report: CaseDecisionQualityReport } = $props();
   let page = $state(1);

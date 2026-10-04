@@ -1,10 +1,10 @@
 <script lang="ts">
-  import IntelligenceIcon, { type IntelligenceIconName } from '$lib/components/IntelligenceIcon.svelte';
+  import IntelligenceIcon, { type IntelligenceIconName } from '#lib/components/IntelligenceIcon.svelte';
   import {
     projectEvidenceTopology,
     type EvidenceTopologyInput,
     type EvidenceTopologyTarget,
-  } from '$lib/analysis/evidence-topology.ts';
+  } from '#lib/analysis/evidence-topology.ts';
 
   let {
     id = 'evidence-topology',

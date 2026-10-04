@@ -62,7 +62,6 @@ export const RELEASE_IDENTITY_PATHS = Object.freeze([
   'frontend/package.json',
   'frontend/src',
   'frontend/static',
-  'frontend/svelte.config.ts',
   'frontend/vite.config.ts',
   'lib',
   'netlify/functions',

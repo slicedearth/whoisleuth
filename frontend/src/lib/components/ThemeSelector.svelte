@@ -6,11 +6,11 @@
     readThemePreference,
     setThemePreference,
     type ThemePreference,
-  } from '$lib/theme';
+  } from '#lib/theme.ts';
   import {
     observeAppearancePreference, readAppearancePreference, setAppearancePreference,
     type AppearancePreference,
-  } from '$lib/appearance.ts';
+  } from '#lib/appearance.ts';
 
   let preference = $state<ThemePreference>('system');
   let appearance = $state<AppearancePreference>({ density: 'comfortable', effects: 'full' });

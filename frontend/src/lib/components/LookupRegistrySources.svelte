@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import RdapDomainSource from '$lib/components/RdapDomainSource.svelte';
-  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import RdapDomainSource from '#lib/components/RdapDomainSource.svelte';
+  import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
   import {
     projectEvidenceMatrix,
     type MatrixInput,
-  } from '$lib/analysis/visualization-models.ts';
-  import { buildRdapReverseSearchPreviews } from '$lib/analysis/rdap-reverse-search-preview.ts';
-  import { boundedTechnologyText } from '$lib/analysis/lookup-display-shared.ts';
+  } from '#lib/analysis/visualization-models.ts';
+  import { buildRdapReverseSearchPreviews } from '#lib/analysis/rdap-reverse-search-preview.ts';
+  import { boundedTechnologyText } from '#lib/analysis/lookup-display-shared.ts';
   import { registrarStandingOfficialSourceUrl } from '../../../../lib/registrar-standing-catalogue-contract.mts';
 
   type JsonRecord = Record<string, unknown>;

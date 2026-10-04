@@ -1,10 +1,10 @@
 <script lang="ts">
-  import type { ServiceDependencyReview } from '$lib/analysis/service-dependency-review.ts';
-  import BoundedRelationshipMap from '$lib/components/BoundedRelationshipMap.svelte';
+  import type { ServiceDependencyReview } from '#lib/analysis/service-dependency-review.ts';
+  import BoundedRelationshipMap from '#lib/components/BoundedRelationshipMap.svelte';
   import type {
     ForceGraphLinkInput,
     ForceGraphNodeInput,
-  } from '$lib/analysis/visualization-models.ts';
+  } from '#lib/analysis/visualization-models.ts';
 
   type TechnologyFinding = { id: string; name: string; category: string; confidence: string };
   type LibraryFinding = { id: string; name: string; version: string };

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
+  import type { CaseRecord } from '#lib/cases.ts';
   import { canonicalArtifactJsonV2 } from '../../../../packages/evidence/artifact-integrity.mts';
-  import { prepareCaseReviewHandoff, assertCaseReviewHandoffCurrent } from '$lib/case-review-package.ts';
+  import { prepareCaseReviewHandoff, assertCaseReviewHandoffCurrent } from '#lib/case-review-package.ts';
   import EvidenceFileExport from './EvidenceFileExport.svelte';
 
   let { record, disabled = false, onbusy = () => {} }: { record: CaseRecord; disabled?: boolean; onbusy?: (busy: boolean) => void } = $props();

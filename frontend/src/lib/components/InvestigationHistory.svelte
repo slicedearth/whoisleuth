@@ -1,8 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import type { InvestigationHistory } from '$lib/analysis/investigation-search.ts';
-  import type { InvestigationSearchSession } from '$lib/investigation-search-session.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import type { InvestigationHistory } from '#lib/analysis/investigation-search.ts';
+  import type { InvestigationSearchSession } from '#lib/investigation-search-session.ts';
   import Pagination from './Pagination.svelte';
 
   let { session, entityId, onopen, onsettled }: {

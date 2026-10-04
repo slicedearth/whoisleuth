@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick, onDestroy } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import {
     CONTAINMENT_RECIPIENT_ROLES,
     MAX_CONTAINMENT_ASSERTIONS,
@@ -12,9 +12,9 @@
     type ContainmentSelection,
     type CaseContainmentHandoff,
   } from '../../../../packages/cases/case-containment-handoff.mts';
-  import { prepareCaseAttachmentFiles, retainCaseAttachments } from '$lib/case-attachments.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
-  import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
+  import { prepareCaseAttachmentFiles, retainCaseAttachments } from '#lib/case-attachments.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
+  import { caseEvidenceChoiceName } from '#lib/analysis/case-evidence-presentation.ts';
   import CopyButton from './CopyButton.svelte';
   let {
     record,

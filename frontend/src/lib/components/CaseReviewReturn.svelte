@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import { onDestroy, tick } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
+  import type { CaseRecord } from '#lib/cases.ts';
   import { buildCaseExport } from '../../../../packages/cases/case-storage-model.mts';
   import { MAX_CASE_IMPORT_BYTES } from '../../../../packages/contracts/case-portability.mts';
   import { canonicalArtifactJsonV2, sha256ArtifactBytes } from '../../../../packages/evidence/artifact-integrity.mts';
   import { CASE_REVIEW_KINDS, previewCaseReviewReturn, selectedCaseReviewRows, type CaseReviewReturn, type CaseReviewRow } from '../../../../packages/cases/case-review-return.mts';
-  import { parseBoundedJson, boundedJsonLimitsForBytes } from '$lib/bounded-json';
+  import { parseBoundedJson, boundedJsonLimitsForBytes } from '#lib/bounded-json.ts';
   import CaseReviewPackage from './CaseReviewPackage.svelte';
   import EvidencePackageInput from './EvidencePackageInput.svelte';
-  import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
-  import { readPackagedCaseReview } from '$lib/case-review-package.ts';
+  import { runInvestigationPackageWorker } from '#lib/investigation-package-worker.ts';
+  import { readPackagedCaseReview } from '#lib/case-review-package.ts';
 
   let { record, mutationBusy, persist }: {
     record: CaseRecord;

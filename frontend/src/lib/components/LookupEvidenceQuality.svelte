@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { untrack } from 'svelte';
   import type { DecisionFact } from '../../../../packages/evidence/decision-fact.mts';
-  import { buildLookupEvidenceQualityModel, buildLookupCollectionOutcomeReview } from '$lib/analysis/lookup-evidence-quality-model.ts';
-  import type { LookupEvidenceQualityMatrix } from '$lib/analysis/lookup-decision-support.ts';
-  import { formatCollectionDuration } from '$lib/analysis/lookup-display-shared.ts';
-  import type { LookupHttpResponse, LookupTiming } from '$lib/analysis/lookup-response.ts';
-  import type { LookupFreshnessThresholds, LookupSourceRefreshPlan, LookupSourceRefreshLedger, SourceRefreshCaseTarget } from '$lib/analysis/lookup-source-refresh.ts';
-  import LookupCollectionTiming from '$lib/components/LookupCollectionTiming.svelte';
-  import LookupSourceRefresh from '$lib/components/LookupSourceRefresh.svelte';
+  import { buildLookupEvidenceQualityModel, buildLookupCollectionOutcomeReview } from '#lib/analysis/lookup-evidence-quality-model.ts';
+  import type { LookupEvidenceQualityMatrix } from '#lib/analysis/lookup-decision-support.ts';
+  import { formatCollectionDuration } from '#lib/analysis/lookup-display-shared.ts';
+  import type { LookupHttpResponse, LookupTiming } from '#lib/analysis/lookup-response.ts';
+  import type { LookupFreshnessThresholds, LookupSourceRefreshPlan, LookupSourceRefreshLedger, SourceRefreshCaseTarget } from '#lib/analysis/lookup-source-refresh.ts';
+  import LookupCollectionTiming from '#lib/components/LookupCollectionTiming.svelte';
+  import LookupSourceRefresh from '#lib/components/LookupSourceRefresh.svelte';
 
   let {
     matrix,

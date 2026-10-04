@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { CaseRecord } from '$lib/cases';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { buildCaseIncidentCoverage } from '../../../../packages/cases/case-workflow-metadata.mts';
   let { record }: { record: CaseRecord } = $props();
   let page = $state(1);

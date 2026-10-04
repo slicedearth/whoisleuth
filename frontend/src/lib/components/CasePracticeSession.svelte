@@ -1,17 +1,17 @@
 <script lang="ts">
   import { onDestroy, tick, untrack } from 'svelte';
-  import { createCasePracticeSession, CASE_PRACTICE_OBSERVED_AT, CASE_PRACTICE_INTAKE_TEXT, reviewCasePracticeInput, previewCasePracticeContainment, casePracticeDefinition, casePracticeRoutes, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeFeedback, casePracticeIdentityReview, type CasePracticeScenario } from '$lib/analysis/case-practice.ts';
+  import { createCasePracticeSession, CASE_PRACTICE_OBSERVED_AT, CASE_PRACTICE_INTAKE_TEXT, reviewCasePracticeInput, previewCasePracticeContainment, casePracticeDefinition, casePracticeRoutes, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeFeedback, casePracticeIdentityReview, type CasePracticeScenario } from '#lib/analysis/case-practice.ts';
   import { caseSelectedEvidenceSourceLimitations } from '../../../../packages/cases/case-evidence-links.mts';
-  import { provideDocumentCaseDraftStorage } from '$lib/controllers/case-draft.svelte.ts';
-  import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
-  import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft.ts';
+  import { provideDocumentCaseDraftStorage } from '#lib/controllers/case-draft.svelte.ts';
+  import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
+  import { restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
   import CaseObservationStage from './CaseObservationStage.svelte';
   import CaseAssessmentStage from './CaseAssessmentStage.svelte';
   import CaseRecheckReview from './CaseRecheckReview.svelte';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CaseRequestedEvidence from './CaseRequestedEvidence.svelte';
   import CaseAssessmentComparison from './CaseAssessmentComparison.svelte';
-  import '$lib/components/case-response-stage.css';
+  import '#lib/components/case-response-stage.css';
 
   let { onreset, scenario }: { onreset: () => void; scenario: CasePracticeScenario } = $props();
   const session = createCasePracticeSession(untrack(() => scenario));

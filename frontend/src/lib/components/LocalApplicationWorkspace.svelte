@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { localApplicationInfo, type LocalApplicationInfo } from '$lib/local-application-storage.ts';
+  import { localApplicationInfo, type LocalApplicationInfo } from '#lib/local-application-storage.ts';
   let info = $state<LocalApplicationInfo | null>(null);
   let error = $state('');
   onMount(() => {

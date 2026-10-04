@@ -1,5 +1,5 @@
 <script lang="ts">
-  import BrandMark from '$lib/components/BrandMark.svelte';
+  import BrandMark from '#lib/components/BrandMark.svelte';
 
   let {
     stage,

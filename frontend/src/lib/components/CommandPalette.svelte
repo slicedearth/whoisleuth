@@ -2,10 +2,10 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount, tick } from 'svelte';
-  import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
+  import IntelligenceIcon from '#lib/components/IntelligenceIcon.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
-  import { isNavigationItemActive, type NavigationItem } from '$lib/workspaces';
-  import { loadDeferredModule, reloadDeferredModulePage } from '$lib/deferred-module';
+  import { isNavigationItemActive, type NavigationItem } from '#lib/workspaces.ts';
+  import { loadDeferredModule, reloadDeferredModulePage } from '#lib/deferred-module.ts';
 
   type ConsoleCommand = NavigationItem & {
     group: string;
@@ -57,7 +57,7 @@
 
   onMount(() => {
     const controller = new AbortController();
-    void loadDeferredModule(() => import('$lib/console-command-navigation'), { signal: controller.signal }).then(({ consoleCommandNavigation }) => {
+    void loadDeferredModule(() => import('#lib/console-command-navigation.ts'), { signal: controller.signal }).then(({ consoleCommandNavigation }) => {
       if (controller.signal.aborted) return;
       commands = consoleCommandNavigation;
       destinationsState = 'ready';

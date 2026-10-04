@@ -56,7 +56,6 @@ const SOURCE_FILES = Object.freeze([
   'package-lock.json',
   'tsconfig.json',
   'frontend/package.json',
-  'frontend/svelte.config.ts',
   'frontend/tsconfig.json',
   'frontend/vite.config.ts',
 ] as const);
@@ -253,7 +252,7 @@ function buildConfigurationFiles(repositoryRoot: string, known: ReadonlySet<stri
   // Build inspection runs after installation. Bootstrap commands also import
   // this module's artefact paths and must remain usable without node_modules.
   const ts = createRequire(path.join(DEFAULT_REPOSITORY_ROOT, 'package.json'))('typescript') as typeof import('typescript');
-  const pending = ['frontend/vite.config.ts', 'frontend/svelte.config.ts'];
+  const pending = ['frontend/vite.config.ts'];
   const visited = new Set<string>();
   const additional: PlannedFile[] = [];
   const resolution: CompilerOptions = {

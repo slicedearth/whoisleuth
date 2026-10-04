@@ -1,6 +1,6 @@
 <script module lang="ts">
-  import type { ExternalFindingsDocument } from '$lib/analysis/external-findings-import.ts';
-  import type { ExternalIntelligencePreview } from '$lib/analysis/external-intelligence-import.ts';
+  import type { ExternalFindingsDocument } from '#lib/analysis/external-findings-import.ts';
+  import type { ExternalIntelligencePreview } from '#lib/analysis/external-intelligence-import.ts';
 
   export type ExternalImportPreview =
     | Readonly<{ kind: 'findings'; document: ExternalFindingsDocument }>
@@ -9,10 +9,10 @@
 
 <script lang="ts">
   import Pagination from './Pagination.svelte';
-  import { externalFindingCaseProjection } from '$lib/analysis/external-findings-import.ts';
-  import { externalIntelligenceAssertionContent } from '$lib/analysis/external-intelligence-import.ts';
-  import type { ExternalFindingConversionReport } from '$lib/analysis/external-findings-converters.ts';
-  import type { CaseRecord } from '$lib/analysis/case-model.ts';
+  import { externalFindingCaseProjection } from '#lib/analysis/external-findings-import.ts';
+  import { externalIntelligenceAssertionContent } from '#lib/analysis/external-intelligence-import.ts';
+  import type { ExternalFindingConversionReport } from '#lib/analysis/external-findings-converters.ts';
+  import type { CaseRecord } from '#lib/analysis/case-model.ts';
   import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
 
   let { preview, conversionReport, cases, applying, onimport, oncancel }: {

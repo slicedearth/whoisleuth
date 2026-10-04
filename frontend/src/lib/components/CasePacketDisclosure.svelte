@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { buildCaseResponseReviewInputs } from '../../../../packages/cases/case-response-packet.mts';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   let { material, retainedPinCount }: {
     material: ReturnType<typeof buildCaseResponseReviewInputs>;
     retainedPinCount: number;

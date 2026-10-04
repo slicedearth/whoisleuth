@@ -1,15 +1,15 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import { MAX_CONTEXT_RECORDS, MAX_CONTEXT_INPUT_BYTES, type ContextReview } from '../../../../packages/contracts/context-review.mts';
-  import { incidentPresentation, type ContextReviewPresentation } from '$lib/analysis/context-review-presentation.ts';
+  import { incidentPresentation, type ContextReviewPresentation } from '#lib/analysis/context-review-presentation.ts';
   import LocalFileInput from './LocalFileInput.svelte';
   import EvidenceTimestamp from './EvidenceTimestamp.svelte';
   import { MAX_RESPONSE_VALUE_LENGTH, MAX_RESPONSE_LABEL_LENGTH, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH } from '../../../../packages/contracts/case-portability.mts';
   import { CASE_PIN_COMPLETENESS } from '../../../../packages/cases/case-response-records.mts';
   import { INCIDENT_SEQUENCE_INPUT_SCHEMA, INCIDENT_SEQUENCE_INPUT_VERSION, INCIDENT_STAGE_KINDS, INCIDENT_STAGE_BASES, readIncidentStages, incidentStageFromPin, reviewIncidentSequence, type IncidentStage } from '../../../../packages/investigation/incident-sequence-review.mts';
-  import { readContextFile, readContextEvidence } from '$lib/context-review-input.ts';
+  import { readContextFile, readContextEvidence } from '#lib/context-review-input.ts';
   import CaseContextReport from './CaseContextReport.svelte';
   import Pagination from './Pagination.svelte';
   import './context-review.css';

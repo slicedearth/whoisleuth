@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import { CASE_PROVIDER_OUTCOMES, CASE_OBSERVED_EFFECT_STATES } from '../../../../packages/cases/case-response-records.mts';
   import { PLATFORM_OBJECT_TYPES, PLATFORM_REPORT_STATES, PLATFORM_CONTINUITY_INPUT_SCHEMA, PLATFORM_CONTINUITY_INPUT_VERSION, readPlatformObjects, reviewPlatformContinuity, type PlatformObject, type PlatformObjectType } from '../../../../packages/investigation/platform-continuity-review.mts';
   import { MAX_CONTEXT_RECORDS, MAX_CONTEXT_INPUT_BYTES, type ContextReview } from '../../../../packages/contracts/context-review.mts';
-  import { platformPresentation, type ContextReviewPresentation } from '$lib/analysis/context-review-presentation.ts';
+  import { platformPresentation, type ContextReviewPresentation } from '#lib/analysis/context-review-presentation.ts';
   import LocalFileInput from './LocalFileInput.svelte';
   import EvidenceTimestamp from './EvidenceTimestamp.svelte';
-  import { readContextFile, readContextEvidence } from '$lib/context-review-input.ts';
+  import { readContextFile, readContextEvidence } from '#lib/context-review-input.ts';
   import CaseContextReport from './CaseContextReport.svelte';
   import Pagination from './Pagination.svelte';
   import './context-review.css';

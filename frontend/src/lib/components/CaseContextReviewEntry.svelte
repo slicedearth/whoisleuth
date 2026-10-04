@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import DeferredSurface from './DeferredSurface.svelte';
-  import { loadDeferredModule } from '$lib/deferred-module';
+  import { loadDeferredModule } from '#lib/deferred-module.ts';
   let { record, mutationBusy, persistOperation }: { record: CaseRecord; mutationBusy: boolean; persistOperation: PersistCaseOperation } = $props();
   let activated = $state(false);
   const load = () => import('./CaseContextReviews.svelte');

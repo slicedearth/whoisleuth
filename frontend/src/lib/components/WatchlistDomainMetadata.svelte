@@ -1,10 +1,10 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import Pagination from '$lib/components/Pagination.svelte';
-  import { watchContextBrandDisplay, type WatchBrandNames } from '$lib/analysis/watchlist-context-labels';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time';
-  import type { WatchlistEntry } from '$lib/watchlists';
-  import { updateWatchContexts } from '$lib/watchlists';
+  import Pagination from '#lib/components/Pagination.svelte';
+  import { watchContextBrandDisplay, type WatchBrandNames } from '#lib/analysis/watchlist-context-labels.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import type { WatchlistEntry } from '#lib/watchlists.ts';
+  import { updateWatchContexts } from '#lib/watchlists.ts';
   import {
     WATCH_PRIORITIES,
     type WatchPriority,

@@ -1,30 +1,30 @@
 <script lang="ts">
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import { onDestroy, onMount, tick } from 'svelte';
-  import PublicConsoleCta from '$lib/components/PublicConsoleCta.svelte';
-  import PublicSeo from '$lib/components/PublicSeo.svelte';
-  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
-  import { preloadBestEffort } from '$lib/idle-preload';
+  import PublicConsoleCta from '#lib/components/PublicConsoleCta.svelte';
+  import PublicSeo from '#lib/components/PublicSeo.svelte';
+  import DeferredSurface from '#lib/components/DeferredSurface.svelte';
+  import { preloadBestEffort } from '#lib/idle-preload.ts';
   import {
     DEFERRED_MODULE_RECOVERY_DETAIL,
     loadDeferredModule,
     reloadDeferredModulePage,
-  } from '$lib/deferred-module';
+  } from '#lib/deferred-module.ts';
   import {
     createSyntheticDemoState, startSyntheticDemoScenario, type SyntheticDemoScenario, MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
     normalizeSyntheticDemoState, parseSyntheticDemoState, SYNTHETIC_DEMO_CANDIDATES, SYNTHETIC_DEMO_PROFILE,
     SYNTHETIC_DEMO_STAGES, SYNTHETIC_DEMO_STORAGE_KEY,
     syntheticDemoCandidate, syntheticDemoLookupView, syntheticDemoRelationshipGroups, syntheticDemoStage,
-  } from '$lib/analysis/demo-model-core.ts';
+  } from '#lib/analysis/demo-model-core.ts';
 
   type View='dashboard'|'brands'|'discover'|'bulk'|'lookup'|'monitor';
   type CandidateFilter='all'|'high'|'related';
   type DemoVisualView='evidence'|'relationships'|'timeline';
   type LookupFamily='registration'|'web'|'relationships'|'quality'|'case'|null;
-  type BrandsStageModule=typeof import('$lib/components/demo-stages/brands.ts');
-  type BulkStageModule=typeof import('$lib/components/demo-stages/bulk.ts');
-  type LookupStageModule=typeof import('$lib/components/demo-stages/lookup.ts');
-  type MonitorStageModule=typeof import('$lib/components/demo-stages/monitor.ts');
+  type BrandsStageModule=typeof import('#lib/components/demo-stages/brands.ts');
+  type BulkStageModule=typeof import('#lib/components/demo-stages/bulk.ts');
+  type LookupStageModule=typeof import('#lib/components/demo-stages/lookup.ts');
+  type MonitorStageModule=typeof import('#lib/components/demo-stages/monitor.ts');
 
   let demoState:ReturnType<typeof createSyntheticDemoState>=$state(createSyntheticDemoState());
   let view=$state<View>('dashboard');
@@ -32,7 +32,7 @@
   let practiceOpen=$state(false);
   let practiceStarted=$state(false);
   let practiceGeneration=$state(0);
-  function preloadCasePractice(){preloadBestEffort(()=>import('$lib/components/CasePractice.svelte'));}
+  function preloadCasePractice(){preloadBestEffort(()=>import('#lib/components/CasePractice.svelte'));}
   onMount(()=>{
     const reveal=()=>{if(window.location.hash==='#case-practice'){practiceOpen=true;practiceStarted=true;}};
     reveal();window.addEventListener('hashchange',reveal);
@@ -138,17 +138,17 @@
   }
   async function loadStageModule(target:View){
     if(target==='brands'){
-      const module=await loadDeferredModule(()=>import('$lib/components/demo-stages/brands.ts'),{signal:moduleController.signal});
+      const module=await loadDeferredModule(()=>import('#lib/components/demo-stages/brands.ts'),{signal:moduleController.signal});
       BrandProfileListView=module.BrandProfileList;
       return;
     }
     if(target==='bulk'){
-      const module=await loadDeferredModule(()=>import('$lib/components/demo-stages/bulk.ts'),{signal:moduleController.signal});
+      const module=await loadDeferredModule(()=>import('#lib/components/demo-stages/bulk.ts'),{signal:moduleController.signal});
       BulkRelationshipsView=module.BulkRelationships;
       return;
     }
     if(target==='lookup'){
-      const module=await loadDeferredModule(()=>import('$lib/components/demo-stages/lookup.ts'),{signal:moduleController.signal});
+      const module=await loadDeferredModule(()=>import('#lib/components/demo-stages/lookup.ts'),{signal:moduleController.signal});
       EvidenceTopologyView=module.EvidenceTopology;
       LookupLifecycleView=module.LookupLifecycle;
       LookupAcquisitionReviewView=module.LookupAcquisitionReview;
@@ -163,7 +163,7 @@
       return;
     }
     if(target==='monitor'){
-      const module=await loadDeferredModule(()=>import('$lib/components/demo-stages/monitor.ts'),{signal:moduleController.signal});
+      const module=await loadDeferredModule(()=>import('#lib/components/demo-stages/monitor.ts'),{signal:moduleController.signal});
       EvidenceTimelineView=module.EvidenceTimeline;
       buildSyntheticDemoExportView=module.buildSyntheticDemoExport;
       syntheticDemoCaseRecordView=module.syntheticDemoCaseRecord;
@@ -340,7 +340,7 @@
 
 <details id="case-practice" class="case-practice-entry card" bind:open={practiceOpen} ontoggle={event=>{if(event.currentTarget.isConnected&&event.currentTarget.open)practiceStarted=true;}}>
   <summary onpointerenter={preloadCasePractice} onfocus={preloadCasePractice}>Practise with real Case forms</summary>
-  {#if practiceStarted}{#key practiceGeneration}<DeferredSurface load={()=>import('$lib/components/CasePractice.svelte')} props={{onreset:()=>{practiceGeneration+=1;}}} onready={()=>{if(practiceGeneration>0)document.getElementById('case-practice-title')?.focus();}} loadingLabel="Opening the isolated Case practice." unavailableLabel="Case practice could not be loaded." />{/key}{/if}
+  {#if practiceStarted}{#key practiceGeneration}<DeferredSurface load={()=>import('#lib/components/CasePractice.svelte')} props={{onreset:()=>{practiceGeneration+=1;}}} onready={()=>{if(practiceGeneration>0)document.getElementById('case-practice-title')?.focus();}} loadingLabel="Opening the isolated Case practice." unavailableLabel="Case practice could not be loaded." />{/key}{/if}
 </details>
 
 <nav class="demo-steps card" bind:this={demoSteps} aria-label="Synthetic tool substeps">

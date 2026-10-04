@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import {
     DISCLOSURE_FIELD_IDS,
     DISCLOSURE_PURPOSES,
@@ -8,7 +8,7 @@
     registrationDisclosureFilename,
     type DisclosureFieldId,
     type DisclosurePurpose,
-  } from '$lib/analysis/registration-disclosure-plan.ts';
+  } from '#lib/analysis/registration-disclosure-plan.ts';
 
   type JsonRecord = Record<string, unknown>;
   const asRecord = (value: unknown): JsonRecord => value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};

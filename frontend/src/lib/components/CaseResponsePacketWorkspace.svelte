@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import { tick } from 'svelte';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CasePacketPrintPreview from './CasePacketPrintPreview.svelte';
   import CasePacketDisclosure from './CasePacketDisclosure.svelte';
   import { buildCaseResponseReviewInputs } from '../../../../packages/cases/case-response-packet.mts';
   import { deliveryReceiptForPacket, type CaseDeliveryPacketReceipt } from '../../../../packages/cases/case-packet-correction.mts';
-  import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
+  import { caseEvidenceChoiceName } from '#lib/analysis/case-evidence-presentation.ts';
   import { caseInvestigationContext } from '../../../../packages/cases/case-incident-context.mts';
   import { caseResponseIncidentUrls, caseTypeSummary } from '../../../../packages/cases/case-workflow-metadata.mts';
   import type { CaseRecord } from '../cases.ts';
@@ -26,12 +26,12 @@
     type ResponseAuthorisationConfirmationId,
     type ResponsePacketProfileId,
     type ResponseReadinessState,
-  } from '$lib/analysis/case-response-packet.ts';
+  } from '#lib/analysis/case-response-packet.ts';
   import {
     CASE_RESPONSE_STAGE_DEFINITIONS,
     type CaseResponseStage,
-  } from '$lib/analysis/case-response-stage.ts';
-  import { isoFromUtcInput, utcInputFromIso, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
+  } from '#lib/analysis/case-response-stage.ts';
+  import { isoFromUtcInput, utcInputFromIso, utcDateTimeInputAttributes, list } from '#lib/analysis/case-response-form-values.ts';
   import { responseRouteFreshness } from '../../../../packages/cases/response-route-freshness.mts';
 
   let {

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { CaseEvidencePin } from '$lib/cases';
-  import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
+  import type { CaseEvidencePin } from '#lib/cases.ts';
+  import { caseEvidenceChoiceName } from '#lib/analysis/case-evidence-presentation.ts';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   let { label, pins, value = $bindable(''), emptyLabel = 'No evidence pin', disabled = false, required = false, onselect }: {
     label: string;

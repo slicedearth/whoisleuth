@@ -1,17 +1,17 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { createAcquisitionReviewWorkspace } from '$lib/controllers/acquisition-review-workspace.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { createAcquisitionReviewWorkspace } from '#lib/controllers/acquisition-review-workspace.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import type {
     AcquisitionDueDiligence,
     AcquisitionReviewState,
-  } from '$lib/analysis/acquisition-due-diligence.ts';
+  } from '#lib/analysis/acquisition-due-diligence.ts';
   import {
     ACQUISITION_MANUAL_CHECKS,
     type AcquisitionDecisionPacket,
     type AcquisitionDecision,
     type AcquisitionManualCheck,
-  } from '$lib/analysis/acquisition-decision-packet.ts';
+  } from '#lib/analysis/acquisition-decision-packet.ts';
 
   let { review, target, observedAt, synthetic = false }: {
     review: AcquisitionDueDiligence;

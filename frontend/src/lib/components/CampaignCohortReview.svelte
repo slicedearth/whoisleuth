@@ -1,14 +1,14 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import type { BrandProfile } from '$lib/analysis/brand-profile-model.ts';
+  import type { BrandProfile } from '#lib/analysis/brand-profile-model.ts';
   import {
     buildCampaignCohortReview,
     type CampaignCohortRationaleKind,
     type CampaignCohortSourceState,
-  } from '$lib/analysis/campaign-cohort-review.ts';
-  import type { CaseRecord } from '$lib/cases';
-  import type { CaseRelationshipSummary } from '$lib/analysis/case-relationships.ts';
-  import type { CampaignRecord } from '$lib/campaigns';
+  } from '#lib/analysis/campaign-cohort-review.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { CaseRelationshipSummary } from '#lib/analysis/case-relationships.ts';
+  import type { CampaignRecord } from '#lib/campaigns.ts';
 
   let {
     campaign,

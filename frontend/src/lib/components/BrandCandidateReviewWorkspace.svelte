@@ -3,19 +3,19 @@
   import DomainFeedCandidateIntake from './DomainFeedCandidateIntake.svelte';
   import BrandKeywordCampaigns from './BrandKeywordCampaigns.svelte';
   import { keywordCampaignDefaultPriority } from '../../../../packages/workspace/brand-keyword-campaign.mts';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time';
-  import { loadWatchlists, addCandidateWatchlist, type Watchlists } from '$lib/watchlists';
-  import { loadAnalystReviewState } from '$lib/analyst-review-state';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { loadWatchlists, addCandidateWatchlist, type Watchlists } from '#lib/watchlists.ts';
+  import { loadAnalystReviewState } from '#lib/analyst-review-state.ts';
   import {
     saveBrandCandidateDecision,
     saveBrandCandidateException,
     type BrandProfile,
-  } from '$lib/brand-profiles';
-  import { setShortlistSelection } from '$lib/shortlist';
+  } from '#lib/brand-profiles.ts';
+  import { setShortlistSelection } from '#lib/shortlist.ts';
   import {
     emptyAnalystReviewStateStore,
     type AnalystReviewStateStore,
-  } from '$lib/analysis/analyst-review-state';
+  } from '#lib/analysis/analyst-review-state.ts';
   import { projectBrandCandidateReview } from '../../../../packages/monitoring/brand-candidate-review.mts';
   import {
     candidateMaterialFingerprint,
@@ -26,7 +26,7 @@
     planCandidateWatchHandoff,
     type CandidateWatchPlan,
   } from '../../../../packages/workspace/candidate-watch-handoff.mts';
-  import { subscribeBrowserLocalData } from '$lib/browser-local-data-service';
+  import { subscribeBrowserLocalData } from '#lib/browser-local-data-service.ts';
 
   let {
     active,

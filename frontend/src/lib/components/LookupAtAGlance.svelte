@@ -4,11 +4,11 @@
     buildLookupAtAGlanceModel,
     type LookupAtAGlanceGroupId,
     type LookupAtAGlanceItem,
-  } from '$lib/analysis/lookup-at-a-glance-model.ts';
-  import { formatDate } from '$lib/analysis/lookup-display-shared.ts';
-  import type { LookupPresentedReviewAction, LookupReviewActionModel } from '$lib/analysis/lookup-review-action-model.ts';
-  import type { LookupSummarySignal } from '$lib/analysis/lookup-summary-model.ts';
-  import { lookupQuestionsNeedingEvidence, type LookupClaimReadiness } from '$lib/analysis/lookup-claim-readiness.ts';
+  } from '#lib/analysis/lookup-at-a-glance-model.ts';
+  import { formatDate } from '#lib/analysis/lookup-display-shared.ts';
+  import type { LookupPresentedReviewAction, LookupReviewActionModel } from '#lib/analysis/lookup-review-action-model.ts';
+  import type { LookupSummarySignal } from '#lib/analysis/lookup-summary-model.ts';
+  import { lookupQuestionsNeedingEvidence, type LookupClaimReadiness } from '#lib/analysis/lookup-claim-readiness.ts';
 
   let {
     reviewActions,

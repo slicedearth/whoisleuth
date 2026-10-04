@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
-  import type { CaseRecord } from '$lib/cases';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
   import {
     brandProtectionOperationsReportFilename,
     buildBrandProtectionOperationsReport,
@@ -8,7 +8,7 @@
     serializeBrandProtectionOperationsReport,
     type OperationsReportSourceState,
     type OperationsReportWindow,
-  } from '$lib/analysis/brand-protection-operations-report.ts';
+  } from '#lib/analysis/brand-protection-operations-report.ts';
   import OperationsContributors from './OperationsContributors.svelte';
   import OperationsCaseScope from './OperationsCaseScope.svelte';
 

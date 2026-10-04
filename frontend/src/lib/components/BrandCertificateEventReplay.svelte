@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
-  import { buildBrandCertificateEventReplay, type CertificateEventReplayState } from '$lib/analysis/brand-certificate-event-replay.ts';
-  import type { BrandProfile } from '$lib/brand-profiles';
-  import type { CaseRecord } from '$lib/cases';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
+  import { buildBrandCertificateEventReplay, type CertificateEventReplayState } from '#lib/analysis/brand-certificate-event-replay.ts';
+  import type { BrandProfile } from '#lib/brand-profiles.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
   import Pagination from './Pagination.svelte';
 
   let { active, cases, unavailable = false }: { active: BrandProfile; cases: CaseRecord[]; unavailable?: boolean } = $props();

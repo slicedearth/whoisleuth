@@ -21,7 +21,6 @@
     "lib/**/*.mts",
     "lib/**/*.cts",
     "server.mts",
-    "frontend/svelte.config.ts",
     "netlify/**/*.ts",
     "netlify/**/*.mts",
     "netlify/**/*.cts",

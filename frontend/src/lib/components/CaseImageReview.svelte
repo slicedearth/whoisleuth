@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
+  import type { CaseRecord } from '#lib/cases.ts';
   import { CaseAttachmentSourceChangedError, type CaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
   import { MAX_EVIDENCE_IMAGE_REGIONS, readImageRegionPlan, type ImageDimensions, type ImageRegion } from '../../../../packages/evidence/image-regions.mts';
-  import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
-  import { prepareCaseImageDerivative } from '$lib/case-image-edit.ts';
-  import { readRetainedCaseFile, retainCaseAttachments, type SelectedCaseAttachment } from '$lib/case-attachments.ts';
-  import { trackTransientCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
-  import { failedLocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
+  import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
+  import { prepareCaseImageDerivative } from '#lib/case-image-edit.ts';
+  import { readRetainedCaseFile, retainCaseAttachments, type SelectedCaseAttachment } from '#lib/case-attachments.ts';
+  import { trackTransientCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
+  import { failedLocalMutationOutcome } from '#lib/local-mutation-outcome.ts';
   import ArtifactPreview from './ArtifactPreview.svelte';
   import EvidenceTimestamp from './EvidenceTimestamp.svelte';
   import ImageChangeReview from './ImageChangeReview.svelte';

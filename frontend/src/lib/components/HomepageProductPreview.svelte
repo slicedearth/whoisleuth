@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { SYNTHETIC_BRAND } from '$lib/synthetic-brand.ts';
+  import { SYNTHETIC_BRAND } from '#lib/synthetic-brand.ts';
 
   type PreviewCandidate = Readonly<{
     id: string;

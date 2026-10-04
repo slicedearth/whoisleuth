@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { BROWSER_WORKSPACE_DIRECTORY_EVENT, currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE, DEFAULT_BROWSER_WORKSPACE_NAME } from '$lib/browser-workspace-context.ts';
+  import { BROWSER_WORKSPACE_DIRECTORY_EVENT, currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE, DEFAULT_BROWSER_WORKSPACE_NAME } from '#lib/browser-workspace-context.ts';
   import BrowserWorkspaceLock from './BrowserWorkspaceLock.svelte';
-  import { isLocalApplication } from '$lib/local-application-context.ts';
+  import { isLocalApplication } from '#lib/local-application-context.ts';
   let { destination = false }: { destination?: boolean } = $props();
   let name = $state('Loading…');
   let encrypted = $state(false);
@@ -16,14 +16,14 @@
       const request = ++generation;
       try {
         if (localApplication) {
-          const { localApplicationInfo } = await import('$lib/local-application-storage.ts');
+          const { localApplicationInfo } = await import('#lib/local-application-storage.ts');
           await localApplicationInfo();
           if (active && request === generation) name = 'Filesystem workspace';
           return;
         }
         const id = currentBrowserWorkspaceId();
         if (id === DEFAULT_BROWSER_WORKSPACE) { name = DEFAULT_BROWSER_WORKSPACE_NAME; return; }
-        const { browserWorkspaceDirectory } = await import('$lib/browser-workspace-directory.ts');
+        const { browserWorkspaceDirectory } = await import('#lib/browser-workspace-directory.ts');
         const workspace = await browserWorkspaceDirectory.ready(id);
         if (active && request === generation) { name = workspace.name; selectedId = workspace.id; encrypted = Boolean(workspace.encryption); }
       } catch { if (active && request === generation) name = 'Unavailable'; }

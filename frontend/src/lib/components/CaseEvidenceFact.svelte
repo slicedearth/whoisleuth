@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { CaseEvidencePin } from '$lib/cases';
+  import type { CaseEvidencePin } from '#lib/cases.ts';
   import CopyButton from './CopyButton.svelte';
-  import { evidenceFactCitation } from '$lib/analysis/evidence-copy.ts';
+  import { evidenceFactCitation } from '#lib/analysis/evidence-copy.ts';
   // Opt in only outside labels and other interactive controls.
   let { pin, copyable = false }: { pin: CaseEvidencePin; copyable?: boolean } = $props();
 </script>

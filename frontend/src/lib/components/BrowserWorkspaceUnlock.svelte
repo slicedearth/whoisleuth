@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { currentBrowserWorkspaceId } from '$lib/browser-workspace-context.ts';
-  import { browserWorkspaceDirectory } from '$lib/browser-workspace-directory.ts';
-  import { unlockCurrentBrowserWorkspace } from '$lib/browser-workspace-unlock.ts';
+  import { currentBrowserWorkspaceId } from '#lib/browser-workspace-context.ts';
+  import { browserWorkspaceDirectory } from '#lib/browser-workspace-directory.ts';
+  import { unlockCurrentBrowserWorkspace } from '#lib/browser-workspace-unlock.ts';
   import ThemeSelector from './ThemeSelector.svelte';
-  import { MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES } from '$lib/browser-workspace-encryption-model.ts';
+  import { MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES } from '#lib/browser-workspace-encryption-model.ts';
   let { onunlock }: { onunlock: () => Promise<void> } = $props();
   let name = $state('Encrypted workspace');
   let passphrase = $state('');

@@ -56,6 +56,11 @@ adapters.
 Console routes compose view effects around responsibility-specific controllers.
 Domain models own validation; storage adapters own transactions and conflict
 checks. A committed write and a failed subsequent refresh remain distinct.
+The static frontend adapter, preprocessing, browser policy and bundler plugins
+are configured in `frontend/vite.config.ts`. Frontend imports use the native
+`#lib/*` package mapping with explicit extensions; its TypeScript project extends
+the framework's `$app/tsconfig`. Application version checks share the recorded
+build identity and have no periodic polling interval.
 The mark and outlined wordmark share vector geometry in
 `frontend/src/lib/brand-identity.ts`. `node tools/brand-assets.mts --write`
 regenerates the static logos, native-size favicons and social preview without

@@ -8,14 +8,14 @@
   import { CASE_DISPOSITIONS, isReviewedCaseDisposition } from '../../../../packages/cases/case-record-decisions.mts';
   import { CASE_REVIEW_REASONS } from '../../../../packages/cases/case-record-contracts.mts';
   import type { CaseRecord, CaseEvidenceRelationStance } from '../cases.ts';
-  import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
-  import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
+  import type { CaseResponsePresentation, PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
+  import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
-  import CaseInvestigationBranches from '$lib/components/CaseInvestigationBranches.svelte';
+  import CaseInvestigationBranches from '#lib/components/CaseInvestigationBranches.svelte';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   import CaseAssessmentComparison from './CaseAssessmentComparison.svelte';
-  import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
+  import { caseEvidenceChoiceName } from '#lib/analysis/case-evidence-presentation.ts';
 
   let { record, mode, mutationBusy, persist, onmessage }: {
     record: CaseRecord;

@@ -3,7 +3,7 @@
   import {
     PUBLIC_SESSION_CONTEXT,
     type PublicSessionGetter,
-  } from '$lib/public-session';
+  } from '#lib/public-session.ts';
 
   const getSession = getContext<PublicSessionGetter | undefined>(PUBLIC_SESSION_CONTEXT);
   const session = $derived(getSession?.() ?? 'anonymous');

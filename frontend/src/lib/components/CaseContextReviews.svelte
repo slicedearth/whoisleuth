@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import DomainHistoryReview from './DomainHistoryReview.svelte';
   import PlatformContinuityReview from './PlatformContinuityReview.svelte';
   import StorefrontReview from './StorefrontReview.svelte';

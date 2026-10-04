@@ -4,7 +4,7 @@
     DEFERRED_MODULE_RECOVERY_DETAIL,
     loadDeferredModule,
     reloadDeferredModulePage,
-  } from '$lib/deferred-module';
+  } from '#lib/deferred-module.ts';
 
   type DeferredModule = Readonly<{ default: Component<Properties> }>;
 

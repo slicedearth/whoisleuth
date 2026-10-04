@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
-  import { projectCertificateValidity } from '$lib/analysis/visualization-models.ts';
-  import type { LookupTlsProps } from '$lib/analysis/lookup-tls-display.ts';
+  import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
+  import { projectCertificateValidity } from '#lib/analysis/visualization-models.ts';
+  import type { LookupTlsProps } from '#lib/analysis/lookup-tls-display.ts';
 
   let {
     status,

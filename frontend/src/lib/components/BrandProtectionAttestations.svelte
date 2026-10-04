@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { tick } from 'svelte';
-  import type { BrandProfile, BrandProfileSaveResult } from '$lib/brand-profiles';
-  import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
+  import type { BrandProfile, BrandProfileSaveResult } from '#lib/brand-profiles.ts';
+  import { restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
   import {
     PROTECTION_ATTESTATION_CONTROLS,
     reviewProtectionAttestations,
     type ProtectionAttestation,
     type ProtectionAttestationControl,
     type ProtectionAttestationState,
-  } from '$lib/analysis/brand-profile-model.ts';
+  } from '#lib/analysis/brand-profile-model.ts';
 
   type Draft = {
     state: ProtectionAttestationState;

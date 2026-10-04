@@ -1,12 +1,12 @@
 <script lang="ts">
-  import Pagination from '$lib/components/Pagination.svelte';
-  import BulkRiskSummary from '$lib/components/BulkRiskSummary.svelte';
+  import Pagination from '#lib/components/Pagination.svelte';
+  import BulkRiskSummary from '#lib/components/BulkRiskSummary.svelte';
   import CasePicker from './CasePicker.svelte';
   import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
-  import type { CaseRecord } from '$lib/analysis/case-model.ts';
-  import type { BulkRiskPresentation } from '$lib/analysis/bulk-route-model.ts';
-  import type { BulkSortKey as SortKey } from '$lib/analysis/bulk-sort.ts';
-  import type { BrowserLocalCollectionLoadState } from '$lib/browser-local-data-service';
+  import type { CaseRecord } from '#lib/analysis/case-model.ts';
+  import type { BulkRiskPresentation } from '#lib/analysis/bulk-route-model.ts';
+  import type { BulkSortKey as SortKey } from '#lib/analysis/bulk-sort.ts';
+  import type { BrowserLocalCollectionLoadState } from '#lib/browser-local-data-service.ts';
   import { BULK_RESULT_COLUMNS, DEFAULT_BULK_RESULT_COLUMNS, type BulkResultColumn } from '../../../../packages/workspace/bulk-columns.mts';
 
   type CaseOption = Readonly<{ value: string; label: string }>;

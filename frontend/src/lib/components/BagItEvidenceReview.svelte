@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
-  import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
-  import type { BrowserBagItReview } from '$lib/investigation-package-worker-model.ts';
-  import { selectedBagItFolderFiles } from '$lib/investigation-folder.ts';
+  import { runInvestigationPackageWorker } from '#lib/investigation-package-worker.ts';
+  import type { BrowserBagItReview } from '#lib/investigation-package-worker-model.ts';
+  import { selectedBagItFolderFiles } from '#lib/investigation-folder.ts';
   import { MAX_BAGIT_ZIP_BYTES } from '../../../../packages/interchange/bagit.mts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
 
   let { disabled = false, onbusy = () => {} }: { disabled?: boolean; onbusy?: (value: boolean) => void } = $props();
   let review = $state.raw<BrowserBagItReview | null>(null);

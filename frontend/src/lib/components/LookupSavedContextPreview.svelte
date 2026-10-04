@@ -4,7 +4,7 @@
     DEFERRED_MODULE_RECOVERY_DETAIL,
     loadDeferredModule,
     reloadDeferredModulePage,
-  } from '$lib/deferred-module';
+  } from '#lib/deferred-module.ts';
 
   let { query }: { query: string } = $props();
   let open = $state(false);
@@ -32,7 +32,7 @@
     loadError = '';
     try {
       const module = await loadDeferredModule(
-        () => import('$lib/components/LookupSavedContextResults.svelte'),
+        () => import('#lib/components/LookupSavedContextResults.svelte'),
         { signal: moduleController.signal },
       );
       if (!active || request !== generation) return;

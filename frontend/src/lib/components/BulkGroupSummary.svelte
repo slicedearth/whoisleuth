@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { BulkGroupBy, BulkTriageGroup } from '$lib/analysis/bulk-triage.ts';
+  import type { BulkGroupBy, BulkTriageGroup } from '#lib/analysis/bulk-triage.ts';
 
   let {
     groupBy,

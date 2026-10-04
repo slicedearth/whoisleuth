@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import type { DashboardAttentionSummary } from '$lib/analysis/dashboard-workspace-state.ts';
-  import { analystReviewAttentionHref } from '$lib/analysis/analyst-review-attention.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import type { DashboardAttentionSummary } from '#lib/analysis/dashboard-workspace-state.ts';
+  import { analystReviewAttentionHref } from '#lib/analysis/analyst-review-attention.ts';
 
   let { summary }: { summary: DashboardAttentionSummary } = $props();
 

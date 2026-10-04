@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onDestroy, tick, untrack } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
-  import { readRetainedCaseFiles } from '$lib/case-attachments.ts';
-  import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import { readRetainedCaseFiles } from '#lib/case-attachments.ts';
+  import { runInvestigationPackageWorker } from '#lib/investigation-package-worker.ts';
   import {
     TEXT_COMPARISON_BYTES,
     type TextPassageComparison,

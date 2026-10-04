@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
+  import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
   import type { CredentialFormAttribution } from '../../../../packages/evidence/credential-form-attribution.mts';
   type CategoryCounts = {
     password: number;

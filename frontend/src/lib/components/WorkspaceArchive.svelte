@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import { onMount, tick } from 'svelte';
-  import BrowserWorkspaceIndicator from '$lib/components/BrowserWorkspaceIndicator.svelte';
+  import BrowserWorkspaceIndicator from '#lib/components/BrowserWorkspaceIndicator.svelte';
   import BrowserStorageHealth from './BrowserStorageHealth.svelte';
   import WorkspaceRecovery from './WorkspaceRecovery.svelte';
   import WorkspaceFileBackup from './WorkspaceFileBackup.svelte';
-  import { hasUnlockedBrowserWorkspace } from '$lib/browser-workspace-unlock.ts';
-  import { currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE } from '$lib/browser-workspace-context.ts';
-  import { isLocalApplication } from '$lib/local-application-context.ts';
-  import { boundedJsonLimitsForBytes, parseBoundedJson } from '$lib/bounded-json';
+  import { hasUnlockedBrowserWorkspace } from '#lib/browser-workspace-unlock.ts';
+  import { currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE } from '#lib/browser-workspace-context.ts';
+  import { isLocalApplication } from '#lib/local-application-context.ts';
+  import { boundedJsonLimitsForBytes, parseBoundedJson } from '#lib/bounded-json.ts';
   import {
     MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,
     MAX_WORKSPACE_ARCHIVE_BYTES,
@@ -21,9 +21,9 @@
     inspectEncryptedWorkspaceArchive,
     isEncryptedWorkspaceArchive,
     prepareLocalWorkspaceArchive,
-  } from '$lib/workspace-archive';
-  import type { WorkspaceImportSummary } from '$lib/workspace-archive';
-  import { restoreLegacyBrowserData } from '$lib/browser-local-data-service';
+  } from '#lib/workspace-archive.ts';
+  import type { WorkspaceImportSummary } from '#lib/workspace-archive.ts';
+  import { restoreLegacyBrowserData } from '#lib/browser-local-data-service.ts';
 
   type ArchiveReview = Awaited<ReturnType<typeof prepareLocalWorkspaceArchive>>;
   type WorkspacePreview = Awaited<ReturnType<ArchiveReview['preview']>>;

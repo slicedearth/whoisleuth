@@ -4,19 +4,19 @@
     importExternalFindingsIntoCase,
     type CaseRecord,
     type ExternalFindingsDocument,
-  } from '$lib/cases';
-  import { externalFindingsCaseTargets } from '$lib/analysis/external-findings-import.ts';
-  import { buildLocalRenderedCaptureHandoff } from '$lib/analysis/local-rendered-capture-handoff.ts';
-  import CopyableCommand from '$lib/components/CopyableCommand.svelte';
+  } from '#lib/cases.ts';
+  import { externalFindingsCaseTargets } from '#lib/analysis/external-findings-import.ts';
+  import { buildLocalRenderedCaptureHandoff } from '#lib/analysis/local-rendered-capture-handoff.ts';
+  import CopyableCommand from '#lib/components/CopyableCommand.svelte';
   import ArtifactPreview from './ArtifactPreview.svelte';
-  import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
-  import type { BrowserCaptureAttachmentReview } from '$lib/investigation-package-worker-model.ts';
-  import { supportsArtifactPreview } from '$lib/artifact-preview.ts';
+  import { runInvestigationPackageWorker } from '#lib/investigation-package-worker.ts';
+  import type { BrowserCaptureAttachmentReview } from '#lib/investigation-package-worker-model.ts';
+  import { supportsArtifactPreview } from '#lib/artifact-preview.ts';
   import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../../../../packages/investigation/investigation-manifest.mts';
-  import { retainCaseAttachments, type SelectedCaseAttachment } from '$lib/case-attachments.ts';
+  import { retainCaseAttachments, type SelectedCaseAttachment } from '#lib/case-attachments.ts';
   import { readCaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
   import { sha256ArtifactBytes } from '../../../../packages/evidence/artifact-integrity.mts';
-  import type { PersistCaseOperation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
+  import type { PersistCaseOperation, PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
   import { MAX_WEB_CAPTURE_MANIFEST_BYTES } from '../../../../packages/contracts/web-capture.mts';
   import CaptureComparison from './CaptureComparison.svelte';
   import PageBehaviourReview from './PageBehaviourReview.svelte';

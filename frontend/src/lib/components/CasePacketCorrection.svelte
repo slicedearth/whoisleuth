@@ -1,13 +1,13 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
-  import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
+  import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import { readCasePacketCorrection, correctionDelivery, CASE_DELIVERY_RECEIPT_LIMITATION } from '../../../../packages/cases/case-packet-correction.mts';
   import { readCaseResponseObjects } from '../../../../packages/cases/case-response-object.mts';
   import { submittedPacketReceipts } from '../../../../packages/cases/case-requested-evidence.mts';
   import { MAX_RESPONSE_RATIONALE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
-  import { isoFromUtcInput, utcDateTimeInputAttributes } from '$lib/analysis/case-response-form-values.ts';
+  import { isoFromUtcInput, utcDateTimeInputAttributes } from '#lib/analysis/case-response-form-values.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
 
   let { record, persist, mutationBusy, oncreated }: { record: CaseRecord; persist: PersistCaseResponse; mutationBusy: boolean; oncreated: (id: string) => void | Promise<void> } = $props();

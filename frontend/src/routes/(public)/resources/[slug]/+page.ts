@@ -4,7 +4,7 @@ import type { EntryGenerator, PageLoad } from './$types';
 import {
   PUBLIC_RESOURCE_SLUGS,
   publicResource,
-} from '$lib/public-resources';
+} from '#lib/public-resources.ts';
 
 export const entries: EntryGenerator = () =>
   PUBLIC_RESOURCE_SLUGS.map((slug) => ({ slug }));

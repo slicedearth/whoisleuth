@@ -1,19 +1,19 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { saveBrandKeywordCampaign, type BrandProfile } from '$lib/brand-profiles';
+  import { saveBrandKeywordCampaign, type BrandProfile } from '#lib/brand-profiles.ts';
   import {
     keywordCampaignDraft,
     previewKeywordCampaignDraft,
     previewKeywordCampaignHosts,
     type KeywordCampaignDraft,
-  } from '$lib/controllers/brand-keyword-campaign';
+  } from '#lib/controllers/brand-keyword-campaign.ts';
   import {
     brandKeywordCampaignState,
     type BrandKeywordCampaign,
   } from '../../../../packages/workspace/brand-keyword-campaign.mts';
   import { WATCH_PRIORITIES } from '../../../../packages/workspace/brand-candidate-workflow.mts';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time';
-  import { failedLocalMutationOutcome } from '$lib/local-mutation-outcome';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { failedLocalMutationOutcome } from '#lib/local-mutation-outcome.ts';
 
   let {
     active,

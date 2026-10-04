@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import {
     applyCaseRelationshipClusterAdjustments,
     buildCaseRelationshipClusterExport,
     type RelationshipClusterAdjustments,
     type RelationshipClusterSummary,
-  } from '$lib/analysis/case-relationship-clusters.ts';
-  import { registerAnalystUndo } from '$lib/analyst-undo';
+  } from '#lib/analysis/case-relationship-clusters.ts';
+  import { registerAnalystUndo } from '#lib/analyst-undo.ts';
 
   let { summary }: { summary: RelationshipClusterSummary } = $props();
   let labels = $state<Record<string, string>>({});

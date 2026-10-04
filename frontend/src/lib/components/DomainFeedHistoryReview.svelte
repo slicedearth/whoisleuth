@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time';
-  import { downloadLocalFile } from '$lib/download-local-file';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import {
     DomainFeedHistoryController,
     parseDomainFeedHistoryCursor,
     type DomainFeedHistoryState,
-  } from '$lib/controllers/domain-feed-history';
-  import type { PreparedDomainFeedReview } from '$lib/domain-feed-client';
+  } from '#lib/controllers/domain-feed-history.ts';
+  import type { PreparedDomainFeedReview } from '#lib/domain-feed-client.ts';
   import type { DomainFeedCursor } from '../../../../packages/monitoring/domain-feed-history.mts';
   import type { DomainFeedSelection } from '../../../../packages/monitoring/domain-feed.mts';
 

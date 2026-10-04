@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { BRAND_WORDMARK_VIEWBOX, BRAND_WORDMARK_PRIMARY, BRAND_WORDMARK_SECONDARY } from '$lib/brand-identity';
+  import { BRAND_WORDMARK_VIEWBOX, BRAND_WORDMARK_PRIMARY, BRAND_WORDMARK_SECONDARY } from '#lib/brand-identity.ts';
 </script>
 
 <span class="wordmark"><span class="sr-only">WHOISleuth</span><svg viewBox={BRAND_WORDMARK_VIEWBOX} aria-hidden="true" focusable="false" fill="none" stroke-width="5.5" stroke-linecap="square" stroke-linejoin="round"><path class="primary" d={BRAND_WORDMARK_PRIMARY}/><path class="secondary" d={BRAND_WORDMARK_SECONDARY}/></svg></span>

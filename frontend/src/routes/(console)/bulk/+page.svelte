@@ -1,77 +1,77 @@
 <script lang="ts">
-  import { HANDOFF_SOURCE_LABELS } from '$lib/candidate-handoff-core';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { HANDOFF_SOURCE_LABELS } from '#lib/candidate-handoff-core.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import { goto } from '$app/navigation';
   import { page as routePage } from '$app/state';
   import { getContext, onMount, tick } from 'svelte';
-  import BulkScanQueue from '$lib/components/BulkScanQueue.svelte';
-  import BulkMobileDisclosure from '$lib/components/BulkMobileDisclosure.svelte';
-  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
-  import PageHeading from '$lib/components/PageHeading.svelte';
+  import BulkScanQueue from '#lib/components/BulkScanQueue.svelte';
+  import BulkMobileDisclosure from '#lib/components/BulkMobileDisclosure.svelte';
+  import DeferredSurface from '#lib/components/DeferredSurface.svelte';
+  import PageHeading from '#lib/components/PageHeading.svelte';
   import {
     activeProfile,
     isDomainAllowlisted,
     type ActiveBrandProfileSourceState,
     type BrandProfile,
-  } from '$lib/brand-profiles';
-  import type { BrowserLocalCollectionLoadState } from '$lib/browser-local-data-service';
+  } from '#lib/brand-profiles.ts';
+  import type { BrowserLocalCollectionLoadState } from '#lib/browser-local-data-service.ts';
   import {
     consumeCandidateHandoff,
     type Candidate,
     type CandidateHandoff,
     type CertificateTransparencyProvenance,
-  } from '$lib/candidate-handoff';
-  import { BulkShortlistWorkspace, type BulkShortlistState } from '$lib/controllers/bulk-shortlist-workspace.ts';
-  import type { CaseRecord } from '$lib/cases';
-  import { previewWatchlistUpdate, saveReviewedWatchlistUpdate, saveSingleDomainWatchlist } from '$lib/watchlists';
-  import type { WatchlistUpdatePreview } from '$lib/analysis/watchlist-store.ts';
-  import MonitorMembershipReview from '$lib/components/MonitorMembershipReview.svelte';
+  } from '#lib/candidate-handoff.ts';
+  import { BulkShortlistWorkspace, type BulkShortlistState } from '#lib/controllers/bulk-shortlist-workspace.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import { previewWatchlistUpdate, saveReviewedWatchlistUpdate, saveSingleDomainWatchlist } from '#lib/watchlists.ts';
+  import type { WatchlistUpdatePreview } from '#lib/analysis/watchlist-store.ts';
+  import MonitorMembershipReview from '#lib/components/MonitorMembershipReview.svelte';
   import {
     failedLocalMutationOutcome,
     type LocalMutationOutcome,
-  } from '$lib/local-mutation-outcome.ts';
-  import { MUTATION_LABELS } from '$lib/analysis/typosquat-generator.ts';
-  import { buildCoverageReport } from '$lib/analysis/coverage.ts';
+  } from '#lib/local-mutation-outcome.ts';
+  import { MUTATION_LABELS } from '#lib/analysis/typosquat-generator.ts';
+  import { buildCoverageReport } from '#lib/analysis/coverage.ts';
   import {
     canonicalBulkTargets,
-  } from '$lib/analysis/bulk-scan-normalizer.ts';
-  import { parseDomainInput } from '$lib/analysis/utils.ts';
+  } from '#lib/analysis/bulk-scan-normalizer.ts';
+  import { parseDomainInput } from '#lib/analysis/utils.ts';
   import {
     buildScanRelationships,
     RELATIONSHIP_EVIDENCE_VERSION,
-  } from '$lib/analysis/relationship-evidence.ts';
-  import type { RelationshipObservation } from '$lib/analysis/relationship-evidence.ts';
+  } from '#lib/analysis/relationship-evidence.ts';
+  import type { RelationshipObservation } from '#lib/analysis/relationship-evidence.ts';
   import {
     relationshipAdmissionMatchesCurrent,
     type RelationshipRetentionAdmission,
-  } from '$lib/analysis/relationship-admission-preview.ts';
-  import { relationshipObservationId } from '$lib/analysis/relationship-observation-model.ts';
-  import { buildBulkCoverageCsv, buildBulkResultsCsv } from '$lib/analysis/bulk-export.ts';
+  } from '#lib/analysis/relationship-admission-preview.ts';
+  import { relationshipObservationId } from '#lib/analysis/relationship-observation-model.ts';
+  import { buildBulkCoverageCsv, buildBulkResultsCsv } from '#lib/analysis/bulk-export.ts';
   import {
     buildDefensiveIndicatorExport,
     prepareDefensiveIndicatorExport,
-  } from '$lib/analysis/defensive-indicator-export.ts';
-  import { BulkCaseActions } from '$lib/controllers/bulk-case-actions.ts';
+  } from '#lib/analysis/defensive-indicator-export.ts';
+  import { BulkCaseActions } from '#lib/controllers/bulk-case-actions.ts';
   import {
     BulkSessionWorkspace,
     type BulkSessionWorkspaceState,
-  } from '$lib/controllers/bulk-session-workspace.ts';
+  } from '#lib/controllers/bulk-session-workspace.ts';
   import {
     BulkMonitorActions,
     type BulkMonitorScope,
-  } from '$lib/controllers/bulk-monitor-actions.ts';
-  import { BulkCollectionWorkflow } from '$lib/controllers/bulk-collection-workflow.ts';
+  } from '#lib/controllers/bulk-monitor-actions.ts';
+  import { BulkCollectionWorkflow } from '#lib/controllers/bulk-collection-workflow.ts';
   import {
     BulkScanController,
     type BulkScanState,
-  } from '$lib/controllers/bulk-scan-controller.ts';
+  } from '#lib/controllers/bulk-scan-controller.ts';
   import {
     bulkNavigationView,
     bulkReviewView,
     clearBulkViewFilters,
     createBulkViewState,
     restoreBulkView,
-  } from '$lib/controllers/bulk-view-state.ts';
+  } from '#lib/controllers/bulk-view-state.ts';
   import {
     bulkProfileContextsMatch,
     fromBulkSessionResult,
@@ -80,21 +80,21 @@
     toBulkSessionResult,
     type ScanMode,
     type ScanResult,
-  } from '$lib/analysis/bulk-result-model.ts';
+  } from '#lib/analysis/bulk-result-model.ts';
   import {
     BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION,
     bulkProfileContextProvenance,
     normalizeBulkProfileContext,
     summarizeBulkProfileContexts,
     type BulkProfileContextProvenance,
-  } from '$lib/analysis/bulk-session-model.ts';
+  } from '#lib/analysis/bulk-session-model.ts';
   import {
     defaultBulkSortDirection,
     normalizeBulkPresentationSortKey,
     sortBulkResults,
     type BulkSortDirection,
     type BulkSortKey,
-  } from '$lib/analysis/bulk-sort.ts';
+  } from '#lib/analysis/bulk-sort.ts';
   import {
     buildBulkTriageGroups,
     bulkAdvancedFilterOptions,
@@ -105,7 +105,7 @@
     type BulkLifecycleFilter,
     type BulkMailFilter,
     type BulkSourceFilter,
-  } from '$lib/analysis/bulk-triage.ts';
+  } from '#lib/analysis/bulk-triage.ts';
   import {
     buildBulkRiskComparison,
     buildBulkRiskPresentation,
@@ -115,40 +115,40 @@
     matchesBulkRouteFilter,
     toBulkRouteTriageRow,
     type BulkPrimaryFilter,
-  } from '$lib/analysis/bulk-route-model.ts';
+  } from '#lib/analysis/bulk-route-model.ts';
   import {
     CAPABILITY_CONTEXT,
     disabledCapabilities,
     disabledCapability,
     type CapabilityGetter,
-  } from '$lib/capabilities';
-  import { readBulkWorkflowState, writeBulkWorkflowState } from '$lib/console-workflow-state.ts';
+  } from '#lib/capabilities.ts';
+  import { readBulkWorkflowState, writeBulkWorkflowState } from '#lib/console-workflow-state.ts';
   import {
     loadInvestigationGuide,
     selectInvestigationGuideFocusDomain,
     selectInvestigationGuideReviewDomains,
-  } from '$lib/investigation-guide';
-  import { unavailableLocalContextLabels } from '$lib/local-context-load.ts';
-  import { preloadBestEffort } from '$lib/idle-preload';
-  import { loadDeferredModule } from '$lib/deferred-module';
-  import type { BulkSession } from '$lib/bulk-sessions';
+  } from '#lib/investigation-guide.ts';
+  import { unavailableLocalContextLabels } from '#lib/local-context-load.ts';
+  import { preloadBestEffort } from '#lib/idle-preload.ts';
+  import { loadDeferredModule } from '#lib/deferred-module.ts';
+  import type { BulkSession } from '#lib/bulk-sessions.ts';
   import type {
     BulkReviewFilter,
     BulkReviewPreset,
     BulkReviewPresetView,
     BulkReviewState,
     BulkReviewStore,
-  } from '$lib/bulk-review';
+  } from '#lib/bulk-review.ts';
   import type { BulkResultColumn } from '../../../../../packages/workspace/bulk-columns.mts';
   import {
     BULK_REVIEW_SCHEMA,
     BULK_REVIEW_SCHEMA_VERSION,
-  } from '$lib/analysis/bulk-review-model.ts';
+  } from '#lib/analysis/bulk-review-model.ts';
   import {
     buildBulkDomainComparison,
     buildBulkDomainComparisonExport,
-  } from '$lib/analysis/bulk-domain-comparison.ts';
-  import { buildBulkRetryPlan } from '$lib/analysis/bulk-retry-plan.ts';
+  } from '#lib/analysis/bulk-domain-comparison.ts';
+  import { buildBulkRetryPlan } from '#lib/analysis/bulk-retry-plan.ts';
   import {
     BULK_PACING_OPTIONS,
     buildBulkProgressEstimate,
@@ -156,36 +156,36 @@
     bulkConcurrency,
     normalizeBulkPacing,
     type BulkPacing,
-  } from '$lib/analysis/bulk-pacing.ts';
-  import { bulkQueryLimit } from '$lib/analysis/bulk-limits.ts';
-  import { buildBulkReviewManifest } from '$lib/analysis/bulk-review-export.ts';
+  } from '#lib/analysis/bulk-pacing.ts';
+  import { bulkQueryLimit } from '#lib/analysis/bulk-limits.ts';
+  import { buildBulkReviewManifest } from '#lib/analysis/bulk-review-export.ts';
   import {
     buildBulkPeerOutlierExport,
     buildBulkPeerOutlierMatrix,
-  } from '$lib/analysis/bulk-peer-outliers.ts';
+  } from '#lib/analysis/bulk-peer-outliers.ts';
   import {
     buildBulkMailExposureExport,
     buildBulkMailExposureReport,
-  } from '$lib/analysis/bulk-mail-exposure.ts';
-  import type { BulkReviewCockpitRow } from '$lib/analysis/bulk-review-cockpit.ts';
+  } from '#lib/analysis/bulk-mail-exposure.ts';
+  import type { BulkReviewCockpitRow } from '#lib/analysis/bulk-review-cockpit.ts';
   import {
     casesForDomain,
     selectedCasesByDomain,
   } from '../../../../../packages/cases/case-selection.mts';
-  import { registerAnalystUndo } from '$lib/analyst-undo';
+  import { registerAnalystUndo } from '#lib/analyst-undo.ts';
   const moduleController = new AbortController();
   const preloadModule = (load: () => Promise<unknown>) =>
     preloadBestEffort(load, moduleController.signal);
   let analysisPreloadGeneration = 0;
   let analysisPreloadReady = $state(false);
 
-  import { BulkDomainImport } from '$lib/controllers/bulk-domain-import.ts';
+  import { BulkDomainImport } from '#lib/controllers/bulk-domain-import.ts';
   const PAGE_SIZE = 100;
-  type CasesApi = typeof import('$lib/cases');
+  type CasesApi = typeof import('#lib/cases.ts');
   type MobileResultView = 'review' | 'list' | 'analysis';
   type WorkspaceTool = 'sessions' | 'review' | 'indicators';
-  type BulkReviewApi = typeof import('$lib/bulk-review');
-  type RelationshipApi = typeof import('$lib/relationship-observations');
+  type BulkReviewApi = typeof import('#lib/bulk-review.ts');
+  type RelationshipApi = typeof import('#lib/relationship-observations.ts');
   let handoff = $state<CandidateHandoff | null>(null);
   let input = $state('');
   let mode = $state<ScanMode>('fast');
@@ -219,7 +219,7 @@
   let profile = $state<BrandProfile | null>(null);
   let profileSourceState = $state<ActiveBrandProfileSourceState>('loading');
   const shortlistWorkspace = new BulkShortlistWorkspace({
-    loadStorage: () => loadDeferredModule(() => import('$lib/shortlist'), { signal: moduleController.signal }),
+    loadStorage: () => loadDeferredModule(() => import('#lib/shortlist.ts'), { signal: moduleController.signal }),
     publish: next => { shortlistState = next; },
     confirm: message => confirm(message),
     registerUndo: registerAnalystUndo,
@@ -238,7 +238,7 @@
   let relationshipsSourceState = $state<BrowserLocalCollectionLoadState>('idle');
   const sessionWorkspace = new BulkSessionWorkspace({
     loadStorage: () =>
-      loadDeferredModule(() => import('$lib/bulk-sessions'), { signal: moduleController.signal }),
+      loadDeferredModule(() => import('#lib/bulk-sessions.ts'), { signal: moduleController.signal }),
     scan: () => ({
       running: scan.running,
       results,
@@ -589,7 +589,7 @@
     if (bulkReviewSourceState === 'ready' || bulkReviewSourceState === 'loading')
       return bulkReviewLoad ?? Promise.resolve();
     bulkReviewSourceState = 'loading';
-    bulkReviewLoad = loadDeferredModule(() => import('$lib/bulk-review'), {
+    bulkReviewLoad = loadDeferredModule(() => import('#lib/bulk-review.ts'), {
       signal: moduleController.signal,
     })
       .then(async (module) => {
@@ -611,7 +611,7 @@
     if (relationshipsSourceState === 'ready' || relationshipsSourceState === 'loading')
       return relationshipLoad ?? Promise.resolve();
     relationshipsSourceState = 'loading';
-    relationshipLoad = loadDeferredModule(() => import('$lib/relationship-observations'), {
+    relationshipLoad = loadDeferredModule(() => import('#lib/relationship-observations.ts'), {
       signal: moduleController.signal,
     })
       .then(async (module) => {
@@ -641,7 +641,7 @@
       () =>
         Promise.allSettled([
           shortlistWorkspace.ensureLoaded(),
-          import('$lib/cases').then(async (module) => {
+          import('#lib/cases.ts').then(async (module) => {
             casesApi = module;
             cases = await module.loadCases();
             caseOptions = module.CASE_DISPOSITIONS;
@@ -702,27 +702,27 @@
     if (next === 'review') void ensureBulkReviewContext();
   }
   function preloadWorkspaceTool(next: WorkspaceTool) {
-    if (next === 'sessions') preloadModule(() => import('$lib/components/BulkSessions.svelte'));
+    if (next === 'sessions') preloadModule(() => import('#lib/components/BulkSessions.svelte'));
     else if (next === 'review')
-      preloadModule(() => import('$lib/components/BulkReviewWorkspace.svelte'));
-    else preloadModule(() => import('$lib/components/ManagedIndicatorWorkspace.svelte'));
+      preloadModule(() => import('#lib/components/BulkReviewWorkspace.svelte'));
+    else preloadModule(() => import('#lib/components/ManagedIndicatorWorkspace.svelte'));
   }
   function preloadResultView(next: MobileResultView) {
-    if (next === 'review') preloadModule(() => import('$lib/components/BulkReviewCockpit.svelte'));
+    if (next === 'review') preloadModule(() => import('#lib/components/BulkReviewCockpit.svelte'));
     else if (next === 'list')
-      preloadModule(() => import('$lib/components/BulkResultsTable.svelte'));
+      preloadModule(() => import('#lib/components/BulkResultsTable.svelte'));
     else {
       const generation = ++analysisPreloadGeneration;
       analysisPreloadReady = false;
       const loads: Array<Promise<unknown>> = [
-        import('$lib/components/BulkMailExposureReview.svelte'),
-        import('$lib/components/BulkPeerOutliers.svelte'),
+        import('#lib/components/BulkMailExposureReview.svelte'),
+        import('#lib/components/BulkPeerOutliers.svelte'),
       ];
-      if (domainComparison) loads.push(import('$lib/components/BulkDomainComparison.svelte'));
-      if (view.groupBy) loads.push(import('$lib/components/BulkGroupSummary.svelte'));
+      if (domainComparison) loads.push(import('#lib/components/BulkDomainComparison.svelte'));
+      if (view.groupBy) loads.push(import('#lib/components/BulkGroupSummary.svelte'));
       if (relationshipSummary.groups.length || relationshipSummary.limitations.length)
-        loads.push(import('$lib/components/BulkRelationships.svelte'));
-      if (coverage) loads.push(import('$lib/components/BulkCoverage.svelte'));
+        loads.push(import('#lib/components/BulkRelationships.svelte'));
+      if (coverage) loads.push(import('#lib/components/BulkCoverage.svelte'));
       const preload = Promise.all(loads);
       void preload.then(
         () => {
@@ -1381,13 +1381,13 @@
       const exported =
         indicatorFormat === 'stix'
           ? (
-              await loadDeferredModule(() => import('$lib/analysis/stix-indicator-export.ts'), {
+              await loadDeferredModule(() => import('#lib/analysis/stix-indicator-export.ts'), {
                 signal: moduleController.signal,
               })
             ).buildStixIndicatorExport(sources)
           : indicatorFormat === 'misp'
             ? (
-                await loadDeferredModule(() => import('$lib/analysis/misp-indicator-export.ts'), {
+                await loadDeferredModule(() => import('#lib/analysis/misp-indicator-export.ts'), {
                   signal: moduleController.signal,
                 })
               ).buildMispIndicatorExport(sources)
@@ -1486,7 +1486,7 @@
       </div>
       {#if workspaceTool==='sessions'}
         <DeferredSurface
-          load={()=>import('$lib/components/BulkSessions.svelte')}
+          load={()=>import('#lib/components/BulkSessions.svelte')}
           props={{
             sessions: sessionState.sessions, currentSessionId: sessionState.currentId, saveName: sessionState.name,
             setSaveName: (value: string) => sessionWorkspace.setName(value), saveCurrent: () => sessionWorkspace.save(),
@@ -1505,14 +1505,14 @@
         />
       {:else if workspaceTool==='review'}
         <DeferredSurface
-          load={()=>import('$lib/components/BulkReviewWorkspace.svelte')}
+          load={()=>import('#lib/components/BulkReviewWorkspace.svelte')}
           props={{store:bulkReviewStore,currentView:currentBulkReviewView(),reviewFilter:view.reviewStateFilter,setReviewFilter:(value:BulkReviewFilter)=>{view.reviewStateFilter=value;view.page=1;},saveView:saveCurrentBulkReviewView,loadView:loadBulkReviewView,deleteView:removeBulkReviewView,sourceState:bulkReviewSourceState}}
           loadingLabel="Loading saved Bulk review views from this browser."
           unavailableLabel="Saved Bulk review views could not be loaded."
         />
       {:else}
         <DeferredSurface
-          load={()=>import('$lib/components/ManagedIndicatorWorkspace.svelte')}
+          load={()=>import('#lib/components/ManagedIndicatorWorkspace.svelte')}
           props={{rows:reviewedIndicatorRows,selectedDomains:[...shortlistedDomains],officialDomains:profile?.officialDomains??[],allowlistedDomains:profile?.allowlistedDomains??[],contextReady:indicatorEligibilityAvailable}}
           loadingLabel="Loading indicator revision tools."
           unavailableLabel="Indicator revision tools could not be loaded. Your retained files have not changed."
@@ -1532,9 +1532,9 @@
       <button type="button" aria-controls="bulk-list-panel" aria-pressed={mobileResultView==='list'} onpointerenter={()=>preloadResultView('list')} onfocus={()=>preloadResultView('list')} onclick={()=>selectResultView('list')}>List</button>
       <button type="button" aria-controls="bulk-analysis-panel" aria-pressed={mobileResultView==='analysis'} onpointerenter={()=>preloadResultView('analysis')} onfocus={()=>preloadResultView('analysis')} onclick={()=>selectResultView('analysis')}>Analysis</button>
     </div>
-    <BulkMobileDisclosure title="Filters and result actions" description="Filter, sort, export, retain, or rescan the current result set." onpreload={()=>preloadModule(()=>import('$lib/components/BulkTriageControls.svelte'))}>
+    <BulkMobileDisclosure title="Filters and result actions" description="Filter, sort, export, retain, or rescan the current result set." onpreload={()=>preloadModule(()=>import('#lib/components/BulkTriageControls.svelte'))}>
       <DeferredSurface
-        load={()=>import('$lib/components/BulkTriageControls.svelte')}
+        load={()=>import('#lib/components/BulkTriageControls.svelte')}
         props={{counts,filter: view.filter,setFilter,running: scan.running,retryErrors,exportCsv,indicatorFormat,setIndicatorFormat:(value:'domains'|'hosts'|'dnsmasq'|'rpz'|'stix'|'misp')=>indicatorFormat=value,exportIndicators:exportDefensiveIndicators,indicatorCount,indicatorEligibilityAvailable,indicatorProfileContextUnavailableCount,indicatorWildcards,setIndicatorWildcards:(value:boolean)=>indicatorWildcards=value,selectedIndicatorCount,mutationFilter: view.mutationFilter,setMutationFilter:(value:string)=>{view.mutationFilter=value;view.page=1;},mutationOptions:mutationOptions.map((value)=>({value,label:mutationLabels[value]||value.replaceAll('_',' ')})),signalFilters: view.signalFilters,toggleSignal,sourceFilter: view.sourceFilter,reviewFilter:view.reviewStateFilter,setSourceFilter:(value:BulkSourceFilter)=>{view.sourceFilter=value;view.page=1;},lifecycleFilter: view.lifecycleFilter,setLifecycleFilter:(value:BulkLifecycleFilter)=>{view.lifecycleFilter=value;view.page=1;},ageFilter: view.ageFilter,setAgeFilter:(value:BulkAgeFilter)=>{view.ageFilter=value;view.page=1;},mailFilter: view.mailFilter,setMailFilter:(value:BulkMailFilter)=>{view.mailFilter=value;view.page=1;},registrarFilter: view.registrarFilter,setRegistrarFilter:(value:string)=>{view.registrarFilter=value;view.page=1;},caseDispositionFilter: view.caseDispositionFilter,setCaseDispositionFilter:(value:string)=>{view.caseDispositionFilter=value;view.page=1;},groupBy: view.groupBy,setGroupBy:(value:BulkGroupBy)=>view.groupBy=value,advancedFilterOptions,clearFilters,sortKey: view.sortKey,sortDirection: view.sortDirection,setSortKey,setSortDirection,indicatorStatus,riskComparisonSummary:riskComparison.summary,matchedCount:filtered.length,resultCount:results.length,visibleCount:visibleResults.length,currentPage,pageCount,watchlistName,setWatchlistName,saveResults,saveSelectedResults,saveStatus,selectedCount:selectedRows.length,monitorAllBlockedCount,monitorSelectedBlockedCount,selectFiltered,clearFilteredSelection,exportSelectedCsv,deepRescanSelected,createCasesSelected,setSelectedDisposition,caseMutationBusy,caseOptions,profileContextState:profileSourceState,shortlistAvailable:shortlistSourceState==='ready',caseAvailable:casesSourceState==='ready',reviewAvailable:bulkReviewSourceState==='ready'}}
         loadingLabel="Loading filters and result actions."
         unavailableLabel="Filters and result actions could not be loaded. The primary result list remains available."
@@ -1544,7 +1544,7 @@
     <div id="bulk-review-panel" class:mobile-view-active={mobileResultView==='review'} class="mobile-result-panel review-result-panel">
       {#if mobileResultView==='review'}
         <DeferredSurface
-          load={()=>import('$lib/components/BulkReviewCockpit.svelte')}
+          load={()=>import('#lib/components/BulkReviewCockpit.svelte')}
           props={{rows:cockpitRows,caseRecords:cases,selectIncident:selectIncidentCase,retryPlan,retryStatus,setReviewState:setReviewStateAt,toggleSaved:toggleSavedAt,trackCase:trackCaseAt,caseOptions,setDisposition:setDispositionAt,watchlistName,setWatchlistName,saveToWatchlist:saveCurrentResultAt,actionStatus:saveStatus||caseStatus,inspectDomain:inspectAt,executeRetry:executeReviewedRetry,profileContextLoading:profileSourceState==='loading',shortlistAvailable:shortlistSourceState==='ready',caseAvailable:casesSourceState==='ready',reviewAvailable:bulkReviewSourceState==='ready'}}
           loadingLabel="Loading result review."
           unavailableLabel="Result review could not be loaded. The primary result list remains available."
@@ -1555,7 +1555,7 @@
     <div id="bulk-list-panel" class:mobile-view-active={mobileResultView==='list'} class="mobile-result-panel list-result-panel">
       {#if mobileResultView==='list'}
       <DeferredSurface
-        load={()=>import('$lib/components/BulkResultsTable.svelte')}
+        load={()=>import('#lib/components/BulkResultsTable.svelte')}
         props={{rows:resultRows,columns:view.resultColumns,setColumns:(value:BulkResultColumn[])=>view.resultColumns=value,caseRecords:cases,selectIncident:selectIncidentCase,sortKey: view.sortKey,sortDirection: view.sortDirection,setSort,toggleSaved:toggleSavedAt,caseOptions,setDisposition:setDispositionAt,trackCase:trackCaseAt,inspectDomain:inspectAt,copyDraft,currentPage,pageCount,setPage:(value:number)=>view.page=value,draftStatus,caseStatus,setReviewState:setReviewStateAt,shortlistSourceState,caseSourceState:casesSourceState,reviewSourceState:bulkReviewSourceState}}
         loadingLabel="Loading the primary Bulk result list."
         unavailableLabel="The primary Bulk result list could not be loaded. Collected results remain in this tab."
@@ -1570,31 +1570,31 @@
       data-analysis-preload-ready={analysisPreloadReady ? 'true' : 'false'}
     >
       {#if mobileResultView==='analysis'}
-      <BulkMobileDisclosure title="Mail exposure" description="Review observed mail and authentication posture." onpreload={()=>preloadModule(()=>import('$lib/components/BulkMailExposureReview.svelte'))}>
+      <BulkMobileDisclosure title="Mail exposure" description="Review observed mail and authentication posture." onpreload={()=>preloadModule(()=>import('#lib/components/BulkMailExposureReview.svelte'))}>
         <DeferredSurface
-          load={()=>import('$lib/components/BulkMailExposureReview.svelte')}
+          load={()=>import('#lib/components/BulkMailExposureReview.svelte')}
           props={{report:mailExposureReport,selectedDomains:shortlistedDomains,selectionAvailable:shortlistSourceState==='ready',selectDomains,exportReport:exportMailExposure,exportDisabled:profileSourceState!=='ready'}}
           loadingLabel="Loading the mail-exposure review."
           unavailableLabel="The mail-exposure review could not be loaded."
         />
       </BulkMobileDisclosure>
       {#if domainComparison}
-        <BulkMobileDisclosure title="Domain comparison" description="Compare two selected or settled domains." onpreload={()=>preloadModule(()=>import('$lib/components/BulkDomainComparison.svelte'))}>
-          <DeferredSurface load={()=>import('$lib/components/BulkDomainComparison.svelte')} props={{comparison:domainComparison,exportComparison:exportDomainComparison,openSettledRow:()=>selectResultView('list')}} loadingLabel="Loading the domain comparison." unavailableLabel="The domain comparison could not be loaded." />
+        <BulkMobileDisclosure title="Domain comparison" description="Compare two selected or settled domains." onpreload={()=>preloadModule(()=>import('#lib/components/BulkDomainComparison.svelte'))}>
+          <DeferredSurface load={()=>import('#lib/components/BulkDomainComparison.svelte')} props={{comparison:domainComparison,exportComparison:exportDomainComparison,openSettledRow:()=>selectResultView('list')}} loadingLabel="Loading the domain comparison." unavailableLabel="The domain comparison could not be loaded." />
         </BulkMobileDisclosure>
       {/if}
       {#if view.groupBy}
-        <BulkMobileDisclosure title="Group summary" description="Review the grouping selected in the filters." onpreload={()=>preloadModule(()=>import('$lib/components/BulkGroupSummary.svelte'))}>
+        <BulkMobileDisclosure title="Group summary" description="Review the grouping selected in the filters." onpreload={()=>preloadModule(()=>import('#lib/components/BulkGroupSummary.svelte'))}>
           <DeferredSurface
-            load={()=>import('$lib/components/BulkGroupSummary.svelte')}
+            load={()=>import('#lib/components/BulkGroupSummary.svelte')}
             props={{groupBy: view.groupBy,groups:groupSummary.groups,excluded:groupSummary.excluded,truncated:groupSummary.truncated,overlapping:groupSummary.overlapping,selectedDomains:shortlistedDomains,selectionAvailable:shortlistSourceState==='ready',selectDomains}}
             loadingLabel="Loading the selected group summary."
             unavailableLabel="The selected group summary could not be loaded."
           />
         </BulkMobileDisclosure>
       {/if}
-      <BulkMobileDisclosure title="Cohort outliers" description="Find uncommon evidence within this result set." onpreload={()=>preloadModule(()=>import('$lib/components/BulkPeerOutliers.svelte'))}>
-        <DeferredSurface load={()=>import('$lib/components/BulkPeerOutliers.svelte')} props={{matrix:peerOutlierMatrix,exportMatrix:exportPeerOutliers}} loadingLabel="Loading the cohort-outlier matrix." unavailableLabel="The cohort-outlier matrix could not be loaded." />
+      <BulkMobileDisclosure title="Cohort outliers" description="Find uncommon evidence within this result set." onpreload={()=>preloadModule(()=>import('#lib/components/BulkPeerOutliers.svelte'))}>
+        <DeferredSurface load={()=>import('#lib/components/BulkPeerOutliers.svelte')} props={{matrix:peerOutlierMatrix,exportMatrix:exportPeerOutliers}} loadingLabel="Loading the cohort-outlier matrix." unavailableLabel="The cohort-outlier matrix could not be loaded." />
       </BulkMobileDisclosure>
       {/if}
     </div>
@@ -1603,9 +1603,9 @@
   <div class:mobile-view-active={mobileResultView==='analysis'} class="mobile-result-panel extended-analysis-panel">
     {#if mobileResultView==='analysis'}
     {#if relationshipSummary.groups.length || relationshipSummary.limitations.length}
-      <BulkMobileDisclosure title="Relationships" description="Review shared infrastructure observed in this scan." onpreload={()=>preloadModule(()=>import('$lib/components/BulkRelationships.svelte'))} onopen={ensureRelationshipContext}>
+      <BulkMobileDisclosure title="Relationships" description="Review shared infrastructure observed in this scan." onpreload={()=>preloadModule(()=>import('#lib/components/BulkRelationships.svelte'))} onopen={ensureRelationshipContext}>
         <DeferredSurface
-          load={()=>import('$lib/components/BulkRelationships.svelte')}
+          load={()=>import('#lib/components/BulkRelationships.svelte')}
           props={{groups:relationshipSummary.groups,excludedNonPublicAddresses:relationshipSummary.excludedNonPublicAddresses,truncated:relationshipSummary.truncated,limitations:relationshipSummary.limitations,loadDomains,retainObservation,observationId:relationshipObservationId,retainedIds:retainedRelationshipIds,retainStatus:relationshipRetentionStatus,retentionAvailable:relationshipsSourceState==='ready',sourceContextId:relationshipSourceContextId}}
           loadingLabel="Loading relationship analysis."
           unavailableLabel="Relationship analysis could not be loaded."
@@ -1613,16 +1613,16 @@
       </BulkMobileDisclosure>
     {/if}
     {#if coverage}
-      <BulkMobileDisclosure title="Profile listing" description="Review which generated candidates are listed in the active profile and which need evidence review." onpreload={()=>preloadModule(()=>import('$lib/components/BulkCoverage.svelte'))}>
-        <DeferredSurface load={()=>import('$lib/components/BulkCoverage.svelte')} props={{coverage,exportCoverage,loadDomains}} loadingLabel="Loading profile-listing coverage." unavailableLabel="Profile-listing coverage could not be loaded." />
+      <BulkMobileDisclosure title="Profile listing" description="Review which generated candidates are listed in the active profile and which need evidence review." onpreload={()=>preloadModule(()=>import('#lib/components/BulkCoverage.svelte'))}>
+        <DeferredSurface load={()=>import('#lib/components/BulkCoverage.svelte')} props={{coverage,exportCoverage,loadDomains}} loadingLabel="Loading profile-listing coverage." unavailableLabel="Profile-listing coverage could not be loaded." />
       </BulkMobileDisclosure>
     {/if}
     {/if}
   </div>
 {/if}
 
-<BulkMobileDisclosure title="Shortlist" description="Review and manage the saved shortlist." onpreload={()=>preloadModule(()=>import('$lib/components/BulkShortlist.svelte'))} onopen={ensurePrimaryResultContext}>
-  <DeferredSurface load={()=>import('$lib/components/BulkShortlist.svelte')} props={{domains:shortlist.map((item)=>item.domain),status:shortlistStatus,sourceState:shortlistSourceState,loadShortlisted,downloadShortlist,importShortlistFile,removeAllShortlisted}} loadingLabel="Loading the saved shortlist." unavailableLabel="The shortlist workspace could not be loaded." />
+<BulkMobileDisclosure title="Shortlist" description="Review and manage the saved shortlist." onpreload={()=>preloadModule(()=>import('#lib/components/BulkShortlist.svelte'))} onopen={ensurePrimaryResultContext}>
+  <DeferredSurface load={()=>import('#lib/components/BulkShortlist.svelte')} props={{domains:shortlist.map((item)=>item.domain),status:shortlistStatus,sourceState:shortlistSourceState,loadShortlisted,downloadShortlist,importShortlistFile,removeAllShortlisted}} loadingLabel="Loading the saved shortlist." unavailableLabel="The shortlist workspace could not be loaded." />
 </BulkMobileDisclosure>
 
 <style>

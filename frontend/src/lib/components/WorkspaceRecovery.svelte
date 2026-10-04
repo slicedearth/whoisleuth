@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import type { ReviewedWorkspaceArchive } from '../../../../packages/workspace/workspace-recovery.mts';
-  import type { WorkspaceRecovery, WorkspaceRecoveryReport } from '$lib/workspace-recovery.ts';
-  import { MAX_BROWSER_WORKSPACE_NAME } from '$lib/browser-workspace-directory.ts';
-  import { MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS, MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES } from '$lib/browser-workspace-encryption-model.ts';
+  import type { WorkspaceRecovery, WorkspaceRecoveryReport } from '#lib/workspace-recovery.ts';
+  import { MAX_BROWSER_WORKSPACE_NAME } from '#lib/browser-workspace-directory.ts';
+  import { MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS, MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES } from '#lib/browser-workspace-encryption-model.ts';
   import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../../packages/contracts/selected-file-limits.mts';
   import EvidencePackageInput from './EvidencePackageInput.svelte';
   import RecoveryFileChecklist from './RecoveryFileChecklist.svelte';
@@ -51,7 +51,7 @@
     await operation(async () => {
       const protect = requireEncryption || encrypted;
       if (protect && passphrase !== confirmation) throw new Error('The rehearsal passphrases do not match.');
-      const { openWorkspaceRecovery, WorkspaceRecoveryStartError } = await import('$lib/workspace-recovery.ts');
+      const { openWorkspaceRecovery, WorkspaceRecoveryStartError } = await import('#lib/workspace-recovery.ts');
       try {
         const opened = await openWorkspaceRecovery(readArchive(), { name, requireEncryption, ...(protect ? { passphrase } : {}) });
         if (disposed) { await opened.close(); return; }

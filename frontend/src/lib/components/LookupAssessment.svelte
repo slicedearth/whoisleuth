@@ -3,9 +3,9 @@
     type OpportunityExplanation,
     type RiskExplanation,
     type RiskScoreSensitivity,
-  } from '$lib/analysis/scoring.ts';
-  import { projectScoreFactors } from '$lib/analysis/visualization-models.ts';
-  import type { LookupTaskView } from '$lib/analysis/lookup-presentation.ts';
+  } from '#lib/analysis/scoring.ts';
+  import { projectScoreFactors } from '#lib/analysis/visualization-models.ts';
+  import type { LookupTaskView } from '#lib/analysis/lookup-presentation.ts';
 
   type SyntheticRiskExplanation = Readonly<{
     synthetic: true;

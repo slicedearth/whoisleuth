@@ -1,27 +1,27 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { evidenceTime } from '$lib/analysis/evidence-time';
+  import { evidenceTime } from '#lib/analysis/evidence-time.ts';
   import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { goto } from '$app/navigation';
-import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
-  import PageHeading from '$lib/components/PageHeading.svelte';
-  import { setCaseNavigationContext } from '$lib/console-workflow-state';
-  import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
-  import LocalCollectionState from '$lib/components/LocalCollectionState.svelte';
-  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
-  import BrandProtectionOperationsReport from '$lib/components/BrandProtectionOperationsReport.svelte';
-  import EvidenceDebtMatrix from '$lib/components/EvidenceDebtMatrix.svelte';
-  import UnifiedAnalystReviewInbox from '$lib/components/UnifiedAnalystReviewInbox.svelte';
-  import CaseDecisionQuality from '$lib/components/CaseDecisionQuality.svelte';
-  import CaseLifecycleReview from '$lib/components/CaseLifecycleReview.svelte';
-  import { saveCandidateHandoff } from '$lib/candidate-handoff';
-  import { watchlistActiveDomains } from '$lib/watchlists';
-  import { loadProfiles, type BrandProfile } from '$lib/brand-profiles';
-  import { buildWatchBrandNames } from '$lib/analysis/watchlist-context-labels';
-  import { buildInvestigationCaseRelationships } from '$lib/analysis/case-relationships.ts';
-  import { buildCaseRelationshipClusters } from '$lib/analysis/case-relationship-clusters.ts';
-  import { buildCaseDecisionQualityReport } from '$lib/analysis/case-decision-quality.ts';
-  import { preloadBestEffort } from '$lib/idle-preload';
+import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
+  import PageHeading from '#lib/components/PageHeading.svelte';
+  import { setCaseNavigationContext } from '#lib/console-workflow-state.ts';
+  import MonitorViewTabs from '#lib/components/MonitorViewTabs.svelte';
+  import LocalCollectionState from '#lib/components/LocalCollectionState.svelte';
+  import DeferredSurface from '#lib/components/DeferredSurface.svelte';
+  import BrandProtectionOperationsReport from '#lib/components/BrandProtectionOperationsReport.svelte';
+  import EvidenceDebtMatrix from '#lib/components/EvidenceDebtMatrix.svelte';
+  import UnifiedAnalystReviewInbox from '#lib/components/UnifiedAnalystReviewInbox.svelte';
+  import CaseDecisionQuality from '#lib/components/CaseDecisionQuality.svelte';
+  import CaseLifecycleReview from '#lib/components/CaseLifecycleReview.svelte';
+  import { saveCandidateHandoff } from '#lib/candidate-handoff.ts';
+  import { watchlistActiveDomains } from '#lib/watchlists.ts';
+  import { loadProfiles, type BrandProfile } from '#lib/brand-profiles.ts';
+  import { buildWatchBrandNames } from '#lib/analysis/watchlist-context-labels.ts';
+  import { buildInvestigationCaseRelationships } from '#lib/analysis/case-relationships.ts';
+  import { buildCaseRelationshipClusters } from '#lib/analysis/case-relationship-clusters.ts';
+  import { buildCaseDecisionQualityReport } from '#lib/analysis/case-decision-quality.ts';
+  import { preloadBestEffort } from '#lib/idle-preload.ts';
   import {
     appendUnavailableCollectionStatus,
     buildMonitorNavigationUrl,
@@ -35,41 +35,41 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     type MonitorCollection,
     type MonitorFocus,
     type MonitorView,
-  } from '$lib/controllers/monitor-route-controller.ts';
-  import { buildInvestigationProjection } from '$lib/analysis/investigation-projection.ts';
-  import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
-  import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_PORTABLE_BYTES, parseWatchlistExport, restoreHostedWatchlist as restoreHostedWatchlistAtomically, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
-  import { editCase, loadCases, openCase, type CaseRecord } from '$lib/cases';
+  } from '#lib/controllers/monitor-route-controller.ts';
+  import { buildInvestigationProjection } from '#lib/analysis/investigation-projection.ts';
+  import type { ParentDomainCampaignSourceState } from '#lib/analysis/parent-domain-campaign-review.ts';
+  import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_PORTABLE_BYTES, parseWatchlistExport, restoreHostedWatchlist as restoreHostedWatchlistAtomically, writeWatchlists, type WatchlistEntry, type Watchlists } from '#lib/watchlists.ts';
+  import { editCase, loadCases, openCase, type CaseRecord } from '#lib/cases.ts';
   import { casesForDomain } from '../../../../../packages/cases/case-selection.mts';
-  import { loadCampaigns, type CampaignRecord } from '$lib/campaigns';
-  import { loadDetectionRules, type DetectionRule } from '$lib/detection-rules';
+  import { loadCampaigns, type CampaignRecord } from '#lib/campaigns.ts';
+  import { loadDetectionRules, type DetectionRule } from '#lib/detection-rules.ts';
   import {
     deleteRelationshipObservation,
     loadRelationshipObservations,
     type RelationshipObservation,
-  } from '$lib/relationship-observations';
-  import { CAPABILITY_CONTEXT, featureCapability, type CapabilityGetter } from '$lib/capabilities';
-  import { loadBulkSessions } from '$lib/bulk-sessions';
-  import { loadAnalystReviewState, saveAnalystReviewDecision } from '$lib/analyst-review-state';
-  import type { BulkSession } from '$lib/analysis/bulk-session-model.ts';
-  import { createRetainedReviewController, type RetainedReviewPreparation } from '$lib/controllers/retained-review-controller.ts';
-  import { analystReviewRequiredSourceState } from '$lib/analysis/analyst-review-source-state.ts';
+  } from '#lib/relationship-observations.ts';
+  import { CAPABILITY_CONTEXT, featureCapability, type CapabilityGetter } from '#lib/capabilities.ts';
+  import { loadBulkSessions } from '#lib/bulk-sessions.ts';
+  import { loadAnalystReviewState, saveAnalystReviewDecision } from '#lib/analyst-review-state.ts';
+  import type { BulkSession } from '#lib/analysis/bulk-session-model.ts';
+  import { createRetainedReviewController, type RetainedReviewPreparation } from '#lib/controllers/retained-review-controller.ts';
+  import { analystReviewRequiredSourceState } from '#lib/analysis/analyst-review-source-state.ts';
   import {
     analystReviewDismissalReasonLabel,
     type AnalystReviewDismissalReason,
     type AnalystReviewItem,
-  } from '$lib/analysis/analyst-review-inbox.ts';
+  } from '#lib/analysis/analyst-review-inbox.ts';
   import {
     emptyAnalystReviewStateStore,
     type AnalystReviewDisposition,
     type AnalystReviewStateStore,
-  } from '$lib/analysis/analyst-review-state.ts';
+  } from '#lib/analysis/analyst-review-state.ts';
   import {
     buildWebsiteClusterAssertion,
     buildWebsiteProfileClusters,
     type WebsiteProfileCluster,
-  } from '$lib/analysis/website-profile-clusters.ts';
-  import { loadWebsiteSnapshots, type WebsiteProfileSnapshot } from '$lib/website-snapshots';
+  } from '#lib/analysis/website-profile-clusters.ts';
+  import { loadWebsiteSnapshots, type WebsiteProfileSnapshot } from '#lib/website-snapshots.ts';
   const moduleController = new AbortController();
   const preloadModule = (load: () => Promise<unknown>) => preloadBestEffort(load, moduleController.signal);
   onDestroy(() => moduleController.abort());
@@ -77,9 +77,9 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   let view=$state<MonitorView>('inbox');
   const monitorWorkflow=$derived(monitorWorkflowForView(view));
   $effect(()=>{
-    const currentUrl=page.url;
+    const currentUrl=new URL(page.url.href);
     const requested=monitorViewFromUrl(currentUrl);
-    if(requested==='cases') { void goto(canonicalCaseUrl(currentUrl), {replaceState:true}); return; }
+    if(requested==='cases') { void goto(canonicalCaseUrl(currentUrl), {replace: true}); return; }
     untrack(()=>{
       view=requested;
     });
@@ -90,19 +90,19 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   async function navigateMonitor(next:MonitorView,focus?:MonitorFocus){
     preloadMonitorView(next);
     view=next;
-    await goto(buildMonitorNavigationUrl(page.url,next,focus),{noScroll:true,keepFocus:true});
+    await goto(buildMonitorNavigationUrl(new URL(page.url.href),next,focus),{reset: false});
   }
   function selectMonitorView(next:MonitorView){
     if(next===view)return;
     void navigateMonitor(next);
   }
   function preloadMonitorView(next:MonitorView){
-    if(next==='certificates')preloadModule(()=>import('$lib/components/CertificateReviewInbox.svelte'));
-    else if(next==='timeline')preloadModule(()=>Promise.all([import('$lib/components/RetainedEvidenceTimeline.svelte'),import('$lib/components/RetainedChangeReview.svelte')]));
-    else if(next==='campaigns')preloadModule(()=>import('$lib/components/CampaignManager.svelte'));
-    else if(next==='relationships')preloadModule(()=>Promise.all([import('$lib/components/WebsiteProfileClusters.svelte'),import('$lib/components/RetainedRelationshipObservations.svelte'),import('$lib/components/CaseRelationshipClusters.svelte'),import('$lib/components/CaseRelationshipWorkspace.svelte')]));
-    else if(next==='rules')preloadModule(()=>import('$lib/components/DetectionRuleManager.svelte'));
-    else if(next==='watchlists')preloadModule(()=>Promise.all([import('$lib/components/MonitorActivityHeatmap.svelte'),import('$lib/components/WatchlistWorkspace.svelte'),import('$lib/components/HostedWatchlistManager.svelte')]));
+    if(next==='certificates')preloadModule(()=>import('#lib/components/CertificateReviewInbox.svelte'));
+    else if(next==='timeline')preloadModule(()=>Promise.all([import('#lib/components/RetainedEvidenceTimeline.svelte'),import('#lib/components/RetainedChangeReview.svelte')]));
+    else if(next==='campaigns')preloadModule(()=>import('#lib/components/CampaignManager.svelte'));
+    else if(next==='relationships')preloadModule(()=>Promise.all([import('#lib/components/WebsiteProfileClusters.svelte'),import('#lib/components/RetainedRelationshipObservations.svelte'),import('#lib/components/CaseRelationshipClusters.svelte'),import('#lib/components/CaseRelationshipWorkspace.svelte')]));
+    else if(next==='rules')preloadModule(()=>import('#lib/components/DetectionRuleManager.svelte'));
+    else if(next==='watchlists')preloadModule(()=>Promise.all([import('#lib/components/MonitorActivityHeatmap.svelte'),import('#lib/components/WatchlistWorkspace.svelte'),import('#lib/components/HostedWatchlistManager.svelte')]));
   }
 
   // --- Watchlists ---
@@ -129,7 +129,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   async function downloadWatchlists(){try{await exportWatchlists();}catch(cause){message=cause instanceof Error?cause.message:'Could not export watchlists.';}}
   async function rescan(name:string){const current=watchlists[name];if(!current||current.membershipRecovery)return;const candidates=watchlistActiveDomains(current).map(domain=>({domain,source:name,mutationTypes:current.results.find(record=>record.domain===domain)?.mutationTypes??[]}));const handoffResult=saveCandidateHandoff('watchlist',candidates);if(!handoffResult.saved){message='This browser could not retain the watchlist candidates for Bulk. Check site-storage access and try again.';return;}await goto(`/bulk?source=watchlist&handoff=${handoffResult.token}`);}
   async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_WATCHLIST_PORTABLE_BYTES)throw new Error('This watchlist file exceeds the supported import size.');const result=await importWatchlists(parseWatchlistExport(await file.text()));const skipped=result.skipped?`; skipped ${result.skipped} older, same-time, invalid or over-limit watchlist${result.skipped===1?'':'s'}; local watchlists were retained`:'';const saved=`Imported ${result.added} new and ${result.updated} updated watchlists${skipped}.`;try{await refresh();message=saved;}catch{message=`${saved} Refreshing the saved list failed. Reload before another import.`;}}catch(cause){message=cause instanceof Error?cause.message:'Import failed';}finally{input.value='';}}
-  async function restoreHostedWatchlist(reviewed:import('$lib/watchlists').HostedWatchlistRestorePreview){
+  async function restoreHostedWatchlist(reviewed:import('#lib/watchlists.ts').HostedWatchlistRestorePreview){
     const committed=await restoreHostedWatchlistAtomically(reviewed);
     watchlists=committed;
     const saved=`Restored evidence for "${reviewed.name}"; ${reviewed.retained.length+reviewed.added.length} active domains retained.`;
@@ -325,12 +325,12 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     selected = target.name;
     changedOnly = false;
     await tick();
-    if (monitorRouteKey(page.url) !== routeKey) return;
+    if (monitorRouteKey(new URL(page.url.href)) !== routeKey) return;
     restoreWatchlistTarget();
   }
 
   $effect(()=>{
-    const currentUrl=new URL(page.url);
+    const currentUrl=new URL(page.url.href);
     const routeKey=monitorRouteKey(currentUrl);
     const loadedWatchlists=watchlists;
     const watchlistState=watchlistsSourceState;
@@ -428,7 +428,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
 {#if view==='certificates'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-certificates">
   {#if casesSourceState==='ready'&&brandProfilesSourceState==='ready'&&analystReviewStateSourceState==='ready'}
-    <DeferredSurface load={()=>import('$lib/components/CertificateReviewInbox.svelte')} loadingLabel="Loading retained certificate review…" unavailableLabel="The certificate review inbox could not be loaded." props={{profiles:brandProfiles,cases,reviewState:analystReviewState,profileId:page.url.searchParams.get('profile')??'',onreview:recordAnalystReviewDecision,oncount:(count:number)=>certificateReviewCount=count}} placeholder="workspace" />
+    <DeferredSurface load={()=>import('#lib/components/CertificateReviewInbox.svelte')} loadingLabel="Loading retained certificate review…" unavailableLabel="The certificate review inbox could not be loaded." props={{profiles:brandProfiles,cases,reviewState:analystReviewState,profileId:page.url.searchParams.get('profile')??'',onreview:recordAnalystReviewDecision,oncount:(count:number)=>certificateReviewCount=count}} placeholder="workspace" />
     {#if caseMessage}<p class="case-message" role="status" aria-live="polite">{caseMessage}</p>{/if}
   {:else}
     <LocalCollectionState state={casesSourceState==='loading'||brandProfilesSourceState==='loading'||analystReviewStateSourceState==='loading'?'loading':'unavailable'} title="Certificate review unavailable" detail="Readable Brand Profiles, retained Cases, and the analyst lifecycle overlay are required. Missing collections are not treated as empty certificate evidence." />
@@ -444,9 +444,9 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
         <p role="status">{#if timelinePreparation?.state==='unavailable'}{timelinePreparation.error}{#if retainedTimeline?.evaluatedAt} Showing the review from {date(retainedTimeline.evaluatedAt)}.{/if}{:else if timelinePreparation?.state!=='ready'}Preparing the timeline locally…{#if retainedTimeline} The previous review remains visible.{/if}{:else if retainedTimeline?.evaluatedAt}Reviewed {date(retainedTimeline.evaluatedAt)}{/if}</p>
         <button type="button" class="btn" aria-disabled={timelineRefreshDisabled} onclick={()=>{if(!timelineRefreshDisabled)timelineController.prepare(timelineInput,true);}}>{timelinePreparation?.state==='unavailable'?'Retry timeline':'Refresh timeline'}</button>
       </div>
-      {#if retainedTimeline}<DeferredSurface load={()=>import('$lib/components/RetainedEvidenceTimeline.svelte')} loadingLabel="Loading retained evidence timeline…" unavailableLabel="The retained evidence timeline could not be loaded." props={{timeline:retainedTimeline}} placeholder="workspace" />{/if}
+      {#if retainedTimeline}<DeferredSurface load={()=>import('#lib/components/RetainedEvidenceTimeline.svelte')} loadingLabel="Loading retained evidence timeline…" unavailableLabel="The retained evidence timeline could not be loaded." props={{timeline:retainedTimeline}} placeholder="workspace" />{/if}
     </div>
-    <DeferredSurface load={()=>import('$lib/components/RetainedChangeReview.svelte')} loadingLabel="Loading retained change review…" unavailableLabel="The retained change review could not be loaded." props={{cases,websiteSnapshots,watchlists,bulkSessions}} placeholder="workspace" />
+    <DeferredSurface load={()=>import('#lib/components/RetainedChangeReview.svelte')} loadingLabel="Loading retained change review…" unavailableLabel="The retained change review could not be loaded." props={{cases,websiteSnapshots,watchlists,bulkSessions}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={timelineSourceState} title="Retained timeline unavailable" detail="The combined timeline requires readable Cases, watchlists, saved Bulk sessions, relationship observations, website snapshots, and analyst review decisions. No empty history is inferred while any required collection is unavailable." />
   {/if}
@@ -456,7 +456,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
 {#if view==='campaigns'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-campaigns">
   {#if campaignsSourceState==='ready'}
-    <DeferredSurface load={()=>import('$lib/components/CampaignManager.svelte')} loadingLabel="Loading campaign workspace…" unavailableLabel="The campaign workspace could not be loaded." props={{records:cases,profiles:brandProfiles,relationshipSummary,cohortSourceStates:{cases:casesSourceState,profiles:brandProfilesSourceState,relationships:relationshipsSourceState},parentDomainSourceState:parentDomainCasesSourceState,initialCampaigns:campaigns,focusId:page.url.searchParams.get('campaign')||'',onselect:openRelatedCase,oncount:(count:number)=>campaignCount=count,onchange:(nextCampaigns:CampaignRecord[])=>campaigns=nextCampaigns}} placeholder="workspace" />
+    <DeferredSurface load={()=>import('#lib/components/CampaignManager.svelte')} loadingLabel="Loading campaign workspace…" unavailableLabel="The campaign workspace could not be loaded." props={{records:cases,profiles:brandProfiles,relationshipSummary,cohortSourceStates:{cases:casesSourceState,profiles:brandProfilesSourceState,relationships:relationshipsSourceState},parentDomainSourceState:parentDomainCasesSourceState,initialCampaigns:campaigns,focusId:page.url.searchParams.get('campaign')||'',onselect:openRelatedCase,oncount:(count:number)=>campaignCount=count,onchange:(nextCampaigns:CampaignRecord[])=>campaigns=nextCampaigns}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={campaignsSourceState} title="Campaigns unavailable" detail="The saved campaign collection could not be read, so its count and mutation controls remain unavailable. Reload to retry without treating the collection as empty." />
   {/if}
@@ -466,22 +466,22 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
 {#if view==='relationships'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-relationships">
   {#if websiteSnapshotsSourceState==='ready'}
-    <DeferredSurface load={()=>import('$lib/components/WebsiteProfileClusters.svelte')} loadingLabel="Loading website-profile relationships…" unavailableLabel="Website-profile relationships could not be loaded." props={{summary:websiteProfileClusters,cases,onpin:casesSourceState==='ready'?recordWebsiteClusterLead:null}} placeholder="workspace" />
+    <DeferredSurface load={()=>import('#lib/components/WebsiteProfileClusters.svelte')} loadingLabel="Loading website-profile relationships…" unavailableLabel="Website-profile relationships could not be loaded." props={{summary:websiteProfileClusters,cases,onpin:casesSourceState==='ready'?recordWebsiteClusterLead:null}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={websiteSnapshotsSourceState} title="Website-profile relationships unavailable" detail="Saved website snapshots could not be read, so no missing cluster is inferred and review-lead recording from that source remains unavailable." />
   {/if}
   {#if relationshipsSourceState==='ready'}
-    <DeferredSurface load={()=>import('$lib/components/RetainedRelationshipObservations.svelte')} loadingLabel="Loading retained relationship observations…" unavailableLabel="Retained relationship observations could not be loaded." props={{records:retainedRelationships,focusId:page.url.searchParams.get('observation')||'',ondelete:removeRetainedRelationship}} />
+    <DeferredSurface load={()=>import('#lib/components/RetainedRelationshipObservations.svelte')} loadingLabel="Loading retained relationship observations…" unavailableLabel="Retained relationship observations could not be loaded." props={{records:retainedRelationships,focusId:page.url.searchParams.get('observation')||'',ondelete:removeRetainedRelationship}} />
   {:else}
     <LocalCollectionState state={relationshipsSourceState} title="Retained relationships unavailable" detail="Retained relationship observations could not be read, so their count and deletion controls remain unavailable." />
   {/if}
   {#if casesSourceState==='ready'}
     {#if campaignsSourceState==='ready'&&relationshipsSourceState==='ready'}
-      <DeferredSurface load={()=>import('$lib/components/CaseRelationshipClusters.svelte')} loadingLabel="Loading Case relationship clusters…" unavailableLabel="Case relationship clusters could not be loaded." props={{summary:relationshipClusters}} />
+      <DeferredSurface load={()=>import('#lib/components/CaseRelationshipClusters.svelte')} loadingLabel="Loading Case relationship clusters…" unavailableLabel="Case relationship clusters could not be loaded." props={{summary:relationshipClusters}} />
     {:else}
       <LocalCollectionState state={campaignsSourceState==='loading'||relationshipsSourceState==='loading'?'loading':'unavailable'} title="Some relationship sources are unavailable" detail="Case evidence remains below. Campaigns or saved relationships could not be loaded, so combined totals are unavailable." />
     {/if}
-    <DeferredSurface load={()=>import('$lib/components/CaseRelationshipWorkspace.svelte')} loadingLabel="Loading Case relationship workspace…" unavailableLabel="The Case relationship workspace could not be loaded. Retained Cases remain available in the Cases view." props={{records:cases,summary:relationshipSummary,onselect:openRelatedCase}} placeholder="workspace" />
+    <DeferredSurface load={()=>import('#lib/components/CaseRelationshipWorkspace.svelte')} loadingLabel="Loading Case relationship workspace…" unavailableLabel="The Case relationship workspace could not be loaded. Retained Cases remain available in the Cases view." props={{records:cases,summary:relationshipSummary,onselect:openRelatedCase}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={casesSourceState} title="Case relationships unavailable" detail="Load saved Cases to see relationships between them. Available website profiles and saved relationships are shown above." />
   {/if}
@@ -491,7 +491,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
 {#if view==='rules'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-rules">
   {#if detectionRulesSourceState==='ready'}
-    <DeferredSurface load={()=>import('$lib/components/DetectionRuleManager.svelte')} loadingLabel="Loading detection-rule workspace…" unavailableLabel="The detection-rule workspace could not be loaded." props={{records:cases,caseSourceState:casesSourceState,initialRules:detectionRules,onselect:openRelatedCase,oncount:(count:number)=>customRuleCount=count,onchange:(nextRules:DetectionRule[])=>detectionRules=nextRules}} placeholder="workspace" />
+    <DeferredSurface load={()=>import('#lib/components/DetectionRuleManager.svelte')} loadingLabel="Loading detection-rule workspace…" unavailableLabel="The detection-rule workspace could not be loaded." props={{records:cases,caseSourceState:casesSourceState,initialRules:detectionRules,onselect:openRelatedCase,oncount:(count:number)=>customRuleCount=count,onchange:(nextRules:DetectionRule[])=>detectionRules=nextRules}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={detectionRulesSourceState} title="Custom rules unavailable" detail="The saved rule collection could not be read, so its count and mutation controls remain unavailable. No empty rule collection is inferred." />
   {/if}
@@ -502,12 +502,12 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-watchlists" aria-busy={watchlistsRefreshing}>
   {#if watchlistsSourceState==='ready'}
     {#if watchlistsRefreshing}<p class="refresh-status" role="status" aria-live="polite">Refreshing watchlists while the last readable snapshot remains available.</p>{/if}
-    <DeferredSurface load={()=>import('$lib/components/MonitorActivityHeatmap.svelte')} loadingLabel="Loading watchlist activity…" unavailableLabel="Watchlist activity could not be loaded." props={{events:watchlistActivity}} />
-    <DeferredSurface load={()=>import('$lib/components/WatchlistWorkspace.svelte')} loadingLabel="Loading watchlist workspace…" unavailableLabel="The watchlist workspace could not be loaded." onready={restoreWatchlistTarget} props={{watchlists,names,entry,selected,setSelected:(value:string)=>selected=value,history,changedOnly,setChangedOnly:(value:boolean)=>changedOnly=value,message,downloadWatchlists,importFile,clearAll,rescan,remove,refresh,brandNames:watchBrandNames,openCase:openWatchlistCase,formatDate:date}} placeholder="workspace" />
+    <DeferredSurface load={()=>import('#lib/components/MonitorActivityHeatmap.svelte')} loadingLabel="Loading watchlist activity…" unavailableLabel="Watchlist activity could not be loaded." props={{events:watchlistActivity}} />
+    <DeferredSurface load={()=>import('#lib/components/WatchlistWorkspace.svelte')} loadingLabel="Loading watchlist workspace…" unavailableLabel="The watchlist workspace could not be loaded." onready={restoreWatchlistTarget} props={{watchlists,names,entry,selected,setSelected:(value:string)=>selected=value,history,changedOnly,setChangedOnly:(value:boolean)=>changedOnly=value,message,downloadWatchlists,importFile,clearAll,rescan,remove,refresh,brandNames:watchBrandNames,openCase:openWatchlistCase,formatDate:date}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={watchlistsSourceState} title="Watchlists unavailable" detail="Saved watchlists could not be read, so their count, empty state, imports, and local mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
   {/if}
-  <DeferredSurface load={()=>import('$lib/components/HostedWatchlistManager.svelte')} loadingLabel="Loading hosted watchlist controls…" unavailableLabel="Hosted watchlist controls could not be loaded." props={{capability:scheduledCapability,localWatchlists:watchlists,localNames:names,localSourceState:watchlistsSourceState,restoreHosted:restoreHostedWatchlist,formatDate:date}} />
+  <DeferredSurface load={()=>import('#lib/components/HostedWatchlistManager.svelte')} loadingLabel="Loading hosted watchlist controls…" unavailableLabel="Hosted watchlist controls could not be loaded." props={{capability:scheduledCapability,localWatchlists:watchlists,localNames:names,localSourceState:watchlistsSourceState,restoreHosted:restoreHostedWatchlist,formatDate:date}} />
 </div>
 {/if}
 

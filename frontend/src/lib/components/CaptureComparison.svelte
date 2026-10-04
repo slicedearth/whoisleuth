@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onDestroy, tick, untrack } from 'svelte';
-  import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
-  import type { BrowserCaptureAttachmentReview } from '$lib/investigation-package-worker-model.ts';
+  import { runInvestigationPackageWorker } from '#lib/investigation-package-worker.ts';
+  import type { BrowserCaptureAttachmentReview } from '#lib/investigation-package-worker-model.ts';
   import { MAX_WEB_CAPTURE_MANIFEST_BYTES } from '../../../../packages/contracts/web-capture.mts';
   import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../../../../packages/contracts/investigation-package-limits.mts';
   import ArtifactPreview from './ArtifactPreview.svelte';
   import ImageChangeReview from './ImageChangeReview.svelte';
   import PageBehaviourComparison from './PageBehaviourComparison.svelte';
-  import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
+  import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
 
   let { left, caseDomain, persist, mutationBusy }: { left: BrowserCaptureAttachmentReview; caseDomain: string; persist: PersistCaseResponse; mutationBusy: boolean } = $props();
   let right = $state.raw<BrowserCaptureAttachmentReview | null>(null), manifest = $state.raw<Blob | null>(null);

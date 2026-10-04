@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import {
     parseSourceReliabilityDashboard,
     reliabilityDurationLabel,
     reliabilityRateLabel,
     SOURCE_RELIABILITY_DASHBOARD_MAX_BYTES,
     type SourceReliabilityDashboard,
-  } from '$lib/analysis/source-reliability-dashboard.ts';
+  } from '#lib/analysis/source-reliability-dashboard.ts';
 
   let dashboard = $state<SourceReliabilityDashboard | null>(null);
   let error = $state('');

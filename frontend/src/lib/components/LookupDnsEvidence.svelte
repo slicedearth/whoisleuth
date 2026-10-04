@@ -1,6 +1,6 @@
 <script lang="ts">
-  import DnsChangeRehearsal from '$lib/components/DnsChangeRehearsal.svelte';
-  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
+  import DnsChangeRehearsal from '#lib/components/DnsChangeRehearsal.svelte';
+  import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
   let {
     status,
     complete,

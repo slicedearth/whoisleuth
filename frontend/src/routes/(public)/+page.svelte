@@ -1,12 +1,12 @@
 <script lang="ts">
-  import PublicSeo from '$lib/components/PublicSeo.svelte';
-  import HomepageProductPreview from '$lib/components/HomepageProductPreview.svelte';
-  import PublicConsoleCta from '$lib/components/PublicConsoleCta.svelte';
-  import PublicGoalPaths from '$lib/components/PublicGoalPaths.svelte';
-  import PublicResourceCards from '$lib/components/PublicResourceCards.svelte';
-  import SyntheticTopologyBackdrop from '$lib/components/SyntheticTopologyBackdrop.svelte';
-  import { publicGuideGoals } from '$lib/public-guide';
-  import { PUBLIC_RESOURCES } from '$lib/public-resources';
+  import PublicSeo from '#lib/components/PublicSeo.svelte';
+  import HomepageProductPreview from '#lib/components/HomepageProductPreview.svelte';
+  import PublicConsoleCta from '#lib/components/PublicConsoleCta.svelte';
+  import PublicGoalPaths from '#lib/components/PublicGoalPaths.svelte';
+  import PublicResourceCards from '#lib/components/PublicResourceCards.svelte';
+  import SyntheticTopologyBackdrop from '#lib/components/SyntheticTopologyBackdrop.svelte';
+  import { publicGuideGoals } from '#lib/public-guide.ts';
+  import { PUBLIC_RESOURCES } from '#lib/public-resources.ts';
 
   const evidenceSources = [
     ['Registration first','WHOIS and RDAP stay separate, and only authoritative registry evidence decides registration status.'],

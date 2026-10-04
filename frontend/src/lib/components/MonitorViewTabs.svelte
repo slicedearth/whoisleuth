@@ -1,6 +1,6 @@
 <script lang="ts">
-  import HorizontalNavigation from '$lib/components/HorizontalNavigation.svelte';
-  import { monitorViewNavigation } from '$lib/workspaces';
+  import HorizontalNavigation from '#lib/components/HorizontalNavigation.svelte';
+  import { monitorViewNavigation } from '#lib/workspaces.ts';
   type View = 'inbox' | 'timeline' | 'watchlists' | 'cases' | 'campaigns' | 'relationships' | 'rules' | 'certificates';
   type Counts = Record<View, number | null>;
   type CountStates = Record<View, 'loading' | 'ready' | 'unavailable'>;

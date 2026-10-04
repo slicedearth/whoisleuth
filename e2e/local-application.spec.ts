@@ -21,6 +21,34 @@ async function pinForm(page: import('@playwright/test').Page) {
   return details.locator('form').first();
 }
 
+test('launch navigation clears its token and history before one delayed local session exchange', async ({ page, localApplication }) => {
+  let exchanges = 0;
+  let scrubbedBeforeExchange = false;
+  let received!: () => void, release!: () => void;
+  const requested = new Promise<void>(resolve => { received = resolve; });
+  const permitted = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/local-session', async route => {
+    exchanges++;
+    const location = new URL(page.url());
+    scrubbedBeforeExchange = location.pathname === '/login' && location.hash === '';
+    received();
+    await permitted;
+    await route.continue();
+  });
+  try {
+    await page.goto(localApplication.instance.launchUrl);
+    await requested;
+    expect(scrubbedBeforeExchange).toBe(true);
+    const token = new URL(localApplication.instance.launchUrl).hash.slice(1);
+    expect(await page.evaluate(value => !JSON.stringify(history.state).includes(value), token)).toBe(true);
+    expect(exchanges).toBe(1);
+    release();
+    await expect(page).toHaveURL(`${localApplication.instance.origin}/dashboard`);
+    await expect(page.locator('#main-content > .workspace-scope strong')).toHaveText('Filesystem workspace');
+    expect(exchanges).toBe(1);
+  } finally { release(); }
+});
+
 test('an unconfirmed filesystem recovery write keeps the form and blocks repeat writes until review', async ({ page, localApplication }) => {
   await openLocalApplication(page, localApplication);
   await openCasesView(page); await createCase(page, 'uncertain-recovery.example');

@@ -1,17 +1,17 @@
 <script lang="ts">
   import AnalystReviewInbox from './AnalystReviewInbox.svelte';
-  import { buildAnalystReviewInbox, type AnalystReviewDismissalReason, type AnalystReviewItem } from '$lib/analysis/analyst-review-inbox.ts';
-  import { buildLocalAnalystReviewProjection } from '$lib/analysis/analyst-review-local-projections.ts';
-  import { buildCertificateReviewInbox } from '$lib/analysis/certificate-review-inbox.ts';
-  import type { AnalystReviewDisposition, AnalystReviewStateStore } from '$lib/analysis/analyst-review-state.ts';
-  import type { BrandProfile } from '$lib/brand-profiles';
+  import { buildAnalystReviewInbox, type AnalystReviewDismissalReason, type AnalystReviewItem } from '#lib/analysis/analyst-review-inbox.ts';
+  import { buildLocalAnalystReviewProjection } from '#lib/analysis/analyst-review-local-projections.ts';
+  import { buildCertificateReviewInbox } from '#lib/analysis/certificate-review-inbox.ts';
+  import type { AnalystReviewDisposition, AnalystReviewStateStore } from '#lib/analysis/analyst-review-state.ts';
+  import type { BrandProfile } from '#lib/brand-profiles.ts';
   import { projectBrandCandidateReview } from '../../../../packages/monitoring/brand-candidate-review.mts';
   import { projectWatchlistContextReviews } from '../../../../packages/monitoring/watchlist-context-review.mts';
-  import type { BulkSession } from '$lib/bulk-sessions';
-  import type { CaseRecord } from '$lib/cases';
-  import type { DetectionRule } from '$lib/detection-rules';
-  import type { WebsiteProfileSnapshot } from '$lib/website-snapshots';
-  import type { Watchlists } from '$lib/watchlists';
+  import type { BulkSession } from '#lib/bulk-sessions.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { DetectionRule } from '#lib/detection-rules.ts';
+  import type { WebsiteProfileSnapshot } from '#lib/website-snapshots.ts';
+  import type { Watchlists } from '#lib/watchlists.ts';
 
   let {
     cases,

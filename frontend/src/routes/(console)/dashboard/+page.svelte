@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { onMount, tick } from 'svelte';
-  import { isLocalApplication } from '$lib/local-application-context.ts';
+  import { isLocalApplication } from '#lib/local-application-context.ts';
   let localApplication = $state(false);
   onMount(() => { localApplication = isLocalApplication(); });
   import { goto } from '$app/navigation';
-  import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
-  import PageHeading from '$lib/components/PageHeading.svelte';
-  import DashboardAttentionSummary from '$lib/components/DashboardAttentionSummary.svelte';
-  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
-  import { readBrowserLocalData, subscribeBrowserLocalData } from '$lib/browser-local-data-service.ts';
-  import type { BrowserLocalCollectionDocumentMap } from '$lib/browser-local-data-definitions.ts';
-  import { preloadBestEffort, preloadOnIdle } from '$lib/idle-preload';
-  import { loadDeferredModule, reloadDeferredModulePage } from '$lib/deferred-module';
+  import IntelligenceIcon from '#lib/components/IntelligenceIcon.svelte';
+  import PageHeading from '#lib/components/PageHeading.svelte';
+  import DashboardAttentionSummary from '#lib/components/DashboardAttentionSummary.svelte';
+  import DeferredSurface from '#lib/components/DeferredSurface.svelte';
+  import { readBrowserLocalData, subscribeBrowserLocalData } from '#lib/browser-local-data-service.ts';
+  import type { BrowserLocalCollectionDocumentMap } from '#lib/browser-local-data-definitions.ts';
+  import { preloadBestEffort, preloadOnIdle } from '#lib/idle-preload.ts';
+  import { loadDeferredModule, reloadDeferredModulePage } from '#lib/deferred-module.ts';
   import {
     DASHBOARD_REQUIRED_COLLECTION_IDS,
     buildDashboardAttentionSummary,
@@ -20,11 +20,11 @@
     dashboardWorkspaceState,
     type DashboardAttentionSummary as DashboardAttentionSummaryModel,
     type DashboardWorkspaceState,
-  } from '$lib/analysis/dashboard-workspace-state.ts';
-  import { publicHomepage } from '$lib/workspaces';
-  import { statusLabel } from '$lib/analysis/case-record-decisions.ts';
-  import { ANALYST_REVIEW_REQUIRED_COLLECTION_IDS } from '$lib/analysis/analyst-review-source-state.ts';
-  import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft.ts';
+  } from '#lib/analysis/dashboard-workspace-state.ts';
+  import { publicHomepage } from '#lib/workspaces.ts';
+  import { statusLabel } from '#lib/analysis/case-record-decisions.ts';
+  import { ANALYST_REVIEW_REQUIRED_COLLECTION_IDS } from '#lib/analysis/analyst-review-source-state.ts';
+  import { restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
   let workspaceManagerRequested = $state(false);
   let lookupTarget = $state('');
   let recentCases = $state<BrowserLocalCollectionDocumentMap['cases']>([]);
@@ -97,9 +97,9 @@
       } else {
         try {
           const modules = await loadDeferredModule(() => Promise.all([
-            import('$lib/analysis/analyst-review-inbox.ts'),
-            import('$lib/analysis/certificate-review-inbox.ts'),
-            import('$lib/analysis/analyst-review-local-projections.ts'),
+            import('#lib/analysis/analyst-review-inbox.ts'),
+            import('#lib/analysis/certificate-review-inbox.ts'),
+            import('#lib/analysis/analyst-review-local-projections.ts'),
           ]), { signal: moduleController.signal });
           if (!current()) return;
           const [{ buildAnalystReviewInbox }, { buildCertificateReviewInbox }, { buildLocalAnalystReviewProjection }] = modules;
@@ -181,7 +181,7 @@
   }
 
   function preloadSecondaryWorkspaces() {
-    preloadBestEffort(() => import('$lib/components/DashboardSecondaryWorkspaces.svelte'), moduleController.signal);
+    preloadBestEffort(() => import('#lib/components/DashboardSecondaryWorkspaces.svelte'), moduleController.signal);
   }
 
   onMount(()=>{
@@ -274,14 +274,14 @@
 
 <details id="workspaces" class="workspace-directory card" ontoggle={event => { if (event.currentTarget.open) workspaceManagerRequested=true; }}>
   <summary>{localApplication ? 'Workspace details' : 'Manage browser workspaces'}</summary>
-  {#if workspaceManagerRequested}<div class="workspace-directory-body"><DeferredSurface load={() => import('$lib/components/BrowserWorkspaceManager.svelte')} props={{}} loadingLabel="Reading workspace information." unavailableLabel="Workspace information could not be loaded." /></div>{/if}
+  {#if workspaceManagerRequested}<div class="workspace-directory-body"><DeferredSurface load={() => import('#lib/components/BrowserWorkspaceManager.svelte')} props={{}} loadingLabel="Reading workspace information." unavailableLabel="Workspace information could not be loaded." /></div>{/if}
 </details>
 
 <!-- Open tools keep their drafts and import results when summary classification changes. -->
 {#if firstUseTool || secondaryOpen}
   <div id={firstUseTool ? 'dashboard-first-use-tool' : 'dashboard-secondary-workspaces'}>
     <DeferredSurface
-      load={() => import('$lib/components/DashboardSecondaryWorkspaces.svelte')}
+      load={() => import('#lib/components/DashboardSecondaryWorkspaces.svelte')}
       props={{mode:firstUseTool || 'all',onsummarychange:refreshLocalSummary}}
       loadingLabel="Loading saved-work tools."
       unavailableLabel="Saved-work tools could not be loaded."

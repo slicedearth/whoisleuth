@@ -14,13 +14,13 @@
   import type {
     AbuseRecipientResolution,
     ResolvedAbuseRecipient,
-  } from '$lib/analysis/abuse-recipient-resolver.ts';
-  import { abuseRecipientKindLabel } from '$lib/analysis/abuse-recipient-resolver.ts';
-  import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
-  import type { LookupConclusionEvidenceSelection } from '$lib/controllers/lookup-case-controller.ts';
-  import { clearsLocalMutationDraft } from '$lib/local-mutation-outcome.ts';
-  import { handlesLocalLink } from '$lib/link-activation';
-  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
+  } from '#lib/analysis/abuse-recipient-resolver.ts';
+  import { abuseRecipientKindLabel } from '#lib/analysis/abuse-recipient-resolver.ts';
+  import type { CheckpointFact } from '#lib/analysis/case-evidence-checkpoint.ts';
+  import type { LookupConclusionEvidenceSelection } from '#lib/controllers/lookup-case-controller.ts';
+  import { clearsLocalMutationDraft } from '#lib/local-mutation-outcome.ts';
+  import { handlesLocalLink } from '#lib/link-activation.ts';
+  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
   import CasePicker from './CasePicker.svelte';
   import LookupRecheckReview from './LookupRecheckReview.svelte';
   import { MAX_CASE_OBJECTIVE_LENGTH, MAX_CASE_CHECKPOINT_FACTS } from '../../../../packages/contracts/case-portability.mts';
@@ -28,14 +28,14 @@
   import type {
     LookupCaseState,
     lookupCaseActions,
-  } from '$lib/controllers/lookup-case-workspace.ts';
-  import type { LookupWatchlistState } from '$lib/controllers/lookup-view-state.ts';
-  import type { LookupTaskView } from '$lib/analysis/lookup-presentation.ts';
+  } from '#lib/controllers/lookup-case-workspace.ts';
+  import type { LookupWatchlistState } from '#lib/controllers/lookup-view-state.ts';
+  import type { LookupTaskView } from '#lib/analysis/lookup-presentation.ts';
   import {
     createLookupCaseDraft,
     resetLookupCaseDraft,
     hasLookupCaseDraftEdits,
-  } from '$lib/controllers/lookup-case-form.ts';
+  } from '#lib/controllers/lookup-case-form.ts';
 
   type DraftAction = { email: string; body: string; mailto: string };
 

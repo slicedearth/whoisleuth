@@ -2,10 +2,10 @@
   import type { CaseRecord } from '../../../../packages/cases/case-record-contracts.mts';
   import { buildCaseDecisionOverview } from '../../../../packages/cases/case-decision-overview.mts';
   import { caseRequestedEvidenceQueue } from '../../../../packages/cases/case-response-queue.mts';
-  import { evidenceTime } from '$lib/analysis/evidence-time.ts';
-  import { caseEvidenceChoiceName, caseRecheckEvidence } from '$lib/analysis/case-evidence-presentation.ts';
-  import type { CaseWorkspaceSection } from '$lib/analysis/case-response-stage.ts';
-  import { reviewClock } from '$lib/review-clock.ts';
+  import { evidenceTime } from '#lib/analysis/evidence-time.ts';
+  import { caseEvidenceChoiceName, caseRecheckEvidence } from '#lib/analysis/case-evidence-presentation.ts';
+  import type { CaseWorkspaceSection } from '#lib/analysis/case-response-stage.ts';
+  import { reviewClock } from '#lib/review-clock.ts';
   let { record, selectSection, onrequest }: { record: CaseRecord; selectSection: (section: CaseWorkspaceSection) => void | Promise<void>;
     onrequest: (actionId: string, requestId: string) => void | Promise<void> } = $props();
   const overview = $derived(buildCaseDecisionOverview(record, new Date($reviewClock).toISOString()));

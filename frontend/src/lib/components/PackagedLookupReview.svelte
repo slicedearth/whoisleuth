@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { LookupEvidenceReplay } from '$lib/analysis/lookup-evidence-replay.ts';
+  import type { LookupEvidenceReplay } from '#lib/analysis/lookup-evidence-replay.ts';
   import LookupEvidenceReading from './LookupEvidenceReading.svelte';
   let { replay, onclose }: { replay: LookupEvidenceReplay; onclose: () => void } = $props();
   const id = $props.id();

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { tick } from 'svelte';
-  import Pagination from '$lib/components/Pagination.svelte';
-  import RelationshipSourceEvidence from '$lib/components/RelationshipSourceEvidence.svelte';
-  import type { RelationshipObservation } from '$lib/relationship-observations';
+  import Pagination from '#lib/components/Pagination.svelte';
+  import RelationshipSourceEvidence from '#lib/components/RelationshipSourceEvidence.svelte';
+  import type { RelationshipObservation } from '#lib/relationship-observations.ts';
 
   const PAGE_SIZE = 10;
 

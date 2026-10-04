@@ -4,27 +4,27 @@
   import { caseTypeSummary } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { dispositionLabel } from '../../../../packages/cases/case-record-decisions.mts';
   import { editCase, importCaseReviewReturn, type CaseRecord } from '../cases.ts';
-  import { handlesLocalLink } from '$lib/link-activation';
-  import { failedLocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
-  import { reviewClock } from '$lib/review-clock.ts';
-  import { buildCaseResponseProgress } from '$lib/analysis/case-response-progress.ts';
-  import CaseObservationStage from '$lib/components/CaseObservationStage.svelte';
-  import CaseAssessmentStage from '$lib/components/CaseAssessmentStage.svelte';
-  import CaseHistoryStage from '$lib/components/CaseHistoryStage.svelte';
-  import CaseActionStage from '$lib/components/CaseActionStage.svelte';
-  import CaseOutcomeStage from '$lib/components/CaseOutcomeStage.svelte';
-  import CaseRenderedCapture from '$lib/components/CaseRenderedCapture.svelte';
+  import { handlesLocalLink } from '#lib/link-activation.ts';
+  import { failedLocalMutationOutcome } from '#lib/local-mutation-outcome.ts';
+  import { reviewClock } from '#lib/review-clock.ts';
+  import { buildCaseResponseProgress } from '#lib/analysis/case-response-progress.ts';
+  import CaseObservationStage from '#lib/components/CaseObservationStage.svelte';
+  import CaseAssessmentStage from '#lib/components/CaseAssessmentStage.svelte';
+  import CaseHistoryStage from '#lib/components/CaseHistoryStage.svelte';
+  import CaseActionStage from '#lib/components/CaseActionStage.svelte';
+  import CaseOutcomeStage from '#lib/components/CaseOutcomeStage.svelte';
+  import CaseRenderedCapture from '#lib/components/CaseRenderedCapture.svelte';
   import CaseMessageIntake from './CaseMessageIntake.svelte';
   import CaseIdentityReview from './CaseIdentityReview.svelte';
   import CaseContextReviewEntry from './CaseContextReviewEntry.svelte';
-  import CaseAttachments from '$lib/components/CaseAttachments.svelte';
-  import CaseWorkflowDetails from '$lib/components/CaseWorkflowDetails.svelte';
-  import CaseTitleForm from '$lib/components/CaseTitleForm.svelte';
-  import CaseDecisionOverview from '$lib/components/CaseDecisionOverview.svelte';
-  import CaseResponseQueue from '$lib/components/CaseResponseQueue.svelte';
-  import CaseReviewReturn from '$lib/components/CaseReviewReturn.svelte';
+  import CaseAttachments from '#lib/components/CaseAttachments.svelte';
+  import CaseWorkflowDetails from '#lib/components/CaseWorkflowDetails.svelte';
+  import CaseTitleForm from '#lib/components/CaseTitleForm.svelte';
+  import CaseDecisionOverview from '#lib/components/CaseDecisionOverview.svelte';
+  import CaseResponseQueue from '#lib/components/CaseResponseQueue.svelte';
+  import CaseReviewReturn from '#lib/components/CaseReviewReturn.svelte';
   import type { CaseReviewReturn as ReviewReturn } from '../../../../packages/cases/case-review-return.mts';
-  import CaseResponsePacketWorkspace from '$lib/components/CaseResponsePacketWorkspace.svelte';
+  import CaseResponsePacketWorkspace from '#lib/components/CaseResponsePacketWorkspace.svelte';
   import {
     CASE_RESPONSE_STAGE_DEFINITIONS,
     CASE_STAGE_SECTION,
@@ -33,8 +33,8 @@
     type CaseResponsePresentation,
     type CaseResponseStage,
     type CaseResponseStageId,
-  } from '$lib/analysis/case-response-stage.ts';
-  import '$lib/components/case-response-stage.css';
+  } from '#lib/analysis/case-response-stage.ts';
+  import '#lib/components/case-response-stage.css';
   import type { CaseDraftReceipt } from '../../../../packages/contracts/case-drafts.mts';
 
   let {

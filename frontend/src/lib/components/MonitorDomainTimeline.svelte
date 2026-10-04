@@ -2,7 +2,7 @@
   import {
     projectMonitorTimeline,
     type MonitorTimelineInput,
-  } from '$lib/analysis/visualization-models.ts';
+  } from '#lib/analysis/visualization-models.ts';
 
   type TimelineEvent = {
     checkedAt: string | null;

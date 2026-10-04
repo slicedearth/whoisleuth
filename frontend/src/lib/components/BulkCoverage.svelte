@@ -2,7 +2,7 @@
   import {
     projectProfileListingBars,
     type ProfileListingBarInput,
-  } from '$lib/analysis/visualization-models.ts';
+  } from '#lib/analysis/visualization-models.ts';
   type CoverageSummary = {
     total: number;
     profileListed: number;

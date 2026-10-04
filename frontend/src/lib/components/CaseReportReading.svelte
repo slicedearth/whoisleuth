@@ -2,7 +2,7 @@
   import type { buildCaseReport } from '../../../../packages/cases/case-report.mts';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import EvidenceTimestamp from './EvidenceTimestamp.svelte';
-  import { snapshotFieldGroups, formatSnapshotValue } from '$lib/analysis/evidence-display.ts';
+  import { snapshotFieldGroups, formatSnapshotValue } from '#lib/analysis/evidence-display.ts';
   let { report, timeLabel = 'report time' }: { report: ReturnType<typeof buildCaseReport>['json']; timeLabel?: string } = $props();
 </script>
 

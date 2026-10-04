@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import { onDestroy } from 'svelte';
-  import type { BrandProfile } from '$lib/brand-profiles';
+  import type { BrandProfile } from '#lib/brand-profiles.ts';
   import MailReportDetails from './MailReportDetails.svelte';
-  import { runMailReportWorker } from '$lib/mail-report-worker.ts';
+  import { runMailReportWorker } from '#lib/mail-report-worker.ts';
   import {
     MAX_MAIL_REPORT_FILE_BYTES,
     MAX_MAIL_REPORT_INPUT_BYTES,
     MAX_MAIL_REPORT_INPUT_FILES,
     type MailReportReview,
     type ParsedMailReport,
-  } from '$lib/analysis/mail-report-workbench.ts';
+  } from '#lib/analysis/mail-report-workbench.ts';
 
   let { active, available = true }: { active: BrandProfile; available?: boolean } = $props();
 

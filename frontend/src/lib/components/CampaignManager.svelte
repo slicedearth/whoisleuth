@@ -1,22 +1,22 @@
 <script lang="ts">
-  import { parseBoundedJson } from '$lib/bounded-json';
-  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
-  import { failedLocalMutationOutcome, LocalRecordConflictError } from '$lib/local-mutation-outcome';
+  import { parseBoundedJson } from '#lib/bounded-json.ts';
+  import { createDraftRevision, restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
+  import { failedLocalMutationOutcome, LocalRecordConflictError } from '#lib/local-mutation-outcome.ts';
   import { tick, untrack } from 'svelte';
-  import Pagination from '$lib/components/Pagination.svelte';
-  import CampaignCohortReview from '$lib/components/CampaignCohortReview.svelte';
-  import CampaignTemporalReview from '$lib/components/CampaignTemporalReview.svelte';
-  import ParentDomainCampaignScope from '$lib/components/ParentDomainCampaignScope.svelte';
-  import type { BrandProfile } from '$lib/analysis/brand-profile-model.ts';
-  import type { CampaignCohortSourceState } from '$lib/analysis/campaign-cohort-review.ts';
-  import type { CaseRelationshipSummary } from '$lib/analysis/case-relationships.ts';
-  import type { CaseRecord } from '$lib/cases';
+  import Pagination from '#lib/components/Pagination.svelte';
+  import CampaignCohortReview from '#lib/components/CampaignCohortReview.svelte';
+  import CampaignTemporalReview from '#lib/components/CampaignTemporalReview.svelte';
+  import ParentDomainCampaignScope from '#lib/components/ParentDomainCampaignScope.svelte';
+  import type { BrandProfile } from '#lib/analysis/brand-profile-model.ts';
+  import type { CampaignCohortSourceState } from '#lib/analysis/campaign-cohort-review.ts';
+  import type { CaseRelationshipSummary } from '#lib/analysis/case-relationships.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
   import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
   import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
-  import { buildCampaignReviewSummary } from '$lib/analysis/campaign-review-summary.ts';
+  import { buildCampaignReviewSummary } from '#lib/analysis/campaign-review-summary.ts';
   import OperationsCaseScope from './OperationsCaseScope.svelte';
-  import { buildCampaignTemporalReview } from '$lib/analysis/campaign-temporal-review.ts';
-  import { buildParentDomainCampaignReview, type ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
+  import { buildCampaignTemporalReview } from '#lib/analysis/campaign-temporal-review.ts';
+  import { buildParentDomainCampaignReview, type ParentDomainCampaignSourceState } from '#lib/analysis/parent-domain-campaign-review.ts';
   import {
     addCampaignDomain,
     createCampaign,
@@ -28,7 +28,7 @@
     MAX_CAMPAIGN_IMPORT_BYTES,
     removeCampaignDomain,
     type CampaignRecord,
-  } from '$lib/campaigns';
+  } from '#lib/campaigns.ts';
 
   let { records, profiles, relationshipSummary, cohortSourceStates, parentDomainSourceState, initialCampaigns = [], onselect, oncount, onchange, focusId = '' }:{records:CaseRecord[];profiles:BrandProfile[];relationshipSummary:CaseRelationshipSummary;cohortSourceStates:{cases:CampaignCohortSourceState;profiles:CampaignCohortSourceState;relationships:CampaignCohortSourceState};parentDomainSourceState:ParentDomainCampaignSourceState;initialCampaigns?:CampaignRecord[];onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void;onchange?:(campaigns:CampaignRecord[])=>void;focusId?:string}=$props();
   let campaigns=$state<CampaignRecord[]>([]);

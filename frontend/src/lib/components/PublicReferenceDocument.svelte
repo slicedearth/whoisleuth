@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount, type Snippet } from 'svelte';
-  import PublicReferenceSidebar from '$lib/components/PublicReferenceSidebar.svelte';
-  import { PUBLIC_REFERENCE_DESTINATIONS, relatedPublicReferences } from '$lib/public-reference-navigation';
-  import { revealDocumentationTarget } from '$lib/documentation-anchors';
+  import PublicReferenceSidebar from '#lib/components/PublicReferenceSidebar.svelte';
+  import { PUBLIC_REFERENCE_DESTINATIONS, relatedPublicReferences } from '#lib/public-reference-navigation.ts';
+  import { revealDocumentationTarget } from '#lib/documentation-anchors.ts';
   import { WHOISLEUTH_SITE_ORIGIN } from '../../../../packages/analysis/project-metadata.mts';
 
   let {

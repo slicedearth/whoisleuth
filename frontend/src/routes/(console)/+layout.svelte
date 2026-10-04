@@ -7,32 +7,32 @@
     isNavigationItemActive,
     isProtectedDestination,
     referenceNavigation,
-  } from '$lib/workspaces';
-  import { preloadBestEffort, preloadOnIdle } from '$lib/idle-preload';
-  import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
-  import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
-  import BrandMark from '$lib/components/BrandMark.svelte';
-  import BrandWordmark from '$lib/components/BrandWordmark.svelte';
-  import CommandPalette from '$lib/components/CommandPalette.svelte';
-  import ConsoleLoading from '$lib/components/ConsoleLoading.svelte';
-  import BrowserWorkspaceIndicator from '$lib/components/BrowserWorkspaceIndicator.svelte';
-  import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
-  import SiteFooter from '$lib/components/SiteFooter.svelte';
-  import ThemeSelector from '$lib/components/ThemeSelector.svelte';
-  import AnalystUndo from '$lib/components/AnalystUndo.svelte';
-  import { keepFocusBelow } from '$lib/visible-focus';
-  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
-  import { reloadDeferredModulePage } from '$lib/deferred-module';
-  import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '$lib/browser-local-data-service';
-  import { clearConsoleWorkflowState, subscribeSelectedConsoleCase } from '$lib/console-workflow-state';
-  import { hasUnlockedBrowserWorkspace, lockBrowserWorkspace } from '$lib/browser-workspace-unlock';
-  import { isLocalApplication } from '$lib/local-application-context.ts';
-  import { hasUnprotectedCaseDrafts } from '$lib/controllers/case-draft-state.ts';
+  } from '#lib/workspaces.ts';
+  import { preloadBestEffort, preloadOnIdle } from '#lib/idle-preload.ts';
+  import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '#lib/capabilities.ts';
+  import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '#lib/bounded-json-response.ts';
+  import BrandMark from '#lib/components/BrandMark.svelte';
+  import BrandWordmark from '#lib/components/BrandWordmark.svelte';
+  import CommandPalette from '#lib/components/CommandPalette.svelte';
+  import ConsoleLoading from '#lib/components/ConsoleLoading.svelte';
+  import BrowserWorkspaceIndicator from '#lib/components/BrowserWorkspaceIndicator.svelte';
+  import IntelligenceIcon from '#lib/components/IntelligenceIcon.svelte';
+  import SiteFooter from '#lib/components/SiteFooter.svelte';
+  import ThemeSelector from '#lib/components/ThemeSelector.svelte';
+  import AnalystUndo from '#lib/components/AnalystUndo.svelte';
+  import { keepFocusBelow } from '#lib/visible-focus.ts';
+  import DeferredSurface from '#lib/components/DeferredSurface.svelte';
+  import { reloadDeferredModulePage } from '#lib/deferred-module.ts';
+  import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '#lib/browser-local-data-service.ts';
+  import { clearConsoleWorkflowState, subscribeSelectedConsoleCase } from '#lib/console-workflow-state.ts';
+  import { hasUnlockedBrowserWorkspace, lockBrowserWorkspace } from '#lib/browser-workspace-unlock.ts';
+  import { isLocalApplication } from '#lib/local-application-context.ts';
+  import { hasUnprotectedCaseDrafts } from '#lib/controllers/case-draft-state.ts';
   let localApplication = $state(false);
   import {
     hasStoredInvestigationGuide,
     INVESTIGATION_GUIDE_EVENT,
-  } from '$lib/investigation-guide-storage';
+  } from '#lib/investigation-guide-storage.ts';
 
   let { children } = $props();
   let session = $state<'checking'|'authenticated'|'unavailable'|'ended'>('checking');
@@ -67,7 +67,7 @@
   });
   onMount(() => {
     localApplication = isLocalApplication();
-    const cancelNavigationPreload = preloadOnIdle(() => preloadBestEffort(() => import('$lib/console-command-navigation')));
+    const cancelNavigationPreload = preloadOnIdle(() => preloadBestEffort(() => import('#lib/console-command-navigation.ts')));
     const unsubscribeCase = subscribeSelectedConsoleCase((id) => { selectedCaseId = id; });
     void checkSession();
     if (hasStoredInvestigationGuide()) investigationGuideRequested = true;
@@ -113,7 +113,7 @@
       if(!authenticated){
         clearConsoleWorkflowState();
         if (localApplication) { window.location.replace('/login'); return; }
-        try{await goto(signInTarget(),{replaceState:true});}
+        try{await goto(signInTarget(),{replace: true});}
         finally{clearConsoleWorkflowState();}
         return;
       }
@@ -269,7 +269,7 @@
   <div class="workspace-error">
     <section class="workspace-access card">
       {#if localData.code === 'LOCAL_DATA_WORKSPACE_LOCKED'}
-        <DeferredSurface load={() => import('$lib/components/BrowserWorkspaceUnlock.svelte')} props={{onunlock:retryLocalData}} loadingLabel="Loading workspace unlock." unavailableLabel="Workspace unlock could not be loaded. Reload the page to retry." />
+        <DeferredSurface load={() => import('#lib/components/BrowserWorkspaceUnlock.svelte')} props={{onunlock:retryLocalData}} loadingLabel="Loading workspace unlock." unavailableLabel="Workspace unlock could not be loaded. Reload the page to retry." />
       {:else}
         <h1 tabindex="-1" bind:this={storageErrorHeading}>{localApplication ? 'Filesystem workspace unavailable' : 'Browser-local data unavailable'}</h1>
         <p class="muted">{localData.detail}</p>
@@ -289,14 +289,14 @@
       <p class="login-links"><a href="/privacy">Review storage and privacy details</a></p>
     </section>
   </div>
-  <section class="workspace-recovery card"><DeferredSurface load={() => import('$lib/components/BrowserWorkspaceManager.svelte')} props={{}} loadingLabel="Reading workspace recovery options." unavailableLabel="Workspace recovery could not be loaded. Reload the page to retry." /></section>
+  <section class="workspace-recovery card"><DeferredSurface load={() => import('#lib/components/BrowserWorkspaceManager.svelte')} props={{}} loadingLabel="Reading workspace recovery options." unavailableLabel="Workspace recovery could not be loaded. Reload the page to retry." /></section>
 {:else}
   <div class="shell" class:open={navOpen}>
     <a class="skip-link" href="#main-content">Skip to main content</a>
     <header bind:this={consoleHeader} inert={commandOpen} aria-hidden={commandOpen?'true':undefined}>
       <a href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark small"><BrandMark /></span><strong><BrandWordmark /></strong></a>
       <div class="console-header-actions">
-        <button class="command-trigger" type="button" aria-label="Search console navigation" bind:this={commandTrigger} onpointerenter={() => preloadBestEffort(() => import('$lib/console-command-navigation'))} onfocus={() => preloadBestEffort(() => import('$lib/console-command-navigation'))} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Search</strong></button>
+        <button class="command-trigger" type="button" aria-label="Search console navigation" bind:this={commandTrigger} onpointerenter={() => preloadBestEffort(() => import('#lib/console-command-navigation.ts'))} onfocus={() => preloadBestEffort(() => import('#lib/console-command-navigation.ts'))} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Search</strong></button>
         <span class="sign-out-control">
           <button class="console-sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>
           {#if logoutError}<span class="sign-out-error" role="alert">{logoutError}</span>{/if}
@@ -322,8 +322,8 @@
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
     <main id="main-content" use:keepFocusBelow={() => consoleHeader} class:wide-workspace={wideWorkspace} tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>
       <BrowserWorkspaceIndicator />
-      {#if showCaseContext && selectedCaseId}<DeferredSurface load={() => import('$lib/components/SelectedCaseContext.svelte')} props={{caseId:selectedCaseId}} loadingLabel="Reading selected Case…" unavailableLabel="Selected Case context could not be loaded." />{/if}
-      {#if investigationGuideRequested}<DeferredSurface load={() => import('$lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}
+      {#if showCaseContext && selectedCaseId}<DeferredSurface load={() => import('#lib/components/SelectedCaseContext.svelte')} props={{caseId:selectedCaseId}} loadingLabel="Reading selected Case…" unavailableLabel="Selected Case context could not be loaded." />{/if}
+      {#if investigationGuideRequested}<DeferredSurface load={() => import('#lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}
       {@render children()}
       <SiteFooter console />
     </main>

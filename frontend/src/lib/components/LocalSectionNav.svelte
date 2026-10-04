@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { handlesLocalLink } from '$lib/link-activation';
+  import { handlesLocalLink } from '#lib/link-activation.ts';
 
   let {
     label,

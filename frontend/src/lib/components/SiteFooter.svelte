@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { publicFooterNavigation } from '$lib/workspaces';
+  import { publicFooterNavigation } from '#lib/workspaces.ts';
   import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../packages/analysis/project-metadata.mts';
 
   let { console = false }: { console?: boolean } = $props();

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { readPackagedCaseReview } from '$lib/case-review-package.ts';
+  import type { readPackagedCaseReview } from '#lib/case-review-package.ts';
   import { buildCaseReport } from '../../../../packages/cases/case-report.mts';
-  import { supportsArtifactPreview } from '$lib/artifact-preview.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { supportsArtifactPreview } from '#lib/artifact-preview.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import CaseReportReading from './CaseReportReading.svelte';
   import CaseAssessmentComparison from './CaseAssessmentComparison.svelte';
   import ArtifactPreview from './ArtifactPreview.svelte';

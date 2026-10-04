@@ -6,9 +6,9 @@
     type ScheduledMonitoringCommand,
     type ScheduledMonitoringResponse,
     type ScheduledWatchlist,
-  } from '$lib/scheduled-monitoring';
-  import type { Capability } from '$lib/capabilities';
-  import { planHostedWatchlistRestore, type HostedWatchlistRestorePreview, type Watchlists } from '$lib/watchlists';
+  } from '#lib/scheduled-monitoring.ts';
+  import type { Capability } from '#lib/capabilities.ts';
+  import { planHostedWatchlistRestore, type HostedWatchlistRestorePreview, type Watchlists } from '#lib/watchlists.ts';
 
   let {
     capability,

@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
-  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
-  import type { CaseRecord } from '$lib/cases';
-  import { buildDisclosureRouteReview } from '$lib/analysis/disclosure-route-review.ts';
-  import Pagination from '$lib/components/Pagination.svelte';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
+  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import { buildDisclosureRouteReview } from '#lib/analysis/disclosure-route-review.ts';
+  import Pagination from '#lib/components/Pagination.svelte';
   import {
     collectCaseLifecycleEvents,
     filterCaseLifecycleEvents,
     serializeCaseLifecycleCalendarEvents,
-  } from '$lib/analysis/case-lifecycle-calendar.ts';
+  } from '#lib/analysis/case-lifecycle-calendar.ts';
 
   let { records }: { records: readonly CaseRecord[] } = $props();
   let message = $state('');

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { onMount } from 'svelte';
-  import { parseBoundedJson } from '$lib/bounded-json';
+  import { parseBoundedJson } from '#lib/bounded-json.ts';
   import {
     compareWebsiteSnapshots,
     deleteWebsiteSnapshot,
@@ -11,7 +11,7 @@
     MAX_WEBSITE_SNAPSHOT_IMPORT_BYTES,
     retainWebsiteSnapshot,
     type WebsiteProfileSnapshot,
-  } from '$lib/website-snapshots';
+  } from '#lib/website-snapshots.ts';
 
   let { domain, canSave, buildSnapshot }: {
     domain: string;

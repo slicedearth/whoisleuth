@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { browserWorkspaceDirectory, MAX_BROWSER_WORKSPACE_NAME, type BrowserWorkspace } from '$lib/browser-workspace-directory.ts';
-  import { BROWSER_WORKSPACE_DIRECTORY_EVENT, currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE, DEFAULT_BROWSER_WORKSPACE_NAME, navigateToBrowserWorkspace } from '$lib/browser-workspace-context.ts';
-  import { MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES, MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS } from '$lib/browser-workspace-encryption-model.ts';
+  import { browserWorkspaceDirectory, MAX_BROWSER_WORKSPACE_NAME, type BrowserWorkspace } from '#lib/browser-workspace-directory.ts';
+  import { BROWSER_WORKSPACE_DIRECTORY_EVENT, currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE, DEFAULT_BROWSER_WORKSPACE_NAME, navigateToBrowserWorkspace } from '#lib/browser-workspace-context.ts';
+  import { MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES, MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS } from '#lib/browser-workspace-encryption-model.ts';
   import BrowserWorkspaceCopy from './BrowserWorkspaceCopy.svelte';
-  import { isLocalApplication } from '$lib/local-application-context.ts';
+  import { isLocalApplication } from '#lib/local-application-context.ts';
   import LocalApplicationWorkspace from './LocalApplicationWorkspace.svelte';
   let localApplication = $state(false);
 

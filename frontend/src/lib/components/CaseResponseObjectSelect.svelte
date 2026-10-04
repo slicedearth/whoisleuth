@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CaseRecord } from '$lib/cases';
+  import type { CaseRecord } from '#lib/cases.ts';
   import { caseResponseObjectChoices, MAX_CASE_RESPONSE_OBJECTS, type CaseResponseObject } from '../../../../packages/cases/case-response-object.mts';
   let { record, label = 'Exact response object', emptyLabel = 'Unknown / not bound', value = $bindable(''), values = $bindable<string[]>([]), multiple = false, disabled = false, objects }: {
     record: CaseRecord; label?: string; emptyLabel?: string; value?: string; values?: string[]; multiple?: boolean; disabled?: boolean; objects?: readonly CaseResponseObject[];

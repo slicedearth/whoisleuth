@@ -4,11 +4,11 @@
     requestLookupSourceRefresh, mergeLookupSourceRefreshLedger, MAX_LOOKUP_SOURCE_REFRESH_HISTORY,
     type LookupSourceRefreshLedger, type LookupSourceRefreshPlan, type LookupSourceRefreshPlanItem,
     type LookupSourceRefreshResult, type SourceRefreshCaseTarget,
-  } from '$lib/analysis/lookup-source-refresh.ts';
-  import { originalSourceRefreshFacts, sourceRefreshTarget } from '$lib/analysis/lookup-source-observation.ts';
-  import { compareCheckpointFacts } from '$lib/analysis/case-evidence-checkpoint.ts';
-  import type { LookupHttpResponse } from '$lib/analysis/lookup-response.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  } from '#lib/analysis/lookup-source-refresh.ts';
+  import { originalSourceRefreshFacts, sourceRefreshTarget } from '#lib/analysis/lookup-source-observation.ts';
+  import { compareCheckpointFacts } from '#lib/analysis/case-evidence-checkpoint.ts';
+  import type { LookupHttpResponse } from '#lib/analysis/lookup-response.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import LookupSourceCheckpoint from './LookupSourceCheckpoint.svelte';
 
   let { plan, original, depth, ledger, onledgerchange, caseTarget }: {

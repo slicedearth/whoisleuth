@@ -2,18 +2,18 @@
   import type { Snippet } from 'svelte';
   import { CASE_PROVIDER_OUTCOMES } from '../../../../packages/cases/case-response-records.mts';
   import type { CaseRecord, CaseActionRecord, CaseActionState } from '../cases.ts';
-  import type { CaseActionEventSourceClass } from '$lib/analysis/case-response-model.ts';
+  import type { CaseActionEventSourceClass } from '#lib/analysis/case-response-model.ts';
   import { providerOutcomeRequiresObjectScope } from '../../../../packages/cases/case-response-actions.mts';
-  import { isoFromUtcInput, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
-  import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
+  import { isoFromUtcInput, utcDateTimeInputAttributes, list } from '#lib/analysis/case-response-form-values.ts';
+  import type { CaseResponsePresentation, PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
   import { responseRouteFreshness } from '../../../../packages/cases/response-route-freshness.mts';
-  import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
-  import { reviewClock } from '$lib/review-clock.ts';
+  import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
+  import { reviewClock } from '#lib/review-clock.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseResponseObjectSelect from './CaseResponseObjectSelect.svelte';
   import type { CaseDeliveryPacketReceipt } from '../../../../packages/cases/case-packet-correction.mts';
-  import { createCasePacketDeliveryAuthority } from '$lib/controllers/case-packet-delivery.ts';
+  import { createCasePacketDeliveryAuthority } from '#lib/controllers/case-packet-delivery.ts';
   import { CASE_RESPONSE_OBJECT_OUTCOMES, selectedCaseResponseObject, type CaseResponseObjectOutcome } from '../../../../packages/cases/case-response-object.mts';
 
   let { record, mode, mutationBusy, persist, onreviewrecipient, metadata }: {

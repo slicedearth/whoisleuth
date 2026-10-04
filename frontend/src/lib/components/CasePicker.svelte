@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CaseRecord } from '$lib/analysis/case-model.ts';
+  import type { CaseRecord } from '#lib/analysis/case-model.ts';
   import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
   let { id, records, selectedId = '', disabled = false, select }: {
     id: string;
