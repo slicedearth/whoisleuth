@@ -18,15 +18,15 @@ test('local production instructions explicitly load development-only credentials
   const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-env-file-test-'));
   try {
     const file = path.join(directory, '.env.local');
-    await writeFile(file, 'SITE_PASSWORD=fixture-only-password\nSESSION_SECRET=fixture-only-signing-secret\n', { mode: 0o600 });
+    await writeFile(file, 'SITE_PASSWORD=test-only-secret\nSESSION_SECRET=test-only-session-signing-secret\n', { mode: 0o600 });
     const env = { ...process.env };
     delete env.SITE_PASSWORD;
     delete env.SESSION_SECRET;
-    const script = `import { checkPassword } from ${JSON.stringify(new URL('../lib/auth.mts', import.meta.url).href)}; process.stdout.write(String(checkPassword('fixture-only-password')));`;
+    const script = `import { checkPassword } from ${JSON.stringify(new URL('../lib/auth.mts', import.meta.url).href)}; process.stdout.write(String(checkPassword('test-only-secret')));`;
     for (const [argumentsValue, environment, expected] of [
       [[`--env-file=${file}`], env, 'true'],
       [[], env, 'false'],
-      [[], { ...env, SITE_PASSWORD: 'fixture-only-password', SESSION_SECRET: 'fixture-only-signing-secret' }, 'true'],
+      [[], { ...env, SITE_PASSWORD: 'test-only-secret', SESSION_SECRET: 'test-only-session-signing-secret' }, 'true'],
     ] as const) {
       const result = spawnSync(process.execPath, [...argumentsValue, '--input-type=module', '-e', script], { env: environment, encoding: 'utf8', timeout: 5000 });
       assert.equal(result.status, 0, result.stderr);

@@ -1,6 +1,6 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_INDEX = {
-  "commandCount": 52,
+  "commandCount": 53,
   "groups": [
     "investigate",
     "respond",
@@ -338,6 +338,13 @@ export const PUBLIC_CLI_INDEX = {
       "id": "watchlist-review",
       "summary": "Review a local candidate watchlist handoff",
       "group": "assure",
+      "common": false,
+      "mode": "offline"
+    },
+    {
+      "id": "domain-feed",
+      "summary": "Review a selected local plain-domain feed",
+      "group": "investigate",
       "common": false,
       "mode": "offline"
     },

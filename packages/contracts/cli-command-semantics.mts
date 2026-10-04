@@ -14,6 +14,7 @@ export const CAPABILITY_IDS = Object.freeze({
   URLSCAN_SEARCH: 'urlscan_search',
   URLHAUS_HOST: 'urlhaus_host',
   THREATFOX_DOMAIN_IOC: 'threatfox_domain_ioc',
+  DOMAIN_FEED_SEARCH: 'domain_feed_search',
   REGISTRAR_RDAP: 'registrar_rdap',
   NETWORK_CONTEXT: 'network_context',
   REVERSE_DNS: 'reverse_dns',

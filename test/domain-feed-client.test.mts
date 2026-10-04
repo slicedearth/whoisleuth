@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeDomainFeedSelection, scanDomainFeed } from '../packages/monitoring/domain-feed.mts';
+import { normalizeDomainFeedReview, normalizeDomainFeedSelection, scanDomainFeed } from '../packages/monitoring/domain-feed.mts';
 import { loadDomainFeedServiceStatus, queryDomainFeedService } from '../frontend/src/lib/domain-feed-client.ts';
 
 const importedAt = '2000-01-01T00:00:00.000Z';
@@ -24,16 +24,27 @@ test('explicit service query reconstructs exact Brand attribution locally and pr
   let sent: unknown;
   const result = await queryDomainFeedService('tif-mini', selection, new AbortController().signal, async (_input, init) => {
     sent = JSON.parse(init!.body as string);
-    return Response.json({ enabled: true, feeds: [{ stale: true, review: await review(), error: null }], limitations: ['Cache lookup is not target collection.'] });
+    return Response.json({ enabled: true, feeds: [{ feedId: 'tif-mini', stale: true, review: await review(), error: null }], limitations: ['Cache lookup is not target collection.'] });
   }, '2000-01-02T00:00:00.000Z');
   assert.deepEqual(sent, { operation: 'query', feedIds: ['tif-mini'], selection: { hosts: ['login.target.example'], terms: [] } });
   assert.equal(JSON.stringify(sent).includes('local-example-profile'), false);
-  assert.equal(result[0]!.matches[0]!.candidate.matches[0]!.brandProfileId, 'local-example-profile');
-  assert.equal(result[0]!.matches[0]!.candidate.sources[0]!.observedHostname, 'login.target.example');
-  assert.equal(result[0]!.matches[0]!.candidate.sources[0]!.sourceLastObservedAt, null);
-  assert.equal(result[0]!.importedAt, importedAt);
-  assert.equal(result[0]!.matches[0]!.candidate.sources[0]!.firstLocalObservedAt, '2000-01-02T00:00:00.000Z');
-  assert.ok(result[0]!.limitations.some((value) => value.includes('stale')));
+  assert.equal(result[0]!.candidates[0]!.candidate.matches[0]!.brandProfileId, 'local-example-profile');
+  assert.equal(result[0]!.candidates[0]!.candidate.sources[0]!.observedHostname, 'login.target.example');
+  assert.equal(result[0]!.candidates[0]!.candidate.sources[0]!.sourceLastObservedAt, null);
+  assert.equal(result[0]!.review.importedAt, importedAt);
+  assert.equal(result[0]!.candidates[0]!.candidate.sources[0]!.firstLocalObservedAt, '2000-01-02T00:00:00.000Z');
+  assert.ok(result[0]!.warnings.some((value) => value.includes('stale')));
+  assert.deepEqual(normalizeDomainFeedReview(result[0]!.review), await review());
+  assert.equal(result[0]!.review.selection.brandProfileId, null);
+});
+
+test('failed refresh does not discard a valid last-good snapshot or forward private error text', async () => {
+  const result = await queryDomainFeedService('tif-mini', selection, new AbortController().signal, async () => Response.json({
+    enabled: true, feeds: [{ feedId: 'tif-mini', stale: false, review: await review(), error: 'private upstream detail' }], limitations: [],
+  }));
+  assert.equal(result[0]!.candidates.length, 1);
+  assert.deepEqual(result[0]!.warnings, ['The latest refresh failed. These candidates come from the last retained snapshot.']);
+  assert.doesNotMatch(JSON.stringify(result), /private upstream detail/u);
 });
 
 test('client rejects unsafe or ambiguous status and query envelopes instead of inferring absence', async () => {
@@ -41,11 +52,13 @@ test('client rejects unsafe or ambiguous status and query envelopes instead of i
   for (const value of [null, { enabled: true, feeds: [{}] }, { enabled: false, feeds: Array.from({ length: 12 }, () => ({})) }]) {
     await assert.rejects(loadDomainFeedServiceStatus(signal, async () => Response.json(value)), /unreadable status/u);
   }
-  await assert.rejects(queryDomainFeedService('tif-mini', selection, signal, async () => Response.json({ enabled: true, feeds: [{ stale: false, review: null, error: 'unknown' }], limitations: [] })), /No absence/u);
+  await assert.rejects(queryDomainFeedService('tif-mini', selection, signal, async () => Response.json({ enabled: true, feeds: [{ feedId: 'tif-mini', stale: false, review: null, error: 'unknown' }], limitations: [] })), /No absence/u);
   const good = await review();
-  await assert.rejects(queryDomainFeedService('tif-full', selection, signal, async () => Response.json({ enabled: true, feeds: [{ stale: false, review: good, error: null }], limitations: [] })), /unexpected feed/u);
+  await assert.rejects(queryDomainFeedService('tif-full', selection, signal, async () => Response.json({ enabled: true, feeds: [{ feedId: 'tif-full', stale: false, review: good, error: null }], limitations: [] })), /unexpected feed/u);
   const wrongSelection = normalizeDomainFeedSelection({ hosts: ['different.example'], brandProfileId: 'local-example-profile' })!;
-  await assert.rejects(queryDomainFeedService('tif-mini', wrongSelection, signal, async () => Response.json({ enabled: true, feeds: [{ stale: false, review: good, error: null }], limitations: [] })), /outside the explicit selection/u);
+  await assert.rejects(queryDomainFeedService('tif-mini', wrongSelection, signal, async () => Response.json({ enabled: true, feeds: [{ feedId: 'tif-mini', stale: false, review: good, error: null }], limitations: [] })), /outside the explicit selection/u);
+  const overlappingSelection = normalizeDomainFeedSelection({ hosts: selection.hosts, terms: ['target'], brandProfileId: selection.brandProfileId });
+  await assert.rejects(queryDomainFeedService('tif-mini', overlappingSelection, signal, async () => Response.json({ enabled: true, feeds: [{ feedId: 'tif-mini', stale: false, review: good, error: null }], limitations: [] })), /outside the explicit selection/u);
   await assert.rejects(loadDomainFeedServiceStatus(signal, async () => Response.json({ privateDetail: 'not copied' }, { status: 503 })), /unavailable/u);
 });
 

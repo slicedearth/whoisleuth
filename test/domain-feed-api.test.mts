@@ -8,8 +8,8 @@ import type { NetworkRouteServices } from '../server.mts';
 
 const previous = { password: process.env.SITE_PASSWORD, secret: process.env.SESSION_SECRET,
   disabled: process.env.WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY };
-process.env.SITE_PASSWORD = 'fixture-password';
-process.env.SESSION_SECRET = 'fixture-session-secret-with-sufficient-length';
+process.env.SITE_PASSWORD = 'test-only-secret';
+process.env.SESSION_SECRET = 'test-only-session-signing-secret';
 const { registerNetworkApiRoutes, apiErrorHandler } = await import('../server.mts');
 const { buildSessionCookie, createSessionToken } = await import('../lib/auth.mts');
 const { createDomainFeedHandler } = await import('../netlify/functions/domain-feed.mts');

@@ -47,7 +47,40 @@ under a rolled-back clock preserves the existing clock guard. A committed except
 remains saved if the visible Brand refresh fails, with drafts retained and further
 mutations disabled until saved context can be reread.
 
-## Offline CLI
+## Review a domain feed
+
+In Brands, open **Review domain feed candidates**. Select the source, enter
+literal terms or exact hostnames, then scan a downloaded plain-domain file.
+The file is processed locally without uploading it or querying its domains.
+Select individual results to retain in Candidate review, then use the existing
+Watchlist preview to choose a destination and priority.
+
+The source catalogue covers threat-intelligence feeds, recent-registration
+cohorts and high-entropy subsets. These are different nomination sources, not
+interchangeable abuse findings. Open **Source details and coverage** for the
+file digest, publisher declaration, local read time and omitted-match count.
+Per-domain registration and source-observation dates remain unknown.
+
+The equivalent CLI commands are offline:
+
+```sh
+whoisleuth domain-feed review nrd7 feed.txt --select term:example --json
+whoisleuth domain-feed watch-input nrd7 feed.txt context.json --select host:login.example --json
+```
+
+`context.json` uses the candidate-watch input below with an empty `candidates`
+array. The second command emits that existing format with the matched nominees;
+review it with `watchlist-review plan` before exporting a Watchlist. Neither
+command downloads a feed or changes saved work. Use installed `domain-feed --help`
+for selection and file bounds.
+
+An operator can also configure the [optional cached feed service](domain-feed-service.md).
+Opening its disclosure reads cache status; only **Query selected feed cache**
+sends the selected feed, terms and exact hostnames. The Brand Profile stays local.
+Stale or failed-refresh warnings remain visible alongside retained results.
+Manual file review does not require this service.
+
+## Offline Watchlist handoff
 
 `whoisleuth watchlist-review plan selection.json --json` previews the same bounded
 selection without network requests. `watchlist-review export selection.json`

@@ -44,6 +44,25 @@ function compact(value: string): string {
 
 const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   {
+    id: 'domain-feed-local-import',
+    clauses: [
+      /Domain-feed file import processes a selected plain-domain file locally, without uploading it or querying its domains/iu,
+      /File publication time and local import time do not establish when an individual domain was registered or observed/iu,
+      /filename and its path are not retained/iu,
+    ],
+  },
+  {
+    id: 'domain-feed-query-disclosure',
+    clauses: [
+      /Optional domain-feed search is disabled until an operator configures the separate feed service/iu,
+      /selected feed identifiers, exact hostnames and literal search terms/iu,
+      /does not send the Brand Profile, Case, browser workspace or session cookie to the service/iu,
+      /Connection credentials remain server-side/iu,
+      /retains public feed snapshots and metadata, not search queries/iu,
+      /Disabling the connection does not delete its cache/iu,
+    ],
+  },
+  {
     id: 'local-mmdb-current-review',
     clauses: [
       /reads one selected local database/iu,

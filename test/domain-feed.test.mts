@@ -171,9 +171,11 @@ test('literal Unicode terms do not silently expand to canonical punycode variant
 test('feed review composes with existing candidate-watch input without changing scores, availability or baseline', async () => {
   const result = await scan('mybrand.example\nexact.example');
   const input = buildDomainFeedWatchInput(result, ['mybrand.example'], { name: 'Local review', brandProfileId: 'review-profile', priority: 'p3', reason: 'Review explicitly selected feed inclusion.' });
-  const plan = reviewCandidateWatchInput(JSON.stringify(input), 'plan', NOW) as { additionalRequests: number; rows: { domain: string }[] };
+  const plan = reviewCandidateWatchInput(JSON.stringify(input), 'plan', NOW);
+  assert.ok('rows' in plan);
   assert.equal(plan.additionalRequests, 0); assert.equal(plan.rows[0]!.domain, 'mybrand.example');
-  const exported = reviewCandidateWatchInput(JSON.stringify(input), 'export', NOW) as { watchlists: Record<string, { results: unknown[]; baseline: unknown[]; domainMetadata: { candidate: unknown }[] }> };
+  const exported = reviewCandidateWatchInput(JSON.stringify(input), 'export', NOW);
+  assert.ok('watchlists' in exported);
   const watchlist = exported.watchlists['Local review']!;
   assert.deepEqual(watchlist.results, []); assert.deepEqual(watchlist.baseline, []);
   assert.equal(watchlist.domainMetadata.length, 1);

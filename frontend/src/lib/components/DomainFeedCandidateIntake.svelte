@@ -4,19 +4,19 @@
   import { retainBrandCandidates, type BrandProfile } from '$lib/brand-profiles';
   import { runDomainFeedWorker } from '$lib/domain-feed-worker';
   import { DomainFeedIntakeOperation } from '$lib/controllers/domain-feed-intake';
-  import { loadDomainFeedServiceStatus, queryDomainFeedService, type DomainFeedServiceStatus } from '$lib/domain-feed-client';
-  import { DOMAIN_FEED_CATALOGUE, DOMAIN_FEED_LIMITS, normalizeDomainFeedSelection, type DomainFeedReview } from '../../../../packages/monitoring/domain-feed.mts';
+  import { loadDomainFeedServiceStatus, queryDomainFeedService, type DomainFeedServiceStatus, type PreparedDomainFeedReview } from '$lib/domain-feed-client';
+  import { DOMAIN_FEED_CATALOGUE, DOMAIN_FEED_LIMITS, normalizeDomainFeedSelection } from '../../../../packages/monitoring/domain-feed.mts';
 
   let { active, disabled = false, onrefresh }: { active: BrandProfile; disabled?: boolean; onrefresh: () => Promise<unknown> } = $props();
   const operation = new DomainFeedIntakeOperation(), statusOperation = new DomainFeedIntakeOperation();
   let feedId = $state('tif-mini'), terms = $state(''), hosts = $state('');
-  let file = $state.raw<Blob | null>(null), reviews = $state.raw<DomainFeedReview[]>([]);
+  let file = $state.raw<Blob | null>(null), reviews = $state.raw<PreparedDomainFeedReview[]>([]);
   let resultOrigin = $state<'local' | 'service'>('local');
   let selected = $state<Set<string>>(new Set()), busy = $state(false), writing = $state(false);
   let message = $state(''), openedProfile = $state(''), status = $state.raw<DomainFeedServiceStatus | null>(null);
   let serviceBusy = $state(false), serviceMessage = $state(''), serviceOpen = $state(false);
   let resultHeading = $state<HTMLHeadingElement>(), actionStatus = $state<HTMLParagraphElement>();
-  const matches = $derived(reviews.flatMap((review) => review.matches));
+  const matches = $derived(reviews.flatMap((review) => review.candidates));
   const chosen = $derived(matches.filter((match) => selected.has(match.domain)));
   const cached = $derived(status?.feeds.find((feed) => feed.feedId === feedId));
   const context = () => JSON.stringify([active.id, feedId, terms, hosts]);
@@ -55,12 +55,15 @@
     const started = operation.begin(submittedContext);
     busy = true;
     try {
-      const result = hosted
-        ? await queryDomainFeedService(submittedFeed, selectedInput, started.signal)
-        : [await runDomainFeedWorker({ kind: 'scan', file: submittedFile!, feedId: submittedFeed, selection: selectedInput, importedAt: new Date().toISOString() }, { signal: started.signal })];
+      let result: PreparedDomainFeedReview[];
+      if (hosted) result = await queryDomainFeedService(submittedFeed, selectedInput, started.signal);
+      else {
+        const review = await runDomainFeedWorker({ kind: 'scan', file: submittedFile!, feedId: submittedFeed, selection: selectedInput, importedAt: new Date().toISOString() }, { signal: started.signal });
+        result = [{ review, candidates: review.matches, limitations: review.limitations, warnings: [] }];
+      }
       if (!operation.current(started, context())) return;
       reviews = result; resultOrigin = hosted ? 'service' : 'local'; file = null;
-      message = `${result.reduce((count, review) => count + review.matches.length, 0)} exact candidate nominations staged. Select individual candidates before retaining them.`;
+      message = `${result.reduce((count, review) => count + review.candidates.length, 0)} candidates found. Select those you want to retain.`;
       await tick();
       if (operation.current(started, context())) resultHeading?.focus();
     } catch (cause) {
@@ -116,9 +119,9 @@
 
 <details class="feed-intake">
   <summary>Review domain feed candidates</summary>
-  <p>Match an explicitly supplied domain-only feed against literal terms or exact hostnames. Listings are nominations, not Risk, ownership or infringement findings.</p>
+  <p>Find candidates in a domain feed using literal terms or exact hostnames. A listing is a lead to review, not an infringement finding.</p>
   <fieldset disabled={writing || disabled}>
-    <legend>Explicit matching selection</legend>
+    <legend>What to match</legend>
     <label>Domain feed source<select bind:value={feedId} onchange={() => invalidate()}>{#each DOMAIN_FEED_CATALOGUE as feed}<option value={feed.id}>{feed.label}</option>{/each}</select></label>
     <div class="selection-fields">
       <label>Literal Brand terms<textarea bind:value={terms} oninput={() => invalidate()} maxlength="1620" rows="3" placeholder="One term per line"></textarea></label>
@@ -127,7 +130,7 @@
     <p class="muted">Up to 20 literal terms (3–80 characters) or 200 exact hostnames. No parent-domain expansion.</p>
     <label>Local domain-only feed file<input type="file" accept=".txt,text/plain" onchange={chooseFile} /></label>
     {#if file}<p>{file.size.toLocaleString()} bytes selected for local scanning.</p>{/if}
-    <p class="muted">The file is streamed in a local worker; its contents and filename are not sent to a service or retained. Only reviewed candidates are saved.</p>
+    <p class="muted">The file stays on this device. Only candidates you choose to retain are saved.</p>
     <button class="btn" onclick={() => void scan()} disabled={!file || busy}>Scan local file</button>
     <details class="optional-service" ontoggle={(event) => void openService(event)}>
       <summary>Optional hosted feed cache</summary>
@@ -135,7 +138,7 @@
       {#if serviceBusy}<p role="status">Reading operator configuration…</p>
       {:else if serviceMessage}<p role="status">{serviceMessage}</p>
       {:else if status?.enabled === false}<p>Not enabled by the operator. Manual local import remains available.</p>
-      {:else if status?.enabled}<p>{cached?.cached ? `Selected feed cache available${cached.stale ? ' (stale)' : ''}.` : 'The selected feed cache is unavailable; no absence is inferred.'}</p>
+      {:else if status?.enabled}<p>{cached?.cached ? `Selected feed cache available${cached.stale ? ' (stale)' : ''}.` : 'No usable snapshot is available for this feed.'}</p>{#if cached?.error}<p>The latest refresh failed. A retained snapshot, if available, can still be reviewed.</p>{/if}
       {:else}<p>Service configuration has not been read.</p>{/if}
       <button class="btn" onclick={() => void scan(true)} disabled={busy || serviceBusy || !status?.enabled || !cached?.cached}>Query selected feed cache</button>
     </details>
@@ -145,9 +148,15 @@
   {#if reviews.length}
     <section aria-labelledby="domain-feed-result-title">
       <h3 id="domain-feed-result-title" tabindex="-1" bind:this={resultHeading}>Staged feed nominations</h3>
-      {#each reviews as review}
-        <dl><div><dt>Source</dt><dd>{review.feedId}</dd></div><div><dt>Raw-file SHA-256</dt><dd>{review.revision}</dd></div><div><dt>Declared update / version</dt><dd>{formatEvidenceDate(review.declaredPublishedAt, 'Unknown')} · {review.declaredVersion || 'Unknown'}</dd></div><div><dt>{resultOrigin === 'local' ? 'Reviewed locally / acquired' : 'Cache imported / acquired'}</dt><dd>{formatEvidenceDate(review.importedAt)} · {formatEvidenceDate(review.acquiredAt, 'Unknown')}</dd></div><div><dt>Snapshot and match coverage</dt><dd>{review.bytes.toLocaleString()} bytes · {review.rows.toLocaleString()} source rows · {review.matches.length} distinct candidates returned · {review.matched ?? 'Unknown'} raw matching rows · {review.omitted ?? 'Unknown'} matching occurrences not separately retained; {review.truncated ? 'additional distinct candidates omitted by the bound' : resultOrigin === 'local' ? 'scan completed' : 'cache query completed'}</dd></div></dl>
-        <ul>{#each review.limitations as limitation}<li>{limitation}</li>{/each}</ul>
+      {#each reviews as result}
+        {@const review = result.review}
+        {#each result.warnings as warning}<p class="source-warning">{warning}</p>{/each}
+        {#if review.truncated}<p class="source-warning">Showing {review.matches.length} candidates; more matches were omitted. Narrow the terms to review another selection.</p>{/if}
+        <details class="source-details">
+          <summary>Source details and coverage</summary>
+          <dl><div><dt>Source</dt><dd>{review.feedId}</dd></div><div><dt>Raw-file SHA-256</dt><dd>{review.revision}</dd></div><div><dt>Declared update / version</dt><dd>{formatEvidenceDate(review.declaredPublishedAt, 'Unknown')} · {review.declaredVersion || 'Unknown'}</dd></div><div><dt>{resultOrigin === 'local' ? 'Reviewed locally / acquired' : 'Cache imported / acquired'}</dt><dd>{formatEvidenceDate(review.importedAt)} · {formatEvidenceDate(review.acquiredAt, 'Unknown')}</dd></div><div><dt>Snapshot and match coverage</dt><dd>{review.bytes.toLocaleString()} bytes · {review.rows.toLocaleString()} source rows · {review.matches.length} distinct candidates returned · {review.matched ?? 'Unknown'} raw matching rows · {review.omitted ?? 'Unknown'} matching occurrences not separately retained; {review.truncated ? 'additional distinct candidates omitted by the bound' : resultOrigin === 'local' ? 'scan completed' : 'cache query completed'}</dd></div></dl>
+          <ul>{#each result.limitations as limitation}<li>{limitation}</li>{/each}</ul>
+        </details>
       {/each}
       <fieldset disabled={writing || disabled || busy}><legend>Select specific candidates to retain</legend>
         {#each matches as match (match.domain)}<label class="candidate"><input type="checkbox" checked={selected.has(match.domain)} onchange={(event) => toggle(match.domain, event.currentTarget.checked)} />{match.domain}<span class="muted">{match.terms.length ? `Literal matches: ${match.terms.join(', ')}` : 'Exact hostname selection'}</span></label>{/each}
@@ -167,7 +176,7 @@
   .selection-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
   .candidate { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
   .candidate span { grid-column: 2; }
-  .optional-service { margin-block: 16px; }
+  .optional-service, .source-details { margin-block: 16px; }
   .muted { color: var(--muted); }
   dl div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 12px; }
   dd { margin: 0; }

@@ -1344,6 +1344,16 @@ const SHARED_COMMAND_OPTIONS = [
     "option": "--select",
     "scope": "command",
     "usage": "--select \u003cvalue>",
+    "description": "Select host:\u003cexact-hostname> or term:\u003cliteral-text>; repeat for separate explicit selectors.",
+    "values": [],
+    "repeatable": true,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--select",
+    "scope": "command",
+    "usage": "--select \u003cvalue>",
     "description": "Bind a literal input to a workflow step; repeat for further inputs.",
     "values": [],
     "repeatable": true,
@@ -1442,7 +1452,7 @@ const SHARED_COMMAND_OPTIONS = [
   }
 ] as const;
 export const PUBLIC_CLI_CATALOGUE = {
-  "commandCount": 52,
+  "commandCount": 53,
   "groups": [
     "investigate",
     "respond",
@@ -5401,6 +5411,132 @@ export const PUBLIC_CLI_CATALOGUE = {
       }
     },
     {
+      "id": "domain-feed",
+      "summary": "Review a selected local plain-domain feed",
+      "description": "Review exact hosts or literal terms in a selected local plain-domain feed.",
+      "group": "investigate",
+      "common": false,
+      "usage": "whoisleuth domain-feed \u003creview|watch-input> \u003ctif-full|tif-medium|tif-mini|nrd7|nrd14-8|nrd21-15|nrd28-22|nrd35-29|entropy7|entropy14|entropy30> \u003csource> [\u003ccontext>] --select \u003cvalue> [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth domain-feed review tif-mini feed.txt --select host:candidate.example --json",
+      "boundary": "Always available offline. Reads one explicit local regular file; never downloads a feed, performs a Lookup, changes scores, retains candidates or enables a schedule. Streams at most 256 MiB and 10 million physical rows with 1,024-byte lines and a ten-minute deadline; retains at most 200 matched hosts. Repeat --select host:\u003chostname> or term:\u003cliteral> for at most 200 exact hosts and 20 literal terms of 3–80 characters. Matching never treats a parent as equivalent or executes a regular expression. Review emits the full raw-byte digest, separate declared file/local clocks, unknown per-host clocks and omissions. watch-input also requires a candidate-watch-input v1 context file with an empty candidates array, and emits that existing format for a separate watchlist-review plan/export. Inclusion is not a maliciousness, activity, ownership or availability verdict.",
+      "collection": {
+        "mode": "offline",
+        "scope": "Local raw file: 256 MiB, 10 million physical rows, 1,024 bytes per line, ten minutes; 200 retained hosts, 20 literal terms, no requests."
+      },
+      "inputs": [
+        {
+          "name": "operation",
+          "valueKind": "enum",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [
+            "review",
+            "watch-input"
+          ],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        },
+        {
+          "name": "feed",
+          "valueKind": "enum",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [
+            "tif-full",
+            "tif-medium",
+            "tif-mini",
+            "nrd7",
+            "nrd14-8",
+            "nrd21-15",
+            "nrd28-22",
+            "nrd35-29",
+            "entropy7",
+            "entropy14",
+            "entropy30"
+          ],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        },
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        },
+        {
+          "name": "context",
+          "valueKind": "file",
+          "minimum": 0,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--select",
+        "--json",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[110], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
+      "networkEffect": "offline",
+      "disclosureClass": "none",
+      "explicitAuthorisationRequired": false,
+      "planSupport": true,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002ecandidate-watch-input"
+      ],
+      "inputLimits": [
+        "Local raw file: 256 MiB, 10 million physical rows, 1,024 bytes per line, ten minutes; 200 retained hosts, 20 literal terms, no requests.",
+        "operation: 1-1 enum value",
+        "feed: 1-1 enum value",
+        "source: 1-1 file value",
+        "context: 0-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [
+        "Bounded feed inclusion review",
+        "Explicit candidate watch selection"
+      ],
+      "capability": {
+        "familyId": "offline_review",
+        "networkMode": "none",
+        "dataSent": [
+          "none"
+        ],
+        "recipients": [
+          "none"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete",
+          "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The command reads only selected bounded local input and makes no network request.",
+          "Output remains under the operator's local retention and deletion control."
+        ]
+      }
+    },
+    {
       "id": "workflow-run",
       "summary": "Execute approved fixed-recipe steps",
       "description": "Execute approved steps from a fixed investigation recipe and emit a resumable checkpoint.",
@@ -5456,7 +5592,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[110], SHARED_COMMAND_OPTIONS[111], SHARED_COMMAND_OPTIONS[112], SHARED_COMMAND_OPTIONS[113], SHARED_COMMAND_OPTIONS[114], SHARED_COMMAND_OPTIONS[115], SHARED_COMMAND_OPTIONS[116], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[111], SHARED_COMMAND_OPTIONS[112], SHARED_COMMAND_OPTIONS[113], SHARED_COMMAND_OPTIONS[114], SHARED_COMMAND_OPTIONS[115], SHARED_COMMAND_OPTIONS[116], SHARED_COMMAND_OPTIONS[117], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "conditional_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
@@ -5558,7 +5694,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[117], SHARED_COMMAND_OPTIONS[118], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[118], SHARED_COMMAND_OPTIONS[119], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5794,7 +5930,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--compact",
         "--no-attribution"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[20], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[119], SHARED_COMMAND_OPTIONS[22]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[20], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[120], SHARED_COMMAND_OPTIONS[22]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,

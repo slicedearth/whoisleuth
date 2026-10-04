@@ -85,6 +85,7 @@ const EXPECTED_CAPABILITY_IDS = [
   'urlscan_search',
   'urlhaus_host',
   'threatfox_domain_ioc',
+  'domain_feed_search',
   'registrar_rdap',
   'network_context',
   'reverse_dns',
@@ -117,6 +118,7 @@ const EXPECTED_LEGACY_CAPABILITY_IDS = [
   'urlscan_search',
   'urlhaus_host',
   'threatfox_domain_ioc',
+  'domain_feed_search',
   'domain_posture',
   'idn_confusables',
   'analyst_cases',
@@ -146,6 +148,10 @@ const EXPECTED_LEGACY_CAPABILITIES = [
   {
     id: 'threatfox_domain_ioc', status: 'disabled', execution: 'hosted', scanModes: ['deep'],
     reason: 'Malware-IOC intelligence is not enabled for this deployment.',
+  },
+  {
+    id: 'domain_feed_search', status: 'disabled', execution: 'hosted', scanModes: [],
+    reason: 'Optional domain feed service is not enabled for this deployment.',
   },
   { id: 'domain_posture', status: 'supported', execution: 'hosted', scanModes: [] },
   { id: 'idn_confusables', status: 'local_only', execution: 'browser', scanModes: ['fast', 'deep'] },
@@ -463,6 +469,7 @@ describe('canonical capability manifest', () => {
       urlscan_search: 'bounded_risk_input',
       urlhaus_host: 'bounded_risk_input',
       threatfox_domain_ioc: 'bounded_risk_input',
+      domain_feed_search: 'none',
       idn_confusables: 'bounded_risk_input',
       tls_intelligence: 'none',
     } as const;

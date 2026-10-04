@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { expect, test } from './fixtures';
-import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openBrandProfileList, readBrowserLocalCollection, useTheme } from './helpers';
 import { normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
 import { scanDomainFeed, normalizeDomainFeedSelection } from '../packages/monitoring/domain-feed.mts';
 import { openConsoleView } from './console-navigation';
@@ -97,6 +97,8 @@ test('feed selection, metadata and controls remain usable at supported widths an
   await intake.getByLabel('Local domain-only feed file').setInputFiles({ name: 'example-feed.txt', mimeType: 'text/plain', buffer: Buffer.from(raw) });
   await intake.getByRole('button', { name: 'Scan local file', exact: true }).click();
   await expect(intake.getByRole('heading', { name: 'Staged feed nominations' })).toBeVisible();
+  await intake.getByText('Source details and coverage', { exact: true }).click();
+  await expect(intake.getByText(digest, { exact: true })).toBeVisible();
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const width of [320, 390, 1280]) {
@@ -140,7 +142,7 @@ test('cancel and profile changes terminate held local workers and reject their l
     await intake.getByLabel('Local domain-only feed file').setInputFiles({ name: 'replacement.txt', mimeType: 'text/plain', buffer: Buffer.from(raw) });
     await intake.getByRole('button', { name: 'Scan local file', exact: true }).click();
     await expect(intake.getByRole('progressbar', { name: 'Domain feed review in progress' })).toBeVisible();
-    await page.locator('#brand-profiles-summary').click();
+    await openBrandProfileList(page);
     await page.getByRole('radio', { name: 'Set Second profile active' }).check();
     await expect(page.getByRole('heading', { name: 'Candidate review for Second profile' })).toBeVisible();
     expect(await probe.evaluate((value) => value.counts())).toEqual({ created: 2, terminated: 2, held: 2 });
@@ -159,7 +161,7 @@ test('explicit hosted cache query retains locally attributed nominations without
     requests.push(body);
     await route.fulfill({ json: body.operation === 'status'
       ? { enabled: true, feeds: [{ feedId: 'tif-mini', cached: true, stale: true, error: null, metadata: serverReview, checkedAt: NOW }] }
-      : { enabled: true, feeds: [{ stale: true, review: serverReview, error: null }], limitations: ['Cache lookup is not target collection.'] } });
+      : { enabled: true, feeds: [{ feedId: 'tif-mini', stale: true, review: serverReview, error: 'Latest refresh failed; retained snapshot is available.' }], limitations: ['Cache lookup is not target collection.'] } });
   });
   const { intake } = await seed(page);
   await intake.getByLabel('Exact hostnames').fill('login.product.example');
@@ -169,6 +171,7 @@ test('explicit hosted cache query retains locally attributed nominations without
   await intake.getByRole('button', { name: 'Query selected feed cache' }).click();
   await expect(intake.getByRole('heading', { name: 'Staged feed nominations' })).toBeVisible();
   await expect(intake).toContainText('The retained feed cache is stale');
+  await expect(intake.getByText('The latest refresh failed. These candidates come from the last retained snapshot.', { exact: true })).toBeVisible();
   expect(requests[1]).toEqual({ operation: 'query', feedIds: ['tif-mini'], selection: { hosts: ['login.product.example'], terms: [] } });
   const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
   expect(before.records[0]!.value.candidateObservations).toEqual([]);

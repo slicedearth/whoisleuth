@@ -79,6 +79,7 @@ or publication of different bytes from those reviewed.
 | Optional worker | Bounded monitoring or processing | Schedule, compact target set, store state and upstream responses | Separate configuration, encryption where promised, least data, budget and retry bounds, no general evidence custody |
 | Optional rendered capture | Explicit local rendering and artefact creation | Page scripts, subresources, browser teardown traffic and output paths | Browser sandbox, pinned collector, browser-lifetime deny-only proxy, disabled alternate transports, bounded private writes, explicit partial evidence |
 | Optional local application | Loopback access to a selected filesystem workspace | Local requests, stored records, concurrent writes and lost acknowledgements | Authenticated loopback boundary, exact origin admission, bounded transactions and durable operation receipts |
+| Optional domain-feed service | Public-data cache and explicit candidate search | Feed bytes, publisher metadata, search terms, cache state and connection configuration | Streamed admission, fixed source catalogue, atomic last-good replacement, bounded index/query work, authenticated loopback listener, server-only credentials and no target collection |
 
 ## Principal threats and controls
 
@@ -93,6 +94,13 @@ not bypass these primitives for convenience.
 Residual risk includes changes in public address allocation, upstream DNS
 compromise, and protocol-specific behaviours that are outside the validated
 connection. Evidence remains point-in-time.
+
+The optional feed connection accepts only a fixed configured public HTTPS
+origin or numeric-loopback HTTP endpoint. Public connections use the same
+pinned-address validation and reject redirects. Loopback admission is confined
+to this operator-configured connection; it does not widen target collection.
+Search terms are disclosed to the configured service, not to feed publishers.
+Cache digests identify bytes, not publisher trust or domain registration dates.
 
 The capture companion supplies every admitted response through the pinned Node
 collector. A deny-only loopback proxy refuses direct browser connections even

@@ -8,6 +8,7 @@ import { urlscanConfiguration } from './urlscan-intelligence.mts';
 import { urlhausConfiguration } from './urlhaus-intelligence.mts';
 import { threatfoxConfiguration } from './threatfox-intelligence.mts';
 import { scheduledMonitorRuntimeConfiguration } from './scheduled-monitor-configuration.mts';
+import { domainFeedConnection } from './server/domain-feed-config.mts';
 import { CAPABILITY_MANIFEST } from '../packages/contracts/capability-manifest.mts';
 
 type CapabilityStatus = 'supported' | 'disabled' | 'unavailable' | 'local_only';
@@ -54,6 +55,19 @@ function capabilityReport(
     runtime: normalizedRuntime,
     authoritative: true,
     features: DEFINITIONS.map((item) => {
+      if (item.id === 'domain_feed_search') {
+        const enabled = env?.WHOISLEUTH_DOMAIN_FEED_ENABLED === '1';
+        const configured = enabled && domainFeedConnection(env ?? {}) !== null;
+        const { reason: _reason, ...definition } = item;
+        return {
+          ...definition,
+          status: configured ? 'supported' : enabled ? 'unavailable' : 'disabled',
+          scanModes: [...item.scanModes],
+          ...(!configured ? { reason: enabled
+            ? 'Optional domain feed service configuration is incomplete or invalid.'
+            : 'Optional domain feed service is not enabled for this deployment.' } : {}),
+        };
+      }
       if (item.id === 'urlscan_search') {
         const configuration = urlscanConfiguration(env);
         const { reason: _reason, ...definition } = item;

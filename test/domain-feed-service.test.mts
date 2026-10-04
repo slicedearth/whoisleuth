@@ -12,7 +12,7 @@ import { refreshDomainFeedCache, queryDomainFeedCache, domainFeedCacheStatus, pr
 import { startDomainFeedService, executeDomainFeedWorker } from '../lib/server/domain-feed-service.mts';
 import { parseDomainFeedOperation, executeDomainFeedOperation, validateDomainFeedReply } from '../lib/server/domain-feed-client.mts';
 
-const TOKEN = 'fixture_service_token_with_at_least_43_characters_012345';
+const TOKEN = 'fixture'.repeat(8);
 const NOW = Date.parse('2026-10-04T00:00:00.000Z');
 const FEED = 'tif-mini';
 const selection = normalizeDomainFeedSelection({ hosts: ['exact.example'], terms: ['brand'] });
@@ -187,11 +187,11 @@ test('real loopback service authenticates, confines origins and exposes only sta
 
 test('backend bounds replies, refuses redirect credential forwarding and propagates interruption', async () => {
   const env = { WHOISLEUTH_DOMAIN_FEED_ENABLED: '1', WHOISLEUTH_DOMAIN_FEED_URL: 'https://feed-service.example', WHOISLEUTH_DOMAIN_FEED_TOKEN: TOKEN,
-    WHOISLEUTH_DOMAIN_FEED_ACCESS_CLIENT_ID: 'fixture-access-id', WHOISLEUTH_DOMAIN_FEED_ACCESS_CLIENT_SECRET: 'fixture-access-secret' };
+    WHOISLEUTH_DOMAIN_FEED_ACCESS_CLIENT_ID: 'fixture-access-id', WHOISLEUTH_DOMAIN_FEED_ACCESS_CLIENT_SECRET: 'test-only-secret' };
   let calls = 0;
   const redirect = await executeDomainFeedOperation({ operation: 'status' }, { env, transport: async (_url, init) => {
     calls++; assert.equal(init.redirect, 'manual'); assert.equal(new Headers(init.headers).get('authorization'), `Bearer ${TOKEN}`);
-    assert.equal(new Headers(init.headers).get('CF-Access-Client-Secret'), 'fixture-access-secret');
+    assert.equal(new Headers(init.headers).get('CF-Access-Client-Secret'), 'test-only-secret');
     return new Response(null, { status: 302, headers: { location: 'https://other.example/' } });
   } });
   assert.equal(calls, 1); assert.equal(redirect.status, 503);
@@ -206,7 +206,7 @@ test('backend bounds replies, refuses redirect credential forwarding and propaga
 });
 
 test('backend rejects Unicode-escaped bearer and gateway secret echoes in decoded status and query metadata', async () => {
-  const accessSecret = 'fixture-access-secret';
+  const accessSecret = 'test-only-secret';
   const env = { WHOISLEUTH_DOMAIN_FEED_ENABLED: '1', WHOISLEUTH_DOMAIN_FEED_URL: 'https://feed-service.example', WHOISLEUTH_DOMAIN_FEED_TOKEN: TOKEN,
     WHOISLEUTH_DOMAIN_FEED_ACCESS_CLIENT_ID: 'fixture-access-id', WHOISLEUTH_DOMAIN_FEED_ACCESS_CLIENT_SECRET: accessSecret };
   for (const secret of [TOKEN, accessSecret]) for (const kind of ['status', 'query'] as const) {

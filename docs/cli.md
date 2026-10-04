@@ -108,6 +108,12 @@ One strict domain, IP address or ASN can occupy command position as Lookup
 shorthand. URL-like or ambiguous input requires the explicit `lookup` command.
 Only `bulk` accepts multiple targets.
 
+For a downloaded plain-domain feed, use
+`whoisleuth domain-feed review nrd7 feed.txt --select term:example --json`.
+This is an offline literal match, not a feed download or target Lookup. The
+[candidate-review guide](brand-candidate-review.md#review-a-domain-feed) covers
+source attribution and the separate Watchlist handoff.
+
 `discover` accepts a brand label or registrable domain and supports multi-part
 public suffixes in `--tlds` (for example, `co.uk,com.au`). It preserves the full
 suffix and does not collect candidate evidence; use `discover-scan` only after

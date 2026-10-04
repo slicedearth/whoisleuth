@@ -1,6 +1,6 @@
 # Optional domain feed service
 
-The application works without this service. Manual offline feed review stays available; neither opening the application nor building the website downloads a feed. Hosted feed search is disconnected by default. The standalone service below is runnable preparation for a separately approved host, not an activated deployment.
+The application works without this service. Manual offline feed review stays available; neither opening the application nor building the website downloads a feed. Hosted feed search is disconnected by default. The standalone service maintains an operator-selected cache independently of website builds.
 
 ## Prepare the service
 
@@ -11,7 +11,7 @@ Generate a random bearer token locally, for example with `node -e 'console.log(r
 Create an ignored, mode-0600 environment file outside the public checkout with these service settings, replacing the placeholders:
 
 ```dotenv
-WHOISLEUTH_DOMAIN_FEED_SERVICE_TOKEN=REPLACE_WITH_RANDOM_BASE64URL_TOKEN
+WHOISLEUTH_DOMAIN_FEED_SERVICE_TOKEN=replace-me
 WHOISLEUTH_DOMAIN_FEED_CACHE_DIRECTORY=/srv/domain-feed-cache
 WHOISLEUTH_DOMAIN_FEED_SERVICE_PORT=8787
 WHOISLEUTH_DOMAIN_FEED_SERVICE_FEEDS=tif-mini,nrd7
@@ -25,18 +25,18 @@ Start the service explicitly:
 node --env-file=/etc/domain-feed-service.env tools/domain-feed-service.mts --serve
 ```
 
-This command starts the selected feeds' first refresh and then refreshes them sequentially every six hours. It listens only on `127.0.0.1`, with no public refresh endpoint. Each cache directory has one exclusive service lock; a second process fails closed. Configure a process supervisor separately after choosing and approving the host. A crash can leave the lock or provisional files behind: confirm the previous process is stopped before manually removing its lock or provisional files. Do not automate removal of another process's files.
+This command starts the selected feeds' first refresh and then refreshes them sequentially every six hours. It listens only on `127.0.0.1`, with no public refresh endpoint. Each cache directory has one exclusive service lock; a second process fails closed. Use the host's process supervisor to manage restarts. A crash can leave the lock or provisional files behind: confirm the previous process is stopped before manually removing its lock or provisional files. Do not automate removal of another process's files.
 
 For a remote host, place an independently configured HTTPS reverse proxy in front of the loopback listener. The proxy must replace the upstream Host with the exact loopback host and port, must not forward browser Origin or cookies, and must preserve the backend's bearer authentication. Requests with a different Host, a cross-site Origin, duplicate authentication headers or a missing/invalid token are rejected. Limit access to the application's backend; do not expose the loopback listener publicly. TLS, proxy and firewall activation remain deployment decisions and are not performed by the setup command.
 
-## Connect the application's backend later
+## Connect the application's backend
 
-Only after the service is reachable and approved, configure the application's server-side environment:
+Once the service is reachable, configure the application's server-side environment with the same bearer token as the service:
 
 ```dotenv
 WHOISLEUTH_DOMAIN_FEED_ENABLED=1
 WHOISLEUTH_DOMAIN_FEED_URL=https://feed-service.example
-WHOISLEUTH_DOMAIN_FEED_TOKEN=REPLACE_WITH_THE_SAME_RANDOM_TOKEN
+WHOISLEUTH_DOMAIN_FEED_TOKEN=replace-me
 ```
 
 The service URL must be a fixed root origin with no credentials, query or fragment. Remote connections require HTTPS on its default port and use the existing public-address validation and pinned connection. A same-host deployment may instead use `http://127.0.0.1:8787`; this narrow numeric-loopback transport does not alter the shared public-fetch protections. Redirects are never followed with credentials.
@@ -61,7 +61,7 @@ Operational errors are fixed, bounded descriptions, not upstream bodies or excep
 
 ## Roll back or remove
 
-Unset `WHOISLEUTH_DOMAIN_FEED_ENABLED` first and restart/redeploy the application's backend through its normal approved workflow. Manual offline review remains available. Stop the service with SIGINT or SIGTERM and confirm its process has ended before removing cache files, credentials or proxy configuration. Normal shutdown joins outstanding workers and removes its lock/provisional output; it deliberately retains last-good databases. Remove those databases only when retention is no longer needed. Do not change network permissions, publish a new service, rotate production credentials or modify the website's production environment as part of a local verification run.
+Unset `WHOISLEUTH_DOMAIN_FEED_ENABLED` first and restart/redeploy the application's backend. Manual offline review remains available. Stop the service with SIGINT or SIGTERM and confirm its process has ended before removing cache files, credentials or proxy configuration. Normal shutdown joins outstanding workers and removes its lock/provisional output; it deliberately retains last-good databases. Remove those databases only when retention is no longer needed.
 
 ## Local verification
 

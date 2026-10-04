@@ -42,7 +42,7 @@ test('local worker streams a supplied blob without network and retains only boun
 test('worker admission rejects oversized files before streaming and unsupported operations', async () => {
   class OversizedBlob extends Blob {
     get size() { return DOMAIN_FEED_LIMITS.bytes + 1; }
-    stream(): ReadableStream<Uint8Array> { throw new Error('must not stream'); }
+    stream(): ReturnType<Blob['stream']> { throw new Error('must not stream'); }
   }
   const oversized = await runDomainFeedWorkerOperation({ ...request, file: new OversizedBlob() });
   assert.equal(oversized.kind, 'error');

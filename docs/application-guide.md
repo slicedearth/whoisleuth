@@ -398,6 +398,11 @@ Overview contains the allowlist and review summary; Assets lists the profile's
 domain relationships; Tools opens domain, mail, certificate and account-control
 reviews. The Brand profiles disclosure switches the explicitly active profile.
 
+**Review domain feed candidates** matches a local plain-domain file against
+selected terms or exact hostnames. Choose which results to retain before
+preparing a Watchlist handoff. The [candidate-review guide](brand-candidate-review.md)
+covers manual import, source coverage and the separately configured feed cache.
+
 Allowlist, expected-setting, portable-setting and account-control drafts are
 preserved when switching views or tools. Selecting or saving another
 profile, or leaving Brands, clears the previous profile's tool drafts. A failed

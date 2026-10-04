@@ -3971,6 +3971,96 @@ export const PUBLIC_CLI_GRAMMAR = {
     "help"
   ]
 },
+"domain-feed": {
+  "parserKey": "domain-feed",
+  "bootstrapProfile": "allowed",
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[107], SHARED_OPTIONS[7], SHARED_OPTIONS[8], SHARED_OPTIONS[9]],
+  "positionals": [
+    {
+      "name": "operation",
+      "valueKind": "enum",
+      "minimum": 1,
+      "maximum": 1,
+      "values": [
+        "review",
+        "watch-input"
+      ],
+      "inputSource": "argv",
+      "requiredWhenOptions": []
+    },
+    {
+      "name": "feed",
+      "valueKind": "enum",
+      "minimum": 1,
+      "maximum": 1,
+      "values": [
+        "tif-full",
+        "tif-medium",
+        "tif-mini",
+        "nrd7",
+        "nrd14-8",
+        "nrd21-15",
+        "nrd28-22",
+        "nrd35-29",
+        "entropy7",
+        "entropy14",
+        "entropy30"
+      ],
+      "inputSource": "argv",
+      "requiredWhenOptions": []
+    },
+    {
+      "name": "source",
+      "valueKind": "file",
+      "minimum": 1,
+      "maximum": 1,
+      "values": [],
+      "inputSource": "argv",
+      "requiredWhenOptions": []
+    },
+    {
+      "name": "context",
+      "valueKind": "file",
+      "minimum": 0,
+      "maximum": 1,
+      "values": [],
+      "inputSource": "argv",
+      "requiredWhenOptions": []
+    }
+  ],
+  "constraints": [
+    {
+      "kind": "requires_all",
+      "option": "--force",
+      "requiredOptions": [
+        "--output"
+      ]
+    },
+    {
+      "kind": "mutually_exclusive",
+      "options": [
+        "--quiet",
+        "--output"
+      ]
+    },
+    {
+      "kind": "excludes_all",
+      "option": "--quiet",
+      "excludedOptions": [
+        "--json"
+      ]
+    },
+    {
+      "kind": "required",
+      "options": [
+        "--select"
+      ]
+    }
+  ],
+  "metaActions": [
+    "help"
+  ]
+},
 "workflow-run": {
   "parserKey": "workflow-run",
   "bootstrapProfile": "allowed",

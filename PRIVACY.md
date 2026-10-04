@@ -108,6 +108,13 @@ These sensitive fields are included in deliberate Brand, Watchlist and workspace
 exports. Hosted monitoring requests omit candidate/context metadata and local
 password-form attribution. Restoring a hosted list preserves local contexts.
 
+Domain-feed file import processes a selected plain-domain file locally, without
+uploading it or querying its domains. Only deliberately retained candidates,
+match reasons, source labels and file digests enter the existing Brand or
+Watchlist records. File publication time and local import time do not establish
+when an individual domain was registered or observed. The original file, its
+filename and its path are not retained by this import.
+
 Lesson-based template revisions retain authored guidance, applicability, reason,
 source-template identity and content hashes of the source template and selected
 lesson. They do not copy the Case identity or note text automatically. These
@@ -400,6 +407,18 @@ explicitly selected. Depending on that selection, the canonical registrable
 domain can be sent to the configured search-only URLscan, URLhaus or ThreatFox
 adapter. These integrations do not submit a URL, sample, scan or report. A
 provider miss, failure or quota response is not evidence of safety.
+
+Optional domain-feed search is disabled until an operator configures the
+separate feed service. An explicit search sends only selected feed identifiers,
+exact hostnames and literal search terms through the authenticated application
+backend to that service. It does not send the Brand Profile, Case, browser
+workspace or session cookie to the service. Connection credentials remain
+server-side. The service retains public feed snapshots and metadata, not search
+queries; its hosting or tunnel operator may apply separate request logging.
+Feed refreshes contact only the selected catalogue sources, without sharing
+analyst search terms. Disabling the connection does not delete its cache;
+deletion is a separate operator action. Feed membership and a missing match
+are not verdicts about a domain.
 
 The checked-in SSLBL certificate projection is local and digest-checked. Lookup
 does not send its target or certificate to SSLBL. Opening a separately labelled
