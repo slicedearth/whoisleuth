@@ -185,8 +185,14 @@ test('domain-history scopes survive report download, print, retention and relate
   expect(exported.observations.find((row: { label: string }) => row.label === 'Retained certificate · Certificate publication').hostname).toBe('certificate.example.test');
   await report.getByRole('button', { name: 'Print review', exact: true }).click();
   const print = page.getByRole('dialog', { name: 'Domain history and retired dependencies', exact: true });
-  await expect(print.locator('li').filter({ has: print.getByRole('heading', { name: 'registration · Registrar · changed', exact: true }) })).toContainText('Target: example.test');
-  await expect(print.locator('li').filter({ has: print.getByRole('heading', { name: 'web · Page title · changed', exact: true }) })).toContainText('Target: login.example.test');
+  for (const [heading, hostname] of [
+    ['registration · Registrar · changed', 'example.test'],
+    ['web · Page title · changed', 'login.example.test'],
+    ['Retained certificate · Certificate publication · partial', 'certificate.example.test'],
+  ] as const) {
+    const observation = print.getByRole('listitem').filter({ has: page.getByRole('heading', { name: heading, exact: true }) });
+    await expect(observation).toContainText(`Target: ${hostname}`);
+  }
   await print.getByRole('button', { name: 'Close print preview', exact: true }).click();
   await report.getByRole('button', { name: 'Save review in Case', exact: true }).click(); await expect(report.getByRole('status')).toContainText('Review saved');
   expect((await retainedJson(page)).map(value => JSON.parse(value))).toContainEqual(exported);
