@@ -19,6 +19,7 @@ import { BROWSER_LOCAL_COLLECTION_MANIFEST } from '../packages/contracts/browser
 const NOW = new Date('2026-07-22T00:00:00.000Z');
 const DECLARED_BROWSER_STORE_BYTES = BROWSER_LOCAL_COLLECTIONS
   .reduce((total, definition) => total + definition.maximumBytes, 0);
+const DISPLAYED_BROWSER_STORE_MIB = Math.round(100 * DECLARED_BROWSER_STORE_BYTES / (1024 * 1024)) / 100;
 
 function capture() {
   let value = '';
@@ -46,11 +47,11 @@ describe('local data platform evaluation', () => {
     assert.equal(report.mode, 'offline_contract_evaluation');
     assert.equal(report.current.storeCount, BROWSER_LOCAL_COLLECTIONS.length);
     assert.equal(report.current.declaredMaximumBytes, DECLARED_BROWSER_STORE_BYTES);
-    assert.equal(report.current.declaredMaximumMiB, DECLARED_BROWSER_STORE_BYTES / 1024 / 1024);
+    assert.equal(report.current.declaredMaximumMiB, DISPLAYED_BROWSER_STORE_MIB);
     assert.equal(report.current.localStorageReferenceBytes, LOCAL_STORAGE_REFERENCE_BYTES);
     const excess = Math.max(0, DECLARED_BROWSER_STORE_BYTES - LOCAL_STORAGE_REFERENCE_BYTES);
     assert.equal(report.current.exceedsReferenceByBytes, excess);
-    assert.equal(report.current.exceedsReferenceByMiB, excess / 1024 / 1024);
+    assert.equal(report.current.exceedsReferenceByMiB, Math.round(100 * excess / (1024 * 1024)) / 100);
   });
 
   test('keeps the evaluation offline and does not inspect or change browser data', () => {
@@ -123,7 +124,7 @@ describe('local data platform evaluation', () => {
   test('formats a concise maintainer decision and rejects unsupported arguments', async () => {
     const report = buildLocalDataPlatformEvaluation({ now: () => NOW });
     const output = formatLocalDataPlatformEvaluation(report);
-    assert.ok(output.includes(`${DECLARED_BROWSER_STORE_BYTES / 1024 / 1024} MiB across ${BROWSER_LOCAL_COLLECTIONS.length} stores`));
+    assert.ok(output.includes(`${DISPLAYED_BROWSER_STORE_MIB} MiB across ${BROWSER_LOCAL_COLLECTIONS.length} stores`));
     assert.match(output, /native_indexeddb \(no production dependency\)/);
     assert.match(output, /Encrypted named workspaces are available/);
 
