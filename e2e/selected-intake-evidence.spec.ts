@@ -39,14 +39,14 @@ test('selected plaintext phones and supplied destination pairs retain only appli
   await selected.getByLabel('Select phone candidate 2', { exact: true }).uncheck();
   await expect(intake.getByRole('button', { name: 'Download review', exact: true })).toBeDisabled();
   await selected.getByLabel('Phone source label', { exact: true }).fill('Selected support snippet');
-  await selected.getByLabel('Phone text basis', { exact: true }).selectOption('manual_transcription');
-  await selected.getByLabel('Declared phone role', { exact: true }).selectOption('advertised_support_contact');
+  await selected.getByRole('combobox', { name: 'Phone text basis', exact: true }).selectOption('manual_transcription');
+  await selected.getByRole('combobox', { name: 'Declared phone role', exact: true }).selectOption('advertised_support_contact');
   await selected.getByLabel('Include a manually supplied destination pair', { exact: true }).check();
   await selected.getByLabel('Displayed or claimed destination', { exact: true }).fill('store.example.test');
   await selected.getByLabel('Displayed evidence source label', { exact: true }).fill('Supplied advert');
   await selected.getByLabel('Separately supplied destination', { exact: true }).fill('https://store.example.test.attacker.invalid/private-path?key=PRIVATE-URL');
   await selected.getByLabel('Destination evidence source label', { exact: true }).fill('Supplied redirect record');
-  await selected.getByLabel('Destination evidence role', { exact: true }).selectOption('supplied_redirect');
+  await selected.getByRole('combobox', { name: 'Destination evidence role', exact: true }).selectOption('supplied_redirect');
   await selected.getByRole('button', { name: 'Apply selected contact and destination evidence', exact: true }).click();
   await expect(selected.getByRole('heading', { name: 'Applied selected evidence', exact: true })).toBeFocused();
   await expect(selected.getByRole('region', { name: 'Applied selected evidence', exact: true })).toContainText('different host');

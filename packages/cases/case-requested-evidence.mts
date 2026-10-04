@@ -76,7 +76,7 @@ export function assertEvidenceRequestEvent(request: CaseEvidenceRequest | undefi
 export function submittedPacketReceipts(action: Pick<CaseActionRecord, 'history'>) {
   return action.history.flatMap(event => {
     const match = /^response-packet-sha256:([a-f0-9]{64})$/u.exec(event.reference ?? '');
-    return event.applied && event.previousState === 'authorised' && event.nextState === 'submitted'
+    return event.applied && ['authorised', 'submitted'].includes(event.previousState ?? '') && event.nextState === 'submitted'
       && event.sourceClass === 'analyst' && match
       ? [{ eventId: event.id, digestSha256: match[1]!, occurredAt: event.occurredAt }] : [];
   });

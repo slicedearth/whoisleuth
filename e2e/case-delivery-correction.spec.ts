@@ -22,7 +22,7 @@ test('exact delivery correction preserves originals through cancel, failed save,
   await region.locator('summary').first().click();
   await expect(region).toContainText('1 digest-only delivery record lacks an exact packet receipt');
   const form = region.getByRole('form', { name: 'Linked correction preparation', exact: true });
-  const deliverySelect = form.getByLabel('Original delivery', { exact: true });
+  const deliverySelect = form.getByRole('combobox', { name: 'Original delivery', exact: true });
   await expect(deliverySelect.locator('option')).toHaveCount(3);
   await expect(deliverySelect).toHaveValue('');
   await deliverySelect.selectOption(`${s.originalId}|${first.event.id}`);
