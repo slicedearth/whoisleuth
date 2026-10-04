@@ -365,9 +365,19 @@ Bulk can retain compact sessions, named review views and per-domain review
 state. Checkpoints and saved sessions contain targets and must be handled as
 investigation data. Resume requires the exact original input and mode, and a
 partial later observation does not erase an earlier usable component.
+Saving retained results uses their admitted targets and collection mode, even
+when the queue has already been edited for the next run. A loaded partial
+session keeps its full original membership during a selected-subset refresh.
 
 Selected rows can continue to Cases, exports or response preparation. Selection
 does not submit a target to a provider or apply a control.
+
+**Save selected** previews a scoped Monitor merge, preserving unrelated current
+members without presenting them as rechecked. **Save to Monitor** previews full
+snapshot replacement, including exactly which current members are retained,
+added or removed. Confirm the reviewed change explicitly; a destination changed
+in another tab requires a fresh review. Removed current members are not included
+in future rescans, and retained bounded change events are not full snapshots.
 
 Selected CSV exports include a review manifest containing the exact selection,
 filters, source states and separate batch, row and source observation times.
@@ -933,6 +943,10 @@ performs enforcement or acquisition.
 Offline Risk calibration uses deliberately reviewed local data. Its summary
 contains aggregate model performance only and does not train or change
 the running model. See the [CLI risk-calibrate command](https://www.whoisleuth.com/cli#command-risk-calibrate).
+The Case export review and download share one immutable snapshot, including
+separate Case IDs for distinct incidents on the same domain. Later Case edits
+are not substituted into an already reviewed download; reopen the review to
+include them.
 Choose review labels from independent evidence before inspecting the score.
 Include authorised lookalikes, ordinary domains, confirmed incidents and cases
 where collection is incomplete—not only examples that agree with the model.

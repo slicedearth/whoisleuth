@@ -1,4 +1,5 @@
 import type { ScanMode, ScanResult } from '../analysis/bulk-result-model.ts';
+import type { WatchlistUpdatePreview } from '../analysis/watchlist-store.ts';
 
 export type BulkMonitorScope = 'all' | 'selected' | 'row';
 export type BulkMonitorRequest = Readonly<{
@@ -9,18 +10,28 @@ export type BulkMonitorRequest = Readonly<{
   scope: BulkMonitorScope;
 }>;
 type MonitorStorage = Readonly<{
-  saveSnapshot: typeof import('../watchlists.ts')['saveWatchlist'];
+  previewSnapshot: typeof import('../watchlists.ts')['previewWatchlistUpdate'];
+  saveSnapshot: typeof import('../watchlists.ts')['saveReviewedWatchlistUpdate'];
   saveSingle: typeof import('../watchlists.ts')['saveSingleDomainWatchlist'];
 }>;
 
-/** All three entry points share one atomic eligibility check and one write. */
+/** Shared admission; aggregate updates require an exact reviewed transaction. */
 export class BulkMonitorActions {
   #busy = false;
+  #generation = 0;
+  #disposed = false;
+  #review: WatchlistUpdatePreview | null = null;
+  #pending: Readonly<{ excluded: number; scope: BulkMonitorScope }> | null = null;
   private readonly storage: MonitorStorage;
-  constructor(storage: MonitorStorage) { this.storage = storage; }
+  readonly #publish: (state: Readonly<{ busy: boolean; review: WatchlistUpdatePreview | null }>) => void;
+  constructor(storage: MonitorStorage, publish: (state: Readonly<{ busy: boolean; review: WatchlistUpdatePreview | null }>) => void = () => {}) { this.storage = storage; this.#publish = publish; }
+  get state() { return { busy: this.#busy, review: this.#review }; }
+  #update(): void { if (!this.#disposed) this.#publish(this.state); }
+  cancel(): void { this.#generation++; this.#review = null; this.#pending = null; this.#update(); }
+  dispose(): void { this.#disposed = true; this.cancel(); }
 
   async submit(request: BulkMonitorRequest): Promise<Readonly<{ status: string; clearName: boolean }> | null> {
-    if (this.#busy) return null;
+    if (this.#busy || this.#disposed) return null;
     const { scope, mode, profileReady } = request;
     const rows = [...request.rows];
     const name = request.name.trim();
@@ -36,23 +47,49 @@ export class BulkMonitorActions {
       : scope === 'row' ? 'Domains trusted by the active Brand Profile are excluded from watchlists.'
       : 'Select at least one non-trusted result before saving to Monitor.');
     this.#busy = true;
+    const generation = ++this.#generation;
+    this.#review = null;
+    this.#pending = null;
+    this.#update();
     try {
-      const changes = scope === 'row'
-        ? (await this.storage.saveSingle(name, findings[0]!.saved, mode)).changes
-        : await this.storage.saveSnapshot(name, findings.map(row => row.saved), mode);
       const excluded = rows.length - findings.length;
-      const suffix = excluded ? `; excluded ${excluded} trusted domain${excluded === 1 ? '' : 's'}` : '';
-      let status: string;
-      if (scope === 'row') status = changes.length
+      if (scope !== 'row') {
+        const reviewed = await this.storage.previewSnapshot(name, findings.map(row => row.saved), mode, scope === 'selected' ? 'merge' : 'replace');
+        if (this.#disposed || generation !== this.#generation) return null;
+        this.#review = reviewed;
+        this.#pending = { excluded, scope };
+        this.#update();
+        return { status: 'Review retained, added and removed Monitor members before confirming. Nothing has been saved yet.', clearName: false };
+      }
+      const changes = (await this.storage.saveSingle(name, findings[0]!.saved, mode)).changes;
+      if (this.#disposed || generation !== this.#generation) return null;
+      const status = changes.length
         ? `Updated ${name} with ${findings[0]!.domain} and recorded ${changes.length} material change${changes.length === 1 ? '' : 's'}.`
         : `Saved ${findings[0]!.domain} to ${name}.`;
-      else if (scope === 'selected') status = `Saved ${findings.length} explicitly selected result${findings.length === 1 ? '' : 's'} to ${name}.`;
-      else status = changes.length
-        ? `Updated ${name} and recorded ${changes.length} material change${changes.length === 1 ? '' : 's'}${suffix}.`
-        : `Saved ${findings.length} result${findings.length === 1 ? '' : 's'} to ${name}${suffix}.`;
-      return { status, clearName: scope !== 'row' };
+      return { status, clearName: false };
     } catch (cause) {
+      if (this.#disposed || generation !== this.#generation) return null;
       return rejected(cause instanceof Error ? cause.message : 'Could not save the selected results.');
-    } finally { this.#busy = false; }
+    } finally { this.#busy = false; this.#update(); }
+  }
+
+  async confirm(): Promise<Readonly<{ status: string; clearName: boolean }> | null> {
+    const reviewed = this.#review, pending = this.#pending;
+    if (this.#busy || this.#disposed || !reviewed || !pending) return null;
+    const generation = this.#generation;
+    this.#busy = true;
+    this.#update();
+    try {
+      const changes = await this.storage.saveSnapshot(reviewed);
+      if (this.#disposed || generation !== this.#generation) return null;
+      this.#review = null;
+      this.#pending = null;
+      return { status: `${reviewed.operation === 'merge' ? 'Merged' : 'Saved'} ${reviewed.input.length} explicitly reviewed result${reviewed.input.length === 1 ? '' : 's'} to ${reviewed.name}${changes.length ? `; recorded ${changes.length} material change${changes.length === 1 ? '' : 's'}` : ''}${pending.excluded ? `; excluded ${pending.excluded} trusted domain${pending.excluded === 1 ? '' : 's'}` : ''}.`, clearName: true };
+    } catch (cause) {
+      if (this.#disposed || generation !== this.#generation) return null;
+      this.#review = null;
+      this.#pending = null;
+      return { status: cause instanceof Error ? cause.message : 'Could not save the reviewed Monitor update.', clearName: false };
+    } finally { this.#busy = false; this.#update(); }
   }
 }

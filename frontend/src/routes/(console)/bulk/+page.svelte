@@ -23,7 +23,9 @@
   } from '$lib/candidate-handoff';
   import { BulkShortlistWorkspace, type BulkShortlistState } from '$lib/controllers/bulk-shortlist-workspace.ts';
   import type { CaseRecord } from '$lib/cases';
-  import { saveWatchlist, saveSingleDomainWatchlist } from '$lib/watchlists';
+  import { previewWatchlistUpdate, saveReviewedWatchlistUpdate, saveSingleDomainWatchlist } from '$lib/watchlists';
+  import type { WatchlistUpdatePreview } from '$lib/analysis/watchlist-store.ts';
+  import MonitorMembershipReview from '$lib/components/MonitorMembershipReview.svelte';
   import {
     failedLocalMutationOutcome,
     type LocalMutationOutcome,
@@ -177,7 +179,7 @@
   let analysisPreloadGeneration = 0;
   let analysisPreloadReady = $state(false);
 
-  const MAX_DOMAIN_IMPORT_BYTES = 2 * 1024 * 1024;
+  import { BulkDomainImport } from '$lib/controllers/bulk-domain-import.ts';
   const PAGE_SIZE = 100;
   type CasesApi = typeof import('$lib/cases');
   type MobileResultView = 'review' | 'list' | 'analysis';
@@ -196,6 +198,14 @@
   // Progress updates must not rerun result analysis between batched publications.
   const results = $derived(scan.results);
   let status = $state('');
+  const domainImport = new BulkDomainImport(value => {
+    if (value.input !== undefined) input = value.input;
+    status = value.status;
+  });
+  function setDomainInput(value: string) {
+    domainImport.changed();
+    input = value;
+  }
   let indicatorFormat = $state<'domains' | 'hosts' | 'dnsmasq' | 'rpz' | 'stix' | 'misp'>(
     'domains',
   );
@@ -203,6 +213,9 @@
   let indicatorStatus = $state('');
   let watchlistName = $state('');
   let saveStatus = $state('');
+  let monitorReview = $state.raw<WatchlistUpdatePreview | null>(null);
+  let monitorBusy = $state(false);
+  function setWatchlistName(value: string) { monitorActions.cancel(); watchlistName = value; }
   let profile = $state<BrandProfile | null>(null);
   let profileSourceState = $state<ActiveBrandProfileSourceState>('loading');
   const shortlistWorkspace = new BulkShortlistWorkspace({
@@ -228,8 +241,6 @@
       loadDeferredModule(() => import('$lib/bulk-sessions'), { signal: moduleController.signal }),
     scan: () => ({
       running: scan.running,
-      mode,
-      domains: parseDomains(),
       results,
       cancelled: scan.cancelled,
     }),
@@ -738,9 +749,9 @@
       handoffNavigation && handoffToken
         ? consumeCandidateHandoff(handoffToken, handoffSource)
         : null;
-    if (handoffNavigation && handoff) input = handoff.candidates.map((c) => c.domain).join('\n');
+    if (handoffNavigation && handoff) setDomainInput(handoff.candidates.map((c) => c.domain).join('\n'));
     else if (investigationTarget && !restored) {
-      input = investigationTarget;
+      setDomainInput(investigationTarget);
       scanController.restore([], 0);
       status =
         'Loaded the guided-investigation target. Add only relevant comparison domains before scanning.';
@@ -786,7 +797,8 @@
         ? candidateState
         : null;
     if (restored) {
-      input = restored.input;
+      setDomainInput(restored.input);
+      sessionWorkspace.restoreInput(restored.resultInput ?? null);
       mode = restored.mode;
       pacing = normalizeBulkPacing(restored.pacing);
       scanController.restore([], restored.total);
@@ -807,6 +819,8 @@
       },
     );
     return () => {
+      domainImport.dispose();
+      monitorActions.dispose();
       moduleController.abort();
       sessionWorkspace.dispose();
       shortlistWorkspace.dispose();
@@ -822,6 +836,7 @@
         guideContext,
         input,
         mode,
+        resultInput: sessionWorkspace.state.input,
         pacing,
         completed: scan.completed,
         total: scan.total,
@@ -856,7 +871,9 @@
     },
     confirm: (message) => confirm(message),
   });
-  const monitorActions = new BulkMonitorActions({ saveSnapshot: saveWatchlist, saveSingle: saveSingleDomainWatchlist });
+  const monitorActions = new BulkMonitorActions({ previewSnapshot: previewWatchlistUpdate, saveSnapshot: saveReviewedWatchlistUpdate, saveSingle: saveSingleDomainWatchlist }, state => {
+    monitorReview = state.review; monitorBusy = state.busy;
+  });
   const trackCase = (row: ScanResult) => caseActions.open(row);
   const setRowDisposition = (row: ScanResult, value: string) =>
     caseActions.setDisposition(row, value);
@@ -974,7 +991,7 @@
     view.page = 1;
   }
   function loadDomains(domains: string[]) {
-    input = domains.join('\n');
+    setDomainInput(domains.join('\n'));
     status = `Loaded ${domains.length} related domains into the scan queue.`;
     document
       .querySelector('.queue')
@@ -1068,20 +1085,10 @@
     const control = event.currentTarget as HTMLInputElement,
       file = control.files?.[0];
     if (!file) return;
-    try {
-      if (file.size > MAX_DOMAIN_IMPORT_BYTES)
-        throw new Error('Domain-list imports are limited to 2 MB.');
-      const parsed = parseDomainInput(await file.text());
-      if (parsed.tooLarge)
-        throw new Error('The domain-list file exceeds the bounded row or cell limit.');
-      if (!parsed.entries.length) throw new Error('No domain entries were found in that file.');
-      input = parsed.entries.join('\n');
-      status = `Loaded ${parsed.entries.length} unique entries from ${file.name}${parsed.usedHeader ? ' using its domain column' : ''}${parsed.duplicates ? `; removed ${parsed.duplicates} duplicate${parsed.duplicates === 1 ? '' : 's'}` : ''}.`;
-    } catch (cause) {
-      status = cause instanceof Error ? cause.message : 'Could not import the domain list.';
-    } finally {
-      control.value = '';
-    }
+    // Capture the selected file before clearing the native control; an older
+    // read must never clear a newer selection when its promise settles.
+    control.value = '';
+    await domainImport.import(file);
   }
   function exportCoverage() {
     if (!coverage) return;
@@ -1111,7 +1118,7 @@
     }
     if (!sessionWorkspace.select(session)) return;
     mode = session.mode;
-    input = session.domains.join('\n');
+    setDomainInput(session.domains.join('\n'));
     const current = currentProfileContext();
     let quarantined = 0;
     const restoredResults = session.results.map((row) => {
@@ -1205,7 +1212,7 @@
   const collection = new BulkCollectionWorkflow(scanController, sessionWorkspace, {
     context: () => ({ mode, pacing, profile, profileSourceState }),
     active: () => !moduleController.signal.aborted,
-    prepareView: () => { void ensurePrimaryResultContext(); view.page = 1; },
+    prepareView: () => { domainImport.changed(); monitorActions.cancel(); void ensurePrimaryResultContext(); view.page = 1; },
     status: message => { status = message; },
     provenance,
   });
@@ -1400,7 +1407,7 @@
       rows,
       scope,
       name: submittedName,
-      mode,
+      mode: sessionWorkspace.state.input?.mode ?? mode,
       profileReady: profileSourceState === 'ready',
     });
     if (!result) return;
@@ -1409,10 +1416,18 @@
   }
   const saveResults = () => saveToMonitor(results, 'all');
   const saveSelectedResults = () => saveToMonitor(selectedRows, 'selected');
+  async function confirmMonitorSave() {
+    const submittedName = watchlistName;
+    const result = await monitorActions.confirm();
+    if (!result || moduleController.signal.aborted) return;
+    saveStatus = result.status;
+    if (result.clearName && watchlistName === submittedName) watchlistName = '';
+  }
 </script>
 
 <svelte:head><title>Bulk · WHOISleuth</title></svelte:head>
 <PageHeading eyebrow="Investigate" title="Bulk" description="Compare multiple domains and retry inconclusive results." />
+{#if monitorReview}<MonitorMembershipReview preview={monitorReview} busy={monitorBusy} confirm={confirmMonitorSave} cancel={() => monitorActions.cancel()} />{/if}
 <BulkScanQueue
   lookupDisabledReason={lookupDisabled?(lookupDisabled.reason||'Lookup is disabled by deployment policy.'):''}
   scanLimitations={scanLimitations.map((item)=>item.id.replaceAll('_',' '))}
@@ -1422,9 +1437,9 @@
   handoffSource={handoff ? HANDOFF_SOURCE_LABELS[handoff.source] : ''}
   handoffContextTruncated={handoff?.generatedCandidatesTruncated===true}
   {input}
-  setInput={(value)=>input=value}
+  setInput={setDomainInput}
   {mode}
-  setMode={(value)=>mode=value}
+  setMode={(value)=>{ domainImport.changed(); mode=value; }}
   {pacing}
   setPacing={(value)=>pacing=value}
   pacingOptions={BULK_PACING_OPTIONS}
@@ -1520,7 +1535,7 @@
     <BulkMobileDisclosure title="Filters and result actions" description="Filter, sort, export, retain, or rescan the current result set." onpreload={()=>preloadModule(()=>import('$lib/components/BulkTriageControls.svelte'))}>
       <DeferredSurface
         load={()=>import('$lib/components/BulkTriageControls.svelte')}
-        props={{counts,filter: view.filter,setFilter,running: scan.running,retryErrors,exportCsv,indicatorFormat,setIndicatorFormat:(value:'domains'|'hosts'|'dnsmasq'|'rpz'|'stix'|'misp')=>indicatorFormat=value,exportIndicators:exportDefensiveIndicators,indicatorCount,indicatorEligibilityAvailable,indicatorProfileContextUnavailableCount,indicatorWildcards,setIndicatorWildcards:(value:boolean)=>indicatorWildcards=value,selectedIndicatorCount,mutationFilter: view.mutationFilter,setMutationFilter:(value:string)=>{view.mutationFilter=value;view.page=1;},mutationOptions:mutationOptions.map((value)=>({value,label:mutationLabels[value]||value.replaceAll('_',' ')})),signalFilters: view.signalFilters,toggleSignal,sourceFilter: view.sourceFilter,reviewFilter:view.reviewStateFilter,setSourceFilter:(value:BulkSourceFilter)=>{view.sourceFilter=value;view.page=1;},lifecycleFilter: view.lifecycleFilter,setLifecycleFilter:(value:BulkLifecycleFilter)=>{view.lifecycleFilter=value;view.page=1;},ageFilter: view.ageFilter,setAgeFilter:(value:BulkAgeFilter)=>{view.ageFilter=value;view.page=1;},mailFilter: view.mailFilter,setMailFilter:(value:BulkMailFilter)=>{view.mailFilter=value;view.page=1;},registrarFilter: view.registrarFilter,setRegistrarFilter:(value:string)=>{view.registrarFilter=value;view.page=1;},caseDispositionFilter: view.caseDispositionFilter,setCaseDispositionFilter:(value:string)=>{view.caseDispositionFilter=value;view.page=1;},groupBy: view.groupBy,setGroupBy:(value:BulkGroupBy)=>view.groupBy=value,advancedFilterOptions,clearFilters,sortKey: view.sortKey,sortDirection: view.sortDirection,setSortKey,setSortDirection,indicatorStatus,riskComparisonSummary:riskComparison.summary,matchedCount:filtered.length,resultCount:results.length,visibleCount:visibleResults.length,currentPage,pageCount,watchlistName,setWatchlistName:(value:string)=>watchlistName=value,saveResults,saveSelectedResults,saveStatus,selectedCount:selectedRows.length,monitorAllBlockedCount,monitorSelectedBlockedCount,selectFiltered,clearFilteredSelection,exportSelectedCsv,deepRescanSelected,createCasesSelected,setSelectedDisposition,caseMutationBusy,caseOptions,profileContextState:profileSourceState,shortlistAvailable:shortlistSourceState==='ready',caseAvailable:casesSourceState==='ready',reviewAvailable:bulkReviewSourceState==='ready'}}
+        props={{counts,filter: view.filter,setFilter,running: scan.running,retryErrors,exportCsv,indicatorFormat,setIndicatorFormat:(value:'domains'|'hosts'|'dnsmasq'|'rpz'|'stix'|'misp')=>indicatorFormat=value,exportIndicators:exportDefensiveIndicators,indicatorCount,indicatorEligibilityAvailable,indicatorProfileContextUnavailableCount,indicatorWildcards,setIndicatorWildcards:(value:boolean)=>indicatorWildcards=value,selectedIndicatorCount,mutationFilter: view.mutationFilter,setMutationFilter:(value:string)=>{view.mutationFilter=value;view.page=1;},mutationOptions:mutationOptions.map((value)=>({value,label:mutationLabels[value]||value.replaceAll('_',' ')})),signalFilters: view.signalFilters,toggleSignal,sourceFilter: view.sourceFilter,reviewFilter:view.reviewStateFilter,setSourceFilter:(value:BulkSourceFilter)=>{view.sourceFilter=value;view.page=1;},lifecycleFilter: view.lifecycleFilter,setLifecycleFilter:(value:BulkLifecycleFilter)=>{view.lifecycleFilter=value;view.page=1;},ageFilter: view.ageFilter,setAgeFilter:(value:BulkAgeFilter)=>{view.ageFilter=value;view.page=1;},mailFilter: view.mailFilter,setMailFilter:(value:BulkMailFilter)=>{view.mailFilter=value;view.page=1;},registrarFilter: view.registrarFilter,setRegistrarFilter:(value:string)=>{view.registrarFilter=value;view.page=1;},caseDispositionFilter: view.caseDispositionFilter,setCaseDispositionFilter:(value:string)=>{view.caseDispositionFilter=value;view.page=1;},groupBy: view.groupBy,setGroupBy:(value:BulkGroupBy)=>view.groupBy=value,advancedFilterOptions,clearFilters,sortKey: view.sortKey,sortDirection: view.sortDirection,setSortKey,setSortDirection,indicatorStatus,riskComparisonSummary:riskComparison.summary,matchedCount:filtered.length,resultCount:results.length,visibleCount:visibleResults.length,currentPage,pageCount,watchlistName,setWatchlistName,saveResults,saveSelectedResults,saveStatus,selectedCount:selectedRows.length,monitorAllBlockedCount,monitorSelectedBlockedCount,selectFiltered,clearFilteredSelection,exportSelectedCsv,deepRescanSelected,createCasesSelected,setSelectedDisposition,caseMutationBusy,caseOptions,profileContextState:profileSourceState,shortlistAvailable:shortlistSourceState==='ready',caseAvailable:casesSourceState==='ready',reviewAvailable:bulkReviewSourceState==='ready'}}
         loadingLabel="Loading filters and result actions."
         unavailableLabel="Filters and result actions could not be loaded. The primary result list remains available."
       />
@@ -1530,7 +1545,7 @@
       {#if mobileResultView==='review'}
         <DeferredSurface
           load={()=>import('$lib/components/BulkReviewCockpit.svelte')}
-          props={{rows:cockpitRows,caseRecords:cases,selectIncident:selectIncidentCase,retryPlan,retryStatus,setReviewState:setReviewStateAt,toggleSaved:toggleSavedAt,trackCase:trackCaseAt,caseOptions,setDisposition:setDispositionAt,watchlistName,setWatchlistName:(value:string)=>watchlistName=value,saveToWatchlist:saveCurrentResultAt,actionStatus:saveStatus||caseStatus,inspectDomain:inspectAt,executeRetry:executeReviewedRetry,profileContextLoading:profileSourceState==='loading',shortlistAvailable:shortlistSourceState==='ready',caseAvailable:casesSourceState==='ready',reviewAvailable:bulkReviewSourceState==='ready'}}
+          props={{rows:cockpitRows,caseRecords:cases,selectIncident:selectIncidentCase,retryPlan,retryStatus,setReviewState:setReviewStateAt,toggleSaved:toggleSavedAt,trackCase:trackCaseAt,caseOptions,setDisposition:setDispositionAt,watchlistName,setWatchlistName,saveToWatchlist:saveCurrentResultAt,actionStatus:saveStatus||caseStatus,inspectDomain:inspectAt,executeRetry:executeReviewedRetry,profileContextLoading:profileSourceState==='loading',shortlistAvailable:shortlistSourceState==='ready',caseAvailable:casesSourceState==='ready',reviewAvailable:bulkReviewSourceState==='ready'}}
           loadingLabel="Loading result review."
           unavailableLabel="Result review could not be loaded. The primary result list remains available."
         />

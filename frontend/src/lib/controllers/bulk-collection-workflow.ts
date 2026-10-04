@@ -81,7 +81,7 @@ export class BulkCollectionWorkflow {
       profile,
       provenance: bulkProfileContextProvenance(sourceState, profile),
     });
-    if (!this.workspace.beginScan(replace)) return null;
+    if (!this.workspace.beginScan(replace, { mode: snapshot.mode, domains })) return null;
     this.effects.prepareView();
     this.effects.status(
       `Scanning ${domains.length} domain${domains.length === 1 ? '' : 's'}…${sourceState === 'unavailable' ? ' Brand Profile-derived trust, allowlist, match, and contextual Risk evidence will remain inconclusive.' : ''}`,

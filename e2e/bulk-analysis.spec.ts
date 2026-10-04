@@ -964,8 +964,9 @@ test('a malformed successful response remains an explicit failure in exports and
 
   await page.getByLabel('Watchlist name').fill('Invalid response audit');
   await page.getByRole('button', { name: 'Save to Monitor' }).click();
+  await page.getByRole('region', { name: 'Review Monitor membership' }).getByRole('button', { name: 'Confirm snapshot replacement', exact: true }).click();
   await expect(page.locator('.save-watchlist').getByRole('status')).toHaveText(
-    'Saved 1 result to Invalid response audit.',
+    'Saved 1 explicitly reviewed result to Invalid response audit.',
     { timeout: 10_000 },
   );
   const retained = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });

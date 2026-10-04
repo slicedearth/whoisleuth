@@ -3,6 +3,7 @@ import type { ScanResult } from '../analysis/bulk-result-model.ts';
 import type { ShortlistRecord } from '../shortlist.ts';
 import type { BrowserLocalCollectionLoadState } from '../browser-local-data-service.ts';
 import type { registerAnalystUndo } from '../analyst-undo.ts';
+import { MAX_SHORTLIST_INPUTS } from '../analysis/shortlist-model.ts';
 
 type Storage = Pick<
   typeof import('../shortlist.ts'),
@@ -35,6 +36,8 @@ export class BulkShortlistWorkspace {
   #storage: Storage | null = null;
   #loading: Promise<void> | null = null;
   #disposed = false;
+  #tail: Promise<unknown> = Promise.resolve();
+  #pending = 0;
   #state: BulkShortlistState = { records: [], sourceState: 'idle', status: '' };
   constructor(options: Options) {
     this.#options = options;
@@ -80,28 +83,45 @@ export class BulkShortlistWorkspace {
     return null;
   }
   async toggle(row: ScanResult): Promise<void> {
-    await this.ensureLoaded();
-    const selected = !this.#state.records.some((record) => record.domain === row.domain);
-    if (await this.select([row], selected))
-      this.#update({
-        status: selected
-          ? `Added ${row.domain} to the shortlist.`
-          : `Removed ${row.domain} from the shortlist.`,
-      });
+    const captured = this.#capture([row]);
+    if (!captured) return;
+    await this.#enqueue(async () => {
+      await this.ensureLoaded();
+      const selected = !this.#state.records.some((record) => record.domain === row.domain);
+      if (await this.#select(captured, selected)) this.#update({ status: selected
+        ? `Added ${row.domain} to the shortlist.` : `Removed ${row.domain} from the shortlist.` });
+      return true;
+    });
   }
   async select(rows: readonly ScanResult[], selected = true): Promise<boolean> {
+    const captured = this.#capture(rows);
+    return captured ? this.#enqueue(() => this.#select(captured, selected)) : false;
+  }
+  #capture(rows: readonly ScanResult[]): unknown[] | null {
+    if (rows.length > MAX_SHORTLIST_INPUTS) {
+      this.#update({ status: 'The requested shortlist selection exceeds the bounded input limit.' });
+      return null;
+    }
+    return structuredClone(rows.map(row => ({ ...row.saved, riskScore: row.risk,
+      opportunityScore: row.opportunity, savedAt: this.#options.now?.() ?? new Date().toISOString() })));
+  }
+  #enqueue(operation: () => Promise<boolean>): Promise<boolean> {
+    if (this.#disposed) return Promise.resolve(false);
+    if (this.#pending >= 8) {
+      this.#update({ status: 'Wait for the queued shortlist changes to finish before submitting more.' });
+      return Promise.resolve(false);
+    }
+    this.#pending += 1;
+    const queued = this.#tail.then(() => this.#disposed ? false : operation());
+    this.#tail = queued.catch(() => false).finally(() => { this.#pending -= 1; });
+    return queued;
+  }
+  async #select(captured: unknown[], selected: boolean): Promise<boolean> {
     const storage = await this.#ready('changing the selection');
     if (!storage) return false;
-    const domains = new Set(this.#state.records.map((record) => record.domain));
-    const affected = selected ? rows : rows.filter((row) => domains.has(row.domain));
     try {
       const result = await storage.setShortlistSelection(
-        affected.map((row) => ({
-          ...row.saved,
-          riskScore: row.risk,
-          opportunityScore: row.opportunity,
-          savedAt: this.#options.now?.() ?? new Date().toISOString(),
-        })),
+        captured,
         selected,
       );
       this.#update({ records: result.records, status: selectionStatus(result, selected) });
@@ -126,6 +146,9 @@ export class BulkShortlistWorkspace {
     }
   }
   async clear(): Promise<void> {
+    await this.#enqueue(async () => { await this.#clear(); return true; });
+  }
+  async #clear(): Promise<void> {
     const storage = await this.#ready('changing it');
     if (
       !storage ||
@@ -154,6 +177,9 @@ export class BulkShortlistWorkspace {
     }
   }
   async import(file: Pick<File, 'size' | 'text'>): Promise<void> {
+    await this.#enqueue(async () => { await this.#import(file); return true; });
+  }
+  async #import(file: Pick<File, 'size' | 'text'>): Promise<void> {
     const storage = await this.#ready('importing');
     if (!storage) return;
     let committed = false;

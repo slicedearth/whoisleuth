@@ -15,10 +15,61 @@ import {
   WATCHLIST_SCHEMA,
   WATCHLIST_SCHEMA_VERSION,
   watchlistStoreVersion,
+  planWatchlistUpdate,
+  applyReviewedWatchlistUpdate,
 } from '../frontend/src/lib/analysis/watchlist-store.ts';
 import { mergeHostedWatchlist, resolveWatchlistMutationTarget } from '../frontend/src/lib/watchlists.ts';
 
 const NOW = '2026-07-14T08:00:00.000Z';
+
+test('Monitor membership review distinguishes scoped evidence from complete replacement', () => {
+  const a = { domain: 'first.example', availability: 'registered', scanDepth: 'fast' as const };
+  const b = { domain: 'second.example', availability: 'registered', scanDepth: 'fast' as const };
+  const c = { domain: 'third.example', availability: 'registered', scanDepth: 'fast' as const };
+  const original = normalizeWatchlistStore({ Review: entry({ results: [a, b] }) }).watchlists;
+  const merge = planWatchlistUpdate(original, ' review ', [c], 'fast', 'merge');
+  assert.equal(merge.name, 'Review');
+  assert.deepEqual(merge.retained, ['first.example', 'second.example']);
+  assert.deepEqual(merge.added, ['third.example']);
+  assert.deepEqual(merge.removed, []);
+  const applied = applyReviewedWatchlistUpdate(original, merge, '2026-07-15T08:00:00.000Z');
+  const stored = JSON.parse(serializeWatchlistStore(applied.watchlists)).watchlists.Review;
+  assert.deepEqual(stored.results.map((record: { domain: string }) => record.domain), ['first.example', 'second.example', 'third.example']);
+  assert.equal(stored.history.at(-1).resultCount, 1);
+  assert.equal(stored.history.length, original.Review!.history.length + 1);
+  assert.deepEqual(stored.baseline.map((record: { domain: string }) => record.domain), ['first.example', 'second.example', 'third.example']);
+  const replace = planWatchlistUpdate(original, 'Review', [c], 'fast', 'replace');
+  assert.deepEqual(replace.retained, []);
+  assert.deepEqual(replace.removed, ['first.example', 'second.example']);
+  const replaced = applyReviewedWatchlistUpdate(original, replace, '2026-07-15T08:00:00.000Z').watchlists.Review!;
+  assert.deepEqual(replaced.results.map(record => record.domain), ['third.example']);
+  assert.equal(replaced.history.length, original.Review!.history.length + 1);
+  const refresh = planWatchlistUpdate(original, 'Review', [{ ...a, availability: 'available' }], 'fast', 'merge');
+  const refreshed = applyReviewedWatchlistUpdate(original, refresh, '2026-07-15T08:00:00.000Z');
+  assert.equal(refreshed.watchlists.Review!.results[1]!.domain, 'second.example');
+  assert.equal(refreshed.watchlists.Review!.history.at(-1)!.resultCount, 1);
+  assert.ok(refreshed.changes.some(change => change.domain === 'first.example' && change.field === 'availability'));
+});
+
+test('Monitor consent rejects destination evidence or membership drift but preserves unrelated watchlists', () => {
+  const original = normalizeWatchlistStore({ Review: entry(), Unrelated: entry() }).watchlists;
+  const input = [{ domain: 'new.example', availability: 'registered', scanDepth: 'fast' as const }];
+  const reviewed = planWatchlistUpdate(original, 'Review', input, 'fast', 'replace');
+  input[0]!.domain = 'later.example';
+  assert.equal(reviewed.input[0]?.domain, 'new.example');
+  assert.equal(Object.isFrozen(reviewed.previous?.results[0]), true);
+  for (const drift of ['membership', 'evidence', 'deleted'] as const) {
+    const changed = structuredClone(original);
+    if (drift === 'membership') changed.Review!.results.push({ ...changed.Review!.results[0]!, domain: 'peer.example' });
+    if (drift === 'evidence') changed.Review!.results[0]!.registrarName = 'Later registrar';
+    if (drift === 'deleted') delete changed.Review;
+    assert.throws(() => applyReviewedWatchlistUpdate(changed, reviewed, NOW), /changed after review/u);
+  }
+  const unrelated = structuredClone(original);
+  unrelated.Unrelated!.results[0]!.registrarName = 'Unrelated change';
+  const result = applyReviewedWatchlistUpdate(unrelated, reviewed, NOW);
+  assert.deepEqual(result.watchlists.Unrelated, normalizeWatchlistStore(unrelated).watchlists.Unrelated);
+});
 
 function entry(overrides = {}) {
   return {

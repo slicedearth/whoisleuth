@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { BulkCaseActions, bulkCaseInput, type BulkCaseContext } from '../frontend/src/lib/controllers/bulk-case-actions.ts';
 import { BulkMonitorActions } from '../frontend/src/lib/controllers/bulk-monitor-actions.ts';
+import { planWatchlistUpdate } from '../packages/workspace/watchlist-store.mts';
 import { BrowserLocalDataError } from '../frontend/src/lib/browser-local-data-content.ts';
 import { createCase, type CaseRecord } from '../packages/cases/case-model.mts';
 import { relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
@@ -150,9 +151,10 @@ test('unavailable Case context and cancelled confirmation perform no mutation', 
 for (const scope of ['all', 'selected', 'row'] as const) test(`Monitor ${scope} saves apply the same admission and exclusion rules`, async () => {
   let writes = 0;
   const actions = new BulkMonitorActions({
-    saveSnapshot: async (_name, rows, mode) => {
+    previewSnapshot: async (name, rows, mode, operation) => planWatchlistUpdate({}, name, rows, mode, operation),
+    saveSnapshot: async reviewed => {
       assert.notEqual(scope, 'row');
-      writes++; assert.equal(rows.length, 1); assert.equal(mode, 'fast'); return [];
+      writes++; assert.equal(reviewed.input.length, 1); assert.equal(reviewed.mode, 'fast'); return [];
     },
     saveSingle: async (name, result, mode) => {
       assert.equal(scope, 'row');
@@ -170,7 +172,12 @@ for (const scope of ['all', 'selected', 'row'] as const) test(`Monitor ${scope} 
   assert.equal((await actions.submit(request))?.clearName, false);
   assert.equal(writes, 0);
   candidate.trusted = null;
-  const saved = await actions.submit(request);
+  let saved = await actions.submit(request);
+  if (scope !== 'row') {
+    assert.equal(writes, 0);
+    assert.equal(actions.state.review?.operation, scope === 'selected' ? 'merge' : 'replace');
+    saved = await actions.confirm();
+  }
   assert.equal(writes, 1);
   assert.match(saved!.status, /to Review/u);
   assert.equal(saved?.clearName, scope !== 'row');
@@ -179,17 +186,56 @@ for (const scope of ['all', 'selected', 'row'] as const) test(`Monitor ${scope} 
 test('Monitor writes reject overlap and retain the draft after a failed write', async () => {
   let finish!: () => void, writes = 0;
   const actions = new BulkMonitorActions({
+    previewSnapshot: async (name, rows, mode, operation) => planWatchlistUpdate({}, name, rows, mode, operation),
     saveSnapshot: async () => {
       writes++; await new Promise<void>(resolve => { finish = resolve; }); throw new Error('Storage unavailable');
     },
     saveSingle: async () => assert.fail('A selected snapshot must not use the single-domain operation'),
   });
   const request = { rows: [row()], name: 'Review', mode: 'fast' as const, profileReady: true, scope: 'selected' as const };
-  const first = actions.submit(request);
+  await actions.submit(request);
+  const first = actions.confirm();
   assert.equal(await actions.submit(request), null);
   finish();
   assert.deepEqual(await first, { status: 'Storage unavailable', clearName: false });
   assert.equal(writes, 1);
+});
+
+test('cancelled or disposed Monitor reviews cannot publish after a held read', async () => {
+  for (const outcome of ['cancel', 'dispose'] as const) {
+    let finish!: (value: ReturnType<typeof planWatchlistUpdate>) => void;
+    let publications = 0, writes = 0;
+    const actions = new BulkMonitorActions({
+      previewSnapshot: () => new Promise(resolve => { finish = resolve; }),
+      saveSnapshot: async () => { writes++; return []; },
+      saveSingle: async () => assert.fail('A review must not write'),
+    }, () => { publications++; });
+    const request = { rows: [row()], name: 'Review', mode: 'fast' as const, profileReady: true, scope: 'selected' as const };
+    const pending = actions.submit(request);
+    actions[outcome]();
+    const before = publications;
+    finish(planWatchlistUpdate({}, request.name, request.rows.map(item => item.saved), request.mode, 'merge'));
+    assert.equal(await pending, null);
+    assert.equal(actions.state.review, null);
+    assert.equal(await actions.confirm(), null);
+    assert.equal(writes, 0);
+    if (outcome === 'dispose') assert.equal(publications, before);
+  }
+});
+
+test('a committed Monitor write cannot clear a newer draft after cancellation', async () => {
+  let finish!: () => void;
+  const actions = new BulkMonitorActions({
+    previewSnapshot: async (name, rows, mode, operation) => planWatchlistUpdate({}, name, rows, mode, operation),
+    saveSnapshot: async () => { await new Promise<void>(resolve => { finish = resolve; }); return []; },
+    saveSingle: async () => assert.fail('Unexpected single-domain write'),
+  });
+  await actions.submit({ rows: [row()], name: 'Review', mode: 'fast', profileReady: true, scope: 'all' });
+  const pending = actions.confirm();
+  actions.cancel();
+  finish();
+  assert.equal(await pending, null);
+  assert.equal(actions.state.review, null);
 });
 
 test('complete Bulk CSV preserves the independent column contract, unknowns and formula safety', () => {

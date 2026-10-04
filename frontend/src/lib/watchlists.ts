@@ -12,6 +12,10 @@ import {
   mergeWatchlistStores,
   normalizeWatchlistName,
   serializeWatchlistStore,
+  resolveWatchlistMutationTarget,
+  planWatchlistUpdate,
+  applyReviewedWatchlistUpdate,
+  type WatchlistUpdatePreview,
 } from './analysis/watchlist-store.ts';
 import { normalizeDomain } from '../../../packages/evidence/domain-name.mts';
 import { applyCandidateWatchHandoff, planCandidateWatchHandoff, setWatchDomainContext, setWatchDomainContexts, type CandidateWatchInput, type CandidateWatchPlan, type WatchDomainContextEdit } from '../../../packages/workspace/candidate-watch-handoff.mts';
@@ -78,18 +82,18 @@ function boundedWatchlists(all: Watchlists): Watchlists {
   return JSON.parse(serializeWatchlistStore(all)).watchlists as Watchlists;
 }
 
-export function resolveWatchlistMutationTarget(
-  current: Watchlists,
-  requestedName: string,
-): { name: string; previous: WatchlistEntry | null } {
-  const existingName = Object.keys(current).find(
-    (candidate) => candidate.toLowerCase() === requestedName.toLowerCase(),
-  );
-  const previous = existingName ? current[existingName] ?? null : null;
-  if (!previous && Object.keys(current).length >= MAX_WATCHLISTS) {
-    throw new Error('Watchlist storage is full. Export and remove a watchlist before saving more.');
-  }
-  return { name: existingName || requestedName, previous };
+export { resolveWatchlistMutationTarget };
+
+export async function previewWatchlistUpdate(name: string, results: readonly WatchlistComparableRecord[], mode: 'fast' | 'deep', operation: 'merge' | 'replace') {
+  const captured = structuredClone(results);
+  return planWatchlistUpdate(await loadWatchlists(), name, captured, mode, operation);
+}
+
+export async function saveReviewedWatchlistUpdate(reviewed: WatchlistUpdatePreview) {
+  return updateBrowserLocalData('watchlists', current => {
+    const result = applyReviewedWatchlistUpdate(current, reviewed);
+    return { document: result.watchlists, result: result.changes };
+  });
 }
 
 export async function writeWatchlists(all: Watchlists): Promise<void> {
