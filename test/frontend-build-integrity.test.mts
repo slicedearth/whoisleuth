@@ -16,6 +16,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { describe, test } from 'node:test';
 
 import {
@@ -60,6 +61,9 @@ function fixtureRepository(context: { after(callback: () => void): void }): stri
     write(root, `${directory}/.fixture`, `${directory}\n`);
   }
   for (const relative of SOURCE_FILES) write(root, relative, `${relative}\n`);
+  write(root, 'package.json', JSON.stringify({ name: 'fixture-root', private: true, type: 'module', workspaces: ['frontend'] }));
+  write(root, 'frontend/package.json', JSON.stringify({ name: 'fixture-frontend', private: true, type: 'module' }));
+  write(root, 'package-lock.json', JSON.stringify({ lockfileVersion: 3, packages: { '': {}, frontend: {} } }));
   write(root, 'frontend/src/app.ts', 'export const app = true;\n');
 
   const script = 'console.log("fixture");\n';
@@ -97,7 +101,7 @@ function markerObject(root: string): Record<string, unknown> {
 
 function initialiseFixtureCheckout(root: string): void {
   write(root, '.gitignore', [
-    'node_modules/',
+    'node_modules',
     'frontend/build/',
     'frontend/build-identity.json',
     'frontend/.svelte-kit/',
@@ -133,6 +137,40 @@ function writeDiagnosticFixture(root: string, environment: NodeJS.ProcessEnv) {
 }
 
 describe('hosted browser workspace diagnostics', () => {
+  test('preserves hoisted and workspace-local dependencies without builder intermediates', (context) => {
+    const repository = fixtureRepository(context);
+    initialiseFixtureCheckout(repository);
+    const manifest = JSON.stringify({ name: '@fixture/plugin', type: 'module', exports: './index.js' });
+    for (const root of ['node_modules', 'frontend/node_modules']) {
+      write(repository, `${root}/@fixture/plugin/package.json`, manifest);
+      write(repository, `${root}/@fixture/plugin/index.js`, `export const location = ${JSON.stringify(root)};\n`);
+    }
+    write(repository, 'frontend/vite.config.ts', 'import { location } from "@fixture/plugin"; export default { location };\n');
+    const snapshot = recordFrontendBuildIntegrity(repository, ENVIRONMENT);
+    const workspace = createHostedBrowserWorkspace(repository, ENVIRONMENT);
+    context.after(workspace.dispose);
+    assert.deepEqual(assertFrontendBuildIntegrity(workspace.root, ENVIRONMENT), snapshot);
+    for (const root of ['', 'frontend']) {
+      const resolved = createRequire(path.join(workspace.root, root, 'package.json')).resolve('@fixture/plugin');
+      assert.equal(resolved, realpathSync(path.join(repository, root, 'node_modules/@fixture/plugin/index.js')));
+    }
+    assert.equal(existsSync(path.join(workspace.root, 'frontend/.svelte-kit')), false);
+    workspace.dispose();
+    assert.equal(existsSync(path.join(repository, 'frontend/node_modules/@fixture/plugin/index.js')), true);
+  });
+
+  test('rejects dependency directories reached through links or undeclared checkout owners', (context) => {
+    const repository = fixtureRepository(context);
+    initialiseFixtureCheckout(repository);
+    symlinkSync(path.join(repository, 'node_modules'), path.join(repository, 'frontend/node_modules'), 'dir');
+    recordFrontendBuildIntegrity(repository, ENVIRONMENT);
+    assert.throws(() => createHostedBrowserWorkspace(repository, ENVIRONMENT), /without linked traversal/u);
+    rmSync(path.join(repository, 'frontend/node_modules'));
+    write(repository, 'package-lock.json', JSON.stringify({ packages: { '': {}, missing: {} } }));
+    recordFrontendBuildIntegrity(repository, ENVIRONMENT);
+    assert.throws(() => createHostedBrowserWorkspace(repository, ENVIRONMENT), /checked-out package manifest/u);
+  });
+
   test('keeps focused failure and interruption diagnostics private without changing the contributor checkout', (context) => {
     for (const outcome of ['failed', 'interrupted'] as const) {
       const { repository, workspace } = diagnosticWorkspace(context);

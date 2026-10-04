@@ -24,6 +24,8 @@ import {
   boundedSafeRelativePath,
   compareCodeUnits,
   hasMaintainerUnsafeCharacters,
+  readBoundedStableRegularFileSync,
+  requireJsonRecord,
   sha256Bytes,
 } from './maintainer-tool-helpers.mts';
 import { playwrightRunArtifacts } from './playwright-run-artifacts.mts';
@@ -211,6 +213,37 @@ function copyRegularFile(source: string, destination: string, label: string, exp
   return copied.byteLength;
 }
 
+function linkInstalledDependencies(repositoryRoot: string, temporaryRoot: string, files: readonly string[]): void {
+  const lockfile = requireJsonRecord(JSON.parse(readBoundedStableRegularFileSync(
+    path.join(repositoryRoot, 'package-lock.json'), MAX_CHECKOUT_FILE_BYTES, 'Browser workspace lockfile',
+  ).toString('utf8')), 'Browser workspace lockfile');
+  const packages = requireJsonRecord(lockfile.packages, 'Browser workspace locked packages');
+  const entries = Object.keys(packages);
+  if (entries.length > MAX_CHECKOUT_FILES) throw new TypeError('Browser workspace locked packages exceed the inventory bound.');
+  // npm may hoist a dependency or install it beneath its workspace. Preserve
+  // both layouts from the lockfile instead of assuming everything is hoisted.
+  const roots = ['', ...entries.filter(entry => entry && !entry.split('/').includes('node_modules'))];
+  const canonicalRoot = realpathSync(repositoryRoot);
+  for (const root of roots) {
+    if (root) {
+      boundedSafeRelativePath(root, 'Browser dependency workspace', MAX_PATH_LENGTH);
+      if (!files.includes(`${root}/package.json`) || requireJsonRecord(packages[root], 'Locked workspace').link === true) {
+        throw new TypeError('Browser dependency workspace requires a checked-out package manifest.');
+      }
+    }
+    const relative = path.join(root, 'node_modules');
+    const source = path.join(canonicalRoot, relative);
+    const stat = lstatSync(source, { throwIfNoEntry: false });
+    if (!stat && root) continue; // A fully hoisted workspace has no local directory.
+    if (!stat?.isDirectory() || stat.isSymbolicLink() || realpathSync(source) !== source) {
+      throw new TypeError('Hosted browser workspace requires checked-out dependency directories without linked traversal.');
+    }
+    const destination = path.join(temporaryRoot, relative);
+    mkdirSync(path.dirname(destination), { recursive: true });
+    symlinkSync(source, destination, 'dir');
+  }
+}
+
 export function createHostedBrowserWorkspace(
   repositoryRoot: string,
   environment: NodeJS.ProcessEnv = process.env,
@@ -250,12 +283,7 @@ export function createHostedBrowserWorkspace(
     if (totalBytes > MAX_CHECKOUT_TOTAL_BYTES) {
       throw new TypeError('Hosted browser workspace exceeds its aggregate byte limit.');
     }
-    const dependencyRoot = path.join(repositoryRoot, 'node_modules');
-    const dependencyStat = lstatSync(dependencyRoot);
-    if (!dependencyStat.isDirectory() || dependencyStat.isSymbolicLink()) {
-      throw new TypeError('Hosted browser workspace requires the checked-out dependency directory.');
-    }
-    symlinkSync(dependencyRoot, path.join(temporaryRoot, 'node_modules'), 'dir');
+    linkInstalledDependencies(repositoryRoot, temporaryRoot, files);
     if (existsSync(path.join(temporaryRoot, 'frontend/.svelte-kit'))) {
       throw new TypeError('Hosted browser workspace contains undeclared SvelteKit builder output.');
     }
