@@ -402,6 +402,7 @@ export function buildRelationshipGraphDocument(
       ...(Array.isArray(graph.limitations) ? graph.limitations : []),
       'This export contains bounded, locally derived investigation pivots and does not establish ownership, coordination, intent, or maliciousness.',
       'Transient focus, pin, hide, comparison-group, selected-relationship, and private table-view state are excluded from interchange exports.',
+      'Relationship canonical and value fields are bounded display text. Use entityId for canonical identity where present; derived node IDs are not durable cross-export keys.',
     ], MAX_RELATIONSHIP_GRAPH_EXPORT_LIMITATIONS, 300),
   };
 }
@@ -435,7 +436,7 @@ function scalar(value: unknown): string {
 }
 
 const NODE_FIELDS: ReadonlyArray<readonly [string, string]> = [
-  ['kind', 'Kind'], ['canonical', 'Canonical value'], ['label', 'Label'],
+  ['kind', 'Kind'], ['canonical', 'Bounded display value'], ['label', 'Label'],
   ['relationshipType', 'Relationship type'], ['value', 'Relationship value'], ['description', 'Description'],
   ['entityId', 'Canonical entity identity'],
   ['method', 'Comparison method'], ['certaintyClasses', 'Certainty classes'],

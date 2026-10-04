@@ -31,6 +31,12 @@ record. Its observations, history and Brand contexts remain reviewable and
 exportable; no targets are activated or pruned. Other watchlists remain usable.
 Export the preserved records before creating a separate watchlist with at most
 2,000 selected members. Only an explicit deletion removes the recovery record.
+The ordinary collection budget remains 2 MiB. Reading and rewriting reserves
+exactly 39 extra bytes per paused record for its recovery marker, at most 100
+records; this allowance cannot hold additional observations or context. Portable
+exports also allow their timestamp envelope and use compact JSON when indentation
+would exceed the import bound. Plaintext and encrypted workspaces use the same
+decoded-data limits.
 
 Restoring hosted evidence previews the complete local/hosted membership union.
 It replaces the evidence snapshot and history while retaining local members

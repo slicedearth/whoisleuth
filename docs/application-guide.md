@@ -753,7 +753,11 @@ complete later evidence, a complete exact-object baseline and comparable
 conditions. Procedural disputes and warnings retain their source separately.
 Deliberate object closure leaves other objects and the Case status unchanged;
 whole-Case closure remains a separate analyst decision. No control submits a
-report or starts collection. Operations reports
+report or starts collection. An imported conflicting receipt does not erase an
+earlier authored closure. The Case view and Markdown report qualify that
+historical decision; JSON preserves its authored fields and source receipts.
+Malformed or dangling closure links are counted separately as unretained history.
+Operations reports
 offer a local contributor drill-down and a paged Case scope view, independent of
 the report's time window. Campaigns show the same view for Cases matching their
 domains; same-domain incidents remain separate. Provider outcomes remain separate

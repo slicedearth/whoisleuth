@@ -77,6 +77,13 @@ export const MAX_WATCHLIST_INPUTS = MAX_WATCHLISTS * 4;
 export const MAX_WATCHLIST_NAME_LENGTH = 100;
 export const MAX_WATCHLIST_STORE_BYTES = 2 * 1024 * 1024;
 export const MAX_WATCHLIST_IMPORT_BYTES = 2 * 1024 * 1024;
+// Recovery metadata is not new analyst data. Reserve only its exact JSON cost;
+// the store writer still enforces the ordinary budget after subtracting it.
+export const WATCHLIST_RECOVERY_METADATA = Object.freeze({ membershipRecovery: 'legacy_overflow' as const });
+export const WATCHLIST_RECOVERY_METADATA_BYTES = JSON.stringify(WATCHLIST_RECOVERY_METADATA).length - 1;
+export const MAX_WATCHLIST_READ_BYTES = MAX_WATCHLIST_STORE_BYTES + MAX_WATCHLISTS * WATCHLIST_RECOVERY_METADATA_BYTES;
+// Date.toISOString() produces at most 27 ASCII characters, including extended years.
+export const MAX_WATCHLIST_PORTABLE_BYTES = MAX_WATCHLIST_READ_BYTES + JSON.stringify({ exportedAt: '+999999-12-31T23:59:59.999Z' }).length - 1;
 export const MAX_WATCHLIST_HISTORY_EVENTS = 12;
 export const MAX_WATCHLIST_CHANGES_PER_EVENT = 500;
 export const MAX_WATCHLIST_DOMAINS = 2_000;
@@ -221,6 +228,7 @@ export const WORKSPACE_PORTABILITY_BOUND_CONSTANTS = Object.freeze([
   'MAX_CAMPAIGNS', 'MAX_CAMPAIGN_DOMAINS', 'MAX_CAMPAIGN_NAME_LENGTH', 'MAX_CAMPAIGN_DESCRIPTION_LENGTH',
   'MAX_CAMPAIGN_IMPORT_BYTES', 'MAX_CAMPAIGN_INPUT_RECORDS', 'MAX_CAMPAIGN_STORE_BYTES',
   'MAX_WATCHLISTS', 'MAX_WATCHLIST_INPUTS', 'MAX_WATCHLIST_NAME_LENGTH', 'MAX_WATCHLIST_STORE_BYTES', 'MAX_WATCHLIST_IMPORT_BYTES',
+  'MAX_WATCHLIST_READ_BYTES', 'MAX_WATCHLIST_PORTABLE_BYTES',
   'MAX_WATCHLIST_HISTORY_EVENTS', 'MAX_WATCHLIST_CHANGES_PER_EVENT', 'MAX_WATCHLIST_DOMAINS', 'MAX_WATCHLIST_INPUT_RECORDS',
   'MAX_WATCHLIST_NAMESERVERS', 'MAX_WATCHLIST_MUTATION_TYPES', 'MAX_WATCHLIST_HISTORY_DOMAIN_OPTIONS',
   'MAX_SHORTLIST_ENTRIES', 'MAX_SHORTLIST_INPUTS', 'MAX_SHORTLIST_STORE_BYTES', 'MAX_SHORTLIST_IMPORT_BYTES', 'MAX_SHORTLIST_FACTORS',
@@ -283,7 +291,7 @@ export const WATCHLIST_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.watchlists', kind: 'browser_store', schema: null, currentVersion: WATCHLIST_SCHEMA_VERSION,
   supportedVersions: WATCHLIST_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
-  byteBudget: MAX_WATCHLIST_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
+  byteBudget: MAX_WATCHLIST_READ_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
   note: 'Public version 2 remains readable without inferred collection outcomes. Version 3 retains explicit page and favicon collection quality; unversioned maps are outside the compatibility boundary.',
 });
 export const SHORTLIST_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
@@ -361,7 +369,7 @@ export const WATCHLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.watchlists', kind: 'export', schema: WATCHLIST_SCHEMA, currentVersion: WATCHLIST_SCHEMA_VERSION,
   supportedVersions: WATCHLIST_EXPORT_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
-  byteBudget: MAX_WATCHLIST_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
+  byteBudget: MAX_WATCHLIST_PORTABLE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
   note: 'Versions 2–5 remain readable. Version 6 preserves older membership overflow as paused, exportable records without activating or pruning domains. New active membership remains bounded. Brand contexts and incomplete-check baselines remain preserved.',
 });
 export const SHORTLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({

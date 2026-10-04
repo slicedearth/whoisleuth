@@ -9,7 +9,7 @@ import { caseRecheckComparisonBlockers, caseRecheckAnswerContext, assertCaseObje
 import { buildCaseReport } from '../packages/cases/case-report.mts';
 import { buildCaseResponseReviewInputs, validateCaseResponseReviewInputs } from '../packages/cases/case-response-packet.mts';
 import { normalizeSnapshot, compareCaseEvidence } from '../packages/cases/case-evidence-model.mts';
-import { caseClosureProviderBlocker, caseClosureActionBlocker } from '../packages/cases/case-response-outcomes.mts';
+import { caseClosureProviderBlocker, caseClosureActionBlocker, caseClosureHistoryQualification } from '../packages/cases/case-response-outcomes.mts';
 const NOW = '2026-09-01T10:00:00.000Z', AFTER = '2026-09-02T10:00:00.000Z';
 function scoped() {
   let record = createCase({ domain: 'incident.example', incidentTarget: 'https://incident.example/one' }, NOW);
@@ -236,6 +236,79 @@ test('normalised imported terminal receipts cannot hide conflicting exact-object
   assert.equal(closed.status, sent.status);
   assert.deepEqual(normalizeCaseStore(buildCaseExport([closed], closedAt)).cases[0]!.closures.records, closed.closures.records);
 });
+test('Case import preserves authored provider closures through conflicting receipt projection and repeated exports', () => {
+  const first = '2026-09-04T10:00:00.000Z', earlier = '2026-09-03T10:00:00.000Z', closedAt = '2026-09-05T10:00:00.000Z';
+  for (const wholeCase of [false, true]) {
+    let { record, objects } = scoped();
+    if (wholeCase) record = updateCase([record], record.id, { actionUpdate: { id: record.actions[0]!.id, responseObjects: [] } }, NOW).record;
+    for (const state of ['ready_for_review', 'reviewed', 'authorised', 'submitted', 'acknowledged']) record = transition(record, state);
+    const responseObject = wholeCase ? undefined : objects[0];
+    const closure = { reason: 'provider_reported_resolution_not_independently_checked', summary: 'A deliberate decision on the retained provider receipt.',
+      actionId: record.actions[0]!.id, ...(responseObject ? { responseObject } : {}), limitations: ['No independent technical recheck.'] };
+    function branch(resolved: boolean, at: string, id: string) {
+      const result = transition(record, 'terminal', { sourceClass: 'provider', occurredAt: at,
+        providerOutcome: resolved ? 'provider_reports_resolved' : 'rejected_outside_policy_scope',
+        ...(responseObject ? { responseObjects: [responseObject], objectOutcome: resolved ? 'removed' : 'restored' } : {}) });
+      result.actions[0]!.history.at(-1)!.id = id;
+      return normalizeCaseStore(JSON.parse(serializeCaseStore([result]))).cases[0]!;
+    }
+    for (const [resolvedId, conflictId, conflictAt] of [
+      ['receipt-a', 'receipt-z', first], ['receipt-z', 'receipt-a', first], ['receipt-a', 'receipt-z', earlier],
+    ]) {
+      const resolved = branch(true, first, resolvedId!);
+      const closed = updateCase([resolved], resolved.id, { closure }, closedAt).record;
+      const authored = structuredClone(closed.closures.records[0]!);
+      assert.equal(caseClosureHistoryQualification(authored, closed.actions), null);
+      const conflict = branch(false, conflictAt!, conflictId!);
+      for (const [local, imported] of [[closed, conflict], [conflict, closed]] as const) {
+        const result = mergeCases([local], buildCaseExport([imported], closedAt));
+        assert.equal(result.authoredHistoryOmitted, 0);
+        let merged = result.cases[0]!;
+        for (let round = 0; round < 3; round++) {
+          assert.deepEqual(merged.closures.records, [authored]);
+          assert.equal(merged.closures.omitted, 0);
+          assert.equal(merged.actions[0]!.history.filter(event => event.nextState === 'terminal').length, 2);
+          assert.match(caseClosureHistoryQualification(authored, merged.actions)!, /historical analyst decision.*current remediation/, JSON.stringify({ wholeCase, resolvedId, conflictId, conflictAt, terminal: merged.actions[0]!.history.filter(event => event.nextState === 'terminal') }));
+          assert.notEqual(caseClosureActionBlocker(authored.reason, merged.actions[0], responseObject, closedAt), null);
+          assert.throws(() => updateCase([merged], merged.id, { closure }, closedAt), /latest applicable/);
+          const report = buildCaseReport(merged);
+          assert.deepEqual(report.json.analystResponse.closures.records, [authored]);
+          assert.match(report.markdown, /History qualification:.*historical analyst decision/);
+          merged = normalizeCaseStore(JSON.parse(serializeCaseStore(normalizeCaseStore(buildCaseExport([merged], closedAt)).cases))).cases[0]!;
+        }
+      }
+      const duplicated = mergeCases([closed], buildCaseExport([closed], closedAt)).cases[0]!;
+      assert.deepEqual(duplicated.closures.records, [authored]);
+      assert.equal(caseClosureHistoryQualification(authored, duplicated.actions), null);
+    }
+  }
+});
+
+test('historical closure links reject dangling, wrong-scope and future receipts without rewriting unrelated object decisions', () => {
+  const { record: sent, objects } = submitted();
+  const resolved = transition(sent, 'acknowledged', { sourceClass: 'provider', providerOutcome: 'provider_reports_resolved', responseObjects: [objects[0]], objectOutcome: 'removed' });
+  const input = { reason: 'provider_reported_resolution_not_independently_checked', summary: 'Historical decision', actionId: resolved.actions[0]!.id, responseObject: objects[0] };
+  const closed = updateCase([resolved], resolved.id, { closure: input }, AFTER).record;
+  for (const changed of [{ actionId: 'missing-action' }, { actionId: '!invalid' }, { responseObject: objects[1] }, { responseObject: undefined }, { createdAt: NOW }]) {
+    const raw = structuredClone(closed);
+    Object.assign(raw.closures.records[0]!, changed);
+    if ('responseObject' in changed && changed.responseObject === undefined) delete raw.closures.records[0]!.responseObject;
+    const imported = mergeCases([], buildCaseExport([raw], AFTER)).cases[0]!;
+    assert.equal(imported.closures.records.length, 0);
+    assert.equal(imported.closures.omitted, 1);
+    assert.match(buildCaseReport(imported).markdown, /Closure records not retained: 1/);
+  }
+  const malformed = structuredClone(closed);
+  malformed.closures.records[0]!.responseObject = { ...objects[0]!, identifier: 'not a URL' };
+  assert.throws(() => normalizeCaseStore(buildCaseExport([malformed], AFTER)), /object|URL|identifier/i);
+  const later = '2026-09-03T10:00:00.000Z';
+  const b = (outcome: 'removed' | 'restored') => transition(closed, 'terminal', { sourceClass: 'provider', occurredAt: later, responseObjects: [objects[1]],
+    providerOutcome: outcome === 'removed' ? 'provider_reports_resolved' : 'partially_remediated', objectOutcome: outcome });
+  const merged = mergeCases([b('removed')], buildCaseExport([b('restored')], later)).cases[0]!;
+  assert.deepEqual(merged.closures.records, closed.closures.records);
+  assert.equal(caseClosureHistoryQualification(merged.closures.records[0]!, merged.actions), null);
+});
+
 test('scoped changed closure requires complete later same-object comparison evidence', () => {
   const responseObject = { kind: 'domain' as const, identifier: 'incident.example', incidentTargetId: null };
   const observation = { field: 'http.status', label: 'Baseline', value: '200', source: 'Retained fixture observation', sourceState: 'complete', completeness: 'complete', observedAt: NOW, observationHostname: 'incident.example', responseObject };

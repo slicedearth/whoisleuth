@@ -87,13 +87,16 @@ test('closure selector follows exact-object provider history rather than the act
   expect(saved.workflowMetadata!.incidentTargets[1]!.state).toBe('open');
 });
 
-test('imported competing legal terminal receipts withhold new closure in the real selector and storage',async({page})=>{
+for (const keepAuthored of [false, true]) test(`imported competing legal terminal receipts withhold new closure${keepAuthored ? ' and preserve an authored closure' : ''} in the real selector and storage`,async({page})=>{
   const {record,objects}=fixture();
   const branch=(resolved:boolean,id:string)=>{
     const value=updateCase([record],record.id,{actionUpdate:{id:record.actions[0]!.id,transition:{nextState:'terminal',sourceClass:'provider',provenance:'Independent exact-object receipt',providerOutcome:resolved?'provider_reports_resolved':'partially_remediated',objectOutcome:resolved?'removed':'restored',responseObjects:[objects[0]!],occurredAt:after}}},after).record;
     value.actions[0]!.history.at(-1)!.id=id; return value;
   };
-  const resolved=branch(true,'receipt-a'),conflicting=branch(false,'receipt-z');
+  let resolved=branch(true,keepAuthored?'receipt-z':'receipt-a');
+  const conflicting=branch(false,keepAuthored?'receipt-a':'receipt-z');
+  if (keepAuthored) resolved = updateCase([resolved], resolved.id, { closure: { reason: 'provider_reported_resolution_not_independently_checked', summary: 'Earlier deliberate closure from the provider receipt.', actionId: resolved.actions[0]!.id, responseObject: objects[0] } }, after).record;
+  const authored = structuredClone(resolved.closures.records);
   await page.clock.setFixedTime('2026-09-04T10:00:00.000Z');
   await openSeededTimelineCase(page,record.domain,[resolved],CASE_SCHEMA_VERSION);
   await page.getByRole('link',{name:'All Cases',exact:true}).click();
@@ -118,7 +121,20 @@ test('imported competing legal terminal receipts withhold new closure in the rea
   const saved=afterSave.records[0]!.value;
   expect(saved.actions[0]!.history.filter(event=>event.nextState==='terminal')).toHaveLength(2);
   expect(saved.actions[0]!.history.filter(event=>event.nextState==='terminal'&&!event.applied)).toHaveLength(1);
-  expect(saved.closures.records).toEqual([]); expect(saved.status).toBe(record.status);
+  expect(saved.closures.records).toEqual(authored); expect(saved.status).toBe(record.status);
+  if (keepAuthored) {
+    const history = outcome.getByRole('list', { name: 'Deliberate case closures', exact: true });
+    await expect(history).toContainText(authored[0]!.summary);
+    await expect(history).toContainText('This historical analyst decision is preserved');
+    for (const theme of ['light', 'dark'] as const) for (const width of [320, 390, 1280]) {
+      await useTheme(page, theme); await page.setViewportSize({ width, height: 900 });
+      await history.scrollIntoViewIfNeeded(); await expect(history).toBeVisible(); await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await history.screenshot({ path: test.info().outputPath(`closure-history-${theme}-${width}.png`) });
+    }
+    await page.reload(); await openCaseResponseWorkspace(page, '', 'quick'); await openCaseSection(page, 'Response');
+    await expect(page.getByRole('list', { name: 'Deliberate case closures', exact: true })).toContainText(authored[0]!.summary);
+    expect((await readBrowserLocalCollection(page, 'cases')).records[0]!.value.closures.records).toEqual(authored);
+  }
 });
 
 test('object authoring and qualified coverage remain available with native keyboard controls and bounded layout', async ({ page }) => {

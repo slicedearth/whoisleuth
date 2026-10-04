@@ -246,4 +246,21 @@ test('long whole-set labels keep separate canonical groups through filtering, gr
   assert.equal(clusters.clusters.length,2);
   const merged=applyCaseRelationshipClusterAdjustments(clusters,{labels:{},dismissed:[],merged:[clusters.clusters.map(row=>row.id)],splitCases:{}});
   assert.equal(merged.clusters.length,1); assert.equal(merged.clusters[0]!.groups.length,2);
+  for (const record of cases) for (const evidence of record.evidenceHistory) evidence.nameservers = [...evidence.nameservers!].reverse().map(value => `${value.toUpperCase()}.`);
+  const permuted = buildInvestigationCaseRelationships(buildInvestigationProjection({ cases: buildCaseExport([...cases].reverse(), now) }, { generatedAt: now }));
+  assert.deepEqual(permuted.groups.map(caseRelationshipGroupId).sort(), summary.groups.map(caseRelationshipGroupId).sort());
+  assert.deepEqual(buildRelationshipGraphDocument(permuted, { generatedAt: now }).graph.nodes.map(node => node.id).sort(), graph.graph.nodes.map(node => node.id).sort());
+});
+
+test('same-value infrastructure from distinct source identities stays in separate comparison cohorts', () => {
+  const before = fixture(), after = fixture();
+  after.observedAt = '2026-10-02T12:00:00.000Z';
+  for (const snapshot of [before, after]) {
+    snapshot.sources.push({ ...snapshot.sources[0]!, id: 'independent-dns-source' });
+    snapshot.dns.push({ ...snapshot.dns[0]!, sourceId: 'independent-dns-source', observedAt: snapshot.observedAt });
+  }
+  const rows = compareInfrastructureObservations(before, after).rows.filter(row => row.family === before.dns[0]!.type);
+  assert.ok(rows.some(row => row.cohort.sourceId === before.sources[0]!.id));
+  assert.ok(rows.some(row => row.cohort.sourceId === 'independent-dns-source'));
+  assert.equal(new Set(rows.map(row => row.cohort.sourceId)).size, 2);
 });

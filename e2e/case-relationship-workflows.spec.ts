@@ -484,6 +484,26 @@ test.describe('accessible cross-case relationship table', () => {
     await openConsoleView(page, 'relationships');
   }
 
+  test('equal bounded relationship labels select their own exact rows and graph nodes', async ({ page }) => {
+    const shared = Array.from({ length: 10 }, (_, index) => `ns${index}-${'shared'.repeat(5)}.example.test`);
+    const records = ['first-a', 'first-b', 'second-a', 'second-b'].map((name, index) => caseRecord({ id: name, domain: `${name}.example`,
+      evidenceHistory: [snapshot({ nameservers: [...shared, `zz-${index < 2 ? 'first' : 'second'}.example.test`] })] }));
+    await openRelationshipTable(page, records);
+    const table = page.getByRole('table', { name: 'Cross-case relationships from retained investigation evidence' });
+    const first = table.getByRole('row').filter({ hasText: 'first-a.example' });
+    const second = table.getByRole('row').filter({ hasText: 'second-a.example' });
+    await expect(first).toHaveCount(1); await expect(second).toHaveCount(1);
+    const firstButton = first.getByRole('button', { name: /^Inspect relationship/ });
+    const secondButton = second.getByRole('button', { name: /^Inspect relationship/ });
+    expect(await firstButton.getAttribute('aria-label')).toBe(await secondButton.getAttribute('aria-label'));
+    for (const [selected, other] of [[firstButton, secondButton], [secondButton, firstButton]]) {
+      await selected!.focus(); await page.keyboard.press('Enter');
+      await expect(selected!).toHaveAttribute('aria-pressed', 'true');
+      await expect(other!).toHaveAttribute('aria-pressed', 'false');
+      await expect(page.getByRole('region', { name: 'Relationship graph' }).locator('svg [aria-pressed="true"]')).toHaveCount(1);
+    }
+  });
+
   test('filters semantic relationship rows and opens a member case', async ({ page }) => {
     const http = {
       httpSummaryVersion: 1,

@@ -3,7 +3,6 @@
   import { evidenceTime } from '$lib/analysis/evidence-time';
   import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { goto } from '$app/navigation';
-  import { parseBoundedJson } from '$lib/bounded-json';
 import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { setCaseNavigationContext } from '$lib/console-workflow-state';
@@ -39,7 +38,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   } from '$lib/controllers/monitor-route-controller.ts';
   import { buildInvestigationProjection } from '$lib/analysis/investigation-projection.ts';
   import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
-  import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, restoreHostedWatchlist as restoreHostedWatchlistAtomically, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
+  import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_PORTABLE_BYTES, parseWatchlistExport, restoreHostedWatchlist as restoreHostedWatchlistAtomically, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
   import { editCase, loadCases, openCase, type CaseRecord } from '$lib/cases';
   import { casesForDomain } from '../../../../../packages/cases/case-selection.mts';
   import { loadCampaigns, type CampaignRecord } from '$lib/campaigns';
@@ -129,7 +128,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   async function clearAll(){if(!names.length||!confirm('Delete every saved watchlist and its history?'))return;try{await writeWatchlists({});}catch(cause){message=cause instanceof Error?cause.message:'Could not clear watchlists.';return;}await reconcileCommittedWatchlists({},'Cleared all watchlists.');}
   async function downloadWatchlists(){try{await exportWatchlists();}catch(cause){message=cause instanceof Error?cause.message:'Could not export watchlists.';}}
   async function rescan(name:string){const current=watchlists[name];if(!current||current.membershipRecovery)return;const candidates=watchlistActiveDomains(current).map(domain=>({domain,source:name,mutationTypes:current.results.find(record=>record.domain===domain)?.mutationTypes??[]}));const handoffResult=saveCandidateHandoff('watchlist',candidates);if(!handoffResult.saved){message='This browser could not retain the watchlist candidates for Bulk. Check site-storage access and try again.';return;}await goto(`/bulk?source=watchlist&handoff=${handoffResult.token}`);}
-  async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_WATCHLIST_IMPORT_BYTES)throw new Error('Watchlist imports are limited to 2 MB.');const result=await importWatchlists(parseBoundedJson(await file.text(),{label:'Watchlist import',maximumBytes:MAX_WATCHLIST_IMPORT_BYTES}));const skipped=result.skipped?`; skipped ${result.skipped} older, same-time, invalid or over-limit watchlist${result.skipped===1?'':'s'}; local watchlists were retained`:'';const saved=`Imported ${result.added} new and ${result.updated} updated watchlists${skipped}.`;try{await refresh();message=saved;}catch{message=`${saved} Refreshing the saved list failed. Reload before another import.`;}}catch(cause){message=cause instanceof Error?cause.message:'Import failed';}finally{input.value='';}}
+  async function importFile(event:Event){const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];if(!file)return;try{if(file.size>MAX_WATCHLIST_PORTABLE_BYTES)throw new Error('This watchlist file exceeds the supported import size.');const result=await importWatchlists(parseWatchlistExport(await file.text()));const skipped=result.skipped?`; skipped ${result.skipped} older, same-time, invalid or over-limit watchlist${result.skipped===1?'':'s'}; local watchlists were retained`:'';const saved=`Imported ${result.added} new and ${result.updated} updated watchlists${skipped}.`;try{await refresh();message=saved;}catch{message=`${saved} Refreshing the saved list failed. Reload before another import.`;}}catch(cause){message=cause instanceof Error?cause.message:'Import failed';}finally{input.value='';}}
   async function restoreHostedWatchlist(reviewed:import('$lib/watchlists').HostedWatchlistRestorePreview){
     const committed=await restoreHostedWatchlistAtomically(reviewed);
     watchlists=committed;

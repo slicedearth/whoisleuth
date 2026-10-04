@@ -13,7 +13,7 @@
   import { selectedCaseResponseObject, caseResponseObjectChoices } from '../../../../packages/cases/case-response-object.mts';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   import { CASE_RECHECK_CONDITIONS } from '../../../../packages/cases/case-recheck-model.mts';
-  import { caseClosureReviewBlocker, caseClosureActionBlocker } from '../../../../packages/cases/case-response-outcomes.mts';
+  import { caseClosureReviewBlocker, caseClosureActionBlocker, caseClosureHistoryQualification } from '../../../../packages/cases/case-response-outcomes.mts';
 
   let { record, mode, mutationBusy, persist }: {
     record: CaseRecord;
@@ -123,10 +123,12 @@
       {#if record.closures.records.length}
         <ol class="records embedded-records" aria-label="Deliberate case closures">
           {#each [...record.closures.records].reverse() as closure}
-            <li><strong>{closure.reason.replaceAll('_', ' ')}</strong><p>{closure.summary}</p><p>Scope: {closure.responseObject ? `${closure.responseObject.kind.replaceAll('_', ' ')} · ${closure.responseObject.identifier}` : 'Whole Case analyst decision'}</p><small>Closure ID {closure.id} · {closure.createdAt}</small>{#if closure.observedEffectReviewId}<small>Independent review: {closure.observedEffectReviewId}</small>{/if}{#if closure.actionId}<small>Provider action: {closure.actionId}</small>{/if}{#if closure.limitations.length}<small>Limitations: {closure.limitations.join('; ')}</small>{/if}</li>
+            {@const qualification = caseClosureHistoryQualification(closure, record.actions)}
+            <li><strong>{closure.reason.replaceAll('_', ' ')}</strong><p>{closure.summary}</p><p>Scope: {closure.responseObject ? `${closure.responseObject.kind.replaceAll('_', ' ')} · ${closure.responseObject.identifier}` : 'Whole Case analyst decision'}</p><small>Closure ID {closure.id} · {closure.createdAt}</small>{#if closure.observedEffectReviewId}<small>Independent review: {closure.observedEffectReviewId}</small>{/if}{#if closure.actionId}<small>Provider action: {closure.actionId}</small>{/if}{#if qualification}<p class="inline-warning">{qualification}</p>{/if}{#if closure.limitations.length}<small>Limitations: {closure.limitations.join('; ')}</small>{/if}</li>
           {/each}
         </ol>
       {/if}
+      {#if record.closures.omitted}<p class="inline-warning">{record.closures.omitted} closure records could not be retained. {record.closures.limitations.join(' ')}</p>{/if}
     </div>
   </details>
 

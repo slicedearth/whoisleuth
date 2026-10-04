@@ -16,6 +16,7 @@ import { webCollectionScoreLimitation } from '../evidence/collection-quality.mts
 import { analystInteroperabilityTags } from '../analysis/analyst-taxonomy.mts';
 import { caseEvidenceLinkIssues } from './case-evidence-links.mts';
 import { caseTypeSummary } from './case-workflow-metadata.mts';
+import { caseClosureHistoryQualification } from './case-response-outcomes.mts';
 import {
   buildPortableGeneratorMetadata,
   portableGeneratorAttribution,
@@ -749,8 +750,11 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     lines.push(`  Scope: ${closure.responseObject ? `${escapeMarkdownInline(closure.responseObject.kind)} · ${escapeMarkdownInline(closure.responseObject.identifier)}; other objects and the Case remain independent.` : 'Whole Case analyst decision.'}`);
     if (closure.observedEffectReviewId) lines.push(`  Independent review: ${escapeMarkdownInline(closure.observedEffectReviewId)}`);
     if (closure.actionId) lines.push(`  Provider action: ${escapeMarkdownInline(closure.actionId)}`);
+    const qualification = caseClosureHistoryQualification(closure, response.actions);
+    if (qualification) lines.push(`  History qualification: ${escapeMarkdownInline(qualification)}`);
     if (closure.limitations.length) lines.push(`  Limitations: ${escapeMarkdownInline(closure.limitations.join('; '))}`);
   }
+  if (response.closures.omitted) lines.push(`- Closure records not retained: ${response.closures.omitted}. ${escapeMarkdownInline(response.closures.limitations.join('; '))}`);
   lines.push('');
 
   // Analyst notes (only when included)

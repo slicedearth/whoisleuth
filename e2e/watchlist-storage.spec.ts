@@ -1,8 +1,10 @@
 import { openConsoleView } from './console-navigation';
+import { readFileSync } from 'node:fs';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalCollectionReadAfterWrite, readBrowserLocalCollection } from './helpers';
 import { appendWatchlistScan } from '../packages/workspace/watchlist-history.mts';
 import { WATCHLIST_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
+import { watchlistV5Boundary } from '../test/helpers/watchlist-v5-boundary.mts';
 
 const WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
 const NOW = '2026-07-14T08:00:00.000Z';
@@ -22,6 +24,34 @@ async function seed(page: import('@playwright/test').Page, value: unknown) {
   await page.goto('/monitor');
   await openConsoleView(page, 'watchlists');
 }
+
+test('a maximum historical watchlist imports into paused recovery and downloads a re-importable export', async ({ page }) => {
+  const historical = watchlistV5Boundary(readFileSync('test/fixtures/workspace-lifecycle/watchlist-v5-membership-overflow.json', 'utf8'), 2097152, 2);
+  await page.goto('/monitor'); await openConsoleView(page, 'watchlists');
+  await page.getByLabel('Import JSON', { exact: true }).setInputFiles({ name: 'historical-watchlists.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(historical)) });
+  const row = page.getByRole('row', { name: /^Retained Paused/ });
+  await expect(row).toHaveCount(1);
+  await expect(row.getByRole('button', { name: 'Rescan in Bulk', exact: true })).toBeDisabled();
+  await row.getByRole('button', { name: 'History', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Watchlist membership recovery', exact: true })).toBeVisible();
+  const stored = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 3 });
+  expect(stored.manifest.serializedBytes).toBe(2097152 + 78);
+  const event = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export JSON', exact: true }).click();
+  const stream = await (await event).createReadStream();
+  if (!stream) throw new Error('Watchlist export stream is unavailable.');
+  const chunks: Buffer[] = []; for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  const bytes = Buffer.concat(chunks);
+  const exported = JSON.parse(bytes.toString('utf8'));
+  for (const [name, entry] of Object.entries(exported.watchlists) as Array<[string, Record<string, unknown>]>) {
+    const { membershipRecovery: _marker, ...retained } = entry;
+    expect(retained).toEqual(historical.watchlists[name]);
+  }
+  await page.getByLabel('Import JSON', { exact: true }).setInputFiles({ name: 'recovered-watchlists.json', mimeType: 'application/json', buffer: bytes });
+  await expect(page.getByRole('status').filter({ hasText: 'Imported 0 new and 0 updated watchlists' })).toBeVisible();
+  await page.reload(); await openConsoleView(page, 'watchlists');
+  await expect(row).toContainText('Paused');
+  expect((await readBrowserLocalCollection(page, 'watchlists')).records).toEqual(stored.records);
+});
 
 test('incomplete web collection is visible while a usable Watchlist baseline survives reload', async ({ page }) => {
   const complete = { domain: 'quality.invalid', availability: 'registered', scanDepth: 'deep', pageTitle: 'Earlier page',

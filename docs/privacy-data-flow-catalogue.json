@@ -8490,7 +8490,7 @@
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
       "writeSemantics": "normalized_rewrite",
-      "byteBudget": 2097152,
+      "byteBudget": 2101052,
       "storageClass": "browser_profile_storage",
       "retentionControl": "browser_profile_and_user_controlled"
     },
@@ -9713,7 +9713,7 @@
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
-      "byteBudget": 2097152,
+      "byteBudget": 2101095,
       "storageClass": "deliberate_local_file",
       "retentionControl": "operator_controlled_after_export"
     },

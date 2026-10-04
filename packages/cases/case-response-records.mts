@@ -326,6 +326,7 @@ export type CaseClosureLinkContext = Readonly<{
   providerResolutionEvents?: ReadonlyMap<string, readonly Readonly<{
     eventId: string;
     occurredAt: string;
+    responseObjects?: readonly CaseResponseObject[];
   }>[]>;
 }>;
 

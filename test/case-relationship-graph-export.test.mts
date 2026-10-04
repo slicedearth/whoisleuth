@@ -150,9 +150,8 @@ describe('relationship graph interchange export', () => {
     assert.ok(firstObservation);
     assert.deepEqual(firstObservation.schemaVersions, { case: 2 });
     assert.equal(document.graph.truncated, true);
-    const finalLimitation = document.limitations.at(-1);
-    assert.ok(finalLimitation);
-    assert.match(finalLimitation, /Transient focus, pin, hide/);
+    assert.ok(document.limitations.some(value => /Transient focus, pin, hide/.test(value)));
+    assert.ok(document.limitations.some(value => /canonical and value fields are bounded display text/.test(value)));
   });
 
   test('preserves canonical projection schema provenance through every graph format', () => {

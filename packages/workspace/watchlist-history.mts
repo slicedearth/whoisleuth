@@ -18,6 +18,7 @@ import {
   MAX_WATCHLIST_INPUT_RECORDS,
   MAX_WATCHLIST_MUTATION_TYPES,
   MAX_WATCHLIST_NAMESERVERS,
+  WATCHLIST_RECOVERY_METADATA,
 } from '../contracts/workspace-portability.mts';
 
 export {
@@ -609,7 +610,7 @@ export function normalizeWatchlistEntry(entry: unknown, options: { recoverLegacy
     baseline,
     history,
     domainMetadata: recovery ? metadata : normalizeWatchDomainMetadata(metadata, results.map(record => record.domain)),
-    ...(recovery ? { membershipRecovery: 'legacy_overflow' as const } : {}),
+    ...(recovery ? WATCHLIST_RECOVERY_METADATA : {}),
   };
   if (normalized.history.length === 0 && (results.length || baseline.length)) normalized.history.push(initialHistoryEvent(normalized, baseline));
   return normalized;

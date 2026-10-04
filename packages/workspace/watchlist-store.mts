@@ -6,11 +6,15 @@ import { MAX_WATCHLIST_DOMAINS, normalizeWatchlistEntry, compactWatchlistResults
 import { mergeWatchDomainMetadata, normalizeWatchDomainMetadata } from './brand-candidate-workflow.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
+import { boundedJsonLimitsForBytes, parseBoundedJson } from '../analysis/bounded-json.mts';
 import {
   MAX_WATCHLIST_INPUTS,
   MAX_WATCHLIST_NAME_LENGTH,
   MAX_WATCHLISTS,
   MAX_WATCHLIST_STORE_BYTES,
+  MAX_WATCHLIST_PORTABLE_BYTES,
+  WATCHLIST_RECOVERY_METADATA_BYTES,
+  serialiseWorkspacePortableJson,
   WATCHLIST_SCHEMA,
   WATCHLIST_SCHEMA_VERSION,
   WATCHLIST_BROWSER_SUPPORTED_VERSIONS,
@@ -224,7 +228,8 @@ function byteLength(value: string): number {
 
 export function assertWatchlistStoreBudget(watchlists: unknown): WatchlistStore {
   const store = normalizeWatchlistStore(watchlists);
-  if (byteLength(JSON.stringify(store)) > MAX_WATCHLIST_STORE_BYTES) {
+  const recoveryBytes = Object.values(store.watchlists).filter(entry => entry.membershipRecovery).length * WATCHLIST_RECOVERY_METADATA_BYTES;
+  if (byteLength(JSON.stringify(store)) - recoveryBytes > MAX_WATCHLIST_STORE_BYTES) {
     throw new Error('Watchlist storage is full. Export and remove a watchlist before saving more.');
   }
   return store;
@@ -304,6 +309,18 @@ export function buildWatchlistExport(
     schema: WATCHLIST_SCHEMA,
     version: WATCHLIST_SCHEMA_VERSION,
     exportedAt,
-    watchlists: normalizeWatchlistStore(watchlists).watchlists,
+    watchlists: assertWatchlistStoreBudget(watchlists).watchlists,
   };
+}
+
+/** Preserve readable formatting when it fits; maximum stores need compact JSON. */
+export function serializeWatchlistExport(watchlists: unknown, nowIso?: unknown): string {
+  const value = buildWatchlistExport(watchlists, nowIso);
+  const formatted = serialiseWorkspacePortableJson(value);
+  return byteLength(formatted) <= MAX_WATCHLIST_PORTABLE_BYTES ? formatted : JSON.stringify(value);
+}
+
+export function parseWatchlistExport(json: string): unknown {
+  return parseBoundedJson(json, { label: 'Watchlist import', maximumBytes: MAX_WATCHLIST_PORTABLE_BYTES,
+    limits: boundedJsonLimitsForBytes(MAX_WATCHLIST_PORTABLE_BYTES) });
 }

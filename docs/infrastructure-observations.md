@@ -65,6 +65,14 @@ the certificate SHA-256, alongside their source and observation clocks. Labels
 are presentation only: relationship groups and graph exports use canonical
 entity identities, including when long nameserver-set labels look identical.
 
+Derived relationship-group, graph-node and cluster IDs can change when their
+identity calculation changes, including for short labels. They are not durable
+cross-export keys; use the canonical `entityId` where provided. Historical groups
+without it use their complete retained value. Graph fields named `canonical`
+and `value` are bounded display text, not a replacement for that identity. Inspect
+the contributing Case evidence for full nameserver members. Component selections
+and cluster adjustments are transient and are not persisted review history.
+
 The existing offline command shares the website reader and comparison owner:
 
 ```sh

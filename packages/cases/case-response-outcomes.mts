@@ -209,6 +209,7 @@ function normalizeClosure(
   const summary = text(item.summary, MAX_RESPONSE_RATIONALE_LENGTH);
   if (!summary) return null;
   const createdAt = iso(item.createdAt, fallback, options);
+  const responseObject = readCaseResponseObject(item.responseObject, options.sourceVersion);
   const observedEffectReviewId = typeof item.observedEffectReviewId === 'string'
     && SAFE_ID_RE.test(item.observedEffectReviewId)
     && (!validReviewIds || validReviewIds.has(item.observedEffectReviewId))
@@ -229,14 +230,15 @@ function normalizeClosure(
     && (!reviewPredatesClosure || linkedReview?.state !== 'changed')) return null;
   const linkedProviderEvents = actionId ? linkContext.providerResolutionEvents?.get(actionId) ?? [] : [];
   if (linkContext.providerResolutionEvents && reason === 'provider_reported_resolution_not_independently_checked'
-    && !linkedProviderEvents.some((event) => Date.parse(event.occurredAt) <= Date.parse(createdAt))) return null;
+    && !linkedProviderEvents.some((event) => Date.parse(event.occurredAt) <= Date.parse(createdAt)
+      && (responseObject ? event.responseObjects?.some(object => sameCaseResponseObject(object, responseObject)) : !event.responseObjects?.length))) return null;
   const linkLimitations = [
     ...(item.observedEffectReviewId != null && !observedEffectReviewId ? ['A malformed or dangling observed-effect review reference was omitted from this closure.'] : []),
     ...(item.actionId != null && !actionId ? ['A malformed or dangling response-action reference was omitted from this closure.'] : []),
   ];
   return {
     id: safeId(item.id, 'case-closure', { reason: item.reason, summary, createdAt }),
-    ...(item.responseObject === undefined ? {} : { responseObject: readCaseResponseObject(item.responseObject, options.sourceVersion)! }),
+    ...(responseObject === undefined ? {} : { responseObject }),
     reason,
     summary,
     observedEffectReviewId,
@@ -257,8 +259,11 @@ export function buildCaseClosureLinkContext(
       createdAt: review.createdAt,
     }] as const)),
     providerResolutionEvents: new Map(actions.map((action) => [action.id, action.history
-      .filter((event) => event.applied && event.providerOutcome === 'provider_reports_resolved')
-      .map((event) => ({ eventId: event.id, occurredAt: event.occurredAt }))] as const)),
+      // Reconciliation can change projection, but not the identity of a retained
+      // typed receipt supporting an already-authored historical decision.
+      .filter((event) => event.providerOutcome === 'provider_reports_resolved')
+      .map((event) => ({ eventId: event.id, occurredAt: event.occurredAt,
+        ...(event.responseObjects === undefined ? {} : { responseObjects: event.responseObjects }) }))] as const)),
   };
 }
 
@@ -372,6 +377,18 @@ export function caseClosureProviderBlocker(action: CaseActionRecord | null | und
 export function caseClosureActionBlocker(reason: CaseClosureReason | null, action: CaseActionRecord | null | undefined, responseObject: CaseResponseObject | undefined, now: string): string | null {
   if (action?.responseObjects?.length && (!responseObject || !action.responseObjects.some(object => sameCaseResponseObject(object, responseObject)))) return 'This action concerns explicitly bound objects. Select one of them for this closure; other objects remain independent.';
   return reason === 'provider_reported_resolution_not_independently_checked' ? caseClosureProviderBlocker(action, responseObject, now) : null;
+}
+
+/** Derived presentation only: never rewrite the analyst's summary or limitations. */
+export function caseClosureHistoryQualification(closure: CaseClosureRecord, actions: readonly CaseActionRecord[]): string | null {
+  if (closure.reason !== 'provider_reported_resolution_not_independently_checked') return null;
+  const action = actions.find(candidate => candidate.id === closure.actionId);
+  // Evaluate the retained history, not a wall-clock freshness claim. Future-dated
+  // or conflicting receipts cannot silently make an old decision authoritative.
+  const latestAt = (action?.history ?? []).reduce((latest, event) =>
+    Date.parse(event.occurredAt) > Date.parse(latest) ? event.occurredAt : latest, closure.createdAt);
+  return caseClosureProviderBlocker(action, closure.responseObject, latestAt) === null ? null
+    : 'Retained provider history no longer supports a new closure for this scope. This historical analyst decision is preserved; it does not establish current remediation.';
 }
 
 export function appendCaseClosure(

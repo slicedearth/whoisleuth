@@ -1,0 +1,15 @@
+{
+  "writerCommit": "13bf1846bb4117605cb7146ab1a3460197b32e70",
+  "writer": "packages/workspace/watchlist-store.mts",
+  "recipe": "test/helpers/watchlist-v5-boundary.mts",
+  "operations": ["normalizeWatchlistStore", "serializeWatchlistStore", "prepareLocalDataContent:WATCHLISTS_COLLECTION"],
+  "schemaVersion": 5,
+  "admission": "The historical writer normalises each generated document without changing any byte, then serialises and prepares its browser records within the original 2,097,152-byte bound. Padding consists only of legal, distinct Brand contexts with reasons of at most 300 characters. The existing literal fixture and manifest remain unchanged.",
+  "vectors": [
+    { "bytes": 2097113, "recoveredLists": 1, "sha256": "8ba6b08aa5d3ae1d242e6d798d253b776fe644a416a52f87987c9176e68437c7", "manifestDigest": "NGqdE_8mCSAam6_1E5dW1V2fgGW4rkUPEHbfjwBK0To" },
+    { "bytes": 2097114, "recoveredLists": 1, "sha256": "53134d8a44c85f76325f4c4bfc04ddb00ea33013bf2a4bf782b25f3baae94b3a", "manifestDigest": "EBXwspWp8T4EPcj4RDLiZBdngCF4DP1VX-vgtBF3pGM" },
+    { "bytes": 2097151, "recoveredLists": 1, "sha256": "3a713605e2bd20c9b33eb7a2ea977557ba4ad9a789a2f06b81b59616fc1a16df", "manifestDigest": "Q6egyW9TehV5TLpGRf_BqRcPPXVW9_FDdhnQxZMnN8o" },
+    { "bytes": 2097152, "recoveredLists": 1, "sha256": "9ab255e3f23589d71a2c262c1056b01873413bffc98c7fe4b098c4e71054aa56", "manifestDigest": "XZxXpCUQ2oCBChCKtCilk-omXGDLD8sn54vdoF85m5U" },
+    { "bytes": 2097152, "recoveredLists": 2, "sha256": "d325ea9320f3a7ecea84454cab2fe69e2f3af1226df572a5f89d37fe865a9c50", "manifestDigest": "0UVXVj73Nq11bR-kDy8OxtV4yP71-bGBb64N7WVetlw" }
+  ]
+}

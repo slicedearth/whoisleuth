@@ -426,6 +426,21 @@ describe('projection-backed cross-case relationships', () => {
     assert.equal(filtered.discardedRelationshipCount, 2);
   });
 
+  test('legacy full-value identities remain supported while malformed canonical IDs cannot fall back to labels', () => {
+    const summary = buildInvestigationCaseRelationships(investigationFixture());
+    const { entityId: _entityId, ...legacy } = requiredValue(summary.groups[0]);
+    const id = caseRelationshipGroupId(legacy);
+    assert.ok(id);
+    assert.equal(id, caseRelationshipGroupId(structuredClone(legacy)));
+    assert.notEqual(id, caseRelationshipGroupId({ ...legacy, value: `${legacy.value}-other` }));
+    assert.equal(filterInvestigationCaseRelationships({ ...summary, groups: [legacy] }).groups.length, 1);
+    for (const entityId of ['', 'bad id', 'bad\nidentity', 'x'.repeat(101)]) {
+      const invalid = { ...legacy, entityId };
+      assert.equal(caseRelationshipGroupId(invalid), '');
+      assert.equal(filterInvestigationCaseRelationships({ ...summary, groups: [invalid] }).groups.length, 0);
+    }
+  });
+
   test('reports absent, malformed, and future projection contracts without interpreting them', () => {
     assert.equal(buildInvestigationCaseRelationships(null).state, 'absent');
     assert.equal(buildInvestigationCaseRelationships({ schema: 'wrong', version: 1 }).state, 'invalid');
