@@ -64,6 +64,7 @@ type CaptureManifest = Readonly<{
   observerLabel: string | null;
   vantageLabel: string | null;
   completeness: 'complete' | 'partial';
+  limitations: string[];
   title: string | null;
   finalOrigin: string | null;
   requestDomains: string[];
@@ -74,6 +75,7 @@ type CaptureManifest = Readonly<{
 }>;
 type DomDigest = Readonly<{
   domain: string;
+  limitations: string[];
   counts: Readonly<Record<'elements' | 'forms' | 'controls' | 'scripts' | 'images', number>>;
   structure: Readonly<{ value: string; truncated: boolean }>;
   visibleText: Readonly<{ value: string; bytes: number; truncated: boolean }>;
@@ -104,8 +106,10 @@ function boundedText(value: unknown, maximum: number, label: string, optional = 
 }
 
 function boundedPath(value: unknown, label: string): string {
-  const candidate = boundedText(value, 2048, label);
-  return path.resolve(candidate ?? '');
+  if (typeof value !== 'string' || !value || value.length > 2048 || hasTerminalUnsafeCharacters(value)) {
+    throw new Error(`${label} must be bounded text without control characters.`);
+  }
+  return path.resolve(value);
 }
 
 function artifactName(value: unknown, label: string): string {
@@ -243,7 +247,7 @@ function parseManifest(value: unknown): CaptureManifest {
   const completeness = capture.completeness === 'complete' || capture.completeness === 'partial'
     ? capture.completeness
     : (() => { throw new Error('Rendered capture completeness must be complete or partial.'); })();
-  limitationList(capture.limitations, 'Rendered capture limitations');
+  const limitations = limitationList(capture.limitations, 'Rendered capture limitations');
   const page = record(capture.page);
   if (!page || !onlyKeys(page, PAGE_KEYS)) throw new Error('Rendered capture page metadata is invalid.');
   if (completeness === 'partial' && page.finalOrigin === null && Array.isArray(capture.artifacts)
@@ -267,6 +271,7 @@ function parseManifest(value: unknown): CaptureManifest {
     conditions: readCaptureConditions(capture.conditions),
     observerLabel: readObservationLabel(capture.observerLabel), vantageLabel: readObservationLabel(capture.vantageLabel),
     completeness,
+    limitations,
     title: boundedText(page.title, 300, 'Rendered capture title', true),
     finalOrigin: origin(page.finalOrigin, 'Rendered capture final origin'),
     requestDomains: stringList(capture.requestDomains, MAX_CAPTURE_HOSTS, 'Rendered capture request domains'),
@@ -288,7 +293,7 @@ function parseDomDigest(value: unknown, expectedDomain: string, expectedCaptured
   if (timestamp(root.capturedAt, 'Rendered DOM digest time') !== expectedCapturedAt) {
     throw new Error('Rendered DOM digest time does not match its manifest.');
   }
-  limitationList(root.limitations, 'Rendered DOM digest limitations');
+  const limitations = limitationList(root.limitations, 'Rendered DOM digest limitations');
   const counts = record(root.counts);
   const structure = record(root.structure);
   const visibleText = record(root.visibleText);
@@ -299,6 +304,7 @@ function parseDomDigest(value: unknown, expectedDomain: string, expectedCaptured
   }
   return {
     domain,
+    limitations,
     counts: {
       elements: nonNegativeInteger(counts.elements, MAX_WEB_CAPTURE_DOM_ELEMENTS, 'Rendered element count'),
       forms: nonNegativeInteger(counts.forms, MAX_WEB_CAPTURE_DOM_ELEMENTS, 'Rendered form count'),
@@ -428,6 +434,10 @@ export async function compareRenderedCaptures(
     left: { domain: left.manifest.domain, capturedAt: left.manifest.capturedAt, completeness: left.manifest.completeness },
     right: { domain: right.manifest.domain, capturedAt: right.manifest.capturedAt, completeness: right.manifest.completeness },
     partial,
+    sourceLimitations: {
+      left: { capture: left.manifest.limitations, domDigest: left.dom.limitations },
+      right: { capture: right.manifest.limitations, domDigest: right.dom.limitations },
+    },
     pageBehaviour: comparePageBehaviour(left.manifest.pageBehaviour, right.manifest.pageBehaviour),
     observationContext: compareObservationContexts([left, right].map(({ manifest }) => ({
       observedAt: manifest.capturedAt, observerLabel: manifest.observerLabel, vantageLabel: manifest.vantageLabel, conditions: manifest.conditions,
@@ -535,6 +545,10 @@ export function formatRenderedCaptureComparison(document: Awaited<ReturnType<typ
     ...document.limitations.map((limitation) => `  - ${limitation}`),
     ...document.observationContext.limitations.map(limitation => `  - ${limitation}`),
     ...document.pixelChanges.limitations.map(limitation => `  - ${limitation}`),
+    ...(['left', 'right'] as const).flatMap(side => [
+      ...document.sourceLimitations[side].capture.map(limitation => `  - ${side} capture: ${limitation}`),
+      ...document.sourceLimitations[side].domDigest.map(limitation => `  - ${side} DOM digest: ${limitation}`),
+    ]),
   ];
   return `${lines.join('\n')}\n`;
 }

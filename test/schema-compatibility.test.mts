@@ -461,7 +461,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.web-capture-dom-digest').byteBudget, MAX_WEB_CAPTURE_DOM_DIGEST_BYTES);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').schema, WEB_CAPTURE_COMPARISON_SCHEMA);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').currentVersion, WEB_CAPTURE_COMPARISON_VERSION);
-    assert.deepEqual(byId(inventory, 'cli.web-capture-comparison').supportedVersions, [4]);
+    assert.deepEqual(byId(inventory, 'cli.web-capture-comparison').supportedVersions, [5]);
     assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [26, 27, 28, 29, LOOKUP_EVIDENCE_SCHEMA_VERSION]);
     assert.deepEqual(byId(inventory, 'export.synthetic-demo').supportedVersions, [5]);
     assert.deepEqual(byId(inventory, 'export.external-findings').supportedVersions, [4, 5]);
