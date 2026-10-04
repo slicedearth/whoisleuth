@@ -33,7 +33,7 @@ async function main() {
     });
     await page.setViewportSize({ width: 1280, height: 640 });
     const renderedSocial = social.replace('<image href="logo.svg" x="70" y="58" width="340" height="60" />',
-      `<g transform="translate(70 58) scale(${340 / 388})">${logo.replace(/<svg[^>]*>|<\/svg>/gu, '')}</g>`);
+      logo.replace('<svg ', '<svg x="70" y="58" width="340" height="60" '));
     if (renderedSocial === social) throw new Error('Social preview must reference the shared logo asset.');
     await page.setContent(`<style>html,body{margin:0}svg{display:block}</style>${renderedSocial}`);
     const socialPng = await page.screenshot({ type: 'png' });

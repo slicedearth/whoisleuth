@@ -5,9 +5,9 @@ export const BRAND_MARK_LINKS = 'M18.5 23H35.5L27 36.5Z';
 export const BRAND_MARK_NODES = 'M22.7 23a4.2 4.2 0 1 1-8.4 0 4.2 4.2 0 1 1 8.4 0ZM39.7 23a4.2 4.2 0 1 1-8.4 0 4.2 4.2 0 1 1 8.4 0ZM31.2 36.5a4.2 4.2 0 1 1-8.4 0 4.2 4.2 0 1 1 8.4 0Z';
 
 // Drawn letterforms keep the wordmark independent of installed fonts.
-export const BRAND_WORDMARK_VIEWBOX = '-3 0 308 42';
+export const BRAND_WORDMARK_VIEWBOX = '-3 0 314 42';
 export const BRAND_WORDMARK_PRIMARY = 'M1 5L8 36L16.5 16L25 36L32 5M46 5V36M46 20.5H68M68 5V36M86 5H100Q106 5 106 11V30Q106 36 100 36H86Q80 36 80 30V11Q80 5 86 5ZM120 5V36M158 9Q152 4 144 5Q133 5 133 13Q133 20 144 21L149 22Q159 24 158 30Q158 37 146 37Q137 37 132 32';
-export const BRAND_WORDMARK_SECONDARY = 'M173 5V36M185 25H207V23Q207 14 196 14Q185 14 185 25Q185 36 196 36Q203 36 207 32M221 14V27Q221 36 231 36Q242 36 242 26M242 14V36M256 6V29Q256 36 264 36M248 15H266M279 5V36M279 24Q279 14 289 14Q300 14 300 24V36';
+export const BRAND_WORDMARK_SECONDARY = 'M173 5V36M185 25H207V23Q207 14 196 14Q185 14 185 25Q185 36 196 36Q203 36 207 32M221 14V27Q221 36 231 36Q242 36 242 26M242 14V36M262 6V29Q262 36 270 36M254 15H272M285 5V36M285 24Q285 14 295 14Q306 14 306 24V36';
 
 export const BRAND_PALETTE = Object.freeze({ primary: '#39adfd', secondary: '#6be1a3', lightPrimary: '#005b91', lightSecondary: '#006b49' });
 
@@ -18,5 +18,5 @@ export function brandMarkSvg(): string {
 export function brandLogoSvg(light = false): string {
   const primary = light ? BRAND_PALETTE.lightPrimary : BRAND_PALETTE.primary;
   const secondary = light ? BRAND_PALETTE.lightSecondary : BRAND_PALETTE.secondary;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 388 64"><title>WHOISleuth</title><path fill="${primary}" d="${BRAND_MARK_LENS}"/><path fill="none" stroke="${secondary}" stroke-width="2.4" stroke-linejoin="round" d="${BRAND_MARK_LINKS}"/><path fill="${secondary}" d="${BRAND_MARK_NODES}"/><g transform="translate(82 10)" fill="none" stroke-width="5.5" stroke-linecap="square" stroke-linejoin="round"><path stroke="${primary}" d="${BRAND_WORDMARK_PRIMARY}"/><path stroke="${secondary}" d="${BRAND_WORDMARK_SECONDARY}"/></g></svg>\n`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 394 64"><title>WHOISleuth</title><path fill="${primary}" d="${BRAND_MARK_LENS}"/><path fill="none" stroke="${secondary}" stroke-width="2.4" stroke-linejoin="round" d="${BRAND_MARK_LINKS}"/><path fill="${secondary}" d="${BRAND_MARK_NODES}"/><g transform="translate(82 10)" fill="none" stroke-width="5.5" stroke-linecap="square" stroke-linejoin="round"><path stroke="${primary}" d="${BRAND_WORDMARK_PRIMARY}"/><path stroke="${secondary}" d="${BRAND_WORDMARK_SECONDARY}"/></g></svg>\n`;
 }
