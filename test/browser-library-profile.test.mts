@@ -24,6 +24,47 @@ import { fastCheckParameters } from './helpers/fast-check-config.mts';
 const OBSERVED_AT = '2026-07-27T00:00:00.000Z';
 
 describe('bounded browser-library profile', () => {
+  test('the technology projection preserves real advisory aliases and qualifies malformed identifiers through the retained reader', async () => {
+    const technologyProfile = await analyzeWebsiteTechnology({
+      html: '<script src="/jquery-1.12.4.js"></script><script>/* dwr-1.1.3.jar */</script>',
+      observedAt: OBSERVED_AT,
+    });
+    const profile = requiredValue(technologyProfile.browserLibraryProfile);
+    assert.deepEqual(profile.findings.map(({ id, apparentVersion }) => ({ id, apparentVersion })), [
+      { id: 'DWR', apparentVersion: '1.1.3' }, { id: 'jquery', apparentVersion: '1.12.4' },
+    ], JSON.stringify(profile.diagnostics));
+    assert.equal(profile.status, 'partial');
+    assert.equal(profile.complete, false);
+    assert.equal(profile.diagnostics.inlineSignatureTimedOut, false);
+    assert.equal(profile.diagnostics.inlineSignatureUnavailable, false);
+    assert.equal(profile.diagnostics.referenceSignatureTimedOut, false);
+    assert.equal(profile.diagnostics.referenceSignatureUnavailable, false);
+    assert.match(profile.limitations.join(' '), /1 supplied CVE identifier entry was omitted/u);
+    assert.ok(profile.findings.some(finding => finding.advisoryIdentifiers.includes('CVE-2014-5325')));
+    assert.ok(profile.findings.some(finding => finding.advisoryIdentifiers.some(identifier => identifier.startsWith('GHSA-'))));
+    assert.ok(profile.findings.every(finding => !finding.advisoryIdentifiers.includes('CVE-2007-01-09')));
+    const retained = JSON.parse(JSON.stringify({ availability: { technologyProfile } }));
+    assert.equal(sanitizeLookupChildProfiles(retained), retained);
+  });
+
+  test('the technology projection retains the explicit incomplete outcome when library matching expires', async context => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      const pending = analyzeWebsiteTechnology({
+        html: '<script src="/jquery-1.12.4.js"></script><script>/* dwr-1.1.3.jar */</script>',
+        observedAt: OBSERVED_AT,
+      });
+      context.mock.timers.tick(750);
+      const profile = requiredValue((await pending).browserLibraryProfile);
+      assert.deepEqual(profile.findings, []);
+      assert.equal(profile.status, 'partial');
+      assert.equal(profile.complete, false);
+      assert.equal(profile.diagnostics.inlineSignatureTimedOut, true);
+      assert.equal(profile.diagnostics.referenceSignatureTimedOut, true);
+      assert.match(profile.limitations.join(' '), /isolated-worker deadline/u);
+    } finally { context.mock.timers.reset(); }
+  });
+
   test('cancellation propagates before, during and after matching without poisoning later work', async () => {
     for (const html of ['', '<script>/*! jQuery v3.7.1 */</script>']) {
       const before = new AbortController(); before.abort();

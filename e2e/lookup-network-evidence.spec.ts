@@ -929,12 +929,24 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expectNoHorizontalOverflow(page);
 });
 
-test('real library projection retains advisory aliases and discloses malformed source identifiers', async ({ page }, testInfo) => {
+test('library evidence retains advisory aliases and distinguishes incomplete matching', async ({ page }, testInfo) => {
+  // Catalogue evaluation and its bounded worker run in the model suite. This
+  // browser assertion exercises rendering without a successful timed scan as setup.
   const technologyProfile = await analyzeWebsiteTechnology({
-    html: '<script src="/jquery-1.12.4.js"></script><script>/* dwr-1.1.3.jar */</script>',
     observedAt: '2026-09-08T00:00:00.000Z',
   });
-  expect(technologyProfile.browserLibraryProfile?.findings.map((finding) => finding.id)).toEqual(expect.arrayContaining(['DWR', 'jquery']));
+  const libraryProfile = technologyProfile.browserLibraryProfile!;
+  Object.assign(libraryProfile, {
+    status: 'partial', complete: false, truncated: true,
+    limitations: [...libraryProfile.limitations, '1 supplied CVE identifier entry was omitted because of invalid syntax. Advisory matches are still counted.'],
+    diagnostics: { ...libraryProfile.diagnostics, scriptsExamined: 2, referencesExamined: 1, inlineScriptsExamined: 1, findings: 2, advisoryMatches: 3 },
+    findings: [
+      { id: 'DWR', name: 'DWR', apparentVersion: '1.1.3', detectionMethods: ['inline signature'], advisoryCount: 2,
+        highestSeverity: 'high', advisoryIdentifiers: ['CVE-2014-5325', 'CVE-2014-5326'], knownExploitedCount: 0, knownExploitedIdentifiers: [], weaknessClasses: ['CWE-79'] },
+      { id: 'jquery', name: 'jquery', apparentVersion: '1.12.4', detectionMethods: ['script filename'], advisoryCount: 1,
+        highestSeverity: 'medium', advisoryIdentifiers: ['CVE-2019-11358', 'GHSA-6C3J-C64M-QHGQ'], knownExploitedCount: 0, knownExploitedIdentifiers: [], weaknessClasses: ['CWE-1321'] },
+    ],
+  });
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -974,6 +986,21 @@ test('real library projection retains advisory aliases and discloses malformed s
       if ([320, 1280].includes(viewport.width)) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`library-provenance-${viewport.width}-${theme}.png`) }); }
     }
   }
+  Object.assign(libraryProfile, {
+    findings: [],
+    diagnostics: { ...libraryProfile.diagnostics, findings: 0, advisoryMatches: 0, inlineSignatureTimedOut: true, referenceSignatureTimedOut: true },
+    limitations: ['Passive library matching exceeded its isolated-worker deadline; hash evidence was still evaluated.'],
+  });
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  if (await technology.getAttribute('open') === null) await disclosure.click();
+  await expect(libraries).toBeVisible();
+  await expect(libraries.locator('.evidence-status')).toHaveText('partial');
+  await expect(libraries.getByText('No conclusive library match', { exact: true })).toBeVisible();
+  await expect(libraries.getByText('No catalogue matches', { exact: true })).toHaveCount(0);
+  const sources = libraries.locator('details.source-details');
+  if (await sources.getAttribute('open') === null) await sources.locator('summary').click();
+  await expect(sources).toContainText('isolated-worker deadline');
 });
 
 test('completed technology analysis distinguishes an unmatched catalogue from source success', async ({ page }) => {
