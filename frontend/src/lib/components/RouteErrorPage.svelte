@@ -1,5 +1,6 @@
 <script lang="ts">
   import BrandMark from './BrandMark.svelte';
+  import BrandWordmark from './BrandWordmark.svelte';
   import SiteFooter from './SiteFooter.svelte';
 
   let { status = 404 }: { status?: number } = $props();
@@ -12,7 +13,7 @@
 </svelte:head>
 
 <div class="error-shell">
-  <header><a class="brand" href="/" data-sveltekit-reload><span class="mark"><BrandMark /></span><strong>WHOISleuth</strong></a></header>
+  <header><a class="brand" href="/" data-sveltekit-reload><span class="mark"><BrandMark /></span><strong><BrandWordmark /></strong></a></header>
   <main id="main-content">
     <p class="status">{status}</p>
     <h1>{missing ? 'Page not found' : 'Page unavailable'}</h1>

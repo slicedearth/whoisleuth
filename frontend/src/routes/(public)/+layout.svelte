@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { onMount, setContext } from 'svelte';
   import BrandMark from '$lib/components/BrandMark.svelte';
+  import BrandWordmark from '$lib/components/BrandWordmark.svelte';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
   import {
@@ -82,7 +83,7 @@
 <div class="public-shell" class:documentation-shell={referenceSectionActive}>
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <header class="public-header">
-    <a class="public-brand" href="/" aria-label="WHOISleuth overview"><span class="mark"><BrandMark /></span><span class="brand-copy"><strong>WHOISleuth</strong><small>Domain intelligence</small></span></a>
+    <a class="public-brand" href="/" aria-label="WHOISleuth overview"><span class="mark"><BrandMark /></span><span class="brand-copy"><strong><BrandWordmark /></strong><small>Domain intelligence</small></span></a>
     <nav class="public-navigation-desktop" aria-label="Public navigation">
       {#each publicHeaderNavigation as item}
         <a data-public-route={item.href} class:active={publicItemActive(item.href)} aria-current={publicItemCurrent(item.href)} href={item.href}>{item.label}</a>

@@ -12,6 +12,7 @@
   import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
   import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
   import BrandMark from '$lib/components/BrandMark.svelte';
+  import BrandWordmark from '$lib/components/BrandWordmark.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import ConsoleLoading from '$lib/components/ConsoleLoading.svelte';
   import BrowserWorkspaceIndicator from '$lib/components/BrowserWorkspaceIndicator.svelte';
@@ -293,7 +294,7 @@
   <div class="shell" class:open={navOpen}>
     <a class="skip-link" href="#main-content">Skip to main content</a>
     <header bind:this={consoleHeader} inert={commandOpen} aria-hidden={commandOpen?'true':undefined}>
-      <a href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark small"><BrandMark /></span><strong>WHOISleuth</strong></a>
+      <a href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark small"><BrandMark /></span><strong><BrandWordmark /></strong></a>
       <div class="console-header-actions">
         <button class="command-trigger" type="button" aria-label="Search console navigation" bind:this={commandTrigger} onpointerenter={() => preloadBestEffort(() => import('$lib/console-command-navigation'))} onfocus={() => preloadBestEffort(() => import('$lib/console-command-navigation'))} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Search</strong></button>
         <span class="sign-out-control">
@@ -306,7 +307,7 @@
     <aside id="console-navigation" bind:this={navigationPanel} inert={commandOpen} aria-hidden={commandOpen?'true':undefined}>
       <div class="terminal-strip" aria-hidden="true"><span class="prompt-sigil">❯</span><span>guest@whoisleuth / console</span></div>
       <button class="navigation-drawer-close" type="button" aria-label="Close navigation" onclick={()=>void closeNavigation()}>×</button>
-      <a class="brand" href="/dashboard"><span class="mark"><BrandMark /></span><span><strong>WHOISleuth</strong><small>Domain intelligence console</small></span></a>
+      <a class="brand" href="/dashboard"><span class="mark"><BrandMark /></span><span><strong><BrandWordmark /></strong><small>Domain intelligence console</small></span></a>
       <nav aria-label="Console">
         {#each consoleNavigationGroups as navigationGroup}
           <div class="console-nav-group" role="group" aria-labelledby={`console-group-${navigationGroup.label.toLowerCase().replaceAll(' ', '-').replace('&', 'and')}`}>
