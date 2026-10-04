@@ -1,6 +1,7 @@
 // Shared collision-resistant identities for bounded, already normalised records.
 // Platform cryptography remains the owner of signatures and authentication.
 export const MAX_IDENTITY_DIGEST_BYTES = 1024 * 1024;
+export const MAX_INCREMENTAL_DIGEST_BYTES = 256 * 1024 * 1024;
 
 const SHA256_CONSTANTS = Object.freeze([
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -17,25 +18,20 @@ function rotateRight(value: number, bits: number): number {
   return (value >>> bits) | (value << (32 - bits));
 }
 
-export function sha256IdentityHex(bytes: Uint8Array): string {
-  if (bytes.byteLength > MAX_IDENTITY_DIGEST_BYTES) throw new RangeError('Record identity exceeds its byte limit.');
-  // This digest is a collision-resistant record identity, not a password,
-  // signature, MAC, or substitute for the platform cryptography used there.
-  const paddedLength = Math.ceil((bytes.byteLength + 9) / 64) * 64;
-  const padded = new Uint8Array(paddedLength);
-  padded.set(bytes);
-  padded[bytes.byteLength] = 0x80;
-  const view = new DataView(padded.buffer);
-  const bitLength = bytes.byteLength * 8;
-  view.setUint32(paddedLength - 8, Math.floor(bitLength / 0x1_0000_0000), false);
-  view.setUint32(paddedLength - 4, bitLength >>> 0, false);
+/** Incremental content identity only; never authentication or publisher proof. */
+export function createIncrementalSha256(maximumBytes = MAX_IDENTITY_DIGEST_BYTES) {
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 0 || maximumBytes > MAX_INCREMENTAL_DIGEST_BYTES)
+    throw new RangeError('Content identity has an invalid byte limit.');
   const state = new Uint32Array([
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
     0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
   ]);
   const words = new Uint32Array(64);
-  for (let offset = 0; offset < paddedLength; offset += 64) {
-    for (let index = 0; index < 16; index += 1) words[index] = view.getUint32(offset + index * 4, false);
+  const pending = new Uint8Array(64);
+  let pendingBytes = 0, totalBytes = 0, finished = false;
+  function block(bytes: Uint8Array, offset: number) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset + offset, 64);
+    for (let index = 0; index < 16; index += 1) words[index] = view.getUint32(index * 4, false);
     for (let index = 16; index < 64; index += 1) {
       const left = words[index - 15]!;
       const right = words[index - 2]!;
@@ -69,5 +65,41 @@ export function sha256IdentityHex(bytes: Uint8Array): string {
     state[6] = (state[6]! + g!) >>> 0;
     state[7] = (state[7]! + h!) >>> 0;
   }
-  return [...state].map((value) => value.toString(16).padStart(8, '0')).join('');
+  return Object.freeze({
+    update(bytes: Uint8Array): void {
+      if (finished) throw new Error('Content identity is already finalised.');
+      if (!(bytes instanceof Uint8Array) || bytes.byteLength > maximumBytes - totalBytes)
+        throw new RangeError('Content identity exceeds its byte limit.');
+      totalBytes += bytes.byteLength;
+      let offset = 0;
+      if (pendingBytes) {
+        const length = Math.min(64 - pendingBytes, bytes.byteLength);
+        pending.set(bytes.subarray(0, length), pendingBytes);
+        pendingBytes += length; offset += length;
+        if (pendingBytes === 64) { block(pending, 0); pendingBytes = 0; }
+      }
+      while (offset + 64 <= bytes.byteLength) { block(bytes, offset); offset += 64; }
+      if (offset < bytes.byteLength) {
+        pending.set(bytes.subarray(offset), 0); pendingBytes = bytes.byteLength - offset;
+      }
+    },
+    digestHex(): string {
+      if (finished) throw new Error('Content identity is already finalised.');
+      finished = true;
+      const padding = new Uint8Array(pendingBytes < 56 ? 64 : 128);
+      padding.set(pending.subarray(0, pendingBytes)); padding[pendingBytes] = 0x80;
+      const view = new DataView(padding.buffer), bits = totalBytes * 8;
+      view.setUint32(padding.length - 8, Math.floor(bits / 0x1_0000_0000), false);
+      view.setUint32(padding.length - 4, bits >>> 0, false);
+      block(padding, 0); if (padding.length === 128) block(padding, 64);
+      return [...state].map(value => value.toString(16).padStart(8, '0')).join('');
+    },
+  });
+}
+
+export function sha256IdentityHex(bytes: Uint8Array): string {
+  if (bytes.byteLength > MAX_IDENTITY_DIGEST_BYTES) throw new RangeError('Record identity exceeds its byte limit.');
+  const digest = createIncrementalSha256();
+  digest.update(bytes);
+  return digest.digestHex();
 }
