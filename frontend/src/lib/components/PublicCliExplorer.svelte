@@ -306,10 +306,10 @@
   </div>
 
   <form class="filters" hidden={Boolean(expandedId)} onsubmit={(event) => event.preventDefault()} aria-label="Filter CLI commands">
-    <label class="search"><span>Search commands</span><input type="search" bind:value={query} placeholder="Command or purpose" autocomplete="off"></label>
-    <label><span>Group</span><select bind:value={group}><option value="all">All groups</option>{#each PUBLIC_CLI_INDEX.groups as item}<option value={item}>{labelToken(item)}</option>{/each}</select></label>
-    <label><span>Mode</span><select bind:value={mode}><option value="all">All modes</option>{#each PUBLIC_CLI_INDEX.modes as item}<option value={item}>{labelToken(item)}</option>{/each}</select></label>
-    <label class="check"><input type="checkbox" bind:checked={commonOnly}><span>Common commands only</span></label>
+    <label class="search"><span>Search commands</span><input type="search" bind:value={query} disabled={!clientReady} placeholder="Command or purpose" autocomplete="off"></label>
+    <label><span>Group</span><select bind:value={group} disabled={!clientReady}><option value="all">All groups</option>{#each PUBLIC_CLI_INDEX.groups as item}<option value={item}>{labelToken(item)}</option>{/each}</select></label>
+    <label><span>Mode</span><select bind:value={mode} disabled={!clientReady}><option value="all">All modes</option>{#each PUBLIC_CLI_INDEX.modes as item}<option value={item}>{labelToken(item)}</option>{/each}</select></label>
+    <label class="check"><input type="checkbox" bind:checked={commonOnly} disabled={!clientReady}><span>Common commands only</span></label>
   </form>
   <p class="filter-status" hidden={Boolean(expandedId)} role="status" aria-live="polite">Showing {filtered.length} of {PUBLIC_CLI_INDEX.commandCount} commands.</p>
   {#if loadError}<div class="load-error" role="alert"><p>{loadError}</p><small>{DEFERRED_MODULE_RECOVERY_DETAIL}</small><button type="button" onclick={reloadDeferredModulePage}>Reload page</button></div>{/if}
@@ -403,7 +403,7 @@
               aria-label={`View ${command.id} command`}
               aria-describedby={`command-summary-${command.id}`}
               aria-busy={loadingId === command.id}
-              disabled={Boolean(loadError)}
+              disabled={!clientReady || Boolean(loadError)}
               onfocus={preloadCatalogue}
               onpointerenter={preloadCatalogue}
               onclick={(event) => navigateToCommand(event, command.id)}

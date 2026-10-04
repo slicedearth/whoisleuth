@@ -48,6 +48,11 @@ test('exact delivery correction preserves originals through cancel, failed save,
     }
     expect((await new AxeBuilder({ page }).include('.correction').analyze()).violations).toEqual([]);
   }
+  const json = region.getByRole('region', { name: 'Correction draft JSON', exact: true });
+  await json.focus();
+  await expect(json).toBeFocused();
+  await page.keyboard.press('PageDown');
+  await expect.poll(() => json.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
   await region.getByRole('button', { name: 'Cancel correction preview', exact: true }).click();
   expect((await readBrowserLocalCollection(page, 'cases')).records).toEqual(before.records);
   await expect(form.getByLabel('Corrected statement', { exact: true })).toHaveValue('Only a demonstration form is established by the retained capture.');

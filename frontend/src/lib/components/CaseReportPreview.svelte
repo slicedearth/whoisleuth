@@ -56,12 +56,18 @@
       {/each}
     </article>
   </div>
-  <details class="screen-reading"><summary>Exact Markdown download</summary><pre>{preview.files.md.content}</pre></details>
-  <details class="screen-reading"><summary>Exact JSON download</summary><pre>{preview.files.json.content}</pre></details>
+  <details class="screen-reading"><summary>Exact Markdown download</summary>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -- the named scroll region provides keyboard access to the complete report -->
+    <div class="text-scroll" role="region" tabindex="0" aria-label="Exact report Markdown"><pre>{preview.files.md.content}</pre></div>
+  </details>
+  <details class="screen-reading"><summary>Exact JSON download</summary>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -- the named scroll region provides keyboard access to the complete report -->
+    <div class="text-scroll" role="region" tabindex="0" aria-label="Exact report JSON"><pre>{preview.files.json.content}</pre></div>
+  </details>
 </dialog>
 
 <style>
-  dialog{width:min(960px,calc(100% - 24px));max-height:calc(100dvh - 24px);padding:24px;border:1px solid var(--border-strong);border-radius:var(--radius-md);background:var(--panel);color:var(--text);overflow:auto;overflow-wrap:anywhere}dialog::backdrop{background:rgb(0 0 0 / .6)}header,.actions{display:flex;align-items:start;justify-content:space-between;gap:12px;flex-wrap:wrap}h2{margin:0;font-family:var(--font-sans)}p,li{line-height:1.6}.actions{justify-content:start;margin-top:20px}details{margin-top:20px}summary{min-height:44px}pre{max-height:28rem;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:var(--text-xs)/1.5 var(--mono)}
+  dialog{width:min(960px,calc(100% - 24px));max-height:calc(100dvh - 24px);padding:24px;border:1px solid var(--border-strong);border-radius:var(--radius-md);background:var(--panel);color:var(--text);overflow:auto;overflow-wrap:anywhere}dialog::backdrop{background:rgb(0 0 0 / .6)}header,.actions{display:flex;align-items:start;justify-content:space-between;gap:12px;flex-wrap:wrap}h2{margin:0;font-family:var(--font-sans)}p,li{line-height:1.6}.actions{justify-content:start;margin-top:20px}details{margin-top:20px}summary{min-height:44px}.text-scroll{max-height:28rem;overflow:auto}.text-scroll:focus-visible{outline:2px solid var(--focus);outline-offset:3px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:var(--text-xs)/1.5 var(--mono)}
   @media(max-width:600px){dialog{padding:16px}.actions button{width:100%}}
   .report-print-content,.print-guard{display:none}
   @media print {

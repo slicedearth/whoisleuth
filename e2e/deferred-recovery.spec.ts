@@ -248,14 +248,16 @@ test('CLI navigation readiness waits for working client-side filtering', async (
     const status = catalogue.getByRole('status');
     await expect(page.getByRole('heading', { name: 'WHOISleuth CLI', exact: true })).toBeVisible();
     await expect(search).toBeVisible();
-    await expect(search).toBeEnabled();
+    await expect(search).toBeDisabled();
+    await expect(catalogue.getByRole('combobox', { name: 'Group', exact: true })).toBeDisabled();
+    await expect(catalogue.getByRole('combobox', { name: 'Mode', exact: true })).toBeDisabled();
+    await expect(catalogue.getByRole('checkbox', { name: 'Common commands only', exact: true })).toBeDisabled();
+    await expect(catalogue.getByRole('button', { name: 'View workflow-plan command', exact: true })).toBeDisabled();
     await expect(catalogue).toHaveAttribute('data-client-ready', 'false');
     await waitForAnimationFrames(page);
     expect(await isNavigationReadinessMarked(page)).toBe(false);
 
-    // The enabled prerendered control accepts DOM input, but cannot update its
-    // result set until the component's client handlers are installed.
-    await search.fill('workflow-plan');
+    // Prerendered controls cannot accept edits that hydration would overwrite.
     await expect(status).toHaveText(`Showing ${CLI_COMMANDS.length} of ${CLI_COMMANDS.length} commands.`);
     expect(await isNavigationReadinessMarked(page)).toBe(false);
 
@@ -267,6 +269,7 @@ test('CLI navigation readiness waits for working client-side filtering', async (
     }).toBe(true);
     expect(await readNavigationReadinessMark(page)).toBeGreaterThan(0);
     await expect(catalogue).toHaveAttribute('data-client-ready', 'true');
+    await expect(search).toBeEnabled();
 
     await search.fill('');
     await search.focus();

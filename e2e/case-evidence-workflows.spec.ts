@@ -555,6 +555,17 @@ test.describe('case report export', () => {
     const preview = page.getByRole('dialog', { name: 'Case report preview', exact: true });
     const printable = preview.getByRole('article', { name: 'Complete prepared ordinary Case report', includeHidden: true });
     await expect(printable).toHaveCount(1); await expect(printable).toBeHidden();
+    for (const format of ['Markdown', 'JSON']) {
+      const disclosure = preview.getByText(`Exact ${format} download`, { exact: true });
+      await disclosure.click();
+      const text = preview.getByRole('region', { name: `Exact report ${format}`, exact: true });
+      await text.focus();
+      await expect(text).toBeFocused();
+      await page.keyboard.press('PageDown');
+      await expect.poll(() => text.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+      expect((await new AxeBuilder({ page }).include('dialog[open]').analyze()).violations).toEqual([]);
+      await disclosure.click();
+    }
     await page.evaluate(() => { window.print = () => { Reflect.set(window, 'ordinaryReportPrintCalls', Number(Reflect.get(window, 'ordinaryReportPrintCalls') ?? 0) + 1); window.dispatchEvent(new Event('beforeprint')); }; });
     const print = preview.getByRole('button', { name: 'Print or save PDF', exact: true });
     await print.focus(); await page.keyboard.press('Enter');

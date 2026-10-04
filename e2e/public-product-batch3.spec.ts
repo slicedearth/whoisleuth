@@ -240,6 +240,7 @@ test('filters and opens the canonical CLI catalogue entirely by keyboard', async
   await page.goto('/cli');
   const catalogue = page.getByTestId('public-cli-catalogue');
   const search = catalogue.getByRole('searchbox', { name: 'Search commands' });
+  await expect(search).toBeEnabled();
   await search.focus();
   await page.keyboard.type('workflow-plan');
   await expect(search).toBeFocused();
