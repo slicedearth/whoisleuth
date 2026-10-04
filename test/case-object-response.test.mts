@@ -268,7 +268,7 @@ test('Case import preserves authored provider closures through conflicting recei
           assert.deepEqual(merged.closures.records, [authored]);
           assert.equal(merged.closures.omitted, 0);
           assert.equal(merged.actions[0]!.history.filter(event => event.nextState === 'terminal').length, 2);
-          assert.match(caseClosureHistoryQualification(authored, merged.actions)!, /historical analyst decision.*current remediation/, JSON.stringify({ wholeCase, resolvedId, conflictId, conflictAt, terminal: merged.actions[0]!.history.filter(event => event.nextState === 'terminal') }));
+          assert.match(caseClosureHistoryQualification(authored, merged.actions)!, /As of the latest retained receipt.*historical analyst decision.*current remediation/, JSON.stringify({ wholeCase, resolvedId, conflictId, conflictAt, terminal: merged.actions[0]!.history.filter(event => event.nextState === 'terminal') }));
           assert.notEqual(caseClosureActionBlocker(authored.reason, merged.actions[0], responseObject, closedAt), null);
           assert.throws(() => updateCase([merged], merged.id, { closure }, closedAt), /latest applicable/);
           const report = buildCaseReport(merged);

@@ -73,6 +73,11 @@ and `value` are bounded display text, not a replacement for that identity. Inspe
 the contributing Case evidence for full nameserver members. Component selections
 and cluster adjustments are transient and are not persisted review history.
 
+In GraphML and GEXF, the display label for `node_canonical` is now
+`Bounded display value` (previously `Canonical value`). The field key, JSON
+property, entity identities and values are unchanged; XML consumers should use
+the field key rather than its display label.
+
 The existing offline command shares the website reader and comparison owner:
 
 ```sh

@@ -496,11 +496,18 @@ test.describe('accessible cross-case relationship table', () => {
     const firstButton = first.getByRole('button', { name: /^Inspect relationship/ });
     const secondButton = second.getByRole('button', { name: /^Inspect relationship/ });
     expect(await firstButton.getAttribute('aria-label')).toBe(await secondButton.getAttribute('aria-label'));
-    for (const [selected, other] of [[firstButton, secondButton], [secondButton, firstButton]]) {
-      await selected!.focus(); await page.keyboard.press('Enter');
-      await expect(selected!).toHaveAttribute('aria-pressed', 'true');
-      await expect(other!).toHaveAttribute('aria-pressed', 'false');
-      await expect(page.getByRole('region', { name: 'Relationship graph' }).locator('svg [aria-pressed="true"]')).toHaveCount(1);
+    const graph = page.getByRole('region', { name: 'Relationship graph' });
+    for (const [selected, other, members, excluded] of [
+      [firstButton, secondButton, ['first-a', 'first-b'], ['second-a', 'second-b']],
+      [secondButton, firstButton, ['second-a', 'second-b'], ['first-a', 'first-b']],
+    ] as const) {
+      await selected.focus(); await page.keyboard.press('Enter');
+      await expect(selected).toHaveAttribute('aria-pressed', 'true');
+      await expect(other).toHaveAttribute('aria-pressed', 'false');
+      await expect(graph.locator('svg [aria-pressed="true"]')).toHaveCount(1);
+      // The selected node's own pivots distinguish these otherwise equal labels.
+      for (const member of members) await expect(graph.getByRole('button', { name: `Open ${member}.example`, exact: true })).toBeVisible();
+      for (const member of excluded) await expect(graph.getByRole('button', { name: `Open ${member}.example`, exact: true })).toHaveCount(0);
     }
   });
 
@@ -900,15 +907,26 @@ test.describe('accessible cross-case relationship table', () => {
     for (const format of ['graphml', 'gexf'] as const) {
       const xml = await download(format);
       expect(xml.result.suggestedFilename()).toMatch(new RegExp(`^whoisleuth-relationship-graph-\\d{4}-\\d{2}-\\d{2}\\.${format}$`));
-      const parsed = await page.evaluate((content) => {
+      const parsed = await page.evaluate(({ content, format }) => {
         const document = new DOMParser().parseFromString(content, 'application/xml');
+        const value = (node: Element, field: string) => format === 'graphml'
+          ? node.querySelector(`data[key="node_${field}"]`)?.textContent ?? null
+          : node.querySelector(`attvalue[for="node_${field}"]`)?.getAttribute('value') ?? null;
+        const field = document.querySelector('[id="node_canonical"]');
         return {
           errors: document.getElementsByTagName('parsererror').length,
-          nodes: document.getElementsByTagNameNS('*', 'node').length,
+          fieldLabel: field?.getAttribute(format === 'graphml' ? 'attr.name' : 'title'),
+          nodes: [...document.getElementsByTagNameNS('*', 'node')].map(node => ({
+            id: node.getAttribute('id'), canonical: value(node, 'canonical'), entityId: value(node, 'entityId'),
+          })),
           edges: document.getElementsByTagNameNS('*', 'edge').length,
         };
-      }, xml.content);
-      expect(parsed).toEqual({ errors: 0, nodes: 4, edges: 4 });
+      }, { content: xml.content, format });
+      expect(parsed).toEqual({ errors: 0, fieldLabel: 'Bounded display value', edges: 4,
+        nodes: document.graph.nodes.map((node: { id: string; canonical: string; entityId?: string }) => ({
+          id: node.id, canonical: node.canonical, entityId: node.entityId ?? null,
+        })),
+      });
     }
     await expect(controls.getByRole('status')).toContainText('Downloaded 4 nodes and 4 edges');
   });

@@ -6,6 +6,7 @@ import {
   buildRelationshipGraphDocument,
   buildRelationshipGraphExport,
   MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES,
+  MAX_RELATIONSHIP_GRAPH_EXPORT_LIMITATIONS,
   MAX_RELATIONSHIP_GRAPH_EXPORT_OBSERVATIONS_PER_RELATIONSHIP,
   RELATIONSHIP_GRAPH_EXPORT_SCHEMA,
   RELATIONSHIP_GRAPH_EXPORT_VERSION,
@@ -103,6 +104,25 @@ function summary(overrides: Partial<CaseRelationshipSummary> = {}): CaseRelation
 }
 
 describe('relationship graph interchange export', () => {
+  test('reserves fixed explanations and discloses saturated source limitations in every format', () => {
+    for (const count of [0, 9, 10, 12, 60]) {
+      const limitations = Array.from({ length: count }, (_, index) => `Source limitation ${index + 1}.`);
+      const input = summary({ limitations });
+      const document = buildRelationshipGraphDocument(input, { generatedAt: NOW });
+      assert.ok(document.limitations.length <= MAX_RELATIONSHIP_GRAPH_EXPORT_LIMITATIONS);
+      const expectedSource = count <= 9 ? limitations : limitations.slice(0, 8);
+      assert.deepEqual(document.limitations.slice(0, expectedSource.length), expectedSource);
+      assert.equal(document.limitations.some(value => /Additional graph-level limitations are omitted/.test(value)), count > 9);
+      for (const format of ['json', 'graphml', 'gexf'] as const) {
+        const { content, bytes } = buildRelationshipGraphExport(input, { generatedAt: NOW, format });
+        assert.match(content, /does not establish ownership, coordination, intent, or maliciousness/);
+        assert.match(content, /Transient focus, pin, hide/);
+        assert.match(content, /Use entityId for canonical identity where present/);
+        assert.ok(bytes <= MAX_RELATIONSHIP_GRAPH_EXPORT_BYTES);
+      }
+    }
+  });
+
   test('builds one versioned canonical graph with deterministic portable ids and provenance', () => {
     const document = buildRelationshipGraphDocument(summary(), { generatedAt: NOW, source: 'monitor' });
     assert.equal(document.schema, RELATIONSHIP_GRAPH_EXPORT_SCHEMA);

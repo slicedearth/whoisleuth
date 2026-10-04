@@ -388,7 +388,7 @@ export function caseClosureHistoryQualification(closure: CaseClosureRecord, acti
   const latestAt = (action?.history ?? []).reduce((latest, event) =>
     Date.parse(event.occurredAt) > Date.parse(latest) ? event.occurredAt : latest, closure.createdAt);
   return caseClosureProviderBlocker(action, closure.responseObject, latestAt) === null ? null
-    : 'Retained provider history no longer supports a new closure for this scope. This historical analyst decision is preserved; it does not establish current remediation.';
+    : 'As of the latest retained receipt, provider history does not support a new closure for this scope. This historical analyst decision is preserved; it does not establish current remediation.';
 }
 
 export function appendCaseClosure(

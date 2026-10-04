@@ -125,6 +125,7 @@ for (const keepAuthored of [false, true]) test(`imported competing legal termina
   if (keepAuthored) {
     const history = outcome.getByRole('list', { name: 'Deliberate case closures', exact: true });
     await expect(history).toContainText(authored[0]!.summary);
+    await expect(history).toContainText('As of the latest retained receipt');
     await expect(history).toContainText('This historical analyst decision is preserved');
     for (const theme of ['light', 'dark'] as const) for (const width of [320, 390, 1280]) {
       await useTheme(page, theme); await page.setViewportSize({ width, height: 900 });

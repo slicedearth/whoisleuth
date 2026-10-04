@@ -478,8 +478,9 @@ type WorkspaceLifecyclePortableDefinition = Readonly<{
   schema: string;
   builder: string;
   merger: string;
-  serializerHookId: 'workspace.portable.json' | 'workspace.portable.json-line' | 'workspace.portable.archive-section';
+  serializerHookId: 'workspace.portable.json' | 'workspace.portable.json-line' | 'workspace.portable.archive-section' | 'workspace.portable.watchlist-json';
   indentSpaces: 0 | 2;
+  compactFallback?: true;
   terminalLf: boolean;
 }>;
 
@@ -565,8 +566,9 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
       schema: WATCHLIST_SCHEMA,
       builder: 'buildWatchlistExport',
       merger: 'mergeWatchlistStores',
-      serializerHookId: 'workspace.portable.json',
+      serializerHookId: 'workspace.portable.watchlist-json',
       indentSpaces: 2,
+      compactFallback: true,
       terminalLf: false,
     },
   },
@@ -1301,6 +1303,13 @@ const WORKSPACE_LIFECYCLE_HOOKS: readonly SchemaLifecycleHook[] = Object.freeze(
     exportName: 'serialiseWorkspacePortableJson',
   },
   {
+    id: 'workspace.portable.watchlist-json',
+    role: 'serialiser',
+    runtime: 'shared',
+    module: 'packages/workspace/watchlist-store.mts',
+    exportName: 'serializeWatchlistExport',
+  },
+  {
     id: 'workspace.portable.json-line',
     role: 'serialiser',
     runtime: 'shared',
@@ -1417,6 +1426,7 @@ function workspacePortableSerialisation(
     encoding: 'utf-8',
     bom: false,
     indentSpaces: definition.portable.indentSpaces,
+    ...(definition.portable.compactFallback ? { compactFallback: true as const } : {}),
     terminalLf: definition.portable.terminalLf,
     propertyOrder: 'normalised_fixed',
     canonicalisation: null,
