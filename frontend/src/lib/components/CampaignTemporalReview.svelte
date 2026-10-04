@@ -72,6 +72,11 @@
             <div class="event-head"><strong>{event.domain}</strong><span>{labelFor(event.layer)}</span></div>
             <p>{formatDate(event.firstObservedAt)}{#if event.lastObservedAt !== event.firstObservedAt} – {formatDate(event.lastObservedAt)}{/if} · {event.observationCount} retained observation{event.observationCount === 1 ? '' : 's'}</p>
             <small>{event.sources.join(', ')} · {event.completeness}{event.truncated ? ' · truncated' : ''}</small>
+            {#if event.limitations.length}
+              <details><summary>Evidence limitations</summary>
+                {#each event.limitations as limitation}<p>{limitation}</p>{/each}
+              </details>
+            {/if}
           </div>
         </li>
       {/each}

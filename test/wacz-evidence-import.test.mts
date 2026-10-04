@@ -58,23 +58,26 @@ function wacz(options: Readonly<{
   resourceDigest?: 'valid' | 'invalid';
   resourceBytes?: number;
   includeManifest?: boolean;
+  resourcePath?: string;
+  entryPath?: string;
+  warcBytes?: Uint8Array;
   extraEntries?: Readonly<Record<string, Uint8Array>>;
 }> = {}): Uint8Array {
-  const compressedWarc = gzipSync(warcArchive());
+  const compressedWarc = gzipSync(options.warcBytes ?? warcArchive());
   const manifest = encoder.encode(JSON.stringify({
     profile: 'data-package',
     wacz_version: '1.1.1',
     resources: [
       {
         name: 'capture.warc.gz',
-        path: 'archive/capture.warc.gz',
+        path: options.resourcePath ?? 'archive/capture.warc.gz',
         hash: `sha256:${options.resourceDigest === 'invalid' ? '0'.repeat(64) : sha256(compressedWarc)}`,
         bytes: options.resourceBytes ?? compressedWarc.byteLength,
       },
     ],
   }));
   const files: Zippable = {
-    'archive/capture.warc.gz': [compressedWarc, { level: 0 as const }],
+    [options.entryPath ?? options.resourcePath ?? 'archive/capture.warc.gz']: [compressedWarc, { level: 0 as const }],
     ...(options.extraEntries ?? {}),
   };
   if (options.includeManifest !== false) {
@@ -90,6 +93,28 @@ function wacz(options: Readonly<{
 }
 
 describe('portable WACZ evidence import', () => {
+  test('matches exact resource case while rejecting ambiguous case-folded duplicates', async () => {
+    for (const resourcePath of ['archive/Capture.warc.gz', 'archive/Capture.WARC.GZ']) {
+      const report = await parseWaczEvidenceArchive(toArrayBuffer(wacz({ resourcePath })));
+      assert.equal(report.accepted, 1);
+      assert.equal(report.resourcesVerified, 1);
+      await assert.rejects(parseWaczEvidenceArchive(toArrayBuffer(wacz({ resourcePath, entryPath: resourcePath.toLowerCase() }))), /not uniquely declared|missing/);
+      await assert.rejects(parseWaczEvidenceArchive(toArrayBuffer(wacz({ resourcePath, extraEntries: { [resourcePath.toLowerCase()]: gzipSync(warcArchive()) } }))), /repeats a ZIP entry/);
+    }
+  });
+
+  test('delegates the same whole-archive per-host finding bound without partial imports', async () => {
+    for (const count of [20, 21]) {
+      const records = Array.from({ length: count }, (_, index) => encoder.encode(new TextDecoder().decode(warcArchive())
+        .replace('2026-07-31T00:00:00.000Z', `2026-07-${String(index + 1).padStart(2, '0')}T00:00:00.000Z`)));
+      const bytes = new Uint8Array(records.reduce((sum, record) => sum + record.byteLength, 0));
+      let offset = 0;
+      for (const record of records) { bytes.set(record, offset); offset += record.byteLength; }
+      const reading = parseWaczEvidenceArchive(toArrayBuffer(wacz({ warcBytes: bytes })));
+      if (count === 21) await assert.rejects(reading, /20|per domain/i);
+      else { const report = await reading; assert.equal(report.accepted, 20); assert.equal(report.excluded, 0); }
+    }
+  });
   test('owns the archive before digesting, independent of caller mutation or transfer', async () => {
     for (const action of ['mutate', 'transfer'] as const) {
       const input = toArrayBuffer(wacz());

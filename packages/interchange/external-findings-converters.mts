@@ -319,39 +319,50 @@ function parseCsvRows(value: string): string[][] {
   let row: string[] = [];
   let field = '';
   let quoted = false;
+  let closedQuote = false;
+  function finishRow() {
+    row.push(field);
+    if (row.some(item => item.trim())) {
+      if (row.length !== MAX_CSV_COLUMNS) throw new Error(rows.length === 0
+        ? `CSV header must be: ${EXTERNAL_FINDING_CSV_COLUMNS.join(',')}.`
+        : `CSV rows must contain exactly ${MAX_CSV_COLUMNS} columns.`);
+      rows.push(row);
+      if (rows.length > MAX_EXTERNAL_FINDINGS + 1) throw new Error(`CSV imports are limited to ${MAX_EXTERNAL_FINDINGS} findings.`);
+    }
+    row = [];
+    field = '';
+    closedQuote = false;
+  }
   for (let index = 0; index < value.length; index += 1) {
     const character = value[index] ?? '';
     if (quoted) {
       if (character === '"' && value[index + 1] === '"') {
         field += '"';
         index += 1;
-      } else if (character === '"') quoted = false;
+      } else if (character === '"') { quoted = false; closedQuote = true; }
       else field += character;
       continue;
     }
+    const newline = character === '\n' || (character === '\r' && (value[index + 1] === '\n' || index === value.length - 1));
+    if (closedQuote && character !== ',' && !newline) throw new Error('CSV closing quotes must be followed by a comma or line ending.');
     if (character === '"') {
       if (field) throw new Error('CSV quotes must begin at the start of a field.');
       quoted = true;
     } else if (character === ',') {
       row.push(field);
       field = '';
-      if (row.length > MAX_CSV_COLUMNS) throw new Error('CSV rows have too many columns.');
-    } else if (character === '\n') {
-      row.push(field.replace(/\r$/, ''));
-      rows.push(row);
-      row = [];
-      field = '';
-      if (rows.length > MAX_EXTERNAL_FINDINGS + 1) throw new Error(`CSV imports are limited to ${MAX_EXTERNAL_FINDINGS} findings.`);
+      closedQuote = false;
+      if (row.length >= MAX_CSV_COLUMNS) throw new Error('CSV rows have too many columns.');
+    } else if (newline) {
+      finishRow();
+      if (character === '\r' && value[index + 1] === '\n') index += 1;
     } else {
       field += character;
     }
   }
   if (quoted) throw new Error('CSV contains an unterminated quoted field.');
-  if (field || row.length) {
-    row.push(field.replace(/\r$/, ''));
-    rows.push(row);
-  }
-  return rows.filter((candidate) => candidate.some((item) => item.trim()));
+  if (field || row.length || closedQuote) finishRow();
+  return rows;
 }
 
 export function convertExternalFindingsCsv(value: string, fallbackSource = 'External CSV findings'): ExternalFindingsDocument {

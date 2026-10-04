@@ -65,6 +65,17 @@ describe('external findings converters', () => {
     );
   });
 
+  test('requires exactly seven CSV fields at both line endings and end of file', () => {
+    const header = 'domain,category,summary,observed_at,completeness,limitation,reference';
+    const valid = `example.test,http,"Observed, with ""quotes""",${observedAt},complete,,`;
+    for (const ending of ['', '\n', '\r\n']) {
+      assert.equal(convertExternalFindingsCsv(`${header}\n${valid}${ending}`).findings[0]?.summary, 'Observed, with "quotes"');
+      for (const invalid of [valid.slice(0, -1), `${valid},extra`, valid.replace('""quotes"""', '""quotes"""suffix')]) {
+        assert.throws(() => convertExternalFindingsCsv(`${header}\n${invalid}${ending}`), /CSV/);
+      }
+    }
+  });
+
   test('converts documented domain observations with an explicit review summary', () => {
     const report = convertSupportedExternalFindings({
       schema: DOMAIN_OBSERVATION_ROWS_SCHEMA,

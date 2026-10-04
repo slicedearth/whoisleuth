@@ -167,6 +167,13 @@ are supported; malformed HTTP records are excluded individually. Invalid WARC
 framing or conflicting record lengths reject the archive because record
 boundaries cannot be trusted.
 
+Final validation permits at most 20 distinct findings for any one hostname.
+An archive exceeding that per-host limit is rejected as a whole; it is not
+silently reduced to 20. Exact duplicates are removed during final validation.
+The 25-response archive bound is applied before that deduplication, so repeated
+records can consume candidate slots. The same rules apply to WARC resources
+inside WACZ packages.
+
 For each retained response, the importer keeps only the normalised domain,
 HTTP(S) origin, bounded title, response status, WARC observation time,
 completeness, fixed limitations, and whole-archive SHA-256 digest. Supported

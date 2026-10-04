@@ -138,3 +138,20 @@ test('retained managed manifest fixture remains independently readable and verif
   assert.equal(value.revision, 1); assert.equal(value.entries[0]!.domain, 'candidate.example.test');
   assert.equal(value.entries[0]!.observation.observedAt, null);
 });
+
+test('final manifest bytes round trip near the file limit without losing revision history', async () => {
+  const rows = Array.from({ length: MAX_MANAGED_INDICATORS }, (_, index) => row(`entry-${index}.example.test`));
+  const first = (await buildManagedIndicatorRevision({ name: 'Large review', basis: 'é'.repeat(930), expiresAt: EXPIRY, rows,
+    selectedDomains: rows.map(item => item.domain) }, NOW)).manifest;
+  assert.ok(Buffer.byteLength(`${JSON.stringify(first, null, 2)}\n`) > MAX_MANAGED_INDICATOR_SET_BYTES);
+  const second = (await buildManagedIndicatorRevision({ previous: first, basis: 'Reviewed "quoted" evidence \\ again',
+    renewIds: [first.entries[0]!.id], withdrawIds: [first.entries[1]!.id], expiresAt: RENEWED }, NEXT)).manifest;
+  for (const manifest of [first, second]) {
+    const exported = await exportManagedIndicators(manifest, 'manifest');
+    assert.ok(Buffer.byteLength(exported.content) <= MAX_MANAGED_INDICATOR_SET_BYTES);
+    const imported = await readManagedIndicatorSet(parseManagedIndicatorJson(exported.content));
+    assert.deepEqual(imported, manifest);
+    assert.equal(imported.entries.length, MAX_MANAGED_INDICATORS);
+    assert.equal(imported.integrity.digestSha256, manifest.integrity.digestSha256);
+  }
+});

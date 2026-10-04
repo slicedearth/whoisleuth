@@ -6,7 +6,8 @@ import { test } from 'node:test';
 import { runCli } from '../cli/runner.mts';
 import { cliInvocationNetworkEffect } from '../cli/command-reference.mts';
 import { parseCliArguments } from '../cli/arguments.mts';
-import { readManagedIndicatorSet } from '../packages/interchange/managed-indicator-set.mts';
+import { readManagedIndicatorSet, parseManagedIndicatorJson, MAX_MANAGED_INDICATORS } from '../packages/interchange/managed-indicator-set.mts';
+import { MAX_MANAGED_INDICATOR_SET_BYTES } from '../packages/contracts/analyst-interchange.mts';
 import { buildInterchangeFidelityReport } from '../cli/interchange-report.mts';
 
 const NOW = '2026-09-23T00:00:00.000Z';
@@ -54,6 +55,25 @@ test('malformed and future indicator files fail without success output or collec
     const result = await invoke(['indicator-set', 'inspect', '--json'], raw);
     assert.equal(result.reads, 1); assert.notEqual(result.code, 0); assert.equal(result.stdout, ''); assert.ok(result.stderr.length > 0);
   }
+});
+
+test('large CLI revisions can be reopened from their actual emitted bytes', async () => {
+  const rows = Array.from({ length: MAX_MANAGED_INDICATORS }, (_, index) => ({ domain: `entry-${index}.example.test`,
+    availability: 'registered', risk: 85, analystDisposition: 'suspicious', profileContext: { sourceState: 'ready' } }));
+  const first = await invoke(['indicator-set', 'revise', '--json'], JSON.stringify({ name: 'Large review', basis: 'é'.repeat(930),
+    expiresAt: '2026-10-23T00:00:00.000Z', rows, selectedDomains: rows.map(row => row.domain) }));
+  assert.equal(first.code, 0, first.stderr);
+  assert.ok(Buffer.byteLength(first.stdout) <= MAX_MANAGED_INDICATOR_SET_BYTES);
+  const manifest = await readManagedIndicatorSet(parseManagedIndicatorJson(first.stdout));
+  assert.equal(manifest.entries.length, MAX_MANAGED_INDICATORS);
+  const readBack = await invoke(['indicator-set', 'inspect', '--json'], first.stdout);
+  assert.equal(readBack.code, 0, readBack.stderr);
+  assert.deepEqual(await readManagedIndicatorSet(parseManagedIndicatorJson(readBack.stdout)), manifest);
+  const escaped = await invoke(['indicator-set', 'revise', '--json'], JSON.stringify({ name: 'Quoted "review"', basis: 'Observed é \\ evidence\u202e',
+    expiresAt: '2026-10-23T00:00:00.000Z', rows: [rows[0]], selectedDomains: [rows[0]!.domain] }));
+  assert.equal(escaped.code, 0, escaped.stderr);
+  assert.doesNotMatch(escaped.stdout, /\u202e/u);
+  assert.equal((await readManagedIndicatorSet(parseManagedIndicatorJson(escaped.stdout))).entries[0]?.basis, 'Observed é \\ evidence\u202e');
 });
 
 test('the documented indicator plan is executable offline rather than a guessed input shape', async () => {

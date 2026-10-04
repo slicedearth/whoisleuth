@@ -151,12 +151,20 @@ function candidatesFromSightings(record: CaseRecord): Candidate[] {
 }
 
 function aggregateCandidates(candidates: readonly Candidate[]): CampaignTemporalEvent[] {
-  const deduplicated = [...new Map(candidates.map((item) => [
-    `${item.domain}\u0000${item.layer}\u0000${item.observedAt}\u0000${item.source}\u0000${item.origin}`,
-    item,
-  ])).values()];
+  const deduplicated = new Map<string, Candidate>();
+  for (const item of candidates) {
+    const key = `${item.domain}\u0000${item.layer}\u0000${item.observedAt}\u0000${item.source}\u0000${item.origin}`;
+    const previous = deduplicated.get(key);
+    if (!previous) { deduplicated.set(key, item); continue; }
+    deduplicated.set(key, {
+      ...item,
+      completeness: COMPLETENESS_RANK[previous.completeness] > COMPLETENESS_RANK[item.completeness] ? previous.completeness : item.completeness,
+      truncated: previous.truncated || item.truncated,
+      limitations: [...new Set([...previous.limitations, ...item.limitations])].sort().slice(0, MAX_LIMITATIONS),
+    });
+  }
   const grouped = new Map<string, Candidate[]>();
-  for (const item of deduplicated) {
+  for (const item of deduplicated.values()) {
     const key = `${item.domain}\u0000${item.layer}`;
     grouped.set(key, [...(grouped.get(key) ?? []), item]);
   }
@@ -177,7 +185,7 @@ function aggregateCandidates(candidates: readonly Candidate[]): CampaignTemporal
       origins: Object.freeze([...new Set(ordered.map((item) => item.origin))].sort()),
       completeness,
       truncated: ordered.some((item) => item.truncated),
-      limitations: Object.freeze([...new Set(ordered.flatMap((item) => item.limitations).map((item) => text(item, 240)).filter(Boolean))].slice(0, MAX_LIMITATIONS)),
+      limitations: Object.freeze([...new Set(ordered.flatMap((item) => item.limitations).map((item) => text(item, 240)).filter(Boolean))].sort().slice(0, MAX_LIMITATIONS)),
     });
   }).sort((left, right) => left.firstObservedAt.localeCompare(right.firstObservedAt) || left.domain.localeCompare(right.domain) || left.layer.localeCompare(right.layer));
 }

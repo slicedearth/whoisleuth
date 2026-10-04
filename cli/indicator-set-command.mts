@@ -4,7 +4,6 @@ import { MAX_MANAGED_INDICATOR_PLAN_BYTES, MAX_MANAGED_INDICATOR_SET_BYTES } fro
 import type { CliArguments } from './arguments.mts';
 import type { CliCommandContext } from './runner-types.mts';
 
-import { formatJsonDocument } from './formatters/json.mts';
 import { safeTerminalValue } from './formatters/terminal.mts';
 import EXIT_CODES from './exit-codes.mts';
 
@@ -24,7 +23,7 @@ export async function runIndicatorSetCommand(args: Extract<CliArguments, { actio
   dependencies.signal?.throwIfAborted();
   if (args.quiet) return EXIT_CODES.SUCCESS;
   if (args.operation === 'stix' || args.operation === 'misp') context.writeStdout((await exportManagedIndicators(manifest, args.operation)).content);
-  else if (args.output === 'json') context.writeStdout(formatJsonDocument(manifest));
+  else if (args.output === 'json') context.writeStdout((await exportManagedIndicators(manifest, 'manifest')).content);
   else {
     const lines = [`${safeTerminalValue(manifest.name)} · revision ${manifest.revision}`, `Set ${manifest.id}`, `Content digest ${manifest.integrity.digestSha256}`,
       'Content verified; authorship and earlier revisions are not authenticated.'];

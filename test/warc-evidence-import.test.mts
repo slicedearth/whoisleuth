@@ -66,6 +66,18 @@ function archive(...records: Uint8Array[]): ArrayBuffer {
 }
 
 describe('portable WARC evidence import', () => {
+  test('keeps whole-archive per-host admission distinct from the global candidate bound', async () => {
+    const item = (index: number, target = 'https://same.example.test/') => record('response', responseBlock({ title: `Observation ${index}` }), { target });
+    const twenty = Array.from({ length: 20 }, (_, i) => item(i));
+    const accepted = await parseWarcEvidenceArchive(archive(...twenty));
+    assert.equal(accepted.accepted, 20); assert.equal(accepted.excluded, 0);
+    await assert.rejects(parseWarcEvidenceArchive(archive(...twenty, item(20))), /20|per domain/i);
+    const mixed = await parseWarcEvidenceArchive(archive(...twenty, ...Array.from({ length: 5 }, (_, i) => item(i, 'https://other.example.test/'))));
+    assert.equal(mixed.accepted, 25); assert.equal(mixed.excluded, 0);
+    const duplicates = await parseWarcEvidenceArchive(archive(...twenty, ...Array.from({ length: 5 }, () => item(0))));
+    assert.equal(duplicates.accepted, 20); assert.equal(duplicates.excluded, 5);
+  });
+
   test('admits repeatable references, header whitespace and long values within the aggregate bound', async () => {
     const block = responseBlock({ extraHeaders: ['X-Context:\tfirst\tsecond', '\tcontinued', `X-Long: ${'x'.repeat(8_192)}`, 'Link: <https://one.example/>', 'Link: <https://two.example/>', 'X-Empty:'] });
     const result = await parseWarcEvidenceArchive(archive(record('response', block, {
