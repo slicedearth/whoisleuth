@@ -438,7 +438,7 @@ describe('Common-infrastructure catalogue', () => {
 
   test('parses explicit maintenance arguments without accepting moving refs', () => {
     assert.deepEqual(parseArguments([]), {
-      commit: DEFAULT_UPSTREAM_COMMIT,
+      commit: COMMON_INFRASTRUCTURE_SNAPSHOT.source.commit,
       checkOnly: false,
     });
     assert.deepEqual(parseArguments(['--commit', 'c'.repeat(40), '--check-only']), {

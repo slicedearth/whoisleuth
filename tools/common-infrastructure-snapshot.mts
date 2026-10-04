@@ -81,7 +81,7 @@ type MainOptions = Readonly<{
 }>;
 
 export const SNAPSHOT_PATH = 'packages/relationships/common-infrastructure-snapshot.json';
-export const DEFAULT_UPSTREAM_COMMIT = 'cdb6cf3076786277eceffbddc03d56bbf8687c5c';
+export const DEFAULT_UPSTREAM_COMMIT = retainedSnapshot.source.commit;
 export const CLOUDFLARE_RANGE_URLS = Object.freeze([
   'https://www.cloudflare.com/ips-v4',
   'https://www.cloudflare.com/ips-v6',
