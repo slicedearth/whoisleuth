@@ -111,7 +111,7 @@ Only `bulk` accepts multiple targets.
 For a downloaded plain-domain feed, use
 `whoisleuth domain-feed review nrd7 feed.txt --select term:example --json`.
 This is an offline literal match, not a feed download or target Lookup. The
-[candidate-review guide](brand-candidate-review.md#review-a-domain-feed) covers
+[candidate-review guide](https://github.com/slicedearth/whoisleuth/blob/main/docs/brand-candidate-review.md#review-a-domain-feed) covers
 source attribution and the separate Watchlist handoff.
 
 `discover` accepts a brand label or registrable domain and supports multi-part

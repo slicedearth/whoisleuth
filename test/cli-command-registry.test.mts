@@ -148,6 +148,7 @@ function optionValue(command: CliCommand, option: string): string {
   if (specification.values.length > 0) return specification.values[0]!;
   if (specification.valueKind === 'integer') return String(specification.integerRanges[0]!.minimum);
   if (specification.valueKind === 'file') return `${option.slice(2)}.json`;
+  if (command === 'domain-feed' && option === '--select') return 'host:example.test';
   return option === '--configuration-digest' ? `sha256:${'a'.repeat(64)}` : 'fixture';
 }
 

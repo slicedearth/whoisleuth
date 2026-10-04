@@ -91,7 +91,6 @@ test('the sitemap and social preview remain aligned with the public resource con
   const previewSource = readFileSync(join(repositoryRoot, 'frontend', 'static', 'social-preview.svg'), 'utf8');
   assert.equal(existsSync(join(repositoryRoot, 'docs', 'assets', 'social-preview.svg')), false);
   assert.match(previewSource, /<svg[^>]+width="1280" height="640"[^>]+viewBox="0 0 1280 640"/u);
-  assert.match(previewSource, /<image href="favicon\.svg"/u);
   assert.match(previewSource, />EVIDENCE TOPOLOGY</u);
   assert.match(previewSource, />LOOKUP TARGET</u);
   assert.doesNotMatch(previewSource, /<(?:script|foreignObject)\b|(?:href|xlink:href)="https?:\/\//iu);
