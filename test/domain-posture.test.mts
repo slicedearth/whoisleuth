@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { buildPostureReport, fetchMtaStsPolicy, matchesMtaPattern, normalizeAuditDomain, normalizeDkimSelectors } from '../lib/domain-posture.mts';
 import { requiredValue } from './value-assertions.mts';
-import { validateDmarcExternalReporting } from '../lib/domain-posture-analysis.mts';
+import { expandSpfPolicy, SPF_PERMISSIVE_PATH_ISSUE, validateDmarcExternalReporting } from '../lib/domain-posture-analysis.mts';
 
 const RSA_2048_PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoUwDmvRvwyuGHZ0vZBD3z+Zyusi3f+ccPP7s6IGnw5talY8ZpxC8SAB29A4zsGU8azxzEkhiiPeNlal0nBrVu5mfVeCJ8vUMIxiVZf3sSEpPRO9JM0KtF9FjujN2lR2c6pAFIUurSHR5zHsopgZUqzDIfy54PQ2UUMDgzy9avfmCqbStL+t7EHDPaydIw9PrKihG8pdhtiVEX0gbkmVnBSl3BLt5zmN/I7p6MnAJddRXZBQIljpGU4bQh2JpISKaewTpjicPVhmlYM09ssUWUkmIfI55Tf26HwO5N6z9hmEUpWbyVMe0hXTydNUgxJK+460H0f0QQdVHc8sDsgPEcwIDAQAB';
 
@@ -33,6 +33,54 @@ function strongInput(): Parameters<typeof buildPostureReport>[1] {
 function byId(report: ReturnType<typeof buildPostureReport>, id: string) {
   return requiredValue(report.checks.find((item) => item.id === id));
 }
+
+test('SPF expansion-to-report conserves qualifiers, ordering and permissive-path caveats', async () => {
+  const fixtures: Record<string, ReturnType<typeof query<string>>> = {
+    'allow.example.net': query(['v=spf1 +all']),
+    'block.example.net': query(['v=spf1 +all']),
+    'redirect.example.net': query(['v=spf1 redirect=allow.example.net']),
+    'normal.example.net': query(['v=spf1 ip4:192.0.2.0/24 -all']),
+    'failed.example.net': query([], 'fixture resolver failed'),
+  };
+  for (const [policy, warning, state] of [
+    ['v=spf1 include:allow.example.net -all', true, 'complete'],
+    ['v=spf1 +include:allow.example.net -all', true, 'complete'],
+    ['v=spf1 include:redirect.example.net -all', true, 'complete'],
+    ['v=spf1 redirect=allow.example.net', true, 'complete'],
+    ['v=spf1 -include:allow.example.net -all', false, 'complete'],
+    ['v=spf1 ?include:allow.example.net -all', false, 'complete'],
+    ['v=spf1 ~include:allow.example.net -all', false, 'complete'],
+    ['v=spf1 -all include:allow.example.net', false, 'complete'],
+    ['v=spf1 -all redirect=allow.example.net', false, 'complete'],
+    ['v=spf1 -include:block.example.net include:allow.example.net -all', false, 'complete'],
+    ['v=spf1 include:normal.example.net -all', false, 'complete'],
+    ['v=spf1 ip4:192.0.2.0/24 -all', false, 'complete'],
+    ['v=spf1 include:failed.example.net -all', false, 'partial'],
+    [`v=spf1 ${Array.from({ length: 11 }, () => 'include:allow.example.net').join(' ')} -all`, false, 'partial'],
+    ['v=spf1 include:failed.example.net include:allow.example.net -all', true, 'partial'],
+  ] as const) {
+    const input = strongInput();
+    input.spf = query([policy]);
+    const requests: string[] = [];
+    input.spfExpansion = await expandSpfPolicy('example.test', input.spf, async hostname => {
+      requests.push(hostname);
+      return fixtures[hostname] ?? query([]);
+    });
+    assert.equal(input.spfExpansion.state, state, policy);
+    assert.equal(input.spfExpansion.issues.includes(SPF_PERMISSIVE_PATH_ISSUE), warning, policy);
+    const report = buildPostureReport('example.test', input);
+    const check = byId(report, 'spf');
+    if (warning) {
+      assert.equal(check.status, 'warning', policy);
+      assert.match(check.detail, /permissive \+all evidence/u);
+      assert.ok(check.detail.includes(`Expanded policy: ${state}.`));
+    } else if (state === 'partial') assert.equal(check.status, 'warning', policy);
+    else if (policy === 'v=spf1 include:normal.example.net -all' || policy === 'v=spf1 ip4:192.0.2.0/24 -all') assert.equal(check.status, 'pass', policy);
+    assert.equal(requests.length, input.spfExpansion.lookupsUsed - 1, policy);
+    assert.deepEqual(Object.keys(input.spfExpansion).sort(), ['branches', 'dnsLookupTerms', 'issues', 'lookupLimit', 'lookupsUsed', 'maxDepth', 'state', 'version', 'voidLookupLimit', 'voidLookups'].sort());
+    assert.ok(input.spfExpansion.branches.every(branch => !Object.hasOwn(branch, 'mechanisms') && !Object.hasOwn(branch, 'policy')));
+  }
+});
 
 test('malformed reporting evidence cannot become a passing posture check', async () => {
   const input = strongInput();

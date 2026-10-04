@@ -422,6 +422,16 @@ View-only filters show configured expectations, differences or unknown settings;
 history filters separate changed sources from unknown comparisons. All retained
 rows remain available through **All**, and filtering does not change exports.
 
+SPF collection completeness is separate from sender-authorisation quality. A
+completed expansion containing potentially reachable permissive `+all` evidence
+through positive include or redirect paths needs review even when the root ends
+in `-all`. Include qualifiers and mechanism order matter: a matching negative
+include does not authorise senders, mechanisms after `all` are unreachable, and
+redirect is ignored in a record containing `all`. The bounded review follows
+[SPF include semantics](https://www.rfc-editor.org/rfc/rfc7208#section-5.2), but
+does not evaluate an individual sender or claim that every nested `+all` permits
+every sender. Unknown, failed or budget-limited branches remain incomplete.
+
 For nameservers, DS, MX and CAA, choose no expectation, an expected empty set,
 specified records, or observation only. A null MX (`0 .`) is a specified record,
 not an empty set. Portable settings preserve these choices; an import changes

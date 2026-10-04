@@ -24,6 +24,7 @@ import {
   parseDkimRecords,
 } from './domain-posture-parsers.mts';
 import {
+  SPF_PERMISSIVE_PATH_ISSUE,
   buildExternalDependencies,
   expandSpfPolicy,
   validateDmarcExternalReporting,
@@ -259,7 +260,8 @@ function spfCheck(query: DnsQuery, expansion?: SpfExpansion): PostureCheck {
       remediation: 'Replace +all with an explicit sender allowlist and a restrictive terminal policy.',
     });
   }
-  if (parsed.terminalPolicy === 'fail' && parsed.issues.length === 0 && (!expansion || expansion.state === 'complete')) {
+  const permissiveExpansion = expansion?.issues.includes(SPF_PERMISSIVE_PATH_ISSUE) ?? false;
+  if (parsed.terminalPolicy === 'fail' && parsed.issues.length === 0 && !permissiveExpansion && (!expansion || expansion.state === 'complete')) {
     return check('spf', 'SPF', 'pass', 'Restrictive fail-all policy', { detail: details.join(' '), records: parsed.records });
   }
   if (expansion && expansion.state !== 'complete') {
@@ -267,6 +269,12 @@ function spfCheck(query: DnsQuery, expansion?: SpfExpansion): PostureCheck {
       detail: details.join(' '),
       records: parsed.records,
       remediation: 'Review unresolved, invalid, cyclic, or budget-limited include and redirect branches before treating the policy as complete.',
+    });
+  }
+  if (permissiveExpansion) {
+    return check('spf', 'SPF', 'warning', 'SPF authorisation needs review', {
+      detail: details.join(' '), records: parsed.records,
+      remediation: 'Review the positive include or redirect path containing +all; complete collection does not establish restrictive sender authorisation.',
     });
   }
   if (parsed.terminalPolicy === 'redirect') {
