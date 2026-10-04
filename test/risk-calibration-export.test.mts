@@ -4,10 +4,14 @@ import { describe, test } from 'node:test';
 import type { CaseRecord } from '../frontend/src/lib/analysis/case-record-model.ts';
 import {
   buildRiskCalibrationDatasetExport,
+  buildRiskCalibrationExportPreview,
+  serializeRiskCalibrationDatasetExport,
   MAX_RISK_CALIBRATION_EXPORT_RECORDS,
 } from '../frontend/src/lib/analysis/risk-calibration-export.ts';
 import { parseRiskCalibrationDataset } from '../cli/risk-calibration.mts';
 import { MAX_RISK_CALIBRATION_RECORD_ID_LENGTH } from '../packages/contracts/risk-calibration.mts';
+import { CalibrationExportWorkspace } from '../frontend/src/lib/controllers/calibration-export-workspace.ts';
+import { deferred } from './deferred.mts';
 
 function caseRecord(overrides: Partial<CaseRecord> = {}): CaseRecord {
   return {
@@ -77,6 +81,58 @@ function caseRecord(overrides: Partial<CaseRecord> = {}): CaseRecord {
 }
 
 describe('reviewed Risk calibration dataset export', () => {
+  test('same-domain incidents retain separate review rows and immutable exported identities', async () => {
+    const first = caseRecord({ id: 'incident-one', disposition: 'confirmed_abuse' });
+    const second = caseRecord({ id: 'incident-two', disposition: 'false_positive' });
+    let current = [first, second];
+    let loads = 0;
+    let downloaded = '';
+    const workspace = new CalibrationExportWorkspace({
+      preview: async ids => { loads++; return buildRiskCalibrationExportPreview(current, ids); },
+      download: async reviewed => {
+        downloaded = serializeRiskCalibrationDatasetExport(reviewed.payload);
+        return { included: reviewed.payload.records.length, excluded: reviewed.payload.export.excluded };
+      },
+      publish: () => {}, status: () => {},
+    });
+    await workspace.review(['incident-one', 'incident-two']);
+    const reviewed = workspace.state.preview!;
+    assert.deepEqual(reviewed.records.map(record => record.id), ['incident-one', 'incident-two']);
+    assert.deepEqual(reviewed.records.map(record => record.analystDisposition), ['confirmed_abuse', 'false_positive']);
+    const expectedBytes = serializeRiskCalibrationDatasetExport(reviewed.payload);
+    first.disposition = 'expected';
+    first.evidenceHistory[0]!.hasPasswordField = false;
+    current = [];
+    await workspace.confirm();
+    assert.equal(loads, 1);
+    assert.equal(downloaded, expectedBytes);
+    assert.deepEqual(JSON.parse(downloaded).records.map((record: { id: string }) => record.id), ['incident-one', 'incident-two']);
+    assert.equal(Object.isFrozen(reviewed.payload.records[0]!.evidence), true);
+  });
+
+  test('delayed calibration previews cannot replace changed selections, newer reviews or cancellation', async () => {
+    for (const invalidation of ['selection', 'newer', 'cancel', 'dispose'] as const) {
+      const first = deferred<ReturnType<typeof buildRiskCalibrationExportPreview>>();
+      const older = buildRiskCalibrationExportPreview([caseRecord()], ['case-1']);
+      const newer = buildRiskCalibrationExportPreview([caseRecord({ id: 'case-2' })], ['case-2']);
+      let loads = 0, publications = 0;
+      const workspace = new CalibrationExportWorkspace({
+        preview: async () => ++loads === 1 ? first.promise : newer,
+        download: async () => assert.fail('no export was confirmed'),
+        publish: () => { publications++; }, status: () => {},
+      });
+      const pending = workspace.review(['case-1']);
+      if (invalidation === 'selection') workspace.changed();
+      if (invalidation === 'cancel') workspace.cancel();
+      if (invalidation === 'dispose') workspace.dispose();
+      if (invalidation === 'newer') await workspace.review(['case-2']);
+      const before = publications;
+      first.resolve(older);
+      await pending;
+      assert.equal(publications, before);
+      assert.equal(workspace.state.preview, invalidation === 'newer' ? newer : null);
+    }
+  });
   test('projects only selected reviewed cases into the existing CLI contract', () => {
     const selected = caseRecord();
     const unselected = caseRecord({ id: 'case-2', domain: 'other.example', disposition: 'false_positive' });

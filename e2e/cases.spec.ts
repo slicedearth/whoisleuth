@@ -2,7 +2,7 @@ import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-cont
 import { openCaseClassification, openCaseMetadata, openCaseSection, openConsoleView, openInboxReview } from './console-navigation';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
+import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, snapshot } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { DETECTION_RULE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
@@ -616,6 +616,66 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
   await expect(page.getByRole('dialog', { name: 'Confirm Risk calibration dataset' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+});
+
+test('same-domain calibration incidents export the exact reviewed payload after a peer changes its label', async ({ page, context }) => {
+  await page.goto('/cases');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [
+    caseRecord({ id: 'incident-one', domain: 'shared.invalid', disposition: 'confirmed_abuse', evidenceHistory: [snapshot({ id: 'evidence-one', hasPasswordField: true })] }),
+    caseRecord({ id: 'incident-two', domain: 'shared.invalid', disposition: 'false_positive', evidenceHistory: [snapshot({ id: 'evidence-two', hasPasswordField: false })] }),
+  ] } });
+  await openConsoleView(page, 'cases');
+  await page.getByText('Advanced Case tools', { exact: true }).click();
+  await page.getByRole('button', { name: 'Select Cases for calibration export', exact: true }).click();
+  const selections = page.getByRole('checkbox', { name: 'Include in offline Risk calibration export' });
+  await expect(selections).toHaveCount(2);
+  await selections.nth(0).check(); await selections.nth(1).check();
+  await page.getByRole('button', { name: 'Review calibration export (2)' }).click();
+  const review = page.getByRole('dialog', { name: 'Confirm Risk calibration dataset' });
+  await expect(review.locator('li')).toHaveCount(2);
+  await expect(review).toContainText('Confirmed abuse');
+  await expect(review).toContainText('False positive');
+  const peer = await context.newPage();
+  try {
+    await peer.goto('/cases?case=incident-one');
+    await openCaseMetadata(peer);
+    await peer.getByRole('combobox', { name: 'Disposition', exact: true }).selectOption('expected');
+    await expect.poll(async () => (await readBrowserLocalCollection(peer, 'cases')).records.find(record => record.value.id === 'incident-one')?.value.disposition).toBe('expected');
+    const pending = page.waitForEvent('download');
+    await review.getByRole('button', { name: 'Confirm local export' }).click();
+    const download = await pending;
+    const filename = await download.path();
+    expect(filename).not.toBeNull();
+    const actual = JSON.parse(await readFile(filename!, 'utf8'));
+    expect(actual.records.map((record: { id: string; analystDisposition: string }) => [record.id, record.analystDisposition]).sort()).toEqual([
+      ['incident-one', 'confirmed_abuse'], ['incident-two', 'false_positive'],
+    ]);
+    expect(actual.records.find((record: { id: string }) => record.id === 'incident-one').evidence.hasPasswordField).toBe(true);
+  } finally { await peer.close(); }
+});
+
+test('a held calibration preview cannot replace a newer selected Case set', { tag: '@timing-sensitive' }, async ({ page }) => {
+  await page.goto('/cases');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [
+    caseRecord({ id: 'selected-one', domain: 'first.invalid', disposition: 'confirmed_abuse', evidenceHistory: [snapshot({ id: 'first-evidence' })] }),
+    caseRecord({ id: 'selected-two', domain: 'second.invalid', disposition: 'false_positive', evidenceHistory: [snapshot({ id: 'second-evidence' })] }),
+  ] } });
+  await openConsoleView(page, 'cases');
+  await page.getByText('Advanced Case tools', { exact: true }).click();
+  await page.getByRole('button', { name: 'Select Cases for calibration export', exact: true }).click();
+  const first = page.locator('article').filter({ has: page.locator('#case-head-selected-one') }).getByRole('checkbox');
+  const second = page.locator('article').filter({ has: page.locator('#case-head-selected-two') }).getByRole('checkbox');
+  await first.check();
+  const release = await holdBrowserLocalTransaction(page);
+  try {
+    await page.getByRole('button', { name: 'Review calibration export (1)' }).click();
+    await first.uncheck(); await second.check();
+    await page.getByRole('button', { name: 'Review calibration export (1)' }).click();
+  } finally { await release(); }
+  const review = page.getByRole('dialog', { name: 'Confirm Risk calibration dataset' });
+  await expect(review).toContainText('second.invalid');
+  await expect(review).not.toContainText('first.invalid');
+  await review.getByRole('button', { name: 'Cancel', exact: true }).click();
 });
 
 test('case tags offer bounded in-tab undo', async ({ page }) => {

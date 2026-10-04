@@ -103,7 +103,7 @@
       <div class="included">
         <h3>Records to include</h3>
         <ul>
-          {#each displayedRecords as record (record.domain)}
+          {#each displayedRecords as record (record.id)}
             <li><span>{record.domain}</span><small>{dispositionLabel(record.analystDisposition)} · {reasonLabel(record.reviewReasonCode)}</small></li>
           {/each}
         </ul>
@@ -112,6 +112,7 @@
         {/if}
       </div>
       <p class="privacy-note">
+        This download uses the exact snapshot reviewed here; later Case changes are not included.
         Notes, tags, assertions, actions, contacts, raw evidence, provider payloads, and stored Risk scores are excluded.
         The file stays local unless you share it, and exporting it does not train or change Risk.
       </p>

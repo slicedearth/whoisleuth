@@ -7,6 +7,7 @@
 import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   import { registerAnalystUndo } from '$lib/analyst-undo';
   import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
+  import { CalibrationExportWorkspace } from '$lib/controllers/calibration-export-workspace.ts';
   import { hasUnprotectedCaseDrafts, trackTransientCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import { preloadBestEffort } from '$lib/idle-preload';
   import { readCaseNavigationContext, selectConsoleCase } from '$lib/console-workflow-state';
@@ -92,8 +93,14 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   trackTransientCaseDraft(() => incidentDraftDirty);
   let incidentOpeningIntent: (() => boolean) | null = null;
   let calibrationCaseIds = $state<string[]>([]);
-  let calibrationReview = $state<RiskCalibrationExportPreview | null>(null);
+  let calibrationReview = $state.raw<RiskCalibrationExportPreview | null>(null);
   let calibrationExportBusy = $state(false);
+  const calibrationWorkspace = new CalibrationExportWorkspace({
+    preview: previewRiskCalibrationDataset,
+    download: exportRiskCalibrationDataset,
+    publish: state => { calibrationReview = state.preview; calibrationExportBusy = state.busy; },
+    status: message => { caseMessage = message; },
+  });
   let guidedDomains = $state<string[]>([]);
   let guidedDomainsTruncated = $state(false);
   let mounted = false;
@@ -410,31 +417,11 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     }
   }
   function toggleCalibrationCase(record: CaseRecord, selected: boolean) {
-    calibrationReview = null;
+    calibrationWorkspace.changed();
     calibrationCaseIds = selected ? [...new Set([...calibrationCaseIds, record.id])] : calibrationCaseIds.filter(id => id !== record.id);
   }
-  async function reviewCalibrationDataset() {
-    try {
-      calibrationReview = await previewRiskCalibrationDataset(calibrationCaseIds);
-    }
-    catch (cause) {
-      caseMessage = cause instanceof Error ? cause.message : 'Could not review the Risk calibration dataset.';
-    }
-  }
-  async function downloadCalibrationDataset() {
-    calibrationExportBusy = true;
-    try {
-      const result = await exportRiskCalibrationDataset(calibrationCaseIds);
-      calibrationReview = null;
-      caseMessage = `Exported ${result.included} reviewed case${result.included === 1 ? '' : 's'} for offline Risk calibration${result.excluded ? `; excluded ${result.excluded} incompatible selection${result.excluded === 1 ? '' : 's'}` : ''}. No model setting was changed.`;
-    }
-    catch (cause) {
-      caseMessage = cause instanceof Error ? cause.message : 'Could not export the Risk calibration dataset.';
-    }
-    finally {
-      calibrationExportBusy = false;
-    }
-  }
+  const reviewCalibrationDataset = () => calibrationWorkspace.review(calibrationCaseIds);
+  const downloadCalibrationDataset = () => calibrationWorkspace.confirm();
   async function removeCase(record: CaseRecord) {
     if (!confirm(`Delete the case for ${record.domain}? Its notes are removed unless you exported them.`))
       return;
@@ -539,7 +526,9 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   function installCommittedCaseSnapshot(records: CaseRecord[], state: ParentDomainCampaignSourceState = 'ready') {
     cases = records;
     casesSourceState = 'ready';
-    calibrationCaseIds = calibrationCaseIds.filter(id => records.some(record => record.id === id));
+    const retainedIds = calibrationCaseIds.filter(id => records.some(record => record.id === id));
+    if (retainedIds.length !== calibrationCaseIds.length) calibrationWorkspace.changed();
+    calibrationCaseIds = retainedIds;
     if (expandedId && !records.some(record => record.id === expandedId))
       expandedId = '';
     onchange?.(records, state);
@@ -638,6 +627,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     });
     return () => {
       mounted = false;
+      calibrationWorkspace.dispose();
       preloadController.abort();
     };
   });
@@ -680,7 +670,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
       <DeferredSurface load={() => import('$lib/components/CalibrationExportReview.svelte')}
         loadingLabel="Loading calibration export review…" unavailableLabel="Calibration export review could not be loaded."
         props={{ preview: calibrationReview, busy: calibrationExportBusy, confirm: downloadCalibrationDataset,
-          cancel: () => { if (!calibrationExportBusy) calibrationReview = null; } }} />
+          cancel: () => calibrationWorkspace.cancel() }} />
     {/if}
 
       <CaseFilters
@@ -706,7 +696,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     {/if}
     <details class="advanced-case-tools">
       <summary>Advanced Case tools</summary>
-      <button class="btn" type="button" aria-pressed={calibrationMode} onclick={() => calibrationMode = !calibrationMode}>{calibrationMode ? 'Finish selecting calibration Cases' : 'Select Cases for calibration export'}</button>
+      <button class="btn" type="button" aria-pressed={calibrationMode} onclick={() => { calibrationWorkspace.cancel(); calibrationMode = !calibrationMode; }}>{calibrationMode ? 'Finish selecting calibration Cases' : 'Select Cases for calibration export'}</button>
       <DeferredSurface load={() => import('$lib/components/RiskCalibrationDashboard.svelte')} props={{}}
         loadingLabel="Loading risk-calibration reference…" unavailableLabel="Risk-calibration reference could not be loaded." />
     </details>

@@ -53,8 +53,10 @@ import {
   type ExternalIntelligencePreview,
 } from './analysis/external-intelligence-import.ts';
 import {
-  buildRiskCalibrationDatasetExport,
+  buildRiskCalibrationExportPreview,
+  snapshotSelectedCaseIds,
   serializeRiskCalibrationDatasetExport,
+  type RiskCalibrationExportPreview,
 } from './analysis/risk-calibration-export.ts';
 
 export type CaseAssociationRetention = Readonly<{
@@ -70,16 +72,7 @@ export class CaseAssociationCapacityError extends Error {
   }
 }
 
-export type RiskCalibrationExportPreview = Readonly<{
-  selected: number;
-  included: number;
-  excluded: number;
-  records: readonly Readonly<{
-    domain: string;
-    analystDisposition: ReviewedCaseDisposition;
-    reviewReasonCode: string | null;
-  }>[];
-}>;
+export type { RiskCalibrationExportPreview };
 
 export {
   CASE_DISPOSITIONS,
@@ -522,10 +515,9 @@ export function exportCaseSnapshot(cases: CaseRecord[]): void {
 }
 
 export async function exportRiskCalibrationDataset(
-  selectedCaseIds: readonly string[],
+  reviewed: RiskCalibrationExportPreview,
 ): Promise<{ included: number; excluded: number }> {
-  if (!selectedCaseIds.length) throw new Error('Select at least one reviewed case for calibration export.');
-  const payload = buildRiskCalibrationDatasetExport(await loadCases(), selectedCaseIds);
+  const payload = reviewed.payload;
   if (!payload.records.length) {
     throw new Error('The selected cases do not contain reviewed dispositions with compatible retained evidence.');
   }
@@ -539,21 +531,9 @@ export async function exportRiskCalibrationDataset(
 export async function previewRiskCalibrationDataset(
   selectedCaseIds: readonly string[],
 ): Promise<RiskCalibrationExportPreview> {
-  if (!selectedCaseIds.length) {
+  const selected = snapshotSelectedCaseIds(selectedCaseIds);
+  if (!selected.length) {
     throw new Error('Select at least one reviewed case for calibration export.');
   }
-  const payload = buildRiskCalibrationDatasetExport(await loadCases(), selectedCaseIds);
-  if (!payload.records.length) {
-    throw new Error('The selected cases do not contain reviewed dispositions with compatible retained evidence.');
-  }
-  return Object.freeze({
-    selected: payload.export.selected,
-    included: payload.records.length,
-    excluded: payload.export.excluded,
-    records: Object.freeze(payload.records.map((record) => Object.freeze({
-      domain: record.domain,
-      analystDisposition: record.analystDisposition,
-      reviewReasonCode: record.reviewReasonCode ?? null,
-    }))),
-  });
+  return buildRiskCalibrationExportPreview(await loadCases(), selected);
 }

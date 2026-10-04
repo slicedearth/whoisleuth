@@ -64,6 +64,14 @@ export type RiskCalibrationDatasetExportRecord = Readonly<
   }
 >;
 
+export type RiskCalibrationExportPreview = Readonly<{
+  selected: number;
+  included: number;
+  excluded: number;
+  records: readonly Readonly<Pick<RiskCalibrationDatasetExportRecord, 'id' | 'domain' | 'analystDisposition'> & { reviewReasonCode: string | null }>[];
+  payload: RiskCalibrationDatasetExport;
+}>;
+
 export type RiskCalibrationDatasetExport = Readonly<{
   schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
   version: typeof RISK_CALIBRATION_DATASET_VERSION;
@@ -81,7 +89,7 @@ function optionalBoolean(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined;
 }
 
-function snapshotSelectedCaseIds(value: unknown): readonly string[] {
+export function snapshotSelectedCaseIds(value: unknown): readonly string[] {
   const shapeMessage = 'Risk calibration selections must be a bounded dense ordinary array of case identifiers.';
   try {
     if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) {
@@ -272,4 +280,18 @@ export function serializeRiskCalibrationDatasetExport(
   return serializeRiskCalibrationSnapshot(
     snapshotRiskCalibrationDatasetExportForSerialization(payload),
   );
+}
+
+/** Summary and final bytes share one detached, immutable reviewed projection. */
+export function buildRiskCalibrationExportPreview(cases: readonly CaseRecord[], selectedCaseIds: readonly string[]): RiskCalibrationExportPreview {
+  const payload = buildRiskCalibrationDatasetExport(cases, selectedCaseIds);
+  if (!payload.records.length) throw new Error('The selected cases do not contain reviewed dispositions with compatible retained evidence.');
+  return recursivelyFreezeOwned({
+    selected: payload.export.selected,
+    included: payload.records.length,
+    excluded: payload.export.excluded,
+    records: payload.records.map(record => ({ id: record.id, domain: record.domain,
+      analystDisposition: record.analystDisposition, reviewReasonCode: record.reviewReasonCode ?? null })),
+    payload,
+  });
 }
