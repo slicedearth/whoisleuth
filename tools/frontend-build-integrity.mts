@@ -6,6 +6,7 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
+  realpathSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -20,12 +21,14 @@ import {
   boundedSafeRelativePath,
   compareCodeUnits,
   hasMaintainerUnsafeCharacters,
+  pathIsWithin,
   readBoundedStableRegularFileSync,
   sha256Bytes,
 } from './maintainer-tool-helpers.mts';
 
 export const FRONTEND_BUILD_INTEGRITY_FORMAT = 'frontend-build-identity';
-export const FRONTEND_BUILD_INTEGRITY_VERSION = 2 as const;
+export const FRONTEND_BUILD_INTEGRITY_VERSION = 3 as const;
+export const MAX_FRONTEND_ROUTE_SOURCE_BYTES = 512 * 1024;
 export const FRONTEND_BUILD_INTEGRITY_MARKER = 'frontend/build-identity.json';
 export const FRONTEND_BROWSER_ARTIFACT_PATHS = Object.freeze([
   'frontend/build',
@@ -119,6 +122,7 @@ export type FrontendBuildIntegritySnapshot = Readonly<{
   source: TreeIdentity;
   served: TreeIdentity;
   viteManifestSha256: string;
+  generatedRouteSource: FileIdentity;
   manifestOutputs: readonly string[];
   browserTestSupport: FrontendBrowserTestSupport;
   htmlDocuments: number;
@@ -349,6 +353,33 @@ type FrontendManifestIdentity = Readonly<{
   browserModules: readonly Readonly<{ source: string; output: string }>[];
 }>;
 
+export function readFrontendGeneratedRouteSource(
+  frontendRoot: string,
+  manifestSource: string | Buffer,
+  expected?: FileIdentity,
+): Readonly<{ identity: FileIdentity; source: string }> {
+  const manifest = parseBoundedJsonObject(manifestSource.toString(), {
+    label: 'Frontend Vite manifest', maximumBytes: MAX_MANIFEST_BYTES,
+  });
+  const entries = Object.entries(manifest);
+  if (entries.length > MAX_MANIFEST_ENTRIES) throw new TypeError('Frontend Vite manifest exceeds its entry limit.');
+  const selected = entries.filter(([, entry]) => entry && typeof entry === 'object'
+    && !Array.isArray(entry) && (entry as Record<string, unknown>).name === 'entry/app');
+  if (selected.length !== 1) throw new Error('Client manifest must identify exactly one application entry source.');
+  const source = boundedSafeRelativePath(selected[0]![0], 'Generated application entry source', MAX_PATH_LENGTH);
+  const generatedRoot = realpathSync(path.join(frontendRoot, '.svelte-kit/generated'));
+  const sourcePath = path.resolve(frontendRoot, source);
+  if (!source.startsWith('.svelte-kit/generated/') || !pathIsWithin(generatedRoot, realpathSync(sourcePath))) {
+    throw new TypeError('Generated application entry source resolves outside the generated root.');
+  }
+  const bytes = readBoundedStableRegularFileSync(sourcePath, MAX_FRONTEND_ROUTE_SOURCE_BYTES, 'Generated client route source');
+  const identity = Object.freeze({ path: source, bytes: bytes.byteLength, sha256: sha256Bytes(bytes) });
+  if (expected && (identity.path !== expected.path || identity.bytes !== expected.bytes || identity.sha256 !== expected.sha256)) {
+    throw new TypeError('Generated client route source does not match the recorded build identity.');
+  }
+  return Object.freeze({ identity, source: bytes.toString('utf8') });
+}
+
 function frontendManifestIdentity(source: Buffer): FrontendManifestIdentity {
   const manifest = parseBoundedJsonObject(source.toString('utf8'), {
     label: 'Frontend Vite manifest',
@@ -503,6 +534,7 @@ function createSnapshotOnce(
   const manifestPath = path.join(repositoryRoot, 'frontend/.svelte-kit/output/client/.vite/manifest.json');
   const manifestSource = readBoundedStableRegularFileSync(manifestPath, MAX_MANIFEST_BYTES, 'Frontend Vite manifest');
   const manifest = frontendManifestIdentity(manifestSource);
+  const generatedRouteSource = readFrontendGeneratedRouteSource(path.join(repositoryRoot, 'frontend'), manifestSource).identity;
   const manifestOutputs = manifest.outputs;
   const immutableClientFiles = client.files.filter((item) => item.path.startsWith('_app/immutable/'));
   const orderedManifestOutputs = [...manifestOutputs].sort(compareCodeUnits);
@@ -531,6 +563,7 @@ function createSnapshotOnce(
     source,
     served,
     viteManifestSha256,
+    generatedRouteSource,
     manifestOutputs: Object.freeze(orderedManifestOutputs),
     browserTestSupport: browserTestSupport(
       viteManifestSha256,
@@ -590,7 +623,7 @@ export function parseFrontendBuildIntegritySnapshot(source: string): FrontendBui
   });
   exactKeys(parsed, [
     'format', 'version', 'runtime', 'source', 'served', 'viteManifestSha256',
-    'manifestOutputs', 'browserTestSupport', 'htmlDocuments', 'immutableReferences',
+    'generatedRouteSource', 'manifestOutputs', 'browserTestSupport', 'htmlDocuments', 'immutableReferences',
   ], 'Frontend build-integrity marker');
   if (parsed.format !== FRONTEND_BUILD_INTEGRITY_FORMAT || parsed.version !== FRONTEND_BUILD_INTEGRITY_VERSION) {
     throw new TypeError('Frontend build-integrity marker uses an unsupported format or version.');
@@ -626,6 +659,11 @@ export function parseFrontendBuildIntegritySnapshot(source: string): FrontendBui
     throw new TypeError('Frontend build-integrity summary is malformed.');
   }
   const retainedSource = parseTreeIdentity(parsed.source, 'Frontend build-integrity source');
+  const generatedRouteSource = parseFileIdentity(parsed.generatedRouteSource, 'Frontend generated route source');
+  if (!generatedRouteSource.path.startsWith('.svelte-kit/generated/') || generatedRouteSource.bytes < 1
+    || generatedRouteSource.bytes > MAX_FRONTEND_ROUTE_SOURCE_BYTES) {
+    throw new TypeError('Frontend generated route source is outside its path or byte bounds.');
+  }
   const served = parseTreeIdentity(parsed.served, 'Frontend build-integrity served build');
   const support = record(parsed.browserTestSupport, 'Frontend build-integrity browser-test support');
   exactKeys(support, ['digestSha256', 'modules'], 'Frontend build-integrity browser-test support');
@@ -667,6 +705,7 @@ export function parseFrontendBuildIntegritySnapshot(source: string): FrontendBui
     source: retainedSource,
     served,
     viteManifestSha256: parsed.viteManifestSha256,
+    generatedRouteSource,
     manifestOutputs: Object.freeze(manifestOutputs),
     browserTestSupport: rebuiltSupport,
     htmlDocuments: Number(parsed.htmlDocuments),

@@ -21,7 +21,8 @@ async function pinForm(page: import('@playwright/test').Page) {
   return details.locator('form').first();
 }
 
-test('launch navigation clears its token and history before one delayed local session exchange', async ({ page, localApplication }) => {
+for (const entry of ['fresh launch', 'already-open login fragment'] as const) {
+test(`${entry} clears its token and history before one delayed local session exchange`, async ({ page, localApplication }) => {
   let exchanges = 0;
   let scrubbedBeforeExchange = false;
   let received!: () => void, release!: () => void;
@@ -36,7 +37,13 @@ test('launch navigation clears its token and history before one delayed local se
     await route.continue();
   });
   try {
-    await page.goto(localApplication.instance.launchUrl);
+    if (entry === 'fresh launch') await page.goto(localApplication.instance.launchUrl);
+    else {
+      await page.goto(`${localApplication.instance.origin}/login?next=https%3A%2F%2Foutside.invalid%2F`);
+      await expect(page.getByRole('heading', { name: 'Open local workspace', exact: true })).toBeVisible();
+      await expect(page.getByRole('status')).toHaveCount(0);
+      await page.evaluate(hash => { location.hash = hash; }, new URL(localApplication.instance.launchUrl).hash);
+    }
     await requested;
     expect(scrubbedBeforeExchange).toBe(true);
     const token = new URL(localApplication.instance.launchUrl).hash.slice(1);
@@ -48,6 +55,7 @@ test('launch navigation clears its token and history before one delayed local se
     expect(exchanges).toBe(1);
   } finally { release(); }
 });
+}
 
 test('an unconfirmed filesystem recovery write keeps the form and blocks repeat writes until review', async ({ page, localApplication }) => {
   await openLocalApplication(page, localApplication);

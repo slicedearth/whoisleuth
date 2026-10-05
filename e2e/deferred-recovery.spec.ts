@@ -411,7 +411,7 @@ test('a pending protected module reaches a terminal reload state and ignores lat
   await expectNoHorizontalOverflow(page);
 });
 
-for (const navigation of ['back', 'another command', 'another page'] as const) {
+for (const navigation of ['back', 'back-forward', 'back-forward-back', 'another command', 'another page'] as const) {
   test(`late CLI catalogue completion respects navigation to ${navigation}`, async ({ page }) => {
     const chunkPath = productionChunkPath('src/lib/generated/public-cli-catalogue.ts');
     let release = () => {};
@@ -432,9 +432,17 @@ for (const navigation of ['back', 'another command', 'another page'] as const) {
       await expect(page).toHaveURL('/cli#command-commands');
       await expect.poll(() => heldRequests).toBe(1);
       await expect(catalogue.locator('[data-command-detail]')).toHaveCount(0);
-      if (navigation === 'back') {
+      if (navigation.startsWith('back')) {
         await page.goBack();
         await expect(page).toHaveURL('/cli#commands');
+        if (navigation !== 'back') {
+          await page.goForward();
+          await expect(page).toHaveURL('/cli#command-commands');
+          if (navigation === 'back-forward-back') {
+            await page.goBack();
+            await expect(page).toHaveURL('/cli#commands');
+          }
+        }
       } else if (navigation === 'another command') {
         await catalogue.locator('article[data-command="doctor"] .command-open').click();
         await expect(page).toHaveURL('/cli#command-doctor');
@@ -447,13 +455,14 @@ for (const navigation of ['back', 'another command', 'another page'] as const) {
       release();
       await page.waitForFunction(() => Reflect.get(globalThis, '__cliSelectionModuleEvaluated') === true);
       await waitForAnimationFrames(page);
-      if (navigation === 'another command') {
-        await expect(catalogue.locator('[data-command-detail="doctor"]')).toBeVisible();
+      if (navigation === 'another command' || navigation === 'back-forward') {
+        const id = navigation === 'another command' ? 'doctor' : 'commands';
+        await expect(catalogue.locator(`[data-command-detail="${id}"]`)).toBeFocused();
         await expect(catalogue.locator('[data-command-detail]')).toHaveCount(1);
-        await expect(page).toHaveURL('/cli#command-doctor');
+        await expect(page).toHaveURL(`/cli#command-${id}`);
       } else {
         await expect(page.locator('[data-command-detail]')).toHaveCount(0);
-        await expect(page).toHaveURL(navigation === 'back' ? '/cli#commands' : '/resources');
+        await expect(page).toHaveURL(navigation.startsWith('back') ? '/cli#commands' : '/resources');
         expect(await page.evaluate((previous) => document.activeElement === previous, focusBeforeRelease)).toBe(true);
       }
       if (navigation === 'back') {

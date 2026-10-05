@@ -23,10 +23,12 @@ import {
   assertFrontendBuildIntegrity,
   cleanFrontendBuildArtifacts,
   FRONTEND_BUILD_INTEGRITY_MARKER,
+  FRONTEND_BUILD_INTEGRITY_VERSION,
   frontendProductionChunk,
   parseFrontendBuildIntegritySnapshot,
   recordFrontendBuildIntegrity,
 } from '../tools/frontend-build-integrity.mts';
+import { readFrontendRouteNodes } from '../tools/frontend-loading-report.mts';
 import {
   createHostedBrowserWorkspace,
   HOSTED_BROWSER_DIAGNOSTIC_LIMITS,
@@ -76,12 +78,14 @@ function fixtureRepository(context: { after(callback: () => void): void }): stri
   ].join('\n');
   const redirect = '<script>location.href="/";</script>\n';
   const manifest = {
+    '.svelte-kit/generated/build/client-optimized/app.js': { name: 'entry/app', file: '_app/immutable/entry/app.A.js' },
     'src/app.ts': {
       file: '_app/immutable/entry/app.A.js',
       css: ['_app/immutable/assets/app.A.css'],
     },
   };
   for (const [relative, source] of [
+    ['frontend/.svelte-kit/generated/build/client-optimized/app.js', 'export const dictionary = {"/": [2]};\n'],
     ['frontend/.svelte-kit/output/client/_app/immutable/entry/app.A.js', script],
     ['frontend/.svelte-kit/output/client/_app/immutable/assets/app.A.css', style],
     ['frontend/.svelte-kit/output/client/.vite/manifest.json', JSON.stringify(manifest)],
@@ -331,6 +335,19 @@ describe('hosted browser workspace diagnostics', () => {
 });
 
 describe('frontend build integrity', () => {
+  test('binds the current generated route source to the recorded build, including in-place edits', (context) => {
+    const root = fixtureRepository(context);
+    const snapshot = recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    const frontend = path.join(root, 'frontend');
+    const manifest = JSON.parse(readFileSync(path.join(frontend, '.svelte-kit/output/client/.vite/manifest.json'), 'utf8'));
+    assert.deepEqual(readFrontendRouteNodes(frontend, manifest, snapshot.generatedRouteSource), [{ routeKey: '/', pageNode: 2, layoutNodes: [] }]);
+    // The manifest, selected path and served bytes remain unchanged.
+    write(root, `frontend/${snapshot.generatedRouteSource.path}`, 'export const dictionary = {"/": [3]};\n');
+    assert.deepEqual(assertFrontendBuildIntegrity(root, ENVIRONMENT), snapshot);
+    assert.throws(() => readFrontendRouteNodes(frontend, manifest, snapshot.generatedRouteSource), /recorded build identity/u);
+    const malformed = { ...snapshot, generatedRouteSource: { ...snapshot.generatedRouteSource, path: 'outside.js' } };
+    assert.throws(() => parseFrontendBuildIntegritySnapshot(JSON.stringify(malformed)), /path or byte bounds/u);
+  });
   test('worker outputs require a manifest identity and remain verified without builder intermediates', (context) => {
     const root = fixtureRepository(context);
     const workerSource = 'src/lib/workers/search.worker.ts';
@@ -521,7 +538,7 @@ describe('frontend build integrity', () => {
 
     assert.throws(() => parseFrontendBuildIntegritySnapshot('{'), /JSON|parse/u);
     assert.throws(
-      () => parseFrontendBuildIntegritySnapshot(JSON.stringify({ ...retained, version: 3 })),
+      () => parseFrontendBuildIntegritySnapshot(JSON.stringify({ ...retained, version: FRONTEND_BUILD_INTEGRITY_VERSION + 1 })),
       /unsupported format or version/u,
     );
     assert.throws(

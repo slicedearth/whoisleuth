@@ -17,8 +17,9 @@ import {
   hasMaintainerUnsafeCharacters,
   pathIsWithin,
   readBoundedStableRegularFileSync,
+  sha256Bytes,
 } from './maintainer-tool-helpers.mts';
-import { assertFrontendBuildIntegrity } from './frontend-build-integrity.mts';
+import { assertFrontendBuildIntegrity, readFrontendGeneratedRouteSource, MAX_FRONTEND_ROUTE_SOURCE_BYTES, type FrontendBuildIntegritySnapshot } from './frontend-build-integrity.mts';
 
 type WritableLike = { write(value: string): unknown };
 type ManifestEntry = Readonly<{
@@ -50,7 +51,7 @@ export const FRONTEND_LOADING_REPORT_SCHEMA = 'whoisleuth.frontend-loading-repor
 export const FRONTEND_LOADING_REPORT_VERSION = 2;
 export const BROWSER_LOCAL_CHUNK_NAME = 'browser-local-data-definitions';
 export const MAX_FRONTEND_MANIFEST_BYTES = 2 * 1024 * 1024;
-export const MAX_FRONTEND_ROUTE_SOURCE_BYTES = 512 * 1024;
+export { MAX_FRONTEND_ROUTE_SOURCE_BYTES };
 export const MAX_FRONTEND_MANIFEST_ENTRIES = 4096;
 export const MAX_FRONTEND_ROUTES = 256;
 export const MAX_FRONTEND_LAYOUT_NODES_PER_ROUTE = 32;
@@ -264,18 +265,10 @@ export function parseGeneratedRouteNodes(source: string): RouteNode[] {
   return routes;
 }
 
-export function readFrontendRouteNodes(frontendRoot: string, manifest: Manifest): RouteNode[] {
-  const entries = Object.entries(manifest).filter(([, entry]) => entry.name === 'entry/app');
-  if (entries.length !== 1) throw new Error('Client manifest must identify exactly one application entry source.');
-  const source = boundedSafeRelativePath(entries[0]![0], 'Generated application entry source', 1024);
-  const generatedRoot = realpathSync(path.join(frontendRoot, '.svelte-kit/generated'));
-  const sourcePath = path.resolve(frontendRoot, source);
-  if (!pathIsWithin(generatedRoot, realpathSync(sourcePath))) {
-    throw new TypeError('Generated application entry source resolves outside the generated root.');
-  }
-  return parseGeneratedRouteNodes(readBoundedStableRegularFileSync(
-    sourcePath, MAX_FRONTEND_ROUTE_SOURCE_BYTES, 'Generated client route source',
-  ).toString('utf8'));
+export function readFrontendRouteNodes(
+  frontendRoot: string, manifest: Manifest, expected?: FrontendBuildIntegritySnapshot['generatedRouteSource'],
+): RouteNode[] {
+  return parseGeneratedRouteNodes(readFrontendGeneratedRouteSource(frontendRoot, JSON.stringify(manifest), expected).source);
 }
 
 export function buildFrontendLoadingReport(input: FrontendLoadingReportInput) {
@@ -454,7 +447,7 @@ export function main(
         MAX_FRONTEND_MANIFEST_BYTES, 'Previous loading report').toString('utf8'),
       { label: 'Previous loading report', maximumBytes: MAX_FRONTEND_MANIFEST_BYTES },
     )) : undefined;
-    assertFrontendBuildIntegrity();
+    const identity = assertFrontendBuildIntegrity();
     const frontend = path.resolve('frontend');
     const clientRoot = path.join(frontend, '.svelte-kit/output/client');
     const realClientRoot = realpathSync(clientRoot);
@@ -463,11 +456,14 @@ export function main(
       MAX_FRONTEND_MANIFEST_BYTES,
       'Frontend client manifest',
     ).toString('utf8');
+    if (sha256Bytes(Buffer.from(manifestSource, 'utf8')) !== identity.viteManifestSha256) {
+      throw new TypeError('Frontend client manifest does not match the recorded build identity.');
+    }
     const manifest = validateManifest(parseBoundedJsonObject(manifestSource, {
       label: 'Frontend client manifest',
       maximumBytes: MAX_FRONTEND_MANIFEST_BYTES,
     }));
-    const routeNodes = readFrontendRouteNodes(frontend, manifest);
+    const routeNodes = readFrontendRouteNodes(frontend, manifest, identity.generatedRouteSource);
     const measurements = new Map<string, AssetMeasurement>();
     let measuredBytes = 0;
     const report = buildFrontendLoadingReport({
