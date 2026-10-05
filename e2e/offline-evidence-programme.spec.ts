@@ -134,6 +134,7 @@ test('registration boundaries preserve earlier history and survive explicit repo
 test('containment handoff selects exact retained requests, previews audience disclosure and preserves open state in a resolved Case', async ({
   page,
 }, testInfo) => {
+  await page.clock.setFixedTime(new Date(NOW));
   let record = createCase({ domain: 'example.test', title: 'Unshared title' }, NOW);
   record = updateCase(
     [record],
@@ -150,6 +151,10 @@ test('containment handoff selects exact retained requests, previews audience dis
     NOW,
   ).record;
   const pin = record.evidencePins[0]!;
+  record = updateCase([record], record.id, { evidencePin: {
+    label: 'Unselected related source', value: 'Private related value', source: 'Separate retained source',
+    observedAt: NOW, completeness: 'complete',
+  } }, NOW).record;
   record = updateCase(
     [record],
     record.id,
@@ -196,6 +201,31 @@ test('containment handoff selects exact retained requests, previews audience dis
       'I reviewed these exact statements, evidence values and audience disclosures for this recipient.',
     )
     .check();
+  await expect(handoff.getByRole('button', { name: 'Download containment handoff' })).toBeEnabled();
+  // Sections remain mounted: a relationship-only save must invalidate this
+  // approved disclosure even when the Case clock and selected pins are unchanged.
+  await openCaseSection(page, 'Evidence');
+  const relationships = page.locator('details.evidence-relationships');
+  await relationships.locator(':scope > summary').click();
+  const relationship = relationships.getByRole('form', { name: 'Record evidence relationship' });
+  await relationship.getByLabel('Evidence pin', { exact: true }).selectOption(pin.id);
+  await relationship.getByLabel('Source evidence pin', { exact: true }).selectOption(record.evidencePins[1]!.id);
+  await relationship.getByLabel('Attribution basis').fill('Private relationship basis');
+  await relationship.getByRole('button', { name: 'Record relationship' }).click();
+  await expect(relationships.getByRole('list', { name: 'Analyst-declared evidence relationships' })).toContainText('Private relationship basis');
+  const linked = await readBrowserLocalCollection(page, 'cases', { minimumRevision: 2 });
+  expect(linked.records[0]!.value.updatedAt).toBe(record.updatedAt);
+  expect(linked.records[0]!.value.evidencePins).toEqual(record.evidencePins);
+  await openCaseSection(page, 'Response');
+  await expect(preview).toHaveCount(0);
+  await expect(handoff.getByRole('status')).toContainText('The Case or selected scope changed. Preview and review the handoff again.');
+  await expect(handoff.getByRole('button', { name: 'Download containment handoff' })).toHaveCount(0);
+  await expect(handoff.getByRole('button', { name: 'Save containment handoff in Case' })).toHaveCount(0);
+  await handoff.getByRole('button', { name: 'Preview containment disclosure' }).click();
+  await expect(preview).toContainText('Multiple references do not establish independent observations');
+  await expect(preview).not.toContainText('Private relationship basis');
+  await expect(handoff.getByLabel('I reviewed these exact statements, evidence values and audience disclosures for this recipient.')).not.toBeChecked();
+  await handoff.getByLabel('I reviewed these exact statements, evidence values and audience disclosures for this recipient.').check();
   await handoff.getByRole('button', { name: 'Save containment handoff in Case' }).click();
   await expect(handoff.getByRole('status')).toContainText('Handoff saved');
   await expect(handoff.locator(':scope > summary')).toBeFocused();

@@ -56,6 +56,7 @@
       record.status,
       record.assertions,
       record.evidencePins,
+      record.evidenceLinks,
       selection,
     ]),
   );

@@ -66,6 +66,54 @@ test('BOM and supplementary characters count as exact original UTF-16 units, not
   await assert.rejects(reviewMessageInput(new Uint8Array([0xff, 0xfe, 0x31]), 'text', NOW));
 });
 
+test('sentence-final phone periods preserve source bytes, exact spans and explicit selection', async () => {
+  for (const original of ['+1 202 555 0107', '(202) 555-0107', '+1 202 555 0107 ext. 17']) {
+    for (const suffix of ['.', '. ', '.\n', '.\r\n', '.\t', '.\u00a0', '.\u202f', '', '!', '. 7654321']) {
+      const prefix = '\uFEFF🧭 Support: ', source = prefix + original + suffix;
+      const result = await reviewMessageInput(bytes(source), 'text', NOW);
+      const digest = await sha256ArtifactBytes(bytes(source));
+      assert.equal(result.phoneReview!.candidates.length, 1, JSON.stringify(source));
+      const candidate = result.phoneReview!.candidates[0]!;
+      assert.equal(result.phoneReview!.sourceDigestSha256, digest);
+      assert.equal(result.phoneReview!.sourceTextLength, source.length);
+      assert.equal(candidate.start, prefix.length);
+      assert.equal(candidate.end, prefix.length + original.length);
+      assert.equal(source.slice(candidate.start, candidate.end), original);
+      assert.equal(candidate.original, original);
+      assert.equal(candidate.canonical, original.startsWith('+') ? '+12025550107' : null);
+      assert.equal(candidate.state, original.startsWith('+') ? 'international_candidate' : 'national_ambiguous');
+      assert.equal(candidate.extension, original.includes('ext.') ? '17' : null);
+      validatePhoneReview(result);
+      assert.ok(result.report.schemaVersion === 2);
+      assert.equal(result.report.selectedEvidence, undefined);
+      const report = withIntakeSelectedEvidence(result, selection(result));
+      assert.equal(report.selectedEvidence!.sourceDigestSha256, digest);
+      assert.deepEqual(report.selectedEvidence!.phones[0]!.occurrences,
+        [{ original, start: prefix.length, end: prefix.length + original.length }]);
+      assert.doesNotMatch(JSON.stringify(report), /Support:|🧭|7654321/u);
+      assert.throws(() => withIntakeSelectedEvidence(result, { ...selection(result), sourceDigestSha256: 'sha256:' + '0'.repeat(64) }), /complete input digest/u);
+      assert.throws(() => withIntakeSelectedEvidence(result, { ...selection(result), phones: [{ ...selection(result).phones[0], end: candidate.end + 1 }] }), TypeError);
+    }
+  }
+});
+
+test('prose-period exception does not admit embedded identifiers, URI bodies or unlabelled national numbers', () => {
+  const digest = 'sha256:' + 'a'.repeat(64);
+  const sources = [
+    'Call: 2025550107.25', 'Support: +12025550107.25', 'Phone: 12345678.90', 'Version: +12025550107.1',
+    ...['.example', '._id', './path', '.+1234', '..', '.Next'].map(suffix => 'Support: +12025550107' + suffix),
+    ...['.', 'a', '_', '/', ':', '@'].map(prefix => prefix + '+12025550107.'),
+    '192.0.2.17.', '2001:db8::17.', 'Call: 2026-10-04.', 'Account: +12025550107.',
+    'Order: 2025550107.', 'Reference: 2025550107.', 'SHA256:' + '1'.repeat(64) + '.',
+    'https://example.test/+12025550107.', 'hxxps[:]//example[.]test/+12025550107.', 'tel:+12025550107.',
+    'value=urn:phone:+12025550107.', 'value=data:text/plain,+12025550107.', '+12025550107@example.test',
+    'Authorization: +12025550107.', 'Cookie: +12025550107.', '<a title="+12025550107.">text</a>',
+    '<a title="+12025550107.', '<script>+12025550107.</script>', '<style>+12025550107.</style>',
+    '2025550107.', '(202) 555-0107.',
+  ];
+  for (const source of sources) assert.deepEqual(reviewPhoneCandidates(source, digest).candidates, [], source);
+});
+
 test('equivalent explicit international formatting groups only compatible declarations and preserves each source span', async () => {
   const result = await reviewMessageInput(bytes('+1 202 555 0107\n+1 (202) 555-0107\nPhone: (202) 555-0107\nPhone: 202 555 0107'), 'text', NOW);
   assert.equal(result.phoneReview!.candidates.length, 4);
@@ -94,7 +142,7 @@ test('phone extensions stay separate and distinct numbers or provenance do not c
 });
 
 test('unsupported Unicode digits, bidi and confusable plus signs preserve exact spans without becoming selected numbers', async () => {
-  const source = '+１ ２０２ ５５５ ０１０７\n＋1 202 555 0107\n+1 202\u202e555 0107';
+  const source = '+１ ２０２ ５５５ ０１０７.\n＋1 202 555 0107.\n+1 202\u202e555 0107.';
   const result = await reviewMessageInput(bytes(source), 'text', NOW);
   assert.equal(result.phoneReview!.candidates.length, 3);
   for (const candidate of result.phoneReview!.candidates) {
@@ -318,7 +366,7 @@ test('unsupported interchange mappings never coerce selected phone observations 
 });
 
 test('browser and CLI retain identical selected reports, while default CLI output omits transient candidates', async () => {
-  const source = '🧭 Support: +1 202 555 0107';
+  const source = '🧭 Support: +1 202 555 0107.';
   const result = await reviewMessageInput(bytes(source), 'text', NOW);
   const worker = await runMessageIntakeOperation({ kind: 'text', file: new Blob([bytes(source)]), reviewedAt: NOW });
   assert.deepEqual(worker, { kind: 'review', result });
@@ -327,7 +375,7 @@ test('browser and CLI retain identical selected reports, while default CLI outpu
   assert.doesNotMatch(output, /12025550107|202 555/u);
   assert.doesNotMatch(diagnostics, /12025550107|202 555/u);
   assert.match(diagnostics, /Transient phone candidates: 1/u);
-  assert.ok(diagnostics.includes(`UTF-16 span [${source.indexOf('+')}, ${source.length})`));
+  assert.ok(diagnostics.includes(`UTF-16 span [${source.indexOf('+')}, ${source.length - 1})`));
   assert.match(diagnostics, /--intake-context with version 2/u);
   const input = JSON.stringify({ schema: 'whoisleuth.intake-context', version: 2, context: null, review: { ...selection(result), destinationPair } });
   const args = parseCliArguments(['intake', 'text', 'selected.txt', '--intake-context', 'context.json', '--json']);
@@ -336,6 +384,9 @@ test('browser and CLI retain identical selected reports, while default CLI outpu
   const context = { setFailureLabel() {}, now: () => NOW, writeStdout(value: string) { output += value; }, writeStderr(value: string) { diagnostics += value; }, readInput: async (path: string, maximum: number) => { assert.equal(path, 'context.json'); assert.equal(maximum, 8192); return input; } } as unknown as CliCommandContext;
   assert.equal(await runIntakeCommand(args, { readBinaryArtifactInput: () => bytes(source) }, context), 0);
   assert.deepEqual(JSON.parse(output), applyIntakeContextInput(result, input));
+  assert.equal(JSON.parse(output).selectedEvidence.sourceDigestSha256, await sha256ArtifactBytes(bytes(source)));
+  assert.deepEqual(JSON.parse(output).selectedEvidence.phones[0].occurrences,
+    [{ original: '+1 202 555 0107', start: source.indexOf('+'), end: source.length - 1 }]);
   assert.equal(requests, 0);
   assert.equal(INTAKE_SELECTED_EVIDENCE_LIMITATIONS.length, 4);
 });

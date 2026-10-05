@@ -122,6 +122,17 @@ test('sensitive URL, address and credential material is removed before indicator
   assert.equal(indicators.includes('192.0.2.17'), true);
 });
 
+test('literal plaintext and MIME HTML retain their distinct indicator extraction boundaries', async () => {
+  const source = '<script>192.0.2.17</script><style>192.0.2.18</style><p>192.0.2.19</p>';
+  const plain = await reviewMessageInput(bytes(source), 'text', NOW);
+  const html = await reviewMessageInput(bytes(`Content-Type: text/html\r\n\r\n${source}`), 'email', NOW);
+  assert.deepEqual(intakeIndicators(plain.report).map(item => item.value), ['192.0.2.17', '192.0.2.18', '192.0.2.19']);
+  assert.deepEqual(intakeIndicators(html.report).map(item => item.value), ['192.0.2.19']);
+  assert.deepEqual(plain.targets, []);
+  assert.deepEqual(html.targets, []);
+  assert.doesNotMatch(JSON.stringify(plain.report) + JSON.stringify(html.report), /<script>|<style>/u);
+});
+
 test('indicator bounds stop accumulation and mark independent partial coverage', () => {
   const intake = createIndicatorIntake();
   intake.addText(

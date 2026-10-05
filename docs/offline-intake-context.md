@@ -19,8 +19,11 @@ within one part are deduplicated. The UI can copy a source citation. Indicators
 are not added to Lookup targets and do not become a risk score or finding.
 
 Complete URL spans, address local parts, recognised credential-bearing lines,
-message headers, script/style content and QR payloads are not scanned for
-indicators. HAR and identity-event imports keep their existing restricted
+message headers and QR payloads are not scanned for indicators. MIME HTML
+extraction also excludes script and style nodes. Explicit plaintext is literal
+supplied text: an IP inside a pasted code snippet can be an inert observation;
+the code is never executed. Phone candidates have their own stricter markup
+exclusions. HAR and identity-event imports keep their existing restricted
 projections: no broad scan of their original fields occurs. Extraction is
 limited to 512 observations, 4,096 candidate checks and 2,097,152 text code
 units across an input. Reached bounds are partial coverage, never proof that
@@ -43,6 +46,11 @@ snippet. Text ranges use zero-based, end-exclusive UTF-16 code-unit offsets;
 supplementary characters occupy two units. A declared source time is separate
 from the local review time. Identify manual transcription or OCR-derived text
 when that is how the supplied text was obtained.
+
+The browser provides a shared declaration for selected occurrences. Open
+**Declaration for candidate** to override a source label, role, observation time
+or text basis for one occurrence. Apply or clear edits before saving or
+downloading; only equivalent numbers with equivalent declarations share a group.
 
 An advertised support contact and a sender or caller-ID claim describe different
 roles; neither verifies ownership. International formatting can be compared only

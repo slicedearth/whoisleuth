@@ -86,7 +86,10 @@ export function reviewPhoneCandidates(value: string, sourceDigestSha256: string)
       if (original.length > MAX_INTAKE_PHONE_CHARACTERS) { partial = true; continue; }
       if (excluded.subarray(start, end).some(Boolean)) continue;
       const before = value.slice(Math.max(0, start - 48), start);
-      if (/[\p{L}\p{N}_./:@+-]$/u.test(before) || /^[\p{L}\p{N}_./:@+-]/u.test(value.slice(end, end + 1))) continue;
+      const after = value.slice(end, end + 2);
+      // Sentence punctuation is outside the original span; embedded dots still reject.
+      if (/[\p{L}\p{N}_./:@+-]$/u.test(before)
+        || (/^[\p{L}\p{N}_./:@+-]/u.test(after) && !/^\.(?:\s|$)/u.test(after))) continue;
       if (NOT_PHONE_LABEL.test(before) || /^\d{4}[- ]\d{1,2}[- ]\d{1,2}$/u.test(original) || /^\d{1,2}[- ]\d{1,2}[- ]\d{2,4}$/u.test(original)) continue;
       if (!/^[+\uFF0B]/u.test(original) && !PHONE_LABEL.test(before)) continue;
       const parsed = phoneCandidateValue(original);

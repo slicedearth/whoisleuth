@@ -9,8 +9,11 @@
     onchange: (report: CurrentMessageIntakeReport) => void; onpending: (pending: boolean) => void;
     headingTag?: 'h4' | 'h5';
   } = $props();
-  let selected = $state<string[]>([]), page = $state(1), sourceLabel = $state(''), observedAt = $state(''), countryCallingCode = $state('');
-  let basis = $state<IntakeEvidenceDeclaration['basis']>('unknown'), role = $state<IntakePhoneDeclaration['role']>('unknown');
+  type PhoneDeclarationDraft = Pick<IntakePhoneDeclaration, 'sourceLabel' | 'basis' | 'role'> & { observedAt: string };
+  const emptyDeclaration = (): PhoneDeclarationDraft => ({ sourceLabel: '', observedAt: '', basis: 'unknown', role: 'unknown' });
+  let selected = $state<string[]>([]), page = $state(1), countryCallingCode = $state('');
+  let defaults = $state<PhoneDeclarationDraft>(emptyDeclaration());
+  let overrides = $state<Record<string, PhoneDeclarationDraft | undefined>>({});
   let pairEnabled = $state(false), displayed = $state(''), destination = $state('');
   let displayedSource = $state(''), destinationSource = $state(''), displayedAt = $state(''), destinationAt = $state('');
   let displayedBasis = $state<IntakeEvidenceDeclaration['basis']>('unknown'), destinationBasis = $state<IntakeEvidenceDeclaration['basis']>('unknown');
@@ -21,6 +24,12 @@
   function changed() { pending = true; error = ''; onpending(true); }
   function toggle(id: string, checked: boolean) {
     selected = checked ? [...selected, id] : selected.filter(value => value !== id);
+    if (!checked) delete overrides[id];
+    changed();
+  }
+  function override(id: string, checked: boolean) {
+    if (checked) overrides[id] = { ...defaults };
+    else delete overrides[id];
     changed();
   }
   function visibleOriginal(value: string) {
@@ -32,10 +41,11 @@
     try {
       const next = withIntakeSelectedEvidence({ report, targets: [], ...(phoneReview ? { phoneReview } : {}) }, !selected.length && !pairEnabled ? null : {
         sourceDigestSha256: report.source.digestSha256,
-        phones: candidates.filter(candidate => selected.includes(candidate.id)).map(candidate => ({
-          start: candidate.start, end: candidate.end,
-          declaration: { sourceLabel: sourceLabel.trim(), observedAt: observedAt.trim() || null, basis, role, countryCallingCode: countryCallingCode.trim() || null },
-        })),
+        phones: candidates.filter(candidate => selected.includes(candidate.id)).map(candidate => {
+          const draft = overrides[candidate.id] ?? defaults;
+          return { start: candidate.start, end: candidate.end,
+            declaration: { ...draft, sourceLabel: draft.sourceLabel.trim(), observedAt: draft.observedAt.trim() || null, countryCallingCode: countryCallingCode.trim() || null } };
+        }),
         destinationPair: pairEnabled ? {
           displayed, destination,
           displayedDeclaration: { sourceLabel: displayedSource.trim(), observedAt: displayedAt.trim() || null, basis: displayedBasis, role: 'displayed_claim' },
@@ -49,10 +59,18 @@
   function clear() {
     if (disabled) return;
     onchange(withIntakeSelectedEvidence({ report, targets: [] }, null));
-    selected = []; pairEnabled = false; displayed = ''; destination = '';
+    selected = []; overrides = {}; defaults = emptyDeclaration(); countryCallingCode = '';
+    pairEnabled = false; displayed = ''; destination = '';
     pending = false; onpending(false); error = '';
   }
 </script>
+
+{#snippet declarationFields(draft: PhoneDeclarationDraft, prefix: string, required = true)}
+  <label>{prefix} source label<input {required} maxlength="160" bind:value={draft.sourceLabel} oninput={changed} placeholder="Supplied support snippet" /></label>
+  <label>{prefix} text basis<select bind:value={draft.basis} onchange={changed}>{#each INTAKE_TEXT_BASES as item}<option value={item}>{item.replaceAll('_', ' ')}</option>{/each}</select></label>
+  <label>{prefix === 'Phone' ? 'Declared phone role' : `${prefix} phone role`}<select bind:value={draft.role} onchange={changed}>{#each INTAKE_PHONE_ROLES as item}<option value={item}>{item.replaceAll('_', ' ')}</option>{/each}</select></label>
+  <label>{prefix} observation time (ISO with timezone)<input maxlength="40" bind:value={draft.observedAt} oninput={changed} placeholder="Unknown unless supplied" /></label>
+{/snippet}
 
 <details class="selected-evidence">
   <summary>Select phone candidates or compare supplied destinations</summary>
@@ -71,16 +89,23 @@
               <p>Source span [{candidate.start}, {candidate.end}) · UTF-16 code units; controls are shown as escapes.</p>
               {#each candidate.issues as issue}<p>{issue}</p>{/each}
               <label class="check"><input type="checkbox" checked={selected.includes(candidate.id)} disabled={candidate.state === 'unsupported' || (!selected.includes(candidate.id) && selected.length >= MAX_SELECTED_INTAKE_PHONES)} onchange={event => toggle(candidate.id, event.currentTarget.checked)} />Select phone candidate {candidate.id.replace('phone-', '')}</label>
+              {#if selected.includes(candidate.id)}
+                {@const draft = overrides[candidate.id]}
+                <details>
+                  <summary>Declaration for candidate {candidate.id.replace('phone-', '')}</summary>
+                  <label class="check"><input type="checkbox" checked={Boolean(overrides[candidate.id])} onchange={event => override(candidate.id, event.currentTarget.checked)} />Use a different declaration for candidate {candidate.id.replace('phone-', '')}</label>
+                  {#if draft}
+                    {@render declarationFields(draft, `Candidate ${candidate.id.replace('phone-', '')}`)}
+                  {:else}<p>Uses the shared declaration below.</p>{/if}
+                </details>
+              {/if}
             </li>
           {/each}
         </ol>
         {#if candidates.length > 10}<Pagination currentPage={page} pageCount={Math.ceil(candidates.length / 10)} setPage={next => page = next} ariaLabel="Phone candidate pages" />{/if}
         {#if selected.length}
-          <p>Selected occurrences: {selected.length}. Declarations below apply to these occurrences. Equivalent international formatting may share a group, but every source span is preserved.</p>
-          <label>Phone source label<input required maxlength="160" bind:value={sourceLabel} oninput={changed} placeholder="Supplied support snippet" /></label>
-          <label>Phone text basis<select bind:value={basis} onchange={changed}>{#each INTAKE_TEXT_BASES as item}<option value={item}>{item.replaceAll('_', ' ')}</option>{/each}</select></label>
-          <label>Declared phone role<select bind:value={role} onchange={changed}>{#each INTAKE_PHONE_ROLES as item}<option value={item}>{item.replaceAll('_', ' ')}</option>{/each}</select></label>
-          <label>Phone observation time (ISO with timezone)<input maxlength="40" bind:value={observedAt} oninput={changed} placeholder="Unknown unless supplied" /></label>
+          <p>Selected occurrences: {selected.length}. This shared declaration applies unless an occurrence has its own declaration. Equivalent international formatting and declarations may share a group; every source span is preserved.</p>
+          {@render declarationFields(defaults, 'Phone', selected.some(id => !overrides[id]))}
           <label>Declared country calling prefix<input maxlength="4" bind:value={countryCallingCode} oninput={changed} placeholder="Unknown, or an explicit + prefix" /></label>
           <p>No country is inferred from a brand or browser locale. National formats remain ambiguous; country context never guesses trunk-prefix rules.</p>
         {/if}
