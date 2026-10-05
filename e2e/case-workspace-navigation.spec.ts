@@ -93,6 +93,62 @@ test('saving equivalent tag spacing acknowledges a no-op without changing storag
   expect(prompts).toEqual([]);
 });
 
+for (const direction of ['combine', 'separate'] as const) {
+  test(`Case tag saves ${direction} literal backslash-zero content without losing the draft`, async ({ page }) => {
+    const literalTag = String.raw`first\0second`;
+    expect(literalTag).toHaveLength(13);
+    expect([...literalTag.slice(5, 7)].map(character => character.charCodeAt(0))).toEqual([92, 48]);
+    const previous = direction === 'combine' ? ['first', 'second'] : [literalTag];
+    const next = direction === 'combine' ? [literalTag] : ['first', 'second'];
+    await page.setViewportSize(direction === 'combine' ? { width: 1280, height: 720 } : { width: 390, height: 844 });
+    await page.goto('/cases');
+    await migrateLegacyBrowserData(page, {
+      'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [{
+        ...caseRecord({ id: 'literal-tags', domain: 'tag-comparison.example' }), tags: previous,
+      }] }),
+    }, { destination: '/cases?case=literal-tags' });
+    await useTheme(page, direction === 'combine' ? 'dark' : 'light');
+    const prompts: string[] = [];
+    page.on('dialog', async dialog => { prompts.push(dialog.message()); await dialog.dismiss(); });
+    await openCaseMetadata(page);
+    const tags = page.getByRole('textbox', { name: /^Additional tags/u });
+    const save = page.getByRole('button', { name: 'Save tags', exact: true });
+    const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+    expect(before.records[0]?.value.tags).toEqual(previous);
+    await tags.fill(next.join(', '));
+    await save.click();
+    await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('Updated tags');
+    const committed = await readBrowserLocalCollection(page, 'cases', { minimumRevision: before.manifest.revision + 1 });
+    expect(committed.records[0]?.value.tags).toEqual(next);
+    expect(committed.manifest.revision).toBe(before.manifest.revision + 1);
+    await expect(tags).toHaveValue(next.join(', '));
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await expect(page).toHaveURL('/cases');
+    expect(prompts).toEqual([]);
+    await page.locator('#case-head-literal-tags').click();
+    await openCaseMetadata(page);
+    await expect(tags).toHaveValue(next.join(', '));
+
+    await tags.fill(previous.join(', '));
+    await failNextBrowserLocalManifestWrite(page, 'cases');
+    await save.click();
+    await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText(/could not save/iu);
+    await expect(tags).toHaveValue(previous.join(', '));
+    expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(committed);
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    expect(prompts).toHaveLength(1);
+    await expect(tags).toHaveValue(previous.join(', '));
+    await save.click();
+    await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('Updated tags');
+    const restored = await readBrowserLocalCollection(page, 'cases', { minimumRevision: committed.manifest.revision + 1 });
+    expect(restored.records[0]?.value.tags).toEqual(previous);
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await expect(page).toHaveURL('/cases');
+    expect(prompts).toHaveLength(1);
+    await expectNoHorizontalOverflow(page);
+  });
+}
+
 for (const [section, preserveLaterFocus] of [
   ['evidence', false], ['evidence', true], ['response', false], ['response', true],
 ] as const) {

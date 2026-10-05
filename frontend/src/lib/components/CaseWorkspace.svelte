@@ -358,7 +358,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
     const unchanged = tagRevision.capture();
     try {
       const next = submittedDraft.split(/[,\n]+/).map(value => value.trim()).filter(Boolean);
-      if (previous.join('\\0') === next.join('\\0')) {
+      if (previous.length === next.length && previous.every((tag, index) => tag === next[index])) {
         if (expandedId === record.id && unchanged()) tagDraft = previous.join(', ');
         return;
       }
