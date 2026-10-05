@@ -247,6 +247,48 @@ describe('buildPostureReport', () => {
     assert.equal(byId(report, 'tls_rpt').status, 'info');
   });
 
+  test('keeps missing mail policies separate from failed, empty and null MX evidence', () => {
+    for (const [mx, detail, status] of [
+      [query([], 'MX resolver timed out'), /applicability is unknown.*MX lookup failed/iu, 'info'],
+      [query([], 'SERVFAIL'), /applicability is unknown.*MX lookup failed/iu, 'info'],
+      [query([]), /No MX records were observed.*does not establish/iu, 'info'],
+      [query([{ priority: 0, exchange: '.' }]), /Null MX explicitly declares/iu, 'info'],
+      [query([{ priority: 10, exchange: 'mail.example.test' }]), /^$/u, 'warning'],
+      [query([{ priority: 10, exchange: 'bad host' }]), /applicability is unknown.*MX evidence is incomplete/iu, 'info'],
+    ] as const) {
+      const input = strongInput();
+      input.mx = mx;
+      input.tlsRpt = query([]);
+      input.mtaStsDns = query([]);
+      for (const id of ['tls_rpt', 'mta_sts']) {
+        const item = byId(buildPostureReport('example.test', input), id);
+        assert.equal(item.status, status);
+        assert.match(item.detail, detail);
+        if (status === 'info') assert.equal(item.remediation, '');
+      }
+      if (mx.error) assert.equal(byId(buildPostureReport('example.test', input), 'mx').status, 'info');
+    }
+  });
+
+  test('never treats truncated DS evidence as a complete consistency result', () => {
+    const input = strongInput();
+    input.registry = { statuses: [], nameservers: [], dsRecordCount: 0, dsDataTruncated: true, error: null };
+    for (const value of ['Signed', 'Unsigned']) {
+      input.dnssec.value = value;
+      for (const count of [0, 1]) {
+        input.registry.dsRecordCount = count;
+        const item = byId(buildPostureReport('example.test', input), 'dnssec_delegation_consistency');
+        assert.equal(item.status, 'info');
+        assert.match(item.summary, /incomplete/u);
+        assert.equal(item.remediation, '');
+      }
+    }
+    input.registry.dsDataTruncated = false;
+    input.registry.dsRecordCount = 0;
+    assert.equal(byId(buildPostureReport('example.test', input), 'dnssec_delegation_consistency').status, 'pass');
+    assert.equal(byId(buildPostureReport('example.test', input), 'dnssec').status, 'warning');
+  });
+
   test('keeps enforced DMARC actionable when aggregate reporting is absent', () => {
     const input = strongInput();
     input.dmarc = query(['v=DMARC1; p=reject; sp=reject; np=reject']);

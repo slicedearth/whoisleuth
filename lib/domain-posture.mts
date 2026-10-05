@@ -419,6 +419,11 @@ function dnssecDelegationConsistencyCheck(
 
   const value = String(input.value || '').toLowerCase();
   const hasDsRecords = registry.dsRecordCount > 0;
+  if (registry.dsDataTruncated) {
+    return check('dnssec_delegation_consistency', 'DNSSEC delegation consistency', 'info', 'Retained DS evidence is incomplete', {
+      detail: 'The normalised registry response reported truncated DS data, so delegation consistency is inconclusive.',
+    });
+  }
   if (value === 'signed' && hasDsRecords) {
     return check('dnssec_delegation_consistency', 'DNSSEC delegation consistency', 'pass', 'Signed state and retained DS records agree', {
       detail: `${registry.dsRecordCount} registry DS record${registry.dsRecordCount === 1 ? '' : 's'} retained.`,
@@ -427,11 +432,6 @@ function dnssecDelegationConsistencyCheck(
   if (value === 'unsigned' && !hasDsRecords) {
     return check('dnssec_delegation_consistency', 'DNSSEC delegation consistency', 'pass', 'Unsigned state and no retained DS records agree', {
       detail: 'This is a consistency result, not a recommendation to leave DNSSEC disabled.',
-    });
-  }
-  if (registry.dsDataTruncated) {
-    return check('dnssec_delegation_consistency', 'DNSSEC delegation consistency', 'info', 'Retained DS evidence is incomplete', {
-      detail: 'The normalised registry response reported truncated DS data, so apparent disagreement is inconclusive.',
     });
   }
   if (value === 'signed' && !hasDsRecords) {
@@ -479,12 +479,23 @@ function matchesMtaPattern(host: unknown, pattern: unknown): boolean {
   return normalizedHost === normalizedPattern;
 }
 
+function mailPolicyApplicability(mxQuery: DnsQuery): { hasMx: boolean; detail: string } {
+  if (mxQuery.error) return { hasMx: false, detail: 'Receiving-mail applicability is unknown because the MX lookup failed.' };
+  const records = completeMxRecords(mxQuery.records);
+  if (!records) return { hasMx: false, detail: 'Receiving-mail applicability is unknown because the MX evidence is incomplete.' };
+  const { hasMx, hasNullMx } = classifyMxRecords(records);
+  return { hasMx, detail: hasMx ? '' : hasNullMx
+    ? 'Null MX explicitly declares that this domain does not accept inbound mail.'
+    : 'No MX records were observed. This alone does not establish that the domain cannot receive mail.' };
+}
+
 function mtaStsCheck(dnsQuery: DnsQuery, policyFetch: MtaStsPolicyFetch | null, mxQuery: DnsQuery): PostureCheck {
   if (dnsQuery.error) return queryFailureCheck('mta_sts', 'MTA-STS', dnsQuery.error);
   const dnsPolicy = parseMtaStsDnsRecords(dnsQuery.records);
-  const hasMx = !mxQuery.error && classifyMxRecords(asMxRecords(mxQuery.records)).hasMx;
   if (dnsPolicy.records.length === 0) {
+    const { hasMx, detail } = mailPolicyApplicability(mxQuery);
     return check('mta_sts', 'MTA-STS', hasMx ? 'warning' : 'info', 'No MTA-STS policy advertised', {
+      detail,
       remediation: hasMx ? 'Publish _mta-sts and serve a valid policy over HTTPS to require authenticated TLS for inbound mail.' : '',
     });
   }
@@ -555,9 +566,9 @@ function tlsRptCheck(query: DnsQuery, mxQuery: DnsQuery): PostureCheck {
   if (query.error) return queryFailureCheck('tls_rpt', 'TLS-RPT', query.error);
   const parsed = parseTlsRptRecords(query.records);
   if (parsed.records.length === 0) {
-    const hasMx = !mxQuery.error && classifyMxRecords(asMxRecords(mxQuery.records)).hasMx;
+    const { hasMx, detail } = mailPolicyApplicability(mxQuery);
     return check('tls_rpt', 'TLS-RPT', hasMx ? 'warning' : 'info', 'No SMTP TLS reporting policy', {
-      detail: hasMx ? '' : 'The domain has no receiving mail exchanger, so SMTP TLS reporting is not currently actionable.',
+      detail,
       remediation: hasMx ? 'Publish a v=TLSRPTv1 record at _smtp._tls with a monitored rua destination.' : '',
     });
   }
