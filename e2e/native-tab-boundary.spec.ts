@@ -74,11 +74,16 @@ test('native documents, redirects and proxy loss retain exact-origin transport i
       try {
         const page = await context.newPage();
         await page.goto(origin);
+        const before = transport.deniedConnections;
         const [destination] = await Promise.all([
           context.waitForEvent('page'),
           page.getByRole('link', { name: label }).click({ modifiers: ['ControlOrMeta', 'Shift'] }),
         ]);
-        await expectBlockedDestination(destination, deniedUrl, /^ERR_(?:CONNECTION_RESET|EMPTY_RESPONSE)$/u);
+        // A destroyed proxy socket can fail before or after connection setup.
+        // Still require the exact failed destination, a proxy denial and no
+        // connection to the listening destination sink.
+        await expectBlockedDestination(destination, deniedUrl, /^ERR_(?:CONNECTION_RESET|EMPTY_RESPONSE|SOCKET_NOT_CONNECTED)$/u);
+        expect(transport.deniedConnections).toBeGreaterThan(before);
         expect(unexpectedConnections).toBe(0);
       } finally { await context.close(); }
     }
