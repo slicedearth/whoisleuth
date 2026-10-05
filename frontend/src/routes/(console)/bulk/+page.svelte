@@ -832,7 +832,12 @@
       shortlistWorkspace.dispose();
       const wasRunning = scan.running;
       scanController.dispose();
-      if (restorationPending) return;
+      if (restorationPending && restored) {
+        // Queue edits are next-run intent, not evidence. Preserve the opaque
+        // snapshot until Profile reconciliation while keeping those edits.
+        writeBulkWorkflowState({ ...restored, input, mode, pacing });
+        return;
+      }
       const retainedResults = scanController.results;
       const retainedProfileContext = retainedResults.length
         ? summarizeBulkProfileContexts(

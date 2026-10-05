@@ -358,8 +358,10 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
     const unchanged = tagRevision.capture();
     try {
       const next = submittedDraft.split(/[,\n]+/).map(value => value.trim()).filter(Boolean);
-      if (previous.join('\\0') === next.join('\\0'))
+      if (previous.join('\\0') === next.join('\\0')) {
+        if (expandedId === record.id && unchanged()) tagDraft = previous.join(', ');
         return;
+      }
       const committed = await editCaseTags(record.id, next, previous);
       if (expandedId === record.id) tagExpected = [...committed.record.tags];
       if (unchanged())

@@ -16,47 +16,80 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/bulk');
 });
 
-test('interrupted profile restoration preserves transient Bulk rows without reusing unverified trust or collecting again', { tag: '@timing-sensitive' }, async ({ page }) => {
-  const requests: string[] = [];
-  await page.route('**/api/lookup?*', async route => {
-    const domain = new URL(route.request().url()).searchParams.get('q')!;
-    requests.push(domain);
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
-      availability: { applicable: true, domain, state: 'registered', confidence: 'high', registrarName: 'Retained fixture registrar' },
-      diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
-    }) });
+for (const collected of [true, false]) {
+  test(`interrupted profile restoration preserves Bulk queue edits and ${collected ? 'collected rows' : 'an input-only draft'} without reusing unverified trust`, { tag: '@timing-sensitive' }, async ({ page }) => {
+    await page.setViewportSize(collected ? { width: 1280, height: 720 } : { width: 390, height: 844 });
+    await useTheme(page, collected ? 'dark' : 'light');
+    const requests: string[] = [];
+    await page.route('**/api/lookup?*', async route => {
+      const domain = new URL(route.request().url()).searchParams.get('q')!;
+      requests.push(domain);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        availability: { applicable: true, domain, state: 'registered', confidence: 'high', registrarName: 'Retained fixture registrar' },
+        diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      }) });
+    });
+    if (collected) await runBulkScan(page, ['retained-navigation.example']);
+    else {
+      await expect(page.getByText('Loading saved Brand Profile context.', { exact: false })).toHaveCount(0);
+      await page.locator('#domains').fill('retained-navigation.example');
+    }
+    const nav = page.locator('#console-navigation');
+    const navigate = async (destination: 'Dashboard' | 'Bulk') => {
+      const toggle = page.getByRole('button', { name: 'Toggle navigation', exact: true });
+      if (await toggle.isVisible() && await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
+      await nav.getByRole('link', { name: destination, exact: true }).click();
+    };
+    await navigate('Dashboard');
+    await expect(page).toHaveURL('/dashboard');
+    let expected = { input: 'retained-navigation.example', mode: 'fast', pacing: 'standard' };
+    for (const draft of [
+      { input: 'next-navigation.example', mode: 'deep', pacing: 'gentle' },
+      { input: '', mode: 'fast', pacing: 'balanced' },
+    ]) {
+      const release = await holdBrowserLocalTransaction(page);
+      try {
+        await navigate('Bulk');
+        await expect(page).toHaveURL('/bulk');
+        await expect(page.locator('#domains')).toHaveValue(expected.input);
+        await expect(page.getByRole('combobox', { name: 'Scan mode', exact: true })).toHaveValue(expected.mode);
+        await expect(page.getByRole('combobox', { name: 'Request pacing', exact: true })).toHaveValue(expected.pacing);
+        await expect(page.locator('#results')).toHaveCount(0);
+        await expect(page.getByText('Loading saved Brand Profile context.', { exact: false })).toBeVisible();
+        await page.locator('#domains').fill(draft.input);
+        await page.getByRole('combobox', { name: 'Scan mode', exact: true }).selectOption(draft.mode);
+        await page.getByRole('combobox', { name: 'Request pacing', exact: true }).selectOption(draft.pacing);
+        await expect(page.getByRole('button', { name: /^Scan(?: \d+)? domains?$/u })).toBeDisabled();
+        await navigate('Dashboard');
+        await expect(page).toHaveURL('/dashboard');
+      } finally { await release(); }
+      expected = draft;
+    }
+    await failBrowserLocalCollectionReads(page, 'brand_profiles');
+    await navigate('Bulk');
+    await expect(page.getByText('Brand Profile context is unavailable.', { exact: false })).toBeVisible();
+    await expect(page.locator('#domains')).toHaveValue(expected.input);
+    await expect(page.getByRole('combobox', { name: 'Scan mode', exact: true })).toHaveValue(expected.mode);
+    await expect(page.getByRole('combobox', { name: 'Request pacing', exact: true })).toHaveValue(expected.pacing);
+    if (collected) {
+      await expect(page.locator('#results')).toContainText('retained-navigation.example');
+      await expect(page.locator('.status')).toContainText('Withheld profile-derived trust');
+      await expect(page.getByRole('progressbar', { name: 'Bulk scan progress' })).toHaveAttribute('aria-valuenow', '1');
+    } else await expect(page.locator('#results')).toHaveCount(0);
+    expect(requests).toEqual(collected ? ['retained-navigation.example'] : []);
+    // An explicit new collection must supersede the old restoration snapshot.
+    await page.locator('#domains').fill('replacement-navigation.example');
+    await page.getByRole('button', { name: 'Scan 1 domain', exact: true }).click();
+    await expect(page.locator('.status')).toContainText('Completed 1 of 1 lookups. Brand Profile context was unavailable');
+    await navigate('Dashboard');
+    await expect(page).toHaveURL('/dashboard');
+    await navigate('Bulk');
+    await expect(page.locator('#results')).toContainText('replacement-navigation.example');
+    await expect(page.locator('#results')).not.toContainText('retained-navigation.example');
+    expect(requests).toEqual([...(collected ? ['retained-navigation.example'] : []), 'replacement-navigation.example']);
+    await expectNoHorizontalOverflow(page);
   });
-  await runBulkScan(page, ['retained-navigation.example']);
-  const nav = page.locator('#console-navigation');
-  await nav.getByRole('link', { name: /^Dashboard/u }).click();
-  await expect(page).toHaveURL('/dashboard');
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const release = await holdBrowserLocalTransaction(page);
-    try {
-      await nav.getByRole('link', { name: /^Bulk/u }).click();
-      await expect(page).toHaveURL('/bulk');
-      await expect(page.locator('#domains')).toHaveValue('retained-navigation.example');
-      await expect(page.locator('#results')).toHaveCount(0);
-      await nav.getByRole('link', { name: /^Dashboard/u }).click();
-      await expect(page).toHaveURL('/dashboard');
-    } finally { await release(); }
-  }
-  await failBrowserLocalCollectionReads(page, 'brand_profiles');
-  await nav.getByRole('link', { name: /^Bulk/u }).click();
-  await expect(page.locator('#results')).toContainText('retained-navigation.example');
-  await expect(page.locator('.status')).toContainText('Withheld profile-derived trust');
-  expect(requests).toEqual(['retained-navigation.example']);
-  // An explicit new collection must supersede the old restoration snapshot.
-  await page.locator('#domains').fill('replacement-navigation.example');
-  await page.getByRole('button', { name: 'Scan 1 domain', exact: true }).click();
-  await expect(page.locator('.status')).toContainText('Completed 1 of 1 lookups. Brand Profile context was unavailable');
-  await nav.getByRole('link', { name: /^Dashboard/u }).click();
-  await expect(page).toHaveURL('/dashboard');
-  await nav.getByRole('link', { name: /^Bulk/u }).click();
-  await expect(page.locator('#results')).toContainText('replacement-navigation.example');
-  await expect(page.locator('#results')).not.toContainText('retained-navigation.example');
-  expect(requests).toEqual(['retained-navigation.example', 'replacement-navigation.example']);
-});
+}
 
 test('single-row Monitor saves preserve another domain and its baseline when a name is reused', async ({ page }) => {
   const requests: string[] = [];

@@ -209,6 +209,8 @@
     const selectedProfile = profile;
     const submittedCandidates = candidates;
     const submittedSelection = selected;
+    const submittedSearchToken = searchToken;
+    const ownsPresentation = () => mounted && searchToken === submittedSearchToken && profile === selectedProfile;
     const submitted = [...selectedCandidates];
     const observedAt = new Date().toISOString();
     retainingCandidates = true;
@@ -216,10 +218,11 @@
       const observations = submitted.map(candidate => discoveryCandidateObservation(candidate, selectedProfile, observedAt)).filter(value => value !== null);
       const unretained = submitted.filter(candidate => !observations.some(observation => observation.domain === candidate.domain));
       const outcomes = await retainBrandCandidates(selectedProfile.id, observations);
+      if (!ownsPresentation()) return;
       status = `${outcomes.filter(row => row.state === 'retained').length} candidate domains retained for Brand review; ${outcomes.filter(row => row.state === 'rejected').length + unretained.length} rejected. No collection was authorised.${unretained.length ? ` Matching/provenance bound rejected: ${unretained.map(candidate => candidate.domain).join(', ')}.` : ''}${outcomes.some(row => row.state === 'rejected') ? ` Rejected: ${outcomes.filter(row => row.state === 'rejected').map(row => `${row.domain}: ${row.reason}`).join('; ')}.` : ''}`;
-      if (mounted && profile === selectedProfile && candidates === submittedCandidates && selected === submittedSelection
+      if (candidates === submittedCandidates && selected === submittedSelection
         && !unretained.length && outcomes.every(row => row.state === 'retained')) await goto('/brands#brand-candidate-review');
-    } catch (cause) { error = cause instanceof Error ? cause.message : 'The selected candidate provenance could not be retained.'; }
+    } catch (cause) { if (ownsPresentation()) error = cause instanceof Error ? cause.message : 'The selected candidate provenance could not be retained.'; }
     finally { retainingCandidates = false; }
   }
   const selectedVisibleCount = $derived(visible.reduce((count, candidate) => count + Number(selected.has(candidate.domain)), 0));

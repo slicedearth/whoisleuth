@@ -66,6 +66,33 @@ for (const kind of ['note', 'tags'] as const) {
   });
 }
 
+test('saving equivalent tag spacing acknowledges a no-op without changing storage or warning on exit', async ({ page }) => {
+  await page.goto('/cases');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [{
+      ...caseRecord({ id: 'equivalent-tags', domain: 'tag-spacing.example' }), tags: ['first', 'second'],
+    }] }),
+  }, { destination: '/cases?case=equivalent-tags' });
+  const prompts: string[] = [];
+  page.on('dialog', async dialog => { prompts.push(dialog.message()); await dialog.dismiss(); });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  for (const draft of ['first,second', ' first , second ', 'first,\nsecond']) {
+    await openCaseMetadata(page);
+    const tags = page.getByRole('textbox', { name: /^Additional tags/u });
+    await tags.fill(draft);
+    await page.getByRole('button', { name: 'Save tags', exact: true }).click();
+    await expect(tags).toHaveValue('first, second');
+    expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(before);
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await expect(page).toHaveURL('/cases');
+    expect(prompts).toEqual([]);
+    await page.locator('#case-head-equivalent-tags').click();
+  }
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page).toHaveURL(/\/login(?:\?|$)/u);
+  expect(prompts).toEqual([]);
+});
+
 for (const [section, preserveLaterFocus] of [
   ['evidence', false], ['evidence', true], ['response', false], ['response', true],
 ] as const) {

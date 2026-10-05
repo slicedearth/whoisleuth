@@ -667,6 +667,50 @@ export async function holdBrowserLocalTransaction(page: Page): Promise<() => Pro
   };
 }
 
+/** Hold one real commit's acknowledgement without blocking unrelated collections. */
+export async function holdNextBrowserLocalCommitAcknowledgement(page: Page, collection: BrowserLocalCollectionId) {
+  await page.evaluate(collectionId => {
+    const descriptor = Object.getOwnPropertyDescriptor(IDBTransaction.prototype, 'oncomplete');
+    if (!descriptor?.set) throw new Error('Native transaction completion is unavailable.');
+    const originalPut = IDBObjectStore.prototype.put;
+    let transaction: IDBTransaction | null = null;
+    let acknowledge: (() => void) | null = null;
+    let released = false;
+    const state = { held: false, release: () => {
+      released = true;
+      IDBObjectStore.prototype.put = originalPut;
+      Object.defineProperty(IDBTransaction.prototype, 'oncomplete', descriptor);
+      acknowledge?.();
+      acknowledge = null;
+    } };
+    (window as typeof window & { heldCommitAcknowledgement?: typeof state }).heldCommitAcknowledgement = state;
+    Object.defineProperty(IDBTransaction.prototype, 'oncomplete', {
+      ...descriptor,
+      set(this: IDBTransaction, callback: IDBTransaction['oncomplete']) {
+        descriptor.set!.call(this, callback && ((event: Event) => {
+          if (this === transaction && !released) {
+            state.held = true;
+            acknowledge = () => callback.call(this, event);
+          } else callback.call(this, event);
+        }));
+      },
+    });
+    IDBObjectStore.prototype.put = function (value: unknown, key?: IDBValidKey) {
+      if (!transaction && this.name === 'manifests' && value !== null && typeof value === 'object'
+        && Reflect.get(value, 'collection') === collectionId) transaction = this.transaction;
+      return key === undefined ? originalPut.call(this, value) : originalPut.call(this, value, key);
+    };
+  }, collection);
+  return {
+    wait: () => expect.poll(() => page.evaluate(() =>
+      (window as typeof window & { heldCommitAcknowledgement?: { held: boolean } }).heldCommitAcknowledgement?.held
+    )).toBe(true),
+    release: () => page.evaluate(() =>
+      (window as typeof window & { heldCommitAcknowledgement?: { release: () => void } }).heldCommitAcknowledgement?.release()
+    ),
+  };
+}
+
 export async function holdBrowserLocalReads(page: Page, delayMs = 750, triggerSelector?: string) {
   await page.evaluate(({ databaseName, delay, selector }) => new Promise<void>((resolve, reject) => {
     const trigger = selector ? document.querySelector<HTMLElement>(selector) : null;
