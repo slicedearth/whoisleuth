@@ -8,6 +8,8 @@ import {
   verifyConsumerCaseProjection,
   assertMispPrivacy,
   MAX_CONSUMER_INPUT_BYTES,
+  compareMispAttributeTimes,
+  verifyOfficialMispSchema,
 } from './interchange-consumer-harness.mts';
 import { parseExternalIntelligenceDocument } from '../frontend/src/lib/analysis/external-intelligence-import.ts';
 
@@ -162,6 +164,8 @@ test('round-trip assertions reject changed IDs, source clocks, restrictions and 
 });
 
 test('process invocation bounds reject before execution and failures remain private', () => {
+  assert.throws(() => verifyOfficialMispSchema('{}'), /pinned revision and digest/u);
+  assert.throws(() => runConsumer('/reserved/missing-python', fixtures, 30_000, '{}'), /pinned revision and digest/u);
   for (const count of [0, 17])
     assert.throws(
       () =>
@@ -194,6 +198,32 @@ test('process invocation bounds reject before execution and failures remain priv
       return true;
     },
   );
+});
+
+test('MISP clocks compare independently by UUID, including unequal, absent, removed and changed values', () => {
+  const source = structuredClone(fixture('misp-defensive').value);
+  attributes(source)[0]!.first_seen = '2026-07-30T01:02:03.000Z';
+  attributes(source)[0]!.last_seen = '2026-07-31T04:05:06.000Z';
+  const original = JSON.stringify(source);
+  const normalised = structuredClone(source);
+  attributes(normalised)[0]!.first_seen = '2026-07-30T01:02:03+00:00';
+  attributes(normalised)[0]!.last_seen = '2026-07-31T04:05:06Z';
+  attributes(normalised).reverse();
+  assert.deepEqual(compareMispAttributeTimes(source, normalised).map(item => item.state), ['preserved', 'preserved', 'absent', 'absent']);
+  for (const field of ['first_seen', 'last_seen'] as const) {
+    for (const mutation of ['removed', 'changed', 'invalid', 'added'] as const) {
+      const next = structuredClone(source), index = mutation === 'added' ? 1 : 0;
+      if (mutation === 'removed') delete attributes(next)[index]![field];
+      else attributes(next)[index]![field] = mutation === 'invalid' ? 'not-a-clock' : '2026-08-03T00:00:00.000Z';
+      const differences = compareMispAttributeTimes(source, next).filter(item => item.state !== 'preserved' && item.state !== 'absent');
+      assert.deepEqual(differences.map(item => [item.uuid, item.field, item.state]), [[attributes(source)[index]!.uuid, field, mutation]]);
+      assert.throws(() => verifyConsumerRoundtrip({ id: 'changed-misp', format: 'misp', value: source }, { id: 'changed-misp', valid: true, value: next }), Error);
+    }
+  }
+  const duplicate = structuredClone(source);
+  attributes(duplicate)[1]!.uuid = attributes(duplicate)[0]!.uuid;
+  assert.throws(() => compareMispAttributeTimes(source, duplicate), /unique/u);
+  assert.equal(JSON.stringify(source), original);
 });
 
 test('hermetic Case projection conserves source provenance through real model serialisation', () => {

@@ -1,5 +1,6 @@
 """Optional bounded offline consumer test adapter; no remote client is created."""
 import contextlib
+import hashlib
 import importlib.metadata
 import io
 import json
@@ -47,7 +48,7 @@ def schema_checks(document, schema):
     ], "errorCount": len(errors)}
 
 
-def consume(document):
+def consume(document, official_schema=None):
     if document["format"] == "stix":
         import stix2
         import stix2validator.validator as validator
@@ -92,7 +93,10 @@ def consume(document):
         return {"id": document["id"], "value": returned, "valid": lax["valid"],
                 "errors": lax["errorCount"], "warnings": 0,
                 "validation": "PyMISP bundled lax import schema; strict schema reported separately",
-                "strict": strict, "schemaErrors": lax["errors"]}
+                "strict": strict, "lax": lax, "schemaErrors": lax["errors"],
+                **({"official": {"original": schema_checks(document["value"], official_schema),
+                                 "reserialised": schema_checks(returned, official_schema)}}
+                   if official_schema is not None else {})}
     raise ValueError("Unsupported consumer format.")
 
 
@@ -102,8 +106,30 @@ def main():
     if len(raw) > MAX_INPUT_BYTES:
         raise ValueError("Consumer input exceeds its byte limit.")
     request = json.loads(raw)
-    if set(request) != {"version", "documents"} or request["version"] != 1:
+    if set(request) not in ({"version", "documents"}, {"version", "documents", "mispSchema"}) or request["version"] != 1:
         raise ValueError("Unsupported consumer request.")
+    official_schema = None
+    official_digest = None
+    if "mispSchema" in request:
+        selected = request["mispSchema"]
+        if set(selected) != {"source", "sha256"} or not isinstance(selected["source"], str):
+            raise ValueError("Invalid schema input.")
+        schema_bytes = selected["source"].encode("utf-8")
+        official_digest = hashlib.sha256(schema_bytes).hexdigest()
+        if len(schema_bytes) > 64 * 1024 or official_digest != selected["sha256"]:
+            raise ValueError("Schema identity mismatch.")
+        official_schema = json.loads(selected["source"])
+        pending = [official_schema]
+        while pending:
+            item = pending.pop()
+            if isinstance(item, dict):
+                if "$ref" in item and (not isinstance(item["$ref"], str) or not item["$ref"].startswith("#")):
+                    raise ValueError("Only local schema references are permitted.")
+                pending.extend(item.values())
+            elif isinstance(item, list):
+                pending.extend(item)
+        from jsonschema import Draft4Validator
+        Draft4Validator.check_schema(official_schema)
     documents = request["documents"]
     if not isinstance(documents, list) or not 1 <= len(documents) <= MAX_DOCUMENTS:
         raise ValueError("Consumer document count exceeds its limit.")
@@ -125,12 +151,13 @@ def main():
             if not isinstance(identifier, str) or len(identifier) > 80 or not identifier.isascii():
                 raise ValueError("Invalid consumer fixture identifier.")
             try:
-                results.append(consume(document))
+                results.append(consume(document, official_schema))
             except Exception as error:
                 results.append({"id": identifier, "valid": False, "errorType": type(error).__name__[:80]})
     response = {"version": 1, "versions": {name: importlib.metadata.version(name)
                 for name in ("stix2", "stix2-validator", "pymisp")},
                 "networkGuardPassed": guard_passed, "networkRefusals": network_refusals,
+                "officialSchemaSha256": official_digest,
                 "results": results}
     output = json.dumps(response, ensure_ascii=False).encode("utf-8")
     if len(output) > MAX_OUTPUT_BYTES:

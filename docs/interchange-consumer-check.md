@@ -16,6 +16,22 @@ node test/interchange-consumer-harness.mts --python /path/to/approved-environmen
 node --test test/interchange-consumer-check.test.mts
 ```
 
+To also check the official MISP 2.5 schema, supply an unchanged local copy of
+[`format/2.5/schema.json` at `63d46c54ccccd646fa352ee74d218f618ccce75b`](https://github.com/MISP/MISP/blob/63d46c54ccccd646fa352ee74d218f618ccce75b/format/2.5/schema.json):
+
+```sh
+node test/interchange-consumer-harness.mts --python /path/to/approved-environment/bin/python --misp-schema /path/to/schema.json
+```
+
+The pinned file is 13,979 bytes, Git blob
+`ac7a5108519b015007a8716b72a05ac5afd63978`, SHA-256
+`ecd424a612aa46a884422eaa2e0ffa63f6972b9133ce0b9ad6085430221bc287`.
+Its source repository carries AGPL-3.0; the schema is used as an external
+verification input, not copied into the repository or an application package.
+The command does not download it. Exact digest matching precedes parsing, and
+only local schema references are admitted. Official validation of the original
+and reserialised documents is reported separately from PyMISP's bundled schemas.
+
 The explicit tool command is the optional native-consumer integration exercise,
 including rejection controls, immutable originals and real Case normalisation.
 The ordinary unit command is hermetic: it does not load Python packages, inspect
@@ -68,6 +84,14 @@ not a first-use or contributor session with human participants.
   deleting valid source clocks. Numeric timestamp/distribution strings may
   become numbers during reserialisation. No remote MISP server acceptance is
   claimed.
+- With the pinned official schema, each attribute's `first_seen` and `last_seen`
+  is compared independently by UUID. An additional synthetic document has
+  unequal first/last instants and an attribute with neither clock. Six controls
+  deliberately remove, change or add one field in a returned copy; reordering
+  attributes must leave comparisons unchanged. These controls do not edit
+  application exports or discard timestamps to obtain validation acceptance.
+  The report records schema results and comparison outcomes, not live-server
+  acceptance.
 - Case import intentionally retains supported, attributed entity claims. It
   does not retain full descriptions, note bodies, comments, complete relationship
   history, operational validity/revocation state, IDS/correlation flags, or the
@@ -75,3 +99,15 @@ not a first-use or contributor session with human participants.
   as evidence removal. Keep the original documents for these semantics and
   restrictions; a successful claim projection is not a lossless interchange
   round trip or permission to distribute the source.
+
+## Measured official-schema experiment
+
+The 5 October 2026 offline run with the versions above accepted all six original
+MISP export fixtures and their six reserialised documents under the pinned
+official schema; PyMISP lax accepted all six while its bundled strict schema
+rejected all six. The additional unequal-clock document also passed official
+and lax validation while failing bundled strict validation. Across the seven
+documents, all 14 present fields preserved their instants and all 14 absent
+fields stayed absent. The six deliberate comparison mutations were detected,
+and UUID-based comparison survived attribute reordering. These are measured
+synthetic results; no server was contacted and application exports were unchanged.

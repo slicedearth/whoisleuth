@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { readBoundedStableRegularFileSync } from '../tools/maintainer-tool-helpers.mts';
 import {
   assertBoundedJsonStructure,
   parseBoundedJsonObject,
@@ -32,6 +33,20 @@ export const REVIEWED_CONSUMER_VERSIONS = Object.freeze({
   'stix2-validator': '3.3.1',
   pymisp: '2.5.34.4',
 });
+export const OFFICIAL_MISP_SCHEMA = Object.freeze({
+  repository: 'https://github.com/MISP/MISP',
+  revision: '63d46c54ccccd646fa352ee74d218f618ccce75b',
+  path: 'format/2.5/schema.json',
+  gitBlob: 'ac7a5108519b015007a8716b72a05ac5afd63978',
+  sha256: 'ecd424a612aa46a884422eaa2e0ffa63f6972b9133ce0b9ad6085430221bc287',
+  bytes: 13_979,
+});
+export function verifyOfficialMispSchema(source: string): void {
+  if (Buffer.byteLength(source) !== OFFICIAL_MISP_SCHEMA.bytes
+    || createHash('sha256').update(source).digest('hex') !== OFFICIAL_MISP_SCHEMA.sha256) {
+    throw new TypeError('The official MISP schema must match its pinned revision and digest.');
+  }
+}
 const PRIVATE_CANARY = 'private-fixture-fields-must-not-export';
 const NOW = '2026-08-01T00:00:00.000Z',
   NEXT = '2026-08-02T00:00:00.000Z';
@@ -54,6 +69,11 @@ type ConsumerResult = Readonly<{
   sharedSchemaCorpus?: boolean;
   consumerWheelResourcesAbsent?: boolean;
   strict?: Readonly<{ valid: boolean; errorCount: number; errors: readonly unknown[] }>;
+  lax?: Readonly<{ valid: boolean; errorCount: number; errors: readonly unknown[] }>;
+  official?: Readonly<{
+    original: Readonly<{ valid: boolean; errorCount: number; errors: readonly unknown[] }>;
+    reserialised: Readonly<{ valid: boolean; errorCount: number; errors: readonly unknown[] }>;
+  }>;
 }>;
 type ConsumerReply = Readonly<{
   version: 1;
@@ -61,6 +81,7 @@ type ConsumerReply = Readonly<{
   networkGuardPassed: true;
   networkRefusals: 0;
   results: readonly ConsumerResult[];
+  officialSchemaSha256: string | null;
 }>;
 
 function record(value: unknown): Value {
@@ -199,6 +220,7 @@ export function runConsumer(
   python: string,
   fixtures: readonly ConsumerFixture[],
   timeoutMs = CONSUMER_TIMEOUT_MS,
+  officialMispSchema?: string,
 ): ConsumerReply {
   if (
     !python ||
@@ -215,9 +237,11 @@ export function runConsumer(
     maximumDepth: 16,
     maximumContainerItems: 1_000,
   });
+  if (officialMispSchema !== undefined) verifyOfficialMispSchema(officialMispSchema);
   const input = JSON.stringify({
     version: 1,
     documents: fixtures.map(({ id, format, value }) => ({ id, format, value })),
+    ...(officialMispSchema === undefined ? {} : { mispSchema: { source: officialMispSchema, sha256: OFFICIAL_MISP_SCHEMA.sha256 } }),
   });
   if (Buffer.byteLength(input) > MAX_CONSUMER_INPUT_BYTES)
     throw new TypeError('Consumer fixtures exceed their byte limit.');
@@ -247,6 +271,7 @@ export function runConsumer(
     reply.version !== 1 ||
     reply.networkGuardPassed !== true ||
     reply.networkRefusals !== 0 ||
+    reply.officialSchemaSha256 !== (officialMispSchema === undefined ? null : OFFICIAL_MISP_SCHEMA.sha256) ||
     !Array.isArray(reply.results) ||
     reply.results.length !== fixtures.length ||
     JSON.stringify(reply.versions) !== JSON.stringify(REVIEWED_CONSUMER_VERSIONS)
@@ -260,6 +285,27 @@ export function runConsumer(
       throw new TypeError('Consumer reply does not match the requested fixtures.');
   }
   return reply as ConsumerReply;
+}
+
+export function compareMispAttributeTimes(original: Value, returned: Value) {
+  const before = attributes(original), after = attributes(returned);
+  for (const values of [before, after]) {
+    assert.ok(values.every(item => typeof item.uuid === 'string'));
+    assert.equal(new Set(values.map(item => item.uuid)).size, values.length, 'Attribute UUIDs must be unique.');
+  }
+  assert.deepEqual(after.map(item => item.uuid).sort(), before.map(item => item.uuid).sort(), 'Attribute UUID sets changed.');
+  const byId = new Map(after.map(item => [item.uuid, item]));
+  return before.flatMap(source => (['first_seen', 'last_seen'] as const).map(field => {
+    const next = byId.get(source.uuid)!;
+    const sourcePresent = Object.hasOwn(source, field), returnedPresent = Object.hasOwn(next, field);
+    const beforeTime = typeof source[field] === 'string' ? Date.parse(source[field]) : NaN;
+    const afterTime = typeof next[field] === 'string' ? Date.parse(next[field]) : NaN;
+    const state = !sourcePresent ? (returnedPresent ? 'added' : 'absent')
+      : !returnedPresent ? 'removed'
+      : !Number.isFinite(beforeTime) || !Number.isFinite(afterTime) ? 'invalid'
+      : beforeTime === afterTime ? 'preserved' : 'changed';
+    return { uuid: source.uuid as string, field, sourcePresent, returnedPresent, state };
+  }));
 }
 
 export function assertMispPrivacy(value: Value): void {
@@ -355,10 +401,8 @@ export function verifyConsumerRoundtrip(fixture: ConsumerFixture, result: Consum
     assertMispPrivacy(returned);
     assert.equal(event(returned).uuid, event(fixture.value).uuid);
     assert.equal(Number(event(returned).timestamp), Number(event(fixture.value).timestamp));
-    assert.deepEqual(
-      attributes(returned).map((item) => item.uuid),
-      attributes(fixture.value).map((item) => item.uuid),
-    );
+    assert.ok(compareMispAttributeTimes(fixture.value, returned).every(item => item.state === 'preserved' || item.state === 'absent'),
+      'MISP first_seen or last_seen was not preserved by attribute UUID.');
     for (const source of attributes(fixture.value)) {
       const item = attributes(returned).find((candidate) => candidate.uuid === source.uuid)!;
       assert.equal(item.deleted, source.deleted);
@@ -368,10 +412,6 @@ export function verifyConsumerRoundtrip(fixture: ConsumerFixture, result: Consum
         'MISP review basis changed before the intentionally lossy Case projection.',
       );
       assert.equal(Number(item.timestamp), Number(source.timestamp));
-      if (!Object.hasOwn(source, 'first_seen')) {
-        assert.equal(Object.hasOwn(item, 'first_seen'), false);
-        assert.equal(Object.hasOwn(item, 'last_seen'), false);
-      }
     }
   }
   assert.ok(after.sourceInspection!.transformations.length > 0);
@@ -383,6 +423,9 @@ export function verifyConsumerRoundtrip(fixture: ConsumerFixture, result: Consum
     warnings: result.warnings ?? 0,
     strictMispSchema: result.strict?.valid ?? null,
     strictMispSchemaErrors: result.strict?.errors ?? [],
+    laxMispSchema: result.lax ?? null,
+    officialMispSchema: result.official ?? null,
+    attributeTimes: fixture.format === 'misp' ? compareMispAttributeTimes(fixture.value, returned) : null,
     normalisations:
       fixture.format === 'stix'
         ? [
@@ -442,19 +485,55 @@ export function verifyConsumerCaseProjection(value: Value) {
   return { assertionsVerified: saved.assertions.length };
 }
 
+function runMispTimestampExperiment(python: string, fixtures: readonly ConsumerFixture[], schema: string) {
+  const source = fixtures.find(item => item.id === 'misp-defensive')!;
+  const unequal: ConsumerFixture = { ...source, id: 'misp-unequal-clock-control', value: structuredClone(source.value) };
+  attributes(unequal.value)[0]!.first_seen = '2026-07-30T01:02:03.000Z';
+  attributes(unequal.value)[0]!.last_seen = '2026-07-31T04:05:06.000Z';
+  const original = JSON.stringify(unequal.value);
+  assertMispPrivacy(unequal.value);
+  const result = runConsumer(python, [unequal], CONSUMER_TIMEOUT_MS, schema).results[0]!;
+  const measured = verifyConsumerRoundtrip(unequal, result);
+  const returned = record(result.value);
+  const controls: Array<{ field: 'first_seen' | 'last_seen'; mutation: string; detected: true }> = [];
+  // Deliberate edits affect returned copies only. Neither an application export
+  // nor a consumer input is repaired to obtain schema acceptance.
+  for (const field of ['first_seen', 'last_seen'] as const) {
+    for (const mutation of ['removed', 'changed', 'added'] as const) {
+      const altered = structuredClone(returned);
+      const index = mutation === 'added' ? 1 : 0;
+      const item = attributes(altered)[index]!;
+      if (mutation === 'removed') delete item[field];
+      else item[field] = '2026-08-03T00:00:00.000Z';
+      const differences = compareMispAttributeTimes(unequal.value, altered).filter(item => item.state !== 'preserved' && item.state !== 'absent');
+      assert.deepEqual(differences.map(item => [item.uuid, item.field, item.state]), [[item.uuid, field, mutation]]);
+      controls.push({ field, mutation, detected: true });
+    }
+  }
+  const reordered = structuredClone(returned);
+  event(reordered).Attribute = attributes(reordered).reverse();
+  assert.deepEqual(compareMispAttributeTimes(unequal.value, reordered), compareMispAttributeTimes(unequal.value, returned));
+  assert.equal(JSON.stringify(unequal.value), original);
+  return { ...measured, controls, attributeReorderingPreserved: true, originalUnchanged: true,
+    scope: 'One synthetic unequal-clock document plus an absent-clock attribute; six comparison controls edit returned copies only.' };
+}
+
 export async function main(args = process.argv.slice(2)): Promise<number> {
-  if (args.length !== 2 || args[0] !== '--python' || !args[1]) {
+  if ((args.length !== 2 && args.length !== 4) || args[0] !== '--python' || !args[1]
+    || (args.length === 4 && (args[2] !== '--misp-schema' || !args[3]))) {
     process.stderr.write(
-      'Usage: node test/interchange-consumer-harness.mts --python <approved-disposable-python>\n',
+      'Usage: node test/interchange-consumer-harness.mts --python <approved-disposable-python> [--misp-schema <pinned-local-schema>]\n',
     );
     return 2;
   }
   const python = args[1];
   try {
+    const officialMispSchema = args[3] ? readBoundedStableRegularFileSync(args[3], OFFICIAL_MISP_SCHEMA.bytes, 'Pinned MISP schema').toString('utf8') : undefined;
+    if (officialMispSchema !== undefined) verifyOfficialMispSchema(officialMispSchema);
     assert.equal(await schemaTreeSha256(), SCHEMA_TREE_SHA256);
     const fixtures = await consumerFixtures(),
       originals = JSON.stringify(fixtures);
-    const reply = runConsumer(python, fixtures);
+    const reply = runConsumer(python, fixtures, CONSUMER_TIMEOUT_MS, officialMispSchema);
     assert.deepEqual(reply.versions, REVIEWED_CONSUMER_VERSIONS);
     assert.equal(reply.networkGuardPassed, true);
     assert.equal(reply.networkRefusals, 0);
@@ -476,7 +555,9 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       originals,
       'Consumer work must never overwrite the original exports.',
     );
-    assert.throws(() => runConsumer(python, fixtures, 1), /timed out/u);
+    const mispTimestampExperiment = officialMispSchema === undefined ? null : runMispTimestampExperiment(python, fixtures, officialMispSchema);
+    assert.equal(JSON.stringify(fixtures), originals);
+    assert.throws(() => runConsumer(python, fixtures, 1, officialMispSchema), /timed out/u);
     const stixResults = reply.results.filter(
       (_, index) => fixtures[index]!.format === 'stix' && !fixtures[index]!.negative,
     );
@@ -486,6 +567,8 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
           versions: reply.versions,
           offline: true,
           results,
+          officialMispSchema: officialMispSchema === undefined ? null : OFFICIAL_MISP_SCHEMA,
+          mispTimestampExperiment,
           stixSchemaCorpus: {
             revision: SCHEMA_REVISION,
             sha256: SCHEMA_TREE_SHA256,
