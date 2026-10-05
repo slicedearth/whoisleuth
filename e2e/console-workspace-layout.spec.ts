@@ -35,9 +35,12 @@ test('overflowing review tabs expose scroll controls without changing the select
     const last = tabs.getByRole('tab').last();
     await expect(last).toBeFocused();
     await expect(last).toHaveAttribute('aria-selected', 'true');
+    // Selection updates optimistically; reload only after navigation commits.
+    await expect(page).toHaveURL(url => url.pathname === '/monitor' && url.searchParams.get('view') === 'rules');
     // The ordinary label is restored by navigation; assert its real control,
     // rather than asking an artificially wider-than-viewport label to fit.
     await page.reload();
+    await expect(last).toHaveAttribute('aria-selected', 'true');
     await expect(tabs.getByRole('tab').last()).toBeInViewport({ ratio: 1 });
     await expectNoHorizontalOverflow(page);
     await page.setViewportSize({ width: 1280, height: 720 });
