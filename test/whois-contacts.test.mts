@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { describe, test } from 'node:test';
 import { parseWhoisChain } from '../lib/whois.mts';
+import { parseIndentedContactBlock } from '../lib/whois-contacts.mts';
 import { requiredValue } from './value-assertions.mts';
 import { projectLookupEvidenceWhoisPublication } from '../lib/evidence-export.mts';
 
@@ -24,6 +26,95 @@ function parseRegistry(response: string) {
 }
 
 describe('bounded WHOIS lifecycle and contact normalization', () => {
+  for (const family of ['role', 'email'] as const) {
+    test(`finishes increasing hostile ${family} contact lines through the complete parser in a killable process`, () => {
+      // This external deadline can interrupt a synchronous regression. It is
+      // not a latency benchmark; output/attribution assertions remain primary.
+      execFileSync(process.execPath, ['--input-type=module', '-e', `
+        import assert from 'node:assert/strict';
+        import { parseWhoisChain } from ${JSON.stringify(new URL('../lib/whois-parser.mts', import.meta.url).href)};
+        for (const size of [2000, 8000, 32000, 128000]) {
+          const role = ${JSON.stringify(family)} === 'role';
+          const response = 'Domain Name: example.test\\n' + (role
+            ? '% This is the ISNIC Whois server.\\nsource: ISNIC\\nregistrant: HANDLE-1\\nrole:' + ' '.repeat(size) + 'X\\nnic-hdl: OTHER\\ne-mail: wrong@example.test\\n'
+            : 'Registrant:\\n  a@' + '.'.repeat(size) + '@\\n  1 Example Road\\n  valid@example.test\\n');
+          assert.ok(Buffer.byteLength(response) < 200000);
+          const chain = [{ server: 'whois.iana.org', response: '' }, { server: 'whois.registry.example', response }];
+          const parsed = parseWhoisChain(chain, 'example.test');
+          assert.equal(parsed.domainName, 'example.test');
+          assert.equal(parsed.registrantEmail, role ? undefined : 'valid@example.test');
+          if (role) {
+            assert.equal(parsed.registrantId, 'HANDLE-1');
+            assert.equal(parsed.registrantOrg, undefined);
+          } else {
+            assert.equal(parsed.registrantOrg, ('a@' + '.'.repeat(size) + '@').slice(0, 300));
+            assert.equal(parsed.registrantAddress, '1 Example Road');
+            assert.ok(parsed.fieldsTruncated.includes('registrantOrg'));
+          }
+          assert.equal(chain[1].response, response);
+          assert.equal(parseWhoisChain(chain, 'other.test').registrantEmail, undefined);
+        }
+      `], { timeout: 5000, stdio: 'pipe' });
+    });
+  }
+
+  test('links a role only to its immediate exact handle and preserves whitespace, bounds and contact fields', () => {
+    for (const whitespace of ['', ' \t ', ' '.repeat(2000)]) {
+      const parsed = parseRegistry([
+        'Domain Name: example.test', '% This is the ISNIC Whois server.',
+        'source: ISNIC', 'registrant: HANDLE.1',
+        `role:${whitespace}Wrong organisation`, 'nic-hdl: HANDLEa1',
+        'e-mail: wrong@example.test', '',
+        `\tRoLe:${whitespace}Correct organisation`, '\tNiC-hDl:\t handle.1 \t',
+        'address: 1 Example Road', 'address: Example City',
+        'phone: +61 300000000', 'e-mail: correct@example.test',
+      ].join('\r\n'));
+      assert.equal(parsed.registrantOrg, 'Correct organisation');
+      assert.equal(parsed.registrantEmail, 'correct@example.test');
+      assert.equal(parsed.registrantAddress, '1 Example Road, Example City');
+      assert.equal(parsed.registrantPhone, '+61 300000000');
+      assert.deepEqual(parsed.fieldsTruncated, []);
+    }
+    for (const intervening of ['', 'address: unrelated']) {
+      const parsed = parseRegistry([
+        'Domain Name: example.test', '% This is the ISNIC Whois server.',
+        'source: ISNIC', 'registrant: HANDLE-1',
+        'role: Unlinked organisation', intervening, 'nic-hdl: HANDLE-1',
+        'e-mail: unlinked@example.test',
+      ].join('\n'));
+      assert.equal(parsed.registrantOrg, undefined);
+      assert.equal(parsed.registrantEmail, undefined);
+    }
+    const parsed = parseRegistry([
+      'Domain Name: example.test', '% This is the ISNIC Whois server.',
+      'source: ISNIC', 'registrant: HANDLE-1',
+      `role: ${'O'.repeat(301)}`, 'nic-hdl: HANDLE-1', 'e-mail: bounded@example.test',
+    ].join('\n'));
+    assert.equal(parsed.registrantOrg, 'O'.repeat(300));
+    assert.equal(parsed.registrantEmail, 'bounded@example.test');
+    assert.ok(parsed.fieldsTruncated.includes('registrantOrg'));
+  });
+
+  test('retains legacy email classification without reclassifying ordinary names and addresses', () => {
+    const accepted = ['a@example.test', 'a.b+tag@example.test', 'a@sub.example.test', 'a@..b', 'a@b..'];
+    const rejected = ['ordinary name', '1 Example Road', '@example.test', 'a@b', 'a@.b', 'a@b.', 'a@@b.test', 'a@..@', 'a@two words.test'];
+    for (const line of [...accepted, ...rejected]) {
+      const parsed = parseIndentedContactBlock(`Registrant:\n  ${line}\n`, /^Registrant:$/m);
+      assert.equal(parsed?.email, accepted.includes(line) ? line : null, line);
+      assert.equal(parsed?.name, accepted.includes(line) ? null : line, line);
+    }
+    // Exhaustive short strings independently compare the old accepted language;
+    // pathological lengths are confined to the killable parser tests above.
+    const alphabet = ['a', '.', '@', ' ', '\t'];
+    const compare = (line: string, depth: number) => {
+      const trimmed = line.trim();
+      const parsed = parseIndentedContactBlock(`Registrant:\n${line}\n`, /^Registrant:$/m);
+      assert.equal(parsed?.email ?? null, /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) ? trimmed : null);
+      if (depth) for (const character of alphabet) compare(line + character, depth - 1);
+    };
+    compare('', 5);
+  });
+
   test('rejects modified nameserver identities and qualifies shortened duplicate statuses through export', () => {
     const exact = `${'a'.repeat(63)}.${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(56)}.test`;
     assert.equal(exact.length, 253);
