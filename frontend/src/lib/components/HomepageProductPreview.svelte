@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { SYNTHETIC_BRAND } from '#lib/synthetic-brand.ts';
+
   type PreviewCandidate = Readonly<{
     id: string;
     domain: string;
@@ -24,7 +26,7 @@
 
   const previewCandidates: readonly PreviewCandidate[] = Object.freeze([
     Object.freeze({
-      id: 'credential-lure', domain: 'northstar-login.example', mutation: 'Brand + login term', availability: 'Registered', risk: 78,
+      id: 'credential-lure', domain: SYNTHETIC_BRAND.loginDomain, mutation: 'Brand + login term', availability: 'Registered', risk: 78,
       nextAction: 'Review the limited website evidence', compactAction: 'Review website',
       signals: Object.freeze(['Recently observed registration', 'Password form present']),
       evidence: Object.freeze({
@@ -42,7 +44,7 @@
       ]),
     }),
     Object.freeze({
-      id: 'character-edit', domain: 'northstarr.example', mutation: 'Character duplication', availability: 'Registered', risk: 34,
+      id: 'character-edit', domain: SYNTHETIC_BRAND.lookalikeDomain, mutation: 'Character substitution', availability: 'Registered', risk: 34,
       nextAction: 'Repeat certificate collection', compactAction: 'Repeat certificate',
       signals: Object.freeze(['Character edit', 'Parked page pattern']),
       evidence: Object.freeze({
@@ -60,7 +62,7 @@
       ]),
     }),
     Object.freeze({
-      id: 'alternate-tld', domain: 'northstar.invalid', mutation: 'Alternate TLD', availability: 'Unknown', risk: 52,
+      id: 'alternate-tld', domain: SYNTHETIC_BRAND.alternateDomain, mutation: 'Alternate TLD', availability: 'Unknown', risk: 52,
       nextAction: 'Repeat registration collection', compactAction: 'Repeat registration',
       signals: Object.freeze(['Official label on alternate TLD', 'Collection intentionally incomplete']),
       evidence: Object.freeze({

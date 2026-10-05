@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import {
     buildDnsChangeRehearsal,
     buildDnsChangeRehearsalExport,
     type DnssecChange,
     type RegistrarLockChange,
     type CertificateKeyChange,
-  } from '$lib/analysis/dns-change-rehearsal.ts';
+  } from '#lib/analysis/dns-change-rehearsal.ts';
 
   let {
     domain,

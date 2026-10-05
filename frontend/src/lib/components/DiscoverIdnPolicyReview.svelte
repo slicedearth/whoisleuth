@@ -5,7 +5,7 @@
     parseRegistryIdnPolicy,
     reviewRegistryIdnCandidates,
     type RegistryIdnPolicy,
-  } from '$lib/analysis/idn-registry-policy.ts';
+  } from '#lib/analysis/idn-registry-policy.ts';
 
   let { candidates }: { candidates: readonly { domain: string; unicodeDomain: string }[] } = $props();
   let suffix = $state('');

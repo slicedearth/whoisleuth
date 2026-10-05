@@ -1,11 +1,11 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import type { InvestigationInfrastructureRelationships } from '$lib/analysis/investigation-infrastructure.ts';
-  import type { InvestigationSearchSession } from '$lib/investigation-search-session';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import type { InvestigationInfrastructureRelationships } from '#lib/analysis/investigation-infrastructure.ts';
+  import type { InvestigationSearchSession } from '#lib/investigation-search-session.ts';
   import Pagination from './Pagination.svelte';
   import BoundedRelationshipMap from './BoundedRelationshipMap.svelte';
-  import { INFRASTRUCTURE_RELATIONSHIP_LABELS as labels, projectInfrastructureTopology } from '$lib/analysis/infrastructure-topology.ts';
+  import { INFRASTRUCTURE_RELATIONSHIP_LABELS as labels, projectInfrastructureTopology } from '#lib/analysis/infrastructure-topology.ts';
   let { session, entityId, onopen, onselect }: {
     session: InvestigationSearchSession;
     entityId: string;
@@ -19,15 +19,17 @@
   let view = $state<'list' | 'topology'>('list'), query = $state(''), focusedEntityId = $state(''), highlightedEntityId = $state('');
   const topology = $derived(response ? projectInfrastructureTopology(response, query, focusedEntityId) : null);
   let focusPage = false;
+  let lastEntity = '';
   $effect(() => {
     const current = session, selected = entityId, requestedPage = page;
     let active = true;
-    pending = true; response = null; error = '';
-    query = ''; focusedEntityId = selected; highlightedEntityId = '';
-    void current.infrastructureRelationships(selected, requestedPage).then(async value => {
+    pending = true; error = '';
+    if (lastEntity !== selected) { lastEntity = selected; response = null; query = ''; focusedEntityId = selected; highlightedEntityId = ''; }
+    void current.infrastructureRelationships(selected, requestedPage, query).then(async value => {
       if (!active) return;
       response = value; pending = false;
       if (focusPage) { focusPage = false; await tick(); if (active) heading?.focus({ preventScroll: true }); }
+      if (highlightedEntityId) { await tick(); if (active) focusSource(highlightedEntityId); }
     }).catch(cause => {
       if (!active) return;
       pending = false;
@@ -39,6 +41,11 @@
   });
   function showSources(id: string) {
     highlightedEntityId = id;
+    const target = response?.topologyRows?.find(row => row.from.id === id || row.to.id === id)?.sourcePage;
+    if (target && target !== page) { page = target; return; }
+    focusSource(id);
+  }
+  function focusSource(id: string) {
     const row = sourceList && [...sourceList.children].find(element => element instanceof HTMLLIElement
       && (element.dataset.from === id || element.dataset.to === id));
     if (row instanceof HTMLElement) { row.focus({ preventScroll: true }); row.scrollIntoView({ block: 'nearest' }); }
@@ -47,12 +54,13 @@
 
 <section class="relationships" aria-label="Directly supported retained relationships" aria-busy={pending}>
   {#if error}<p role="alert">{error}</p>
-  {:else if pending || !response}<p role="status">Reading retained relationships…</p>
+  {:else if !response}<p role="status">Reading retained relationships…</p>
   {:else if response.state !== 'ready'}<p role="status">This retained identity is unavailable or ambiguous.</p>
   {:else}
+    {#if pending}<p role="status">Updating retained relationships…</p>{/if}
     <h4 bind:this={heading} tabindex="-1">{response.relationshipCount} one-hop relationship{response.relationshipCount === 1 ? '' : 's'}</h4>
     <p>{response.total} retained relationship/source row{response.total === 1 ? '' : 's'}. Independent sources have separate rows.</p>
-    <p>Source page {response.page} of {response.pageCount} · {response.rows.length} rows shown. The optional diagram uses only this page, not full multi-host discovery.</p>
+    <p>Source page {response.page} of {response.pageCount} · {response.rows.length} rows shown. The optional diagram searches the complete admitted one-hop relationship set, independently of this source page.</p>
     {#if response.partial}<p>Relationship or source coverage is incomplete.</p>{/if}
     {#if !response.total}<p>No supported one-hop relationship is admitted here. This does not establish absence elsewhere.</p>{/if}
     {#if response.total}
@@ -63,8 +71,8 @@
     {/if}
     {#if view === 'topology' && topology}
       <section class="topology-controls" aria-label="Retained topology controls">
-        <label>Search diagram on this source page<input type="search" bind:value={query} oninput={() => highlightedEntityId = ''} maxlength="200" autocomplete="off" spellcheck="false"></label>
-        <p role="status">{topology.rows.length} of {response.rows.length} current-page source rows match the diagram search. The complete current-page list remains below.</p>
+        <label>Search complete retained topology<input type="search" bind:value={query} oninput={() => highlightedEntityId = ''} maxlength="200" autocomplete="off" spellcheck="false"></label>
+        <p role="status">{topology.rows.length} of {response.topologyTotal ?? response.rows.length} matching relationships shown. The diagram is bounded to 50 relationships; search narrows the full admitted set. All admitted relationship/source rows remain accessible through the source pages below.</p>
         {#if topology.focusEntity}
           <label>Focus diagram identity<select value={topology.focusEntity.id} onchange={event => { focusedEntityId = event.currentTarget.value; highlightedEntityId = ''; }}>{#each topology.diagramEntities as entity (entity.id)}<option value={entity.id}>[{entity.diagramReference}] {entity.canonical} · {entity.type.replaceAll('_', ' ')}</option>{/each}</select></label>
           <p>Focused identity [{topology.focusEntity.diagramReference}]: {topology.focusEntity.canonical} · {topology.focusEntity.type.replaceAll('_', ' ')}</p>
@@ -72,9 +80,9 @@
             {#if topology.focusEntity.id !== entityId}<button class="btn small" type="button" onclick={() => onselect(topology!.focusEntity!.id, topology!.focusEntity!.label)}>Inspect retained evidence for {topology.focusEntity.canonical}</button>{/if}
           </div>
           {#key query}
-            <BoundedRelationshipMap title="Retained one-hop topology" description="Groups organise identity types; arrows follow From → To. Diagram references distinguish abbreviated labels." nodes={topology.nodes} links={topology.links} focusNodeId={topology.focusNodeId} layout="grouped" directed observedLabel="Retained direct or normalised" limitation="Independent sources keep separate links; full attributable evidence remains in the source list below." />
+            <BoundedRelationshipMap title="Retained one-hop topology" description="Groups organise identity types; arrows follow From → To. Diagram references distinguish abbreviated labels." nodes={topology.nodes} links={topology.links} focusNodeId={topology.focusNodeId} layout="grouped" directed observedLabel="Retained direct or normalised" limitation="One diagram link represents one admitted relationship; independent supporting sources remain separate in the paginated source list. Paths across different dates do not establish a contemporaneous alias chain." />
           {/key}
-        {:else}<p>No current-page source rows match this diagram search. Use the unchanged source list or clear the search.</p>{/if}
+        {:else}<p>No admitted relationships match this diagram search. Use the unchanged source list or clear the search.</p>{/if}
       </section>
     {/if}
     <ol bind:this={sourceList} aria-label="Retained relationship sources">

@@ -205,6 +205,54 @@ test('unmatched recovery files do not change saved metadata or retain unreferenc
   await deleteRehearsal(page);
 });
 
+test('paged recovery checklist retains shared provenance and clears only after exact original recovery', async ({ page }) => {
+  const bodies = Array.from({ length: 21 }, (_, index) => Buffer.from(`Paged exact original ${index}`));
+  const references: CaseAttachment[] = bodies.map((body, index) => ({ id: `paged-${index}`, fileName: `original-${index}.txt`,
+    mediaType: 'application/octet-stream', source: 'Selected original source', observedAt: null, retainedAt: NOW,
+    digestSha256: `sha256:${createHash('sha256').update(body).digest('hex')}`, byteLength: body.length }));
+  const archive = await buildWorkspaceArchive({ cases: [
+    { ...createCase({ domain: 'paged-recovery.example' }, NOW), id: 'paged-case', attachments: references },
+    { ...createCase({ domain: 'shared-recovery.example' }, NOW), id: 'shared-case', attachments: [{ ...references[0]!, id: 'shared-reference', source: 'Independent source declaration' }] },
+  ] }, { generatedAt: NOW });
+  await page.goto('/dashboard'); await review(page, JSON.stringify(archive)); const recovery = await start(page);
+  const checklist = recovery.getByRole('region', { name: 'Original-file recovery checklist' });
+  await expect(checklist).toContainText('21 unique originals still need verification');
+  await expect(checklist.locator(':scope > ol > li')).toHaveCount(20);
+  await checklist.getByText('2 provenance references', { exact: true }).click();
+  await expect(checklist).toContainText('Independent source declaration');
+  await expect(checklist).toContainText(references[0]!.digestSha256);
+  await expect(checklist).toContainText(`${bodies[0]!.length} bytes`);
+  await page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable: true,
+    value: { writeText: async (value: string) => { Reflect.set(window, 'recoveryCopiedDigest', value); } } }); });
+  const copy = checklist.getByRole('button', { name: `Copy SHA-256 for recovery original ${references[0]!.digestSha256}`, exact: true });
+  await copy.focus(); await page.keyboard.press('Enter');
+  await expect(copy).toHaveText('Copied');
+  expect(await page.evaluate(() => Reflect.get(window, 'recoveryCopiedDigest'))).toBe(references[0]!.digestSha256);
+  const next = checklist.getByRole('button', { name: 'Next originals', exact: true });
+  await next.focus(); await page.keyboard.press('Enter');
+  await expect(checklist.locator(':scope > ol > li')).toHaveCount(1);
+  await expect(checklist).toContainText(references[20]!.digestSha256);
+  await page.setViewportSize({ width: 320, height: 844 }); await expectNoHorizontalOverflow(page);
+  await recovery.getByLabel('Restore original files', { exact: true }).setInputFiles(bodies.slice(0, 10).map((buffer, index) => ({ name: `renamed-${index}.txt`, mimeType: 'text/plain', buffer })));
+  await expect(checklist).toContainText('11 unique originals still need verification');
+  const [row] = await directoryRows(page), destination = namedDatabase(row!.id);
+  expect(await storedFiles(page, destination)).toHaveLength(10);
+  await recovery.getByLabel('Restore original files', { exact: true }).setInputFiles([
+    { name: 'renamed-exact.txt', mimeType: 'text/plain', buffer: bodies[10]! },
+    { name: references[11]!.fileName, mimeType: 'text/plain', buffer: Buffer.from('Same filename, different bytes.') },
+  ]);
+  await expect(recovery.getByRole('alert')).toContainText('No files from this operation were added');
+  expect(await storedFiles(page, destination)).toHaveLength(10);
+  await expect(checklist).toContainText('11 unique originals still need verification');
+  await recovery.getByLabel('Restore original files', { exact: true }).setInputFiles(bodies.slice(10).map((buffer, index) => ({ name: `renamed-final-${index}.txt`, mimeType: 'text/plain', buffer })));
+  await expect(recovery.getByRole('status')).toContainText('Recovery verified');
+  await expect(checklist.locator(':scope > ol > li')).toHaveCount(0);
+  expect(await storedFiles(page, destination, bodies.length)).toHaveLength(bodies.length);
+  await recovery.getByRole('button', { name: 'Keep rehearsal workspace', exact: true }).click();
+  await expect(checklist).toHaveCount(0);
+  expect((await readBrowserLocalCollection(page, 'cases')).records).toHaveLength(0);
+});
+
 test('an aborted restore cannot be reported as saved and its empty destination can be inspected and deleted', async ({ page }) => {
   await page.goto('/dashboard'); await review(page, await simpleBackup());
   const before = await readBrowserLocalCollection(page, 'cases');

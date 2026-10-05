@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import {
     calibrationIntervalLabel,
     calibrationRateLabel,
@@ -7,7 +7,7 @@
     parseRiskCalibrationDashboard,
     RISK_CALIBRATION_SUMMARY_MAX_BYTES,
     type RiskCalibrationDashboard,
-  } from '$lib/analysis/risk-calibration-dashboard.ts';
+  } from '#lib/analysis/risk-calibration-dashboard.ts';
 
   let dashboard = $state<RiskCalibrationDashboard | null>(null);
   let error = $state('');

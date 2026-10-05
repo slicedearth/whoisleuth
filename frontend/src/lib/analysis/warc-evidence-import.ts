@@ -162,6 +162,18 @@ function safeTarget(value: unknown): URL | null {
   }
 }
 
+function httpBodyLengthLimitation(http: ReturnType<typeof parseHttpResponse>): string | null {
+  // A retained header is not WARC framing. Empty responses may be HEAD, and
+  // bodyless statuses can describe a representation without carrying it.
+  if (!http.body.byteLength || http.status < 200 || [204, 205, 304].includes(http.status)
+    || http.headers.has('transfer-encoding')) return null;
+  const declared = http.headers.get('content-length');
+  if (!declared || !/^\d{1,16}$/u.test(declared)) return null;
+  const length = Number(declared);
+  if (!Number.isSafeInteger(length) || length === http.body.byteLength) return null;
+  return 'HTTP Content-Length differs from the retained body byte count. Response completeness is uncertain; this does not establish source truncation.';
+}
+
 function cleanTitle(html: string): string | null {
   // Both cursors advance through the bounded body. An unfinished opening tag
   // consumes the remaining input once, without repeated suffix scans.
@@ -333,6 +345,7 @@ export async function parseWarcEvidenceArchive(
     const truncationDescription = declaredTruncation
       ? WARC_TRUNCATION_REASONS.get(declaredTruncation) ?? 'the archive producer declared an unrecognised truncation reason'
       : null;
+    const bodyLengthLimitation = httpBodyLengthLimitation(http);
     if (findings.length >= MAX_WARC_FINDINGS) {
       addExclusion(exclusions, `Only the first ${MAX_WARC_FINDINGS} supported page responses were retained.`);
       continue;
@@ -350,7 +363,7 @@ export async function parseWarcEvidenceArchive(
         `Archive SHA-256 ${archiveDigestSha256}.`,
       ].filter(Boolean).join(' '),
       observedAt,
-      completeness: digestState === 'verified' && !declaredTruncation ? 'complete' : 'partial',
+      completeness: digestState === 'verified' && !declaredTruncation && !bodyLengthLimitation ? 'complete' : 'partial',
       limitations: [
         'Imported locally from an analyst-selected WARC response; WHOISleuth did not collect or independently refresh the target.',
         digestState === 'verified'
@@ -361,6 +374,7 @@ export async function parseWarcEvidenceArchive(
         ...(truncationDescription
           ? [`WARC-Truncated declared ${declaredTruncation}: ${truncationDescription}; matching block integrity does not make the response complete.`]
           : []),
+        ...(bodyLengthLimitation ? [bodyLengthLimitation] : []),
         'Only normalised origin, title, status, observation time, completeness, limitations, and archive digest were retained.',
       ],
       reference: `urn:sha256:${archiveDigestSha256}`,

@@ -14,11 +14,11 @@ const storageBoundary = await readFile(
 test('console layout loads the investigation guide only when stored or requested', () => {
   assert.doesNotMatch(
     consoleLayout,
-    /import\s+InvestigationGuide\s+from\s+['"]\$lib\/components\/InvestigationGuide\.svelte['"]/u,
+    /import\s+InvestigationGuide\s+from\s+['"]#lib\/components\/InvestigationGuide\.svelte['"]/u,
   );
   assert.match(
     consoleLayout,
-    /import\(['"]\$lib\/components\/InvestigationGuide\.svelte['"]\)/u,
+    /import\(['"]#lib\/components\/InvestigationGuide\.svelte['"]\)/u,
   );
   assert.match(consoleLayout, /hasStoredInvestigationGuide\(\)/u);
   assert.match(consoleLayout, /INVESTIGATION_GUIDE_EVENT/u);

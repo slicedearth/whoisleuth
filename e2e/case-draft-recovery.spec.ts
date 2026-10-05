@@ -85,6 +85,27 @@ test('sign-out resolves unsaved Case edits before ending the session', { tag: '@
 });
 
 test('Case drafts recover after reload, stay out of backups and clear atomically on submission', { tag: '@cross-browser-critical' }, async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    const observations = { deliveries: 0, writesDuringDelivery: 0 };
+    Reflect.set(window, '__caseResizeObservations', observations);
+    let delivering = false;
+    const NativeObserver = window.ResizeObserver;
+    window.ResizeObserver = class extends NativeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        super((entries, observer) => {
+          const caseNavigation = entries.some(entry => entry.target.matches('[data-case-detail] .case-sections'));
+          if (caseNavigation) { observations.deliveries++; delivering = true; }
+          try { callback(entries, observer); }
+          finally { if (caseNavigation) delivering = false; }
+        });
+      }
+    };
+    const setProperty = CSSStyleDeclaration.prototype.setProperty;
+    CSSStyleDeclaration.prototype.setProperty = function (name, value, priority) {
+      if (delivering && name === '--case-navigation-height') observations.writesDuringDelivery++;
+      return setProperty.call(this, name, value, priority);
+    };
+  });
   await openCasesView(page); await createCase(page, 'draft-recovery.example');
   let form = await pinForm(page);
   await form.getByLabel('Label', { exact: true }).fill('Unsubmitted fixture evidence');
@@ -106,6 +127,14 @@ test('Case drafts recover after reload, stay out of backups and clear atomically
       if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await form.screenshot({ path: testInfo.outputPath(`case-draft-${theme}-${width}.png`) }); }
     }
   }
+  const resizeObservations = await page.evaluate(() => Reflect.get(window, '__caseResizeObservations'));
+  expect(resizeObservations.deliveries).toBeGreaterThan(0);
+  expect(resizeObservations.writesDuringDelivery).toBe(0);
+  await expect.poll(() => page.getByRole('navigation', { name: 'Case sections', exact: true }).evaluate(navigation => {
+    const article = navigation.closest<HTMLElement>('[data-case-detail]');
+    const stored = Number.parseFloat(article?.style.getPropertyValue('--case-navigation-height') ?? '');
+    return stored > 0 && Math.abs(stored - navigation.getBoundingClientRect().height) < 1;
+  })).toBe(true);
   expect((await new AxeBuilder({ page }).include('.case-response-stage').analyze()).violations).toEqual([]);
   await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click();
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true }).click();

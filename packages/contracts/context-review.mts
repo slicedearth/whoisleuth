@@ -2,7 +2,8 @@
 export const CONTEXT_REVIEW_SCHEMA = 'whoisleuth.context-review';
 export const CONTEXT_REVIEW_VERSION = 1;
 export const DOMAIN_HISTORY_INPUT_SCHEMA = 'whoisleuth.domain-history.input';
-export const DOMAIN_HISTORY_INPUT_VERSION = 1;
+export const DOMAIN_HISTORY_INPUT_VERSION = 2;
+export const DOMAIN_HISTORY_LEGACY_INPUT_VERSION = 1;
 export const PLATFORM_CONTINUITY_INPUT_SCHEMA = 'whoisleuth.platform-continuity.input';
 export const PLATFORM_CONTINUITY_INPUT_VERSION = 1;
 export const STOREFRONT_INPUT_SCHEMA = 'whoisleuth.storefront-review.input';

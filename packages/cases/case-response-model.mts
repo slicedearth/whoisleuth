@@ -71,10 +71,13 @@ import {
 } from './case-response-values.mts';
 import { isValidAsciiHostname } from '../contracts/domain-name.mts';
 import { readCaseRecheckContext } from './case-recheck-model.mts';
+import { readCaseResponseObject } from './case-response-object.mts';
+import { normalizeInfrastructureObservation } from '../investigation/infrastructure-observation.mts';
 
 export * from './case-response-records.mts';
 export * from './case-response-actions.mts';
 export * from './case-response-outcomes.mts';
+export * from './case-response-object.mts';
 
 export {
   MAX_ASSERTION_PROVENANCE_LABELS,
@@ -225,6 +228,7 @@ function normalizePin(
   options: CaseEvidencePinNormalizationOptions = {},
 ): CaseEvidencePin | null {
   const item = record(raw);
+  if (item.infrastructureObservation !== undefined && options.sourceVersion != null && options.sourceVersion < 18) throw new TypeError('Infrastructure observations require Case schema 18 or later.');
   const label = text(item.label, MAX_RESPONSE_LABEL_LENGTH);
   const value = text(item.value, MAX_RESPONSE_VALUE_LENGTH);
   if (!label || !value) return null;
@@ -257,6 +261,8 @@ function normalizePin(
       : null,
     limitations: limitations(item.limitations),
     createdAt,
+    ...(item.responseObject === undefined ? {} : { responseObject: readCaseResponseObject(item.responseObject, options.sourceVersion)! }),
+    ...(item.infrastructureObservation === undefined ? {} : { infrastructureObservation: normalizeInfrastructureObservation(item.infrastructureObservation) }),
   };
   normalized.certificateObservation = options.allowCertificateObservation === false
     ? null

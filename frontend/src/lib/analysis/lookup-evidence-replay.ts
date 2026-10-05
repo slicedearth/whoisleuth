@@ -274,6 +274,7 @@ export function buildLookupReplayCaseEvidence(
     pageTitle: value('page.title') ?? null,
     hasPasswordField: replayBoolean(value('page.password-field')),
     hasExternalFormAction: replayBoolean(value('page.external-form-action')),
+    hasExternalPasswordForm: replayBoolean(value('page.external-password-form')),
     phishingLanguageMatch: value('page.phishing-language') ?? null,
   };
 }
@@ -607,6 +608,7 @@ export async function parseLookupEvidenceReplay(
   addFact(facts, 'page.title', 'Page title', [{ value: pageIdentity.title ?? availability.pageTitle, sourceId: 'page-identity' }], replaySourcesById);
   addFact(facts, 'page.password-field', 'Password field', [{ value: availability.hasPasswordField, sourceId: 'page-identity' }], replaySourcesById);
   addFact(facts, 'page.external-form-action', 'External form action', [{ value: availability.hasExternalFormAction, sourceId: 'page-identity' }], replaySourcesById);
+  addFact(facts, 'page.external-password-form', 'Password form declares external destination', [{ value: availability.hasExternalPasswordForm, sourceId: 'page-identity' }], replaySourcesById);
   addFact(facts, 'page.phishing-language', 'Phishing-language cue', [{ value: availability.phishingLanguageMatch, sourceId: 'page-identity' }], replaySourcesById);
   const technologyFindings = Array.isArray(technology.findings)
     ? technology.findings.slice(0, 12).map((item) => record(item).name)

@@ -1,12 +1,12 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import IntelligenceIcon, { type IntelligenceIconName } from '$lib/components/IntelligenceIcon.svelte';
-  import BoundedRelationshipMap from '$lib/components/BoundedRelationshipMap.svelte';
-  import RelationshipSourceEvidence from '$lib/components/RelationshipSourceEvidence.svelte';
+  import IntelligenceIcon, { type IntelligenceIconName } from '#lib/components/IntelligenceIcon.svelte';
+  import BoundedRelationshipMap from '#lib/components/BoundedRelationshipMap.svelte';
+  import RelationshipSourceEvidence from '#lib/components/RelationshipSourceEvidence.svelte';
   import type {
     ForceGraphLinkInput,
     ForceGraphNodeInput,
-  } from '$lib/analysis/visualization-models.ts';
+  } from '#lib/analysis/visualization-models.ts';
   import {
     buildRelationshipAdmissionPreview,
     snapshotRelationshipAdmission,
@@ -15,8 +15,8 @@
     type RelationshipAdmissionGroup,
     type RelationshipAdmissionPreview,
     type RelationshipRetentionAdmission,
-  } from '$lib/analysis/relationship-admission-preview.ts';
-  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
+  } from '#lib/analysis/relationship-admission-preview.ts';
+  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '#lib/local-mutation-outcome.ts';
 
   type PendingAdmission = RelationshipRetentionAdmission & Readonly<{
     action: RelationshipAdmissionAction;

@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import type { BrandProfile } from '$lib/brand-profiles';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import type { BrandProfile } from '#lib/brand-profiles.ts';
   import {
     buildDomainPostureMatrix,
     type DomainPostureMatrixCell,
     type DomainPostureMatrixState,
-  } from '$lib/analysis/domain-posture-matrix.ts';
+  } from '#lib/analysis/domain-posture-matrix.ts';
   import PostureObservationHistory from './PostureObservationHistory.svelte';
   import Pagination from './Pagination.svelte';
 

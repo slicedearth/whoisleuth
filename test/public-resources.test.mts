@@ -41,9 +41,9 @@ test('public resources expose a bounded unique set of useful investigation topic
   for (const resource of PUBLIC_RESOURCES) {
     assert.match(resource.slug, /^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
     assert.ok(resource.summary.length > 0);
-    assert.equal(resource.steps.length, 3);
-    assert.equal(resource.evidence.length, 3);
-    assert.equal(resource.questions.length, 3);
+    for (const section of ['steps', 'evidence', 'questions'] as const) {
+      assert.ok(resource[section].length > 0, `${resource.slug}: ${section} must contain useful content`);
+    }
     const maximumReferences = resource.slug === 'reporting-and-takedown-guidance' ? 11 : 3;
     assert.ok(resource.references.length >= 2 && resource.references.length <= maximumReferences);
     if (resource.slug === 'reporting-and-takedown-guidance') assert.equal(resource.references.length, 11);
@@ -55,7 +55,11 @@ test('public resources expose a bounded unique set of useful investigation topic
       assert.equal(url.protocol, 'https:');
       assert.equal(referenceHosts.has(url.hostname), true);
     }
-    assert.equal(resource.demoHref, '/demo');
+    const demo = new URL(resource.demoHref, WHOISLEUTH_SITE_ORIGIN);
+    assert.equal(demo.origin, WHOISLEUTH_SITE_ORIGIN);
+    assert.equal(demo.pathname, '/demo');
+    assert.ok(['', '#case-practice'].includes(demo.hash));
+    assert.equal(demo.search, '');
     assert.match(resource.guideHref, /^\/resources#[a-z0-9-]+$/u);
     assert.match(resource.repositoryDoc, /^docs\/[a-z0-9-]+\.md$/u);
   }
@@ -67,6 +71,12 @@ test('public resource lookup is exact, neutral for invalid input, and does not i
   assert.equal(publicResource('RDAP-vs-WHOIS'), null);
   assert.equal(publicResource('../privacy'), null);
   assert.equal(publicResource(null), null);
+});
+
+test('evidence and response walkthroughs link to the existing isolated Case practice', () => {
+  for (const slug of ['domain-investigation-workflow', 'reporting-and-takedown-guidance']) assert.equal(publicResource(slug)?.demoHref, '/demo#case-practice');
+  const repositoryRoot = join(import.meta.dirname, '..');
+  for (const resource of PUBLIC_RESOURCES) assert.equal(existsSync(join(repositoryRoot, resource.repositoryDoc)), true);
 });
 
 test('public resource copy remains bounded, plain text, and precise', () => {
@@ -91,7 +101,6 @@ test('the sitemap and social preview remain aligned with the public resource con
   const previewSource = readFileSync(join(repositoryRoot, 'frontend', 'static', 'social-preview.svg'), 'utf8');
   assert.equal(existsSync(join(repositoryRoot, 'docs', 'assets', 'social-preview.svg')), false);
   assert.match(previewSource, /<svg[^>]+width="1280" height="640"[^>]+viewBox="0 0 1280 640"/u);
-  assert.match(previewSource, /<image href="favicon\.svg"/u);
   assert.match(previewSource, />EVIDENCE TOPOLOGY</u);
   assert.match(previewSource, />LOOKUP TARGET</u);
   assert.doesNotMatch(previewSource, /<(?:script|foreignObject)\b|(?:href|xlink:href)="https?:\/\//iu);

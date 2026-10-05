@@ -14,7 +14,7 @@ import {
   CLI_CT_SEARCH_SCHEMA, CLI_CT_SEARCH_SCHEMA_VERSION, CLI_COMPARE_SCHEMA, CLI_COMPARE_SCHEMA_VERSION,
 } from './formatters/json.mts';
 import { CLI_LOOKUP_BRIEF_SCHEMA, CLI_LOOKUP_BRIEF_VERSION } from '../packages/contracts/cli-lookup-brief.mts';
-import { EXTERNAL_FINDINGS_SCHEMA, EXTERNAL_FINDINGS_VERSION, parseExternalFindingsDocument } from '../packages/interchange/external-findings-import.mts';
+import { EXTERNAL_FINDINGS_SCHEMA, parseExternalFindingsDocument } from '../packages/interchange/external-findings-import.mts';
 import { SOURCE_RELIABILITY_REPORT_SCHEMA, SOURCE_RELIABILITY_REPORT_VERSION } from './source-reliability.mts';
 import { CLI_CASE_PACK_SCHEMA, CLI_CASE_PACK_VERSION, verifyCliCasePack } from './case-pack.mts';
 import { SHARING_REVIEW_SCHEMA, SHARING_REVIEW_VERSION } from './sharing-review.mts';
@@ -62,8 +62,7 @@ export function validateWorkflowResult(step: Step, result: unknown, retained: bo
       break;
     case 'ct-search': schema = CLI_CT_SEARCH_SCHEMA; version = CLI_CT_SEARCH_SCHEMA_VERSION; break;
     case 'ct-intake':
-      schema = EXTERNAL_FINDINGS_SCHEMA; version = EXTERNAL_FINDINGS_VERSION;
-      parseExternalFindingsDocument(value);
+      schema = EXTERNAL_FINDINGS_SCHEMA; version = parseExternalFindingsDocument(value).schemaVersion;
       break;
     case 'brief': schema = CLI_LOOKUP_BRIEF_SCHEMA; version = CLI_LOOKUP_BRIEF_VERSION; break;
     case 'compare': schema = CLI_COMPARE_SCHEMA; version = CLI_COMPARE_SCHEMA_VERSION; break;

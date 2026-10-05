@@ -75,6 +75,7 @@ type CaptureArguments = Readonly<{
 }>;
 
 type CaptureDependencies = Readonly<{
+  signal?: AbortSignal;
   launchBrowser(timeoutMs: number): Promise<CaptureBrowser>;
   startArtifactWriter?: typeof startAnchoredArtifactWriter;
   resolveAddresses?: typeof resolvePublicAddresses;
@@ -112,25 +113,62 @@ function createCaptureDeadline(
   timeoutMs: number,
   onTimeout: () => void | Promise<void>,
   scheduler: CaptureDeadlineScheduler = SYSTEM_CAPTURE_DEADLINE_SCHEDULER,
+  callerSignal?: AbortSignal,
 ): CaptureDeadline {
   let didExpire = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const controller = new AbortController();
   const timeoutError = new Error(`Rendered capture exceeded its ${timeoutMs} ms total-run deadline.`);
+  let interrupt: (() => void) | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
-    timer = scheduler.schedule(() => {
+    const stop = (reason: unknown) => {
+      if (didExpire) return;
       didExpire = true;
-      controller.abort(timeoutError);
+      controller.abort(reason);
       void Promise.resolve(onTimeout()).catch(() => {});
-      reject(timeoutError);
+      reject(reason);
+    };
+    interrupt = () => stop(callerSignal?.reason ?? new Error('Rendered capture interrupted.'));
+    callerSignal?.addEventListener('abort', interrupt, { once: true });
+    if (callerSignal?.aborted) interrupt();
+    timer = scheduler.schedule(() => {
+      stop(timeoutError);
     }, timeoutMs);
   });
+  // Cancellation can precede the first race (during output reservation).
+  // Observe immediately without replacing the original rejecting promise.
+  void timeout.catch(() => {});
   return Object.freeze({
     run<T>(operation: Promise<T>) { return Promise.race([operation, timeout]); },
     signal: controller.signal,
     expired() { return didExpire; },
-    clear() { if (timer) scheduler.cancel(timer); timer = null; },
+    clear() {
+      if (timer) scheduler.cancel(timer);
+      timer = null;
+      if (interrupt) callerSignal?.removeEventListener('abort', interrupt);
+    },
   });
+}
+
+/** The first signal requests owned cleanup; a second explicitly forces exit. */
+export function createCaptureInterruption(
+  events: {
+    on(signal: 'SIGINT' | 'SIGTERM', listener: () => void): unknown;
+    off(signal: 'SIGINT' | 'SIGTERM', listener: () => void): unknown;
+  } = process,
+  emergencyExit: () => void = () => process.exit(130),
+) {
+  const controller = new AbortController();
+  const interrupt = () => {
+    if (controller.signal.aborted) emergencyExit();
+    else controller.abort(new Error('Rendered capture interrupted; owned output cleanup requested.'));
+  };
+  events.on('SIGINT', interrupt);
+  events.on('SIGTERM', interrupt);
+  return {
+    signal: controller.signal,
+    clear() { events.off('SIGINT', interrupt); events.off('SIGTERM', interrupt); },
+  };
 }
 
 function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -207,6 +245,14 @@ export function sanitizeCaptureText(value: unknown, maximum: number): string {
       .trim()
       .slice(0, maximum)
     : '';
+}
+
+/** JSON-quoted paths preserve exact whitespace and safely escape terminal controls. */
+export function formatCaptureSuccess(domain: string, directory: string): string {
+  if (!directory || directory.length > 2048) throw new TypeError('Capture output path exceeds its display bound.');
+  const quote = (value: string) => JSON.stringify(value).replace(TERMINAL_UNSAFE_GLOBAL_RE,
+    character => character.split('').map(unit => `\\u${unit.charCodeAt(0).toString(16).padStart(4, '0')}`).join(''));
+  return `Captured ${sanitizeCaptureText(domain, 253)} to ${quote(directory)}\nManifest: ${quote(path.join(directory, 'manifest.json'))}\n`;
 }
 
 function captureUrl(value: unknown): URL {
@@ -809,6 +855,7 @@ export async function captureRenderedPage(
   argumentsValue: CaptureArguments,
   dependencies: CaptureDependencies,
 ) {
+  dependencies.signal?.throwIfAborted();
   if (!Number.isInteger(argumentsValue.timeoutMs) || argumentsValue.timeoutMs < 1_000 || argumentsValue.timeoutMs > MAX_CAPTURE_TIMEOUT_MS) {
     throw new Error(`Rendered capture total-run timeout must be between 1000 and ${MAX_CAPTURE_TIMEOUT_MS} ms.`);
   }
@@ -841,7 +888,7 @@ export async function captureRenderedPage(
       context?.close(),
       browser?.close(),
     ].filter((operation): operation is Promise<void> => Boolean(operation)));
-  }, dependencies.deadlineScheduler);
+  }, dependencies.deadlineScheduler, dependencies.signal);
   const remainingTimeoutMs = () => Math.max(
     1,
     argumentsValue.timeoutMs - Math.max(0, Date.now() - captureStartedAt),
@@ -869,6 +916,7 @@ export async function captureRenderedPage(
     await deadline.run(operation);
   }
   try {
+    deadline.signal.throwIfAborted();
     if (!dependencies.writeArtifact) {
       const writerAcquisition = (dependencies.startArtifactWriter ?? startAnchoredArtifactWriter)(
         targetDirectory,

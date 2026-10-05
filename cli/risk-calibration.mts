@@ -35,7 +35,6 @@ import {
   MAX_RISK_CALIBRATION_STRING_LENGTH,
   MAX_RISK_CALIBRATION_TIMESTAMP_LENGTH,
   RISK_CALIBRATION_DATASET_SCHEMA,
-  RISK_CALIBRATION_DATASET_VERSION,
   RISK_CALIBRATION_REPORT_SCHEMA,
   RISK_CALIBRATION_REPORT_VERSION,
   RISK_CALIBRATION_DISPOSITIONS,
@@ -43,6 +42,7 @@ import {
   snapshotRiskCalibrationReportForSerialization,
   SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS,
   type RiskCalibrationDataset,
+  type RiskCalibrationDatasetVersion,
   type RiskCalibrationDisposition,
   type RiskCalibrationEvidence,
   type RiskCalibrationRecord,
@@ -77,7 +77,7 @@ const AVAILABILITY_STATES = new Set(['registered', 'for_sale', 'expiring', 'avai
 const ACTIVITY_STATES = new Set(['active', 'parked', 'unreachable', 'no_site']);
 const BOOLEAN_FIELDS = [
   'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField',
-  'hasMx', 'hasSpf', 'hasDmarc', 'privacyProtected', 'hasExternalFormAction',
+  'hasMx', 'hasSpf', 'hasDmarc', 'privacyProtected', 'hasExternalFormAction', 'hasExternalPasswordForm',
   'idnReferenceMatch', 'pageBaselineMatch', 'hasActiveBrandProfile',
 ] as const;
 const REVIEW_REASON_CODES = ANALYST_REVIEW_REASON_VALUES;
@@ -149,7 +149,7 @@ type RiskCalibrationReport = {
   generatedAt: string;
   dataset: {
     schema: typeof RISK_CALIBRATION_DATASET_SCHEMA;
-    version: typeof RISK_CALIBRATION_DATASET_VERSION;
+    version: RiskCalibrationDatasetVersion;
     recordCount: number;
   };
   riskModelVersion: number;
@@ -250,8 +250,9 @@ function projectThreatIntelligence(value: unknown, field: string): ProjectedThre
   };
 }
 
-function projectEvidence(value: unknown, field: string): CalibrationEvidence {
+function projectEvidence(value: unknown, field: string, version: number): CalibrationEvidence {
   const source = object(value, field);
+  if (version < 3 && Object.hasOwn(source, 'hasExternalPasswordForm')) throw new CliUsageError(`${field}.hasExternalPasswordForm requires dataset version 3; historical inputs were not reinterpreted.`);
   const availability = boundedString(source.availability ?? source.state, `${field}.availability`, MAX_RISK_CALIBRATION_AVAILABILITY_LENGTH);
   if (!AVAILABILITY_STATES.has(availability)) throw new CliUsageError(`${field}.availability is unsupported.`);
   const result: CalibrationEvidence = {
@@ -347,7 +348,7 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
     : null;
   if (document.schema !== RISK_CALIBRATION_DATASET_SCHEMA
     || documentVersion === null
-    || !SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.includes(documentVersion as typeof RISK_CALIBRATION_DATASET_VERSION)) {
+    || !SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.includes(documentVersion as RiskCalibrationDatasetVersion)) {
     throw new CliUsageError(`Risk calibration input must use ${RISK_CALIBRATION_DATASET_SCHEMA} version ${SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.join(' or ')}.`);
   }
   if (!Array.isArray(document.records) || !document.records.length) {
@@ -378,12 +379,12 @@ export function parseRiskCalibrationDataset(text: unknown): CalibrationDataset {
       domain,
       analystDisposition,
       ...(reviewReasonCode ? { reviewReasonCode } : {}),
-      evidence: projectEvidence(record.evidence, `${prefix}.evidence`),
+      evidence: projectEvidence(record.evidence, `${prefix}.evidence`, documentVersion),
     };
   });
   return {
     schema: RISK_CALIBRATION_DATASET_SCHEMA,
-    version: documentVersion as typeof RISK_CALIBRATION_DATASET_VERSION,
+    version: documentVersion as RiskCalibrationDatasetVersion,
     records,
   };
 }

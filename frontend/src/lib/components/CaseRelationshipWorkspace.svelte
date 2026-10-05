@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CaseRecord } from '$lib/cases';
+  import type { CaseRecord } from '#lib/cases.ts';
   import {
     CASE_RELATIONSHIP_QUERY_DEFAULTS,
     caseRelationshipGroupId,
@@ -8,9 +8,9 @@
     normalizeCaseRelationshipQuery,
     type CaseRelationshipQuery,
     type CaseRelationshipSummary,
-  } from '$lib/analysis/case-relationships.ts';
-  import CaseRelationshipGraph from '$lib/components/CaseRelationshipGraph.svelte';
-  import CaseRelationshipTable from '$lib/components/CaseRelationshipTable.svelte';
+  } from '#lib/analysis/case-relationships.ts';
+  import CaseRelationshipGraph from '#lib/components/CaseRelationshipGraph.svelte';
+  import CaseRelationshipTable from '#lib/components/CaseRelationshipTable.svelte';
 
   let {
     records,

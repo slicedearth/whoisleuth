@@ -2,6 +2,9 @@ import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow } from './helpers';
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
+import { createHash } from 'node:crypto';
+import { canonicalArtifactJsonV2 } from '../packages/evidence/artifact-integrity.mts';
+import { ACQUISITION_MANUAL_CHECKS, type AcquisitionDecisionPacket } from '../packages/investigation/acquisition-decision-packet.mts';
 
 // Data-heavy Lookup evidence presentation and accessibility coverage.
 
@@ -489,8 +492,47 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await acquisitionDecision.getByLabel('Rationale or unresolved questions').fill('Continue manual checks with the current evidence limitations.');
   const acquisitionDownload = page.waitForEvent('download');
   await acquisitionDecision.getByRole('button', { name: 'Download acquisition review' }).click();
-  await expect((await acquisitionDownload).suggestedFilename()).toMatch(/^whoisleuth-acquisition-review-.+\.json$/u);
+  const originalDownload = await acquisitionDownload;
+  await expect(originalDownload.suggestedFilename()).toMatch(/^whoisleuth-acquisition-review-.+\.json$/u);
   await expect(acquisitionDecision.getByRole('status')).toContainText('draft acquisition review');
+  const originalContent = Buffer.concat(await (await originalDownload.createReadStream()).toArray()).toString('utf8');
+  const originalPacket = JSON.parse(originalContent) as AcquisitionDecisionPacket;
+  const historical = structuredClone(originalPacket);
+  historical.generatedAt = '2020-01-01T00:00:00.000Z'; historical.evidenceObservedAt = '2019-12-01T00:00:00.000Z';
+  historical.analystReview = { decision: 'pause', rationale: 'Historical private rationale.', reviewedChecks: [...ACQUISITION_MANUAL_CHECKS], outstandingChecks: [], state: 'reviewed' };
+  Reflect.set(historical.evidenceReview.items[0]!, 'detail', 'Historical evidence must not replace current Lookup evidence.');
+  const { integrity: oldIntegrity, ...unsignedHistorical } = historical;
+  historical.integrity = { ...oldIntegrity, digestSha256: `sha256:${createHash('sha256').update(canonicalArtifactJsonV2(unsignedHistorical)).digest('hex')}` };
+  const reopenInput = acquisitionDecision.getByLabel('Reopen acquisition review (JSON, up to 15 MiB)', { exact: true });
+  const currentRationale = acquisitionDecision.getByLabel('Rationale or unresolved questions');
+  await currentRationale.fill('Fresh edits remain until deliberate acceptance.');
+  const tampered = structuredClone(historical); tampered.analystReview.rationale = 'Changed without digest.';
+  await reopenInput.setInputFiles({ name: 'invalid.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(tampered)) });
+  await expect(acquisitionDecision.getByRole('status')).toContainText('failed its integrity check');
+  await expect(currentRationale).toHaveValue('Fresh edits remain until deliberate acceptance.');
+  const selectedPacket = { name: 'historical.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(historical)) };
+  await reopenInput.setInputFiles(selectedPacket);
+  const historicalPreview = acquisitionDecision.getByRole('region', { name: 'Verified historical acquisition review' });
+  await expect(historicalPreview).toContainText('2019-12-01T00:00:00.000Z');
+  await expect(currentRationale).toHaveValue('Fresh edits remain until deliberate acceptance.');
+  await acquisitionDecision.getByRole('button', { name: 'Cancel reopen', exact: true }).click();
+  await expect(currentRationale).toHaveValue('Fresh edits remain until deliberate acceptance.');
+  await reopenInput.setInputFiles(selectedPacket);
+  await acquisitionDecision.getByRole('button', { name: 'Accept historical manual fields', exact: true }).click();
+  await expect(currentRationale).toHaveValue('Historical private rationale.');
+  await expect(acquisitionReview.locator('.review-grid').first()).not.toContainText('Historical evidence must not replace current Lookup evidence.');
+  await acquisitionDecision.getByRole('button', { name: 'Download acquisition review' }).click();
+  await expect(acquisitionDecision.getByRole('status')).toContainText('Reconfirm');
+  await acquisitionDecision.getByRole('checkbox', { name: /^I reconfirm this decision/u }).check();
+  const renewedDownload = page.waitForEvent('download');
+  await acquisitionDecision.getByRole('button', { name: 'Download acquisition review' }).click();
+  const renewed = JSON.parse(Buffer.concat(await (await (await renewedDownload).createReadStream()).toArray()).toString('utf8')) as AcquisitionDecisionPacket;
+  expect(renewed.evidenceObservedAt).toBe(originalPacket.evidenceObservedAt);
+  expect(renewed.evidenceReview).toEqual(originalPacket.evidenceReview);
+  expect(renewed.generatedAt).not.toBe(historical.generatedAt);
+  expect(renewed.analystReview.state).toBe('reviewed');
+  await expect(acquisitionDecision.getByRole('status')).toContainText('does not confirm durable saving');
+  expect(lookupRequests).toHaveLength(1);
 
   const coverage = page.getByRole('region', { name: 'Evidence coverage' });
   await expect(coverage).toBeVisible();

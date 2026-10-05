@@ -3,14 +3,14 @@
     compareAcquisitionTransitionPins,
     compareCheckpointPins,
     type CheckpointFact,
-  } from '$lib/analysis/case-evidence-checkpoint.ts';
+  } from '#lib/analysis/case-evidence-checkpoint.ts';
   import type {
     CaseEvidencePin,
     CaseTransitionExpectation,
-  } from '$lib/cases';
-  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
+  } from '#lib/cases.ts';
+  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '#lib/local-mutation-outcome.ts';
   import CopyButton from './CopyButton.svelte';
-  import { evidenceFactCitation } from '$lib/analysis/evidence-copy.ts';
+  import { evidenceFactCitation } from '#lib/analysis/evidence-copy.ts';
   import { MAX_CASE_CHECKPOINT_FACTS } from '../../../../packages/contracts/case-portability.mts';
 
   let {

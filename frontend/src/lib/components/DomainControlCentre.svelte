@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import type { BrandProfile } from '$lib/brand-profiles';
-  import { buildDomainControlCentre } from '$lib/analysis/domain-control-centre.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import type { BrandProfile } from '#lib/brand-profiles.ts';
+  import { buildDomainControlCentre } from '#lib/analysis/domain-control-centre.ts';
 
   let { active }: { active: BrandProfile } = $props();
   const centre = $derived(buildDomainControlCentre(active));

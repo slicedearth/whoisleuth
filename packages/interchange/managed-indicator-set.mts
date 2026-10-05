@@ -5,6 +5,7 @@ import { parseBoundedJson, boundedJsonLimitsForBytes } from '../analysis/bounded
 import { MANAGED_INDICATOR_SET_SCHEMA, MANAGED_INDICATOR_SET_VERSION, MAX_MANAGED_INDICATOR_SET_BYTES, MAX_MANAGED_INDICATOR_PLAN_BYTES } from '../contracts/analyst-interchange.mts';
 import { defensiveIndicatorProvenance, prepareDefensiveIndicatorExport, MAX_DEFENSIVE_INDICATOR_INPUTS } from './defensive-indicator-export.mts';
 import { MAX_STIX_INDICATORS } from './stix-indicator-export.mts';
+import { terminalSafeJson } from './json-output.mts';
 
 export const MAX_MANAGED_INDICATORS = MAX_STIX_INDICATORS;
 export const MAX_INDICATOR_REVIEW_BASIS = 1_000;
@@ -98,6 +99,17 @@ export function parseManagedIndicatorJson(raw: string, plan = false): unknown {
   return parseBoundedJson(raw, { maximumBytes, label: 'Managed indicator input', limits: boundedJsonLimitsForBytes(maximumBytes) });
 }
 
+/** Both writers enforce the reader's budget on final UTF-8 bytes, including escapes. */
+export function serializeManagedIndicatorSet(manifest: ManagedIndicatorSet): string {
+  const pretty = `${terminalSafeJson(manifest, 2)}\n`;
+  if (new TextEncoder().encode(pretty).byteLength <= MAX_MANAGED_INDICATOR_SET_BYTES) return pretty;
+  const compact = terminalSafeJson(manifest);
+  if (new TextEncoder().encode(compact).byteLength > MAX_MANAGED_INDICATOR_SET_BYTES) {
+    throw new TypeError('The indicator revision exceeds the file byte limit after safe JSON encoding; no partial file was created.');
+  }
+  return compact;
+}
+
 export function managedIndicatorState(entry: ManagedIndicator, at: string): 'active' | 'expired' | 'withdrawn' {
   iso(at, 'Review time');
   return entry.withdrawal ? 'withdrawn' : Date.parse(entry.expiresAt) <= Date.parse(at) ? 'expired' : 'active';
@@ -180,6 +192,7 @@ export async function buildManagedIndicatorRevision(input: unknown, now = new Da
     revision: (previous?.revision ?? 0) + 1, createdAt: previous?.createdAt ?? generatedAt, modifiedAt: generatedAt,
     previous: previous ? { revisionId: previous.revisionId, digestSha256: previous.integrity.digestSha256 } : null, entries };
   const manifest = validateManagedIndicatorSet({ ...unsigned, integrity: { algorithm: 'SHA-256', canonicalization: SORTED_JSON_V2, digestSha256: await sha256ArtifactDigestV2(unsigned) } });
+  serializeManagedIndicatorSet(manifest);
   const changes: ManagedIndicatorChange[] = previous ? compareManagedIndicatorRevisions(previous, manifest) : manifest.entries.map(entry => ({ id: entry.id, domain: entry.domain, kind: 'added' }));
   return { manifest, changes, unchanged: manifest.entries.length - changes.length, exclusions: preflight.exclusions };
 }

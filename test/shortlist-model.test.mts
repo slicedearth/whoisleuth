@@ -98,6 +98,27 @@ test('versioned stores normalize, deduplicate, and retain the last bounded recor
   assert.equal(requiredValue(store.entries[0]).riskScore, 80);
 });
 
+test('membership-only nominations preserve observed evidence and only add unknown stubs', () => {
+  const original = normalizeShortlistStore([record('observed.example', { pageTitle: 'Retained title', hasWeb: true, nameservers: ['ns1.example'] })]).entries;
+  const before = JSON.stringify(original[0]);
+  const result = setShortlistSelection(original, [{ domain: 'observed.example' }, { domain: 'new.example' }, { domain: 'new.example' }], true, NOW, 'retain');
+  assert.equal(JSON.stringify(result.entries[0]), before);
+  assert.deepEqual({ added: result.added, retained: result.retained, updated: result.updated, skipped: result.skipped }, { added: 1, retained: 1, updated: 0, skipped: 1 });
+  const reloaded = normalizeShortlistStore(JSON.parse(serializeShortlistStore(result.entries))).entries;
+  assert.equal(JSON.stringify(reloaded[0]), before);
+  assert.equal(reloaded[1]!.availability, 'unknown');
+  assert.equal(reloaded[1]!.riskScore, null);
+  assert.equal(reloaded[1]!.opportunityScore, null);
+  const peerUpdated = setShortlistSelection(result.entries, [record('new.example', { riskScore: 91 })], true, NOW);
+  const nominated = setShortlistSelection(peerUpdated.entries, [{ domain: 'new.example' }], true, NOW, 'retain');
+  assert.deepEqual(nominated.entries, peerUpdated.entries);
+  const full = Array.from({ length: MAX_SHORTLIST_ENTRIES }, (_, i) => record(`item-${i}.example`));
+  const limited = setShortlistSelection(full, [{ domain: 'item-0.example' }, { domain: 'over.example' }], true, NOW, 'retain');
+  assert.equal(limited.retained, 1);
+  assert.equal(limited.skipped, 1);
+  assert.equal(limited.updated, 0);
+});
+
 test('store normalization bounds traversal and retained entries', () => {
   const source = Array.from({ length: MAX_SHORTLIST_INPUTS + 20 }, (_, index) => record(`item-${index}.invalid`));
   assert.equal(normalizeShortlistStore(source).entries.length, MAX_SHORTLIST_ENTRIES);

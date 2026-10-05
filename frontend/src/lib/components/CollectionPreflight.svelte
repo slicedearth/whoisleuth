@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CollectionPreflight } from '$lib/analysis/collection-preflight.ts';
+  import type { CollectionPreflight } from '#lib/analysis/collection-preflight.ts';
 
   let {
     preflight,

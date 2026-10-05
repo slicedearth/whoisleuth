@@ -1,4 +1,5 @@
-import { readManagedIndicatorSet } from './managed-indicator-set.mts';
+import { readManagedIndicatorSet, serializeManagedIndicatorSet } from './managed-indicator-set.mts';
+import { terminalSafeJson } from './json-output.mts';
 import { stixIndicatorObjects, stixIndicatorProducer } from './stix-indicator-export.mts';
 import { mispIndicatorAttribute, mispIndicatorEvent } from './misp-indicator-export.mts';
 
@@ -27,7 +28,7 @@ export async function exportManagedIndicators(input: unknown, format: 'manifest'
     document = { Event: { ...mispIndicatorEvent(manifest.id, manifest.createdAt, attributes),
       info: `${manifest.name} · reviewed domain indicators`, timestamp: String(Math.floor(Date.parse(manifest.modifiedAt) / 1000)) } };
   } else if (format !== 'manifest') throw new TypeError('Unsupported managed indicator export format.');
-  return { document, content: `${JSON.stringify(document, null, 2)}\n`,
+  return { document, content: format === 'manifest' ? serializeManagedIndicatorSet(manifest) : `${terminalSafeJson(document, 2)}\n`,
     filename: `whoisleuth-indicators-${manifest.id}-r${manifest.revision}.${format}.json`,
     mimeType: format === 'stix' ? 'application/stix+json;charset=utf-8' : 'application/json;charset=utf-8' };
 }

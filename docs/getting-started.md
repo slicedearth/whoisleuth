@@ -69,13 +69,17 @@ start an investigation; collection begins when you request it in the Console.
 
 ### Production build on the Express host
 
-Build and run the portable Express host with:
+For a local production-style Console using the ignored `.env.local` above,
+build and run the portable Express host with:
 
 ```bash
-npm start
+npm run build
+node --env-file=.env.local server.mts
 ```
 
-`npm start` builds the frontend before starting Express.
+For a deployed host that injects settings into the process environment, use
+`npm start`; it builds the frontend before starting Express and does not load
+`.env.local`. Missing `SITE_PASSWORD` continues to deny Console sign-in.
 
 The application reads deployment settings from the environment. Never commit
 passwords, session secrets, provider credentials or production configuration.

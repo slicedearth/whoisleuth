@@ -8,8 +8,10 @@ import {
   MAX_WATCHLIST_CHANGES_PER_EVENT,
   normalizeWatchlistEntry,
   type CompactWatchlistRecord,
-  type WatchlistEntry,
+  type WatchlistEntry as LocalWatchlistEntry,
 } from '../workspace/watchlist-history.mts';
+// Hosted collection does not acquire browser-local analyst metadata.
+type WatchlistEntry = Omit<LocalWatchlistEntry, 'domainMetadata'>;
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   MAX_SCHEDULED_MONITOR_STORE_BYTES,
@@ -200,18 +202,25 @@ function sourceFingerprint(sources: ScheduledRunSource[]): string {
   return JSON.stringify(sources.map(({ domain }) => domain));
 }
 
-function normalizeScheduledEntry(value: unknown): WatchlistEntry | null {
+export function projectHostedCompactRecord<T extends Record<string, unknown>>(record: T): T {
+  // This fixed hosted whitelist is independent of the browser-local schema.
+  const fields = ['domain', 'scanDepth', 'webCollectionQuality', 'availability', 'registrarName', 'nameservers', 'createdDate', 'expiryDate', 'privacyProtected', 'hasMx', 'hasSpf', 'hasDmarc', 'activityStatus', 'pageTitle', 'httpSummaryVersion', 'httpEvidenceStatus', 'httpFinalOrigin', 'httpResponseStatus', 'httpTransportSecurity', 'httpRedirectCount', 'httpCrossOriginRedirect', 'httpHttpsDowngrade', 'httpContentType', 'httpSecurityHeaders', 'faviconHash', 'faviconMatch', 'faviconNearMatch', 'hasPasswordField', 'phishingLanguageMatch', 'reusesOfficialAssets', 'riskModelVersion', 'riskScore', 'mutationTypes'] as const;
+  return Object.fromEntries(fields.filter(field => Object.hasOwn(record, field)).map(field => [field, record[field]])) as T;
+}
+
+export function projectHostedWatchlistEntry(value: unknown): WatchlistEntry | null {
   const input = plainRecord(value);
   if (!input) return null;
   const normalized = normalizeWatchlistEntry(input);
-  const results = normalized.results.slice(0, MAX_SCHEDULED_DOMAINS);
+  if (normalized.membershipRecovery) return null;
+  const results = normalized.results.slice(0, MAX_SCHEDULED_DOMAINS).map(projectHostedCompactRecord);
   if (results.length === 0) return null;
   const domains = new Set(results.map((record) => record.domain));
   const baseline = normalized.baseline
     .filter((record) => domains.has(record.domain))
-    .slice(0, MAX_SCHEDULED_DOMAINS);
+    .slice(0, MAX_SCHEDULED_DOMAINS).map(projectHostedCompactRecord);
   const history = normalized.history.slice(-MAX_SCHEDULED_HISTORY_EVENTS).map((event) => {
-    const relevantChanges = event.changes.filter((change) => domains.has(change.domain));
+    const relevantChanges = event.changes.filter((change) => domains.has(change.domain) && change.field !== 'hasExternalPasswordForm');
     const changes = relevantChanges.slice(0, MAX_SCHEDULED_CHANGES_PER_EVENT);
     const newlyOmitted = Math.max(0, relevantChanges.length - changes.length);
     const omittedChanges = Math.min(
@@ -238,6 +247,8 @@ function normalizeScheduledEntry(value: unknown): WatchlistEntry | null {
     history,
   };
 }
+
+const normalizeScheduledEntry = projectHostedWatchlistEntry;
 
 function normalizeStoredWatchlist(value: unknown): ScheduledWatchlist | null {
   const record = plainRecord(value);
@@ -305,7 +316,7 @@ function normalizeActiveRun(
   if (cursor === null) return null;
 
   const results = compactWatchlistResults(record.results).slice(0, cursor).map((result) => ({
-    ...result,
+    ...projectHostedCompactRecord(result),
     mutationTypes: [],
   }));
   if (results.length !== cursor) return null;

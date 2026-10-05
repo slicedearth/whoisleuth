@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { CASE_PRACTICE_SCENARIOS, type CasePracticeScenario } from '$lib/analysis/case-practice.ts';
+  import { CASE_PRACTICE_SCENARIOS, type CasePracticeScenario } from '#lib/analysis/case-practice.ts';
   import CasePracticeSession from './CasePracticeSession.svelte';
   let { onreset }: { onreset: () => void } = $props();
   let active = $state<CasePracticeScenario>('credential-form');

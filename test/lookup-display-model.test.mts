@@ -8,6 +8,7 @@ import {
   buildLookupRegistryDisplay,
 } from '../frontend/src/lib/analysis/lookup-display-model.ts';
 import { registrationTraceState } from '../frontend/src/lib/analysis/lookup-registry-display.ts';
+import { buildLookupPageProfileDisplay } from '../frontend/src/lib/analysis/lookup-page-profile-display.ts';
 import {
   deliveryMetadataDisplay,
   publicationMetadataDisplay,
@@ -26,6 +27,7 @@ import {
   records,
   show,
   stringList,
+  type JsonRecord,
 } from '../frontend/src/lib/analysis/lookup-display-shared.ts';
 
 test('keeps generic Lookup display fallbacks bounded and makes joined-value omission visible', () => {
@@ -219,6 +221,38 @@ test('bounds page, technology, and posture presentation models', () => {
   assert.equal(page.securityPostureFindings[0]?.tone, 'neutral');
   assert.equal(page.observedNetworkSourceLabel, 'DNS A fallback');
   assert.equal(page.fingerprints[0]?.value, 'hash-1');
+});
+
+test('preserves admitted form ownership and uncertainty while withholding malformed attribution', () => {
+  const attribution = {
+    complete: true,
+    unassociatedInputs: 0,
+    forms: [{
+      index: 1,
+      categories: { password: 1, email: 0, username: 0, one_time_code: 0, payment: 0 },
+      destinations: [{ relationship: 'same_origin', origin: 'https://example.test' }],
+    }],
+  };
+  const display = (formAttribution: JsonRecord | undefined) => buildLookupPageProfileDisplay({
+    credentialSurfaceProfile: formAttribution === undefined ? {} : { formAttribution }, structuredDataIdentity: {},
+    technologyProfile: {}, browserLibraryProfile: {}, pageRoleProfile: {}, clientBehaviorProfile: {},
+  }).credentialSurface.formAttribution;
+  const before = structuredClone(attribution);
+  assert.deepEqual(display(attribution), attribution);
+  assert.deepEqual(attribution, before);
+
+  const partial = {
+    ...attribution, complete: false, unassociatedInputs: 1,
+    forms: [{ ...attribution.forms[0], destinations: [{ relationship: 'unknown', origin: null }] }],
+  };
+  assert.deepEqual(display(partial), partial);
+  assert.equal(display({ ...partial, complete: true }), null);
+  assert.equal(display({
+    ...attribution,
+    forms: [{ ...attribution.forms[0], destinations: [{ relationship: 'same_origin', origin: 'https://example.test/private-path' }] }],
+  }), null);
+  assert.equal(display({ ...attribution, rawInput: 'private-input-sentinel' }), null);
+  assert.equal(display(undefined), null);
 });
 
 test('projects v10 resource-only delivery evidence as an embedded dependency only', () => {

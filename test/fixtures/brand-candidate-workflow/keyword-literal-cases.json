@@ -1,0 +1,12 @@
+[
+  { "case": "exact literal", "positive": ["launch"], "negative": [], "hostname": "launch.example", "expected": true },
+  { "case": "case normalisation", "positive": ["LAUNCH"], "negative": [], "hostname": "LAUNCH.example", "expected": true },
+  { "case": "substring has no token boundary", "positive": ["launch"], "negative": [], "hostname": "prelaunch.example", "expected": true },
+  { "case": "typo is not expanded", "positive": ["launch"], "negative": [], "hostname": "launc-h.example", "expected": false },
+  { "case": "confusable is not expanded", "positive": ["launch"], "negative": [], "hostname": "lаunch.example", "expected": false },
+  { "case": "Unicode term is not expanded", "positive": ["例え."], "negative": [], "hostname": "例え.example", "expected": false },
+  { "case": "canonical punycode literal", "positive": ["r8j"], "negative": [], "hostname": "例え.example", "expected": true },
+  { "case": "negative takes precedence", "positive": ["launch"], "negative": ["excluded"], "hostname": "excluded-launch.example", "expected": false },
+  { "case": "negative is not regex", "positive": ["launch"], "negative": [".*x"], "hostname": "launch.example", "expected": true },
+  { "case": "positive is not regex", "positive": [".*x"], "negative": [], "hostname": "launch.example", "expected": false }
+]

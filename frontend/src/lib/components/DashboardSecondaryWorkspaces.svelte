@@ -1,21 +1,21 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import BrowserLookupHandoff from '$lib/components/BrowserLookupHandoff.svelte';
-  import SavedWorkSearch from '$lib/components/SavedWorkSearch.svelte';
-  import InvestigationTemplateManager from '$lib/components/InvestigationTemplateManager.svelte';
-  import WorkspaceArchive from '$lib/components/WorkspaceArchive.svelte';
-  import InvestigationPackage from '$lib/components/InvestigationPackage.svelte';
+  import BrowserLookupHandoff from '#lib/components/BrowserLookupHandoff.svelte';
+  import SavedWorkSearch from '#lib/components/SavedWorkSearch.svelte';
+  import InvestigationTemplateManager from '#lib/components/InvestigationTemplateManager.svelte';
+  import WorkspaceArchive from '#lib/components/WorkspaceArchive.svelte';
+  import InvestigationPackage from '#lib/components/InvestigationPackage.svelte';
   import {
     investigationRecipes,
     startInvestigationGuide,
     type InvestigationRecipeId,
-  } from '$lib/investigation-guide';
-  import { loadInvestigationTemplates, type InvestigationTemplate } from '$lib/investigation-templates';
-  import { publicResources } from '$lib/workspaces';
+  } from '#lib/investigation-guide.ts';
+  import { loadInvestigationTemplates, type InvestigationTemplate } from '#lib/investigation-templates.ts';
+  import { publicResources } from '#lib/workspaces.ts';
   import {
     captureBrowserSupportDiagnostics,
     formatBrowserSupportDiagnostics,
-  } from '$lib/browser-support-diagnostics';
+  } from '#lib/browser-support-diagnostics.ts';
 
   let { onsummarychange, mode = 'all' }: {
     onsummarychange?: (message?: string) => void | Promise<void>;

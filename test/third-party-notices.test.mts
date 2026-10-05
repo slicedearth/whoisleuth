@@ -155,32 +155,50 @@ describe('third-party production dependency notices', () => {
     assert.equal(collectProductionPackages(lockfile).some(item => item.name === 'dev-only'), false);
   });
 
-  test('derives browser notices from a real build and replaces the copied production base', async () => {
+  test('requires a locked workspace owner for nested dependency identities', () => {
+    const base = fixtureLockfile();
+    const lockfile = { ...base, packages: { ...base.packages,
+      'frontend/node_modules/workspace-only': { version: '1.0.0', dev: true, license: 'MIT' },
+    } };
+    const options = { bundledDependencies: [{ name: 'workspace-only', version: '1.0.0' }] };
+    assert.equal(collectProductionPackages(lockfile, options).find(item => item.name === 'workspace-only')?.installPath,
+      'frontend/node_modules/workspace-only');
+    const { frontend: _workspace, ...withoutWorkspace } = lockfile.packages;
+    assert.throws(() => collectProductionPackages({ ...lockfile, packages: withoutWorkspace }, options), /locked workspace owner/u);
+    assert.throws(() => collectProductionPackages(lockfile, { bundledDependencies: [{ name: 'workspace-only', version: '2.0.0' }] }), /absent from the locked inventory/u);
+  });
+
+  for (const workspace of ['', 'frontend']) test(`derives browser and worker notices from a real ${workspace ? 'workspace' : 'root'} build`, async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-browser-notices-'));
     try {
+      const sourceRoot = path.join(directory, workspace);
+      const dependencyPrefix = workspace ? `${workspace}/` : '';
+      await mkdir(sourceRoot, { recursive: true });
       await mkdir(path.join(directory, 'public'), { recursive: true });
       await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: 'notice-fixture', version: '1.0.0', private: true, type: 'module' }));
       const lockfile = fixtureLockfile();
       await writeFile(path.join(directory, 'package-lock.json'), JSON.stringify({ ...lockfile, packages: { ...lockfile.packages,
         'node_modules/unused-dev': { version: '1.0.0', dev: true, license: 'MIT' },
-        'node_modules/worker-only': { version: '1.0.0', dev: true, license: 'MIT' },
+        [`${dependencyPrefix}node_modules/dev-only`]: { version: '4.0.0', dev: true, license: 'MIT' },
+        [`${dependencyPrefix}node_modules/worker-only`]: { version: '1.0.0', dev: true, license: 'MIT' },
       } }));
-      for (const name of ['alpha', 'beta', 'shared', 'dev-only']) await writeFixturePackage(directory, name, `${name} licence text`);
-      await writeFile(path.join(directory, 'node_modules/dev-only/package.json'), JSON.stringify({ name: 'dev-only', version: '4.0.0', license: 'MIT', type: 'module', exports: './index.js' }));
-      await writeFile(path.join(directory, 'node_modules/dev-only/index.js'), 'export const visible = "retained-browser-value";');
-      await writeFixturePackage(directory, 'worker-only', 'worker-only licence text');
-      await writeFile(path.join(directory, 'node_modules/worker-only/package.json'), JSON.stringify({ name: 'worker-only', version: '1.0.0', license: 'MIT', type: 'module', exports: './index.js' }));
-      await writeFile(path.join(directory, 'node_modules/worker-only/index.js'), 'export const message = "retained-worker-value";');
-      await mkdir(path.join(directory, 'src'));
-      await writeFile(path.join(directory, 'src/entry.js'), 'export { visible } from "dev-only"; export function start() { return new Worker(new URL("./index.worker.js", import.meta.url), { type: "module" }); }');
-      await writeFile(path.join(directory, 'src/index.worker.js'), 'import { message } from "worker-only"; self.postMessage(message);');
+      for (const name of ['alpha', 'beta', 'shared']) await writeFixturePackage(directory, name, `${name} licence text`);
+      await writeFixturePackage(sourceRoot, 'dev-only', 'dev-only licence text');
+      await writeFile(path.join(sourceRoot, 'node_modules/dev-only/package.json'), JSON.stringify({ name: 'dev-only', version: '4.0.0', license: 'MIT', type: 'module', exports: './index.js' }));
+      await writeFile(path.join(sourceRoot, 'node_modules/dev-only/index.js'), 'export const visible = "retained-browser-value";');
+      await writeFixturePackage(sourceRoot, 'worker-only', 'worker-only licence text');
+      await writeFile(path.join(sourceRoot, 'node_modules/worker-only/package.json'), JSON.stringify({ name: 'worker-only', version: '1.0.0', license: 'MIT', type: 'module', exports: './index.js' }));
+      await writeFile(path.join(sourceRoot, 'node_modules/worker-only/index.js'), 'export const message = "retained-worker-value";');
+      await mkdir(path.join(sourceRoot, 'src'));
+      await writeFile(path.join(sourceRoot, 'src/entry.js'), 'export { visible } from "dev-only"; export function start() { return new Worker(new URL("./index.worker.js", import.meta.url), { type: "module" }); }');
+      await writeFile(path.join(sourceRoot, 'src/index.worker.js'), 'import { message } from "worker-only"; self.postMessage(message);');
       await writeFile(path.join(directory, 'public/third-party-notices.txt'), 'copied production base');
-      const workerBuild = frontendWorkerBuild(directory);
+      const workerBuild = frontendWorkerBuild(sourceRoot);
       await build({
-        configFile: false, root: directory, logLevel: 'silent', plugins: [workerBuild.client, browserThirdPartyNoticesPlugin(directory, workerBuild.renderedWorkerModules)],
+        configFile: false, root: sourceRoot, publicDir: path.join(directory, 'public'), logLevel: 'silent', plugins: [workerBuild.client, browserThirdPartyNoticesPlugin(directory, workerBuild.renderedWorkerModules)],
         worker: { plugins: workerBuild.workerPlugins },
-        build: { outDir: 'dist', assetsDir: '_app/immutable/workers', manifest: true, minify: false,
-          lib: { entry: path.join(directory, 'src/entry.js'), formats: ['es'] } },
+        build: { outDir: path.join(directory, 'dist'), assetsDir: '_app/immutable/workers', manifest: true, minify: false,
+          lib: { entry: path.join(sourceRoot, 'src/entry.js'), formats: ['es'] } },
       });
       const notice = await readFile(path.join(directory, 'dist/third-party-notices.txt'), 'utf8');
       assert.match(notice, /^dev-only@4\.0\.0\nRelationship: bundled browser dependency/mu);

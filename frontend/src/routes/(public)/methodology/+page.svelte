@@ -1,7 +1,7 @@
 <script lang="ts">
-  import PublicReferenceDocument from '$lib/components/PublicReferenceDocument.svelte';
-  import PublicSeo from '$lib/components/PublicSeo.svelte';
-  import { PUBLIC_METHODOLOGY } from '$lib/generated/public-methodology';
+  import PublicReferenceDocument from '#lib/components/PublicReferenceDocument.svelte';
+  import PublicSeo from '#lib/components/PublicSeo.svelte';
+  import { PUBLIC_METHODOLOGY } from '#lib/generated/public-methodology.ts';
 
   const token = (value: string) => value.replaceAll('_', ' ');
   const pageSections = PUBLIC_METHODOLOGY.topics.map((topic) => ({

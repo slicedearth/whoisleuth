@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, holdBrowserLocalTransaction, holdNextBrowserLocalCommitAcknowledgement, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { BASE_URL } from './constants.ts';
 import type { Page } from '@playwright/test';
 
@@ -112,6 +112,142 @@ async function mockRdapNameserverSearch(page: Page) {
 test.beforeEach(async ({ page }) => {
   await page.goto('/discover');
 });
+
+for (const contextChange of ['none', 'leave', 'selection', 'mode'] as const) {
+  test(`candidate retention preserves its destination after ${contextChange} context change`, { tag: '@timing-sensitive' }, async ({ page }) => {
+    const profile = { id: 'retention-brand', name: 'Retention Brand', officialDomains: ['owned.example'],
+      createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
+    await migrateLegacyBrowserData(page, {
+      'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile]),
+      'whois-rdap-active-brand-profile-v1': profile.id,
+    });
+    await mockCtSearch(page, structuredResponse);
+    await runCtSearch(page);
+    const checkbox = page.locator('.candidate input[type="checkbox"]').first();
+    await checkbox.check();
+    const selectedDomain = await page.locator('.candidate').filter({ has: page.locator('input:checked') }).locator('strong').innerText();
+    const retain = page.getByRole('button', { name: 'Retain selected for Brand review', exact: true });
+    const release = await holdBrowserLocalTransaction(page);
+    try {
+      await retain.click();
+      await expect(retain).toBeDisabled();
+      if (contextChange === 'leave') {
+        await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+        await expect(page).toHaveURL(/\/dashboard$/u);
+      } else if (contextChange === 'selection') await checkbox.uncheck();
+      else if (contextChange === 'mode') await page.getByRole('tab', { name: 'Lookalikes' }).click();
+    } finally { await release(); }
+    await expect.poll(async () => {
+      const stored = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+      return stored.records.find(row => row.value.id === profile.id)?.value.candidateObservations.map(row => row.domain);
+    }).toEqual([selectedDomain]);
+    if (contextChange === 'none') await expect(page).toHaveURL(/\/brands#brand-candidate-review$/u);
+    else if (contextChange === 'leave') await expect(page).toHaveURL(/\/dashboard$/u);
+    else if (contextChange === 'selection') {
+      await expect(page.locator('.status')).toContainText('1 candidate domains retained for Brand review');
+      await expect(page).toHaveURL(/\/discover$/u);
+      await expect(checkbox).not.toBeChecked();
+    } else {
+      await expect(page).toHaveURL(/\/discover$/u);
+      await expect(page.getByRole('tab', { name: 'Lookalikes' })).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByText(/candidate domains retained for Brand review/u)).toHaveCount(0);
+    }
+  });
+}
+
+for (const source of ['certificates', 'nameservers'] as const) {
+  for (const resultsFirst of [false, true]) {
+    test(`earlier ${source} retention cannot displace a successor search whose results finish ${resultsFirst ? 'before' : 'after'} acknowledgement`, { tag: '@timing-sensitive' }, async ({ page }) => {
+      await page.setViewportSize(resultsFirst ? { width: 390, height: 844 } : { width: 1280, height: 720 });
+      await useTheme(page, resultsFirst ? 'light' : 'dark');
+      const profile = { id: 'search-retention-brand', name: 'Search retention', officialDomains: ['owned.example'],
+        createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
+      await migrateLegacyBrowserData(page, {
+        'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile]),
+        'whois-rdap-active-brand-profile-v1': profile.id,
+      });
+      if (source === 'certificates') {
+        await mockCtSearch(page, initialBaselineResponse);
+        await runCtSearch(page);
+      } else {
+        await mockRdapNameserverSearch(page);
+        await page.getByRole('tab', { name: 'Nameservers' }).click();
+        await page.getByRole('textbox', { name: 'Nameserver hostname' }).fill('ns1.infrastructure.example');
+        await page.getByRole('textbox', { name: 'Registry suffix' }).fill('example');
+        await page.getByRole('button', { name: 'Search registry' }).click();
+      }
+      const candidate = page.locator('.candidate').first();
+      await candidate.locator('input[type="checkbox"]').check();
+      const submittedDomain = await candidate.locator('strong').innerText();
+      const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+      const acknowledgement = await holdNextBrowserLocalCommitAcknowledgement(page, 'brand_profiles');
+      const retain = page.getByRole('button', { name: 'Retain selected for Brand review', exact: true });
+      const endpoint = source === 'certificates' ? '/api/ct-search' : '/api/rdap-nameserver-search';
+      const failedRequests: string[] = [];
+      page.on('requestfailed', request => {
+        if (new URL(request.url()).pathname === endpoint) failedRequests.push(request.failure()?.errorText ?? 'failed');
+      });
+      let releaseResponse = () => {};
+      const responseHeld = new Promise<void>(resolve => { releaseResponse = resolve; });
+      const submittedSearches: string[] = [];
+      const responseErrors: string[] = [];
+      await page.route(`**${endpoint}?*`, async route => {
+        submittedSearches.push(route.request().url());
+        await responseHeld;
+        const response = source === 'certificates' ? { ...otherOnlyResponse, keyword: 'successor' } : {
+          schema: 'whoisleuth.rdap-nameserver-search', version: 1, state: 'success',
+          nameserver: 'ns2.infrastructure.example', registryScope: 'example', lowerBound: true,
+          observedAt: '2026-08-01T00:00:00.000Z',
+          source: { endpoint: 'https://registry.example/rdap/domains?nsLdhName=ns2.infrastructure.example' },
+          domains: [{ domain: 'successor.example', unicodeDomain: null, statuses: ['active'], nameserverObserved: true, partial: false }],
+          truncated: false, omittedInvalid: 0, limitations: [],
+        };
+        try { await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) }); }
+        catch (cause) { responseErrors.push(String(cause)); }
+      });
+      try {
+        await retain.click();
+        await acknowledgement.wait();
+        await expect(retain).toBeDisabled();
+        // Keep the same mode and old candidate/selection identities while the
+        // admitted successor owns a pending HTTP request.
+        await page.getByRole('textbox', { name: source === 'certificates' ? 'Certificate-log keyword' : 'Nameserver hostname' })
+          .fill(source === 'certificates' ? 'successor' : 'ns2.infrastructure.example');
+        await page.getByRole('button', { name: source === 'certificates' ? 'Search certificates' : 'Search registry' }).click();
+        await expect.poll(() => submittedSearches.length).toBe(1);
+        await expect(page.getByRole('button', { name: 'Searching…', exact: true })).toBeDisabled();
+        const expectSuccessor = async () => {
+          await expect(page.locator('.candidate strong')).toHaveText([source === 'certificates' ? 'other.invalid' : 'successor.example']);
+          await expect(page.getByRole('button', { name: 'Searching…', exact: true })).toHaveCount(0);
+        };
+        if (resultsFirst) {
+          releaseResponse();
+          await expectSuccessor();
+          await acknowledgement.release();
+        } else {
+          await acknowledgement.release();
+          await expect(retain).toBeEnabled();
+          await expect(page).toHaveURL(/\/discover$/u);
+          await expect(page.locator('.status')).toContainText('Searching');
+          releaseResponse();
+          await expectSuccessor();
+        }
+        // Re-selecting is local intent only; enabled retention also proves the
+        // earlier continuation's finally block completed before assertions.
+        await page.locator('.candidate input[type="checkbox"]').first().check();
+        await expect(retain).toBeEnabled();
+        await expect(page).toHaveURL(/\/discover$/u);
+        await expect(page.locator('.status')).not.toContainText('retained for Brand review');
+        const stored = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+        expect(stored.manifest.revision).toBe(before.manifest.revision + 1);
+        expect(stored.records.find(row => row.value.id === profile.id)?.value.candidateObservations.map(row => row.domain)).toEqual([submittedDomain]);
+        expect(failedRequests).toEqual([]);
+        expect(responseErrors).toEqual([]);
+        await expectNoHorizontalOverflow(page);
+      } finally { releaseResponse(); await acknowledgement.release(); }
+    });
+  }
+}
 
 test('certificate search exposes and enforces the shared bounded query contract', async ({ page, request }) => {
   await page.getByRole('tab', { name: 'Certificates' }).click();

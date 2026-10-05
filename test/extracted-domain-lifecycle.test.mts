@@ -6,7 +6,7 @@ import { describe, test } from 'node:test';
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import { parseSerializedHandoff } from '../packages/investigation/candidate-handoff.mts';
 import { parseCacaoInvestigationPlaybook, INVESTIGATION_CACAO_PROFILE_VERSION } from '../packages/interchange/investigation-playbook-interchange.mts';
-import { validateStaticPagePatternPack } from '../packages/interchange/static-page-pattern-packs.mts';
+import { STATIC_PAGE_PATTERN_PACK_VERSION, validateStaticPagePatternPack } from '../packages/interchange/static-page-pattern-packs.mts';
 import {
   parseWebCaptureManifest,
   parseWebCaptureSummary,
@@ -81,7 +81,10 @@ describe('extracted domain lifecycle contracts', () => {
     assert.throws(() => parseWebCaptureManifest({ ...manifest, schemaVersion: 1 }), /schema version 3/u);
     assert.throws(() => parseWebCaptureManifest({ ...manifest, schemaVersion: 4 }), /schema version 3/u);
     const pattern = await fixture(`${FIXTURE_ROOT}static-page-pattern-pack-v2.json`) as Record<string, unknown>;
-    assert.throws(() => validateStaticPagePatternPack({ ...pattern, version: 3 }), /requires schema 2/u);
+    assert.throws(
+      () => validateStaticPagePatternPack({ ...pattern, version: STATIC_PAGE_PATTERN_PACK_VERSION + 1 }),
+      { message: `This page-pattern pack requires schema ${STATIC_PAGE_PATTERN_PACK_VERSION}.` },
+    );
   });
 
   test('keeps internal lifecycle identities out of formats without a public schema member', async () => {

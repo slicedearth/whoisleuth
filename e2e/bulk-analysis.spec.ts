@@ -16,6 +16,115 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/bulk');
 });
 
+for (const collected of [true, false]) {
+  test(`interrupted profile restoration preserves Bulk queue edits and ${collected ? 'collected rows' : 'an input-only draft'} without reusing unverified trust`, { tag: '@timing-sensitive' }, async ({ page }) => {
+    await page.setViewportSize(collected ? { width: 1280, height: 720 } : { width: 390, height: 844 });
+    await useTheme(page, collected ? 'dark' : 'light');
+    const requests: string[] = [];
+    await page.route('**/api/lookup?*', async route => {
+      const domain = new URL(route.request().url()).searchParams.get('q')!;
+      requests.push(domain);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        availability: { applicable: true, domain, state: 'registered', confidence: 'high', registrarName: 'Retained fixture registrar' },
+        diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      }) });
+    });
+    if (collected) await runBulkScan(page, ['retained-navigation.example']);
+    else {
+      await expect(page.getByText('Loading saved Brand Profile context.', { exact: false })).toHaveCount(0);
+      await page.locator('#domains').fill('retained-navigation.example');
+    }
+    const nav = page.locator('#console-navigation');
+    const navigate = async (destination: 'Dashboard' | 'Bulk') => {
+      const toggle = page.getByRole('button', { name: 'Toggle navigation', exact: true });
+      if (await toggle.isVisible() && await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
+      await nav.getByRole('link', { name: destination, exact: true }).click();
+    };
+    await navigate('Dashboard');
+    await expect(page).toHaveURL('/dashboard');
+    let expected = { input: 'retained-navigation.example', mode: 'fast', pacing: 'standard' };
+    for (const draft of [
+      { input: 'next-navigation.example', mode: 'deep', pacing: 'gentle' },
+      { input: '', mode: 'fast', pacing: 'balanced' },
+    ]) {
+      const release = await holdBrowserLocalTransaction(page);
+      try {
+        await navigate('Bulk');
+        await expect(page).toHaveURL('/bulk');
+        await expect(page.locator('#domains')).toHaveValue(expected.input);
+        await expect(page.getByRole('combobox', { name: 'Scan mode', exact: true })).toHaveValue(expected.mode);
+        await expect(page.getByRole('combobox', { name: 'Request pacing', exact: true })).toHaveValue(expected.pacing);
+        await expect(page.locator('#results')).toHaveCount(0);
+        await expect(page.getByText('Loading saved Brand Profile context.', { exact: false })).toBeVisible();
+        await page.locator('#domains').fill(draft.input);
+        await page.getByRole('combobox', { name: 'Scan mode', exact: true }).selectOption(draft.mode);
+        await page.getByRole('combobox', { name: 'Request pacing', exact: true }).selectOption(draft.pacing);
+        await expect(page.getByRole('button', { name: /^Scan(?: \d+)? domains?$/u })).toBeDisabled();
+        await navigate('Dashboard');
+        await expect(page).toHaveURL('/dashboard');
+      } finally { await release(); }
+      expected = draft;
+    }
+    await failBrowserLocalCollectionReads(page, 'brand_profiles');
+    await navigate('Bulk');
+    await expect(page.getByText('Brand Profile context is unavailable.', { exact: false })).toBeVisible();
+    await expect(page.locator('#domains')).toHaveValue(expected.input);
+    await expect(page.getByRole('combobox', { name: 'Scan mode', exact: true })).toHaveValue(expected.mode);
+    await expect(page.getByRole('combobox', { name: 'Request pacing', exact: true })).toHaveValue(expected.pacing);
+    if (collected) {
+      await expect(page.locator('#results')).toContainText('retained-navigation.example');
+      await expect(page.locator('.status')).toContainText('Withheld profile-derived trust');
+      await expect(page.getByRole('progressbar', { name: 'Bulk scan progress' })).toHaveAttribute('aria-valuenow', '1');
+    } else await expect(page.locator('#results')).toHaveCount(0);
+    expect(requests).toEqual(collected ? ['retained-navigation.example'] : []);
+    // An explicit new collection must supersede the old restoration snapshot.
+    await page.locator('#domains').fill('replacement-navigation.example');
+    await page.getByRole('button', { name: 'Scan 1 domain', exact: true }).click();
+    await expect(page.locator('.status')).toContainText('Completed 1 of 1 lookups. Brand Profile context was unavailable');
+    await navigate('Dashboard');
+    await expect(page).toHaveURL('/dashboard');
+    await navigate('Bulk');
+    await expect(page.locator('#results')).toContainText('replacement-navigation.example');
+    await expect(page.locator('#results')).not.toContainText('retained-navigation.example');
+    expect(requests).toEqual([...(collected ? ['retained-navigation.example'] : []), 'replacement-navigation.example']);
+    await expectNoHorizontalOverflow(page);
+  });
+}
+
+test('single-row Monitor saves preserve another domain and its baseline when a name is reused', async ({ page }) => {
+  const requests: string[] = [];
+  await page.route('**/api/lookup?*', async route => {
+    const domain = new URL(route.request().url()).searchParams.get('q')!;
+    requests.push(domain);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      availability: { applicable: true, domain, state: 'registered', confidence: 'high', registrarName: 'Fixture registrar' },
+      diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+    }) });
+  });
+  await runBulkScan(page, ['first-review.example', 'second-review.example']);
+  await selectBulkResultView(page, 'Review');
+  const cockpit = page.getByRole('region', { name: 'Review one result' });
+  await expect(cockpit.getByRole('heading', { name: 'first-review.example', exact: true })).toBeVisible();
+  const name = cockpit.getByLabel('Monitor list for the current row');
+  const save = cockpit.getByRole('button', { name: 'Save current to Monitor' });
+  await name.fill('Shared review');
+  await save.click();
+  await expect(cockpit.getByRole('status')).toContainText('Saved first-review.example to Shared review');
+  const before = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
+  expect(before.records).toHaveLength(1);
+  expect(before.records[0]!.value.results.map((row: { domain: string }) => row.domain)).toEqual(['first-review.example']);
+  expect(before.records[0]!.value.baseline.map((row: { domain: string }) => row.domain)).toEqual(['first-review.example']);
+  await cockpit.getByRole('button', { name: 'Next unresolved' }).click();
+  await expect(cockpit.getByRole('heading', { name: 'second-review.example', exact: true })).toBeVisible();
+  await name.fill('shared REVIEW');
+  await save.click();
+  await expect(cockpit.getByRole('status')).toContainText('That name belongs to a different or multi-domain watchlist');
+  expect(await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 })).toEqual(before);
+  await page.reload();
+  expect(await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 })).toEqual(before);
+  expect(requests).toEqual(['first-review.example', 'second-review.example']);
+});
+
 test('creating selected Cases appends current Bulk evidence to the existing incident', async ({ page }) => {
   const record = createCase({ domain: 'existing-incident.example' }, '2026-08-01T00:00:00.000Z');
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [record] }) });
@@ -930,8 +1039,9 @@ test('a malformed successful response remains an explicit failure in exports and
 
   await page.getByLabel('Watchlist name').fill('Invalid response audit');
   await page.getByRole('button', { name: 'Save to Monitor' }).click();
+  await page.getByRole('region', { name: 'Review Monitor membership' }).getByRole('button', { name: 'Confirm snapshot replacement', exact: true }).click();
   await expect(page.locator('.save-watchlist').getByRole('status')).toHaveText(
-    'Saved 1 result to Invalid response audit.',
+    'Saved 1 explicitly reviewed result to Invalid response audit.',
     { timeout: 10_000 },
   );
   const retained = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });

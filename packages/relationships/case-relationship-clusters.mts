@@ -7,6 +7,7 @@ import type {
   CaseRelationshipMember,
   CaseRelationshipSummary,
 } from './case-relationships.mts';
+import { caseRelationshipGroupId } from './case-relationships.mts';
 import {
   classifyCommonInfrastructureAddress,
   type CommonInfrastructureMatch,
@@ -105,7 +106,7 @@ function clusterId(caseIds: readonly string[], groupKeys: readonly string[]): st
 }
 
 function groupKey(group: CaseRelationshipGroup): string {
-  return `${group.type}:${group.value}`;
+  return caseRelationshipGroupId(group);
 }
 
 function validTimestamp(value: unknown): string | null {

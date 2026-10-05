@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import {
     buildCampaignTemporalExport,
     type CampaignTemporalLayer,
     type CampaignTemporalReview,
-  } from '$lib/analysis/campaign-temporal-review.ts';
-  import type { CampaignRecord } from '$lib/campaigns';
+  } from '#lib/analysis/campaign-temporal-review.ts';
+  import type { CampaignRecord } from '#lib/campaigns.ts';
 
   let { campaign, review, onmessage }:{
     campaign: CampaignRecord;
@@ -72,6 +72,11 @@
             <div class="event-head"><strong>{event.domain}</strong><span>{labelFor(event.layer)}</span></div>
             <p>{formatDate(event.firstObservedAt)}{#if event.lastObservedAt !== event.firstObservedAt} – {formatDate(event.lastObservedAt)}{/if} · {event.observationCount} retained observation{event.observationCount === 1 ? '' : 's'}</p>
             <small>{event.sources.join(', ')} · {event.completeness}{event.truncated ? ' · truncated' : ''}</small>
+            {#if event.limitations.length}
+              <details><summary>Evidence limitations</summary>
+                {#each event.limitations as limitation}<p>{limitation}</p>{/each}
+              </details>
+            {/if}
           </div>
         </li>
       {/each}

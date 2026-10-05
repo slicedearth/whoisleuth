@@ -8,8 +8,8 @@ import {
   SCHEDULED_MONITOR_SCHEMA,
   SCHEDULED_MONITOR_SCHEMA_VERSION,
   SCHEDULED_WATCHLIST_STATUSES,
+  projectHostedWatchlistEntry,
 } from './analysis/scheduled-monitor-model.ts';
-import { normalizeWatchlistEntry } from './analysis/watchlist-history.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../packages/evidence/observation.mts';
 import { recordOrNull } from '../../../lib/json-record.mts';
 import type { WatchlistEntry } from './watchlists.ts';
@@ -32,7 +32,7 @@ export type ScheduledWatchlist = {
   status: ScheduledWatchlistStatus;
   lastError: string | null;
   prunedHistoryEvents: number;
-  entry: WatchlistEntry;
+  entry: Omit<WatchlistEntry, 'domainMetadata'>;
   progress: { completed: number; total: number } | null;
 };
 export type ScheduledMonitoringCapacity = {
@@ -147,8 +147,8 @@ function normalizeScheduledWatchlist(value: unknown): ScheduledWatchlist | null 
 
   const entryInput = record(input.entry);
   if (!entryInput) return null;
-  const entry = normalizeWatchlistEntry(entryInput) as WatchlistEntry;
-  if (entry.results.length !== domainCount || entry.results.length === 0) return null;
+  const entry = projectHostedWatchlistEntry(entryInput);
+  if (!entry || entry.results.length !== domainCount || entry.results.length === 0) return null;
   const lastError = input.lastError === null ? null : boundedText(input.lastError, 300);
   if (input.lastError !== null && lastError === null) return null;
   const nextRunAt = timestamp(input.nextRunAt);
@@ -311,12 +311,15 @@ export async function mutateScheduledMonitoring(
   command: ScheduledMonitoringCommand,
   fetcher: typeof fetch = fetch,
 ): Promise<ScheduledMonitoringResponse> {
+  const projected = command.action !== 'delete' && command.entry ? projectHostedWatchlistEntry(command.entry) : null;
+  if (command.action !== 'delete' && command.entry && !projected) throw new TypeError('Hosted monitoring needs observed domains; candidate-only metadata cannot enable collection.');
+  const payload = command.action === 'delete' || !projected ? command : { ...command, entry: projected };
   const result = await requestJsonCapped(ENDPOINT, {
     method: 'POST',
     credentials: 'same-origin',
     cache: 'no-store',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(command),
+    body: JSON.stringify(payload),
   }, {
     fetchImpl: fetcher,
     maximumBytes: STANDARD_JSON_RESPONSE_BYTES,

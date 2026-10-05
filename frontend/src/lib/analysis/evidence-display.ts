@@ -62,6 +62,7 @@ const FIELD_LABELS = {
   reusesOfficialAssets: 'Official asset reuse',
   hasPasswordField: 'Password form',
   hasExternalFormAction: 'External form action',
+  hasExternalPasswordForm: 'Password form declares external destination',
   phishingLanguageMatch: 'Phishing language',
   profileContextState: 'Brand Profile context',
   profileContextLimitation: 'Profile-context limitation',
@@ -106,7 +107,7 @@ const FIELD_GROUPS: Array<{ name: string; fields: SnapshotField[] }> = [
   },
   {
     name: 'Impersonation',
-    fields: ['faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'phishingLanguageMatch', 'mutationTypes'],
+    fields: ['faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'hasExternalPasswordForm', 'phishingLanguageMatch', 'mutationTypes'],
   },
 ];
 

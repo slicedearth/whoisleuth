@@ -101,6 +101,19 @@ test('missing evidence fails safely instead of matching a negative finding', () 
   assert.equal(conditionMatchesCase({ field: 'pageTitle', operator: 'present', value: true }, record), false);
 });
 
+test('form-attribution rules require the new epoch and do not infer association from page-wide flags', () => {
+  const attributedRule = rule({ conditions: [{ field: 'hasExternalPasswordForm', operator: 'equals', value: true }] });
+  const oldStore = { version: 1, rules: [rule()] };
+  assert.equal(normalizeDetectionRuleStore(oldStore).rules.length, 1);
+  assert.throws(() => normalizeDetectionRuleStore({ version: 1, rules: [attributedRule] }), /schema 2/u);
+  assert.throws(() => mergeDetectionRules([], { schema: 'whoisleuth.detection-rules', version: 1, rules: [attributedRule] }), /schema 2/u);
+  const imported = mergeDetectionRules([], { schema: 'whoisleuth.detection-rules', version: 2, rules: [attributedRule] });
+  assert.equal(imported.added, 1);
+  assert.equal(evaluateDetectionRules(caseRecord(), imported.rules).matchedRules.length, 0);
+  const current = caseRecord({ evidenceHistory: [snapshot({ hasExternalPasswordForm: true })] });
+  assert.deepEqual(evaluateDetectionRules(current, imported.rules).matchedRules.map(item => item.id), ['rule-1']);
+});
+
 test('all and any matching, disabled rules, tags and score separation are explicit', () => {
   const rules = [
     rule(),
@@ -184,7 +197,7 @@ test('store recovery drops invalid, duplicate and excess records', () => {
 
 test('import validates schema and version and merges by stable id', () => {
   assert.throws(() => mergeDetectionRules([], { schema: 'other', rules: [] }), /not a WHOISleuth/);
-  assert.throws(() => mergeDetectionRules([], { schema: 'whoisleuth.detection-rules', version: 2, rules: [] }), /newer schema/);
+  assert.throws(() => mergeDetectionRules([], { schema: 'whoisleuth.detection-rules', version: 3, rules: [] }), /newer schema/);
   const result = mergeDetectionRules([rule()], { schema: 'whoisleuth.detection-rules', version: 1, rules: [rule({ name: 'Replacement' }), rule({ id: 'rule-2' }), { name: 'invalid' }] });
   assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 1, updated: 1, skipped: 1 });
   const replacement = result.rules.find((item) => item.id === 'rule-1');

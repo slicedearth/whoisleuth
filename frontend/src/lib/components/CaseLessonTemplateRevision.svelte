@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
-  import type { InvestigationTemplate } from '$lib/investigation-templates';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { InvestigationTemplate } from '#lib/investigation-templates.ts';
   let { record }: { record: CaseRecord } = $props();
   let selected = $state('');
   let templates = $state<InvestigationTemplate[]>([]);
@@ -19,7 +19,7 @@
     loading = true;
     loadState = 'loading';
     try {
-      const [{ default: component }, { loadInvestigationTemplates }] = await Promise.all([import('./InvestigationTemplateManager.svelte'), import('$lib/investigation-templates')]);
+      const [{ default: component }, { loadInvestigationTemplates }] = await Promise.all([import('./InvestigationTemplateManager.svelte'), import('#lib/investigation-templates.ts')]);
       const saved = await loadInvestigationTemplates();
       if (current !== lifetime) return;
       manager = component; templates = saved; loadState = 'ready';

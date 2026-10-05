@@ -38,6 +38,7 @@ type NormalizedRecords<T> = { records: T[]; truncated: boolean; discarded: numbe
 type DnsQueryResult<T> = NormalizedRecords<T> & { status: 'success' | 'not_found' | 'error'; error: string | null; detail: DnsQueryOutcome };
 type DnsResolver = (value: string) => Promise<unknown>;
 type DnsIntelligenceOptions = {
+  signal?: AbortSignal;
   resolvers?: Record<string, DnsResolver>;
   includeExtendedContext?: boolean;
   includeInheritedCaa?: boolean;
@@ -519,6 +520,7 @@ type CaaPolicyQuery = {
 };
 
 type EffectiveCaaOptions = {
+  signal?: AbortSignal;
   resolver?: DnsResolver;
   directResult?: DnsQueryResult<CaaRecord>;
   timeoutMs?: number;
@@ -528,6 +530,7 @@ type EffectiveCaaOptions = {
 };
 
 async function collectEffectiveCaaPolicy(domain: string, options: EffectiveCaaOptions = {}) {
+  options.signal?.throwIfAborted();
   const normalizedDomain = normalizeHostname(domain);
   const queryLimit = Math.max(
     1,
@@ -572,9 +575,11 @@ async function collectEffectiveCaaPolicy(domain: string, options: EffectiveCaaOp
   const queries: CaaPolicyQuery[] = [];
 
   for (const [index, owner] of owners.entries()) {
+    options.signal?.throwIfAborted();
     const result = index === 0 && options.directResult
       ? options.directResult
       : await query(() => resolver(owner), normalizeCaa, timeoutMs);
+    options.signal?.throwIfAborted();
     queries.push({
       owner,
       status: result.status,
@@ -701,6 +706,7 @@ async function collectEffectiveCaaPolicy(domain: string, options: EffectiveCaaOp
 }
 
 async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOptions = {}) {
+  options.signal?.throwIfAborted();
   const registrationDomain = options.registrationDomain ?? domain;
   if (options.registrationDomain !== undefined && canonicalRegistrableDomain(domain) !== registrationDomain) {
     throw new TypeError('DNS registration context must match the hostname being observed.');
@@ -711,7 +717,10 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
   const timeoutMs = options.timeoutMs || DNS_TIMEOUT_MS;
   const now = options.now || Date.now;
   const started = now();
-  const invoke = (name: string, fallback: DnsResolver, value = domain) => () => (resolvers[name] || fallback)(value);
+  const invoke = (name: string, fallback: DnsResolver, value = domain) => () => {
+    options.signal?.throwIfAborted();
+    return (resolvers[name] || fallback)(value);
+  };
   const aPromise = query(invoke('resolve4', dns.resolve4), (records) => normalizeAddresses(records, 4), timeoutMs);
   const aaaaPromise = query(invoke('resolve6', dns.resolve6), (records) => normalizeAddresses(records, 6), timeoutMs);
   const cnamePromise = query(invoke('resolveCname', dns.resolveCname), normalizeHostnames, timeoutMs);
@@ -726,6 +735,7 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
         directResult,
         timeoutMs,
         now,
+        ...(options.signal ? { signal: options.signal } : {}),
         ...(options.observedAt ? { observedAt: options.observedAt } : {}),
       }))
     : Promise.resolve(null);
@@ -736,7 +746,7 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
     ? query(
         invoke(
           'resolveHttps',
-          (value) => resolveServiceBindingRecords(value, 'HTTPS', { timeoutMs }),
+          (value) => resolveServiceBindingRecords(value, 'HTTPS', { timeoutMs, ...(options.signal ? { signal: options.signal } : {}) }),
         ),
         normalizeServiceBindings,
         timeoutMs,
@@ -753,10 +763,11 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
         ...(options.queryAuthority ? { queryAuthority: options.queryAuthority } : {}),
         timeoutMs,
         now,
+        ...(options.signal ? { signal: options.signal } : {}),
         ...(options.observedAt ? { observedAt: options.observedAt } : {}),
       }))
     : Promise.resolve(null);
-  const [a, aaaa, cname, ns, mx, spf, dmarc, caa, caaPolicy, soa, https, delegation] = await Promise.all([
+  const pending = [
     aPromise,
     aaaaPromise,
     cnamePromise,
@@ -769,7 +780,12 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
     soaPromise,
     httpsPromise,
     delegationPromise,
-  ]);
+  ] as const;
+  // A rejected continuation must not release the lookup while sibling queries
+  // are still running. Their existing bounded resolver deadlines remain active.
+  const [a, aaaa, cname, ns, mx, spf, dmarc, caa, caaPolicy, soa, https, delegation] = await Promise.all(pending)
+    .finally(() => Promise.allSettled(pending));
+  options.signal?.throwIfAborted();
   const queries = {
     a, aaaa, cname, ns, mx, spf, dmarc, caa,
     ...(soa ? { soa } : {}),

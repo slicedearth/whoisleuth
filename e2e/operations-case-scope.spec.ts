@@ -25,19 +25,22 @@ test('campaign domain scope keeps incident IDs and unresolved objects separate w
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 3 });
   const scope = page.locator('.campaign-body details.case-scope');
   await scope.locator(':scope > summary').click();
-  await expect(scope).toContainText('2 separate Cases · 2 open incident links · 1 analyst-resolved links · 3 links with unknown');
+  await expect(scope).toContainText('2 separate Cases · 2 open incident links · 1 analyst-resolved links · 3 exact objects with unknown action or observation coverage');
   await expect(scope).toContainText('same-domain incidents remain separate');
   await expect(scope.getByRole('link', { name: 'First separate incident · Case scope-first', exact: true })).toHaveAttribute('href', '/cases?case=scope-first&section=response');
   await expect(scope.getByRole('link', { name: 'Second separate incident · Case scope-second', exact: true })).toHaveAttribute('href', '/cases?case=scope-second&section=response');
   await expect(scope.getByRole('link', { name: 'Outside campaign · Case scope-unrelated', exact: true })).toHaveCount(0);
   await expect(scope.getByRole('cell', { name: /unavailable.*analyst.*unknown/u })).toHaveCount(1);
+  await expect(scope.getByRole('cell', { name: 'No typed provider outcome retained', exact: true })).toHaveCount(2);
   await scope.getByText('1 campaign domain without an inspected Case', { exact: true }).click();
   await expect(scope).toContainText('missing.example · object coverage unavailable');
   await scope.locator('details.coverage').first().locator(':scope > summary').click();
   await expect(scope.locator('details.coverage').first().getByRole('cell', { name: /Unknown action binding/u })).toHaveCount(2);
   await expect(scope).toContainText('https://distribution.example/ad-two');
   await scope.getByText('Dispute, restoration and recurrence coverage', { exact: true }).click();
-  await expect(scope).toContainText('Unavailable: current records do not type dispute, restoration or incident recurrence');
+  await expect(scope).toContainText('Historical missing bindings remain unknown');
+  await expect(scope).toContainText('does not establish malicious recurrence');
+  await expect(scope).toContainText('Recurrence assessment remains unavailable without a comparable baseline for the same condition and object');
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const width of [320, 390, 1024, 1280, 1920]) {

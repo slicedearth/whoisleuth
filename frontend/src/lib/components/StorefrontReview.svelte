@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import { MAX_CONTEXT_INPUT_BYTES, type ContextReview } from '../../../../packages/contracts/context-review.mts';
-  import { storefrontPresentation, type ContextReviewPresentation } from '$lib/analysis/context-review-presentation.ts';
+  import { storefrontPresentation, type ContextReviewPresentation } from '#lib/analysis/context-review-presentation.ts';
   import LocalFileInput from './LocalFileInput.svelte';
   import { STOREFRONT_INPUT_SCHEMA, STOREFRONT_INPUT_VERSION, readStorefrontObservation, reviewStorefront } from '../../../../packages/investigation/storefront-review.mts';
-  import { storefrontDraft, storefrontDraftInput, draftFromStorefront } from '$lib/analysis/storefront-review-draft.ts';
-  import { readContextFile, readContextEvidence } from '$lib/context-review-input.ts';
+  import { storefrontDraft, storefrontDraftInput, draftFromStorefront } from '#lib/analysis/storefront-review-draft.ts';
+  import { readContextFile, readContextEvidence } from '#lib/context-review-input.ts';
   import { exact } from '../../../../packages/evidence/artifact-structure.mts';
   import StorefrontObservationFields from './StorefrontObservationFields.svelte';
   import CaseContextReport from './CaseContextReport.svelte';

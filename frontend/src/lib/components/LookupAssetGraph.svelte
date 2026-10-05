@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { tick } from 'svelte';
   import Pagination from './Pagination.svelte';
-  import BoundedRelationshipMap from '$lib/components/BoundedRelationshipMap.svelte';
+  import BoundedRelationshipMap from '#lib/components/BoundedRelationshipMap.svelte';
   import {
     countLookupAssetGraphEdgesByLens,
     projectLookupAssetGraph,
     type LookupAssetGraph,
     type LookupAssetGraphLens,
-  } from '$lib/analysis/lookup-asset-graph.ts';
+  } from '#lib/analysis/lookup-asset-graph.ts';
 
   let {
     graph,

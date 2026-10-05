@@ -17,8 +17,9 @@ import {
   hasMaintainerUnsafeCharacters,
   pathIsWithin,
   readBoundedStableRegularFileSync,
+  sha256Bytes,
 } from './maintainer-tool-helpers.mts';
-import { assertFrontendBuildIntegrity } from './frontend-build-integrity.mts';
+import { assertFrontendBuildIntegrity, readFrontendGeneratedRouteSource, MAX_FRONTEND_ROUTE_SOURCE_BYTES, type FrontendBuildIntegritySnapshot } from './frontend-build-integrity.mts';
 
 type WritableLike = { write(value: string): unknown };
 type ManifestEntry = Readonly<{
@@ -50,7 +51,7 @@ export const FRONTEND_LOADING_REPORT_SCHEMA = 'whoisleuth.frontend-loading-repor
 export const FRONTEND_LOADING_REPORT_VERSION = 2;
 export const BROWSER_LOCAL_CHUNK_NAME = 'browser-local-data-definitions';
 export const MAX_FRONTEND_MANIFEST_BYTES = 2 * 1024 * 1024;
-export const MAX_FRONTEND_ROUTE_SOURCE_BYTES = 512 * 1024;
+export { MAX_FRONTEND_ROUTE_SOURCE_BYTES };
 export const MAX_FRONTEND_MANIFEST_ENTRIES = 4096;
 export const MAX_FRONTEND_ROUTES = 256;
 export const MAX_FRONTEND_LAYOUT_NODES_PER_ROUTE = 32;
@@ -228,15 +229,19 @@ export function parseGeneratedRouteNodes(source: string): RouteNode[] {
   }
   const match = source.match(/export const dictionary = \{([\s\S]*?)\};/u);
   if (!match) throw new Error('Could not find the generated client route dictionary.');
-  const dictionary = match[1] ?? '';
+  const dictionary = (match[1] ?? '').trim();
   const routes: RouteNode[] = [];
-  const pattern = /"([^"]+)": \[(\d+),\[([^\]]*)\]\]/gu;
-  for (const match of dictionary.matchAll(pattern)) {
-    const routeKey = match[1] === undefined
-      ? ''
-      : boundedManifestKey(match[1], 'Generated route key');
+  // Consume every generated tuple, including root-only routes and optional
+  // error nodes. The ~ marker declares a server load, not a different node.
+  const pattern = /\s*("(?:[^"\\]|\\.)+")\s*:\s*\[\s*~?(\d+)\s*(?:,\s*\[([\d,\s]*)\])?(?:,\s*\[[\d,\s]*\])?\s*\]\s*(?:,|$)/uy;
+  let offset = 0;
+  while (offset < dictionary.length) {
+    const match = pattern.exec(dictionary);
+    if (!match) throw new Error('Generated client route dictionary contains an unsupported route tuple.');
+    offset = pattern.lastIndex;
+    const routeKey = boundedManifestKey(JSON.parse(match[1]!), 'Generated route key');
     const pageNode = Number(match[2]);
-    if (!routeKey || !Number.isInteger(pageNode)) continue;
+    if (!Number.isSafeInteger(pageNode)) throw new Error('Generated route has an invalid page node.');
     const layoutNodes = (match[3] ?? '')
       .split(',')
       .map((value) => value.trim())
@@ -245,7 +250,7 @@ export function parseGeneratedRouteNodes(source: string): RouteNode[] {
     if (layoutNodes.length > MAX_FRONTEND_LAYOUT_NODES_PER_ROUTE) {
       throw new Error(`Generated route ${routeKey} exceeds its layout-node limit.`);
     }
-    if (layoutNodes.some((node) => !Number.isInteger(node))) {
+    if (layoutNodes.some((node) => !Number.isSafeInteger(node))) {
       throw new Error(`Generated route ${routeKey} has an invalid layout node.`);
     }
     routes.push(Object.freeze({ routeKey, pageNode, layoutNodes: Object.freeze(layoutNodes) }));
@@ -258,6 +263,12 @@ export function parseGeneratedRouteNodes(source: string): RouteNode[] {
     throw new Error('Generated client route dictionary contains duplicate route keys.');
   }
   return routes;
+}
+
+export function readFrontendRouteNodes(
+  frontendRoot: string, manifest: Manifest, expected?: FrontendBuildIntegritySnapshot['generatedRouteSource'],
+): RouteNode[] {
+  return parseGeneratedRouteNodes(readFrontendGeneratedRouteSource(frontendRoot, JSON.stringify(manifest), expected).source);
 }
 
 export function buildFrontendLoadingReport(input: FrontendLoadingReportInput) {
@@ -318,7 +329,7 @@ export function buildFrontendLoadingReport(input: FrontendLoadingReportInput) {
       const previousGzipBytes = previous && Object.hasOwn(previous, path) ? previous[path]! : null;
       return Object.freeze({
         path,
-        access: route.routeKey.includes('(public)') ? 'public' as const : 'protected' as const,
+        access: route.routeKey.split('/').includes('(console)') ? 'protected' as const : 'public' as const,
         assetCount: measured.assets.length,
         bytes: measured.bytes,
         gzipBytes: measured.gzipBytes,
@@ -436,7 +447,7 @@ export function main(
         MAX_FRONTEND_MANIFEST_BYTES, 'Previous loading report').toString('utf8'),
       { label: 'Previous loading report', maximumBytes: MAX_FRONTEND_MANIFEST_BYTES },
     )) : undefined;
-    assertFrontendBuildIntegrity();
+    const identity = assertFrontendBuildIntegrity();
     const frontend = path.resolve('frontend');
     const clientRoot = path.join(frontend, '.svelte-kit/output/client');
     const realClientRoot = realpathSync(clientRoot);
@@ -445,17 +456,14 @@ export function main(
       MAX_FRONTEND_MANIFEST_BYTES,
       'Frontend client manifest',
     ).toString('utf8');
+    if (sha256Bytes(Buffer.from(manifestSource, 'utf8')) !== identity.viteManifestSha256) {
+      throw new TypeError('Frontend client manifest does not match the recorded build identity.');
+    }
     const manifest = validateManifest(parseBoundedJsonObject(manifestSource, {
       label: 'Frontend client manifest',
       maximumBytes: MAX_FRONTEND_MANIFEST_BYTES,
     }));
-    const routeNodes = parseGeneratedRouteNodes(
-      readBoundedStableRegularFileSync(
-        path.join(frontend, '.svelte-kit/generated/client/app.js'),
-        MAX_FRONTEND_ROUTE_SOURCE_BYTES,
-        'Generated client route source',
-      ).toString('utf8'),
-    );
+    const routeNodes = readFrontendRouteNodes(frontend, manifest, identity.generatedRouteSource);
     const measurements = new Map<string, AssetMeasurement>();
     let measuredBytes = 0;
     const report = buildFrontendLoadingReport({

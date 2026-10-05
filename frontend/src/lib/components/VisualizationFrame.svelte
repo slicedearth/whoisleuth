@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import DataVisualization from '$lib/components/DataVisualization.svelte';
+  import DataVisualization from '#lib/components/DataVisualization.svelte';
 
   type LegendColour =
     | 'registration'

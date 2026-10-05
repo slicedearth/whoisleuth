@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { BrandAssetRegisterProjection, BrandAssetSourceSummary } from '$lib/analysis/brand-asset-register.ts';
+  import type { BrandAssetRegisterProjection, BrandAssetSourceSummary } from '#lib/analysis/brand-asset-register.ts';
 
   let { projection }: { projection: BrandAssetRegisterProjection } = $props();
 

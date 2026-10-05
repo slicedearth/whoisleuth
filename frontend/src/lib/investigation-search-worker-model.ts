@@ -8,6 +8,7 @@ import { projectInvestigationContextPreview, type InvestigationContextPreview } 
 import { investigationInfrastructure, investigationInfrastructureRelationships,
   type InvestigationInfrastructure, type InvestigationInfrastructureOptions,
   type InvestigationInfrastructureRelationships } from './analysis/investigation-infrastructure.ts';
+import { reviewRetainedInfrastructureSnapshots, type RetainedInfrastructureSnapshotReview } from '../../../packages/investigation/retained-infrastructure-snapshots.mts';
 
 export type InvestigationSearchSummary = Pick<InvestigationSearchIndex,
   'state' | 'sources' | 'entityCount' | 'termCount' | 'truncated' | 'limitations'> & {
@@ -19,7 +20,8 @@ export type SearchWorkerOperation =
   | { kind: 'preview'; query: string; page?: number }
   | { kind: 'history'; entityId: string; page?: number }
   | { kind: 'infrastructure'; options: InvestigationInfrastructureOptions }
-  | { kind: 'infrastructure_relationships'; entityId: string; page?: number };
+  | { kind: 'infrastructure_snapshots'; selectedIds?: string[]; page?: number }
+  | { kind: 'infrastructure_relationships'; entityId: string; page?: number; topologyQuery?: string };
 export type SearchWorkerRequest = SearchWorkerOperation & { id: number };
 export type SearchWorkerResponse = { id: number } & (
   | { kind: 'build'; summary: InvestigationSearchSummary }
@@ -27,6 +29,7 @@ export type SearchWorkerResponse = { id: number } & (
   | { kind: 'preview'; result: InvestigationContextPreview }
   | { kind: 'history'; result: InvestigationHistory }
   | { kind: 'infrastructure'; result: InvestigationInfrastructure }
+  | { kind: 'infrastructure_snapshots'; result: RetainedInfrastructureSnapshotReview }
   | { kind: 'infrastructure_relationships'; result: InvestigationInfrastructureRelationships }
   | { kind: 'error'; detail: string }
 );
@@ -71,8 +74,11 @@ export function createInvestigationSearchWorkerHandler(send: (response: SearchWo
           limitations: [...new Set([...result.limitations, ...index.limitations])] } });
       } else if (request.kind === 'infrastructure') {
         send({ id, kind: 'infrastructure', result: investigationInfrastructure(projection, index, request.options) });
+      } else if (request.kind === 'infrastructure_snapshots') {
+        const result = reviewRetainedInfrastructureSnapshots(projection, request.selectedIds, request.page);
+        send({ id, kind: 'infrastructure_snapshots', result: { ...result, partial: result.partial || index.truncated } });
       } else if (request.kind === 'infrastructure_relationships') {
-        const result = investigationInfrastructureRelationships(projection, request.entityId, request.page);
+        const result = investigationInfrastructureRelationships(projection, request.entityId, request.page, request.topologyQuery);
         send({ id, kind: 'infrastructure_relationships', result: { ...result,
           partial: result.partial || index.truncated,
           limitations: [...new Set([...result.limitations, ...index.limitations])].slice(0, 20) } });

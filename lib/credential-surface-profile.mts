@@ -6,6 +6,8 @@
 
 import { createObservation } from '../packages/evidence/observation.mts';
 import { CREDENTIAL_SURFACE_PROFILE_VERSION } from './lookup-child-profile-contract.mts';
+import { attributeCredentialForms } from './credential-form-attribution.mts';
+import type { CredentialFormAttribution } from '../packages/evidence/credential-form-attribution.mts';
 import {
   MAX_STATIC_FORMS,
   MAX_STATIC_INPUTS,
@@ -19,23 +21,26 @@ type CredentialSurfaceProfileInput = {
   baseUrl?: unknown;
   observedAt?: unknown;
   sourceTruncated?: unknown;
+  formAttribution?: CredentialFormAttribution;
 };
 
 function analyzeCredentialSurfaceProfile(input: CredentialSurfaceProfileInput = {}) {
   const htmlAnalysis = input.htmlAnalysis ?? analyzeStaticHtml(input.html, { baseUrl: input.baseUrl });
   const forms = htmlAnalysis.forms;
+  const formAttribution = input.formAttribution ?? attributeCredentialForms(htmlAnalysis, typeof input.baseUrl === 'string' ? input.baseUrl : '', input.sourceTruncated === true);
   const sourceTruncated = input.sourceTruncated === true;
   const truncated = sourceTruncated
     || htmlAnalysis.inputLimitReached
     || htmlAnalysis.tagLimitReached
     || forms.truncated;
   const unclassifiedActions = forms.actions.unclassified;
-  const partial = truncated || unclassifiedActions > 0;
+  const partial = truncated || unclassifiedActions > 0 || !formAttribution.complete;
   const limitations = [
     'Static input categories use only bounded type and autocomplete declarations; JavaScript-rendered, non-semantic, disabled, and hidden controls are not classified.',
     'Category counts can overlap when one input declares more than one recognised purpose.',
     'External submission can be legitimate and does not establish phishing, unsafe handling, ownership, intent, or maliciousness.',
-    'No field names, values, labels, placeholders, complete action URLs, paths, queries, fragments, or arbitrary attributes are retained.',
+    'Only form ordinals, input-purpose counts and declared destination origins are retained; no field names, values, labels, placeholders, URL paths, queries or fragments.',
+    'Declared destinations, including submitter overrides, are not observed submissions. Script-created or changed forms are not evaluated.',
   ];
   if (sourceTruncated || htmlAnalysis.inputLimitReached) {
     limitations.push('The captured homepage body was truncated, so credential-surface evidence may be incomplete.');
@@ -52,6 +57,7 @@ function analyzeCredentialSurfaceProfile(input: CredentialSurfaceProfileInput = 
 
   return {
     credentialSurfaceVersion: CREDENTIAL_SURFACE_PROFILE_VERSION,
+    formAttribution,
     ...createObservation({
       status: partial ? 'partial' : 'success',
       observedAt: input.observedAt,

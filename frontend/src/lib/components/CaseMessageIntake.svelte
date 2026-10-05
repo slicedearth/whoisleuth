@@ -1,10 +1,10 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import type { MessageIntakeResult } from '../../../../packages/contracts/message-intake.mts';
   import { messageCaseEvidence } from '../../../../packages/investigation/message-case-evidence.mts';
-  import { prepareCaseAttachmentFiles, retainCaseAttachments } from '$lib/case-attachments.ts';
+  import { prepareCaseAttachmentFiles, retainCaseAttachments } from '#lib/case-attachments.ts';
   import MessageIntake from './MessageIntake.svelte';
   import CaseIncomingNotice from './CaseIncomingNotice.svelte';
 

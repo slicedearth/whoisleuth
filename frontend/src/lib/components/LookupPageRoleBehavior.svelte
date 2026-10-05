@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
+  import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
   type RoleFinding = {
     role: string;
     label: string;

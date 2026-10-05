@@ -91,7 +91,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Identify authority', body: 'Registry evidence controls domain-existence decisions. Registrar publication can enrich the record, while IANA accreditation and ICANN compliance notices remain separately dated provider context rather than evidence about the domain.' }),
-      Object.freeze({ title: 'Compare normalised fields', body: 'Review status values, lifecycle dates, registrar identity and nameservers after normalisation while keeping the original source labels available.' }),
+      Object.freeze({ title: 'Compare normalised fields', body: 'Review status values, lifecycle dates, registrar identity and nameservers with their source labels. In Case domain history, a registration-lifecycle boundary can link an analyst declaration to retained snapshot or pin IDs. Use it to reassess earlier decisions, not to infer ownership or delete history.' }),
       Object.freeze({ title: 'Explain the conflict', body: 'Check collection time, redaction, referral path, source completeness and parsing limitations before treating different values as a material change.' }),
     ]),
     evidence: Object.freeze([
@@ -127,8 +127,8 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Define the protected identity', body: 'Create a browser-local Brand Profile with official domains, product terms, trusted partners and preferred domain endings.' }),
-      Object.freeze({ title: 'Generate a bounded candidate set', body: 'Choose a preset, keyboard layout, domain endings and optional reviewed terms. Generation is deterministic and capped before any lookup runs.' }),
-      Object.freeze({ title: 'Validate before escalating', body: 'Review registration, mail, certificate, website and identity evidence. Similar spelling alone does not prove impersonation, control, intent or harm.' }),
+      Object.freeze({ title: 'Choose matching intent', body: 'Use Discover presets for generated variants, or save a Time-bounded keyword campaign in Brands. Any positive literal can nominate a hostname; any negative literal vetoes it for that review. Set a start, exclusive end and pause state, preview the revision, then save. Campaign literals use ASCII/punycode substrings, not typo or confusable expansion.' }),
+      Object.freeze({ title: 'Review candidates deliberately', body: 'Select an active campaign or manual feed selectors. Retained editions and catch-up opens only after an explicit request to the configured feed service; it does not contact candidate targets. Review dates and gaps, select candidates to retain, then advance. Pausing, expiry and edits preserve earlier revision attribution. Validate nominated names before escalating.' }),
     ]),
     evidence: Object.freeze([
       Object.freeze({ source: 'Local mutation generator', usefulFor: 'Transparent typo, homoglyph and brand-term coverage.', limitation: 'Candidate generation is not evidence that a domain exists or is harmful.' }),
@@ -197,9 +197,9 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'Choose a question, collect the relevant sources, and save reviewed evidence in a Case. Use Fast for registration-first triage and Deep when the decision needs supporting website, certificate or network evidence.',
     ]),
     steps: Object.freeze([
-      Object.freeze({ title: 'Frame the decision', body: 'State whether you are checking registration, possible impersonation, infrastructure overlap, acquisition readiness, service change or an abuse-reporting lead.' }),
-      Object.freeze({ title: 'Collect and compare', body: 'Use Fast for registration-first triage, Deep for richer evidence, and Bulk for consistent peer comparison. In Lookup, choose the Focus that matches the decision, start from At a glance, and open only the Registration, Web and DNS, Relationships and history, Source quality, Case and response, or Advanced evidence families you need. Keep partial sources visible.' }),
-      Object.freeze({ title: 'Record facts and actions', body: 'Pin individual evidence, separate analyst assertions, note contradictions, set reviewed case actions and export a response packet only after preflight.' }),
+      Object.freeze({ title: 'Start from supplied material or a target', body: 'For text, messages or documents, open Review a message, link or selected file. Inspect source-linked addresses and labelled hashes; explicitly select relevant phone candidates from plain text. Compare a displayed destination with a separately supplied one, keeping its source and time. For a target question, choose Fast registration triage or deliberate Deep collection.' }),
+      Object.freeze({ title: 'Retain and compare the relevant evidence', body: 'Save the reviewed report in a Case; original files are a separate choice. Retained files offers text and PNG comparisons. Specialist evidence reviews compares retained domain history and accepts source-linked registration boundaries. Keep missing inputs, different conditions and earlier observations visible instead of treating them as absence.' }),
+      Object.freeze({ title: 'Record the next bounded decision', body: 'Pin the useful fact, link a conclusion and set a review question. In Response, prepare separate external recipient scopes or an internal containment handoff from selected existing follow-ups and pins. Review disclosure before export; provider resolution cannot close an open internal request. Practise these steps with the supplied fictional Case below.' }),
     ]),
     evidence: Object.freeze([
       Object.freeze({ source: 'Lookup', usefulFor: 'One target with source-level registration and supporting evidence.', limitation: 'A broad Deep result still represents bounded observations at specific times.' }),
@@ -216,8 +216,8 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       Object.freeze({ label: 'IETF RFC 1034: DNS concepts', href: 'https://www.rfc-editor.org/rfc/rfc1034', description: 'Describes the DNS namespace, zones and resolver model.' }),
       Object.freeze({ label: 'IETF RFC 9110: HTTP semantics', href: 'https://www.rfc-editor.org/rfc/rfc9110', description: 'Defines HTTP request, response and representation semantics.' }),
     ]),
-    demoHref: '/demo',
-    demoLabel: 'Try the investigation example',
+    demoHref: '/demo#case-practice',
+    demoLabel: 'Practise supplied evidence and handoff review',
     guideHref: '/resources#start',
     guideLabel: 'Choose an investigation path',
     repositoryDoc: 'docs/application-guide.md',
@@ -233,9 +233,10 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       'Retain exact incident links, review the applicable official reporting route and prepare a local evidence packet. Submit the complaint yourself, record delivery and independently recheck the target. Provider acknowledgement does not establish removal.',
     ]),
     steps: Object.freeze([
-      Object.freeze({ title: 'Preserve the review basis', body: 'Retain exact public objects, times, screenshots or capture digests and an evidence-linked conclusion. For copied content without a logo or brand name, compare the supplied reference and candidate text or images explicitly; similarity is not authorship or legal entitlement. Record the observed form destination separately from scripts or a suspected endpoint. Manual pins remain useful when richer comparison or capture is unavailable.' }),
+      Object.freeze({ title: 'Preserve and compare the review basis', body: 'Retain the exact object, source and observation time. In Case Retained files, Compare retained text finds shared runs of at least five words in two selected UTF-8 files after NFC normalisation and lowercasing; inspect the source locations. PNG comparison is separate. Correspondence is not authorship or infringement. Record form destinations independently from scripts or suspected endpoints.' }),
       Object.freeze({ title: 'Choose the applicable official route', body: 'Use the official references below for social content, storefronts, app listings, hosted files/forms and advertisements. A custom storefront or ad context needs an evidenced, explicit platform choice. Separate fraud from copyright, trademark and trade-dress grounds; rights routes require the appropriate authority. Registrar, registry, host, proxy/edge, platform and search visibility have different roles and remedies. An edge address is not proof of the origin host.' }),
-      Object.freeze({ title: 'Review each copy, then track its scope', body: 'Review selected metadata, exact URLs, free text, contacts and attachments for each recipient before manually sharing. Record real delivery separately from acknowledgement. Preserve the original packet when preparing requested evidence. Recheck the exact object under comparable conditions; a failed capture is inconclusive. Close only the evidenced scope and retain unresolved ads, accounts or mail channels. Rehearse these decisions in the fictional practice.' }),
+      Object.freeze({ title: 'Review each copy, then track its scope', body: 'Review each recipient’s exact disclosure before sharing. Internal containment selects retained next-step assertions and linked pins for a security, identity, endpoint or network team; it performs no control and public preview excludes those requests. Record external delivery separately from acknowledgement. Recheck the exact object, and keep unresolved ads, accounts and internal follow-ups open. Print the ordinary Case when a reviewed summary is needed.' }),
+      Object.freeze({ title: 'Correct the record when needed', body: 'For a mistake in a delivered packet, select that delivery and its retained receipt to prepare a separately reviewed correction or withdrawal request. Keep the original record and distinguish a prepared request from a later delivery or acknowledgement. A flag that reuses your own report is not independent confirmation; retain its known source relationship or leave independence unknown.' }),
     ]),
     evidence: Object.freeze([
       Object.freeze({ source: 'Case evidence and incident links', usefulFor: 'Binding the complaint to exact reviewed targets, times, conclusions and limitations.', limitation: 'A retained link or analyst classification does not itself prove a policy or legal violation.' }),
@@ -250,7 +251,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     references: PLATFORM_REPORTING_RESOURCE_REFERENCES,
     referencesTitle: 'Official reporting guidance',
     referencesIntroduction: 'Use the provider-owned pages below to verify the current reporting route, eligibility and disclosure terms before submitting anything.',
-    demoHref: '/demo',
+    demoHref: '/demo#case-practice',
     demoLabel: 'Practise evidence and separate response scopes',
     guideHref: '/resources#reference',
     guideLabel: 'Open product references',
@@ -339,8 +340,8 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Keep collection and retention separate', body: 'Opening a tool does not save its result. The analyst must choose a case, snapshot, watchlist, relationship or export action.' }),
-      Object.freeze({ title: 'Back up deliberately', body: 'A versioned workspace archive can be downloaded in encrypted or clearly labelled unencrypted form. The encrypted passphrase is never sent or recoverable.' }),
-      Object.freeze({ title: 'Know the durability boundary', body: 'Browser storage can be cleared and does not synchronise across devices. A reviewed encrypted archive remains the portability and recovery boundary.' }),
+      Object.freeze({ title: 'Back up and check original files', body: 'Download a versioned encrypted workspace archive or the separately labelled unencrypted format. Review the missing-original checklist: a retained file reference without its bytes is not a recovered original. Restore the required bytes before relying on a complete file export. The encrypted passphrase is never sent or recoverable.' }),
+      Object.freeze({ title: 'Reopen without replacing evidence', body: 'Reopen a saved acquisition-review JSON to preview earlier manual fields, accept deliberately and reconfirm against current Lookup evidence. Use ordinary Case printing for a reviewed record summary, not an original-file backup. If workspace controls are unavailable, Dashboard Support diagnostics reports capabilities such as Web Locks; named workspaces require it and IndexedDB.' }),
     ]),
     evidence: Object.freeze([
       Object.freeze({ source: 'IndexedDB workspace', usefulFor: 'Bounded cases, profiles, watchlists, rules, sessions and reviewed observations.', limitation: 'The active unlocked browser workspace is plaintext and same-origin code can access it.' }),

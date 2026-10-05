@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCase, updateCase, mergeCases, buildCaseExport, normalizeCaseStore } from '../packages/cases/case-model.mts';
 import { buildCaseReport } from '../packages/cases/case-report.mts';
-import { readCaseEvidenceLinks, mergeCaseEvidenceLinks, caseEvidenceLinkIssues, caseEvidenceSharedContext, MAX_CASE_EVIDENCE_LINKS } from '../packages/cases/case-evidence-links.mts';
+import { readCaseEvidenceLinks, mergeCaseEvidenceLinks, caseEvidenceLinkIssues, caseEvidenceSharedContext, caseSelectedEvidenceSourceLimitations, CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION, MAX_CASE_EVIDENCE_LINKS } from '../packages/cases/case-evidence-links.mts';
 import { buildCliCasePack, verifyCliCasePack } from '../cli/case-pack.mts';
-import { CASE_SCHEMA_VERSION, serialiseCasePortableJson } from '../packages/contracts/case-portability.mts';
+import { CASE_SCHEMA_VERSION, MAX_CASE_EVIDENCE_PINS, serialiseCasePortableJson } from '../packages/contracts/case-portability.mts';
 
 const NOW = '2026-09-23T01:00:00.000Z';
 function scenario() {
@@ -69,6 +69,56 @@ test('shared context distinguishes declared source labels, imported content iden
   assert.deepEqual(groups.map(group => group.kind).sort(), ['checkpoint', 'import', 'source']);
   assert.equal(groups.find(group => group.kind === 'import')?.label, 'Same imported content');
   assert.equal(groups.find(group => group.kind === 'source')?.pinIds.length, 3);
+});
+
+test('reused report qualification survives Case round trips without treating record counts as independent support', () => {
+  const { record, input, a, b } = scenario();
+  record.evidencePins[0]!.source = 'Original supplied report';
+  record.evidencePins[1]!.source = 'Provider result following that report';
+  record.evidencePins[0]!.importContentSha256 = 'a'.repeat(64);
+  record.evidencePins[1]!.importContentSha256 = 'a'.repeat(64);
+  const linked = updateCase([record], record.id, { evidenceLink: { ...input, basis: 'The selected result states that it reused the supplied report.' } }, NOW).record;
+  const restored = mergeCases([], buildCaseExport([linked], NOW)).cases[0]!;
+  assert.equal(restored.evidencePins.length, 3, 'Separate retained records are not merged into a corroboration count.');
+  assert.deepEqual(restored.evidencePins, linked.evidencePins);
+  assert.deepEqual(restored.evidenceLinks, linked.evidenceLinks);
+  assert.deepEqual(caseSelectedEvidenceSourceLimitations(restored.evidencePins, restored.evidenceLinks, [a, b]), [CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION]);
+  assert.match(buildCaseReport(restored, { generatedAt: NOW }).markdown, /not independent corroboration/u);
+});
+
+test('narrow output qualifies declared relationships without disclosing the private basis or unselected identity', () => {
+  const { record, input, a, b, c } = scenario();
+  const linked = updateCase([record], record.id, { evidenceLink: input }, NOW).record;
+  const before = structuredClone(linked);
+  for (const selection of [[a], [b], [a, b]]) {
+    const limits = caseSelectedEvidenceSourceLimitations(linked.evidencePins, linked.evidenceLinks, selection);
+    assert.deepEqual(limits, [CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION]);
+    for (const privateValue of [input.basis, a, b, linked.evidenceLinks![0]!.id]) assert.equal(JSON.stringify(limits).includes(privateValue), false);
+  }
+  assert.deepEqual(caseSelectedEvidenceSourceLimitations(linked.evidencePins, linked.evidenceLinks, [c]), []);
+  assert.deepEqual(caseSelectedEvidenceSourceLimitations(linked.evidencePins, linked.evidenceLinks, ['not-retained']), []);
+  const withdrawn = linked.evidenceLinks!.map(link => ({ ...link, withdrawal: { at: NOW, reason: 'Attribution corrected.' } }));
+  assert.deepEqual(caseSelectedEvidenceSourceLimitations(linked.evidencePins, withdrawn, [a]), []);
+  assert.deepEqual(linked, before);
+});
+
+test('separately documented observations and unknown methods keep their attribution without invented independence', () => {
+  const { record } = scenario();
+  const pins = record.evidencePins.map((pin, index) => ({ ...pin, source: index < 2 ? 'Same reporting desk' : 'Provider method not documented',
+    observedAt: index === 0 ? NOW : '2026-09-24T01:00:00.000Z', checkpointId: `distinct-${index}`, importContentSha256: String(index + 1).repeat(64),
+    limitations: [index < 2 ? 'Separately documented observation; reporting independence has not been verified.' : 'The provider did not disclose its collection method.'] }));
+  const before = structuredClone(pins);
+  assert.deepEqual(caseEvidenceSharedContext(pins).map(group => group.kind), ['source']);
+  assert.deepEqual(caseSelectedEvidenceSourceLimitations(pins, undefined, pins.map(pin => pin.id)), [CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION]);
+  assert.deepEqual(caseSelectedEvidenceSourceLimitations(pins, undefined, [pins[2]!.id]), [], 'Absence of a known relationship is not an independence finding.');
+  assert.deepEqual(pins, before);
+});
+
+test('source qualification rejects over-bound selections before grouping retained context', () => {
+  const { record } = scenario();
+  assert.throws(() => caseSelectedEvidenceSourceLimitations(new Array(MAX_CASE_EVIDENCE_PINS + 1).fill(record.evidencePins[0]), undefined, []));
+  assert.throws(() => caseSelectedEvidenceSourceLimitations(record.evidencePins, new Array(MAX_CASE_EVIDENCE_LINKS + 1).fill({}), []));
+  assert.throws(() => caseSelectedEvidenceSourceLimitations(record.evidencePins, undefined, new Array(MAX_CASE_EVIDENCE_PINS + 1).fill('pin')));
 });
 
 test('Case exports, reports and offline packs retain links while the public audience removes private declarations', () => {

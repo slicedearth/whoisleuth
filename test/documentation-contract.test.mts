@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
 
 import { LATEST_PUBLIC_APPLICATION_VERSION } from '../packages/contracts/case-portability.mts';
@@ -7,6 +10,30 @@ import { LATEST_PUBLIC_APPLICATION_VERSION } from '../packages/contracts/case-po
 async function documentation(pathname: string): Promise<string> {
   return readFile(new URL(`../${pathname}`, import.meta.url), 'utf8');
 }
+
+test('local production instructions explicitly load development-only credentials and preserve injected environments', async () => {
+  const guide = await documentation('docs/getting-started.md');
+  assert.match(guide, /node --env-file=\.env\.local server\.mts/u);
+  assert.match(guide, /does not load\s+`\.env\.local`/u);
+  const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-env-file-test-'));
+  try {
+    const file = path.join(directory, '.env.local');
+    await writeFile(file, 'SITE_PASSWORD=test-only-secret\nSESSION_SECRET=test-only-session-signing-secret\n', { mode: 0o600 });
+    const env = { ...process.env };
+    delete env.SITE_PASSWORD;
+    delete env.SESSION_SECRET;
+    const script = `import { checkPassword } from ${JSON.stringify(new URL('../lib/auth.mts', import.meta.url).href)}; process.stdout.write(String(checkPassword('test-only-secret')));`;
+    for (const [argumentsValue, environment, expected] of [
+      [[`--env-file=${file}`], env, 'true'],
+      [[], env, 'false'],
+      [[], { ...env, SITE_PASSWORD: 'test-only-secret', SESSION_SECRET: 'test-only-session-signing-secret' }, 'true'],
+    ] as const) {
+      const result = spawnSync(process.execPath, [...argumentsValue, '--input-type=module', '-e', script], { env: environment, encoding: 'utf8', timeout: 5000 });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout, expected);
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 
 test('critical profiles and the canonical compatibility reference identify current writers', async () => {
   const [readme, productBoundary, registryContract, portableContracts, caseContracts] = await Promise.all([

@@ -28,6 +28,7 @@ import {
   RISK_MUTATION_TYPES,
   RISK_REVIEW_THRESHOLD,
   explainRiskScore,
+  explainRiskScoreV8,
   explainRiskScoreV7,
 } from '../lib/risk-scoring.mts';
 import {
@@ -57,10 +58,21 @@ const EXPECTED_FIXTURES = [
     bytes: 1_154,
     sha256: 'bd650fe84923c61658d451c25d928bd5ff8e54ff585f4f059e6798c681f9a401',
     schema: RISK_CALIBRATION_DATASET_SCHEMA,
-    version: RISK_CALIBRATION_DATASET_VERSION,
-    role: 'current',
+    version: 2,
+    role: 'historical',
     expectation: 'accepted_exact',
     shapeId: 'risk-calibration.dataset.v2',
+  },
+  {
+    id: 'risk-calibration-dataset-v3',
+    path: 'test/fixtures/risk-calibration-dataset-v3.json',
+    bytes: 1_096,
+    sha256: 'a8e41c1325094aec5ef4731fdf9f487a20999729f6cc704e400c3d83db2a0753',
+    schema: RISK_CALIBRATION_DATASET_SCHEMA,
+    version: 3,
+    role: 'current',
+    expectation: 'accepted_exact',
+    shapeId: 'risk-calibration.dataset.v3',
   },
   {
     id: 'risk-calibration-report-v3-detailed',
@@ -174,22 +186,21 @@ function assertEveryRegisteredObjectPath(
 
 function browserDataset(): RiskCalibrationDatasetExport {
   return buildRiskCalibrationDatasetExport([{
-    id: 'calibration-1',
+    id: 'calibration-form-1',
     domain: 'candidate.example.test',
     disposition: 'confirmed_abuse',
     reviewReasonCode: 'confirmed_credential_abuse',
     evidenceHistory: [{
-      capturedAt: GENERATED_AT,
-      createdDate: '2026-08-01T00:00:00.000Z',
+      capturedAt: '2026-10-03T00:00:00.000Z',
+      mutationTypes: [],
       availability: 'registered',
-      mutationTypes: ['dictionary'],
-      faviconMatch: true,
       hasPasswordField: true,
+      hasExternalFormAction: true,
+      hasExternalPasswordForm: true,
       activityStatus: 'active',
-      hasMx: true,
       scanDepth: 'deep',
     }],
-  }] as never, ['calibration-1']);
+  }] as never, ['calibration-form-1']);
 }
 
 function currentDetailed(): RiskCalibrationReport {
@@ -287,7 +298,8 @@ describe('Risk calibration lifecycle', () => {
         extensionPolicy: contract.extensionPolicy,
       })),
       [
-        { schema: RISK_CALIBRATION_DATASET_SCHEMA, version: 2, lifecycle: 'current', readable: true, emitted: true, extensionPolicy: 'discard_bounded' },
+        { schema: RISK_CALIBRATION_DATASET_SCHEMA, version: 2, lifecycle: 'legacy', readable: true, emitted: false, extensionPolicy: 'discard_bounded' },
+        { schema: RISK_CALIBRATION_DATASET_SCHEMA, version: 3, lifecycle: 'current', readable: true, emitted: true, extensionPolicy: 'discard_bounded' },
         { schema: RISK_CALIBRATION_REPORT_SCHEMA, version: 3, lifecycle: 'current', readable: true, emitted: true, extensionPolicy: 'reject' },
       ],
     );
@@ -352,8 +364,8 @@ describe('Risk calibration lifecycle', () => {
         role: fixture.role,
         expectation: fixture.expectation,
         shapeId: fixture.shapeId,
-      })),
-      EXPECTED_FIXTURES,
+      })).sort((left, right) => left.id.localeCompare(right.id)),
+      [...EXPECTED_FIXTURES].sort((left, right) => left.id.localeCompare(right.id)),
     );
     for (const fixture of RISK_CALIBRATION_SCHEMA_LIFECYCLE.fixtures) {
       const raw = await readFile(path.join(ROOT, fixture.path));
@@ -392,7 +404,7 @@ describe('Risk calibration lifecycle', () => {
     }
   });
 
-  test('reproduces current browser, detailed and summary fixture bytes exactly', async () => {
+  test('reproduces the current dataset and historical model reports without rewriting their fixtures', async () => {
     const datasetBytes = serializeRiskCalibrationDatasetExport(browserDataset());
     const parsedDataset = parseRiskCalibrationDataset(datasetBytes);
     assert.equal(parsedDataset.version, RISK_CALIBRATION_DATASET_VERSION);
@@ -407,9 +419,16 @@ describe('Risk calibration lifecycle', () => {
     );
     assert.equal(
       datasetBytes,
-      await readFile(path.join(ROOT, 'test/fixtures/risk-calibration-dataset-v2.json'), 'utf8'),
+      await readFile(path.join(ROOT, 'test/fixtures/risk-calibration-dataset-v3.json'), 'utf8'),
     );
-    const detailed = currentDetailed();
+    const historicalDataset = parseRiskCalibrationDataset(await readFile(path.join(ROOT, 'test/fixtures/risk-calibration-dataset-v2.json'), 'utf8'));
+    const detailed = buildRiskCalibrationReport(historicalDataset, explainRiskScoreV8, {
+      generatedAt: GENERATED_AT,
+      modelVersion: 8,
+      reviewThreshold: RISK_REVIEW_THRESHOLD,
+      previousModelVersion: 7,
+      explainPreviousRiskScore: explainRiskScoreV7,
+    });
     const reorderedDetailed = structuredClone(detailed) as any;
     reorderedDetailed.dataset = reversedObject(reorderedDetailed.dataset);
     reorderedDetailed.records[0].factors[0] = reversedObject(reorderedDetailed.records[0].factors[0]);
@@ -436,7 +455,7 @@ describe('Risk calibration lifecycle', () => {
     );
   });
 
-  test('projects bounded current dataset fields and rejects reader-only versions', async () => {
+  test('projects bounded historical fields without relabelling their version', async () => {
     const raw = JSON.parse(await readFile(
       path.join(ROOT, 'test/fixtures/risk-calibration-dataset-v2.json'),
       'utf8',
@@ -450,14 +469,14 @@ describe('Risk calibration lifecycle', () => {
       privateEvidence: 'discarded',
     };
     const parsed = parseRiskCalibrationDataset(JSON.stringify(raw));
-    assert.equal(parsed.version, RISK_CALIBRATION_DATASET_VERSION);
+    assert.equal(parsed.version, 2);
     assert.equal(parsed.records[0]?.evidence.availability, 'registered');
     assert.equal(Object.hasOwn(parsed as object, 'privateRoot'), false);
     assert.equal(Object.hasOwn(parsed.records[0] as object, 'privateRecord'), false);
     assert.equal(Object.hasOwn(parsed.records[0]?.evidence as object, 'privateEvidence'), false);
     assert.throws(
       () => parseRiskCalibrationDataset(JSON.stringify({ ...raw, version: 1 })),
-      /version 2/u,
+      /version 2 or 3/u,
     );
   });
 

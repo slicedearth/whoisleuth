@@ -1,6 +1,6 @@
 import { WORKSPACE_ARCHIVE_COLLECTIONS } from '../../../packages/contracts/browser-local-collection-manifest.mts';
 import { buildWorkspaceArchive, mergeReadyWorkspaceArchiveData, readWorkspaceArchive } from '../../../packages/workspace/workspace-archive.mts';
-import { compareRecoveredWorkspace, matchRecoveryFiles, workspaceAttachmentGroups, type ReviewedWorkspaceArchive } from '../../../packages/workspace/workspace-recovery.mts';
+import { compareRecoveredWorkspace, inspectRecoveryFiles, matchRecoveryFiles, workspaceAttachmentGroups, type ReviewedWorkspaceArchive } from '../../../packages/workspace/workspace-recovery.mts';
 import { browserWorkspaceDirectory } from './browser-workspace-directory.ts';
 import { openBrowserWorkspaceDestination } from './browser-workspace-destination.ts';
 export { WorkspaceDestinationStartError as WorkspaceRecoveryStartError } from './browser-workspace-destination.ts';
@@ -11,7 +11,7 @@ import type { AnyLocalDataCollectionDefinition } from './browser-local-data-cont
 import type { CaseRecord } from '../../../packages/cases/case-model.mts';
 
 export type WorkspaceRecoveryReport = ReturnType<typeof compareRecoveredWorkspace> & Readonly<{
-  files: Readonly<{ expected: number; verified: number; missing: number; bytes: number }>;
+  files: Awaited<ReturnType<typeof inspectRecoveryFiles>>;
   omissions: number;
   verified: boolean;
 }>;
@@ -57,15 +57,10 @@ export async function openWorkspaceRecovery(input: ReviewedWorkspaceArchive, opt
     const restored = await readWorkspaceArchive(await buildWorkspaceArchive(Object.fromEntries(WORKSPACE_ARCHIVE_COLLECTIONS.map(([section, collection]) => [section, actual.get(collection)])),
       { generatedAt: source.generatedAt ?? new Date().toISOString() }));
     const comparison = compareRecoveredWorkspace(source, restored);
-    let verified = 0, missing = 0, bytes = 0;
-    for (const group of groups) {
-      const files = await provider.readFiles(CASES_COLLECTION, group.map(({ digestSha256, byteLength }) => ({ digestSha256, byteLength })));
-      for (const item of group) {
-        if (files.get(item.digestSha256)) { verified++; bytes += item.byteLength; } else missing++;
-      }
-    }
-    return { ...comparison, files: { expected: verified + missing, verified, missing, bytes }, omissions,
-      verified: comparison.metadataMatches && omissions === 0 && missing === 0 };
+    const files = await inspectRecoveryFiles(source, group => provider.readFiles(CASES_COLLECTION,
+      group.map(({ digestSha256, byteLength }) => ({ digestSha256, byteLength }))));
+    return { ...comparison, files, omissions,
+      verified: comparison.metadataMatches && omissions === 0 && files.missing === 0 && files.unverified === 0 };
   }
   function close(): Promise<void> {
     if (!closed) {

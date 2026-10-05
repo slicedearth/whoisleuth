@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { tick } from 'svelte';
   import Pagination from './Pagination.svelte';
   import CasePicker from './CasePicker.svelte';
   import { casesForDomain, selectedCasesByDomain } from '../../../../packages/cases/case-selection.mts';
-  import type { CaseRecord } from '$lib/cases';
+  import type { CaseRecord } from '#lib/cases.ts';
   import {
     filterWebsiteProfileClusters,
     type WebsiteProfileCluster,
     type WebsiteProfileClusterSummary,
-  } from '$lib/analysis/website-profile-clusters.ts';
+  } from '#lib/analysis/website-profile-clusters.ts';
 
   let {
     summary,

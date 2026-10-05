@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PublicGuideGoal } from '$lib/public-guide';
+  import type { PublicGuideGoal } from '#lib/public-guide.ts';
 
   let {
     goals,

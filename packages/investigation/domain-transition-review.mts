@@ -26,6 +26,8 @@ export function domainTransitionReview(field: string, before: unknown, after: un
         : 'Review the current page evidence before changing the assessment; removal of one form does not establish that the incident is resolved.';
     case 'hasExternalFormAction':
       return 'Check the observed form destination and legitimate service use before updating the assessment. No form was submitted by this review.';
+    case 'hasExternalPasswordForm':
+      return 'Review the password form’s declared destination against the recorded concern and expected identity provider. A changed declaration is not an observed submission.';
     case 'faviconMatch':
     case 'faviconNearMatch':
     case 'reusesOfficialAssets':

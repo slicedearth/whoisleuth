@@ -1,5 +1,6 @@
 import { createIntakeReport } from './intake-report.mts';
 import { createLinkIntake } from './link-intake.mts';
+import { createIndicatorIntake } from './intake-indicators.mts';
 import { decodeQrPixels } from './qr-intake.mts';
 import { sha256ArtifactBytes } from '../evidence/artifact-integrity.mts';
 import { MAX_DOCUMENT_PARTS, MAX_DOCUMENT_TEXT_BYTES, MAX_DOCUMENT_TOTAL_IMAGE_PIXELS,
@@ -8,7 +9,7 @@ import type { MessageIntakeResult } from '../contracts/message-intake.mts';
 
 /** The format adapters provide inert text/pixels; this owner retains provenance and links. */
 export async function createDocumentIntake(bytes: Uint8Array, kind: 'pdf' | 'docx', reviewedAt: string) {
-  const base = await createIntakeReport(bytes, kind, reviewedAt), links = createLinkIntake();
+  const base = await createIntakeReport(bytes, kind, reviewedAt), links = createLinkIntake(), indicators = createIndicatorIntake();
   const parts: DocumentPart[] = [], notes = new Set<string>();
   let textBytes = 0, imagePixels = 0;
   let state: DocumentReview['state'] = 'reviewed', pageCount: number | null = null, reviewedPages = 0;
@@ -29,7 +30,7 @@ export async function createDocumentIntake(bytes: Uint8Array, kind: 'pdf' | 'doc
       const encoded = encoder.encode(value); textBytes += encoded.byteLength;
       if (textBytes > MAX_DOCUMENT_TEXT_BYTES) { partial('Further extracted text exceeds the review bound.'); return; }
       const location = await part({ kind: 'text', page, identity: original ? 'original_part_bytes' : 'extracted_text', state: 'reviewed' }, original ?? encoded);
-      if (location) links.addText(value, 'document_text', location);
+      if (location) { links.addText(value, 'document_text', location); indicators.addText(value, 'document_text', location); }
     },
     async destinations(values: readonly string[], page: number | null, original?: Uint8Array) {
       const encoded = encoder.encode(JSON.stringify(values));
@@ -50,7 +51,9 @@ export async function createDocumentIntake(bytes: Uint8Array, kind: 'pdf' | 'doc
       const result = links.result();
       for (const limitation of result.limitations) partial(limitation);
       if (result.bounded) partial('Further extracted links exceed the review bound.');
-      return { targets: result.targets, report: { ...base, links: result.links,
+      const indicatorResult = indicators.result();
+      if (indicatorResult.indicatorCoverage.state === 'partial') partial('Further indicator extraction exceeds the review bound.');
+      return { targets: result.targets, report: { ...base, ...indicatorResult, links: result.links,
         coverage: { ...base.coverage, state: state === 'reviewed' ? 'reviewed' : 'partial', reviewedParts: parts.length, rejectedLinks: result.rejected },
         documentReview: { state, pageCount, reviewedPages, parts, notes: [...notes] } } };
     },

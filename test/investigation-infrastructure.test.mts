@@ -32,6 +32,20 @@ function inventory(input: ReturnType<typeof fixture>, options: InvestigationInfr
   return investigationInfrastructure(input, buildInvestigationSearchIndex(input), options);
 }
 
+test('complete topology searches past source page one and returns the exact source navigation page', () => {
+  const input = fixture();
+  input.entities = [entity('root'), ...Array.from({ length: 80 }, (_, index) => entity(`host-${index}`, 'ip_address', `192.0.2.${index}`))];
+  input.observations = Array.from({ length: 80 }, (_, index) => observation(`source-${index}`, ['root', `host-${index}`]));
+  input.relationships = Array.from({ length: 80 }, (_, index) => edge(`edge-${index}`, 'root', `host-${index}`, [`source-${index}`]));
+  const result = investigationInfrastructureRelationships(input, 'root', 1, '192.0.2.79');
+  assert.equal(result.rows.length, 50); assert.equal(result.total, 80);
+  assert.equal(result.topologyTotal, 1); assert.equal(result.topologyRows?.[0]?.to.canonical, '192.0.2.79');
+  const sourcePage = result.topologyRows?.[0]?.sourcePage;
+  assert.ok(sourcePage && sourcePage > 1);
+  assert.ok(investigationInfrastructureRelationships(input, 'root', sourcePage).rows.some(row => row.to.canonical === '192.0.2.79'));
+  assert.equal(investigationInfrastructureRelationships(input, 'root', 2, '192.0.2.79').topologyRows?.[0]?.to.canonical, '192.0.2.79');
+});
+
 test('retained infrastructure keeps exact shared identities and independent dated source edges', () => {
   const input = fixture(), before = structuredClone(input);
   const result = inventory(input, { type: 'ip_address' });
@@ -169,8 +183,8 @@ test('partial and unavailable coverage remain separate from pagination and provi
   assert.equal(result.pageCount, 1);
   assert.equal(result.partial, true);
   assert.equal(result.rows.find(row => row.entityId === 'first')?.partial, true);
-  assert.match(result.limitations.join(' '), /routing ASN.*not available/u);
-  assert.match(result.limitations.join(' '), /wildcard patterns.*not retained/u);
+  assert.match(result.limitations.join(' '), /routing ASN.*only when a source-qualified snapshot/u);
+  assert.match(result.limitations.join(' '), /wildcard patterns.*not enumerated hosts/u);
   assert.match(result.limitations.join(' '), /Case domain.*queried owner/u);
   assert.doesNotMatch(JSON.stringify(result.rows), /currentOrigin|providerRole|routingAsn/u);
 });

@@ -63,7 +63,48 @@ type SpfQueueItem = {
   path: string[];
   records?: unknown[];
   error?: string | null;
+  policy: SpfPolicyNode;
 };
+
+type SpfPolicyNode = { parsed: ReturnType<typeof parseSpfRecords> | null; children: Map<number, SpfPolicyNode> };
+type SpfStaticResult = { everySender: '+' | '-' | '~' | '?' | null; permissive: boolean };
+const SPF_PERMISSIVE_PATH_ISSUE = 'Observed permissive +all evidence on a potentially reachable positive SPF include or redirect path; review sender authorisation.';
+
+// This is a conservative universal-result check for unconditional all/include
+// chains, not a sender evaluator. Conditional mechanisms remain unknown.
+function spfStaticResult(policy: SpfPolicyNode): SpfStaticResult {
+  const parsed = policy.parsed;
+  if (!parsed?.valid) return { everySender: null, permissive: false };
+  let uncertain = false, permissive = false;
+  const finish = (result: '+' | '-' | '~' | '?'): SpfStaticResult => ({
+    everySender: !uncertain ? result : null,
+    permissive,
+  });
+  for (const mechanism of parsed.mechanisms) {
+    if (mechanism.kind === 'all') {
+      if (mechanism.qualifier === '+') permissive = true;
+      return finish(mechanism.qualifier);
+    }
+    if (mechanism.kind === 'include') {
+      const child = policy.children.get(mechanism.includeIndex!);
+      const result = child ? spfStaticResult(child) : { everySender: null, permissive: false };
+      if (mechanism.qualifier === '+' && result.permissive) permissive = true;
+      if (result.everySender === '+') return finish(mechanism.qualifier);
+      if (result.everySender !== null) continue; // Only child pass matches include.
+      uncertain = true;
+    } else {
+      // Without sender evaluation, even a literal mechanism remains conditional.
+      uncertain = true;
+    }
+  }
+  if (parsed.redirect) {
+    const child = policy.children.get(parsed.includes.length);
+    const result = child ? spfStaticResult(child) : { everySender: null, permissive: false };
+    permissive ||= result.permissive;
+    return result.everySender === null ? { everySender: null, permissive } : finish(result.everySender);
+  }
+  return { everySender: null, permissive };
+}
 
 const SPF_LOOKUP_LIMIT = 10;
 const SPF_VOID_LOOKUP_LIMIT = 2;
@@ -112,6 +153,7 @@ async function expandSpfPolicy(
   rootQuery: DnsQuery,
   resolveTxt: (domain: string) => Promise<DnsQuery>,
 ): Promise<SpfExpansion> {
+  const rootPolicy: SpfPolicyNode = { parsed: null, children: new Map() };
   const queue: SpfQueueItem[] = [{
     domain: rootDomain,
     parent: null,
@@ -120,6 +162,7 @@ async function expandSpfPolicy(
     path: [rootDomain],
     records: rootQuery.records,
     error: rootQuery.error,
+    policy: rootPolicy,
   }];
   const branches: SpfBranch[] = [];
   const issues: string[] = [];
@@ -178,6 +221,7 @@ async function expandSpfPolicy(
       parsed.issues,
     ));
     if (!parsed.valid) continue;
+    item.policy.parsed = parsed;
     if (dnsLookupTerms > SPF_LOOKUP_LIMIT) {
       boundReached = true;
       issues.push(`The expanded policy declares more than ${SPF_LOOKUP_LIMIT} DNS-querying terms.`);
@@ -189,7 +233,9 @@ async function expandSpfPolicy(
       ...parsed.includes.map((domain) => ({ relation: 'include' as const, domain })),
       ...(parsed.redirect ? [{ relation: 'redirect' as const, domain: parsed.redirect }] : []),
     ];
-    for (const dependency of dependencies) {
+    for (const [dependencyIndex, dependency] of dependencies.entries()) {
+      const policy: SpfPolicyNode = { parsed: null, children: new Map() };
+      item.policy.children.set(dependencyIndex, policy);
       const normalized = strictHostname(dependency.domain);
       if (!normalized) {
         branches.push(branchFor({
@@ -198,6 +244,7 @@ async function expandSpfPolicy(
           relation: dependency.relation,
           depth: item.depth + 1,
           path: item.path,
+          policy,
         }, 'invalid', null, 0, ['The SPF dependency is not a literal public hostname; macros are not expanded by this audit.']));
         continue;
       }
@@ -207,6 +254,7 @@ async function expandSpfPolicy(
         relation: dependency.relation,
         depth: item.depth + 1,
         path: [...item.path, normalized],
+        policy,
       });
     }
   }
@@ -224,6 +272,7 @@ async function expandSpfPolicy(
       : incomplete
         ? 'partial'
         : 'complete';
+  if (rootPolicy.parsed?.terminalPolicy !== 'pass' && spfStaticResult(rootPolicy).permissive) issues.unshift(SPF_PERMISSIVE_PATH_ISSUE);
   return {
     version: 1,
     state,
@@ -399,6 +448,7 @@ function buildExternalDependencies({
 }
 
 export {
+  SPF_PERMISSIVE_PATH_ISSUE,
   SPF_LOOKUP_LIMIT,
   SPF_MAX_DEPTH,
   SPF_VOID_LOOKUP_LIMIT,

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import PublicReferenceDocument from '$lib/components/PublicReferenceDocument.svelte';
-  import PublicSeo from '$lib/components/PublicSeo.svelte';
+  import PublicReferenceDocument from '#lib/components/PublicReferenceDocument.svelte';
+  import PublicSeo from '#lib/components/PublicSeo.svelte';
   import {
     type PublicResource,
-  } from '$lib/public-resources';
+  } from '#lib/public-resources.ts';
   import {
     WHOISLEUTH_PROJECT_URL,
     WHOISLEUTH_SITE_ORIGIN,

@@ -40,8 +40,10 @@ export function resolveIsnicRole(
 ) {
   if (!handle) return null;
   const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Capture the whole role value, including leading whitespace. A separate
+  // whitespace run overlaps this capture and backtracks when the handle fails.
   const headerMatch = text.match(new RegExp(
-    `^[ \\t]*role:[ \\t]*(.+)\\r?\\n[ \\t]*nic-hdl:[ \\t]*${escaped}[ \\t]*$`,
+    `^[ \\t]*role:(.+)\\r?\\n[ \\t]*nic-hdl:[ \\t]*${escaped}[ \\t]*$`,
     'im',
   ));
   if (!headerMatch) return null;
@@ -160,9 +162,7 @@ export function parseIndentedContactBlock(text: string, headerRe: RegExp) {
   if (lines.length === 0) return null;
 
   const remaining = [...lines];
-  const emailIndex = remaining.findIndex(
-    (line) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(line),
-  );
+  const emailIndex = remaining.findIndex(isIndentedContactEmail);
   const email = emailIndex !== -1
     ? remaining.splice(emailIndex, 1)[0]
     : null;
@@ -182,4 +182,13 @@ export function parseIndentedContactBlock(text: string, headerRe: RegExp) {
     email,
     truncated: allLines.length > lines.length,
   };
+}
+
+// Preserve the legacy contact classifier (not a mailbox validator), without
+// repeatedly trying a different separator in a long, dot-heavy failed match.
+function isIndentedContactEmail(line: string): boolean {
+  const at = line.indexOf('@');
+  if (at <= 0 || line.indexOf('@', at + 1) !== -1 || /\s/.test(line)) return false;
+  const dot = line.indexOf('.', at + 2);
+  return dot !== -1 && dot < line.length - 1;
 }

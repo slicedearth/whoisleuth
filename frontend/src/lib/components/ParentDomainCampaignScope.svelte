@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import { untrack } from 'svelte';
   import {
     buildParentDomainCampaignReviewExport,
     serializeParentDomainCampaignReviewExport,
     type ParentDomainCampaignReview,
     type ParentDomainHostnameObservation,
-  } from '$lib/analysis/parent-domain-campaign-review.ts';
-  import type { CampaignRecord } from '$lib/campaigns';
-  import type { CaseRecord } from '$lib/cases';
+  } from '#lib/analysis/parent-domain-campaign-review.ts';
+  import type { CampaignRecord } from '#lib/campaigns.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
 
   let { campaign, review, records, onselect, onmessage }: {
     campaign: CampaignRecord;

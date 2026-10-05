@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import type { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import type { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import { tick } from 'svelte';
-  import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft.ts';
+  import { restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
   let { draft }: { draft: ReturnType<typeof createCaseDraft> } = $props();
   let previewId = $state<string | null>(null);
   async function recover(event: MouseEvent, action: () => Promise<void>) {

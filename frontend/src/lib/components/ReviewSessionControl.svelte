@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { onMount, tick } from 'svelte';
   import type { ReviewSessionPosition, ReviewSessionRecord } from '../../../../packages/contracts/review-session-contract.mts';
   import { discardReviewSession, loadReviewSession, saveReviewSession } from '../review-session.ts';

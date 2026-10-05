@@ -2,21 +2,22 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount, setContext } from 'svelte';
-  import BrandMark from '$lib/components/BrandMark.svelte';
-  import SiteFooter from '$lib/components/SiteFooter.svelte';
-  import ThemeSelector from '$lib/components/ThemeSelector.svelte';
+  import BrandMark from '#lib/components/BrandMark.svelte';
+  import BrandWordmark from '#lib/components/BrandWordmark.svelte';
+  import SiteFooter from '#lib/components/SiteFooter.svelte';
+  import ThemeSelector from '#lib/components/ThemeSelector.svelte';
   import {
     publicHeaderNavigation,
     publicReferenceNavigation,
     publicReferenceSectionNavigation,
-  } from '$lib/workspaces';
-  import { clearConsoleWorkflowState } from '$lib/console-workflow-state';
-  import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
+  } from '#lib/workspaces.ts';
+  import { clearConsoleWorkflowState } from '#lib/console-workflow-state.ts';
+  import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '#lib/bounded-json-response.ts';
   import {
     PUBLIC_SESSION_CONTEXT,
     classifyPublicSessionResponse,
     type PublicSessionState,
-  } from '$lib/public-session';
+  } from '#lib/public-session.ts';
 
   let { children } = $props();
   let session = $state<PublicSessionState>('checking');
@@ -69,7 +70,7 @@
       if(!response.ok)throw new Error();
       session='anonymous';
       clearConsoleWorkflowState();
-      await goto('/login',{replaceState:true});
+      await goto('/login',{replace: true});
       clearConsoleWorkflowState();
     }catch{
       logoutError='Sign out failed. Try again.';
@@ -82,7 +83,7 @@
 <div class="public-shell" class:documentation-shell={referenceSectionActive}>
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <header class="public-header">
-    <a class="public-brand" href="/" aria-label="WHOISleuth overview"><span class="mark"><BrandMark /></span><span class="brand-copy"><strong>WHOISleuth</strong><small>Domain intelligence</small></span></a>
+    <a class="public-brand" href="/" aria-label="WHOISleuth overview"><span class="mark"><BrandMark /></span><span class="brand-copy"><strong><BrandWordmark /></strong><small>Domain intelligence</small></span></a>
     <nav class="public-navigation-desktop" aria-label="Public navigation">
       {#each publicHeaderNavigation as item}
         <a data-public-route={item.href} class:active={publicItemActive(item.href)} aria-current={publicItemCurrent(item.href)} href={item.href}>{item.label}</a>

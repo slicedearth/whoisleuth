@@ -1,9 +1,9 @@
 <script lang="ts">
-  import VisualizationFrame from '$lib/components/VisualizationFrame.svelte';
+  import VisualizationFrame from '#lib/components/VisualizationFrame.svelte';
   import {
     projectLifecycleEvents,
     type LifecycleEventInput,
-  } from '$lib/analysis/visualization-models.ts';
+  } from '#lib/analysis/visualization-models.ts';
 
   let { events }: { events: readonly LifecycleEventInput[] } = $props();
   const timeline = $derived(projectLifecycleEvents(events));

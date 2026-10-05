@@ -82,6 +82,13 @@ describe('scoped CLI release workflow', () => {
     assert.ok(assemblyIndex > installIndex && installedAuditIndex > assemblyIndex && installedAuditIndex < uploadIndex);
     assert.match(requiredValue(prepare[installedAuditIndex]?.run), /"\$RELEASE_DIRECTORY\/installed-dependencies\.json"/u);
     assert.equal((WORKFLOW.match(/npm run dependencies:audit/gu) ?? []).length, 2);
-    assert.equal(prepare[uploadIndex]?.with?.['retention-days'], 7);
+    assert.equal(prepare[uploadIndex]?.with?.['retention-days'], 90);
+    const bindingIndex = commandIndex(prepare, '--installed-dependencies');
+    assert.ok(bindingIndex > installedAuditIndex && bindingIndex < uploadIndex);
+    const downloadedBindingIndex = commandIndex(publish, '--installed-dependencies');
+    assert.ok(downloadedBindingIndex > commandIndex(publish, 'sha256sum --check') && downloadedBindingIndex < stageIndex);
+    for (const step of [prepare[bindingIndex], publish[downloadedBindingIndex]]) assert.match(requiredValue(step?.run), /--offline$/u);
+    const validatorCheckout = publish.find(step => step.uses?.startsWith('actions/checkout@'));
+    assert.equal(validatorCheckout?.with?.ref, '${{ needs.prepare.outputs.source-sha }}');
   });
 });

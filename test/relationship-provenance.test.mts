@@ -95,7 +95,7 @@ test('public retained pivots preserve their identity and original scan time with
   assert.deepEqual(original, before);
 });
 
-test('legacy parent versions cannot admit new source metadata through added or mixed-version fields', () => {
+test('legacy parent versions cannot admit new source metadata through added or mixed-version fields', async () => {
   const current = createRelationshipObservation(certificateGroup(false), { retainedAt: RETAINED });
   const legacy = { version: 1, observations: [{ ...current, sourceVersion: 2 }] };
   const before = structuredClone(legacy);
@@ -110,11 +110,14 @@ test('legacy parent versions cannot admit new source metadata through added or m
   assert.throws(() => normalizeRelationshipObservationStore({ version: 3, observations: [current] }), /newer schema 3/u);
   assert.deepEqual(legacy, before);
 
-  const raw = normalizeBulkSessionStore(richBulkSessionStore(2));
-  const row = requiredValue(requiredValue(raw.sessions[0]).results[0]);
+  // Start with actual public schema 4 rows, not a backdated current writer.
+  const publicArchive = JSON.parse(await readFile(new URL('./fixtures/workspace-source-provenance-v8-public.json', import.meta.url), 'utf8'));
+  const mixedBulk = structuredClone(publicArchive.sections.bulkSessions);
+  assert.equal(mixedBulk.version, 4);
+  assert.equal(normalizeBulkSessionStore(mixedBulk).sessions.length, 1);
+  const row = requiredValue(requiredValue(mixedBulk.sessions[0]).results[0]);
   row.observedAt = LAST;
   row.relationship = relationshipObservation({ tls: tls() });
-  const mixedBulk = { ...raw, version: 4 };
   assert.throws(() => normalizeBulkSessionStore(mixedBulk), /schema 4 cannot contain newer relationship source evidence/u);
   assert.throws(() => mergeBulkSessions([], mixedBulk), /schema 4 cannot contain newer relationship source evidence/u);
   const legacyBulk = structuredClone(mixedBulk);

@@ -6,10 +6,10 @@
     type BulkReviewPreset,
     type BulkReviewPresetView,
     type BulkReviewStore,
-  } from '$lib/bulk-review';
-  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome';
-  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
-  import type { BrowserLocalCollectionLoadState } from '$lib/browser-local-data-service';
+  } from '#lib/bulk-review.ts';
+  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '#lib/local-mutation-outcome.ts';
+  import { createDraftRevision, restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
+  import type { BrowserLocalCollectionLoadState } from '#lib/browser-local-data-service.ts';
 
   let {
     store,

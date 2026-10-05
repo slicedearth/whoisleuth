@@ -1,4 +1,5 @@
 import { sha256ArtifactBytes } from '../packages/evidence/artifact-integrity.mts';
+import type { ImageDerivationDeclaration } from '../packages/evidence/image-regions.mts';
 import { MAX_INVESTIGATION_PACKAGE_BYTES, encodeInvestigationPackageEntries, inspectInvestigationPackage, type InvestigationPackageSourceLink, type InvestigationPackageCaptureReview } from '../packages/investigation/investigation-package.mts';
 import { INVESTIGATION_MANIFEST_SCHEMA } from '../packages/investigation/investigation-manifest.mts';
 import { hasEncryptedInvestigationPackagePrefix, MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../packages/contracts/investigation-package-limits.mts';
@@ -31,6 +32,7 @@ export type OfflineInvestigationPackageDetails = Readonly<{
     id: string;
     byteLength: number;
     mediaType: string;
+    imageDerivation: ImageDerivationDeclaration | null;
     state: EntryState;
     identity: 'verified' | 'failed';
     verification: Pick<OfflineArtifactVerificationReport, 'artifact' | 'state' | 'checks' | 'summary'> | null;
@@ -93,6 +95,7 @@ export async function verifyOfflineInvestigationPackage(input: Uint8Array, passp
     }
     entries.push({ id: reviewed.entry.id, byteLength: reviewed.entry.byteLength,
       mediaType: 'mediaType' in reviewed.entry ? reviewed.entry.mediaType : 'application/json',
+      imageDerivation: 'imageDerivation' in reviewed.entry ? reviewed.entry.imageDerivation : null,
       state, identity: reviewed.state === 'identity_verified' ? 'verified' : 'failed', verification, issue });
   }
   const complete = entries.every((entry) => entry.state === 'admitted' || entry.state === 'opaque')
@@ -116,6 +119,7 @@ export async function verifyOfflineInvestigationPackage(input: Uint8Array, passp
       'Capture attachment checks bind selected bytes to the capture manifest declaration, not to a trusted publisher or real website observation.',
       'Case-file checks match original references to other verified package bytes by length and digest, not by filename or claimed source. Missing originals make the package partial; no file is fetched or imported.',
       'Source declarations and packaging times are not authenticated. Signatures and timestamp tokens require their own verification and trust decisions.',
+      'Image derivation declares the immediate parent fingerprint and editing operations, not proof of transformation or complete redaction. Parent bytes are optional; missing declarations leave editing history unknown.',
       'This command does not import, overwrite or collect evidence. Unchanged bytes and valid source structure do not establish factual accuracy, currentness or safe sharing.',
     ]),
   });

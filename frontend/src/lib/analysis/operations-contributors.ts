@@ -26,8 +26,8 @@ export function buildOperationsScopeReview(
       record, coverage, lifecycle, latestReview, providerEvent,
       baselineRetained: Boolean(latestReview?.recheck?.baselinePinId
         && record.evidencePins.some(pin => pin.id === latestReview.recheck!.baselinePinId)),
-      openObjects: coverage.filter(row => row.target.state === 'open').length,
-      analystResolvedObjects: coverage.filter(row => row.target.state === 'resolved').length,
+      openObjects: record.workflowMetadata?.incidentTargets.filter(target => target.state === 'open').length ?? 0,
+      analystResolvedObjects: record.workflowMetadata?.incidentTargets.filter(target => target.state === 'resolved').length ?? 0,
       observedState: latestReview ? 'available' as const : record.observedEffects.reviews.length ? 'ambiguous' as const : 'missing' as const,
       historyIncomplete: record.observedEffects.omitted > 0 || record.observedEffects.preV13HistoryUnavailable
         || record.closures.omitted > 0 || record.closures.preV13HistoryUnavailable
@@ -40,7 +40,7 @@ export function buildOperationsScopeReview(
     casesOmitted: sourceState === 'ready' ? Math.max(0, records.length - MAX_CASES) : 0,
     openObjects: sourceState === 'ready' ? rows.reduce((count, row) => count + row.openObjects, 0) : null,
     analystResolvedObjects: sourceState === 'ready' ? rows.reduce((count, row) => count + row.analystResolvedObjects, 0) : null,
-    unknownObjectCoverage: sourceState === 'ready' ? rows.reduce((count, row) => count + row.coverage.length, 0) : null,
+    unknownObjectCoverage: sourceState === 'ready' ? rows.reduce((count, row) => count + row.coverage.filter(object => object.actionCoverage === 'unknown' || object.observationCoverage === 'unknown').length, 0) : null,
   };
 }
 

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { CASE_MANUAL_TRAIL_KINDS } from '../../../../packages/cases/case-response-records.mts';
   import type { CaseRecord } from '../cases.ts';
-  import { buildCaseInvestigationTrail } from '$lib/analysis/case-response-model.ts';
-  import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
-  import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
+  import { buildCaseInvestigationTrail } from '#lib/analysis/case-response-model.ts';
+  import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
+  import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseAfterActionStage from './CaseAfterActionStage.svelte';
 

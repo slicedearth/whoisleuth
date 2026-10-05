@@ -1,12 +1,12 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
-  import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
+  import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import { submittedPacketReceipts, latestEvidenceRequests, evidenceRequestDelivery, type CaseEvidenceRequest } from '../../../../packages/cases/case-requested-evidence.mts';
   import { MAX_RESPONSE_VALUE_LENGTH, MAX_RESPONSE_RATIONALE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
-  import { isoFromUtcInput, utcDateTimeInputAttributes } from '$lib/analysis/case-response-form-values.ts';
-  import { reviewClock } from '$lib/review-clock';
+  import { isoFromUtcInput, utcDateTimeInputAttributes } from '#lib/analysis/case-response-form-values.ts';
+  import { reviewClock } from '#lib/review-clock.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
 

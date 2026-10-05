@@ -1,4 +1,6 @@
 import { sveltekit } from '@sveltejs/kit/vite';
+import adapter from '@sveltejs/adapter-static';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { fileURLToPath } from 'node:url';
 import { build, defineConfig, type Plugin } from 'vite';
 import { frontendBuildIdentity } from './build-identity.ts';
@@ -84,7 +86,26 @@ export default defineConfig(async () => {
       themeInitializerPlugin(),
       workerBuild.client,
       browserThirdPartyNoticesPlugin(fileURLToPath(new URL('..', import.meta.url)), workerBuild.renderedWorkerModules),
-      sveltekit(),
+      sveltekit({
+        preprocess: vitePreprocess(),
+        version: { name: identity.updateVersion, pollInterval: 0 },
+        adapter: adapter({ pages: 'build', assets: 'build', strict: true }),
+        csp: {
+          mode: 'hash',
+          directives: {
+            'default-src': ['self'],
+            'script-src': ['self', 'https://challenges.cloudflare.com'],
+            'style-src': ['self', 'unsafe-inline'],
+            'img-src': ['self', 'data:'],
+            'font-src': ['self'],
+            'connect-src': ['self'],
+            'frame-src': ['https://challenges.cloudflare.com'],
+            'base-uri': ['self'],
+            'form-action': ['self'],
+            'object-src': ['none'],
+          },
+        },
+      }),
     ],
     worker: { plugins: workerBuild.workerPlugins },
     server: {

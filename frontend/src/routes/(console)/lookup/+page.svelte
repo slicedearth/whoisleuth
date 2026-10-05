@@ -2,99 +2,99 @@
   import { goto } from '$app/navigation';
   import { getContext, onDestroy, onMount, tick } from 'svelte';
   import { page } from '$app/state';
-  import LocalSectionNav from '$lib/components/LocalSectionNav.svelte';
-  import LookupAtAGlance from '$lib/components/LookupAtAGlance.svelte';
-  import LookupAssessment from '$lib/components/LookupAssessment.svelte';
-  import LookupFamilySummary from '$lib/components/LookupFamilySummary.svelte';
-  import LookupEvidenceReplay from '$lib/components/LookupEvidenceReplay.svelte';
-  import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
-  import LookupSourceCheckpoint from '$lib/components/LookupSourceCheckpoint.svelte';
-  import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
-  import LookupForm from '$lib/components/LookupForm.svelte';
-  import MessageIntake from '$lib/components/MessageIntake.svelte';
-  import LookupTaskGuidance from '$lib/components/LookupTaskGuidance.svelte';
-  import LookupEvidenceSection from '$lib/components/LookupEvidenceSection.svelte';
-  import LookupRegistrySection from '$lib/components/LookupRegistrySection.svelte';
-  import LookupRelationshipsSection from '$lib/components/LookupRelationshipsSection.svelte';
-  import LookupSourceQualitySection from '$lib/components/LookupSourceQualitySection.svelte';
-  import LookupWebEvidenceSection from '$lib/components/LookupWebEvidenceSection.svelte';
-  import { lookupWebSurfaces } from '$lib/components/lookup-web-surfaces.ts';
-  import { lookupSectionSurfaces } from '$lib/components/lookup-section-surfaces.ts';
-  import LookupSavedContextPreview from '$lib/components/LookupSavedContextPreview.svelte';
-  import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
+  import LocalSectionNav from '#lib/components/LocalSectionNav.svelte';
+  import LookupAtAGlance from '#lib/components/LookupAtAGlance.svelte';
+  import LookupAssessment from '#lib/components/LookupAssessment.svelte';
+  import LookupFamilySummary from '#lib/components/LookupFamilySummary.svelte';
+  import LookupEvidenceReplay from '#lib/components/LookupEvidenceReplay.svelte';
+  import LookupEvidenceCheckpoint from '#lib/components/LookupEvidenceCheckpoint.svelte';
+  import LookupSourceCheckpoint from '#lib/components/LookupSourceCheckpoint.svelte';
+  import type { CheckpointFact } from '#lib/analysis/case-evidence-checkpoint.ts';
+  import LookupForm from '#lib/components/LookupForm.svelte';
+  import MessageIntake from '#lib/components/MessageIntake.svelte';
+  import LookupTaskGuidance from '#lib/components/LookupTaskGuidance.svelte';
+  import LookupEvidenceSection from '#lib/components/LookupEvidenceSection.svelte';
+  import LookupRegistrySection from '#lib/components/LookupRegistrySection.svelte';
+  import LookupRelationshipsSection from '#lib/components/LookupRelationshipsSection.svelte';
+  import LookupSourceQualitySection from '#lib/components/LookupSourceQualitySection.svelte';
+  import LookupWebEvidenceSection from '#lib/components/LookupWebEvidenceSection.svelte';
+  import { lookupWebSurfaces } from '#lib/components/lookup-web-surfaces.ts';
+  import { lookupSectionSurfaces } from '#lib/components/lookup-section-surfaces.ts';
+  import LookupSavedContextPreview from '#lib/components/LookupSavedContextPreview.svelte';
+  import LookupResultHeader from '#lib/components/LookupResultHeader.svelte';
   import { hasLookupUrlScheme, lookupObservationHostname } from '../../../../../packages/evidence/lookup-target.mts';
-  import LookupPresentationControls from '$lib/components/LookupPresentationControls.svelte';
-  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
-  import PageHeading from '$lib/components/PageHeading.svelte';
+  import LookupPresentationControls from '#lib/components/LookupPresentationControls.svelte';
+  import DeferredSurface from '#lib/components/DeferredSurface.svelte';
+  import PageHeading from '#lib/components/PageHeading.svelte';
   import {
     activeProfile,
     type ActiveBrandProfileSourceState,
     type BrandProfile,
-  } from '$lib/brand-profiles';
-  import { LookupCollectionWorkflow } from '$lib/controllers/lookup-collection-workflow.ts';
-  import { LookupPageLifecycle } from '$lib/controllers/lookup-page-lifecycle.ts';
+  } from '#lib/brand-profiles.ts';
+  import { LookupCollectionWorkflow } from '#lib/controllers/lookup-collection-workflow.ts';
+  import { LookupPageLifecycle } from '#lib/controllers/lookup-page-lifecycle.ts';
   import type { CaseRecord } from '../../../lib/cases.ts';
-  import { loadWatchlists, saveSingleDomainWatchlist } from '$lib/watchlists';
-  import { saveCandidateHandoff } from '$lib/candidate-handoff';
+  import { loadWatchlists, saveSingleDomainWatchlist } from '#lib/watchlists.ts';
+  import { saveCandidateHandoff } from '#lib/candidate-handoff.ts';
   import {
     prepareLookupEvidenceExport,
     exportLookupEvidence,
     exportLookupReadableReport,
     exportLookupInvestigationBrief,
     exportLookupClaimPassport,
-  } from '$lib/analysis/lookup-exports.ts';
-  import { createLookupViewModel } from '$lib/analysis/lookup-response.ts';
-  import { formatDate, records, show } from '$lib/analysis/lookup-display-model.ts';
-  import { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
-  import type { LookupClaimId } from '$lib/analysis/lookup-claim-readiness.ts';
+  } from '#lib/analysis/lookup-exports.ts';
+  import { createLookupViewModel } from '#lib/analysis/lookup-response.ts';
+  import { formatDate, records, show } from '#lib/analysis/lookup-display-model.ts';
+  import { buildLookupRouteAnalysis } from '#lib/analysis/lookup-route-analysis.ts';
+  import type { LookupClaimId } from '#lib/analysis/lookup-claim-readiness.ts';
   import type {
     LookupFreshnessPolicyInput,
     LookupFreshnessThresholds,
-  } from '$lib/analysis/lookup-source-refresh.ts';
-  import { LOOKUP_CLIENT_TIMEOUT_MS } from '$lib/analysis/lookup-request.ts';
+  } from '#lib/analysis/lookup-source-refresh.ts';
+  import { LOOKUP_CLIENT_TIMEOUT_MS } from '#lib/analysis/lookup-request.ts';
   import {
     prepareLookupCollectionTarget,
     buildLookupResultSectionLinks,
     lookupEvidenceFamilyForHref,
     lookupSecurityTxtEligible,
     lookupTargetType,
-  } from '$lib/analysis/lookup-page-actions.ts';
+  } from '#lib/analysis/lookup-page-actions.ts';
   import {
     readLookupPresentation,
     writeLookupPresentation,
     type LookupTaskView,
-  } from '$lib/analysis/lookup-presentation.ts';
-  import { buildLookupWebsiteSnapshot } from '$lib/analysis/lookup-snapshot-input.ts';
-  import { buildServiceDependencyReview } from '$lib/analysis/service-dependency-review.ts';
-  import { parseDomainInput } from '$lib/analysis/utils.ts';
+  } from '#lib/analysis/lookup-presentation.ts';
+  import { buildLookupWebsiteSnapshot } from '#lib/analysis/lookup-snapshot-input.ts';
+  import { buildServiceDependencyReview } from '#lib/analysis/service-dependency-review.ts';
+  import { parseDomainInput } from '#lib/analysis/utils.ts';
   import {
     CAPABILITY_CONTEXT,
     disabledCapabilities,
     disabledCapability,
     featureCapability,
     type CapabilityGetter,
-  } from '$lib/capabilities';
+  } from '#lib/capabilities.ts';
   import {
     readLookupWorkflowState,
     writeLookupWorkflowState,
     selectConsoleCase,
     setCaseNavigationContext,
-  } from '$lib/console-workflow-state.ts';
+  } from '#lib/console-workflow-state.ts';
   import { normalizeOpaqueReferenceId } from '../../../../../packages/cases/opaque-reference-id.mts';
-  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
-  import { preloadBestEffort } from '$lib/idle-preload';
-  import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
-  import { LookupCaseController } from '$lib/controllers/lookup-case-controller';
-  import type { LookupWatchlistState } from '$lib/controllers/lookup-view-state';
-  import { createLookupSessionState, LookupSession } from '$lib/controllers/lookup-session';
-  import { LookupWatchlistWorkspace } from '$lib/controllers/lookup-watchlist-workspace';
-  import { LookupSectionNavigation } from '$lib/controllers/lookup-section-navigation';
+  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
+  import { preloadBestEffort } from '#lib/idle-preload.ts';
+  import { LookupRequestController } from '#lib/controllers/lookup-request-controller.ts';
+  import { LookupCaseController } from '#lib/controllers/lookup-case-controller.ts';
+  import type { LookupWatchlistState } from '#lib/controllers/lookup-view-state.ts';
+  import { createLookupSessionState, LookupSession } from '#lib/controllers/lookup-session.ts';
+  import { LookupWatchlistWorkspace } from '#lib/controllers/lookup-watchlist-workspace.ts';
+  import { LookupSectionNavigation } from '#lib/controllers/lookup-section-navigation.ts';
   import {
     LookupCaseWorkspace,
     lookupCaseActions,
     type LookupCaseState,
-  } from '$lib/controllers/lookup-case-workspace';
-  import { LookupAnchorController } from '$lib/controllers/lookup-anchor-controller';
+  } from '#lib/controllers/lookup-case-workspace.ts';
+  import { LookupAnchorController } from '#lib/controllers/lookup-anchor-controller.ts';
   import {
     MAX_OBSERVATION_LIMITATIONS,
     MAX_OBSERVATION_LIMITATION_LENGTH,
@@ -360,9 +360,10 @@
     lookupSession.changeQuery(value);
   }
   $effect(() => {
-    const signature = LookupSession.urlSignature(page.url);
+    const url = new URL(page.url.href);
+    const signature = LookupSession.urlSignature(url);
     if (!session.urlReady || signature === session.lastUrl) return;
-    lookupSession.reconcileUrl(page.url);
+    lookupSession.reconcileUrl(url);
   });
   const webSurfaces = $derived(
     lookupWebSurfaces(lookupView, {
@@ -431,7 +432,7 @@
     },
     navigateHash: navigateToCurrentLookupHash,
   });
-  onMount(() => pageLifecycle.mount(page.url, window));
+  onMount(() => pageLifecycle.mount(new URL(page.url.href), window));
 
   function websiteSnapshotInput() {
     const now = new Date().toISOString();
@@ -713,7 +714,7 @@
           </summary>
           <div class="detailed-assessment-body">
             <DeferredSurface
-              load={() => import('$lib/components/LookupClaimReadiness.svelte')}
+              load={() => import('#lib/components/LookupClaimReadiness.svelte')}
               loadingLabel="Loading Evidence Readiness review…"
               unavailableLabel="Evidence Readiness review could not be loaded."
               placeholder="panel"
@@ -726,7 +727,7 @@
 
             {#if lookupEvidenceDocument}
               <DeferredSurface
-                load={() => import('$lib/components/LookupInvestigationCapsule.svelte')}
+                load={() => import('#lib/components/LookupInvestigationCapsule.svelte')}
                 loadingLabel="Loading portable investigation hand-off…"
                 unavailableLabel="The portable investigation hand-off could not be loaded."
                 placeholder="panel"
@@ -742,7 +743,7 @@
 
             {#if session.observation.response?.type === 'domain' && session.task === 'acquisition'}
               <DeferredSurface
-                load={() => import('$lib/components/LookupAcquisitionDueDiligence.svelte')}
+                load={() => import('#lib/components/LookupAcquisitionDueDiligence.svelte')}
                 loadingLabel="Loading acquisition due-diligence review…"
                 unavailableLabel="Acquisition due-diligence review could not be loaded."
                 placeholder="workspace"

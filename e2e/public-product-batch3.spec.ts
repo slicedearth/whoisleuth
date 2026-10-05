@@ -240,6 +240,7 @@ test('filters and opens the canonical CLI catalogue entirely by keyboard', async
   await page.goto('/cli');
   const catalogue = page.getByTestId('public-cli-catalogue');
   const search = catalogue.getByRole('searchbox', { name: 'Search commands' });
+  await expect(search).toBeEnabled();
   await search.focus();
   await page.keyboard.type('workflow-plan');
   await expect(search).toBeFocused();
@@ -328,6 +329,31 @@ test('preserves CLI filter and router state across public Back and Forward navig
   await page.goForward();
   await expect(page).toHaveURL('/resources');
   await expect(page.getByRole('heading', { name: 'Guides for common investigation tasks' })).toBeVisible();
+});
+
+test('a full public navigation wins over an overlapping shallow CLI filter update', async ({ page }) => {
+  const requests = collectInvestigationRequests(page);
+  await page.goto('/cli#commands');
+  await expect(page.getByTestId('public-cli-catalogue')).toHaveAttribute('data-client-ready', 'true');
+  const resources = page.getByRole('navigation', { name: 'Public navigation' }).getByRole('link', { name: 'Resources', exact: true });
+  await expect(resources).toHaveAttribute('href', '/resources');
+  // Both native events run in one turn, before either router promise settles.
+  await resources.evaluate(link => {
+    const search = document.querySelector<HTMLInputElement>('[data-testid="public-cli-catalogue"] input[type="search"]');
+    if (!search) throw new Error('The CLI filter is absent.');
+    search.value = 'doctor';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    (link as HTMLAnchorElement).click();
+  });
+  await expect(page).toHaveURL('/resources');
+  await expect(page.getByRole('heading', { name: 'Guides for common investigation tasks' })).toBeVisible();
+  await expect(page.getByTestId('public-cli-catalogue')).toHaveCount(0);
+  await page.goBack();
+  await expect(page.getByTestId('public-cli-catalogue')).toHaveAttribute('data-client-ready', 'true');
+  await expect(page.getByRole('searchbox', { name: 'Search commands' })).toHaveValue('doctor');
+  await page.goForward();
+  await expect(page).toHaveURL('/resources');
+  expect(requests).toEqual([]);
 });
 
 test('opens a directly linked CLI command without loading unrelated command details', async ({ page }) => {

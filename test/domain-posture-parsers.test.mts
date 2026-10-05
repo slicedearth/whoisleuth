@@ -31,6 +31,16 @@ describe('TXT/tag parsing', () => {
 });
 
 describe('SPF', () => {
+  test('retains internal mechanism order, include identity and qualifiers without altering collection includes', () => {
+    const parsed = parseSpfRecords(['v=spf1 -include:block.example.net include:allow.example.net -all redirect=ignored.example.net']);
+    assert.deepEqual(parsed.includes, ['block.example.net', 'allow.example.net']);
+    assert.deepEqual(parsed.mechanisms, [
+      { kind: 'include', qualifier: '-', includeIndex: 0 },
+      { kind: 'include', qualifier: '+', includeIndex: 1 },
+      { kind: 'all', qualifier: '-', includeIndex: null },
+    ]);
+    assert.equal(parsed.redirect, 'ignored.example.net');
+  });
   test('recognizes a strong fail-all policy and counts top-level DNS terms', () => {
     const parsed = parseSpfRecords([['v=spf1 include:_spf.example.net mx -all']]);
     assert.equal(parsed.valid, true);

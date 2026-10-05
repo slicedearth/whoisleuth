@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { evidenceStatusChipClass } from '$lib/analysis/evidence-status-tone.ts';
-  import type { WithheldThreatIntelligence } from '$lib/analysis/lookup-response.ts';
+  import { evidenceStatusChipClass } from '#lib/analysis/evidence-status-tone.ts';
+  import type { WithheldThreatIntelligence } from '#lib/analysis/lookup-response.ts';
 
   type JsonRecord = Record<string, unknown>;
   type RiskContext = {
@@ -31,7 +31,7 @@
 
 <section class="threat-intelligence evidence-card card" aria-labelledby="threat-intelligence-title">
   <header class="section-head"><div><p class="eyebrow">External intelligence</p><h4 id="threat-intelligence-title">Archived provider verdicts</h4></div><span>Separately attributed</span></header>
-  <p class="card-note">Third-party observations remain attributed and do not decide availability. Risk changes only when qualifying records agree across at least two publisher families.</p>
+  <p class="card-note">Third-party observations remain attributed and do not decide availability. Risk changes only when qualifying records agree across at least two publisher families. Publisher diversity does not establish independent underlying reports; shared submissions and unknown collection methods remain limitations.</p>
   {#if withheld.length}
     <section class="callout warn" aria-label="Withheld external-intelligence records">
       <p>Some external-intelligence data could not be used. This is not evidence of no findings.</p>
@@ -41,9 +41,9 @@
   {#if riskContext.eligibleProviderCount}
     <p class="callout warn external-risk-context">
       {#if riskContext.contribution}
-        Risk context: {riskContext.independentPublisherCount} independent publisher families contributed +{riskContext.contribution} under model v{riskModelVersion ?? '—'}.
+        Risk context: {riskContext.independentPublisherCount} distinct publisher families contributed +{riskContext.contribution} under model v{riskModelVersion ?? '—'}.
       {:else}
-        Risk context: {riskContext.eligibleProviderCount} qualifying provider observation{riskContext.eligibleProviderCount === 1 ? '' : 's'} represented {riskContext.independentPublisherCount} publisher family; no points were added because independent corroboration was absent.
+        Risk context: {riskContext.eligibleProviderCount} qualifying provider observation{riskContext.eligibleProviderCount === 1 ? '' : 's'} represented {riskContext.independentPublisherCount} publisher family; no points were added because the model's publisher-family threshold was not met.
       {/if}
       {#if riskContext.freshestAgeDays !== null} Newest qualifying record age: {riskContext.freshestAgeDays} day{riskContext.freshestAgeDays === 1 ? '' : 's'}.{/if}
       {#if riskContext.unknownAgeProviderCount} {riskContext.unknownAgeProviderCount} qualifying provider observation{riskContext.unknownAgeProviderCount === 1 ? ' has' : 's have'} unknown age.{/if}

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { open, mkdtemp, readFile, rm, writeFile, type FileHandle } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { open, mkdtemp, readFile, readdir, rm, writeFile, type FileHandle } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, test } from 'node:test';
@@ -12,6 +13,8 @@ import { buildOfflineEvidenceReviewWithLocalResources, formatOfflineEvidenceRevi
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildSchemaCompatibilityInventory } from '../tools/schema-compatibility.mts';
+import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
+import { deferred } from './deferred.mts';
 
 const FIXTURE = 'fixtures/mmdb/maxmind-db-test-data/GeoIP2-City-Test.mmdb';
 const DIGEST = 'ed972738e4e03a3e56e12041a6af4d91592249d110f7e4a647e5f2fa0e639c09';
@@ -248,6 +251,66 @@ test('a real busy worker is terminated at the processing deadline and crashes us
   assert.ok('reason' in failed); assert.equal(failed.reason, 'processing_unavailable');
   assert.ok(!JSON.stringify(failed).includes('private path'));
 });
+
+test('MMDB cancellation closes an in-flight read before rejecting and never starts its worker', async () => {
+  const controller = new AbortController(), entered = deferred<void>(), release = deferred<void>();
+  const bytes = await readFile(FIXTURE);
+  let closed = false, workers = 0;
+  const handle = { stat: async () => ({ size: bytes.length, isFile: () => true }),
+    read: async (buffer: Buffer) => { entered.resolve(); await release.promise; bytes.copy(buffer); return { bytesRead: bytes.length }; },
+    close: async () => { closed = true; } } as unknown as FileHandle;
+  const pending = reviewLocalMmdb(QUERY, FIXTURE, NOW, { signal: controller.signal, openFile: async () => handle,
+    createWorker: () => { workers++; throw new Error('Must not start'); } });
+  const rejected = assert.rejects(pending, { name: 'AbortError' });
+  await entered.promise;
+  controller.abort(); release.resolve();
+  await rejected;
+  assert.equal(closed, true); assert.equal(workers, 0);
+  await assert.rejects(reviewLocalMmdb(QUERY, FIXTURE, NOW, { signal: controller.signal,
+    openFile: async () => { throw new Error('Must not reopen'); } }), { name: 'AbortError' });
+});
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) for (const mode of ['stdout', 'quiet', 'strict', 'file'] as const) {
+  test(`the actual MMDB CLI honours first ${signal} during worker review (${mode})`, { timeout: 25_000 }, async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'whoisleuth-mmdb-interrupt-'));
+    directories.push(directory);
+    const source = join(directory, 'query.json'), output = join(directory, 'result.json');
+    await writeFile(source, JSON.stringify(QUERY));
+    // Replace only the decoding worker with a held real worker. The executable,
+    // command routing, signal handlers, reader and cleanup all remain real.
+    const preload = `data:text/javascript,${encodeURIComponent(`
+      import threads from 'node:worker_threads';
+      import { syncBuiltinESMExports } from 'node:module';
+      const OriginalWorker = threads.Worker;
+      threads.Worker = class extends OriginalWorker {
+        constructor(url, options) {
+          const held = options?.workerData?.kind === 'local-mmdb-review';
+          super(held ? 'setInterval(() => {}, 1000)' : url, held ? { ...options, eval: true } : options);
+          if (held) this.once('online', () => process.send?.('review-started'));
+        }
+      };
+      syncBuiltinESMExports();
+    `)}`;
+    const child = spawn(process.execPath, ['--import', preload, 'bin/whoisleuth.mts', 'review-evidence', source, '--mmdb', FIXTURE,
+      ...(mode === 'file' ? ['--json', '--output', output] : mode === 'quiet' ? ['--quiet'] : mode === 'strict' ? ['--strict-exit'] : [])],
+      { env: environmentWithoutV8Coverage(), stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+    let stdout = '', stderr = '';
+    child.stdout!.setEncoding('utf8').on('data', value => { stdout += value; });
+    child.stderr!.setEncoding('utf8').on('data', value => { stderr += value; });
+    const exited = new Promise<number | null>((resolve, reject) => { child.once('exit', resolve); child.once('error', reject); });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`Worker did not start: ${stderr}`)), 15_000);
+        child.once('message', value => { clearTimeout(timer); assert.equal(value, 'review-started'); resolve(); });
+        void exited.then(code => { clearTimeout(timer); reject(new Error(`CLI exited before interruption: ${code}: ${stderr}`)); });
+      });
+      child.kill(signal);
+      assert.equal(await exited, signal === 'SIGINT' ? 130 : 143);
+      assert.equal(stdout, ''); assert.equal(stderr, 'Cancelled by analyst.\n');
+      assert.deepEqual(await readdir(directory), ['query.json']);
+    } finally { if (child.exitCode === null) { child.kill('SIGKILL'); await exited; } }
+  });
+}
 
 test('CLI terminal, JSON and strict exit agree on current admission without making requests', async () => {
   let requests = 0;

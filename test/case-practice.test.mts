@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createCasePracticeRecord, createCasePracticeSession, CASE_PRACTICE_LATER_AT, CASE_PRACTICE_SCENARIOS, casePracticeFeedback, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeRoutes } from '../frontend/src/lib/analysis/case-practice.ts';
+import { createCasePracticeRecord, createCasePracticeSession, CASE_PRACTICE_LATER_AT, CASE_PRACTICE_SCENARIOS, reviewCasePracticeInput, previewCasePracticeContainment, casePracticeFeedback, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeRoutes } from '../frontend/src/lib/analysis/case-practice.ts';
 import { normalizeCase } from '../packages/cases/case-record-operations.mts';
 import { replaceCaseDraft } from '../packages/cases/case-drafts.mts';
 import { caseRecheckAnswerContext } from '../packages/cases/case-recheck-model.mts';
@@ -19,6 +19,31 @@ test('practice starts from fictional, separately attributed complete and unavail
   assert.equal(record.assertions[0]!.recheck?.baselinePinId, record.evidencePins[0]!.id);
   assert.equal(record.actions.length, 0);
   assert.equal(record.closures.records.length, 0);
+});
+
+test('the existing offer-page practice runs deterministic offline owners without changing its evidence or open follow-up', async () => {
+  const record = createCasePracticeRecord(), before = structuredClone(record);
+  const first = await reviewCasePracticeInput(record), repeated = await reviewCasePracticeInput(record);
+  assert.deepEqual(first, repeated);
+  assert.deepEqual(first.intake.indicators.map(item => [item.kind, item.value]), [['sha256', 'a'.repeat(64)], ['ipv4', '192.0.2.17']]);
+  assert.ok(first.intake.indicators.every(item => item.location.partId === 'input'));
+  assert.equal(first.intake.distributionContext?.channel, 'advertisement');
+  assert.equal(first.intake.distributionContext?.observedAt, '2026-09-01T12:00:00.000Z');
+  assert.equal(first.intake.reviewedAt, CASE_PRACTICE_LATER_AT);
+  assert.equal(JSON.stringify(first.intake).includes('campaign=fictional'), false);
+  assert.equal(first.history.state, 'partial');
+  const boundary = first.history.observations.find(item => item.state === 'reported')!;
+  assert.ok(boundary.source.includes(record.evidencePins[0]!.id));
+  assert.equal(record.evidenceHistory.length, 0);
+  const included = await previewCasePracticeContainment(record, 'internal', true);
+  assert.deepEqual(included.evidencePins, [record.evidencePins[0]]);
+  assert.equal(included.assertions[0]!.state, 'open');
+  assert.equal(included.assertions[0]!.evidence[0]!.stance, 'unresolved');
+  const excluded = await previewCasePracticeContainment(record, 'trusted', false);
+  assert.equal(excluded.state, 'partial'); assert.equal(excluded.assertions[0]!.evidence[0]!.state, 'not_selected');
+  const publicPreview = await previewCasePracticeContainment(record, 'public', true);
+  assert.deepEqual(publicPreview.assertions, []); assert.deepEqual(publicPreview.evidencePins, []);
+  assert.deepEqual(record, before);
 });
 
 test('required practice families have distinct supplied evidence, scope, report comparisons and recheck conditions', () => {

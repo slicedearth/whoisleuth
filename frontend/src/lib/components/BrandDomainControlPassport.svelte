@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
-  import { parseBoundedJson } from '$lib/bounded-json';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
+  import { parseBoundedJson } from '#lib/bounded-json.ts';
   import {
     applyVerifiedDomainControlPassport,
     buildBrandProfilePassportInput,
@@ -14,10 +14,10 @@
     serializeDomainControlManifest,
     verifyDomainControlPassport,
     type DomainControlPassportField,
-  } from '$lib/analysis/domain-control-passport.ts';
-  import type { DomainControlPassport } from '$lib/analysis/domain-control-manifest-core.ts';
-  import type { BrandProfile, BrandProfileSaveResult } from '$lib/brand-profiles';
-  import { createDraftRevision } from '$lib/controllers/submitted-draft';
+  } from '#lib/analysis/domain-control-passport.ts';
+  import type { DomainControlPassport } from '#lib/analysis/domain-control-manifest-core.ts';
+  import type { BrandProfile, BrandProfileSaveResult } from '#lib/brand-profiles.ts';
+  import { createDraftRevision } from '#lib/controllers/submitted-draft.ts';
 
   let { active, saveProfile, writeDisabled = false }: {
     active: BrandProfile;

@@ -101,6 +101,8 @@ type SchemaLifecycleSerialisationProfile = Readonly<{
   encoding: 'utf-8';
   bom: false;
   indentSpaces: 0 | 2;
+  /** Prefer the declared indentation, falling back to compact JSON at the byte bound. */
+  compactFallback?: true;
   terminalLf: boolean;
   propertyOrder: 'normalised_fixed' | 'source_insertion';
   canonicalisation: null;
@@ -1087,11 +1089,12 @@ function copySerialisationProfile(
   budget: MetadataCopyBudget,
 ): SchemaLifecycleSerialisationProfile {
   const label = `Schema lifecycle serialisation profile ${index + 1}`;
-  const source = ordinaryRecord(value, SERIALISATION_PROFILE_KEYS, label, budget);
+  const source = ordinaryRecord(value, SERIALISATION_PROFILE_KEYS, label, budget, ['compactFallback']);
   if (source.mediaType !== 'application/json'
     || source.encoding !== 'utf-8'
     || source.bom !== false
     || (source.indentSpaces !== 0 && source.indentSpaces !== 2)
+    || (source.compactFallback !== undefined && (source.compactFallback !== true || source.indentSpaces !== 2))
     || typeof source.terminalLf !== 'boolean'
     || (source.propertyOrder !== 'normalised_fixed' && source.propertyOrder !== 'source_insertion')
     || (source.integrity !== 'none'
@@ -1116,6 +1119,7 @@ function copySerialisationProfile(
     encoding: 'utf-8' as const,
     bom: false as const,
     indentSpaces: source.indentSpaces,
+    ...(source.compactFallback === true ? { compactFallback: true as const } : {}),
     terminalLf: source.terminalLf,
     propertyOrder: source.propertyOrder,
     canonicalisation: source.canonicalisation === null

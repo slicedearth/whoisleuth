@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import { BulkShortlistWorkspace } from '../frontend/src/lib/controllers/bulk-shortlist-workspace.ts';
 import { fromBulkSessionResult } from '../frontend/src/lib/analysis/bulk-result-model.ts';
 import { normalizeBulkSession } from '../packages/workspace/bulk-session-model.mts';
-import { normalizeShortlistRecord } from '../packages/workspace/shortlist-model.mts';
+import { normalizeShortlistRecord, setShortlistSelection, serializeShortlistStore } from '../packages/workspace/shortlist-model.mts';
+import { deferred } from './deferred.mts';
 import { createAnalystUndoDescriptor } from '../frontend/src/lib/analysis/analyst-undo.ts';
 import { richBulkSessionStore } from './bulk-session-fixture.mts';
 
@@ -34,6 +35,7 @@ function harness(overrides: Partial<Storage> = {}) {
         records: selected ? [record] : [],
         added: selected ? 1 : 0,
         updated: 0,
+        retained: 0,
         removed: selected ? 0 : 1,
         skipped: 0,
         undo: [{ domain: record.domain, previous: null, expected: record }],
@@ -119,7 +121,7 @@ test('selection and toggle retain typed result context and register conflict-awa
   assert.equal(h.selections[0]?.selected, true);
   assert.deepEqual(h.selections[0]?.rows, [
     {
-      ...row.saved,
+      ...record,
       riskScore: row.risk,
       opportunityScore: row.opportunity,
       savedAt: '2026-09-20T00:00:00.000Z',
@@ -130,7 +132,8 @@ test('selection and toggle retain typed result context and register conflict-awa
   assert.equal(h.selections[1]?.selected, false);
   assert.match(h.workspace.state.status, /Removed/);
   await h.workspace.select([row], false);
-  assert.deepEqual(h.selections[2]?.rows, []);
+  assert.equal(h.selections[2]?.rows.length, 1);
+  assert.equal((h.selections[2]?.rows[0] as { domain: string }).domain, row.domain);
   assert.equal(h.loads, 1);
   h.workspace.dispose();
   const publications = h.publications;
@@ -163,12 +166,80 @@ test('unavailable context and rejected writes preserve the current list', async 
   assert.equal(failure.undos.length, 0);
 });
 
+test('queued selection intents use the current model transaction, not cached membership', async () => {
+  const other = { ...row, domain: 'other.example', saved: { ...row.saved, domain: 'other.example' } };
+  const unrelated = normalizeShortlistRecord({ ...row.saved, domain: 'unrelated.example' })!;
+  let stored = [record, unrelated];
+  const held = deferred<void>(), started = deferred<void>();
+  let writes = 0;
+  const h = harness({
+    loadShortlist: async () => stored,
+    setShortlistSelection: async (rows, selected) => {
+      if (++writes === 1) { started.resolve(); await held.promise; }
+      const result = setShortlistSelection(stored, rows, selected);
+      // Exercise actual bounded persistence bytes, not an invented membership stub.
+      stored = JSON.parse(serializeShortlistStore(result.entries)).entries;
+      return { ...result, records: stored, undo: [] };
+    },
+  });
+  const selecting = h.workspace.select([row, other], true);
+  await started.promise;
+  const clearing = h.workspace.select([row, other], false);
+  assert.equal(writes, 1);
+  held.resolve();
+  await Promise.all([selecting, clearing]);
+  assert.deepEqual(stored.map(value => value.domain), ['unrelated.example']);
+  assert.deepEqual(h.workspace.state.records, stored);
+  await Promise.all([h.workspace.toggle(row), h.workspace.toggle(row)]);
+  assert.deepEqual(stored.map(value => value.domain), ['unrelated.example']);
+});
+
+test('queued reactive rows retain a detached bounded snapshot before storage becomes ready', async () => {
+  const nameservers = ['ns1.example'];
+  const riskFactors = [{ label: 'Original evidence', points: 18 }];
+  const submitted = { ...row, risk: 71, saved: { ...row.saved,
+    nameservers: new Proxy(nameservers, {}), riskFactors: new Proxy(riskFactors, {}),
+  } };
+  assert.throws(() => structuredClone(submitted.saved), { name: 'DataCloneError' });
+  const held = deferred<void>();
+  let stored: typeof record[] = [];
+  const h = harness({
+    loadShortlist: async () => { await held.promise; return stored; },
+    setShortlistSelection: async (rows, selected) => {
+      const result = setShortlistSelection(stored, rows, selected);
+      stored = JSON.parse(serializeShortlistStore(result.entries)).entries;
+      return { ...result, records: stored, undo: [] };
+    },
+  });
+  const selecting = h.workspace.select([submitted]);
+  nameservers[0] = 'changed.example';
+  riskFactors[0]!.label = 'Changed after submission';
+  submitted.risk = 4;
+  held.resolve();
+  assert.equal(await selecting, true);
+  assert.equal(stored.length, 1);
+  assert.deepEqual(stored[0]!.nameservers, ['ns1.example']);
+  assert.deepEqual(stored[0]!.riskFactors, [{ label: 'Original evidence', points: 18 }]);
+  assert.equal(stored[0]!.riskScore, 71);
+  assert.equal(stored[0]!.savedAt, '2026-09-20T00:00:00.000Z');
+});
+
+test('a rejected snapshot leaves storage untouched and does not expose an internal error', async () => {
+  const h = harness();
+  const saved = new Proxy(row.saved, { ownKeys() { throw new Error('private reactive detail'); } });
+  assert.equal(await h.workspace.select([{ ...row, saved }]), false);
+  assert.equal(h.loads, 0);
+  assert.equal(h.selections.length, 0);
+  assert.equal(h.workspace.state.status, 'The selected rows could not be prepared. No shortlist changes were saved.');
+});
+
 test('partially admitted selections report skipped rows instead of complete success', async () => {
   const h = harness({
     setShortlistSelection: async () => ({
       records: [record],
       added: 0,
       updated: 1,
+      retained: 0,
       removed: 0,
       skipped: 2,
       undo: [],

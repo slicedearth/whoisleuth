@@ -1,4 +1,6 @@
 import { normalizeDomain } from '../evidence/domain-name.mts';
+import { projectInfrastructureObservation } from './infrastructure-collection-projection.mts';
+import { nameserverSetIdentity } from './investigation-entity.mts';
 import { canonicalIpAddress } from '../contracts/ip-address.mts';
 import {
   MAX_NAMESERVERS_PER_ROW,
@@ -120,6 +122,7 @@ function projectExternalObservation(
   domainEntity: InvestigationEntity,
   caseEntity: InvestigationEntity,
 ): void {
+  if (projectInfrastructureObservation(context, pin, caseRecord, caseEntity)) return;
   const sourceSchema = pin.sourceSchema;
   const observedAt = timestamp(pin.observedAt);
   if (
@@ -188,16 +191,11 @@ function projectExternalObservation(
   }
   if (field === 'NS') {
     const target = dnsTarget(pin.value, field);
-    const entity = target ? addEntity('nameserver_set', target, target, { nameservers: [target] }) : null;
+    // Row-converter pins describe one record, not a certified complete RRset.
+    const entity = target ? addEntity('domain', target, target, { domain: target }) : null;
     if (entity) {
       linkObservationEntity(observation, entity);
-      addRelationship({
-        type: 'domain_uses_nameserver_set',
-        from: domainEntity.id,
-        to: entity.id,
-        classification: 'direct',
-        method: 'Imported exact DNS NS observation',
-      }, observation);
+      observation.limitations.push('An individual imported NS record does not establish the complete nameserver set.');
     }
     return;
   }
@@ -258,10 +256,9 @@ function projectCaseSnapshot(
   });
   if (!observation) return;
 
-  const nameservers = [...new Set(snapshot.nameservers.map(normalizeDomain).filter(Boolean))].sort();
+  const { nameservers, canonical, label } = nameserverSetIdentity(snapshot.nameservers);
   if (nameservers.length) {
-    const value = nameservers.join('|');
-    const entity = addEntity('nameserver_set', value, nameservers.join(' · '), { nameservers });
+    const entity = addEntity('nameserver_set', canonical, label, { nameservers });
     if (entity) {
       linkObservationEntity(observation, entity);
       addRelationship({
@@ -509,7 +506,8 @@ for (const row of relationshipRows.records) {
   });
   if (!observation) continue;
   if (nameservers.length) {
-    const entity = addEntity('nameserver_set', nameservers.join('|'), nameservers.join(' · '), { nameservers });
+    const identity = nameserverSetIdentity(nameservers);
+    const entity = addEntity('nameserver_set', identity.canonical, identity.label, { nameservers: identity.nameservers });
     if (entity) {
       linkObservationEntity(observation, entity);
       addRelationship({

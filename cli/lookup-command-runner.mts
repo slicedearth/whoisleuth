@@ -142,6 +142,7 @@ async function runLookupCommand(
       const save = dependencies.writePrivateFile || writePrivateFile;
       await save(args.saveLookup, serializeCliLookupDocument(document), {
         existingFileMessage: 'Saved Lookup file already exists. Choose a new --save-lookup path or remove the existing file explicitly.',
+        beforePublish: async () => { dependencies.signal?.throwIfAborted(); },
       });
       context.writeStderr('Saved the completed private Lookup JSON. It can contain raw public registry and WHOIS responses plus target and collection context; review it before sharing.\n');
     }

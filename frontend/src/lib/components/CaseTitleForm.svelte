@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
   import { MAX_CASE_OBJECTIVE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
-  import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
+  import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   let { record, mutationBusy, persist }: { record: CaseRecord; mutationBusy: boolean; persist: PersistCaseResponse } = $props();
   const draft = createCaseDraft(() => record.id, 'incident-title', { title: '', baseTitle: '' });

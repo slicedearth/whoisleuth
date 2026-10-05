@@ -113,12 +113,18 @@ technology set relationships are also unavailable because omitted activity can
 change them; retained counts and shared observations remain visible for review.
 The comparator makes no request, prints no input
 paths, reports only the page-title equality state rather than either title,
-emits `whoisleuth.web-capture-comparison` version 4, and produces no combined
+emits `whoisleuth.web-capture-comparison` version 5, and produces no combined
 similarity or maliciousness score. Page observations are compared separately:
 script hashes, policy presence, form destinations, navigation order and wording.
 Duplicate observations retain their multiplicity. Historical manifests have no
 page observations; partial capture does not establish an unchanged dependency
 set, and not re-observed never means removed.
+
+Version 5 adds bounded, separately attributed left/right capture and DOM-digest
+limitations without changing the version-4 comparison fields or their meaning.
+Historical comparison output is not rewritten; this is an output-only contract,
+not a comparison-document importer. The selected manifest paths are used exactly,
+including meaningful spaces, and are never copied into comparison output.
 
 The comparison also checks every decoded screenshot pixel on a white background,
 reporting changed counts and a grid of source-pixel coordinates. It never resizes
@@ -129,6 +135,12 @@ declared conditions appear in the report. Older captures without conditions rema
 unknown. Browser, timing, locale and shared-cache differences can affect appearance;
 neither matching pixels nor distinct labels establish independent collection or
 worldwide takedown.
+
+During collection, a first interrupt requests the same bounded transport and
+browser shutdown and owned-output cleanup used by the total-run deadline, then
+exits with status 130. Cleanup never removes replaced directories or unrelated
+files. A second interrupt forces emergency exit and may leave incomplete output;
+inspect it before removing anything. Comparison remains an offline operation.
 
 Collection executes page JavaScript. Each admitted resource operator receives
 the exact requested URL, including path and query, and ordinary allowlisted

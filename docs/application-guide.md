@@ -41,6 +41,15 @@ the requested-evidence exercise prepares a drafting amendment. Changing scenario
 requires confirming that its Case and drafts should be discarded. Feedback
 checks retained relationships and states, not the quality of free-text reasoning.
 
+Choose a compromised-page or shared-form scenario to practise exact object scope;
+the related-host scenario keeps different affected identities and observations
+separate. The changing landing-page exercise leaves the ad and replacement URL
+open to review. Conditional captures retain their different paths and conditions.
+Other examples distinguish reported account actions, an organisation's existence
+from its claimed campaign endorsement, insufficient logo/edge evidence, and a
+later provider result that reuses a submitted report. Inspect the evidence and
+its qualifications before recording a conclusion.
+
 ## Dashboard
 
 Dashboard is the authenticated starting point. It waits for the required
@@ -177,6 +186,15 @@ Coverage distinguishes encrypted, unsupported and partially decoded content;
 no document scripts, macros or external resources run. Select HAR to inspect
 request order, origins, statuses and timings without replaying requests. The
 minimised report excludes headers, cookies, bodies and private URL components.
+
+Plain-text review also offers possible phone numbers for explicit selection.
+Keep the original spelling, declared source time and whether the text was
+transcribed or OCR-derived. A contact role describes the supplied claim, not
+verified ownership. Unselected candidates are not saved. For an ad or search
+result, compare a displayed destination with separately supplied destination
+evidence; this does not open either link or reconstruct an unobserved redirect.
+See [selected-input review](offline-intake-context.md) for supported formats,
+source spans and disclosure controls.
 
 Select **Identity events** for an Entra sign-in export (`value` array) or an Okta
 System Log array. The preview replaces actor identifiers with labels local to
@@ -365,9 +383,19 @@ Bulk can retain compact sessions, named review views and per-domain review
 state. Checkpoints and saved sessions contain targets and must be handled as
 investigation data. Resume requires the exact original input and mode, and a
 partial later observation does not erase an earlier usable component.
+Saving retained results uses their admitted targets and collection mode, even
+when the queue has already been edited for the next run. A loaded partial
+session keeps its full original membership during a selected-subset refresh.
 
 Selected rows can continue to Cases, exports or response preparation. Selection
 does not submit a target to a provider or apply a control.
+
+**Save selected** previews a scoped Monitor merge, preserving unrelated current
+members without presenting them as rechecked. **Save to Monitor** previews full
+snapshot replacement, including exactly which current members are retained,
+added or removed. Confirm the reviewed change explicitly; a destination changed
+in another tab requires a fresh review. Removed current members are not included
+in future rescans, and retained bounded change events are not full snapshots.
 
 Selected CSV exports include a review manifest containing the exact selection,
 filters, source states and separate batch, row and source observation times.
@@ -387,6 +415,11 @@ disclosures. Closing a disclosure preserves its unsaved fields.
 Overview contains the allowlist and review summary; Assets lists the profile's
 domain relationships; Tools opens domain, mail, certificate and account-control
 reviews. The Brand profiles disclosure switches the explicitly active profile.
+
+**Review domain feed candidates** matches a local plain-domain file against
+selected terms or exact hostnames. Choose which results to retain before
+preparing a Watchlist handoff. The [candidate-review guide](brand-candidate-review.md)
+covers manual import, source coverage and the separately configured feed cache.
 
 Allowlist, expected-setting, portable-setting and account-control drafts are
 preserved when switching views or tools. Selecting or saving another
@@ -421,6 +454,16 @@ equal-time records; missing context or ambiguous ordering remains unknown.
 View-only filters show configured expectations, differences or unknown settings;
 history filters separate changed sources from unknown comparisons. All retained
 rows remain available through **All**, and filtering does not change exports.
+
+SPF collection completeness is separate from sender-authorisation quality. A
+completed expansion containing potentially reachable permissive `+all` evidence
+through positive include or redirect paths needs review even when the root ends
+in `-all`. Include qualifiers and mechanism order matter: a matching negative
+include does not authorise senders, mechanisms after `all` are unreachable, and
+redirect is ignored in a record containing `all`. The bounded review follows
+[SPF include semantics](https://www.rfc-editor.org/rfc/rfc7208#section-5.2), but
+does not evaluate an individual sender or claim that every nested `+all` permits
+every sender. Unknown, failed or budget-limited branches remain incomplete.
 
 For nameservers, DS, MX and CAA, choose no expectation, an expected empty set,
 specified records, or observation only. A null MX (`0 .`) is a specified record,
@@ -524,6 +567,12 @@ from another, or shares its source, with an analyst-supplied basis. Shared sourc
 labels, collection checkpoints and imported-content identities are listed
 separately. A relationship can be withdrawn with a reason; its original record
 remains. These declarations do not add confidence or establish independence.
+If a later flag reuses your submitted report, record that known relationship.
+If its method is unknown, keep independence unknown rather than inferring either
+corroboration or dependence. Separately documented new observations retain their
+own sources and times. Selected response and internal handoff material carries
+the relevant shared-source qualification without copying private relationship
+notes into an unrelated recipient's packet.
 
 **Copy citation** on a retained pin or Lookup checkpoint copies only that fact,
 its source, observation time and completeness, not surrounding notes or raw data.
@@ -531,6 +580,11 @@ its source, observation time and completeness, not surrounding notes or raw data
 before an ordinary Case report download. Previewed downloads use the same
 prepared bytes; changing the Case or options requires a fresh preview. These
 reports are separate from authorised response packets.
+**Print or save PDF** formats the complete prepared ordinary report, with
+all sections expanded, selected notes, imported restrictions, source identities
+and omission warnings intact. Long values wrap safely; ISO times ending in Z
+remain UTC and unknown source times remain unknown. The print dialog does not
+confirm saving or delivery, and report data digests are not PDF-byte hashes.
 Due reviews refresh while the view is open without changing observation times.
 Section links support
 browser back and forward and remember reading positions while that Case remains
@@ -712,7 +766,27 @@ assertions remain retained when their metadata is migrated. Exact public inciden
 links can be retained for web or social-platform
 content, resolved without erasing history, and carried into a response packet.
 **Exact incident-object coverage** keeps each link's analyst status separate from
-unknown action binding and independent observation coverage. Operations reports
+explicit action binding and independent observation coverage. Manually reviewed
+actions can bind up to 20 typed domain, hostname, page, advertisement, social,
+messaging, storefront, app or other objects in one shared reporting record.
+Choose the affected subset on each provider result; acknowledgement is not
+removal. Partial-remediation and resolution reports require an explicit nonempty
+subset; a ticket-wide partial response does not mark every object remediated.
+Provider-reported closure uses the latest applicable outcome for that exact
+object, not a later response about another object. Conflicting same-time claims
+cannot support closure. Event snapshots remain immutable, and already-retained historical
+identities stay selectable after a link edit without binding to its replacement.
+Missing historical bindings remain unknown. Pins, saved recheck questions and
+independent reviews can concern the same exact object. Technical outcomes need
+complete later evidence, a complete exact-object baseline and comparable
+conditions. Procedural disputes and warnings retain their source separately.
+Deliberate object closure leaves other objects and the Case status unchanged;
+whole-Case closure remains a separate analyst decision. No control submits a
+report or starts collection. An imported conflicting receipt does not erase an
+earlier authored closure. The Case view and Markdown report qualify that
+historical decision; JSON preserves its authored fields and source receipts.
+Malformed or dangling closure links are counted separately as unretained history.
+Operations reports
 offer a local contributor drill-down and a paged Case scope view, independent of
 the report's time window. Campaigns show the same view for Cases matching their
 domains; same-domain incidents remain separate. Provider outcomes remain separate
@@ -753,6 +827,20 @@ pins in its response packet before authorising it. Preparation is not delivery;
 record the new packet's delivery separately. The original digest and request
 history remain unchanged. Case exports, reports and CLI Case packs preserve this
 history; public Case packs exclude it.
+
+For a self-discovered mistake, prepare a **correction or withdrawal request**
+against one exact recorded delivery. Select its retained packet receipt, state
+the assertion being changed and the reason, choose supporting evidence, and
+keep the affected objects within the original delivery's scope. Review the
+recipient, authority and disclosure again before preparing the new packet.
+This path is separate from a provider-requested amendment.
+
+Older delivery records that contain only a digest cannot establish the original
+packet's version, recipient and object scope. They remain visible, but cannot
+authorise an exact-linked correction. The original delivery and packet digest
+stay unchanged when a new draft is created, cancelled or abandoned. Record any
+later delivery separately; a prepared withdrawal does not mean it was sent or
+accepted.
 
 A retained exact Incident URL can also be handed to the [optional capture companion](../packages/web-capture/README.md).
 The browser validates the selected manifest and can
@@ -803,18 +891,38 @@ separate workspace**. Create a destination, then restore the downloaded evidence
 packages or original files. The active workspace is not switched or modified.
 Section checksums and Case identities are compared with the selected backup;
 every referenced file must match before recovery is reported as verified.
+The paged **Original-file recovery checklist** shows each missing or unverified
+exact SHA-256 and byte length, plus the independent Case provenance references
+for shared bytes. Filenames are locating hints only: renamed exact bytes match;
+same-name different bytes do not. An unreadable storage group is labelled
+unverified rather than absent. Copy a digest with the keyboard-operated copy
+control, then restore bounded groups until the checklist is empty. The checklist
+is transient and clears when the rehearsal is kept, deleted or closed.
 Migrated formats are labelled for review rather than claimed byte-equivalent.
 Preferences are reviewed but not applied. Keep the rehearsal workspace, or
 explicitly delete it after checking the result. Leaving the page preserves it.
 
 Use **Select files for export** to package selected retained originals or
 derivatives with their declared sources and observation times. Missing bytes
-stop the export. The ZIP uses generated entry names; Case metadata, filenames
-and editing instructions stay in the separate JSON backup. Where supported,
+stop the export. Edited images declare their immediate parent fingerprint,
+editing method and operation kinds. The parent may itself be edited and need
+not be selected. These declarations do not prove the edits; missing declarations
+leave editing history unknown. The ZIP uses generated entry names; Case records,
+filenames and edit coordinates stay in the separate JSON backup. Where supported,
 **Write new evidence folder** creates and verifies a new child inside the
 folder you choose. Otherwise, extract the ZIP locally. Neither option is a
 complete workspace backup. **Review evidence folder** on Dashboard checks the
 same manifest and files without importing them or granting ongoing access.
+
+Open **Compare retained text** and choose two retained UTF-8 `.txt` or `.text` files,
+up to 1 MiB and 65,536 words each. It finds shared runs of at least five words
+after NFC Unicode normalisation and lowercasing. Review the original excerpts,
+character offsets, matched-word counts, source labels and full-file digests.
+The first 256 passages are paged; further passages are counted explicitly.
+Long excerpts show a labelled preview while preserving the complete source
+range and match counts. The complete original stays available in Retained files.
+Correspondence is not proof of authorship or infringement. This browser-only
+review neither rewrites the files nor adds a Case decision automatically.
 
 Preview a retained PNG to compare it with another retained image. Source,
 observation time, dimensions and byte identity remain separate; an appearance
@@ -874,6 +982,23 @@ identity or target safety.
 
 ## Understanding evidence
 
+### Reopening an acquisition decision
+
+In Lookup's **Acquisition due diligence → Analyst decision workspace**, select
+**Reopen acquisition review** and choose the original JSON (up to 15 MiB).
+The supported version, bounded structure, full canonical digest, current target
+and synthetic/manual context are checked before a historical preview appears.
+Cancel keeps the current manual edits and Lookup evidence unchanged.
+
+**Accept historical manual fields** restores only the decision, rationale and
+selected checks. It does not replace fresh Lookup evidence or promote an older
+observation time. Keep the original packet for its historical provenance.
+Before preparing a newly dated reviewed packet, explicitly reconfirm the
+decision and selected checks against the current evidence; changing either the
+evidence or manual fields invalidates that confirmation. A download is prepared,
+not confirmed durably saved. There is no automatic lookup, purchase, contact or
+submission, and synthetic packets remain demonstration-only.
+
 ### Source states
 
 Common states include ready, partial, unavailable, blocked, rate-limited,
@@ -908,6 +1033,10 @@ performs enforcement or acquisition.
 Offline Risk calibration uses deliberately reviewed local data. Its summary
 contains aggregate model performance only and does not train or change
 the running model. See the [CLI risk-calibrate command](https://www.whoisleuth.com/cli#command-risk-calibrate).
+The Case export review and download share one immutable snapshot, including
+separate Case IDs for distinct incidents on the same domain. Later Case edits
+are not substituted into an already reviewed download; reopen the review to
+include them.
 Choose review labels from independent evidence before inspecting the score.
 Include authorised lookalikes, ordinary domains, confirmed incidents and cases
 where collection is incomplete—not only examples that agree with the model.

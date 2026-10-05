@@ -1,0 +1,16 @@
+{
+  "schema": "whoisleuth.candidate-watch-input",
+  "version": 1,
+  "watchlists": null,
+  "selection": {
+    "name": "Example review",
+    "brandProfileId": "example-brand",
+    "priority": "p2",
+    "reason": "Review the exact matching pattern before collection.",
+    "candidates": [{
+      "domain": "candidate.example",
+      "matches": [{ "brandProfileId": "example-brand", "ruleKey": "keyword:example", "term": "example", "reason": "Analyst-selected exact keyword nomination" }],
+      "sources": [{ "source": "Imported candidate record", "revision": "fixture-1", "observedHostname": "login.candidate.example", "sourceFirstObservedAt": "2000-01-01T00:00:00.000Z", "sourceLastObservedAt": "2000-01-02T00:00:00.000Z", "firstLocalObservedAt": "2000-01-03T00:00:00.000Z", "completeness": "partial", "gap": "The supplied source interval does not establish continuous coverage." }]
+    }]
+  }
+}

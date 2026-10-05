@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import type { CaseRecord } from '$lib/cases';
-  import { projectCaseRelationshipTable } from '$lib/analysis/case-relationship-table.ts';
-  import type { CaseRelationshipTableRow } from '$lib/analysis/case-relationship-table.ts';
-  import type { CaseRelationshipQuery, CaseRelationshipSummary } from '$lib/analysis/case-relationships.ts';
-  import Pagination from '$lib/components/Pagination.svelte';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import { projectCaseRelationshipTable } from '#lib/analysis/case-relationship-table.ts';
+  import type { CaseRelationshipTableRow } from '#lib/analysis/case-relationship-table.ts';
+  import type { CaseRelationshipQuery, CaseRelationshipSummary } from '#lib/analysis/case-relationships.ts';
+  import Pagination from '#lib/components/Pagination.svelte';
 
   let {
     records,

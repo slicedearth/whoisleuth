@@ -3,8 +3,8 @@
   import {
     projectTrendPoints,
     type TrendPointInput,
-  } from '$lib/analysis/visualization-models.ts';
-  import { MAX_CT_HISTORY_EVENTS } from '$lib/analysis/ct-history.ts';
+  } from '#lib/analysis/visualization-models.ts';
+  import { MAX_CT_HISTORY_EVENTS } from '#lib/analysis/ct-history.ts';
   type HistoryCheck = {
     checkedAt: string;
     checkedLabel: string;

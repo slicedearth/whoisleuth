@@ -1,8 +1,8 @@
 <script lang="ts">
   import { recipientMailto } from '../../../../packages/evidence/email-recipient.mts';
   import { tick } from 'svelte';
-  import { reviewClock } from '$lib/review-clock.ts';
-  import { createDraftRevision } from '$lib/controllers/submitted-draft';
+  import { reviewClock } from '#lib/review-clock.ts';
+  import { createDraftRevision } from '#lib/controllers/submitted-draft.ts';
   import {
     CASE_TYPES,
     MAX_CASE_INCIDENT_TARGETS,

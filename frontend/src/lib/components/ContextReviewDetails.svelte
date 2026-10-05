@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { ContextReview } from '../../../../packages/contracts/context-review.mts';
-  import type { ContextReviewPresentation } from '$lib/analysis/context-review-presentation.ts';
+  import type { ContextReviewPresentation } from '#lib/analysis/context-review-presentation.ts';
   import EvidenceTimestamp from './EvidenceTimestamp.svelte';
   import Pagination from './Pagination.svelte';
   let { presentation, report }: { presentation: ContextReviewPresentation; report: ContextReview } = $props();

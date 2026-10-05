@@ -1,13 +1,13 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { LookupWebSurfaces } from './lookup-web-surfaces.ts';
-  import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
+  import type { CheckpointFact } from '#lib/analysis/case-evidence-checkpoint.ts';
   import { lookupObservationHostname } from '../../../../packages/evidence/lookup-target.mts';
-  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
-  import LookupFamilySummary from '$lib/components/LookupFamilySummary.svelte';
+  import DeferredSurface from '#lib/components/DeferredSurface.svelte';
+  import LookupFamilySummary from '#lib/components/LookupFamilySummary.svelte';
   import LookupEvidenceSection from './LookupEvidenceSection.svelte';
-  import WebsiteSnapshotManager from '$lib/components/WebsiteSnapshotManager.svelte';
-  import type { BrandProfile } from '$lib/brand-profiles';
+  import WebsiteSnapshotManager from '#lib/components/WebsiteSnapshotManager.svelte';
+  import type { BrandProfile } from '#lib/brand-profiles.ts';
   import {
     boundedTechnologyText,
     dateTimeAttribute,
@@ -16,11 +16,11 @@
     statusLabel,
     stringList,
     type JsonRecord,
-  } from '$lib/analysis/lookup-display-model.ts';
-  import type { createLookupViewModel, LookupHttpResponse } from '$lib/analysis/lookup-response.ts';
-  import type { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
-  import type { ServiceDependencyReview } from '$lib/analysis/service-dependency-review.ts';
-  import { lookupTlsProps } from '$lib/analysis/lookup-tls-display.ts';
+  } from '#lib/analysis/lookup-display-model.ts';
+  import type { createLookupViewModel, LookupHttpResponse } from '#lib/analysis/lookup-response.ts';
+  import type { buildLookupRouteAnalysis } from '#lib/analysis/lookup-route-analysis.ts';
+  import type { ServiceDependencyReview } from '#lib/analysis/service-dependency-review.ts';
+  import { lookupTlsProps } from '#lib/analysis/lookup-tls-display.ts';
   import {
     MAX_OBSERVATION_LIMITATIONS,
     MAX_OBSERVATION_LIMITATION_LENGTH,
@@ -399,6 +399,7 @@
             categories: credentialSurface.categories,
             methods: credentialSurface.methods,
             actions: credentialSurface.actions,
+            formAttribution: credentialSurface.formAttribution,
             limitations: pageDisplay.credentialSurfaceLimitations,
           }}
         /></div

@@ -4,14 +4,14 @@
     LOOKUP_EVIDENCE_REPLAY_MAX_BYTES,
     parseLookupEvidenceReplay,
     type LookupEvidenceReplay,
-  } from '$lib/analysis/lookup-evidence-replay.ts';
-  import { buildLookupReplayCheckpointFacts } from '$lib/analysis/case-evidence-checkpoint.ts';
-  import { LookupCaseController } from '$lib/controllers/lookup-case-controller.ts';
-  import type { CaseRecord, CaseTransitionExpectation } from '$lib/cases';
+  } from '#lib/analysis/lookup-evidence-replay.ts';
+  import { buildLookupReplayCheckpointFacts } from '#lib/analysis/case-evidence-checkpoint.ts';
+  import { LookupCaseController } from '#lib/controllers/lookup-case-controller.ts';
+  import type { CaseRecord, CaseTransitionExpectation } from '#lib/cases.ts';
   import LookupEvidenceReading from './LookupEvidenceReading.svelte';
-  import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
+  import LookupEvidenceCheckpoint from '#lib/components/LookupEvidenceCheckpoint.svelte';
   import CasePicker from './CasePicker.svelte';
-  import { buildLookupEvidenceReplayDiff } from '$lib/analysis/lookup-evidence-replay-diff.ts';
+  import { buildLookupEvidenceReplayDiff } from '#lib/analysis/lookup-evidence-replay-diff.ts';
 
   let replay = $state<LookupEvidenceReplay | null>(null);
   let status = $state('');

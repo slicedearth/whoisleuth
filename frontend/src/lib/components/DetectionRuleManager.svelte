@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { parseBoundedJson } from '$lib/bounded-json';
-  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
-  import { failedLocalMutationOutcome, LocalRecordConflictError } from '$lib/local-mutation-outcome';
+  import { parseBoundedJson } from '#lib/bounded-json.ts';
+  import { createDraftRevision, restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
+  import { failedLocalMutationOutcome, LocalRecordConflictError } from '#lib/local-mutation-outcome.ts';
   import { tick, untrack } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
+  import type { CaseRecord } from '#lib/cases.ts';
   import {
     createDetectionRule,
     deleteDetectionRule,
@@ -23,7 +23,7 @@
     RULE_FIELD_DEFINITIONS,
     type DetectionRule,
     type DetectionRuleCondition,
-  } from '$lib/detection-rules';
+  } from '#lib/detection-rules.ts';
   import {
     MAX_STATIC_PAGE_PATTERN_PACK_BYTES,
     REVIEWED_STATIC_PAGE_PATTERN_PACKS,
@@ -32,7 +32,7 @@
     staticPagePatternPackRuleExport,
     validateStaticPagePatternPack,
     type StaticPagePatternPack,
-  } from '$lib/analysis/static-page-pattern-packs.ts';
+  } from '#lib/analysis/static-page-pattern-packs.ts';
 
   let { records, initialRules = [], caseSourceState = 'ready', onselect, oncount, onchange }:{records:CaseRecord[];initialRules?:DetectionRule[];caseSourceState?:'loading'|'ready'|'unavailable';onselect?:(record:CaseRecord)=>void;oncount?:(count:number)=>void;onchange?:(rules:DetectionRule[])=>void}=$props();
   let rules=$state<DetectionRule[]>([]);

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
   import Pagination from './Pagination.svelte';
   import ReviewLifecycleControls from './ReviewLifecycleControls.svelte';
   import { buildCertificateReviewInbox, type CertificateEvidenceClass, type CertificateReviewFindingState } from '../analysis/certificate-review-inbox.ts';

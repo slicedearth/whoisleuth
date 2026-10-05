@@ -48,6 +48,7 @@ function result(domain: string, sourceCoverage: BulkSessionSourceCoverage[]): Bu
     reusesOfficialAssets: false,
     hasPasswordField: false,
     hasExternalFormAction: null,
+    hasExternalPasswordForm: null,
     phishingLanguageMatch: null,
     idnReferenceMatch: false,
     pageBaselineMatch: false,

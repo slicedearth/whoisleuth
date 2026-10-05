@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { tick } from 'svelte';
@@ -9,7 +9,7 @@
     BrandAssetRegisterProjection,
     BrandAssetRegisterRow,
     BrandAssetSourceSummary,
-  } from '$lib/analysis/brand-asset-register.ts';
+  } from '#lib/analysis/brand-asset-register.ts';
   import Pagination from './Pagination.svelte';
 
   type AssetClassFilter = 'all' | BrandAssetClassification;
@@ -103,13 +103,13 @@
   }
 
   async function updateCategoricalFilter(parameter: 'assetClass' | 'assetSource' | 'assetEvidence', value: string) {
-    const url = new URL(page.url);
+    const url = new URL(page.url.href);
     url.searchParams.set('view', 'assets');
     if (value === 'all') url.searchParams.delete(parameter);
     else url.searchParams.set(parameter, value);
     url.searchParams.delete('assetPage');
     url.hash = '';
-    await goto(`${url.pathname}${url.search}`, { noScroll: true, keepFocus: true });
+    await goto(`${url.pathname}${url.search}`, { reset: false });
     await tick();
     const controlId = parameter === 'assetClass'
       ? 'brand-asset-class-filter'
@@ -120,12 +120,12 @@
   }
 
   async function setAssetPage(nextPage: number) {
-    const url = new URL(page.url);
+    const url = new URL(page.url.href);
     url.searchParams.set('view', 'assets');
     if (nextPage <= 1) url.searchParams.delete('assetPage');
     else url.searchParams.set('assetPage', String(nextPage));
     url.hash = '';
-    await goto(`${url.pathname}${url.search}`, { noScroll: true, keepFocus: true });
+    await goto(`${url.pathname}${url.search}`, { reset: false });
     await tick();
     document.getElementById('brand-asset-register-title')?.focus({ preventScroll: true });
   }

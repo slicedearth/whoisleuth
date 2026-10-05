@@ -1,18 +1,18 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
   import type { ContextReview } from '../../../../packages/contracts/context-review.mts';
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
-  import { prepareCaseAttachmentFiles, retainCaseAttachments } from '$lib/case-attachments.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
+  import { prepareCaseAttachmentFiles, retainCaseAttachments } from '#lib/case-attachments.ts';
   import type { LocalCaseReviewSummary } from '../../../../packages/cases/case-review-summary.mts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import Pagination from './Pagination.svelte';
   import ContextReviewDetails from './ContextReviewDetails.svelte';
   import EvidenceTimestamp from './EvidenceTimestamp.svelte';
   import CopyButton from './CopyButton.svelte';
   import ContextReviewPrint from './ContextReviewPrint.svelte';
-  import { contextReviewSources, contextReviewTargets, type ContextReviewPresentation } from '$lib/analysis/context-review-presentation.ts';
-  import { defangedIndicator, evidenceCitation } from '$lib/analysis/evidence-copy.ts';
+  import { contextReviewSources, contextReviewTargets, type ContextReviewPresentation } from '#lib/analysis/context-review-presentation.ts';
+  import { defangedIndicator, evidenceCitation } from '#lib/analysis/evidence-copy.ts';
   import './context-review.css';
   let { report, record, mutationBusy, persistOperation, reusableInput = null, retainReusableInput = true, presentation = null }: { report: ContextReview; record: CaseRecord; mutationBusy: boolean; persistOperation: PersistCaseOperation; reusableInput?: unknown; retainReusableInput?: boolean; presentation?: ContextReviewPresentation | null } = $props();
   const sources = $derived(contextReviewSources(report));

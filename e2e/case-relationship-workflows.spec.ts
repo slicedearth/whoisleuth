@@ -1,6 +1,6 @@
 import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
-import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 
 // Every domain here is a local/invalid value (RFC 2606 .invalid, or dotless
 // bad-domain-* that classifyQuery rejects with a 400). Case features are
@@ -201,6 +201,42 @@ test.describe('browser-local campaigns', () => {
     await page.getByRole('button', { name: 'Open case' }).click();
     await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.case-heading', { hasText: 'member-one.invalid' })).toBeVisible();
+  });
+
+  test('campaign source sequence preserves colliding DNS caveats on screen and in its export', async ({ page }) => {
+    await openCampaigns(page, [caseRecord({ id: 'conserved-case', domain: 'conserved.invalid', evidenceHistory: [], evidencePins: [
+      { id: 'ns-pin', field: 'dns.nameservers', category: 'dns', label: 'Nameservers', value: 'ns.conserved.invalid', source: 'Fixture resolver',
+        observedAt: '2026-06-01T00:00:00.000Z', createdAt: '2026-06-01T00:00:00.000Z', completeness: 'partial', truncated: true,
+        limitations: ['Nameserver answer was truncated.'] },
+      { id: 'a-pin', field: 'dns.addresses', category: 'dns', label: 'Addresses', value: '192.0.2.1', source: 'Fixture resolver',
+        observedAt: '2026-06-01T00:00:00.000Z', createdAt: '2026-06-01T00:00:00.000Z', completeness: 'complete', truncated: false,
+        limitations: ['One resolver observed.'] },
+    ] })]);
+    await page.locator('#new-campaign').fill('Conserved evidence');
+    await page.getByRole('button', { name: 'Create campaign' }).click();
+    await page.locator('.add-case select').selectOption('conserved.invalid');
+    await page.getByRole('button', { name: 'Add domain', exact: true }).click();
+    const sequence = page.getByRole('region', { name: 'Retained source sequence' });
+    const event = sequence.locator('.sequence li[data-layer="dns"]');
+    await expect(event).toContainText('1 retained observation');
+    await expect(event).toContainText('partial · truncated');
+    await event.getByText('Evidence limitations', { exact: true }).click();
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const [width, height] of [[390, 844], [1280, 720]]) {
+        await page.setViewportSize({ width: width!, height: height! });
+        await expect(event.getByText('Nameserver answer was truncated.', { exact: true })).toBeVisible();
+        await expect(event.getByText('One resolver observed.', { exact: true })).toBeVisible();
+        await expectNoHorizontalOverflow(page);
+      }
+    }
+    const pending = page.waitForEvent('download');
+    await sequence.getByRole('button', { name: 'Export review', exact: true }).click();
+    const downloaded = await pending;
+    const payload = JSON.parse(Buffer.concat(await (await downloaded.createReadStream()).toArray()).toString('utf8'));
+    const exported = payload.review.events.find((item: { layer: string }) => item.layer === 'dns');
+    expect(exported).toMatchObject({ completeness: 'partial', truncated: true, observationCount: 1,
+      limitations: ['Nameserver answer was truncated.', 'One resolver observed.'] });
   });
 
   test('reviews exact Brand-scoped cohorts without a request, write, or assertion-derived link', async ({ page }) => {
@@ -447,6 +483,33 @@ test.describe('accessible cross-case relationship table', () => {
     });
     await openConsoleView(page, 'relationships');
   }
+
+  test('equal bounded relationship labels select their own exact rows and graph nodes', async ({ page }) => {
+    const shared = Array.from({ length: 10 }, (_, index) => `ns${index}-${'shared'.repeat(5)}.example.test`);
+    const records = ['first-a', 'first-b', 'second-a', 'second-b'].map((name, index) => caseRecord({ id: name, domain: `${name}.example`,
+      evidenceHistory: [snapshot({ nameservers: [...shared, `zz-${index < 2 ? 'first' : 'second'}.example.test`] })] }));
+    await openRelationshipTable(page, records);
+    const table = page.getByRole('table', { name: 'Cross-case relationships from retained investigation evidence' });
+    const first = table.getByRole('row').filter({ hasText: 'first-a.example' });
+    const second = table.getByRole('row').filter({ hasText: 'second-a.example' });
+    await expect(first).toHaveCount(1); await expect(second).toHaveCount(1);
+    const firstButton = first.getByRole('button', { name: /^Inspect relationship/ });
+    const secondButton = second.getByRole('button', { name: /^Inspect relationship/ });
+    expect(await firstButton.getAttribute('aria-label')).toBe(await secondButton.getAttribute('aria-label'));
+    const graph = page.getByRole('region', { name: 'Relationship graph' });
+    for (const [selected, other, members, excluded] of [
+      [firstButton, secondButton, ['first-a', 'first-b'], ['second-a', 'second-b']],
+      [secondButton, firstButton, ['second-a', 'second-b'], ['first-a', 'first-b']],
+    ] as const) {
+      await selected.focus(); await page.keyboard.press('Enter');
+      await expect(selected).toHaveAttribute('aria-pressed', 'true');
+      await expect(other).toHaveAttribute('aria-pressed', 'false');
+      await expect(graph.locator('svg [aria-pressed="true"]')).toHaveCount(1);
+      // The selected node's own pivots distinguish these otherwise equal labels.
+      for (const member of members) await expect(graph.getByRole('button', { name: `Open ${member}.example`, exact: true })).toBeVisible();
+      for (const member of excluded) await expect(graph.getByRole('button', { name: `Open ${member}.example`, exact: true })).toHaveCount(0);
+    }
+  });
 
   test('filters semantic relationship rows and opens a member case', async ({ page }) => {
     const http = {
@@ -844,15 +907,26 @@ test.describe('accessible cross-case relationship table', () => {
     for (const format of ['graphml', 'gexf'] as const) {
       const xml = await download(format);
       expect(xml.result.suggestedFilename()).toMatch(new RegExp(`^whoisleuth-relationship-graph-\\d{4}-\\d{2}-\\d{2}\\.${format}$`));
-      const parsed = await page.evaluate((content) => {
+      const parsed = await page.evaluate(({ content, format }) => {
         const document = new DOMParser().parseFromString(content, 'application/xml');
+        const value = (node: Element, field: string) => format === 'graphml'
+          ? node.querySelector(`data[key="node_${field}"]`)?.textContent ?? null
+          : node.querySelector(`attvalue[for="node_${field}"]`)?.getAttribute('value') ?? null;
+        const field = document.querySelector('[id="node_canonical"]');
         return {
           errors: document.getElementsByTagName('parsererror').length,
-          nodes: document.getElementsByTagNameNS('*', 'node').length,
+          fieldLabel: field?.getAttribute(format === 'graphml' ? 'attr.name' : 'title'),
+          nodes: [...document.getElementsByTagNameNS('*', 'node')].map(node => ({
+            id: node.getAttribute('id'), canonical: value(node, 'canonical'), entityId: value(node, 'entityId'),
+          })),
           edges: document.getElementsByTagNameNS('*', 'edge').length,
         };
-      }, xml.content);
-      expect(parsed).toEqual({ errors: 0, nodes: 4, edges: 4 });
+      }, { content: xml.content, format });
+      expect(parsed).toEqual({ errors: 0, fieldLabel: 'Bounded display value', edges: 4,
+        nodes: document.graph.nodes.map((node: { id: string; canonical: string; entityId?: string }) => ({
+          id: node.id, canonical: node.canonical, entityId: node.entityId ?? null,
+        })),
+      });
     }
     await expect(controls.getByRole('status')).toContainText('Downloaded 4 nodes and 4 edges');
   });

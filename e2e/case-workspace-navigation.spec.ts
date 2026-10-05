@@ -1,9 +1,9 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
-import { openCaseSection } from './console-navigation';
+import { openCaseMetadata, openCaseSection } from './console-navigation';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { productionChunkPath } from './production-build';
-import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
+import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 
 async function seedCases(page: import('@playwright/test').Page, destination = '/cases') {
   await page.goto('/cases');
@@ -13,6 +13,140 @@ async function seedCases(page: import('@playwright/test').Page, destination = '/
       caseRecord({ id: 'workspace-second', domain: 'second-work.example' }),
     ] }),
   }, { destination });
+}
+
+for (const kind of ['note', 'tags'] as const) {
+  test(`ordinary Case ${kind} drafts protect exits, survive failed saves and clear only after save or discard`, async ({ page }) => {
+    await page.setViewportSize(kind === 'note' ? { width: 390, height: 844 } : { width: 1280, height: 720 });
+    await seedCases(page, '/cases?case=workspace-first');
+    await useTheme(page, kind === 'note' ? 'light' : 'dark');
+    const edit = async () => { if (kind === 'note') await openCaseSection(page, 'History'); else await openCaseMetadata(page); };
+    await edit();
+    const input = page.getByRole('textbox', { name: kind === 'note' ? 'Add note' : /^Additional tags/u, exact: kind === 'note' });
+    const submit = page.getByRole('button', { name: kind === 'note' ? 'Add note' : 'Save tags', exact: true });
+    const draft = kind === 'note' ? 'Exact unsaved note.\nSecond line.' : 'first-tag, second-tag';
+    const prompts: string[] = [];
+    let discard = false;
+    page.on('dialog', async dialog => { prompts.push(dialog.message()); await (discard ? dialog.accept() : dialog.dismiss()); });
+    await input.fill(draft);
+    await openCaseSection(page, 'Evidence');
+    await edit();
+    expect(prompts).toEqual([]);
+    await expect(input).toHaveValue(draft);
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await expect.poll(() => prompts.length).toBe(1);
+    await expect(input).toHaveValue(draft);
+    await page.getByRole('link', { name: 'Review follow-up', exact: true }).click();
+    await expect.poll(() => prompts.length).toBe(2);
+    await expect(input).toHaveValue(draft);
+    await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect.poll(() => prompts.length).toBe(3);
+    await expect(input).toHaveValue(draft);
+    await failNextBrowserLocalManifestWrite(page, 'cases');
+    await submit.click();
+    await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText(/could not save/iu);
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await expect.poll(() => prompts.length).toBe(4);
+    await expect(input).toHaveValue(draft);
+    await submit.click();
+    await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText(kind === 'note' ? 'Added a note' : 'Updated tags');
+    await expect(input).toHaveValue(kind === 'note' ? '' : draft);
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await expect(page).toHaveURL('/cases');
+    expect(prompts).toHaveLength(4);
+    await page.locator('#case-head-workspace-first').click();
+    await edit(); await input.fill('Deliberately discarded draft');
+    discard = true;
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await expect(page).toHaveURL('/cases');
+    expect(prompts).toHaveLength(5);
+    await page.locator('#case-head-workspace-second').click();
+    await edit(); await expect(input).toHaveValue('');
+    await expectNoHorizontalOverflow(page);
+  });
+}
+
+test('saving equivalent tag spacing acknowledges a no-op without changing storage or warning on exit', async ({ page }) => {
+  await page.goto('/cases');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [{
+      ...caseRecord({ id: 'equivalent-tags', domain: 'tag-spacing.example' }), tags: ['first', 'second'],
+    }] }),
+  }, { destination: '/cases?case=equivalent-tags' });
+  const prompts: string[] = [];
+  page.on('dialog', async dialog => { prompts.push(dialog.message()); await dialog.dismiss(); });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  for (const draft of ['first,second', ' first , second ', 'first,\nsecond']) {
+    await openCaseMetadata(page);
+    const tags = page.getByRole('textbox', { name: /^Additional tags/u });
+    await tags.fill(draft);
+    await page.getByRole('button', { name: 'Save tags', exact: true }).click();
+    await expect(tags).toHaveValue('first, second');
+    expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(before);
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await expect(page).toHaveURL('/cases');
+    expect(prompts).toEqual([]);
+    await page.locator('#case-head-equivalent-tags').click();
+  }
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page).toHaveURL(/\/login(?:\?|$)/u);
+  expect(prompts).toEqual([]);
+});
+
+for (const direction of ['combine', 'separate'] as const) {
+  test(`Case tag saves ${direction} literal backslash-zero content without losing the draft`, async ({ page }) => {
+    const literalTag = String.raw`first\0second`;
+    expect(literalTag).toHaveLength(13);
+    expect([...literalTag.slice(5, 7)].map(character => character.charCodeAt(0))).toEqual([92, 48]);
+    const previous = direction === 'combine' ? ['first', 'second'] : [literalTag];
+    const next = direction === 'combine' ? [literalTag] : ['first', 'second'];
+    await page.setViewportSize(direction === 'combine' ? { width: 1280, height: 720 } : { width: 390, height: 844 });
+    await page.goto('/cases');
+    await migrateLegacyBrowserData(page, {
+      'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [{
+        ...caseRecord({ id: 'literal-tags', domain: 'tag-comparison.example' }), tags: previous,
+      }] }),
+    }, { destination: '/cases?case=literal-tags' });
+    await useTheme(page, direction === 'combine' ? 'dark' : 'light');
+    const prompts: string[] = [];
+    page.on('dialog', async dialog => { prompts.push(dialog.message()); await dialog.dismiss(); });
+    await openCaseMetadata(page);
+    const tags = page.getByRole('textbox', { name: /^Additional tags/u });
+    const save = page.getByRole('button', { name: 'Save tags', exact: true });
+    const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+    expect(before.records[0]?.value.tags).toEqual(previous);
+    await tags.fill(next.join(', '));
+    await save.click();
+    await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('Updated tags');
+    const committed = await readBrowserLocalCollection(page, 'cases', { minimumRevision: before.manifest.revision + 1 });
+    expect(committed.records[0]?.value.tags).toEqual(next);
+    expect(committed.manifest.revision).toBe(before.manifest.revision + 1);
+    await expect(tags).toHaveValue(next.join(', '));
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await expect(page).toHaveURL('/cases');
+    expect(prompts).toEqual([]);
+    await page.locator('#case-head-literal-tags').click();
+    await openCaseMetadata(page);
+    await expect(tags).toHaveValue(next.join(', '));
+
+    await tags.fill(previous.join(', '));
+    await failNextBrowserLocalManifestWrite(page, 'cases');
+    await save.click();
+    await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText(/could not save/iu);
+    await expect(tags).toHaveValue(previous.join(', '));
+    expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(committed);
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    expect(prompts).toHaveLength(1);
+    await expect(tags).toHaveValue(previous.join(', '));
+    await save.click();
+    await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('Updated tags');
+    const restored = await readBrowserLocalCollection(page, 'cases', { minimumRevision: committed.manifest.revision + 1 });
+    expect(restored.records[0]?.value.tags).toEqual(previous);
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await expect(page).toHaveURL('/cases');
+    expect(prompts).toHaveLength(1);
+    await expectNoHorizontalOverflow(page);
+  });
 }
 
 for (const [section, preserveLaterFocus] of [
@@ -214,6 +348,7 @@ test('legacy response deep links still open the packet and Case follow-up keeps 
   await expect(page.locator('#case-response-preflight-workspace-first > summary')).toBeInViewport({ ratio: 1 });
   await page.goForward();
   await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('Keep this draft through response navigation');
+  page.once('dialog', async dialog => { expect(dialog.message()).toContain('Case edits are not saved'); await dialog.accept(); });
   await page.getByRole('link', { name: 'Review follow-up', exact: true }).click();
   await expect(page).toHaveURL('/monitor?view=inbox&queue=all&case-review=workspace-first');
   const inbox = page.getByRole('region', { name: 'Review inbox', exact: true });
@@ -222,6 +357,23 @@ test('legacy response deep links still open the packet and Case follow-up keeps 
   await expect(clearCaseScope).toHaveAttribute('href', '/monitor?view=inbox&queue=all');
   await clearCaseScope.click();
   await expect(page).toHaveURL('/monitor?view=inbox&queue=all');
+});
+
+test('a Case history return preserves focus moved outside the outgoing section', async ({ page }) => {
+  await seedCases(page, '/cases?case=workspace-first&response=1#case-response-workspace-first');
+  await expect(page.locator('#case-response-preflight-workspace-first > summary')).toBeFocused();
+  await openCaseSection(page, 'History');
+  await page.getByRole('textbox', { name: 'Add note', exact: true }).fill('Keep this unsaved note');
+  const laterControl = page.getByRole('button', { name: 'Sign out', exact: true });
+  await laterControl.evaluate(element => {
+    window.addEventListener('popstate', () => queueMicrotask(() => element.focus()), { once: true });
+  });
+  await page.goBack();
+  await expect(page.getByRole('navigation', { name: 'Case sections' }).getByRole('link', { name: 'Response', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('#case-response-preflight-workspace-first')).toHaveAttribute('open', '');
+  await expect(laterControl).toBeFocused();
+  await page.goForward();
+  await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('Keep this unsaved note');
 });
 
 for (const theme of ['light', 'dark'] as const) {

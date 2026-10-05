@@ -123,6 +123,7 @@ function listItemPath(path: readonly (number | string)[], list: 'actions' | 'man
 }
 
 function allowedSensitiveFieldPath(key: string, path: readonly (number | string)[]): boolean {
+  const deliveryReceipt = path.at(-1) === 'packetReceipt' && typeof path.at(-2) === 'number' && path.at(-3) === 'history' && listItemPath(path.slice(0, -3), 'actions');
   if (key === 'brandProfileIds') return topCasePath(path) || reportCasePath(path);
   if (key === 'notes') return topCasePath(path) || reportCasePath(path);
   if (key === 'workflowMetadata') return topCasePath(path) || analystResponsePath(path);
@@ -132,8 +133,10 @@ function allowedSensitiveFieldPath(key: string, path: readonly (number | string)
   if (key === 'actions' || key === 'assertions' || key === 'manualTrail' || key === 'observedEffects' || key === 'closures' || key === 'branches') {
     return topCasePath(path) || analystResponsePath(path);
   }
-  if (key === 'recipient') return listItemPath(path, 'actions');
-  if (key === 'target') return listItemPath(path, 'manualTrail');
+  if (key === 'recipient') return listItemPath(path, 'actions') || deliveryReceipt;
+  if (key === 'target') return listItemPath(path, 'manualTrail') || deliveryReceipt;
+  if (key === 'correction') return listItemPath(path, 'actions');
+  if (key === 'packetReceipt') return typeof path.at(-1) === 'number' && path.at(-2) === 'history' && listItemPath(path.slice(0, -2), 'actions');
   return true;
 }
 

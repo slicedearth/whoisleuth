@@ -22,6 +22,8 @@ export type BulkWorkflowState<Result> = {
   guideContext: string;
   input: string;
   mode: LookupMode;
+  /** Exact admitted result input; absent historical transient state is not inferred from the editable queue. */
+  resultInput?: Readonly<{ mode: LookupMode; domains: readonly string[] }> | null;
   pacing?: BulkPacing;
   completed: number;
   total: number;

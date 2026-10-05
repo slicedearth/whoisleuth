@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
 
 import type { Route } from '@playwright/test';
@@ -18,10 +19,12 @@ import {
   WEB_CAPTURE_MANIFEST_VERSION,
   browserNetworkIntrinsicsAreDisabled,
   captureRenderedPage,
+  createCaptureInterruption,
   disableBrowserNetworkIntrinsics,
   installDomProjectionIntrinsics,
   parseCaptureArguments,
   sanitizeCaptureText,
+  formatCaptureSuccess,
   type CaptureBrowser,
 } from '../packages/web-capture/capture.mts';
 import { startAnchoredArtifactWriter } from '../packages/web-capture/anchored-artifact-writer.mts';
@@ -530,10 +533,11 @@ describe('optional local rendered capture package', () => {
     }
   });
 
-  test('removes an owned private artefact whose write crosses the total deadline', async () => {
+  for (const stopping of ['deadline', 'interruption'] as const) test(`removes an owned private artefact whose write crosses ${stopping}`, async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-write-deadline-test-'));
     const destination = path.join(parent, 'capture');
     const deadline = controlledDeadlineScheduler();
+    const controller = new AbortController();
     let writeStarted!: () => void;
     const writing = new Promise<void>((resolve) => { writeStarted = resolve; });
     try {
@@ -559,10 +563,12 @@ describe('optional local rendered capture package', () => {
           }
         },
         deadlineScheduler: deadline.scheduler,
+        signal: controller.signal,
       });
       await writing;
-      deadline.expire();
-      await assert.rejects(capture, /total-run deadline/u);
+      if (stopping === 'deadline') deadline.expire();
+      else controller.abort(new Error('Fixture interruption'));
+      await assert.rejects(capture, /total-run deadline|Fixture interruption/u);
       await assert.rejects(() => stat(destination), /ENOENT/u);
     } finally {
       await rm(parent, { recursive: true, force: true });
@@ -759,6 +765,63 @@ describe('optional local rendered capture package', () => {
     }
   });
 
+  test('preserves exact selected paths and separately attributed source caveats', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-selection-test-'));
+    const directories = [path.join(parent, ' left  input '), path.join(parent, 'left input'), path.join(parent, 'right')];
+    try {
+      for (const [index, directory] of directories.entries()) {
+        await captureFixturePage({ targetUrl: `https://capture-${index}.example.test/`, outputDirectory: directory, timeoutMs: 5000 }, {
+          launchBrowser: async () => fakeBrowser({ hostname: `capture-${index}.example.test` }),
+          fetchResource: fakeFetchResource,
+          resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+          now: () => '2026-08-01T00:00:00.000Z',
+        });
+      }
+      for (const [index, directory] of [directories[0]!, directories[2]!].entries()) {
+        const side = index === 0 ? 'left' : 'right';
+        const manifestPath = path.join(directory, 'manifest.json');
+        const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+        const domPath = path.join(directory, 'dom-digest.json');
+        const dom = JSON.parse(await readFile(domPath, 'utf8'));
+        manifest.captures[0].limitations = [`${side} capture caveat`];
+        dom.limitations = [`${side} DOM caveat`];
+        const domBytes = Buffer.from(`${JSON.stringify(dom)}\n`);
+        await writeFile(domPath, domBytes);
+        const artifact = manifest.captures[0].artifacts.find((value: { kind: string }) => value.kind === 'dom_digest');
+        artifact.bytes = domBytes.byteLength;
+        artifact.sha256 = createHash('sha256').update(domBytes).digest('hex');
+        await writeFile(manifestPath, JSON.stringify(manifest));
+      }
+      const left = path.join(directories[0]!, 'manifest.json'), right = path.join(directories[2]!, 'manifest.json');
+      const printed = formatCaptureSuccess('capture-0.example.test', directories[0]!);
+      const reported = JSON.parse(printed.split('\n').find(line => line.startsWith('Manifest: '))!.slice('Manifest: '.length));
+      assert.equal(reported, left);
+      assert.equal(parseCaptureCompareArguments([left, right]).leftManifest, left);
+      const comparison = await compareRenderedCaptures(reported, right);
+      assert.equal(comparison.left.domain, 'capture-0.example.test');
+      assert.deepEqual(comparison.sourceLimitations, {
+        left: { capture: ['left capture caveat'], domDigest: ['left DOM caveat'] },
+        right: { capture: ['right capture caveat'], domDigest: ['right DOM caveat'] },
+      });
+      const terminal = formatRenderedCaptureComparison(comparison);
+      for (const label of ['left capture: left capture caveat', 'right capture: right capture caveat', 'left DOM digest: left DOM caveat', 'right DOM digest: right DOM caveat']) assert.ok(terminal.includes(label));
+      assert.ok(comparison.limitations.some(value => value.includes('no network request')));
+      assert.equal(comparison.partial, false);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('capture success diagnostics preserve exact paths without raw terminal controls', () => {
+    for (const directory of [' case  1 ', 'case 1', 'folder\u001b[31m\u0085\u202e\"\\name', 'folder/\u{e0001}']) {
+      const output = formatCaptureSuccess('example.test', directory);
+      assert.doesNotMatch(output.replaceAll('\n', ''), /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+      assert.equal(JSON.parse(output.split('\n')[0]!.split(' to ')[1]!), directory);
+      assert.equal(JSON.parse(output.split('\n')[1]!.slice('Manifest: '.length)), path.join(directory, 'manifest.json'));
+    }
+    assert.throws(() => formatCaptureSuccess('example.test', 'x'.repeat(2049)), /bound/);
+  });
+
   test('compares two verified local captures offline without exposing paths or retained page text', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-compare-test-'));
     const leftDirectory = path.join(parent, 'left');
@@ -794,7 +857,7 @@ describe('optional local rendered capture package', () => {
       );
       const comparison = await compareRenderedCaptures(leftManifest, rightManifest, '2026-08-01T00:10:00.000Z');
       assert.equal(comparison.schema, WEB_CAPTURE_COMPARISON_SCHEMA);
-      assert.equal(comparison.version, 4);
+      assert.equal(comparison.version, 5);
       assert.equal(comparison.screenshot.state, 'same');
       assert.equal(comparison.renderedDom.structure.state, 'different');
       assert.equal(comparison.renderedDom.visibleText.state, 'different');
@@ -1004,10 +1067,11 @@ describe('optional local rendered capture package', () => {
     }
   });
 
-  test('closes a browser acquired after the total deadline exactly once', async () => {
+  for (const stopping of ['deadline', 'interruption'] as const) test(`closes a browser acquired after ${stopping} exactly once`, async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-late-browser-test-'));
     const destination = path.join(parent, 'capture');
     const deadline = controlledDeadlineScheduler();
+    const controller = new AbortController();
     let resolveLaunch!: (browser: CaptureBrowser) => void;
     let signalLaunch!: () => void;
     let signalClose!: () => void;
@@ -1031,11 +1095,13 @@ describe('optional local rendered capture package', () => {
         },
         writeArtifact: async () => { throw new Error('late browser must not write artefacts'); },
         deadlineScheduler: deadline.scheduler,
+        signal: controller.signal,
       });
       await launchStarted;
       assert.ok(launchTimeout > 0 && launchTimeout <= 1_000);
-      deadline.expire();
-      await assert.rejects(capture, /total-run deadline/u);
+      if (stopping === 'deadline') deadline.expire();
+      else controller.abort(new Error('Fixture interruption'));
+      await assert.rejects(capture, /total-run deadline|Fixture interruption/u);
       resolveLaunch(lateBrowser);
       await browserClosed;
       assert.equal(closeCount, 1);
@@ -1046,10 +1112,11 @@ describe('optional local rendered capture package', () => {
     }
   });
 
-  test('cleans an anchored writer acquired after the total deadline exactly once', async () => {
+  for (const stopping of ['deadline', 'interruption'] as const) test(`cleans an anchored writer acquired after ${stopping} exactly once`, async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-late-writer-test-'));
     const destination = path.join(parent, 'capture');
     const deadline = controlledDeadlineScheduler();
+    const controller = new AbortController();
     type Writer = Awaited<ReturnType<typeof startAnchoredArtifactWriter>>;
     let resolveWriter!: (writer: Writer) => void;
     let signalStart!: () => void;
@@ -1077,10 +1144,12 @@ describe('optional local rendered capture package', () => {
           return new Promise<Writer>((resolve) => { resolveWriter = resolve; });
         },
         deadlineScheduler: deadline.scheduler,
+        signal: controller.signal,
       });
       await writerStarted;
-      deadline.expire();
-      await assert.rejects(capture, /total-run deadline/u);
+      if (stopping === 'deadline') deadline.expire();
+      else controller.abort(new Error('Fixture interruption'));
+      await assert.rejects(capture, /total-run deadline|Fixture interruption/u);
       resolveWriter(lateWriter);
       await writerFinished;
       assert.equal(finishCount, 1);
@@ -1091,10 +1160,11 @@ describe('optional local rendered capture package', () => {
     }
   });
 
-  test('aborts an admitted direct resource fetch at the shared total deadline', async () => {
+  for (const stopping of ['deadline', 'interruption'] as const) test(`aborts an admitted direct resource fetch at ${stopping}`, async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-fetch-deadline-test-'));
     const destination = path.join(parent, 'capture');
     const deadline = controlledDeadlineScheduler();
+    const controller = new AbortController();
     let requestAborted = false;
     let requestStarted!: () => void;
     const requesting = new Promise<void>((resolve) => { requestStarted = resolve; });
@@ -1114,15 +1184,119 @@ describe('optional local rendered capture package', () => {
         }),
         resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
         deadlineScheduler: deadline.scheduler,
+        signal: controller.signal,
       });
       await requesting;
-      deadline.expire();
-      await assert.rejects(capture, /total-run deadline/u);
+      if (stopping === 'deadline') deadline.expire();
+      else controller.abort(new Error('Fixture interruption'));
+      await assert.rejects(capture, /total-run deadline|Fixture interruption/u);
       assert.equal(requestAborted, true);
       await assert.rejects(() => stat(destination), /ENOENT/u);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
+  });
+
+  test('requests cleanup on first signal, exposes emergency second signal and detaches handlers', async () => {
+    const events = new EventEmitter();
+    let emergencies = 0;
+    const interruption = createCaptureInterruption(events, () => { emergencies += 1; });
+    events.emit('SIGINT');
+    assert.equal(interruption.signal.aborted, true);
+    assert.equal(emergencies, 0);
+    events.emit('SIGTERM');
+    assert.equal(emergencies, 1);
+    interruption.clear();
+    assert.equal(events.listenerCount('SIGINT'), 0);
+    assert.equal(events.listenerCount('SIGTERM'), 0);
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-preabort-test-'));
+    try {
+      const destination = path.join(parent, 'not-created');
+      await assert.rejects(captureRenderedPage({ targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1000 }, {
+        signal: interruption.signal,
+        launchBrowser: async () => { throw new Error('Pre-aborted capture must not launch'); },
+      }), /interrupted/u);
+      await assert.rejects(stat(destination), /ENOENT/u);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  test('handles real isolated process-group interrupts without launching a browser', { timeout: 10_000, skip: process.platform === 'win32' }, async context => {
+    const captureModule = new URL('../packages/web-capture/capture.mts', import.meta.url).href;
+    for (const emergency of [false, true]) {
+      const child = spawn(process.execPath, ['--input-type=module', '-e', `
+        import { createCaptureInterruption } from ${JSON.stringify(captureModule)};
+        const interruption = createCaptureInterruption();
+        const hold = setInterval(() => {}, 1000);
+        interruption.signal.addEventListener('abort', () => {
+          process.stdout.write('cleanup requested\\n');
+          if (!${emergency}) { clearInterval(hold); interruption.clear(); process.exitCode = 130; }
+        });
+        process.stdout.write('ready\\n');
+      `], { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+      context.after(() => { if (child.exitCode === null) child.kill('SIGKILL'); });
+      let output = '';
+      child.stdout.on('data', bytes => { output += String(bytes); });
+      const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+        child.once('error', reject);
+        child.once('close', (code, signal) => resolve({ code, signal }));
+      });
+      const waitFor = (text: string) => new Promise<void>((resolve, reject) => {
+        if (output.includes(text)) { resolve(); return; }
+        const data = () => { if (output.includes(text)) { child.stdout.off('data', data); child.off('close', exited); resolve(); } };
+        const exited = () => { child.stdout.off('data', data); reject(new Error('Interrupt fixture exited before readiness')); };
+        child.stdout.on('data', data);
+        child.once('close', exited);
+      });
+      await waitFor('ready\n');
+      assert.ok(child.pid);
+      process.kill(-child.pid, 'SIGINT');
+      await waitFor('cleanup requested\n');
+      if (emergency) process.kill(-child.pid, 'SIGINT');
+      assert.deepEqual(await closed, { code: 130, signal: null });
+      assert.equal(output.split('cleanup requested').length - 1, 1);
+    }
+  });
+
+  test('an interrupt during actual output reservation exits 130 after owned cleanup without an unhandled rejection', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-reservation-interrupt-'));
+    const output = path.join(parent, 'reserved');
+    try {
+      const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+        import fs from 'node:fs/promises';
+        import { syncBuiltinESMExports } from 'node:module';
+        import { chromium } from 'playwright';
+        const output = ${JSON.stringify(output)};
+        const mkdir = fs.mkdir, lstat = fs.lstat;
+        let reserved = false, reads = 0, launches = 0;
+        chromium.launch = async () => { launches++; throw new Error('Browser launch was not permitted'); };
+        fs.mkdir = async (...args) => {
+          const result = await mkdir(...args);
+          if (args[0] === output) {
+            reserved = true;
+            process.emit('SIGINT');
+            await new Promise(resolve => setImmediate(resolve));
+          }
+          return result;
+        };
+        fs.lstat = async (...args) => {
+          if (args[0] === output && ++reads > 1) await new Promise(resolve => setTimeout(resolve, 30));
+          return lstat(...args);
+        };
+        syncBuiltinESMExports();
+        process.argv = [process.execPath, ${JSON.stringify(CAPTURE_ENTRY)}, 'https://capture.example/', '--output-dir', output, '--authorize-rendered-capture'];
+        await import(${JSON.stringify(pathToFileURL(CAPTURE_ENTRY).href)});
+        if (!reserved) throw new Error('The actual reservation was not reached');
+        if (launches !== 0) throw new Error('Browser launch was attempted after interruption');
+        try { await lstat(output); throw new Error('Owned directory survived cleanup'); }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+      `], { encoding: 'utf8', timeout: 10_000, env: { ...process.env, NODE_OPTIONS: '', NODE_PATH: '' } });
+      assert.equal(child.error, undefined);
+      assert.equal(child.signal, null);
+      assert.equal(child.status, 130, child.stderr);
+      assert.match(child.stderr, /Capture error: Rendered capture interrupted/);
+      assert.doesNotMatch(child.stderr, /UnhandledPromise|triggerUncaughtException|browserType|Executable doesn't exist/);
+      await assert.rejects(stat(output), { code: 'ENOENT' });
+    } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   test('keeps an unavailable screenshot perceptual hash distinct from a visual difference', async () => {

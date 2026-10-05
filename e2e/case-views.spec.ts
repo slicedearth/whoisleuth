@@ -6,6 +6,7 @@ import { caseRecord } from './case-test-fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, failBrowserLocalCollectionReads, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { createWorkspace, namedDatabase, openArchive, switchWorkspace } from './browser-workspace-fixtures';
 import { downloadWorkspaceArchive, downloadEncryptedWorkspaceArchive } from './workspace-backup';
+import { WORKSPACE_ARCHIVE_VERSION } from '../packages/contracts/case-portability.mts';
 
 async function seed(page: Page) {
   await page.clock.setFixedTime('2026-09-13T10:00:00.000Z');
@@ -119,7 +120,7 @@ test('real saved views travel in encrypted and unencrypted backups and restore o
   await page.goto('/dashboard');
   const plain = await downloadWorkspaceArchive(page);
   const document = JSON.parse(plain.content);
-  expect(document.version).toBe(9);
+  expect(document.version).toBe(WORKSPACE_ARCHIVE_VERSION);
   expect(document.sections.caseViews.views).toEqual(original.records.map(record => record.value));
   expect(JSON.stringify(document.sections.cases)).not.toContain('Private selected review');
   const passphrase = 'Reserved encrypted backup fixture';

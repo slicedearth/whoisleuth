@@ -1,12 +1,12 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { Capability } from '$lib/capabilities';
-  import { buildLookupCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
-  import { eligibleLookupOptionalSources, type LookupTargetType } from '$lib/analysis/lookup-page-actions.ts';
-  import CollectionPreflight from '$lib/components/CollectionPreflight.svelte';
-  import LookupSourceProgress from '$lib/components/LookupSourceProgress.svelte';
+  import type { Capability } from '#lib/capabilities.ts';
+  import { buildLookupCollectionPreflight } from '#lib/analysis/collection-preflight.ts';
+  import { eligibleLookupOptionalSources, type LookupTargetType } from '#lib/analysis/lookup-page-actions.ts';
+  import CollectionPreflight from '#lib/components/CollectionPreflight.svelte';
+  import LookupSourceProgress from '#lib/components/LookupSourceProgress.svelte';
   import type { LookupProgressUpdate } from '../../../../lib/lookup-progress-http.mts';
-  import { MAX_DOMAIN_INPUT_CHARACTERS } from '$lib/analysis/utils.ts';
+  import { MAX_DOMAIN_INPUT_CHARACTERS } from '#lib/analysis/utils.ts';
   import { prepareSelectedLookupUrl } from '../../../../packages/evidence/lookup-target.mts';
   import DeferredSurface from './DeferredSurface.svelte';
 

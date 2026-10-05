@@ -81,18 +81,18 @@ describe('canonical Risk calibration contract', () => {
   });
 
   test('freezes exact current-writer compatibility and canonical descriptors', () => {
-    assert.deepEqual(SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS, [2]);
+    assert.deepEqual(SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS, [2, 3]);
     assert.deepEqual(SUPPORTED_RISK_CALIBRATION_REPORT_VERSIONS, [3]);
     assert.equal(Object.isFrozen(SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS), true);
     assert.equal(Object.isFrozen(SUPPORTED_RISK_CALIBRATION_REPORT_VERSIONS), true);
     assert.equal(Object.isFrozen(RISK_CALIBRATION_DATASET_COMPATIBILITY), true);
     assert.equal(Object.isFrozen(RISK_CALIBRATION_DATASET_COMPATIBILITY.supportedVersions), true);
     assert.equal(Object.isFrozen(RISK_CALIBRATION_REPORT_COMPATIBILITY), true);
-    assert.deepEqual(RISK_CALIBRATION_DATASET_COMPATIBILITY.supportedVersions, [2]);
+    assert.deepEqual(RISK_CALIBRATION_DATASET_COMPATIBILITY.supportedVersions, [2, 3]);
     assert.deepEqual(RISK_CALIBRATION_REPORT_COMPATIBILITY.supportedVersions, [3]);
   });
 
-  test('accepts only the exact public current-writer dataset', () => {
+  test('accepts current and exact historical datasets without changing their version', () => {
     const base = {
       schema: RISK_CALIBRATION_DATASET_SCHEMA,
       records: [{
@@ -103,12 +103,13 @@ describe('canonical Risk calibration contract', () => {
       }],
     };
     assert.equal(parseRiskCalibrationDataset(JSON.stringify({ ...base, version: 2 })).version, 2);
+    assert.equal(parseRiskCalibrationDataset(JSON.stringify({ ...base, version: 3 })).version, 3);
     assert.throws(
       () => parseRiskCalibrationDataset(JSON.stringify({ ...base, version: 1 })),
       /version 2/u,
     );
     assert.throws(
-      () => parseRiskCalibrationDataset(JSON.stringify({ ...base, version: 3 })),
+      () => parseRiskCalibrationDataset(JSON.stringify({ ...base, version: 4 })),
       /version 2/u,
     );
   });

@@ -313,8 +313,9 @@ async function runOfflineEvidenceReviewCommand(
     'review-evidence requires one JSON file or a document on stdin.',
   );
   const document = args.mmdbSource
-    ? await buildOfflineEvidenceReviewWithLocalResources(input, context.now(), { mmdbPath: args.mmdbSource })
+    ? await buildOfflineEvidenceReviewWithLocalResources(input, context.now(), { mmdbPath: args.mmdbSource, ...(dependencies.signal ? { signal: dependencies.signal } : {}) })
     : buildOfflineEvidenceReview(input, context.now());
+  dependencies.signal?.throwIfAborted();
   writeReviewReport(context, args, document, formatOfflineEvidenceReview);
   if (args.strictExit) {
     const result = document.result && typeof document.result === 'object' && !Array.isArray(document.result)
@@ -328,9 +329,11 @@ async function runOfflineEvidenceReviewCommand(
       || (result.counts && typeof result.counts === 'object' && !Array.isArray(result.counts)
         && ['different', 'missing', 'unexpected', 'incomplete'].some((key) => Number((result.counts as Record<string, unknown>)[key]) > 0))
     );
-    const contextPartial = (CONTEXT_REVIEW_KINDS as readonly string[]).includes(document.kind) && result.state === 'partial';
+    const contextPartial = ((CONTEXT_REVIEW_KINDS as readonly string[]).includes(document.kind) || document.kind === 'internal_containment') && result.state === 'partial';
     const mmdbIncomplete = result.schema === LOCAL_MMDB_REVIEW_SCHEMA && result.version === LOCAL_MMDB_REVIEW_VERSION && result.completeness !== 'complete';
-    if (gate?.pass === false || zoneMismatch || contextPartial || mmdbIncomplete) return EXIT_CODES.PARTIAL_FAILURE;
+    const infrastructureIncomplete = document.kind === 'infrastructure' ? result.state !== 'complete'
+      : document.kind === 'infrastructure_comparison' && result.state !== 'compared';
+    if (gate?.pass === false || zoneMismatch || contextPartial || mmdbIncomplete || infrastructureIncomplete) return EXIT_CODES.PARTIAL_FAILURE;
   }
   return EXIT_CODES.SUCCESS;
 }

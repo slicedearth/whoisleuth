@@ -3,7 +3,7 @@
   import { comparePageBehaviour } from '../../../../packages/investigation/page-behaviour.mts';
   import { compareObservationContexts } from '../../../../packages/comparison/capture-context.mts';
   import type { CaptureManifestContext } from '../../../../packages/interchange/web-capture-import.mts';
-  import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
+  import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
   import { sha256ArtifactDigestV2 } from '../../../../packages/evidence/artifact-integrity.mts';
   import Pagination from './Pagination.svelte';
   let { left, right, caseDomain, persist, mutationBusy }: { left: CaptureManifestContext; right: CaptureManifestContext; caseDomain: string; persist: PersistCaseResponse; mutationBusy: boolean } = $props();

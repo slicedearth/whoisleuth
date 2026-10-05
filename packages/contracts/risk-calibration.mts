@@ -2,8 +2,8 @@ import { defineSchemaCompatibility } from './schema-compatibility.mts';
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 
 export const RISK_CALIBRATION_DATASET_SCHEMA = 'whoisleuth.risk-calibration-dataset';
-export const RISK_CALIBRATION_DATASET_VERSION = 2;
-export const SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS = Object.freeze([RISK_CALIBRATION_DATASET_VERSION] as const);
+export const RISK_CALIBRATION_DATASET_VERSION = 3;
+export const SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS = Object.freeze([2, RISK_CALIBRATION_DATASET_VERSION] as const);
 export const RISK_CALIBRATION_REPORT_SCHEMA = 'whoisleuth.cli.risk-calibration';
 export const RISK_CALIBRATION_REPORT_VERSION = 3;
 export const SUPPORTED_RISK_CALIBRATION_REPORT_VERSIONS = Object.freeze([RISK_CALIBRATION_REPORT_VERSION] as const);
@@ -84,7 +84,7 @@ export const RISK_CALIBRATION_EVIDENCE_OPTIONAL_KEYS = Object.freeze([
   'activityStatus', 'mutationTypes', 'domainAgeDays', 'faviconMatch',
   'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'hasMx',
   'hasSpf', 'hasDmarc', 'privacyProtected', 'phishingLanguageMatch',
-  'hasExternalFormAction', 'idnReferenceMatch', 'pageBaselineMatch',
+  'hasExternalFormAction', 'hasExternalPasswordForm', 'idnReferenceMatch', 'pageBaselineMatch',
   'hasActiveBrandProfile', 'scanDepth', 'observedAt', 'threatIntelligence',
 ] as const);
 export const RISK_CALIBRATION_THREAT_INTELLIGENCE_KEYS = Object.freeze([
@@ -202,6 +202,7 @@ export type RiskCalibrationEvidence = Readonly<{
   privacyProtected?: boolean;
   phishingLanguageMatch?: string;
   hasExternalFormAction?: boolean;
+  hasExternalPasswordForm?: boolean;
   idnReferenceMatch?: boolean;
   pageBaselineMatch?: boolean;
   hasActiveBrandProfile?: boolean;
@@ -236,7 +237,7 @@ export const RISK_CALIBRATION_DATASET_COMPATIBILITY = defineSchemaCompatibility(
   writeSemantics: 'read_only',
   byteBudget: MAX_RISK_CALIBRATION_INPUT_BYTES,
   owner: 'packages/contracts/risk-calibration.mts',
-  note: 'Offline labelled fixture input; version 2 adds bounded review context without live collection.',
+  note: 'Offline labelled fixture input. Version 2 retains bounded review context; version 3 adds explicit form attribution. Historical records remain readable without manufacturing missing associations.',
 });
 
 export const RISK_CALIBRATION_REPORT_COMPATIBILITY = defineSchemaCompatibility({
@@ -358,22 +359,22 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
     RISK_CALIBRATION_REPORT_COMPATIBILITY,
   ],
   contracts: [
-    {
+    ...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.map((version) => ({
       compatibilityId: RISK_CALIBRATION_DATASET_COMPATIBILITY.id,
       schema: RISK_CALIBRATION_DATASET_SCHEMA,
-      version: RISK_CALIBRATION_DATASET_VERSION,
-      role: 'document',
-      lifecycle: 'current',
+      version,
+      role: 'document' as const,
+      lifecycle: version === RISK_CALIBRATION_DATASET_VERSION ? 'current' as const : 'legacy' as const,
       readable: true,
-      emitted: true,
+      emitted: version === RISK_CALIBRATION_DATASET_VERSION,
       exactKeys: false,
-      extensionPolicy: 'discard_bounded',
-      futureVersionBehaviour: 'reject',
+      extensionPolicy: 'discard_bounded' as const,
+      futureVersionBehaviour: 'reject' as const,
       migrationTarget: null,
       canonicalisation: null,
       byteBudget: MAX_RISK_CALIBRATION_INPUT_BYTES,
-      fixtureIds: ['risk-calibration-dataset-v2'],
-    },
+      fixtureIds: [`risk-calibration-dataset-v${version}`],
+    })),
     {
       compatibilityId: RISK_CALIBRATION_REPORT_COMPATIBILITY.id,
       schema: RISK_CALIBRATION_REPORT_SCHEMA,
@@ -396,14 +397,28 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
   ],
   fixtures: [
     {
+      id: 'risk-calibration-dataset-v3',
+      path: 'test/fixtures/risk-calibration-dataset-v3.json',
+      bytes: 1_096,
+      sha256: 'a8e41c1325094aec5ef4731fdf9f487a20999729f6cc704e400c3d83db2a0753',
+      contentDigestSha256: null,
+      schema: RISK_CALIBRATION_DATASET_SCHEMA,
+      version: 3,
+      role: 'current',
+      expectation: 'accepted_exact',
+      expectedOutputFixtureId: null,
+      scope: 'repository',
+      shapeId: 'risk-calibration.dataset.v3',
+    },
+    {
       id: 'risk-calibration-dataset-v2',
       path: 'test/fixtures/risk-calibration-dataset-v2.json',
       bytes: 1_154,
       sha256: 'bd650fe84923c61658d451c25d928bd5ff8e54ff585f4f059e6798c681f9a401',
       contentDigestSha256: null,
       schema: RISK_CALIBRATION_DATASET_SCHEMA,
-      version: RISK_CALIBRATION_DATASET_VERSION,
-      role: 'current',
+      version: 2,
+      role: 'historical',
       expectation: 'accepted_exact',
       expectedOutputFixtureId: null,
       scope: 'repository',
@@ -441,11 +456,11 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
   metadata: {
     enforcement: 'declarative_only',
     shapes: [
-      ...[RISK_CALIBRATION_DATASET_VERSION].map((version) => ({
+      ...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.map((version) => ({
         id: `risk-calibration.dataset.v${version}`,
         schema: RISK_CALIBRATION_DATASET_SCHEMA,
         versions: [version],
-        objects: DATASET_SHAPE_OBJECTS,
+        objects: version === 2 ? DATASET_SHAPE_OBJECTS.map(object => ({ ...object, optionalKeys: object.optionalKeys.filter(key => key !== 'hasExternalPasswordForm') })) : DATASET_SHAPE_OBJECTS,
         fixedArrays: [],
         normalisation: 'project_known_fields' as const,
         target: null,
@@ -675,7 +690,7 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         operation: 'build-dataset-download',
         acceptedContracts: [],
         emittedContract: { schema: RISK_CALIBRATION_DATASET_SCHEMA, version: RISK_CALIBRATION_DATASET_VERSION, discriminator: null },
-        shapeIds: ['risk-calibration.dataset.v2'],
+        shapeIds: [`risk-calibration.dataset.v${RISK_CALIBRATION_DATASET_VERSION}`],
         boundProfileIds: ['risk-calibration.dataset-bounds.v2'],
         hookIds: ['risk-calibration.browser.build-dataset', 'risk-calibration.browser.serialise-dataset'],
         serialisationProfileId: 'risk-calibration.dataset-json.v2',
@@ -690,9 +705,9 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'risk-calibration.cli-detailed-json-stdout',
         plane: 'cli',
         operation: 'build-detailed-json-stdout',
-        acceptedContracts: [{ schema: RISK_CALIBRATION_DATASET_SCHEMA, versions: [RISK_CALIBRATION_DATASET_VERSION], mode: 'direct', discriminator: null }],
+        acceptedContracts: [{ schema: RISK_CALIBRATION_DATASET_SCHEMA, versions: [...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS], mode: 'direct', discriminator: null }],
         emittedContract: { schema: RISK_CALIBRATION_REPORT_SCHEMA, version: RISK_CALIBRATION_REPORT_VERSION, discriminator: { path: '$.mode', value: 'detailed' } },
-        shapeIds: ['risk-calibration.dataset.v2', 'risk-calibration.report.v3-detailed'],
+        shapeIds: [...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.map(version => `risk-calibration.dataset.v${version}`), 'risk-calibration.report.v3-detailed'],
         boundProfileIds: ['risk-calibration.dataset-bounds.v2', 'risk-calibration.report-detailed.v3', 'risk-calibration.report-detailed-json-output.v3'],
         hookIds: ['risk-calibration.cli.parse-dataset', 'risk-calibration.cli.build-detailed', 'risk-calibration.cli.serialise-report'],
         serialisationProfileId: 'risk-calibration.report-json.v3',
@@ -707,9 +722,9 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'risk-calibration.cli-dataset-read',
         plane: 'cli',
         operation: 'read-dataset',
-        acceptedContracts: [{ schema: RISK_CALIBRATION_DATASET_SCHEMA, versions: [RISK_CALIBRATION_DATASET_VERSION], mode: 'direct', discriminator: null }],
+        acceptedContracts: [{ schema: RISK_CALIBRATION_DATASET_SCHEMA, versions: [...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS], mode: 'direct', discriminator: null }],
         emittedContract: null,
-        shapeIds: ['risk-calibration.dataset.v2'],
+        shapeIds: SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.map(version => `risk-calibration.dataset.v${version}`),
         boundProfileIds: ['risk-calibration.dataset-bounds.v2'],
         hookIds: ['risk-calibration.cli.parse-dataset'],
         serialisationProfileId: null,
@@ -724,9 +739,9 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'risk-calibration.cli-detailed-terminal-stdout',
         plane: 'cli',
         operation: 'build-detailed-terminal-stdout',
-        acceptedContracts: [{ schema: RISK_CALIBRATION_DATASET_SCHEMA, versions: [RISK_CALIBRATION_DATASET_VERSION], mode: 'direct', discriminator: null }],
+        acceptedContracts: [{ schema: RISK_CALIBRATION_DATASET_SCHEMA, versions: [...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS], mode: 'direct', discriminator: null }],
         emittedContract: { schema: RISK_CALIBRATION_REPORT_SCHEMA, version: RISK_CALIBRATION_REPORT_VERSION, discriminator: { path: '$.mode', value: 'detailed' } },
-        shapeIds: ['risk-calibration.dataset.v2', 'risk-calibration.report.v3-detailed'],
+        shapeIds: [...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.map(version => `risk-calibration.dataset.v${version}`), 'risk-calibration.report.v3-detailed'],
         boundProfileIds: ['risk-calibration.dataset-bounds.v2', 'risk-calibration.report-detailed.v3'],
         hookIds: ['risk-calibration.cli.parse-dataset', 'risk-calibration.cli.build-detailed', 'risk-calibration.cli.format-terminal'],
         serialisationProfileId: null,
@@ -741,9 +756,9 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'risk-calibration.cli-summary-json-stdout',
         plane: 'cli',
         operation: 'build-summary-json-stdout',
-        acceptedContracts: [{ schema: RISK_CALIBRATION_DATASET_SCHEMA, versions: [RISK_CALIBRATION_DATASET_VERSION], mode: 'direct', discriminator: null }],
+        acceptedContracts: [{ schema: RISK_CALIBRATION_DATASET_SCHEMA, versions: [...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS], mode: 'direct', discriminator: null }],
         emittedContract: { schema: RISK_CALIBRATION_REPORT_SCHEMA, version: RISK_CALIBRATION_REPORT_VERSION, discriminator: { path: '$.mode', value: 'summary' } },
-        shapeIds: ['risk-calibration.dataset.v2', 'risk-calibration.report.v3-summary'],
+        shapeIds: [...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.map(version => `risk-calibration.dataset.v${version}`), 'risk-calibration.report.v3-summary'],
         boundProfileIds: ['risk-calibration.dataset-bounds.v2', 'risk-calibration.report-summary-output.v3'],
         hookIds: ['risk-calibration.cli.parse-dataset', 'risk-calibration.cli.build-detailed', 'risk-calibration.shared.build-summary', 'risk-calibration.cli.serialise-report'],
         serialisationProfileId: 'risk-calibration.report-json.v3',
@@ -758,9 +773,9 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'risk-calibration.cli-detailed-json-file',
         plane: 'cli',
         operation: 'build-detailed-json-file',
-        acceptedContracts: [{ schema: RISK_CALIBRATION_DATASET_SCHEMA, versions: [RISK_CALIBRATION_DATASET_VERSION], mode: 'direct', discriminator: null }],
+        acceptedContracts: [{ schema: RISK_CALIBRATION_DATASET_SCHEMA, versions: [...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS], mode: 'direct', discriminator: null }],
         emittedContract: { schema: RISK_CALIBRATION_REPORT_SCHEMA, version: RISK_CALIBRATION_REPORT_VERSION, discriminator: { path: '$.mode', value: 'detailed' } },
-        shapeIds: ['risk-calibration.dataset.v2', 'risk-calibration.report.v3-detailed'],
+        shapeIds: [...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.map(version => `risk-calibration.dataset.v${version}`), 'risk-calibration.report.v3-detailed'],
         boundProfileIds: ['risk-calibration.dataset-bounds.v2', 'risk-calibration.report-detailed.v3', 'risk-calibration.report-detailed-json-output.v3', 'risk-calibration.cli-private-output.v1'],
         hookIds: ['risk-calibration.cli.parse-dataset', 'risk-calibration.cli.build-detailed', 'risk-calibration.cli.serialise-report', 'risk-calibration.cli.write-private-file'],
         serialisationProfileId: 'risk-calibration.report-json.v3',
@@ -775,9 +790,9 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'risk-calibration.cli-detailed-terminal-file',
         plane: 'cli',
         operation: 'build-detailed-terminal-file',
-        acceptedContracts: [{ schema: RISK_CALIBRATION_DATASET_SCHEMA, versions: [RISK_CALIBRATION_DATASET_VERSION], mode: 'direct', discriminator: null }],
+        acceptedContracts: [{ schema: RISK_CALIBRATION_DATASET_SCHEMA, versions: [...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS], mode: 'direct', discriminator: null }],
         emittedContract: { schema: RISK_CALIBRATION_REPORT_SCHEMA, version: RISK_CALIBRATION_REPORT_VERSION, discriminator: { path: '$.mode', value: 'detailed' } },
-        shapeIds: ['risk-calibration.dataset.v2', 'risk-calibration.report.v3-detailed'],
+        shapeIds: [...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.map(version => `risk-calibration.dataset.v${version}`), 'risk-calibration.report.v3-detailed'],
         boundProfileIds: ['risk-calibration.dataset-bounds.v2', 'risk-calibration.report-detailed.v3', 'risk-calibration.cli-private-output.v1'],
         hookIds: ['risk-calibration.cli.parse-dataset', 'risk-calibration.cli.build-detailed', 'risk-calibration.cli.format-terminal', 'risk-calibration.cli.write-private-file'],
         serialisationProfileId: null,
@@ -792,9 +807,9 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'risk-calibration.cli-summary-json-file',
         plane: 'cli',
         operation: 'build-summary-json-file',
-        acceptedContracts: [{ schema: RISK_CALIBRATION_DATASET_SCHEMA, versions: [RISK_CALIBRATION_DATASET_VERSION], mode: 'direct', discriminator: null }],
+        acceptedContracts: [{ schema: RISK_CALIBRATION_DATASET_SCHEMA, versions: [...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS], mode: 'direct', discriminator: null }],
         emittedContract: { schema: RISK_CALIBRATION_REPORT_SCHEMA, version: RISK_CALIBRATION_REPORT_VERSION, discriminator: { path: '$.mode', value: 'summary' } },
-        shapeIds: ['risk-calibration.dataset.v2', 'risk-calibration.report.v3-summary'],
+        shapeIds: [...SUPPORTED_RISK_CALIBRATION_DATASET_VERSIONS.map(version => `risk-calibration.dataset.v${version}`), 'risk-calibration.report.v3-summary'],
         boundProfileIds: ['risk-calibration.dataset-bounds.v2', 'risk-calibration.report-summary-output.v3', 'risk-calibration.cli-private-output.v1'],
         hookIds: ['risk-calibration.cli.parse-dataset', 'risk-calibration.cli.build-detailed', 'risk-calibration.shared.build-summary', 'risk-calibration.cli.serialise-report', 'risk-calibration.cli.write-private-file'],
         serialisationProfileId: 'risk-calibration.report-json.v3',
@@ -1376,6 +1391,7 @@ const DATASET_EVIDENCE_SPEC = objectOf([
   { key: 'privacyProtected', value: BOOLEAN_SPEC, optional: true },
   { key: 'phishingLanguageMatch', value: boundedText(MAX_RISK_CALIBRATION_STRING_LENGTH), optional: true },
   { key: 'hasExternalFormAction', value: BOOLEAN_SPEC, optional: true },
+  { key: 'hasExternalPasswordForm', value: BOOLEAN_SPEC, optional: true },
   { key: 'idnReferenceMatch', value: BOOLEAN_SPEC, optional: true },
   { key: 'pageBaselineMatch', value: BOOLEAN_SPEC, optional: true },
   { key: 'hasActiveBrandProfile', value: BOOLEAN_SPEC, optional: true },

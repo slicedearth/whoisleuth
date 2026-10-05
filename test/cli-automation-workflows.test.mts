@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { link, open, rename, unlink, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
@@ -16,9 +16,11 @@ import { buildCliLookupTimeline, formatCliLookupTimeline } from '../cli/lookup-t
 import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../cli/investigation-manifest.mts';
 import { CLI_PROGRESS_EVENT_SCHEMA, CLI_PROGRESS_EVENT_VERSION, createCliProgressEvents } from '../cli/progress-events.mts';
 import { runCli } from '../cli/runner.mts';
+import { writePrivateFile } from '../cli/output-file.mts';
 import { lookupStrictExitFindings } from '../cli/strict-exit.mts';
 import type { BulkLookupResult } from '../cli/bulk.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
+import { deferred } from './deferred.mts';
 
 const NOW = '2026-08-01T00:00:00.000Z';
 
@@ -563,6 +565,40 @@ describe('safe local output', () => {
     assert.equal(code, EXIT_CODES.CANCELLED);
     assert.equal(saveCalls, 0);
   });
+
+  for (const phase of ['before-publication', 'after-publication', 'not-cancelled'] as const) {
+    test(`browser Lookup save honours the publication boundary (${phase})`, async () => {
+      const directory = await mkdtemp(join(tmpdir(), 'whoisleuth-lookup-publication-'));
+      const destination = join(directory, 'lookup.json');
+      const controller = new AbortController(), entered = deferred<void>(), release = deferred<void>();
+      const stderr = capture();
+      let publications = 0;
+      try {
+        const pending = runCli(['lookup', 'example.test', '--browse', '--save-lookup', destination], {
+          stdout: capture().stream, stderr: stderr.stream, signal: controller.signal, canBrowseLookup: () => true,
+          classifyQuery: () => classifiedDomain('example.test'), runUnifiedLookup: async () => lookupResult('example.test'),
+          browseLookupOperation: async options => options.collect!({ signal: controller.signal, onSourceSettled: () => {} }),
+          writePrivateFile: (path, content, options) => writePrivateFile(path, content, options, {
+            randomUUID, rename, unlink,
+            open: async (...args) => {
+              const handle = await open(...args);
+              return { writeFile: async (...writeArgs) => { await handle.writeFile(...writeArgs); entered.resolve(); await release.promise; },
+                sync: () => handle.sync(), close: () => handle.close() };
+            },
+            link: async (...args) => { await link(...args); publications++; if (phase === 'after-publication') controller.abort(); },
+          }),
+        });
+        await entered.promise;
+        if (phase === 'before-publication') controller.abort();
+        release.resolve();
+        assert.equal(await pending, phase === 'before-publication' ? EXIT_CODES.CANCELLED : EXIT_CODES.SUCCESS);
+        assert.equal(publications, phase === 'before-publication' ? 0 : 1);
+        assert.deepEqual(await readdir(directory), phase === 'before-publication' ? [] : ['lookup.json']);
+        if (phase === 'before-publication') assert.equal(stderr.value(), 'Cancelled by analyst.\n');
+        else { assert.match(stderr.value(), /Saved the completed private Lookup JSON/u); assert.equal((await stat(destination)).mode & 0o777, 0o600); }
+      } finally { release.resolve(); await rm(directory, { recursive: true, force: true }); }
+    });
+  }
 });
 
 describe('strict exit and machine progress events', () => {
@@ -1198,6 +1234,49 @@ describe('resumable Bulk checkpoints', () => {
 });
 
 describe('analyst cancellation', () => {
+  for (const command of ['bulk', 'discover-scan'] as const) {
+    for (const machine of [false, true]) {
+      test(`${command} reports failed checkpoint flush before cancellation (${machine ? 'events' : 'terminal'})`, async () => {
+        const controller = new AbortController(), started = deferred<void>();
+        const stdout = capture(), stderr = capture();
+        let calls = 0, recorded = 0;
+        const args = command === 'bulk' ? ['bulk'] : ['discover-scan', 'brand.example', '--scan-limit', '2'];
+        const result = runCli([...args, '--json', '--concurrency', '1', '--checkpoint', 'fixture.json', ...(machine ? ['--events'] : [])], {
+          signal: controller.signal, stdout: stdout.stream, stderr: stderr.stream, now: () => NOW,
+          readBulkInput: async () => 'one.example\ntwo.example', classifyQuery: classifiedDomain,
+          loadTyposquatGenerator: async () => ({ MAX_GENERATION_TLDS: 20, MUTATION_FAMILY_IDS: ['character_omission'],
+            MUTATION_LABELS: { character_omission: 'Character omission' }, normalizeMutationFamilyIds: () => [],
+            normalizeCustomDictionaryTerms: () => ({ values: [], rejectedCount: 0 }),
+            generateTyposquatCandidateSet: () => ({ inputValid: true, version: 1, candidates: ['one.example', 'two.example'].map(domain => ({
+              domain, source: 'brand.example', tld: 'example', mutationTypes: ['character_omission'],
+            })) }),
+          }),
+          runUnifiedLookup: async classified => {
+            if (++calls === 1) return lookupResult(classified.value);
+            started.resolve();
+            return new Promise((_resolve, reject) => controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true }));
+          },
+          createBulkCheckpointWriter: async () => ({ initialResults: [], record() { recorded += 1; },
+            async flush() { throw new Error('one.example fixture checkpoint failed'); } }),
+        });
+        await started.promise;
+        controller.abort(new Error('fixture cancellation'));
+        assert.equal(await result, EXIT_CODES.CANCELLED);
+        assert.equal(recorded, 1);
+        assert.equal(stdout.value(), '');
+        assert.doesNotMatch(stderr.value(), /Completed output is still available/);
+        if (machine) {
+          const events = stderr.value().trim().split('\n').map(line => JSON.parse(line));
+          assert.deepEqual(events.map(event => event.event), ['started', 'item_settled', 'warning', 'cancelled']);
+          assert.equal(events[2].state, 'checkpoint_unavailable');
+          assert.doesNotMatch(stderr.value(), /one\.example|two\.example|fixture checkpoint failed/);
+        } else {
+          assert.match(stderr.value(), /Checkpoint warning:.*latest progress may not be saved\.[\s\S]*Cancelled by analyst\./);
+        }
+      });
+    }
+  }
+
   test('returns 130 and emits no partial result when an in-flight lookup is cancelled', async () => {
     const controller = new AbortController();
     const stdout = capture();

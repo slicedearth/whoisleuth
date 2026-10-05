@@ -6,7 +6,7 @@ import { normalizeOpportunityModelVersion } from '../analysis/opportunity-scorin
 import { normalizeRiskModelVersion } from '../analysis/risk-scoring.mts';
 import { latestObservationCohort } from '../evidence/latest-observations.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
-import { EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION, PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION, OBJECT_RESPONSE_CASE_SCHEMA_VERSION, PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import { validWebObservationMode } from '../evidence/lookup-target.mts';
 import { normalizeWebCollectionQuality, webCollectionAllowsComparison } from '../evidence/collection-quality.mts';
 import {
@@ -145,6 +145,7 @@ const DEEP_SIGNAL_FIELDS: Array<keyof CaseEvidenceMaterial> = [
   'httpCrossOriginRedirect', 'httpHttpsDowngrade', 'httpContentType', 'httpSecurityHeaders',
   'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets', 'hasPasswordField', 'hasExternalFormAction', 'phishingLanguageMatch',
   'pageBaselineMatch',
+  'hasExternalPasswordForm',
 ];
 
 // Ordered list of the fields that make up a snapshot's *material* identity -
@@ -168,6 +169,7 @@ const MATERIAL_FIELD_ORDER: Array<keyof CaseEvidenceMaterial> = [
   'privacyProtected', 'idnReferenceMatch', 'pageBaselineMatch', 'hasActiveBrandProfile',
   'profileContextState', 'profileContextLimitation',
   'mutationTypes',
+  'hasExternalPasswordForm',
 ];
 
 // The canonical, comparison-safe value of a material field. Registrar casing,
@@ -229,7 +231,7 @@ function canonicalMaterialString(snapshot: CaseEvidenceMaterial, legacyOrder = f
     const value = materialValue(field, snapshot, legacyOrder);
     // Optional collection context does not alter historical fingerprints when
     // absent; recorded context separates otherwise-identical captures.
-    if ((field === 'inputHostname' || field === 'observationHostname' || field === 'webObservationMode' || field === 'webCollectionQuality') && value === null) continue;
+    if ((field === 'inputHostname' || field === 'observationHostname' || field === 'webObservationMode' || field === 'webCollectionQuality' || field === 'hasExternalPasswordForm') && value === null) continue;
     canonical[field] = value;
   }
   return JSON.stringify(canonical);
@@ -259,6 +261,7 @@ function buildSnapshot(
 ): { snapshot: CaseEvidenceSnapshot; material: string } | null {
   if (!raw || typeof raw !== 'object') return null;
   const record = objectRecord(raw);
+  if (record.hasExternalPasswordForm !== undefined && options.sourceVersion != null && options.sourceVersion < OBJECT_RESPONSE_CASE_SCHEMA_VERSION) throw new TypeError('Password-form attribution requires Case schema 18 or later; historical evidence was not reinterpreted.');
   if (record.factorOrder !== undefined && record.factorOrder !== 'code-unit-v1') return null;
   const historicalSchema = options.sourceVersion !== undefined && Number(options.sourceVersion) <= PUBLISHED_V2_3_CASE_SCHEMA_VERSION;
   if (historicalSchema && record.factorOrder !== undefined) return null;
@@ -320,6 +323,7 @@ function buildSnapshot(
     reusesOfficialAssets: boolOrNull(record.reusesOfficialAssets),
     hasPasswordField: boolOrNull(record.hasPasswordField),
     hasExternalFormAction: boolOrNull(record.hasExternalFormAction),
+    ...(record.hasExternalPasswordForm === undefined ? {} : { hasExternalPasswordForm: boolOrNull(record.hasExternalPasswordForm) }),
     phishingLanguageMatch: evidenceString(record.phishingLanguageMatch),
     privacyProtected: boolOrNull(record.privacyProtected),
     idnReferenceMatch: boolOrNull(record.idnReferenceMatch),
@@ -338,7 +342,7 @@ function buildSnapshot(
   if (fields.riskScore === null && fields.riskFactors.length === 0) fields.riskModelVersion = null;
   if (fields.opportunityScore === null && fields.opportunityFactors.length === 0) fields.opportunityModelVersion = null;
   if (webCollectionQuality) {
-    for (const field of ['hasPasswordField', 'hasExternalFormAction', 'pageBaselineMatch', 'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets'] as const) {
+    for (const field of ['hasPasswordField', 'hasExternalFormAction', 'hasExternalPasswordForm', 'pageBaselineMatch', 'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets'] as const) {
       if (fields[field] === false && !webCollectionAllowsComparison(field, webCollectionQuality, scanDepth)) fields[field] = null;
     }
   }
@@ -367,6 +371,7 @@ function buildSnapshot(
       reusesOfficialAssets: null,
       hasPasswordField: null,
       hasExternalFormAction: null,
+      ...(record.hasExternalPasswordForm === undefined ? {} : { hasExternalPasswordForm: null }),
       phishingLanguageMatch: null,
       pageBaselineMatch: null,
     });
@@ -636,6 +641,7 @@ const COMPARE_FIELDS: CompareFieldSpec[] = [
   { field: 'reusesOfficialAssets', scope: 'web', label: 'Official asset reuse', type: 'signal', depthGate: 'both-deep' },
   { field: 'hasPasswordField', scope: 'web', label: 'Password form', type: 'signal', depthGate: 'both-deep' },
   { field: 'hasExternalFormAction', scope: 'web', label: 'External form action', type: 'signal', depthGate: 'both-deep' },
+  { field: 'hasExternalPasswordForm', scope: 'web', label: 'Password form with declared external destination', type: 'signal', depthGate: 'both-deep' },
   { field: 'phishingLanguageMatch', scope: 'web', label: 'Phishing language', type: 'phishing', depthGate: 'both-deep' },
   { field: 'mutationTypes', scope: 'hostname', label: 'Mutation types', type: 'set' },
 ];
@@ -859,6 +865,11 @@ function compareField(
     default:
       return null;
   }
+}
+
+/** Field scope is owned by the same specification that gates comparisons. */
+export function caseEvidenceFieldScope(field: string): CompareFieldSpec['scope'] | null {
+  return COMPARE_FIELDS.find(spec => spec.field === field)?.scope ?? null;
 }
 
 /**

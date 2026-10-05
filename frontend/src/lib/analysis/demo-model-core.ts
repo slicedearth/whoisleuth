@@ -9,6 +9,7 @@ import type { CaseEvidenceSnapshot } from './case-model.ts';
 import { RISK_MODEL_VERSION } from './scoring.ts';
 import { inspectRdapCapabilities } from '../../../../lib/rdap-capabilities.mts';
 import { parseBoundedJson } from '../bounded-json.ts';
+import { SYNTHETIC_BRAND } from '../synthetic-brand.ts';
 import { capturedWebCollectionQuality } from '../../../../packages/evidence/collection-quality.mts';
 import {
   MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
@@ -162,10 +163,12 @@ function deepFreeze<T>(value: T): T {
 }
 
 const syntheticProfile: BrandProfile = {
-  id: 'synthetic-northstar',
-  name: 'Northstar Outfitters',
-  officialDomains: ['northstar.example'],
-  productNames: ['Northstar Vault', 'Northstar Rewards'],
+  candidateObservations: [],
+  candidateExceptions: [],
+  id: 'synthetic-example-shop',
+  name: SYNTHETIC_BRAND.name,
+  officialDomains: [SYNTHETIC_BRAND.officialDomain],
+  productNames: [`${SYNTHETIC_BRAND.name} Vault`, `${SYNTHETIC_BRAND.name} Rewards`],
   tlds: ['example', 'invalid'],
   approvedPartnerDomains: [],
   allowlistedDomains: [],
@@ -183,13 +186,13 @@ const syntheticProfile: BrandProfile = {
   officialFaviconPHash: '',
   pageBaseline: {
     baselineVersion: 1,
-    domain: 'northstar.example',
-    lookupDomain: 'northstar.example',
+    domain: SYNTHETIC_BRAND.officialDomain,
+    lookupDomain: SYNTHETIC_BRAND.officialDomain,
     observedAt: '2026-06-20T09:00:00.000Z',
     pageIdentityVersion: 3,
     fingerprintVersion: 1,
-    pageTitle: 'Northstar Outfitters',
-    canonicalHost: 'northstar.example',
+    pageTitle: SYNTHETIC_BRAND.name,
+    canonicalHost: SYNTHETIC_BRAND.officialDomain,
     faviconHash: null,
     faviconPHash: null,
     normalizedHtml: { algorithm: 'sha256', value: 'a'.repeat(64), tokenCount: 120, truncated: false },
@@ -233,7 +236,7 @@ function frozenCandidate(value: SyntheticCandidateInput): SyntheticDemoCandidate
     hasDmarc: value.facts.hasDmarc,
     activityStatus: value.facts.activityStatus,
     websiteProbeDetail: value.evidence.website.detail,
-    pageTitle: value.id === 'credential-lure' ? 'Northstar account access' : null,
+    pageTitle: value.id === 'credential-lure' ? `${SYNTHETIC_BRAND.name} account access` : null,
     httpSummaryVersion: 1,
     httpEvidenceStatus: value.facts.websiteComplete ? 'success' : 'inconclusive',
     httpFinalOrigin: value.facts.websiteComplete ? `https://${value.domain}` : null,
@@ -280,7 +283,7 @@ function frozenCandidate(value: SyntheticCandidateInput): SyntheticDemoCandidate
 
 export const SYNTHETIC_DEMO_CANDIDATES = Object.freeze([
   frozenCandidate({
-    id: 'credential-lure', domain: 'northstar-login.example', mutation: 'Brand + login term', availability: 'Registered', risk: 78,
+    id: 'credential-lure', domain: SYNTHETIC_BRAND.loginDomain, mutation: 'Brand + login term', availability: 'Registered', risk: 78,
     signals: ['Recently observed registration', 'Mail exchanger configured', 'Password form present'],
     riskFactors: [
       { label: 'Credential-themed mutation', points: 22 },
@@ -288,7 +291,7 @@ export const SYNTHETIC_DEMO_CANDIDATES = Object.freeze([
       { label: 'Password form present', points: 24 },
       { label: 'Mail configured', points: 12 },
     ],
-    provenance: { source: 'Certificate Transparency', firstObservedAt: '2026-06-24T08:30:00.000Z', lastObservedAt: '2026-06-26T11:10:00.000Z', certificateCount: 2, hostnames: ['northstar-login.example', 'www.northstar-login.example'] },
+    provenance: { source: 'Certificate Transparency', firstObservedAt: '2026-06-24T08:30:00.000Z', lastObservedAt: '2026-06-26T11:10:00.000Z', certificateCount: 2, hostnames: [SYNTHETIC_BRAND.loginDomain, `www.${SYNTHETIC_BRAND.loginDomain}`] },
     relationship: { label: 'Shared nameserver', value: 'ns1.shared-example.invalid', relatedCandidates: 2 },
     facts: { hasMx: true, hasSpf: true, hasDmarc: false, activityStatus: 'active', websiteComplete: true, httpSecurityHeaders: [], hasPasswordField: true, formAction: 'external', certificateObserved: true, certificateHostnameMatched: true },
     evidence: {
@@ -314,11 +317,11 @@ export const SYNTHETIC_DEMO_CANDIDATES = Object.freeze([
       ],
       hasDmarc: true,
       websiteProbeDetail: 'Synthetic sign-in flow replaced the earlier landing-page fixture',
-      pageTitle: 'Northstar secure sign in',
+      pageTitle: `${SYNTHETIC_BRAND.name} secure sign in`,
     },
   }),
   frozenCandidate({
-    id: 'character-edit', domain: 'northstarr.example', mutation: 'Character duplication', availability: 'Registered', risk: 34,
+    id: 'character-edit', domain: SYNTHETIC_BRAND.lookalikeDomain, mutation: 'Character substitution', availability: 'Registered', risk: 34,
     signals: ['Character edit', 'Parked page pattern'],
     riskFactors: [{ label: 'Character mutation', points: 14 }, { label: 'Recent infrastructure relationship', points: 20 }],
     provenance: { source: 'Generated candidate', firstObservedAt: null, lastObservedAt: null, certificateCount: 0, hostnames: [] },
@@ -339,11 +342,11 @@ export const SYNTHETIC_DEMO_CANDIDATES = Object.freeze([
     changeEvidence: {
       activityStatus: 'active',
       websiteProbeDetail: 'The parking-pattern fixture changed to a generic active page fixture',
-      pageTitle: 'Northstar resources',
+      pageTitle: `${SYNTHETIC_BRAND.name} resources`,
     },
   }),
   frozenCandidate({
-    id: 'alternate-tld', domain: 'northstar.invalid', mutation: 'Alternate TLD', availability: 'Unknown', risk: 52,
+    id: 'alternate-tld', domain: SYNTHETIC_BRAND.alternateDomain, mutation: 'Alternate TLD', availability: 'Unknown', risk: 52,
     signals: ['Official label on alternate TLD', 'Collection intentionally incomplete'],
     riskFactors: [{ label: 'Exact official label', points: 28 }, { label: 'Incomplete deep evidence', points: 24 }],
     provenance: { source: 'Generated candidate', firstObservedAt: null, lastObservedAt: null, certificateCount: 0, hostnames: [] },
@@ -702,9 +705,9 @@ export function syntheticDemoLookupView(id: string) {
       complete: conclusive,
       entities: active ? [{
         types: 'Organization, WebSite',
-        name: 'Northstar account service',
+        name: `${SYNTHETIC_BRAND.name} account service`,
         declaredOrigin: `https://${candidate.domain}`,
-        sameAsHosts: 'northstar.example',
+        sameAsHosts: SYNTHETIC_BRAND.officialDomain,
       }] : [],
       limitations: ['Fixed publisher-declared JSON-LD fixture; it does not verify identity, ownership, control, safety, or maliciousness.'],
     },

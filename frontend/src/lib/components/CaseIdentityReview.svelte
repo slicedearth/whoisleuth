@@ -1,15 +1,16 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseResponse, PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import { identityRecoveryFollowUp, reviewIdentityIncident } from '../../../../packages/investigation/identity-incident-review.mts';
-  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft.ts';
-  import { trackTransientCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
-  import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { createDraftRevision, restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
+  import { trackTransientCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
+  import { caseEvidenceChoiceName } from '#lib/analysis/case-evidence-presentation.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { IDENTITY_ACTIONS, type IdentityAction } from '../../../../packages/contracts/message-intake.mts';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
-  let { record, mutationBusy, persist }: { record: CaseRecord; mutationBusy: boolean; persist: PersistCaseResponse } = $props();
+  import CaseContainmentHandoff from './CaseContainmentHandoff.svelte';
+  let { record, mutationBusy, persist, persistOperation }: { record: CaseRecord; mutationBusy: boolean; persist: PersistCaseResponse; persistOperation: PersistCaseOperation } = $props();
   let selected = $state<IdentityAction[]>([]), saved = $state('');
   let pinIds = $state<string[]>([]), saving = $state(false), owner = $state('');
   const draft = createDraftRevision(() => record.id);
@@ -65,7 +66,8 @@
     </details>
   {/if}
   {#if internalActions.length}<details><summary>Recorded internal and defensive actions · {internalActions.length}</summary><ul>{#each internalActions as item (item.id)}<li>{item.type.replaceAll('_', ' ')} · {item.state.replaceAll('_', ' ')}<small>Action {item.id} · follow-up binding not recorded</small></li>{/each}</ul></details>{/if}
-  <details><summary>About this review</summary><p>Recommendations and open requests are not assignments, completed recovery or independent account results. Selections stay in page memory; deliberate recording adds an analyst assertion with unresolved evidence relationships. Keep credentials and personal account identifiers out of this tool.</p><p>Use the existing action editor for assignment and tracking, and outcome tracking for independent effects. For handoff, review the existing report disclosure preview or full private Case copy. Response packets omit follow-up statements; original files require explicit selection.</p></details>
+  <CaseContainmentHandoff {record} {mutationBusy} {persistOperation} />
+  <details><summary>About this review</summary><p>Recommendations and open requests are not assignments, completed recovery or independent account results. Selections stay in page memory; deliberate recording adds an analyst assertion with unresolved evidence relationships. Keep credentials and personal account identifiers out of this tool.</p><p>Use the existing action editor for assignment and tracking, and outcome tracking for independent effects. The containment handoff exports only deliberately selected retained requests and supporting pins after audience review. Response packets omit follow-up statements; original files require explicit selection.</p></details>
   <p role="status">{saved}</p>
 </div></details>
 

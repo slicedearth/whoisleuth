@@ -26,6 +26,23 @@ the save transaction checks the complete reviewed collection again before any
 confirmed removal. A failed refresh after a successful write is reported as a
 refresh failure, not a request to repeat the write.
 
+Watchlist schema 6 retains schema-5 membership overflow as a paused recovery
+record. Its observations, history and Brand contexts remain reviewable and
+exportable; no targets are activated or pruned. Other watchlists remain usable.
+Export the preserved records before creating a separate watchlist with at most
+2,000 selected members. Only an explicit deletion removes the recovery record.
+The ordinary collection budget remains 2 MiB. Reading and rewriting reserves
+exactly 39 extra bytes per paused record for its recovery marker, at most 100
+records; this allowance cannot hold additional observations or context. Portable
+exports also allow their timestamp envelope and use compact JSON when indentation
+would exceed the import bound. Plaintext and encrypted workspaces use the same
+decoded-data limits.
+
+Restoring hosted evidence previews the complete local/hosted membership union.
+It replaces the evidence snapshot and history while retaining local members
+and Brand contexts. The save transaction rechecks the reviewed destination;
+the next manually initiated Bulk queue uses that same membership.
+
 The default and unencrypted named workspaces use the plaintext JSON codec.
 Anyone able to use the browser profile, a privileged extension or the device
 may be able to read them. Named workspaces can instead use the encrypted codec
@@ -169,12 +186,11 @@ their hashes and remain readable; HTML-derived comparisons across algorithms
 are unavailable rather than a match or a change. Refresh a baseline deliberately
 to use the current parser. Exact favicon-byte comparison remains separate.
 
-Saved Bulk schema 6 reads public schemas 4 and 5; Watchlist schema 3 reads public
-schema 2. They preserve explicit page and favicon collection outcomes for
-comparisons; historical outcomes remain unknown. Failed or partial checks stay
-visible without replacing a usable Watchlist baseline. Retained relationship
-schema 2 reads public schema 1. Current records preserve each contributing source's identity,
-state, observation time and completeness. Unknown historical provenance stays
+Saved Bulk results and Watchlists preserve explicit page and favicon collection
+outcomes for comparisons; historical outcomes remain unknown. Failed or partial checks stay
+visible without replacing a usable Watchlist baseline. Retained relationships
+preserve each contributing source's identity, state, observation time and
+completeness. Unknown historical provenance stays
 unknown, and a partial source can still support an exact positive pivot. The
 archive versions these sections independently; its outer format is unchanged.
 An undated pivot's retention event is labelled as an analyst action, never as a
@@ -281,6 +297,12 @@ use. Schema 4 still requires its original explicit row context.
 Brand Profiles can retain up to 100 profiles in a 4-MiB collection; profile-file
 imports allow 32 MiB, including formatting and export metadata. Imports also
 enforce record, nesting and text limits.
+Keyword campaigns live in the same Brand records: up to 20 campaigns per Brand,
+20 positive and 20 negative literals per revision, and eight previous revisions
+with an older-omission count. The aggregate byte budget still applies. Edits use
+an exact saved-revision guard; imports reject conflicting copies of one revision.
+Earlier Brand schemas remain readable without invented campaign intent. Saving
+or reaching a campaign's start/end time does not request a feed or enable collection.
 
 Cases retain up to 500 records in a 4-MiB collection. Case-file imports allow
 16 MiB for formatting and export metadata, without increasing the stored-data

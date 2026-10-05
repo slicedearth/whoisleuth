@@ -62,6 +62,21 @@ test('provider requests bind explicit submitted receipts, not the latest action 
   assert.equal(submittedPacketReceipts({ history: original.history.map(event => ({ ...event, applied: false })) }).length, 0);
 });
 
+test('repeat deliveries retain their own digests without admitting unapplied or provider events', () => {
+  const s = scenario(), repeatedDigest = 'b'.repeat(64);
+  s.transition(s.actionId, 'submitted', { reference: `response-packet-sha256:${repeatedDigest}` });
+  const action = s.record.actions[0]!;
+  const receipts = submittedPacketReceipts(action);
+  assert.deepEqual(receipts.map(receipt => receipt.digestSha256), [DIGEST, repeatedDigest]);
+  assert.notEqual(receipts[0]!.eventId, receipts[1]!.eventId);
+  for (const overrides of [{ applied: false }, { sourceClass: 'provider' as const }, { nextState: 'acknowledged' as const }]) {
+    assert.deepEqual(submittedPacketReceipts({ history: action.history.map(event => ({ ...event, ...overrides })) }), []);
+  }
+  s.transition(s.actionId, 'acknowledged', { sourceClass: 'provider', providerOutcome: 'more_information_requested',
+    evidenceRequest: { ...s.request, packetDigestSha256: repeatedDigest } });
+  assert.equal(latestEvidenceRequests(s.record.actions[0]!)[0]!.evidenceRequest.packetDigestSha256, repeatedDigest);
+});
+
 test('preparation preserves the original request and rejects missing pins and invented provider provenance', () => {
   const s = scenario(); s.requested();
   const evidenceRequest = { ...s.request, state: 'prepared', evidencePinIds: [s.record.evidencePins[0]!.id],

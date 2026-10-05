@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import { tick } from 'svelte';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CasePacketPrintPreview from './CasePacketPrintPreview.svelte';
   import CasePacketDisclosure from './CasePacketDisclosure.svelte';
   import { buildCaseResponseReviewInputs } from '../../../../packages/cases/case-response-packet.mts';
-  import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
+  import { deliveryReceiptForPacket, type CaseDeliveryPacketReceipt } from '../../../../packages/cases/case-packet-correction.mts';
+  import { caseEvidenceChoiceName } from '#lib/analysis/case-evidence-presentation.ts';
   import { caseInvestigationContext } from '../../../../packages/cases/case-incident-context.mts';
   import { caseResponseIncidentUrls, caseTypeSummary } from '../../../../packages/cases/case-workflow-metadata.mts';
   import type { CaseRecord } from '../cases.ts';
@@ -25,12 +26,12 @@
     type ResponseAuthorisationConfirmationId,
     type ResponsePacketProfileId,
     type ResponseReadinessState,
-  } from '$lib/analysis/case-response-packet.ts';
+  } from '#lib/analysis/case-response-packet.ts';
   import {
     CASE_RESPONSE_STAGE_DEFINITIONS,
     type CaseResponseStage,
-  } from '$lib/analysis/case-response-stage.ts';
-  import { isoFromUtcInput, utcInputFromIso, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
+  } from '#lib/analysis/case-response-stage.ts';
+  import { isoFromUtcInput, utcInputFromIso, utcDateTimeInputAttributes, list } from '#lib/analysis/case-response-form-values.ts';
   import { responseRouteFreshness } from '../../../../packages/cases/response-route-freshness.mts';
 
   let {
@@ -44,7 +45,7 @@
     visible: boolean;
     onmessage: (message: string) => void;
     onstagechange: (stage: CaseResponseStage) => void;
-    onpacketexported: (exported: Readonly<{ caseId: string; actionId: string; actionSignature: string; exportedAt: string; digestSha256: string }>) => void | Promise<void>;
+    onpacketexported: (exported: Readonly<{ caseId: string; actionId: string; actionSignature: string; responseContext: string; exportedAt: string; digestSha256: string; packetReceipt?: CaseDeliveryPacketReceipt }>) => void | Promise<void>;
   } = $props();
 
   let packetCategory = $state('');
@@ -105,6 +106,7 @@
     domain: string;
     actionId: string | null;
     actionSignature: string;
+    responseContext: string;
     generatedAt: string;
   }>;
   let manualPreview = $state.raw<PreparedPacket | null>(null);
@@ -313,7 +315,7 @@
       return preview;
     }
     const action = record.actions.find((item) => item.id === packetActionId);
-    const context = { caseId: record.id, domain: record.domain, actionId: action?.id ?? null, actionSignature: JSON.stringify(action) ?? '' };
+    const context = { caseId: record.id, domain: record.domain, actionId: action?.id ?? null, actionSignature: JSON.stringify(action) ?? '', responseContext: JSON.stringify(record) };
     const built = await buildCaseResponsePacket(record, packetInput(), generatedAt);
     if (signature !== packetHandoffSignature()) throw new Error('The packet inputs changed while the handoff was being prepared. Nothing was downloaded or copied.');
     return { built, signature, generatedAt, ...context };
@@ -354,9 +356,12 @@
         caseId,
         actionId,
         actionSignature,
+        responseContext: prepared.responseContext,
         materialSignature: prepared.signature,
         exportedAt: generatedAt,
         digestSha256: built.json.integrity.digestSha256,
+        ...(built.json.authorisation.status === 'authorised' && built.json.escalationHistory.find(action => action.actionId === actionId)?.responseObjects?.length
+          ? { packetReceipt: deliveryReceiptForPacket(built.json) } : {}),
       } : null;
       onmessage(`Exported a ${built.json.authorisation.status} ${format === 'txt' ? 'plain-text email draft' : format.toUpperCase()} response packet. Nothing was submitted.`);
     } catch (cause) {

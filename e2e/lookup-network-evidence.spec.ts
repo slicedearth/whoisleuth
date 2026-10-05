@@ -510,8 +510,9 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
             complete: true, truncated: false, limitations: [],
           },
         },
+        hasExternalPasswordForm: false,
         credentialSurfaceProfile: {
-          credentialSurfaceVersion: 1, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+          credentialSurfaceVersion: 2, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
           scanMode: 'deep', source: 'html', durationMs: null, complete: true, truncated: false,
           limitations: [
             'Fixed semantic categories and counts only.',
@@ -527,6 +528,13 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
             count: 4,
             classifiedCount: 3,
             categories: { password: 1, email: 1, username: 1, one_time_code: 0, payment: 0 },
+          },
+          formAttribution: {
+            complete: true, unassociatedInputs: 0,
+            forms: [
+              { index: 1, categories: { password: 1, email: 0, username: 1, one_time_code: 0, payment: 0 }, destinations: [{ relationship: 'same_origin', origin: 'https://login.example.test' }] },
+              { index: 2, categories: { password: 0, email: 1, username: 0, one_time_code: 0, payment: 0 }, destinations: [{ relationship: 'external', origin: 'https://collect.example' }] },
+            ],
           },
         },
         structuredDataIdentity: {
@@ -767,13 +775,36 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   const credentialCard = page.locator('.credential-card');
   await expect(credentialCard).not.toHaveAttribute('open', '');
   await expect(credentialCard.getByRole('heading', { name: 'Credential collection surface' })).toBeVisible();
-  await expect(credentialCard.getByText(/3 classified inputs across 2 forms/)).toBeVisible();
+  await expect(credentialCard.locator(':scope > summary')).toContainText('3 recognised inputs · 2 forms');
   await credentialCard.locator(':scope > summary').click();
   await expect(credentialCard.locator('section').filter({ hasText: 'Input purposes' }).getByText('Password')).toBeVisible();
   await expect(credentialCard.locator('section').filter({ hasText: 'Action relationships' }).getByText('External origin')).toBeVisible();
-  await expect(credentialCard.getByText(/external form submission is common for legitimate/i)).toBeVisible();
-  await expect(credentialCard.getByText(/does not retain field names or content/i)).toBeVisible();
+  const passwordForm = credentialCard.locator('.form-list > li').filter({ hasText: 'Form 1' });
+  await expect(passwordForm).toContainText('Password: 1');
+  await expect(passwordForm).toContainText('Same origin');
+  await expect(passwordForm).not.toContainText('https://collect.example');
+  const otherForm = credentialCard.locator('.form-list > li').filter({ hasText: 'Form 2' });
+  await expect(otherForm).toContainText('Email: 1');
+  await expect(otherForm).toContainText('https://collect.example');
+  await expect(otherForm).not.toContainText('Password:');
+  const scope = credentialCard.locator('.profile-notes');
+  await scope.locator(':scope > summary').focus();
+  await scope.locator(':scope > summary').press('Enter');
+  await expect(scope).toContainText('not a phishing verdict');
   await expect(credentialCard).not.toContainText('secret');
+  if (captureVisualEvidenceEnabled()) {
+    const viewport = page.viewportSize();
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 390, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await credentialCard.scrollIntoViewIfNeeded();
+        await expectNoHorizontalOverflow(page);
+        await page.screenshot({ path: test.info().outputPath(`credential-forms-${theme}-${width}.png`) });
+      }
+    }
+    if (viewport) await page.setViewportSize(viewport);
+  }
 
   const technologyCard = page.locator('.technology-card');
   await expect(technologyCard).not.toHaveAttribute('open', '');
@@ -898,12 +929,24 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expectNoHorizontalOverflow(page);
 });
 
-test('real library projection retains advisory aliases and discloses malformed source identifiers', async ({ page }, testInfo) => {
+test('library evidence retains advisory aliases and distinguishes incomplete matching', async ({ page }, testInfo) => {
+  // Catalogue evaluation and its bounded worker run in the model suite. This
+  // browser assertion exercises rendering without a successful timed scan as setup.
   const technologyProfile = await analyzeWebsiteTechnology({
-    html: '<script src="/jquery-1.12.4.js"></script><script>/* dwr-1.1.3.jar */</script>',
     observedAt: '2026-09-08T00:00:00.000Z',
   });
-  expect(technologyProfile.browserLibraryProfile?.findings.map((finding) => finding.id)).toEqual(expect.arrayContaining(['DWR', 'jquery']));
+  const libraryProfile = technologyProfile.browserLibraryProfile!;
+  Object.assign(libraryProfile, {
+    status: 'partial', complete: false, truncated: true,
+    limitations: [...libraryProfile.limitations, '1 supplied CVE identifier entry was omitted because of invalid syntax. Advisory matches are still counted.'],
+    diagnostics: { ...libraryProfile.diagnostics, scriptsExamined: 2, referencesExamined: 1, inlineScriptsExamined: 1, findings: 2, advisoryMatches: 3 },
+    findings: [
+      { id: 'DWR', name: 'DWR', apparentVersion: '1.1.3', detectionMethods: ['inline signature'], advisoryCount: 2,
+        highestSeverity: 'high', advisoryIdentifiers: ['CVE-2014-5325', 'CVE-2014-5326'], knownExploitedCount: 0, knownExploitedIdentifiers: [], weaknessClasses: ['CWE-79'] },
+      { id: 'jquery', name: 'jquery', apparentVersion: '1.12.4', detectionMethods: ['script filename'], advisoryCount: 1,
+        highestSeverity: 'medium', advisoryIdentifiers: ['CVE-2019-11358', 'GHSA-6C3J-C64M-QHGQ'], knownExploitedCount: 0, knownExploitedIdentifiers: [], weaknessClasses: ['CWE-1321'] },
+    ],
+  });
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -943,6 +986,21 @@ test('real library projection retains advisory aliases and discloses malformed s
       if ([320, 1280].includes(viewport.width)) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`library-provenance-${viewport.width}-${theme}.png`) }); }
     }
   }
+  Object.assign(libraryProfile, {
+    findings: [],
+    diagnostics: { ...libraryProfile.diagnostics, findings: 0, advisoryMatches: 0, inlineSignatureTimedOut: true, referenceSignatureTimedOut: true },
+    limitations: ['Passive library matching exceeded its isolated-worker deadline; hash evidence was still evaluated.'],
+  });
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  if (await technology.getAttribute('open') === null) await disclosure.click();
+  await expect(libraries).toBeVisible();
+  await expect(libraries.locator('.evidence-status')).toHaveText('partial');
+  await expect(libraries.getByText('No conclusive library match', { exact: true })).toBeVisible();
+  await expect(libraries.getByText('No catalogue matches', { exact: true })).toHaveCount(0);
+  const sources = libraries.locator('details.source-details');
+  if (await sources.getAttribute('open') === null) await sources.locator('summary').click();
+  await expect(sources).toContainText('isolated-worker deadline');
 });
 
 test('completed technology analysis distinguishes an unmatched catalogue from source success', async ({ page }) => {

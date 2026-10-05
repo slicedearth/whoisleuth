@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { AnalystEvidencePivot } from '$lib/analysis/analyst-evidence-pivots.ts';
+  import type { AnalystEvidencePivot } from '#lib/analysis/analyst-evidence-pivots.ts';
 
   let { pivots }: { pivots: AnalystEvidencePivot[] } = $props();
 </script>

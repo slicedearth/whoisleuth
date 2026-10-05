@@ -56,6 +56,7 @@ function parseSpfRecords(records: unknown) {
     terminalPolicy: string | null;
     redirect: string | null;
     includes: string[];
+    mechanisms: { kind: 'all' | 'include' | 'other'; qualifier: '+' | '-' | '~' | '?'; includeIndex: number | null }[];
     authorizingTerms: string[];
     dnsLookupTerms: number;
     issues: string[];
@@ -66,6 +67,7 @@ function parseSpfRecords(records: unknown) {
     terminalPolicy: null,
     redirect: null,
     includes: [],
+    mechanisms: [],
     authorizingTerms: [],
     dnsLookupTerms: 0,
     issues: [],
@@ -184,6 +186,14 @@ function parseSpfRecords(records: unknown) {
   result.includes = terms
     .map((term) => term.match(/^[+?~-]?include:(.+)$/i)?.[1] || '')
     .filter(Boolean);
+  let includeIndex = 0;
+  result.mechanisms = terms.filter(term => !/^[+?~-]?[a-z][a-z0-9_.-]*=/iu.test(term)).map(term => {
+    const qualifier = (/^[+?~-]/u.test(term) ? term[0] : '+') as '+' | '-' | '~' | '?';
+    const body = /^[+?~-]/u.test(term) ? term.slice(1) : term;
+    const include = body.match(/^include:(.+)$/iu);
+    return { kind: /^all$/iu.test(body) ? 'all' : include ? 'include' : 'other', qualifier,
+      includeIndex: include ? includeIndex++ : null };
+  });
 
   if (terms.some((term) => /^[+?~-]?ptr(?::|$)/i.test(term))) {
     result.issues.push('The deprecated ptr mechanism should not be used.');

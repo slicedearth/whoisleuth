@@ -37,7 +37,7 @@ type CurrentResult = Readonly<{ schema: typeof LOCAL_MMDB_REVIEW_SCHEMA; version
   database: Readonly<{ sha256: string; byteLength: number; metadata: IntrinsicMetadata | null }>;
   freshness: Readonly<{ state: 'current' | 'stale' | 'unknown'; checkedAt: string; ageDays: number | null; policy: FreshnessPolicy }>;
   limitations: readonly string[] }>;
-type ReviewDependencies = Readonly<{ openFile?: typeof open; createWorker?: (options: WorkerOptions) => Worker; deadlineMs?: number }>;
+type ReviewDependencies = Readonly<{ openFile?: typeof open; createWorker?: (options: WorkerOptions) => Worker; deadlineMs?: number; signal?: AbortSignal }>;
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -56,28 +56,35 @@ function names(value: unknown): string | null {
   return boundedText(source.en, 120);
 }
 
-async function readStableMmdb(databasePath: string, openFile = open): Promise<Buffer> {
+async function readStableMmdb(databasePath: string, openFile = open, signal?: AbortSignal): Promise<Buffer> {
   let handle: FileHandle | null = null;
+  let database: Buffer | null = null;
   try {
+    signal?.throwIfAborted();
     const resolvedPath = await realpath(databasePath);
+    signal?.throwIfAborted();
     handle = await openFile(
       resolvedPath,
       fsConstants.O_RDONLY | fsConstants.O_NONBLOCK | fsConstants.O_NOFOLLOW,
     );
+    signal?.throwIfAborted();
     const before = await handle.stat();
+    signal?.throwIfAborted();
     if (!before.isFile() || before.size <= 0 || before.size > MAX_LOCAL_MMDB_BYTES) {
       throw new CliUsageError(`The supplied MMDB must be a file no larger than ${MAX_LOCAL_MMDB_BYTES} bytes.`);
     }
     // Dedicated backing storage can be transferred without copying a pooled
     // buffer or exposing bytes outside the stable file's exact length.
-    const database = Buffer.allocUnsafeSlow(before.size);
+    database = Buffer.allocUnsafeSlow(before.size);
     let offset = 0;
     while (offset < database.length) {
       const { bytesRead } = await handle.read(database, offset, database.length - offset, offset);
+      signal?.throwIfAborted();
       if (bytesRead === 0) break;
       offset += bytesRead;
     }
     const after = await handle.stat();
+    signal?.throwIfAborted();
     if (offset !== database.length
       || before.dev !== after.dev
       || before.ino !== after.ino
@@ -88,6 +95,8 @@ async function readStableMmdb(databasePath: string, openFile = open): Promise<Bu
     }
     return database;
   } catch (cause) {
+    database?.fill(0);
+    signal?.throwIfAborted();
     if (cause instanceof CliUsageError) throw cause;
     throw new CliUsageError('The supplied MMDB file could not be read.');
   } finally {
@@ -251,10 +260,13 @@ if (!isMainThread && parentPort && record(workerData).kind === LOCAL_MMDB_WORKER
  * a sandbox and never receives a database path or inherited environment. */
 export async function reviewLocalMmdb(input: UnknownRecord, databasePath: string,
   checkedAt = new Date().toISOString(), dependencies: ReviewDependencies = {}) {
+  const { signal } = dependencies;
+  signal?.throwIfAborted();
   const query = prepareQuery(input, checkedAt);
   const deadlineMs = dependencies.deadlineMs ?? LOCAL_MMDB_REVIEW_DEADLINE_MS;
   if (!Number.isSafeInteger(deadlineMs) || deadlineMs <= 0 || deadlineMs > LOCAL_MMDB_REVIEW_DEADLINE_MS) throw new CliUsageError('Invalid local database processing deadline.');
-  const database = await readStableMmdb(databasePath, dependencies.openFile);
+  const database = await readStableMmdb(databasePath, dependencies.openFile, signal);
+  if (signal?.aborted) { database.fill(0); signal.throwIfAborted(); }
   const identity = { sha256: createHash('sha256').update(database).digest('hex'), byteLength: database.length };
   const options: WorkerOptions = { workerData: { kind: LOCAL_MMDB_WORKER_KIND, query, bytes: database, identity } satisfies WorkerRequest,
     transferList: [database.buffer as ArrayBuffer], env: {}, execArgv: [], stdout: true, stderr: true,
@@ -263,6 +275,7 @@ export async function reviewLocalMmdb(input: UnknownRecord, databasePath: string
   try { worker = dependencies.createWorker ? dependencies.createWorker(options) : new Worker(new URL(import.meta.url), options); }
   catch {
     if (database.byteLength) database.fill(0);
+    signal?.throwIfAborted();
     if (query.version === 2) return freezeResult(currentResult(query, identity, { metadata: null, ageDays: null, reason: 'invalid_metadata' }, 'processing_unavailable'));
     throw new CliUsageError('The supplied database could not be reviewed within its format and processing bounds.');
   }
@@ -273,13 +286,18 @@ export async function reviewLocalMmdb(input: UnknownRecord, databasePath: string
       const finish = (result?: ReturnType<typeof reviewBytes>, reason = 'processing_unavailable') => {
         if (settled) return;
         settled = true; clearTimeout(timer);
-        if (result) resolve(freezeResult(result));
+        signal?.removeEventListener('abort', onAbort);
+        if (signal?.aborted) reject(signal.reason);
+        else if (result) resolve(freezeResult(result));
         else if (query.version === 2) resolve(freezeResult(currentResult(query, identity, { metadata: null, ageDays: null, reason: 'invalid_metadata' }, reason)));
         else reject(new CliUsageError('The supplied database could not be reviewed within its format and processing bounds.'));
       };
+      const onAbort = () => finish();
       const timer = setTimeout(() => finish(undefined, 'processing_deadline'), deadlineMs);
       worker.once('message', (reply: WorkerReply) => reply && 'result' in reply ? finish(reply.result) : finish());
       worker.once('error', () => finish()); worker.once('exit', () => finish());
+      signal?.addEventListener('abort', onAbort, { once: true });
+      if (signal?.aborted) onAbort();
     });
   } finally { await worker.terminate(); }
 }

@@ -66,6 +66,59 @@ function archive(...records: Uint8Array[]): ArrayBuffer {
 }
 
 describe('portable WARC evidence import', () => {
+  test('qualifies retained HTTP byte-count disagreements without confusing bodyless or encoded responses', async () => {
+    const body = '<title>Résumé</title>';
+    const size = encoder.encode(body).byteLength;
+    for (const [status, content, length, extraHeaders, expected] of [
+      [200, body, String(size), [], 'complete'],
+      [200, body, String(size + 10), [], 'partial'],
+      [200, body, String(size - 1), [], 'partial'],
+      [200, body, '0', [], 'partial'],
+      [200, body, String(body.length), [], 'partial'],
+      [200, body, String(MAX_WARC_RECORD_BYTES + 100), [], 'partial'],
+      [200, '', '100', [], 'complete'],
+      [304, '', '100', [], 'complete'],
+      [101, body, '0', [], 'complete'],
+      [204, body, '0', [], 'complete'],
+      [205, body, '0', [], 'complete'],
+      [304, body, '0', [], 'complete'],
+      [200, body, '0', ['Transfer-Encoding: identity'], 'complete'],
+      [200, body, null, [], 'complete'],
+      [200, body, 'not-a-number', [], 'complete'],
+      [200, body, '9007199254740992', [], 'complete'],
+    ] as const) {
+      const block = encoder.encode([`HTTP/1.1 ${status} Fixture`, 'Content-Type: text/html',
+        ...(length === null ? [] : [`Content-Length: ${length}`]), ...extraHeaders, '', content].join('\r\n'));
+      const report = await parseWarcEvidenceArchive(archive(record('response', block, { target: 'https://example.test/' })));
+      assert.equal(report.accepted, 1);
+      const finding = report.document.findings[0]!;
+      assert.equal(finding.completeness, expected, `${status}/${length}/${extraHeaders}`);
+      assert.equal(finding.limitations.some(value => value.startsWith('HTTP Content-Length differs')), expected === 'partial');
+      assert.match(finding.limitations.join(' '), /WARC-Block-Digest matched/u);
+      if (expected === 'partial') assert.match(finding.limitations.join(' '), /does not establish source truncation/u);
+    }
+    for (const header of ['Content-Encoding: gzip', 'Transfer-Encoding: chunked']) {
+      const rejected = record('response', responseBlock({ extraHeaders: [header, 'Content-Length: 0'] }), { target: 'https://excluded.example/' });
+      const admitted = record('response', responseBlock(), { target: 'https://retained.example/' });
+      const report = await parseWarcEvidenceArchive(archive(rejected, admitted));
+      assert.equal(report.accepted, 1); assert.equal(report.excluded, 1);
+      assert.equal(report.document.findings[0]!.domain, 'retained.example');
+      assert.equal(report.document.findings[0]!.completeness, 'complete');
+    }
+  });
+
+  test('keeps whole-archive per-host admission distinct from the global candidate bound', async () => {
+    const item = (index: number, target = 'https://same.example.test/') => record('response', responseBlock({ title: `Observation ${index}` }), { target });
+    const twenty = Array.from({ length: 20 }, (_, i) => item(i));
+    const accepted = await parseWarcEvidenceArchive(archive(...twenty));
+    assert.equal(accepted.accepted, 20); assert.equal(accepted.excluded, 0);
+    await assert.rejects(parseWarcEvidenceArchive(archive(...twenty, item(20))), /20|per domain/i);
+    const mixed = await parseWarcEvidenceArchive(archive(...twenty, ...Array.from({ length: 5 }, (_, i) => item(i, 'https://other.example.test/'))));
+    assert.equal(mixed.accepted, 25); assert.equal(mixed.excluded, 0);
+    const duplicates = await parseWarcEvidenceArchive(archive(...twenty, ...Array.from({ length: 5 }, () => item(0))));
+    assert.equal(duplicates.accepted, 20); assert.equal(duplicates.excluded, 5);
+  });
+
   test('admits repeatable references, header whitespace and long values within the aggregate bound', async () => {
     const block = responseBlock({ extraHeaders: ['X-Context:\tfirst\tsecond', '\tcontinued', `X-Long: ${'x'.repeat(8_192)}`, 'Link: <https://one.example/>', 'Link: <https://two.example/>', 'X-Empty:'] });
     const result = await parseWarcEvidenceArchive(archive(record('response', block, {

@@ -41,9 +41,9 @@ export async function toggleShortlist(raw: unknown): Promise<boolean> {
   });
 }
 
-export async function setShortlistSelection(raw: unknown[], selected: boolean) {
+export async function setShortlistSelection(raw: unknown[], selected: boolean, existing: 'refresh' | 'retain' = 'refresh') {
   return updateBrowserLocalData('shortlist', (current) => {
-    const result = applyShortlistSelection(current, raw, selected);
+    const result = applyShortlistSelection(current, raw, selected, new Date().toISOString(), existing);
     const records = boundedShortlist(result.entries);
     const before = new Map(current.map((record) => [record.domain, record]));
     const after = new Map(records.map((record) => [record.domain, record]));
@@ -57,6 +57,7 @@ export async function setShortlistSelection(raw: unknown[], selected: boolean) {
       result: {
         added: result.added,
         updated: result.updated,
+        retained: result.retained,
         removed: result.removed,
         skipped: result.skipped,
         records,

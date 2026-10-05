@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import Pagination from '$lib/components/Pagination.svelte';
-  import type { BrandProfile } from '$lib/brand-profiles';
+  import Pagination from '#lib/components/Pagination.svelte';
+  import type { BrandProfile } from '#lib/brand-profiles.ts';
 
   let { profiles, activeId, activate, edit, remove, formatDate, readOnly = false, focusId = '', busy = false, activationDisabled }: {
     profiles: BrandProfile[];

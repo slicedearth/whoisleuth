@@ -1,11 +1,11 @@
 {
   "schema": "whoisleuth.common-infrastructure",
   "version": 1,
-  "generatedAt": "2026-09-23T12:34:53.700Z",
+  "generatedAt": "2026-10-04T11:33:17.184Z",
   "source": {
     "project": "MISP warning-lists",
     "repository": "https://github.com/MISP/misp-warninglists",
-    "commit": "cdb6cf3076786277eceffbddc03d56bbf8687c5c",
+    "commit": "f6669fb89d8c262cbd0b517d7182094cbe769a87",
     "licence": "CC0-1.0 OR BSD-2-Clause"
   },
   "freshnessDays": 30,
@@ -3926,7 +3926,7 @@
         "2c0f:f248::/32"
       ],
       "verification": {
-        "observedAt": "2026-09-23T12:34:53.700Z",
+        "observedAt": "2026-10-04T11:33:17.184Z",
         "rangesSha256": "062fcd25d844185a05c1ef42b1f713e2277b5cd6882211698d7177bdf8d5a7c7",
         "sources": [
           {

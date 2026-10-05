@@ -9,7 +9,7 @@ export {
 export const WEB_CAPTURE_DOM_DIGEST_SCHEMA = 'whoisleuth.dom-digest';
 export const WEB_CAPTURE_DOM_DIGEST_VERSION = 1;
 export const WEB_CAPTURE_COMPARISON_SCHEMA = 'whoisleuth.web-capture-comparison';
-export const WEB_CAPTURE_COMPARISON_VERSION = 4;
+export const WEB_CAPTURE_COMPARISON_VERSION = 5;
 export const MAX_WEB_CAPTURE_DOM_DIGEST_BYTES = 1024 * 1024;
 export const MAX_WEB_CAPTURE_SCREENSHOT_BYTES = 10 * 1024 * 1024;
 export const MAX_WEB_CAPTURE_DOM_ELEMENTS = 20_000;

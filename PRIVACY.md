@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 2 October 2026.
+Last updated: 4 October 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -36,6 +36,14 @@ Missing, blocked, stale, malformed, partial, unavailable or unsupported evidence
 never becomes absence, safety, ownership, control, intent or remediation.
 
 ## Information processed
+
+Normal page and asset requests reach the website host. The browser framework
+also checks a same-origin application-version file when the page regains focus
+or becomes visible. Periodic version polling is disabled. These checks include
+ordinary connection metadata and any eligible first-party session cookie, but
+no target or workspace payload. The document's no-referrer policy omits its
+page URL, including investigation query parameters, from outgoing referrers.
+Version checks do not collect evidence or submit saved investigations.
 
 Depending on the selected operation, WHOISleuth can process:
 
@@ -96,6 +104,31 @@ outcomes, not response bodies. Incomplete checks do not replace usable watchlist
 baselines or establish signal removal. Historical records without these
 outcomes remain readable with unknown collection quality.
 
+Brand candidate review retains bounded source names/revisions, full observed
+hostnames, source-reported intervals, local first-retention times, matching
+Brand/rule reasons and coverage gaps. Watchlists can retain candidate-only
+domains without a Lookup result, scan history or evidence baseline. Per-domain,
+per-Brand priorities, reasons and optional review dates remain local; they do
+not schedule collection. Scoped exceptions retain exact domain/rule scope,
+purpose, reason, expiry, reviewed-material digest and up to eight prior
+revisions. Expiry or materially changed evidence returns candidates to review.
+These sensitive fields are included in deliberate Brand, Watchlist and workspace
+exports. Hosted monitoring requests omit candidate/context metadata and local
+password-form attribution. Restoring a hosted list preserves local contexts.
+
+Domain-feed file import processes a selected plain-domain file locally, without
+uploading it or querying its domains. Only deliberately retained candidates,
+match reasons, source labels and file digests enter the existing Brand or
+Watchlist records. File publication time and local import time do not establish
+when an individual domain was registered or observed. The original file, its
+filename and its path are not retained by this import.
+
+Brand feed campaigns retain literal positive and negative keywords, review
+windows, pause/expiry settings, default priority and immutable rule revisions in
+the Brand Profile. Candidate previews remain transient until explicitly saved.
+Campaign identity, revision and priority remain browser-local when querying the
+optional feed service.
+
 Lesson-based template revisions retain authored guidance, applicability, reason,
 source-template identity and content hashes of the source template and selected
 lesson. They do not copy the Case identity or note text automatically. These
@@ -116,6 +149,19 @@ views of the current workspace's bounded retained records. Filters, selections
 and relationship inspection remain in memory; viewing them makes no collection
 request, creates no parallel evidence store and does not enrol monitoring.
 
+Deliberately imported source-qualified infrastructure snapshots are retained as
+bounded Case evidence pins, not a new collection. They can include exact
+selected hostnames, DNS queried names and record owners, independent source
+identities and times, certificate names and wildcard patterns, and separately
+labelled provider/routing roles. Source descriptions are supplied provenance,
+not authenticated identities. Snapshot review and comparison stay local; exact
+Case/workspace backups and deliberate snapshot exports can disclose those
+fields. Source references exclude URL queries, fragments and credentials.
+Selecting hosts for a one-use Bulk handoff does not collect evidence, recursively
+expand targets, change a watchlist or enrol monitoring. Historical absence of
+these fields stays unknown; failed or incomplete snapshots do not replace
+stronger retained baselines or establish disappearance.
+
 Brand domain-exclusion previews use entered examples and optionally selected
 Case domains already retained in the current workspace. Inputs and preview
 results stay in page memory. Discover's excluded-candidate disclosure reuses its
@@ -128,6 +174,12 @@ not overwritten. Unsaved image edits are not recovery drafts. Removing a source
 can leave its derivative and fingerprint without the original bytes.
 Changed-pixel results and comparison exclusions stay in page memory. Exclusions
 do not redact files. Comparing another capture does not save or import it.
+
+Retained plain-text comparison verifies the selected originals and compares
+bounded word sequences in a local worker. Original-byte digests, counts and
+matched excerpts stay in page memory; no file is fetched, uploaded or rewritten.
+Printing an ordinary Case report uses the exact prepared audience/options
+projection. The operating system handles the print or PDF destination.
 
 Unfinished Case response forms are saved automatically as bounded recovery
 drafts in the selected workspace. They remain separate from submitted Case
@@ -202,7 +254,7 @@ posture comparisons, evidence-gap queues and response preflight from retained
 records without another request. Derived views do not create evidence, prove a
 target state or silently mark an item reviewed.
 
-Creating or refreshing a Case is deliberate. Current Case schema 17 can retain
+Creating or refreshing a Case is deliberate. A Case can retain
 the exact normalised submitted hostname and the DNS, TLS and web observation
 hostname on a new evidence snapshot, analyst
 decision confidence and its basis, and a response route's observation and
@@ -223,6 +275,14 @@ Provider evidence requests retain the original submitted-packet digest, request
 summary, optional deadline, preparation notes and selected pin identities.
 Amendments link to those request events without rewriting the original packet.
 These records stay browser-local until exported; public Case packs exclude them.
+Newly recorded packet deliveries can also retain the prepared packet's version,
+digest, recipient and exact response-object scope. A correction or withdrawal
+draft references one such receipt, its changed assertion, reason and selected
+evidence. Historical digest-only records acquire no fabricated receipt. Full
+local exports preserve the relationship. Trusted Case packs omit the correction
+content and delivery receipt; public packs exclude actions. A redacted copy
+cannot authorise an exact-recipient correction. Neither drafting nor export
+sends a request or changes the original delivery record.
 Analyst-declared evidence relationships retain pin identities, their basis and
 any withdrawal reason. Matching source labels, checkpoints and imported-content
 identities are displayed without assuming independent corroboration. Case files
@@ -232,10 +292,12 @@ They contain domain identities, minimised original observations, review notes,
 expiry and withdrawal records. Previewing or revising them makes no requests;
 only deliberate downloads create output files. STIX and MISP exports are not
 submitted or applied automatically. Content digests do not authenticate authors.
-Exact public v1 Case schema 12 and published-v2 schemas 13–16
-remain readable and migrate directly; migrated fields can remain null, unknown
-or blank because WHOISleuth does not reconstruct them from weaker evidence.
-Case report v13 JSON and Markdown do not add the snapshot hostname.
+
+Current Case schema 19 is written for new saves. Exact public v1 Case schema 12
+and earlier v2 schemas 13–18 remain readable and migrate directly; migrated
+fields can remain null, unknown or blank because WHOISleuth does not reconstruct
+them from weaker evidence.
+Case report v15 JSON and Markdown do not add the snapshot hostname.
 Explicitly selected evidence pins can include their own observation hostname
 in response packets; this remains distinct from the Case's registration domain.
 
@@ -308,6 +370,22 @@ are rejected. Deliberate retention of an exact Incident URL in a Case remains
 separate from that collection request.
 
 Case types, incident links and investigation context are structured local fields.
+Manually reviewed response actions can bind up to 20 exact typed objects. Each
+event retains its immutable scope; partial provider outcomes require a selected
+affected subset. Evidence pins, saved comparison questions, independent reviews
+and object closures can retain the same exact object identity. Missing historical
+bindings remain unknown. An unavailable observation is not removal, and dispute
+or restoration does not establish malicious recurrence or report causation.
+Technical state-change outcomes require complete baseline/current evidence for
+the exact same object under comparable conditions. Procedural disputes and
+warnings retain source attribution separately. Already-retained historical
+identities remain usable after incident-link edits; replacement URLs do not
+inherit their histories.
+Object closure leaves other objects and the Case unchanged. No action submits a
+report or triggers collection. Exact identifiers can contain sensitive paths,
+queries or fragments: review them before saving or sharing. Public Case packs
+remove pin object scopes and infrastructure observations with other private
+response records; trusted/internal packs and ordinary backups retain them.
 Public CLI Case packs retain the types but exclude incident URLs and the private
 objective; trusted/internal packs and ordinary backups retain those details.
 Migrated historical tags and assertions remain preserved as original text.
@@ -337,6 +415,11 @@ network address and apply its own logging, rate limits and retention.
 
 Homepage HTML is processed transiently within the [request-policy limits](https://www.whoisleuth.com/request-policy).
 Raw HTML is not added to browser-local records or ordinary evidence exports.
+Static form review retains form ordinals, fixed input-purpose counts and declared
+destination origins, including enabled submitter overrides. Field names, IDs,
+values, labels, destination paths, queries and fragments are excluded. A nullable
+password-form destination summary can enter saved evidence and Risk calibration;
+unresolved associations remain unknown. No form is filled or submitted.
 Capture and analysis limits are disclosed as incomplete evidence, not absence.
 
 Deep domain collection can query A, AAAA, CAA and MX once through one selected
@@ -354,6 +437,23 @@ explicitly selected. Depending on that selection, the canonical registrable
 domain can be sent to the configured search-only URLscan, URLhaus or ThreatFox
 adapter. These integrations do not submit a URL, sample, scan or report. A
 provider miss, failure or quota response is not evidence of safety.
+
+Optional domain-feed search is disabled until an operator configures the
+separate feed service. An explicit search sends only selected feed identifiers,
+exact hostnames and literal positive/negative search terms through the authenticated application
+backend to that service. It does not send the Brand Profile, Case, browser
+workspace or session cookie to the service. Connection credentials remain
+server-side. The service retains public feed snapshots and metadata, not search
+queries; its hosting or tunnel operator may apply separate request logging.
+Explicit history review also sends a source cursor with an epoch, edition range,
+last reviewed hostname and rule digest. The service retains up to eight edition
+metadata records per source, previous membership within its storage budget and
+64 timestamped refresh outcomes. Missing membership is reported as a gap.
+Cursor downloads contain the source cursor, not Brand identity or Case data.
+Feed refreshes contact only the selected catalogue sources, without sharing
+analyst search terms. Disabling the connection does not delete its cache;
+deletion is a separate operator action. Feed membership and a missing match
+are not verdicts about a domain.
 
 The checked-in SSLBL certificate projection is local and digest-checked. Lookup
 does not send its target or certificate to SSLBL. Opening a separately labelled
@@ -500,6 +600,31 @@ retaining the unredacted original requires a separate choice. Reported account
 actions can be recorded as analyst claims and select recovery guidance. They
 do not establish account compromise.
 
+Text, message, calendar and extracted document text can also retain literal IPs
+and explicitly labelled hashes with their source-part digest. Complete URLs,
+message headers, HAR and identity-event objects are not scanned for these values.
+Optional distribution, observer, vantage and reference labels are analyst
+declarations included only in an explicitly downloaded or retained review;
+ordinary Case summary pins include counts and digests, not those values.
+
+Plain-text phone candidates remain in the temporary intake until deliberately
+selected. A selected observation retains its exact original spelling, source
+digest, UTF-16 text range, and supplied source/time/basis/role declarations;
+the surrounding snippet is excluded. A manual displayed/destination pair retains
+minimised host/origin evidence and its declarations, while exact private URLs
+remain transient. These selected values can still be sensitive. Private intake
+attachments are excluded from trusted and public Case packs; unsupported
+interchange mappings carry an omission limitation rather than inventing a field.
+No telephone, destination or reputation service is contacted.
+
+Internal containment handoffs contain only selected retained follow-up
+assertions and linked pins after audience projection and explicit disclosure
+review. They may still contain sensitive analyst text and exact scope; public
+preview excludes these requests and cannot be exported as a containment handoff.
+The handoff performs no action and does not resolve open requests. Registration
+history boundaries are separately declared references to retained Case evidence,
+not verified ownership events, and leave historical decisions unchanged.
+
 The isolated `dnssec-validate` and `mail-transport` commands require a selected
 literal public resolver, local trust-anchor document and explicit
 owned-or-authorised acknowledgement. Mail transport also requires a separate
@@ -552,7 +677,13 @@ creates a new child folder and reads its files back for verification; handles
 are not saved or used for background access. CLI output requires a new explicit
 path. Cancelled or failed writes may leave partial private output for deliberate
 inspection or deletion. Selected Case-file exports are not complete workspace
-backups and do not include Case metadata or unselected files.
+backups and do not include Case records or unselected files. For edited images,
+they include the declared immediate-parent SHA-256 and byte length, editing
+method and operation kinds. Parent pixels, Case and attachment identifiers,
+filenames and edit coordinates are not added by this declaration. The parent
+may itself be edited. Fingerprints can correlate matching files across exports;
+they are not anonymisation or proof of the edits or complete redaction. Missing
+declarations leave editing history unknown.
 Explicit inline review shows paged JSON text or locally decoded PNG pixels,
 without running document scripts, following links or making page requests.
 Capture attachment checks compare selected bytes with manifest declarations;
@@ -574,7 +705,7 @@ Saved Case views retain names, search text, status, disposition and sort choices
 within the current workspace. Workspace backups include them; response packets
 do not. Applying a view filters retained Cases without making network requests.
 
-The current writer emits workspace archive version 9. Exact versions 5, 6, 7 and 8
+The current writer emits workspace archive version 10. Exact versions 5, 6, 7, 8 and 9
 remain readable. Versions 5–8 gain an empty saved-views section without removing
 existing views. Version 5 also gains an empty Analyst Review Item section without
 inventing decisions. Versions 1 through 4 are unsupported. Future versions fail without
@@ -600,9 +731,9 @@ Different exports have different sensitivity:
 
 - a full saved Lookup can contain targets, bounded source endpoints and timings,
   raw RDAP publications, WHOIS response bodies and publicly published contacts;
-- current Lookup evidence schema 29 excludes raw registration payloads,
+- current Lookup evidence schema 30 excludes raw registration payloads,
   expanded contacts, credentials and complete query-bearing URLs. Published v2
-  schemas 27 and 28 and exact v1 schema 26 remain readable; schema 26 may contain public
+  schemas 27–29 and exact v1 schema 26 remain readable; schema 26 may contain public
   contact fields;
 - Case, workspace, Case-pack, graph, campaign and response files can identify
   investigated targets or contain analyst-authored material; and

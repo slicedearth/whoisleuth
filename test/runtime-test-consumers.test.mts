@@ -62,7 +62,7 @@ test('missing inventory roots and unresolved aliases remain conservative through
         source: 'packages/b.mts',
         dependencies: [
           edge('packages/a.mts'),
-          { module: '$lib/unknown', resolved: '$lib/unknown', couldNotResolve: true },
+          { module: '#lib/unknown.ts', resolved: '#lib/unknown.ts', couldNotResolve: true },
         ],
       },
     ]),

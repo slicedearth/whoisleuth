@@ -14,6 +14,7 @@ import {
   PUBLISHED_CLI_REQUEST_TIMEOUT_MS,
   validateCandidateReport,
   validatePublishedManifest,
+  verifyRetainedCandidate,
   type Fetcher,
 } from '../tools/published-cli-check.mts';
 import {
@@ -107,6 +108,47 @@ function fixtureFetcher(manifest = publishedManifest(), archive = ARCHIVE): Fetc
 }
 
 describe('published CLI verification', () => {
+  test('retains an offline archive/report/dependency binding and rejects substituted evidence without fetching', async () => {
+    const candidate = candidateReport({ runtimeDependencies: { direct: '1.0.0' } });
+    const evidence = {
+      packageName: PACKAGE_NAME, packageVersion: VERSION, archiveSha256: digest('sha256'), dependencyCount: 1,
+      manifestSha256: { [`node_modules/${PACKAGE_NAME}`]: 'a'.repeat(64), 'node_modules/direct': 'b'.repeat(64) },
+      lockfile: { lockfileVersion: 3, packages: {
+        '': { dependencies: { [PACKAGE_NAME]: VERSION } },
+        [`node_modules/${PACKAGE_NAME}`]: { version: VERSION, dependencies: { direct: '1.0.0' } },
+        'node_modules/direct': { version: '1.0.0', integrity: `sha512-${digest('sha512', ARCHIVE, 'base64')}`, resolved: 'https://registry.npmjs.org/direct/-/direct-1.0.0.tgz' },
+      } },
+    };
+    await withCandidate(async ({ report, archive }) => {
+      const installed = path.join(path.dirname(report), 'installed-dependencies.json');
+      const bytes = `${JSON.stringify(evidence)}\n`;
+      await writeFile(installed, bytes);
+      const retained = await verifyRetainedCandidate(VERSION, report, archive, installed);
+      assert.equal(retained.archiveSha256, digest('sha256'));
+      assert.equal(retained.installedDependenciesSha256, createHash('sha256').update(bytes).digest('hex'));
+      let fetched = false;
+      let output = '';
+      const code = await main([VERSION, '--candidate-report', report, '--candidate-archive', archive, '--installed-dependencies', installed, '--offline'], {
+        stdout: { write(value) { output += value; } }, stderr: { write() {} },
+        fetcher: async () => { fetched = true; throw new Error('Offline binding must not fetch'); },
+      });
+      assert.equal(code, 0);
+      assert.match(output, /Reviewed candidate bundle: PASS/u);
+      assert.equal(fetched, false);
+      for (const mutation of [
+        { ...evidence, archiveSha256: 'c'.repeat(64) },
+        { ...evidence, packageVersion: '9.0.0' },
+        { ...evidence, lockfile: { ...evidence.lockfile, packages: { ...evidence.lockfile.packages,
+          [`node_modules/${PACKAGE_NAME}`]: { version: VERSION, dependencies: { direct: '^1.0.0' } } } } },
+      ]) {
+        await writeFile(installed, JSON.stringify(mutation));
+        await assert.rejects(verifyRetainedCandidate(VERSION, report, archive, installed), /does not match|differs/u);
+      }
+      await writeFile(installed, bytes);
+      await writeFile(archive, 'substituted archive');
+      await assert.rejects(verifyRetainedCandidate(VERSION, report, archive, installed), /archive bytes/u);
+    }, candidate);
+  });
   test('binds dependencies to the selected candidate, preserving older reports and refusing added, missing or changed pins', async () => {
     const dependencies = { ...candidateReport().runtimeDependencies, fflate: '0.8.3' };
     const candidate = candidateReport({ runtimeDependencies: dependencies });

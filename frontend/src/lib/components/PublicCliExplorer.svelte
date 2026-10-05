@@ -1,22 +1,22 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { pushState, replaceState } from '$app/navigation';
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import CopyableCommand from '$lib/components/CopyableCommand.svelte';
+  import CopyableCommand from '#lib/components/CopyableCommand.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
-  import { PUBLIC_CLI_INDEX } from '$lib/generated/public-cli-index';
-  import { PUBLIC_EXAMPLES_INDEX } from '$lib/generated/public-examples-index';
-  import { commandReferenceSections, resolveCommandReferenceHash } from '$lib/public-cli-sections';
-  import { revealDocumentationTarget } from '$lib/documentation-anchors';
-  import { preloadOnIdle } from '$lib/idle-preload';
-  import { handlesLocalLink } from '$lib/link-activation';
+  import { PUBLIC_CLI_INDEX } from '#lib/generated/public-cli-index.ts';
+  import { PUBLIC_EXAMPLES_INDEX } from '#lib/generated/public-examples-index.ts';
+  import { commandReferenceSections, resolveCommandReferenceHash } from '#lib/public-cli-sections.ts';
+  import { revealDocumentationTarget } from '#lib/documentation-anchors.ts';
+  import { preloadOnIdle } from '#lib/idle-preload.ts';
+  import { handlesLocalLink } from '#lib/link-activation.ts';
   import {
     DEFERRED_MODULE_RECOVERY_DETAIL,
     loadDeferredModule,
     reloadDeferredModulePage,
-  } from '$lib/deferred-module';
+  } from '#lib/deferred-module.ts';
 
-  type FullCatalogue = typeof import('$lib/generated/public-cli-catalogue')['PUBLIC_CLI_CATALOGUE'];
+  type FullCatalogue = typeof import('#lib/generated/public-cli-catalogue.ts')['PUBLIC_CLI_CATALOGUE'];
   type CommandDetail = FullCatalogue['commands'][number];
 
   let query = $state('');
@@ -29,6 +29,9 @@
   let catalogue = $state<FullCatalogue | null>(null);
   let cataloguePromise: Promise<FullCatalogue> | null = null;
   let loadGeneration = 0;
+  let locationGeneration = 0;
+  let changingCommand = false;
+  let navigationError = $state('');
   let active = true;
   let urlSyncReady = $state(false);
   let clientReady = $state(false);
@@ -55,7 +58,7 @@
   async function ensureCatalogue(): Promise<FullCatalogue> {
     if (catalogue) return catalogue;
     cataloguePromise ??= loadDeferredModule(
-      () => import('$lib/generated/public-cli-catalogue'),
+      () => import('#lib/generated/public-cli-catalogue.ts'),
       { signal: moduleController.signal },
     )
       .then((module) => module.PUBLIC_CLI_CATALOGUE)
@@ -124,26 +127,56 @@
     });
   }
 
+  async function selectCommandLocation(id: string): Promise<void> {
+    const intent = ++locationGeneration;
+    ++loadGeneration;
+    changingCommand = true;
+    navigationError = '';
+    try {
+      await goto(`#command-${id}`, { shallow: true, reset: false, state: page.state });
+      if (!active || intent !== locationGeneration) return;
+      await revealCommand(id);
+    } catch {
+      if (active && intent === locationGeneration) navigationError = 'The command link could not be opened. Try again.';
+    } finally {
+      if (intent === locationGeneration) {
+        changingCommand = false;
+        if (active) syncFiltersToLocation();
+      }
+    }
+  }
+
   function navigateToCommand(event: MouseEvent, id: string): void {
     if (event.currentTarget instanceof HTMLAnchorElement && !handlesLocalLink(event)) return;
     event.preventDefault();
-    pushState(`#command-${id}`, page.state);
-    void revealCommand(id);
+    void selectCommandLocation(id);
   }
 
   function selectCommand(event: Event): void {
     const id = (event.currentTarget as HTMLSelectElement).value;
     if (!id) return;
-    pushState(`#command-${id}`, page.state);
-    void revealCommand(id);
+    void selectCommandLocation(id);
   }
 
   async function returnToResults(event: MouseEvent): Promise<void> {
     if (!handlesLocalLink(event)) return;
     event.preventDefault();
     const returnId = expandedId;
-    pushState('#commands', page.state);
+    const intent = ++locationGeneration;
+    ++loadGeneration;
+    changingCommand = true;
+    navigationError = '';
+    try {
+      await goto('#commands', { shallow: true, reset: false, state: page.state });
+    } catch {
+      if (active && intent === locationGeneration) navigationError = 'The command list link could not be opened. Try again.';
+      return;
+    } finally {
+      if (intent === locationGeneration) changingCommand = false;
+    }
+    if (!active || intent !== locationGeneration) return;
     const request = clearCommandSelection();
+    syncFiltersToLocation();
     await tick();
     requestAnimationFrame(() => {
       if (!currentSelection(request)) return;
@@ -199,6 +232,9 @@
   }
 
   function syncFiltersToLocation() {
+    // Command navigation owns the hash. Apply filter changes only after that
+    // asynchronous transition settles, so a stale hash cannot replace it.
+    if (changingCommand) return;
     const url = new URL(location.href);
     const values = [
       ['q', query.trim()],
@@ -212,7 +248,10 @@
     }
     const href = `${url.pathname}${url.search}${url.hash}`;
     if (href === `${location.pathname}${location.search}${location.hash}`) return;
-    replaceState(href, page.state);
+    const intent = ++locationGeneration;
+    void goto(href, { shallow: true, replace: true, reset: false, state: page.state }).catch(() => {
+      if (active && intent === locationGeneration) navigationError = 'The filter link could not be updated. Try again.';
+    });
   }
 
   function adjacentCommand(direction: -1 | 1) {
@@ -261,15 +300,16 @@
   data-testid="public-cli-catalogue"
   data-client-ready={clientReady ? 'true' : 'false'}
 >
+  {#if navigationError}<p role="status">{navigationError}</p>{/if}
   <div class="catalogue-heading" hidden={Boolean(expandedId)}>
     <div><p class="eyebrow">Command reference</p><h2 id="cli-catalogue-title">All commands</h2><p>Find a command by name or task, then open its usage, options and examples.</p></div>
   </div>
 
   <form class="filters" hidden={Boolean(expandedId)} onsubmit={(event) => event.preventDefault()} aria-label="Filter CLI commands">
-    <label class="search"><span>Search commands</span><input type="search" bind:value={query} placeholder="Command or purpose" autocomplete="off"></label>
-    <label><span>Group</span><select bind:value={group}><option value="all">All groups</option>{#each PUBLIC_CLI_INDEX.groups as item}<option value={item}>{labelToken(item)}</option>{/each}</select></label>
-    <label><span>Mode</span><select bind:value={mode}><option value="all">All modes</option>{#each PUBLIC_CLI_INDEX.modes as item}<option value={item}>{labelToken(item)}</option>{/each}</select></label>
-    <label class="check"><input type="checkbox" bind:checked={commonOnly}><span>Common commands only</span></label>
+    <label class="search"><span>Search commands</span><input type="search" bind:value={query} disabled={!clientReady} placeholder="Command or purpose" autocomplete="off"></label>
+    <label><span>Group</span><select bind:value={group} disabled={!clientReady}><option value="all">All groups</option>{#each PUBLIC_CLI_INDEX.groups as item}<option value={item}>{labelToken(item)}</option>{/each}</select></label>
+    <label><span>Mode</span><select bind:value={mode} disabled={!clientReady}><option value="all">All modes</option>{#each PUBLIC_CLI_INDEX.modes as item}<option value={item}>{labelToken(item)}</option>{/each}</select></label>
+    <label class="check"><input type="checkbox" bind:checked={commonOnly} disabled={!clientReady}><span>Common commands only</span></label>
   </form>
   <p class="filter-status" hidden={Boolean(expandedId)} role="status" aria-live="polite">Showing {filtered.length} of {PUBLIC_CLI_INDEX.commandCount} commands.</p>
   {#if loadError}<div class="load-error" role="alert"><p>{loadError}</p><small>{DEFERRED_MODULE_RECOVERY_DETAIL}</small><button type="button" onclick={reloadDeferredModulePage}>Reload page</button></div>{/if}
@@ -363,7 +403,7 @@
               aria-label={`View ${command.id} command`}
               aria-describedby={`command-summary-${command.id}`}
               aria-busy={loadingId === command.id}
-              disabled={Boolean(loadError)}
+              disabled={!clientReady || Boolean(loadError)}
               onfocus={preloadCatalogue}
               onpointerenter={preloadCatalogue}
               onclick={(event) => navigateToCommand(event, command.id)}

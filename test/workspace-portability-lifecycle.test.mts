@@ -224,4 +224,19 @@ describe('workspace portability lifecycle', () => {
     assert.equal(serialiseWorkspacePortableJson(value), JSON.stringify(value, null, 2));
     assert.equal(serialiseWorkspacePortableJsonLine(value), JSON.stringify(value, null, 2) + '\n');
   });
+
+  test('describes the watchlist export through its bounded adaptive serializer', () => {
+    const metadata = WORKSPACE_PORTABILITY_LIFECYCLE_FAMILY.metadata;
+    const profile = metadata.serialisationProfiles.find(item => item.id === 'workspace.portable.watchlist.json');
+    assert.ok(profile);
+    assert.equal(profile.indentSpaces, 2);
+    assert.equal(profile.compactFallback, true);
+    assert.equal(profile.terminalLf, false);
+    const hook = metadata.hooks.find(item => item.id === profile.serializerHookId);
+    assert.ok(hook);
+    assert.equal(hook.module, 'packages/workspace/watchlist-store.mts');
+    assert.equal(hook.exportName, 'serializeWatchlistExport');
+    const source = {};
+    assert.equal(watchlist.serializeWatchlistExport(source, FIXED), JSON.stringify(watchlist.buildWatchlistExport(source, FIXED), null, 2));
+  });
 });

@@ -2,7 +2,7 @@
   import {
     projectRedirectPath,
     type RedirectInput,
-  } from '$lib/analysis/visualization-models.ts';
+  } from '#lib/analysis/visualization-models.ts';
   import { MAX_HTTP_EVIDENCE_REDIRECTS } from '../../../../packages/analysis/http-evidence-bounds.mts';
 
   let { redirects }: { redirects: RedirectInput[] } = $props();

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PublicResource } from '$lib/public-resources';
+  import type { PublicResource } from '#lib/public-resources.ts';
 
   let {
     resources,

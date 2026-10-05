@@ -38,6 +38,7 @@ This catalogue describes existing execution, disclosure, retention and assurance
 | `urlscan_search` — Archived public scan verdict search | investigate | explicit browser action | hosted bounded passive | deep | bounded passive | normalised registrable domain | configured intelligence provider | deployment optional | transient | none | bounded risk input | authenticated explicit action |
 | `urlhaus_host` — Archived malware-host search | investigate | explicit browser action | hosted bounded passive | deep | bounded passive | normalised registrable domain | configured intelligence provider | deployment optional | transient | none | bounded risk input | authenticated explicit action |
 | `threatfox_domain_ioc` — Retained malware-indicator search | investigate | explicit browser action | hosted bounded passive | deep | bounded passive | normalised registrable domain | configured intelligence provider | deployment optional | transient | none | bounded risk input | authenticated explicit action |
+| `domain_feed_search` — Optional cached domain-feed search | investigate | explicit browser action | hosted bounded passive | None | bounded passive | selected feed search | configured intelligence provider | deployment optional | browser deliberate | deliberate bounded | none | authenticated explicit action |
 | `registrar_rdap` — Eligible registrar RDAP follow-up | investigate | authenticated request | hosted bounded passive | deep | conditional bounded passive | normalised registrable domain<br>registry query | registry service | none | transient | deliberate bounded | none | authenticated request |
 | `network_context` — Observed endpoint network context | investigate | authenticated request | hosted bounded passive | deep | conditional bounded passive | public ip address<br>registry query | registry service | none | transient | deliberate bounded | none | authenticated request |
 | `reverse_dns` — Public-address reverse DNS | investigate | authenticated request | hosted bounded passive | deep | conditional bounded passive | public ip address<br>dns question | dns resolver | none | transient | deliberate bounded | none | authenticated request |
@@ -58,7 +59,7 @@ This catalogue describes existing execution, disclosure, retention and assurance
 
 ## CLI operation catalogue
 
-The public command catalogue keeps its version 1 offline/network label for all 51 installed CLI operations. These operation records retain the more precise plane, activation, credential, export and scoring contract.
+The public command catalogue keeps its version 1 offline/network label for all 53 installed CLI operations. These operation records retain the more precise plane, activation, credential, export and scoring contract.
 
 | Operation | Capability family | Legacy collection | Trigger | Planes | Network | Disclosure | Recipients | Credentials | Retention | Export | Scoring | Authorisation |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -108,6 +109,8 @@ The public command catalogue keeps its version 1 offline/network label for all 5
 | `command.cli.change-packet` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.sharing-review` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.workflow-plan` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
+| `command.cli.watchlist-review` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
+| `command.cli.domain-feed` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.workflow-run` | `workflow_execution` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>public ip address<br>homepage request<br>tls handshake<br>mta sts policy request<br>certificate search term | registry service<br>dns resolver<br>target public service<br>certificate transparency service | none | local output deliberate | local output | none | explicit network approval |
 | `command.cli.diff` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.reconcile` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
@@ -152,6 +155,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `website_probe` | `website_probe` | None | Parent operation budget |
 | `tls_intelligence` | `tls_intelligence` | None | Parent operation budget |
 | `certificate_transparency` | `certificate_transparency` | None | `certificate_transparency` → `certificate_search` |
+| `domain_feed_search` | None | None | `domain_feed_search` → `certificate_search` |
 | `domain_posture` | `domain_posture` | `dns_intelligence` | `domain_posture` → `posture_audit` |
 
 ### Worker-cycle bounds
@@ -191,6 +195,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `urlscan_search` | collector specific | collector specific | registry deep | client stops waiting | explicit document | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
 | `urlhaus_host` | collector specific | collector specific | registry deep | client stops waiting | explicit document | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
 | `threatfox_domain_ioc` | collector specific | collector specific | registry deep | client stops waiting | explicit document | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
+| `domain_feed_search` | certificate search | bounded runtime report | certificate search | cooperative | explicit per source | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
 | `registrar_rdap` | collector specific | collector specific | registry deep | bounded atomic | explicit document | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
 | `network_context` | collector specific | collector specific | registry deep | bounded atomic | explicit document | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
 | `reverse_dns` | collector specific | collector specific | registry deep | bounded atomic | explicit document | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
@@ -259,6 +264,8 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.change-packet` | none | bounded portable document | none | bounded atomic | explicit document | complete<br>partial<br>blocked | None |
 | `command.cli.sharing-review` | none | bounded portable document | none | bounded atomic | explicit document | complete<br>partial<br>blocked | None |
 | `command.cli.workflow-plan` | none | bounded local input | none | not applicable | all or nothing | complete | None |
+| `command.cli.watchlist-review` | none | bounded local input | none | bounded atomic | explicit per item | complete<br>partial | None |
+| `command.cli.domain-feed` | none | bounded local input | none | cooperative | explicit per item | complete<br>partial | None |
 | `command.cli.workflow-run` | variant specific | collector specific | command bounded | step stops admission | explicit step | complete<br>partial<br>blocked | complete<br>partial<br>awaiting network approval<br>awaiting analyst selection<br>awaiting review confirmation<br>step failed |
 | `command.cli.diff` | none | bounded local input | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.reconcile` | none | bounded local input | none | bounded atomic | explicit per source | complete<br>partial | None |
@@ -338,6 +345,12 @@ Runtime configuration and admission remain with their existing enforcement owner
 ### Retained malware-indicator search
 
 - One exact retained-indicator search is performed without submitting an indicator or sample.
+
+### Optional cached domain-feed search
+
+- Disabled until operator configuration. Only explicit feed identifiers, exact hosts and literal terms are sent to the configured cache service; Brand and Case identities stay local.
+- Queries do not contact candidate targets or enable monitoring. The service retains public feed snapshots, not search terms; refresh requests to fixed publishers contain no analyst selection.
+- Manual browser and CLI file review remains available without this connection. Feed membership, file freshness and per-host observation times are separate; inclusion changes no score or availability decision.
 
 ### Eligible registrar RDAP follow-up
 
@@ -473,6 +486,8 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.change-packet` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.sharing-review` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.workflow-plan` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
+| `command.cli.watchlist-review` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
+| `command.cli.domain-feed` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.workflow-run` | Only fixed installed recipe steps can run, and every network invocation requires explicit approval. |
 | `command.cli.diff` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.reconcile` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |

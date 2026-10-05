@@ -1,5 +1,7 @@
 # WHOISleuth CLI guide
 
+`review-evidence` also reviews bounded source-qualified infrastructure snapshots and explicit earlier/later comparison inputs entirely offline. See [infrastructure observations](infrastructure-observations.md) for the exact schemas, outcome semantics and retained-evidence limitations.
+
 The first-party CLI runs on the operator's machine and does not call the hosted
 WHOISleuth deployment. Use this guide for installation, common commands,
 collection boundaries and output. Installed `whoisleuth --help`, focused
@@ -106,6 +108,18 @@ One strict domain, IP address or ASN can occupy command position as Lookup
 shorthand. URL-like or ambiguous input requires the explicit `lookup` command.
 Only `bulk` accepts multiple targets.
 
+For a downloaded plain-domain feed, use
+`whoisleuth domain-feed review nrd7 feed.txt --select term:example --json`.
+Repeat `--select exclude:literal` to veto a literal substring before the result
+bound, including for exact-host selections. At most 20 positive and 20 negative
+terms of 3–80 characters are supported; at least one positive term or exact host
+is required. Matching uses canonical ASCII/punycode text without token, typo,
+confusable or regular-expression expansion. These offline selectors do not infer
+saved browser campaign identity or default priority.
+This is an offline literal match, not a feed download or target Lookup. The
+[candidate-review guide](https://github.com/slicedearth/whoisleuth/blob/main/docs/brand-candidate-review.md#review-a-domain-feed) covers
+source attribution and the separate Watchlist handoff.
+
 `discover` accepts a brand label or registrable domain and supports multi-part
 public suffixes in `--tlds` (for example, `co.uk,com.au`). It preserves the full
 suffix and does not collect candidate evidence; use `discover-scan` only after
@@ -179,6 +193,30 @@ Excluded links and unsupported QR payloads make the review partial, with
 category counts rather than private payload text. Bare QR hostnames are not
 automatically treated as URLs.
 
+Current message-intake reports also retain bounded literal IPv4/IPv6 and
+explicitly labelled MD5, SHA-1 and SHA-256 observations from supported body and
+document text. Each observation links to its selected source part and digest;
+it is not a Lookup target, file identification or threat verdict. Complete URLs,
+message headers, QR payloads, HAR and identity-event fields are excluded from
+this text scan. Historical version-1 reports do not acquire new observations.
+
+Use `intake text selected.txt --intake-context context.json --json` to add an
+explicit analyst-supplied distribution declaration. The separate context file
+is limited to 8 KiB and cannot use stdin. Its channel, non-sensitive source
+label and optional declared time, reference, observer and vantage labels are
+included in the output, not verified as delivery or capture conditions. See
+[selected-input indicators and declarations](offline-intake-context.md) for the
+exact schema, privacy exclusions and extraction bounds.
+
+Plain-text phone discovery reports only candidate counts, the source digest and
+UTF-16 selection ranges to standard error; unselected numbers do not enter JSON
+output. Use a version-2 `--intake-context` file to select exact ranges and declare
+their source, basis, role and known time. The same optional file can supply a
+displayed/destination pair for local hostname comparison. See the
+[selection example](offline-intake-context.md#select-phone-observations-in-the-cli).
+`--quiet` suppresses discovery guidance, and `--strict-exit` reports partial
+phone coverage as well as other incomplete intake work.
+
 ### Local IP-location database review
 
 `review-evidence query.json --mmdb selected.mmdb --json --strict-exit` reads
@@ -233,6 +271,21 @@ comparison and connector provenance. These workflows are offline; partial
 context reviews return 4 when `--strict-exit` is selected. Browser-generated
 reusable inputs use the same validators.
 
+Domain-history input version 2 adds analyst-declared registration, deletion,
+re-registration, transfer or review boundaries linked to retained snapshot or
+pin IDs. Version 1 remains supported with its original output. Boundaries prompt
+reassessment; they do not establish ownership or discard prior evidence.
+
+`review-evidence containment.json --json --strict-exit` accepts a
+`whoisleuth.internal-containment.input` version-1 document containing a supported
+Case export, selected next-step assertion and linked pin IDs, internal or trusted
+audience, recipient role and an explicit disclosure-review acknowledgement.
+It exports only that selected handoff, never writes the Case or performs a
+control. Missing or unselected supporting context stays partial (exit 4 under
+`--strict-exit`), and a resolved Case or provider outcome does not close an open
+internal follow-up. See [internal containment](offline-intake-context.md#selected-internal-containment-handoff)
+for the complete input and audience limitations.
+
 ### Message-header review
 
 `mail-headers` parses only the bounded header block from a selected message file
@@ -283,6 +336,45 @@ selected file, including an envelope when supplied. No provider API is contacted
 ## Output and automation
 
 ### Local Case files
+
+Manual response scope is explicit and offline. `case incident-link` takes
+`{"url":"https://example.test/reported-page"}`; use its retained ID to bind
+`responseObjects` on `case action`. Each object contains `kind`, `identifier`
+and `incidentTargetId` (null for the Case domain or an associated hostname).
+New URL objects must match that exact retained link. Exact historical identities
+already retained in response records remain selectable after a link edit or
+removal; they are not rebound to its replacement. An action may bind up to 20
+objects; missing historical scope stays unknown.
+
+`case action-event` takes `{"id":"action-id","transition":{...}}`, using
+the same reviewed, authorised and manually submitted workflow as Console.
+After submission, a typed `objectOutcome` such as `removed`, `restricted`,
+`suspended`, `delisted`, `restored` or `disputed` requires explicit event
+`responseObjects`: a partial receipt never applies to all objects by default.
+Acknowledgement is a workflow event, not independently observed remediation.
+
+A self-initiated correction uses a new `case action`, with `originActionId`
+identifying the original action and `responseObjects` selecting a subset of that
+delivery's exact objects. Its `correction` block identifies one delivery event,
+packet digest/version and profile, plus the purpose (`correction` or
+`retraction_request`), reason, previous and corrected statements, and retained
+evidence-pin IDs. This is separate from `amendment`, which still requires an
+actual provider-request event. The correction must match a retained typed packet
+receipt on the selected delivery; a historical free-text digest alone is
+insufficient. The usual recipient, authority and disclosure review then applies
+to the new draft. The original packet and delivery remain unchanged.
+
+`case recheck-question` saves `statement` and `recheck` comparison conditions.
+Pins, questions and recheck input can retain one `responseObject`; exact-object
+non-reproduction requires matching complete baseline/current evidence, a later
+observation and comparable conditions. Hostname similarity is insufficient.
+Independent removal, restriction, suspension, delisting, transfer and restoration
+use those same comparison requirements. Disputes and warnings retain procedural
+source attribution separately; provider claims are not independent observations.
+`case close-object` requires one `responseObject` and the usual typed closure
+reason/evidence links. It leaves the Case and other objects unchanged.
+All these JSON operations require `--input`, `--output`, deliberate file
+replacement and the existing digest/lease checks. No report or request is sent.
 
 Create a working file, inspect its Case IDs, then append a note:
 
@@ -395,12 +487,17 @@ An ordinary Case JSON file alone provides structural validity, not a checksum.
 They use generated entry names, not original paths. Ordinary ZIPs and folders
 are private and unencrypted; packaging does not redact selected files. The report distinguishes
 file identity, supported source formats, opaque content, exact capsule/source
-links and capture-manifest attachment matches. Include the capture manifest and
+links, declared image derivation and capture-manifest attachment matches.
+Image derivation reports an immediate-parent digest and byte length, editing
+method and operation kinds, not proof of transformation. Parent inclusion matches
+another selected manifest entry by exact byte digest and size; an unselected Case
+attachment reference does not count. Parent pixels are optional; absent declarations
+leave editing history unknown. Include the capture manifest and
 its screenshot/DOM-digest files together to check their declared bytes; original
 filenames are not needed to establish a match. It does not import files or establish source truth, signature trust or a
 trusted timestamp. Unsupported or rejected entries produce a partial report;
 `--strict-exit` returns 4. Without `--package` or `--folder`, `manifest` produces a
-standalone JSON manifest; exact public version-2 manifests remain readable.
+standalone JSON manifest; exact version-2 and version-3 manifests remain readable.
 
 For [BagIt 1.0](https://www.rfc-editor.org/rfc/rfc8493.html) interchange, use
 `--bagit` with `--package` or `--folder` on both commands:

@@ -16,16 +16,19 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { describe, test } from 'node:test';
 
 import {
   assertFrontendBuildIntegrity,
   cleanFrontendBuildArtifacts,
   FRONTEND_BUILD_INTEGRITY_MARKER,
+  FRONTEND_BUILD_INTEGRITY_VERSION,
   frontendProductionChunk,
   parseFrontendBuildIntegritySnapshot,
   recordFrontendBuildIntegrity,
 } from '../tools/frontend-build-integrity.mts';
+import { readFrontendRouteNodes } from '../tools/frontend-loading-report.mts';
 import {
   createHostedBrowserWorkspace,
   HOSTED_BROWSER_DIAGNOSTIC_LIMITS,
@@ -42,7 +45,6 @@ const SOURCE_FILES = [
   'package-lock.json',
   'tsconfig.json',
   'frontend/package.json',
-  'frontend/svelte.config.ts',
   'frontend/tsconfig.json',
   'frontend/vite.config.ts',
 ];
@@ -61,6 +63,9 @@ function fixtureRepository(context: { after(callback: () => void): void }): stri
     write(root, `${directory}/.fixture`, `${directory}\n`);
   }
   for (const relative of SOURCE_FILES) write(root, relative, `${relative}\n`);
+  write(root, 'package.json', JSON.stringify({ name: 'fixture-root', private: true, type: 'module', workspaces: ['frontend'] }));
+  write(root, 'frontend/package.json', JSON.stringify({ name: 'fixture-frontend', private: true, type: 'module' }));
+  write(root, 'package-lock.json', JSON.stringify({ lockfileVersion: 3, packages: { '': {}, frontend: {} } }));
   write(root, 'frontend/src/app.ts', 'export const app = true;\n');
 
   const script = 'console.log("fixture");\n';
@@ -73,12 +78,14 @@ function fixtureRepository(context: { after(callback: () => void): void }): stri
   ].join('\n');
   const redirect = '<script>location.href="/";</script>\n';
   const manifest = {
+    '.svelte-kit/generated/build/client-optimized/app.js': { name: 'entry/app', file: '_app/immutable/entry/app.A.js' },
     'src/app.ts': {
       file: '_app/immutable/entry/app.A.js',
       css: ['_app/immutable/assets/app.A.css'],
     },
   };
   for (const [relative, source] of [
+    ['frontend/.svelte-kit/generated/build/client-optimized/app.js', 'export const dictionary = {"/": [2]};\n'],
     ['frontend/.svelte-kit/output/client/_app/immutable/entry/app.A.js', script],
     ['frontend/.svelte-kit/output/client/_app/immutable/assets/app.A.css', style],
     ['frontend/.svelte-kit/output/client/.vite/manifest.json', JSON.stringify(manifest)],
@@ -98,7 +105,7 @@ function markerObject(root: string): Record<string, unknown> {
 
 function initialiseFixtureCheckout(root: string): void {
   write(root, '.gitignore', [
-    'node_modules/',
+    'node_modules',
     'frontend/build/',
     'frontend/build-identity.json',
     'frontend/.svelte-kit/',
@@ -134,6 +141,40 @@ function writeDiagnosticFixture(root: string, environment: NodeJS.ProcessEnv) {
 }
 
 describe('hosted browser workspace diagnostics', () => {
+  test('preserves hoisted and workspace-local dependencies without builder intermediates', (context) => {
+    const repository = fixtureRepository(context);
+    initialiseFixtureCheckout(repository);
+    const manifest = JSON.stringify({ name: '@fixture/plugin', type: 'module', exports: './index.js' });
+    for (const root of ['node_modules', 'frontend/node_modules']) {
+      write(repository, `${root}/@fixture/plugin/package.json`, manifest);
+      write(repository, `${root}/@fixture/plugin/index.js`, `export const location = ${JSON.stringify(root)};\n`);
+    }
+    write(repository, 'frontend/vite.config.ts', 'import { location } from "@fixture/plugin"; export default { location };\n');
+    const snapshot = recordFrontendBuildIntegrity(repository, ENVIRONMENT);
+    const workspace = createHostedBrowserWorkspace(repository, ENVIRONMENT);
+    context.after(workspace.dispose);
+    assert.deepEqual(assertFrontendBuildIntegrity(workspace.root, ENVIRONMENT), snapshot);
+    for (const root of ['', 'frontend']) {
+      const resolved = createRequire(path.join(workspace.root, root, 'package.json')).resolve('@fixture/plugin');
+      assert.equal(resolved, realpathSync(path.join(repository, root, 'node_modules/@fixture/plugin/index.js')));
+    }
+    assert.equal(existsSync(path.join(workspace.root, 'frontend/.svelte-kit')), false);
+    workspace.dispose();
+    assert.equal(existsSync(path.join(repository, 'frontend/node_modules/@fixture/plugin/index.js')), true);
+  });
+
+  test('rejects dependency directories reached through links or undeclared checkout owners', (context) => {
+    const repository = fixtureRepository(context);
+    initialiseFixtureCheckout(repository);
+    symlinkSync(path.join(repository, 'node_modules'), path.join(repository, 'frontend/node_modules'), 'dir');
+    recordFrontendBuildIntegrity(repository, ENVIRONMENT);
+    assert.throws(() => createHostedBrowserWorkspace(repository, ENVIRONMENT), /without linked traversal/u);
+    rmSync(path.join(repository, 'frontend/node_modules'));
+    write(repository, 'package-lock.json', JSON.stringify({ packages: { '': {}, missing: {} } }));
+    recordFrontendBuildIntegrity(repository, ENVIRONMENT);
+    assert.throws(() => createHostedBrowserWorkspace(repository, ENVIRONMENT), /checked-out package manifest/u);
+  });
+
   test('keeps focused failure and interruption diagnostics private without changing the contributor checkout', (context) => {
     for (const outcome of ['failed', 'interrupted'] as const) {
       const { repository, workspace } = diagnosticWorkspace(context);
@@ -294,6 +335,19 @@ describe('hosted browser workspace diagnostics', () => {
 });
 
 describe('frontend build integrity', () => {
+  test('binds the current generated route source to the recorded build, including in-place edits', (context) => {
+    const root = fixtureRepository(context);
+    const snapshot = recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    const frontend = path.join(root, 'frontend');
+    const manifest = JSON.parse(readFileSync(path.join(frontend, '.svelte-kit/output/client/.vite/manifest.json'), 'utf8'));
+    assert.deepEqual(readFrontendRouteNodes(frontend, manifest, snapshot.generatedRouteSource), [{ routeKey: '/', pageNode: 2, layoutNodes: [] }]);
+    // The manifest, selected path and served bytes remain unchanged.
+    write(root, `frontend/${snapshot.generatedRouteSource.path}`, 'export const dictionary = {"/": [3]};\n');
+    assert.deepEqual(assertFrontendBuildIntegrity(root, ENVIRONMENT), snapshot);
+    assert.throws(() => readFrontendRouteNodes(frontend, manifest, snapshot.generatedRouteSource), /recorded build identity/u);
+    const malformed = { ...snapshot, generatedRouteSource: { ...snapshot.generatedRouteSource, path: 'outside.js' } };
+    assert.throws(() => parseFrontendBuildIntegritySnapshot(JSON.stringify(malformed)), /path or byte bounds/u);
+  });
   test('worker outputs require a manifest identity and remain verified without builder intermediates', (context) => {
     const root = fixtureRepository(context);
     const workerSource = 'src/lib/workers/search.worker.ts';
@@ -457,7 +511,7 @@ describe('frontend build integrity', () => {
   test('new configuration dependencies are discovered and unresolved or linked helpers fail closed', (context) => {
     const root = fixtureRepository(context);
     recordFrontendBuildIntegrity(root, ENVIRONMENT);
-    write(root, 'frontend/svelte.config.ts', 'import "../tools/new-helper.mts";\n');
+    write(root, 'frontend/vite.config.ts', 'import "../tools/new-helper.mts";\n');
     assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /import is unresolved/u);
     write(root, 'tools/new-helper.mts', 'export const value = true;\n');
     assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /stale or mixed/u);
@@ -484,7 +538,7 @@ describe('frontend build integrity', () => {
 
     assert.throws(() => parseFrontendBuildIntegritySnapshot('{'), /JSON|parse/u);
     assert.throws(
-      () => parseFrontendBuildIntegritySnapshot(JSON.stringify({ ...retained, version: 3 })),
+      () => parseFrontendBuildIntegritySnapshot(JSON.stringify({ ...retained, version: FRONTEND_BUILD_INTEGRITY_VERSION + 1 })),
       /unsupported format or version/u,
     );
     assert.throws(

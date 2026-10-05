@@ -1,5 +1,8 @@
 // Framework-neutral response record types and vocabulary.
 import type { CaseEvidenceRequest, CasePacketAmendment } from './case-requested-evidence.mts';
+import type { CaseDeliveryPacketReceipt, CasePacketCorrection } from './case-packet-correction.mts';
+import type { CaseResponseObject, CaseResponseObjectOutcome } from './case-response-object.mts';
+import type { InfrastructureObservation } from '../investigation/infrastructure-observation.mts';
 
 
 export const CASE_EVIDENCE_RELATION_STANCES = ['supports', 'contradicts', 'unresolved'] as const;
@@ -180,6 +183,7 @@ export type CaseSightingRecord = {
 };
 
 export type CaseEvidencePin = {
+  infrastructureObservation?: InfrastructureObservation | null;
   id: string;
   checkpointId: string | null;
   field: string | null;
@@ -188,6 +192,7 @@ export type CaseEvidencePin = {
   value: string;
   source: string;
   observationHostname?: string;
+  responseObject?: CaseResponseObject;
   webObservationMode?: 'selected_url';
   sourceState: string | null;
   sourceSchema: {
@@ -242,6 +247,9 @@ export type CaseActionTransitionEvent = {
   originActionId: string | null;
   applied: boolean;
   evidenceRequest?: CaseEvidenceRequest;
+  packetReceipt?: CaseDeliveryPacketReceipt;
+  responseObjects?: readonly CaseResponseObject[];
+  objectOutcome?: CaseResponseObjectOutcome;
 };
 
 export type CaseActionRecord = {
@@ -260,6 +268,8 @@ export type CaseActionRecord = {
   outcome: string | null;
   originActionId: string | null;
   amendment?: CasePacketAmendment;
+  correction?: CasePacketCorrection;
+  responseObjects?: readonly CaseResponseObject[];
   history: CaseActionTransitionEvent[];
   historyOmitted: number;
   historyLimitations: string[];
@@ -280,6 +290,8 @@ export type CaseObservedEffectReview = {
   sightingId: string | null;
   followUpAt: string | null;
   recheck?: import('./case-recheck-model.mts').CaseRecheckAnswerContext;
+  responseObject?: CaseResponseObject;
+  objectOutcome?: CaseResponseObjectOutcome;
   createdAt: string;
 };
 
@@ -296,6 +308,7 @@ export type CaseClosureRecord = {
   summary: string;
   observedEffectReviewId: string | null;
   actionId: string | null;
+  responseObject?: CaseResponseObject;
   limitations: string[];
   createdAt: string;
 };
@@ -316,6 +329,7 @@ export type CaseClosureLinkContext = Readonly<{
   providerResolutionEvents?: ReadonlyMap<string, readonly Readonly<{
     eventId: string;
     occurredAt: string;
+    responseObjects?: readonly CaseResponseObject[];
   }>[]>;
 }>;
 

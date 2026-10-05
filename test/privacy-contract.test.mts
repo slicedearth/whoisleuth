@@ -5,24 +5,20 @@ import { test } from 'node:test';
 import {
   CASE_REPORT_SCHEMA_VERSION,
   CASE_SCHEMA_VERSION,
-  LATEST_PUBLIC_CASE_SCHEMA_VERSION,
-  PUBLISHED_V2_3_WORKSPACE_ARCHIVE_VERSION,
+  CASE_IMPORT_VERSIONS,
   PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
-  PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION,
   PUBLISHED_V2_CASE_SCHEMA_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
-  PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION,
   PUBLIC_CASE_RESPONSE_PACKET_VERSION,
   PUBLIC_CASE_SCHEMA_VERSION,
-  PUBLIC_WORKSPACE_ARCHIVE_VERSION,
   SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   WORKSPACE_ARCHIVE_VERSION,
 } from '../packages/contracts/case-portability.mts';
 import {
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
-  LATEST_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
   PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
 } from '../lib/evidence-export.mts';
@@ -47,6 +43,34 @@ function compact(value: string): string {
 }
 
 const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
+  {
+    id: 'domain-feed-local-import',
+    clauses: [
+      /Domain-feed file import processes a selected plain-domain file locally, without uploading it or querying its domains/iu,
+      /File publication time and local import time do not establish when an individual domain was registered or observed/iu,
+      /filename and its path are not retained/iu,
+    ],
+  },
+  {
+    id: 'domain-feed-query-disclosure',
+    clauses: [
+      /Optional domain-feed search is disabled until an operator configures the separate feed service/iu,
+      /selected feed identifiers.*exact hostnames.*positive.*negative.*search terms/iu,
+      /does not send the Brand Profile, Case, browser workspace or session cookie to the service/iu,
+      /Connection credentials remain server-side/iu,
+      /retains public feed snapshots and metadata, not search queries/iu,
+      /Disabling the connection does not delete its cache/iu,
+    ],
+  },
+  {
+    id: 'domain-feed-history-disclosure',
+    clauses: [
+      /Explicit history review.*source cursor.*epoch.*edition range.*last reviewed hostname.*rule digest/iu,
+      /up to eight edition metadata records per source.*previous membership.*storage budget.*64 timestamped refresh outcomes/iu,
+      /Missing membership is reported as a gap/iu,
+      /Cursor downloads contain the source cursor, not Brand identity or Case data/iu,
+    ],
+  },
   {
     id: 'local-mmdb-current-review',
     clauses: [
@@ -339,7 +363,7 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
       new RegExp(`Case schema ${CASE_SCHEMA_VERSION}`, 'iu'),
       new RegExp(`exact public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}`, 'iu'),
       new RegExp(
-        `published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION}–${LATEST_PUBLIC_CASE_SCHEMA_VERSION} remain readable`,
+        `earlier v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION}–${Math.max(...CASE_IMPORT_VERSIONS.filter(version => version !== CASE_SCHEMA_VERSION))} remain readable`,
         'iu',
       ),
     ],
@@ -513,6 +537,17 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
     ],
   },
   {
+    id: 'selected-image-derivation',
+    clauses: [
+      /declared immediate-parent SHA-256 and byte length, editing method and operation kinds/iu,
+      /Parent pixels, Case and attachment identifiers, filenames and edit coordinates are not added/iu,
+      /parent may itself be edited/iu,
+      /Fingerprints can correlate matching files across exports/iu,
+      /not anonymisation or proof of the edits or complete redaction/iu,
+      /Missing declarations leave editing history unknown/iu,
+    ],
+  },
+  {
     id: 'encrypted-file-packages',
     clauses: [
       /Ordinary ZIPs and evidence folders are unencrypted/iu,
@@ -583,7 +618,7 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
     clauses: [
       new RegExp(`Lookup evidence schema ${LOOKUP_EVIDENCE_SCHEMA_VERSION}`, 'iu'),
       new RegExp(
-        `published v2 schemas ${PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION} and ${LATEST_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION}`,
+        `published v2 schemas ${PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION}–${Math.max(...SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.filter(version => version !== LOOKUP_EVIDENCE_SCHEMA_VERSION))}`,
         'iu',
       ),
       new RegExp(`v1 schema ${V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} remain readable`, 'iu'),
@@ -811,16 +846,12 @@ test('public privacy notices share the current material data-handling contract',
     /executes page JavaScript in a disposable, network-bounded browser/iu,
   );
 
-  assert.deepEqual(
-    [...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS],
-    [
-      PUBLIC_WORKSPACE_ARCHIVE_VERSION,
-      PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION,
-      PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION,
-      PUBLISHED_V2_3_WORKSPACE_ARCHIVE_VERSION,
-      WORKSPACE_ARCHIVE_VERSION,
-    ],
-  );
+  // Published epochs remain an independent expectation, not a mirror of the
+  // current writer. Adding another compatible writer does not retire them.
+  for (const version of [5, 6, 7, 8, 9]) {
+    assert.ok(SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.some(supported => supported === version), `Public archive ${version} remains readable`);
+  }
+  assert.ok(SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.includes(WORKSPACE_ARCHIVE_VERSION));
   assert.equal(PUBLIC_CASE_RESPONSE_PACKET_VERSION, 6);
   assert.equal(PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION, 7);
   assert.equal(PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION, 8);

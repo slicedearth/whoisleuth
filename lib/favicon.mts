@@ -28,6 +28,7 @@ type FaviconOptions = {
   htmlAnalysis?: FaviconHtmlEvidence;
   fetcher?: typeof safeFetch;
   timeoutMs?: number;
+  signal?: AbortSignal;
 };
 
 // Extracts favicon URLs declared in the page's own <link rel="...icon..."> tags
@@ -155,13 +156,19 @@ async function fetchFaviconBytes(
   headers: Record<string, string>,
   fetcher: typeof safeFetch,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<Buffer | null> {
+  signal?.throwIfAborted();
   if (/^data:/i.test(url)) return decodeDataUri(url);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetcher(url, { signal: controller.signal, headers });
+    const res = await fetcher(url, { signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, headers });
+    if (signal?.aborted) {
+      await res.body?.cancel().catch(() => {});
+      signal.throwIfAborted();
+    }
     if (!res.ok) {
       // Not reading this body - release it explicitly instead of leaving an
       // unconsumed stream (and the connection it's tied to) open until
@@ -174,9 +181,11 @@ async function fetchFaviconBytes(
     // headers immediately and then trickle or stall the body forever, hanging
     // this worker with no deadline once disarmed.
     const { bytes, truncated } = await readBytesCapped(res, MAX_FAVICON_BYTES);
+    signal?.throwIfAborted();
     // A truncated or empty file can't be hashed meaningfully.
     return truncated || bytes.length === 0 ? null : bytes;
   } catch {
+    signal?.throwIfAborted();
     return null;
   } finally {
     clearTimeout(timeout);
@@ -203,8 +212,9 @@ function buildFaviconCandidates(domain: string, html = '', options: Pick<Favicon
 
 async function fetchFaviconHash(
   domain: string,
-  { html = '', baseUrl, htmlAnalysis, fetcher = safeFetch, timeoutMs = FAVICON_FETCH_TIMEOUT_MS }: FaviconOptions = {},
+  { html = '', baseUrl, htmlAnalysis, fetcher = safeFetch, timeoutMs = FAVICON_FETCH_TIMEOUT_MS, signal }: FaviconOptions = {},
 ): Promise<FaviconHash | null> {
+  signal?.throwIfAborted();
   const headers = whoisleuthRequestHeaders();
   const candidates = buildFaviconCandidates(domain, html, {
     ...(baseUrl !== undefined ? { baseUrl } : {}),
@@ -216,7 +226,8 @@ async function fetchFaviconHash(
 
   for (const url of candidates) {
     // eslint-disable-next-line no-await-in-loop
-    const bytes = await fetchFaviconBytes(url, headers, fetcher, requestTimeoutMs);
+    const bytes = await fetchFaviconBytes(url, headers, fetcher, requestTimeoutMs, signal);
+    signal?.throwIfAborted();
     if (bytes && isFaviconImage(bytes)) {
       return {
         hash: crypto.createHash('sha256').update(bytes).digest('hex'),

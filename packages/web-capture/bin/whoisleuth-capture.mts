@@ -3,7 +3,7 @@
 import manifest from '../package.json' with { type: 'json' };
 import { launchCaptureBrowser } from '../browser.mts';
 
-import { captureRenderedPage, parseCaptureArguments, sanitizeCaptureText } from '../capture.mts';
+import { captureRenderedPage, createCaptureInterruption, parseCaptureArguments, sanitizeCaptureText, formatCaptureSuccess } from '../capture.mts';
 import {
   compareRenderedCaptures,
   formatRenderedCaptureComparison,
@@ -28,6 +28,8 @@ Compare reports capture conditions and every changed pixel in a bounded grid. Re
 Browser installation is separate: run playwright install chromium explicitly.
 The browser sandbox remains enabled. Use a disposable, network-restricted environment for untrusted pages.
 Exit 0 means the operation completed; exit 2 means invalid input or an operation failure.
+During capture, the first interrupt requests owned-output cleanup and exits 130.
+A second interrupt forces emergency exit and may leave incomplete owned output.
 `;
 
 try {
@@ -44,18 +46,23 @@ try {
       : formatRenderedCaptureComparison(comparison));
   } else {
     const options = parseCaptureArguments(argv);
-    const manifest = await captureRenderedPage(options, {
-      launchBrowser: launchCaptureBrowser,
-    });
+    const interruption = createCaptureInterruption();
+    const manifest = await (async () => {
+      try {
+        return await captureRenderedPage(options, { launchBrowser: launchCaptureBrowser, signal: interruption.signal });
+      } catch (error) {
+        if (interruption.signal.aborted) process.exitCode = 130;
+        throw error;
+      } finally {
+        interruption.clear();
+      }
+    })();
     const capture = manifest.captures[0];
     if (!capture) throw new Error('Rendered capture completed without manifest evidence.');
-    const safeDomain = sanitizeCaptureText(capture.domain, 253);
-    const safeOutputDirectory = sanitizeCaptureText(options.outputDirectory, 2048);
-    process.stdout.write(`Captured ${safeDomain} to ${safeOutputDirectory}\n`);
-    process.stdout.write(`Manifest: ${safeOutputDirectory}/manifest.json\n`);
+    process.stdout.write(formatCaptureSuccess(capture.domain, options.outputDirectory));
   }
 } catch (error) {
   const message = error instanceof Error ? error.message : 'Rendered capture failed.';
   process.stderr.write(`Capture error: ${sanitizeCaptureText(message, 500)}\n`);
-  process.exitCode = 2;
+  if (process.exitCode !== 130) process.exitCode = 2;
 }

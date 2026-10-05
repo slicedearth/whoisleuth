@@ -507,15 +507,18 @@ describe('portable workspace archive', () => {
   test('preserves an outer v6 archive containing a migratable Brand Profile v6 section', async () => {
     const archive = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
     const brandSection = recordValue(archive.sections.brandProfiles);
-    const archivedProfile = requiredValue(brandSection.profiles as Array<Record<string, unknown>>)[0]!;
-    archivedProfile.desiredPostureBaselines = [{
-      domain: 'official.invalid',
-      approvedChangeWindows: [{
-        startsAt: '2026-07-20T02:00:00.000Z',
-        endsAt: '2026-07-20T03:00:00.000Z',
-        summary: 'Reviewed archived maintenance',
+    // Author the historical profile shape rather than backdating generated fields.
+    brandSection.profiles = [{
+      ...profile(),
+      desiredPostureBaselines: [{
+        domain: 'official.invalid',
+        approvedChangeWindows: [{
+          startsAt: '2026-07-20T02:00:00.000Z',
+          endsAt: '2026-07-20T03:00:00.000Z',
+          summary: 'Reviewed archived maintenance',
+        }],
+        updatedAt: NOW,
       }],
-      updatedAt: NOW,
     }];
     await retargetSectionVersion(archive, 'brandProfiles', 6);
     removeSections(archive, ['caseViews']);
@@ -693,11 +696,16 @@ describe('portable workspace archive', () => {
       const section = recordValue(archive.sections.bulkSessions);
       const storedSession = requiredValue((section.sessions as Array<Record<string, unknown>>)[0]);
       for (const row of storedSession.results as Array<Record<string, unknown>>) {
+        // Neither field existed in the public schema 4/5 compact row shape.
+        Reflect.deleteProperty(row, 'hasExternalPasswordForm');
+        Reflect.deleteProperty(row, 'webCollectionQuality');
         row.profileContext = structuredClone(storedSession.profileContext);
         if (version === 4) row.relationship = { ...recordValue(row.relationship), version: 2 };
       }
-      attack.mutate(storedSession);
       await retargetSectionVersion(archive, 'bulkSessions', version);
+      assert.equal(mergeBulkSessions([], section).added, 1, `${version}: valid historical base`);
+      attack.mutate(storedSession);
+      await refreshSectionIntegrity(archive, 'bulkSessions');
 
       const preview = await previewWorkspaceArchive(archive, emptyInput(), { selectedSectionIds: ['bulkSessions'] });
       const bulk = preview.sections.find((item) => item.id === 'bulkSessions');

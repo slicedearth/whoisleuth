@@ -1,15 +1,17 @@
 <script lang="ts">
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { onDestroy } from 'svelte';
+  import { createAcquisitionReviewWorkspace } from '#lib/controllers/acquisition-review-workspace.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import type {
     AcquisitionDueDiligence,
     AcquisitionReviewState,
-  } from '$lib/analysis/acquisition-due-diligence.ts';
+  } from '#lib/analysis/acquisition-due-diligence.ts';
   import {
     ACQUISITION_MANUAL_CHECKS,
-    buildAcquisitionDecisionPacket,
+    type AcquisitionDecisionPacket,
     type AcquisitionDecision,
     type AcquisitionManualCheck,
-  } from '$lib/analysis/acquisition-decision-packet.ts';
+  } from '#lib/analysis/acquisition-decision-packet.ts';
 
   let { review, target, observedAt, synthetic = false }: {
     review: AcquisitionDueDiligence;
@@ -21,6 +23,16 @@
   let rationale = $state('');
   let reviewedChecks = $state<AcquisitionManualCheck[]>([]);
   let exportStatus = $state('');
+  let busy = $state(false), reopening = $state(false), reopened = $state(false), confirmationEpoch = $state(0);
+  let historical = $state.raw<AcquisitionDecisionPacket | null>(null);
+  const workspace = createAcquisitionReviewWorkspace({
+    readContext: () => ({ target, observedAt, synthetic, review }),
+    readDraft: () => ({ decision, rationale, reviewedChecks }),
+    writeDraft: draft => { decision = draft.decision; rationale = draft.rationale; reviewedChecks = [...draft.reviewedChecks]; },
+  });
+  const reconfirmed = $derived.by(() => { confirmationEpoch; return workspace.isReconfirmed(); });
+  let disposed = false;
+  onDestroy(() => { disposed = true; workspace.cancel(); });
 
   const checkLabels: Readonly<Record<AcquisitionManualCheck, string>> = {
     eligibility: 'Registry eligibility and current availability checked',
@@ -46,21 +58,32 @@
   }
 
   async function exportDecision(): Promise<void> {
+    if (busy) return;
+    busy = true;
     try {
-      const exported = await buildAcquisitionDecisionPacket({
-        target,
-        evidenceObservedAt: observedAt,
-        decision,
-        rationale,
-        reviewedChecks,
-        synthetic,
-        review,
-      });
+      const exported = await workspace.prepareDownload();
+      if (disposed) return;
       downloadLocalFile(new Blob([exported.content], { type: 'application/json' }), exported.filename);
-      exportStatus = `Downloaded a ${exported.document.analystReview.state}${synthetic ? ' synthetic' : ''} acquisition review. No request or submission was made.`;
+      exportStatus = `Prepared a ${exported.document.analystReview.state}${exported.document.synthetic ? ' synthetic' : ''} acquisition review for download. This does not confirm durable saving. No request or submission was made.`;
     } catch (cause) {
       exportStatus = cause instanceof Error ? cause.message : 'Could not export the acquisition review.';
-    }
+    } finally { busy = false; }
+  }
+
+  async function reopen(event: Event) {
+    const input = event.currentTarget as HTMLInputElement, file = input.files?.[0]; input.value = '';
+    if (!file || busy) return;
+    busy = true; reopening = true; historical = null; exportStatus = '';
+    try { const packet = await workspace.preview(file); if (!disposed) historical = packet; }
+    catch (cause) { if (!disposed) exportStatus = cause instanceof Error ? cause.message : 'The packet could not be verified. The current review is unchanged.'; }
+    finally { busy = false; reopening = false; }
+  }
+
+  function acceptHistorical() {
+    try {
+      workspace.accept(); historical = null; reopened = true; confirmationEpoch++;
+      exportStatus = 'Historical manual fields restored. Current Lookup evidence and observation times are unchanged. Reconfirm before preparing a new reviewed packet.';
+    } catch (cause) { exportStatus = cause instanceof Error ? cause.message : 'The current review changed. Reopen the packet again.'; }
   }
 </script>
 
@@ -137,7 +160,21 @@
       <label class="field">Rationale or unresolved questions
         <textarea bind:value={rationale} maxlength="2000" rows="3" placeholder="Record what is verified, what remains unknown, and the next manual step."></textarea>
       </label>
-      <button class="btn" type="button" onclick={exportDecision}>Download acquisition review</button>
+      <label>Reopen acquisition review (JSON, up to 15 MiB)<input type="file" accept=".json,application/json" disabled={busy} onchange={event => void reopen(event)}></label>
+      {#if historical}
+        <section class="historical-preview" aria-label="Verified historical acquisition review">
+          <h6>Verified historical review — not yet accepted</h6>
+          <p>Target {historical.target} · generated {historical.generatedAt} · historical evidence observed {historical.evidenceObservedAt ?? 'unknown'} · {historical.synthetic ? 'synthetic demonstration' : 'manual review'} · {historical.analystReview.state}</p>
+          <p>Decision: {historical.analystReview.decision.replaceAll('_', ' ')}. Checked: {historical.analystReview.reviewedChecks.join(', ') || 'none'}.</p>
+          <p>{historical.analystReview.rationale || 'No rationale recorded.'}</p>
+          <p>Accept replaces only the current decision, rationale and selected checklist fields. Historical evidence is not loaded into the current Lookup. Keep the original packet unchanged for its original times and provenance.</p>
+          <button class="btn" type="button" disabled={busy} onclick={acceptHistorical}>Accept historical manual fields</button>
+          <button class="btn" type="button" onclick={() => { workspace.cancel(); historical = null; exportStatus = 'Reopen cancelled. Current manual edits and Lookup evidence are unchanged.'; }}>Cancel reopen</button>
+        </section>
+      {/if}
+      {#if reopening}<button class="btn" type="button" onclick={() => { workspace.cancel(); historical = null; exportStatus = 'Reopen cancelled. Current manual edits and Lookup evidence are unchanged.'; }}>Cancel packet reopening</button>{/if}
+      {#if reopened}<label class="check"><input type="checkbox" checked={reconfirmed} onchange={event => { workspace.reconfirm(event.currentTarget.checked); confirmationEpoch++; }} disabled={busy}> I reconfirm this decision and all selected manual checks against the current Lookup evidence. These remain analyst statements, not purchase, ownership or legal verification.</label>{/if}
+      <button class="btn" type="button" onclick={exportDecision} disabled={busy}>Download acquisition review</button>
       {#if exportStatus}<p class="export-status" role="status">{exportStatus}</p>{/if}
     </section>
     <details class="limits">

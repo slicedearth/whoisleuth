@@ -115,20 +115,7 @@ export type CaseIncidentTarget = Readonly<{
   updatedAt: string;
 }>;
 
-/** Local review only: analyst link state is not independent observed coverage. */
-export function buildCaseIncidentCoverage(record: Pick<CaseRecord, 'workflowMetadata'>): readonly Readonly<{
-  target: CaseIncidentTarget;
-  hostname: string;
-  actionCoverage: 'unknown';
-  observationCoverage: 'unknown';
-}>[] {
-  return caseIncidentTargets(record, { includeResolved: true }).map(target => ({
-    target,
-    hostname: new URL(target.url).hostname,
-    actionCoverage: 'unknown',
-    observationCoverage: 'unknown',
-  }));
-}
+export { buildCaseIncidentCoverage } from './case-object-coverage.mts';
 
 export type CaseWorkflowMetadata = {
   types: CaseTypeId[];

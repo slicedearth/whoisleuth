@@ -23,6 +23,9 @@ import {
 } from '../frontend/src/lib/analysis/investigation-projection.ts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model.ts';
 import { CAMPAIGN_SCHEMA_VERSION } from '../frontend/src/lib/analysis/campaign-model.ts';
+import { buildInvestigationLineage } from '../packages/investigation/investigation-lineage.mts';
+import { buildRelationshipGraphDocument, buildRelationshipGraphExport } from '../packages/relationships/case-relationship-graph-export.mts';
+import { buildCaseRelationshipClusters } from '../packages/relationships/case-relationship-clusters.mts';
 
 const CAPTURED = '2026-07-01T00:00:00.000Z';
 
@@ -271,6 +274,51 @@ describe('cross-case relationships', () => {
 });
 
 describe('projection-backed cross-case relationships', () => {
+  test('joins explicit subdomain HTTP observations only to their owning incident through graph, export and cohort', () => {
+    const captured = (host: string) => snapshot({ inputHostname: host, observationHostname: host, source: 'lookup',
+      httpSummaryVersion: 1, httpEvidenceStatus: 'success', httpResponseStatus: 200, httpFinalOrigin: 'https://shared-origin.invalid' });
+    const cases = [caseRecord('case-a', 'a.invalid', [captured('login.a.invalid')]),
+      caseRecord('case-b', 'b.invalid', [captured('portal.b.invalid')]),
+      caseRecord('case-unrelated', 'a.invalid', [snapshot()])];
+    const projected = (values = cases) => buildInvestigationProjection({ cases: { version: CASE_SCHEMA_VERSION, cases: values } }, { generatedAt: CAPTURED });
+    const projection = projected(), before = structuredClone(projection);
+    const summary = buildInvestigationCaseRelationships(projection);
+    const origin = requiredValue(summary.groups.find(group => group.type === 'http_final_origin'));
+    assert.deepEqual(origin.cases.map(item => item.id), ['case-a', 'case-b']);
+    assert.equal(origin.localOccurrenceCount, 2);
+    assert.equal(origin.workspaceCaseCount, 3);
+    assert.deepEqual(origin.lineagePaths?.map(path => path.seed.label).sort(), ['login.a.invalid', 'portal.b.invalid']);
+    const graph = buildRelationshipGraphDocument(summary, { generatedAt: CAPTURED });
+    assert.equal(graph.graph.nodes.filter(node => node.kind === 'case').length, 2);
+    assert.equal(graph.graph.edges.length, 2);
+    for (const format of ['json', 'graphml', 'gexf'] as const) {
+      const output = buildRelationshipGraphExport(summary, { generatedAt: CAPTURED, format }).content;
+      assert.match(output, /login\.a\.invalid/u); assert.match(output, /portal\.b\.invalid/u);
+      assert.doesNotMatch(output, /case-unrelated/u);
+    }
+    const cohort = buildCaseRelationshipClusters(summary);
+    assert.deepEqual(cohort.clusters[0]?.cases.map(item => item.id), ['case-a', 'case-b']);
+    assert.equal(cohort.clusters[0]?.groups[0]?.type, 'http_final_origin');
+    assert.deepEqual(buildInvestigationCaseRelationships(projected([...cases].reverse())), summary);
+    assert.deepEqual(projection, before);
+    const unknown = projected([caseRecord('unknown-a', 'a.invalid', [snapshot({ ...captured('login.a.invalid'), observationHostname: null })]),
+      caseRecord('unknown-b', 'b.invalid', [snapshot({ ...captured('portal.b.invalid'), observationHostname: null })])]);
+    assert.equal(buildInvestigationCaseRelationships(unknown).groups.length, 0);
+    for (const control of ['missing', 'forged-record', 'forged-membership'] as const) {
+      const invalid = structuredClone(projection);
+      for (const relationship of invalid.relationships.filter(item => item.type === 'domain_reached_http_origin')) {
+        if (control === 'missing') relationship.sourceObservationIds = [];
+        else for (const id of relationship.sourceObservationIds) {
+          const observation = requiredValue(invalid.observations.find(item => item.id === id));
+          if (control === 'forged-record') observation.recordId = 'case-unrelated';
+          else observation.entityIds = observation.entityIds.filter(id => !invalid.entities.some(item => item.id === id && item.type === 'case'));
+        }
+      }
+      assert.equal(buildInvestigationCaseRelationships(invalid).groups.length, 0, control);
+      assert.equal(buildInvestigationLineage(invalid).paths.some(path => ['login.a.invalid', 'portal.b.invalid'].includes(path.seed.label)), false, control);
+    }
+  });
+
   test('groups retained historical observations with bounded source provenance and campaign scope', () => {
     const projection = investigationFixture();
     const before = structuredClone(projection);
@@ -361,7 +409,8 @@ describe('projection-backed cross-case relationships', () => {
     assert.equal(normalizeCaseRelationshipGroupId(first), first);
     assert.equal(normalizeCaseRelationshipGroupId(`${first}:extra`), '');
     assert.equal(normalizeCaseRelationshipGroupId('relationship:unsafe value'), '');
-    assert.notEqual(first, caseRelationshipGroupId({ ...group, value: `${group.value}-different` }));
+    assert.equal(first, caseRelationshipGroupId({ ...group, value: `${group.value}-different` }));
+    assert.notEqual(first, caseRelationshipGroupId({ ...group, entityId: `${group.entityId}-different` }));
   });
 
   test('fails closed when malformed groups cannot receive unique view identities', () => {
@@ -375,6 +424,21 @@ describe('projection-backed cross-case relationships', () => {
     assert.equal(filtered.totalRelationships, 2);
     assert.equal(filtered.matchingRelationships, 0);
     assert.equal(filtered.discardedRelationshipCount, 2);
+  });
+
+  test('legacy full-value identities remain supported while malformed canonical IDs cannot fall back to labels', () => {
+    const summary = buildInvestigationCaseRelationships(investigationFixture());
+    const { entityId: _entityId, ...legacy } = requiredValue(summary.groups[0]);
+    const id = caseRelationshipGroupId(legacy);
+    assert.ok(id);
+    assert.equal(id, caseRelationshipGroupId(structuredClone(legacy)));
+    assert.notEqual(id, caseRelationshipGroupId({ ...legacy, value: `${legacy.value}-other` }));
+    assert.equal(filterInvestigationCaseRelationships({ ...summary, groups: [legacy] }).groups.length, 1);
+    for (const entityId of ['', 'bad id', 'bad\nidentity', 'x'.repeat(101)]) {
+      const invalid = { ...legacy, entityId };
+      assert.equal(caseRelationshipGroupId(invalid), '');
+      assert.equal(filterInvestigationCaseRelationships({ ...summary, groups: [invalid] }).groups.length, 0);
+    }
   });
 
   test('reports absent, malformed, and future projection contracts without interpreting them', () => {

@@ -65,6 +65,7 @@ export interface CaseRelationshipGraphRelationshipNode {
   label: string;
   displayLabel: string;
   value: string;
+  entityId?: string;
   method: string;
   description: string;
   cases: CaseRelationshipMember[];
@@ -387,6 +388,7 @@ export function projectCaseRelationshipGraph(
     label: group.label,
     displayLabel: label(group.value),
     value: group.value,
+    ...(group.entityId ? { entityId: group.entityId } : {}),
     method: group.method,
     description: group.description,
     cases: group.cases,

@@ -33,8 +33,8 @@ export const PUBLIC_COVERAGE = {
     }
   ],
   "summary": {
-    "capabilityFamilies": 32,
-    "cliOperations": 51,
+    "capabilityFamilies": 33,
+    "cliOperations": 53,
     "registrySnapshot": {
       "schema": "whoisleuth\u002eregistry-standards-coverage",
       "version": 1,
@@ -501,6 +501,34 @@ export const PUBLIC_COVERAGE = {
       "partialResultContract": "explicit_document",
       "limitations": [
         "One exact retained-indicator search is performed without submitting an indicator or sample."
+      ]
+    },
+    {
+      "id": "domain_feed_search",
+      "title": "Optional cached domain-feed search",
+      "job": "investigate",
+      "implemented": true,
+      "reviewBasis": "Versioned capability contract and deterministic repository verification",
+      "optionalOrConfigurationDependent": true,
+      "executionPlanes": [
+        "hosted_bounded_passive"
+      ],
+      "scanModes": [],
+      "networkMode": "bounded_passive",
+      "runtimeAvailability": "not_evaluated_by_public_catalogue",
+      "outcomes": [
+        "complete",
+        "partial",
+        "blocked",
+        "unsupported",
+        "unavailable",
+        "budget_exhausted"
+      ],
+      "partialResultContract": "explicit_per_source",
+      "limitations": [
+        "Disabled until operator configuration. Only explicit feed identifiers, exact hosts and literal terms are sent to the configured cache service; Brand and Case identities stay local.",
+        "Queries do not contact candidate targets or enable monitoring. The service retains public feed snapshots, not search terms; refresh requests to fixed publishers contain no analyst selection.",
+        "Manual browser and CLI file review remains available without this connection. Feed membership, file freshness and per-host observation times are separate; inclusion changes no score or availability decision."
       ]
     },
     {

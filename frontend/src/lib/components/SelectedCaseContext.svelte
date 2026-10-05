@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { onMount, tick } from 'svelte';
   import { page } from '$app/state';
   import { getCase } from '../cases.ts';
   import { dispositionLabel, statusLabel } from '../../../../packages/cases/case-record-decisions.mts';
   import { formattedCaseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
-  import { caseWorkspaceContext } from '$lib/analysis/case-workspace-context';
-  import { selectConsoleCase } from '$lib/console-workflow-state';
-  import { subscribeBrowserLocalData } from '$lib/browser-local-data-service';
-  import { createSelectedCaseContextReader, type SelectedCaseContextState } from '$lib/controllers/selected-case-context';
-  import { monitorViewFromUrl } from '$lib/controllers/monitor-route-controller';
+  import { caseWorkspaceContext } from '#lib/analysis/case-workspace-context.ts';
+  import { selectConsoleCase } from '#lib/console-workflow-state.ts';
+  import { subscribeBrowserLocalData } from '#lib/browser-local-data-service.ts';
+  import { createSelectedCaseContextReader, type SelectedCaseContextState } from '#lib/controllers/selected-case-context.ts';
+  import { monitorViewFromUrl } from '#lib/controllers/monitor-route-controller.ts';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
 
@@ -20,7 +20,7 @@
   const record = $derived(contextState?.id === caseId && (contextState.phase === 'ready' || contextState.phase === 'loading') ? contextState.record : null);
   const context = $derived(record ? caseWorkspaceContext(record) : null);
   const href = $derived(`/cases?case=${encodeURIComponent(caseId)}`);
-  const insideCaseEditor = $derived(page.url.pathname === '/cases' || (page.url.pathname === '/monitor' && monitorViewFromUrl(page.url) === 'cases'));
+  const insideCaseEditor = $derived(page.url.pathname === '/cases' || (page.url.pathname === '/monitor' && monitorViewFromUrl(new URL(page.url.href)) === 'cases'));
   const reader = createSelectedCaseContextReader({
     selectedId: () => caseId,
     read: getCase,

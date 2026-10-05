@@ -1,4 +1,4 @@
-WHOISleuth is a defensive domain investigation and brand-protection tool. Its
+WHOISleuth is a defensive domain investigation and brand protection tool. Its
 command-line package can collect bounded WHOIS, RDAP, DNS, HTTP, TLS,
 certificate-transparency, website, and related infrastructure evidence. It can
 also generate and review lookalike-domain candidates, compare saved evidence,

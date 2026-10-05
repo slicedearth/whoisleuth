@@ -18,6 +18,8 @@ concurrency:
 
 jobs:
   prepare:
+    outputs:
+      source-sha: ${{ steps.provenance.outputs.source-sha }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -32,10 +34,13 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
       - name: Verify release selection and exact tagged CI
+        id: provenance
         env:
           EXPECTED_VERSION: ${{ inputs.version }}
           GITHUB_TOKEN: ${{ github.token }}
-        run: node tools/release-provenance.mts
+        run: |
+          node tools/release-provenance.mts
+          echo "source-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Audit production dependencies
         run: npm run dependencies:audit
       - name: Install locked dependencies
@@ -63,13 +68,18 @@ jobs:
           archives=( *.tgz )
           test "${#archives[@]}" -eq 1
           sha256sum --check "${archives[0]}.sha256"
+      - name: Bind reviewed candidate reports and dependency evidence
+        env:
+          EXPECTED_VERSION: ${{ inputs.version }}
+          RELEASE_DIRECTORY: ${{ runner.temp }}/whoisleuth-cli-release
+        run: node tools/published-cli-check.mts "$EXPECTED_VERSION" --candidate-report "$RELEASE_DIRECTORY/cli-package-report.json" --candidate-archive "$RELEASE_DIRECTORY/whoisleuth-cli-$EXPECTED_VERSION.tgz" --installed-dependencies "$RELEASE_DIRECTORY/installed-dependencies.json" --offline
       - name: Upload reviewed candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: whoisleuth-cli-release-candidate
           path: ${{ runner.temp }}/whoisleuth-cli-release/
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 90
           compression-level: 0
 
   publish:
@@ -81,6 +91,11 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - name: Check out exact reviewed validator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.source-sha }}
+          persist-credentials: false
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -102,5 +117,10 @@ jobs:
           test "${#archives[@]}" -eq 1
           sha256sum --check "${archives[0]}.sha256"
           echo "archive=$RELEASE_DIRECTORY/${archives[0]}" >> "$GITHUB_OUTPUT"
+      - name: Recheck downloaded report and dependency evidence binding
+        env:
+          EXPECTED_VERSION: ${{ inputs.version }}
+          RELEASE_DIRECTORY: ${{ runner.temp }}/whoisleuth-cli-release
+        run: node tools/published-cli-check.mts "$EXPECTED_VERSION" --candidate-report "$RELEASE_DIRECTORY/cli-package-report.json" --candidate-archive "$RELEASE_DIRECTORY/whoisleuth-cli-$EXPECTED_VERSION.tgz" --installed-dependencies "$RELEASE_DIRECTORY/installed-dependencies.json" --offline
       - name: Stage reviewed version with provenance
         run: npm stage publish "${{ steps.candidate.outputs.archive }}" --access public --provenance

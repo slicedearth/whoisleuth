@@ -1,10 +1,10 @@
 <script lang="ts">
-  import CopyableCommand from '$lib/components/CopyableCommand.svelte';
-  import PublicCliExplorer from '$lib/components/PublicCliExplorer.svelte';
-  import PublicReferenceDocument from '$lib/components/PublicReferenceDocument.svelte';
-  import PublicSeo from '$lib/components/PublicSeo.svelte';
-  import { PUBLIC_CLI_GUIDANCE } from '$lib/generated/public-cli-guidance';
-  import { PUBLIC_CLI_INDEX } from '$lib/generated/public-cli-index';
+  import CopyableCommand from '#lib/components/CopyableCommand.svelte';
+  import PublicCliExplorer from '#lib/components/PublicCliExplorer.svelte';
+  import PublicReferenceDocument from '#lib/components/PublicReferenceDocument.svelte';
+  import PublicSeo from '#lib/components/PublicSeo.svelte';
+  import { PUBLIC_CLI_GUIDANCE } from '#lib/generated/public-cli-guidance.ts';
+  import { PUBLIC_CLI_INDEX } from '#lib/generated/public-cli-index.ts';
   import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../../packages/analysis/project-metadata.mts';
 
   const pageSections = [

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
-  import Pagination from '$lib/components/Pagination.svelte';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
+  import Pagination from '#lib/components/Pagination.svelte';
   import RetainedTimelineEntities from './RetainedTimelineEntities.svelte';
   import {
     filterRetainedEvidenceTimeline,
@@ -11,7 +11,7 @@
     type RetainedTimelineEventType,
     type RetainedTimelineFreshness,
     type RetainedTimelineTimeFilter,
-  } from '$lib/analysis/retained-evidence-timeline.ts';
+  } from '#lib/analysis/retained-evidence-timeline.ts';
 
   const PAGE_SIZE = 50;
   let { timeline }: { timeline: RetainedEvidenceTimeline } = $props();

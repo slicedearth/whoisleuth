@@ -150,6 +150,23 @@ describe('Case collection-quality comparisons', () => {
 });
 
 describe('Watchlist qualified baselines', () => {
+  test('external password-form destinations compare only complete page observations and survive a failed check', () => {
+    const first = appendWatchlistScan(null, [raw({ hasExternalPasswordForm: false })], { checkedAt: NOW, mode: 'deep' }).entry;
+    const changed = appendWatchlistScan(first, [raw({ hasExternalPasswordForm: true })], { checkedAt: LATER, mode: 'deep' });
+    assert.deepEqual(changed.changes.filter(change => change.field === 'hasExternalPasswordForm'), [{
+      domain: 'example.test', field: 'hasExternalPasswordForm', before: false, after: true,
+      kind: 'risk_signal_added', tone: 'danger',
+    }]);
+    const failed = appendWatchlistScan(changed.entry, [raw({ hasExternalPasswordForm: false, webCollectionQuality: FAILED })], { mode: 'deep' });
+    assert.equal(failed.changes.some(change => change.field === 'hasExternalPasswordForm'), false);
+    const reloaded = normalizeWatchlistEntry(JSON.parse(JSON.stringify(failed.entry)));
+    assert.equal(reloaded.baseline[0]!.hasExternalPasswordForm, true);
+    const recovered = appendWatchlistScan(reloaded, [raw({ hasExternalPasswordForm: false })], { mode: 'deep' });
+    assert.ok(recovered.changes.some(change => change.field === 'hasExternalPasswordForm' && change.before === true && change.after === false));
+    const unknown = appendWatchlistScan(null, [raw({ hasExternalPasswordForm: null })], { mode: 'deep' }).entry;
+    assert.equal(appendWatchlistScan(unknown, [raw({ hasExternalPasswordForm: true })], { mode: 'deep' }).changes.some(change => change.field === 'hasExternalPasswordForm'), false);
+  });
+
   test('retains the latest failed attempt without replacing the last usable baseline, including after reload', () => {
     const first = appendWatchlistScan(null, [raw()], { checkedAt: NOW, mode: 'deep' }).entry;
     const failed = appendWatchlistScan(first, [raw({ webCollectionQuality: FAILED, pageTitle: null,

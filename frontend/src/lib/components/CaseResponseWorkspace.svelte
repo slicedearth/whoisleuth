@@ -4,27 +4,27 @@
   import { caseTypeSummary } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { dispositionLabel } from '../../../../packages/cases/case-record-decisions.mts';
   import { editCase, importCaseReviewReturn, type CaseRecord } from '../cases.ts';
-  import { handlesLocalLink } from '$lib/link-activation';
-  import { failedLocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
-  import { reviewClock } from '$lib/review-clock.ts';
-  import { buildCaseResponseProgress } from '$lib/analysis/case-response-progress.ts';
-  import CaseObservationStage from '$lib/components/CaseObservationStage.svelte';
-  import CaseAssessmentStage from '$lib/components/CaseAssessmentStage.svelte';
-  import CaseHistoryStage from '$lib/components/CaseHistoryStage.svelte';
-  import CaseActionStage from '$lib/components/CaseActionStage.svelte';
-  import CaseOutcomeStage from '$lib/components/CaseOutcomeStage.svelte';
-  import CaseRenderedCapture from '$lib/components/CaseRenderedCapture.svelte';
+  import { handlesLocalLink } from '#lib/link-activation.ts';
+  import { failedLocalMutationOutcome } from '#lib/local-mutation-outcome.ts';
+  import { reviewClock } from '#lib/review-clock.ts';
+  import { buildCaseResponseProgress } from '#lib/analysis/case-response-progress.ts';
+  import CaseObservationStage from '#lib/components/CaseObservationStage.svelte';
+  import CaseAssessmentStage from '#lib/components/CaseAssessmentStage.svelte';
+  import CaseHistoryStage from '#lib/components/CaseHistoryStage.svelte';
+  import CaseActionStage from '#lib/components/CaseActionStage.svelte';
+  import CaseOutcomeStage from '#lib/components/CaseOutcomeStage.svelte';
+  import CaseRenderedCapture from '#lib/components/CaseRenderedCapture.svelte';
   import CaseMessageIntake from './CaseMessageIntake.svelte';
   import CaseIdentityReview from './CaseIdentityReview.svelte';
   import CaseContextReviewEntry from './CaseContextReviewEntry.svelte';
-  import CaseAttachments from '$lib/components/CaseAttachments.svelte';
-  import CaseWorkflowDetails from '$lib/components/CaseWorkflowDetails.svelte';
-  import CaseTitleForm from '$lib/components/CaseTitleForm.svelte';
-  import CaseDecisionOverview from '$lib/components/CaseDecisionOverview.svelte';
-  import CaseResponseQueue from '$lib/components/CaseResponseQueue.svelte';
-  import CaseReviewReturn from '$lib/components/CaseReviewReturn.svelte';
+  import CaseAttachments from '#lib/components/CaseAttachments.svelte';
+  import CaseWorkflowDetails from '#lib/components/CaseWorkflowDetails.svelte';
+  import CaseTitleForm from '#lib/components/CaseTitleForm.svelte';
+  import CaseDecisionOverview from '#lib/components/CaseDecisionOverview.svelte';
+  import CaseResponseQueue from '#lib/components/CaseResponseQueue.svelte';
+  import CaseReviewReturn from '#lib/components/CaseReviewReturn.svelte';
   import type { CaseReviewReturn as ReviewReturn } from '../../../../packages/cases/case-review-return.mts';
-  import CaseResponsePacketWorkspace from '$lib/components/CaseResponsePacketWorkspace.svelte';
+  import CaseResponsePacketWorkspace from '#lib/components/CaseResponsePacketWorkspace.svelte';
   import {
     CASE_RESPONSE_STAGE_DEFINITIONS,
     CASE_STAGE_SECTION,
@@ -33,8 +33,8 @@
     type CaseResponsePresentation,
     type CaseResponseStage,
     type CaseResponseStageId,
-  } from '$lib/analysis/case-response-stage.ts';
-  import '$lib/components/case-response-stage.css';
+  } from '#lib/analysis/case-response-stage.ts';
+  import '#lib/components/case-response-stage.css';
   import type { CaseDraftReceipt } from '../../../../packages/contracts/case-drafts.mts';
 
   let {
@@ -215,11 +215,11 @@
 
   async function preparePacketDeliveryRecord(exported: Parameters<ComponentProps<typeof CaseResponsePacketWorkspace>['onpacketexported']>[0]) {
     const action = record.actions.find((item) => item.id === exported.actionId);
-    if (record.id !== exported.caseId || !action || !actionStage || JSON.stringify(action) !== exported.actionSignature) {
+    if (record.id !== exported.caseId || !action || !actionStage || JSON.stringify(action) !== exported.actionSignature || JSON.stringify(record) !== exported.responseContext) {
       onmessage('The packet was exported, but its Case action has changed or is no longer available. Review and export the current packet before recording delivery.');
       return;
     }
-    if (!await actionStage.prepareDeliveryRecord(action.id, exported.digestSha256)) {
+    if (!await actionStage.prepareDeliveryRecord(action.id, exported.digestSha256, exported.packetReceipt, exported.actionSignature, exported.responseContext)) {
       onmessage('The packet was exported, but the current receipt draft could not be confirmed for recovery. Keep this form open and review its recovery status before preparing another receipt.');
       return;
     }
@@ -319,7 +319,7 @@
       </div>
       <div class="case-section" role="group" hidden={activeSection !== 'response'} aria-label="Case response workspace">
       <CaseResponseQueue {record} {mutationBusy} onaction={openQueuedAction} onrecheck={openQueuedRecheck} onrequest={openRequestedEvidence} />
-      <CaseIdentityReview {record} {mutationBusy} {persist} />
+      <CaseIdentityReview {record} {mutationBusy} {persist} {persistOperation} />
       <CaseActionStage bind:this={actionStage} {record} {mutationBusy} {persist} mode={presentationMode} onadvanced={() => void openAdvancedStage('response_decision')} />
       <CaseResponsePacketWorkspace
         {record}

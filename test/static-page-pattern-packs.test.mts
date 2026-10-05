@@ -153,13 +153,14 @@ describe('reviewed static page-pattern packs', () => {
     const externalForm = evaluateDetectionRules(fixtureCase({
       hasPasswordField: true,
       hasExternalFormAction: true,
+      hasExternalPasswordForm: true,
     }), reviewedStaticPagePatternPackExport('external-form-destination'));
     assert.equal(urgent.matchedRules.map((item) => item.id).includes('pack-urgent-account-language-v1'), true);
     assert.deepEqual(walletLabels, Array(4).fill('Reviewed English wallet or recovery-secret language'));
     assert.equal(walletMatches.every((result) => result.matchedRules.length === 1), true);
     assert.equal(walletMatches.every((result) => result.matchedRules[0]?.id === 'pack-wallet-recovery-secret-v1'), true);
     assert.equal(copiedIdentity.matchedRules.map((item) => item.id).includes('pack-credential-assets-v1'), true);
-    assert.equal(externalForm.matchedRules.map((item) => item.id).includes('pack-password-external-form-v1'), true);
+    assert.equal(externalForm.matchedRules.map((item) => item.id).includes('pack-password-external-form-v2'), true);
     assert.equal([...urgent.matchedRules, ...walletMatches.flatMap((result) => result.matchedRules), ...copiedIdentity.matchedRules, ...externalForm.matchedRules]
       .every((item) => item.riskDelta === 0), true);
   });

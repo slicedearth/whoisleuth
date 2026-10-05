@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import type { ReviewedWorkspaceArchive } from '../../../../packages/workspace/workspace-recovery.mts';
-  import type { WorkspaceRecovery, WorkspaceRecoveryReport } from '$lib/workspace-recovery.ts';
-  import { MAX_BROWSER_WORKSPACE_NAME } from '$lib/browser-workspace-directory.ts';
-  import { MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS, MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES } from '$lib/browser-workspace-encryption-model.ts';
+  import type { WorkspaceRecovery, WorkspaceRecoveryReport } from '#lib/workspace-recovery.ts';
+  import { MAX_BROWSER_WORKSPACE_NAME } from '#lib/browser-workspace-directory.ts';
+  import { MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS, MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES } from '#lib/browser-workspace-encryption-model.ts';
   import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../../packages/contracts/selected-file-limits.mts';
   import EvidencePackageInput from './EvidencePackageInput.svelte';
+  import RecoveryFileChecklist from './RecoveryFileChecklist.svelte';
 
   let { readArchive, requireEncryption = false, onbusy = () => {} }: {
     readArchive: () => ReviewedWorkspaceArchive; requireEncryption?: boolean; onbusy?: (value: boolean) => void;
@@ -50,7 +51,7 @@
     await operation(async () => {
       const protect = requireEncryption || encrypted;
       if (protect && passphrase !== confirmation) throw new Error('The rehearsal passphrases do not match.');
-      const { openWorkspaceRecovery, WorkspaceRecoveryStartError } = await import('$lib/workspace-recovery.ts');
+      const { openWorkspaceRecovery, WorkspaceRecoveryStartError } = await import('#lib/workspace-recovery.ts');
       try {
         const opened = await openWorkspaceRecovery(readArchive(), { name, requireEncryption, ...(protect ? { passphrase } : {}) });
         if (disposed) { await opened.close(); return; }
@@ -89,7 +90,8 @@
     <h4>{recovery.workspace.name}</h4>
     <p>Other tabs cannot open this workspace until you finish the rehearsal. Leaving the page keeps its data; keep or delete it deliberately when finished.</p>
     {#if report}
-      <p class="result">{report.caseCount ?? 'Unknown'} Case{report.caseCount === 1 ? '' : 's'} · Case identities {report.identitiesMatch ? 'match' : 'not verified'} · {report.files.verified} of {report.files.expected} unique files verified · {report.files.missing} missing</p>
+      <p class="result">{report.caseCount ?? 'Unknown'} Case{report.caseCount === 1 ? '' : 's'} · Case identities {report.identitiesMatch ? 'match' : 'not verified'} · {report.files.verified} of {report.files.expected} unique files verified · {report.files.missing} missing · {report.files.unverified} unverified</p>
+      <RecoveryFileChecklist files={report.files.checklist} />
       <details><summary>Section comparison</summary><ul>
         {#each report.sections as section}<li><strong>{section.label}</strong>: {section.state === 'exact' ? 'Checksum matches' : section.state === 'migrated' ? 'Migrated format — review normalised data' : section.state === 'changed' ? 'Data differs from the backup' : 'Not restored'} · {section.records ?? 'Unknown'} of {section.expectedRecords} records</li>{/each}
       </ul>{#if report.omissions}<p>{report.omissions} skipped or omitted records prevent complete recovery verification.</p>{/if}</details>

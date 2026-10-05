@@ -72,6 +72,7 @@ function harness(overrides: Partial<Storage> = {}) {
     now: () => '2026-09-20T00:00:00.000Z',
   } satisfies Options;
   const workspace = new BulkSessionWorkspace(options);
+  workspace.restoreInput(record);
   return {
     workspace,
     storage,
@@ -160,7 +161,7 @@ test('saving captures one coherent result and prevents competing session or scan
   h.scan.domains = ['changed.example'];
   h.scan.mode = 'fast';
   h.scan.results = [];
-  assert.equal(h.workspace.beginScan(true), false);
+  assert.equal(h.workspace.beginScan(true, h.scan), false);
   assert.equal(h.workspace.select(h.record), false);
   await h.workspace.save();
   await h.workspace.remove(h.record);
@@ -178,6 +179,37 @@ test('saving captures one coherent result and prevents competing session or scan
   assert.equal(h.workspace.state.currentId, saved.id);
 });
 
+test('saving retained results ignores a next-run target and depth draft', async () => {
+  const h = harness();
+  h.workspace.restoreInput({ mode: 'fast', domains: h.record.domains });
+  h.scan.results.forEach(row => { row.saved.scanDepth = 'fast'; });
+  h.workspace.setName('Completed input');
+  h.scan.domains = ['next.example'];
+  h.scan.mode = 'deep';
+  await h.workspace.save();
+  const saved = normalizeBulkSession(h.writes[0]?.[0]);
+  assert.ok(saved);
+  assert.deepEqual(saved.domains, h.record.domains);
+  assert.equal(saved.mode, 'fast');
+  assert.equal(saved.inputDigest, await bulkSessionInputDigest(h.record.domains, 'fast'));
+  assert.ok(saved.results.every(row => row.scanDepth === 'fast'));
+});
+
+test('loaded partial membership survives a reviewed subset rescan and later queue edits', async () => {
+  const h = harness();
+  const partial = { ...h.record, domains: [...h.record.domains, 'pending.example'], state: 'partial' as const, completedAt: null };
+  assert.equal(h.workspace.select(partial), true);
+  assert.equal(h.workspace.beginScan(false, { mode: partial.mode, domains: [partial.domains[0]!] }), true);
+  h.scan.domains = ['unrelated.example'];
+  await h.workspace.save();
+  const saved = normalizeBulkSession(h.writes[0]?.[0]);
+  assert.ok(saved);
+  assert.deepEqual(saved.domains, partial.domains);
+  assert.equal(saved.state, 'partial');
+  assert.equal(saved.completedAt, null);
+  assert.equal(Object.isFrozen(h.workspace.state.input?.domains), true);
+});
+
 test('save admission, partial/cancelled state and expected-record concurrency are owned together', async () => {
   const h = harness();
   await h.workspace.save();
@@ -189,6 +221,7 @@ test('save admission, partial/cancelled state and expected-record concurrency ar
   assert.equal(h.writes.length, 0);
   h.scan.running = false;
   h.scan.domains.push('pending.example');
+  h.workspace.beginScan(false, h.scan);
   await h.workspace.save();
   assert.equal(h.writes[0]?.[1]?.expected, h.record);
   assert.equal(normalizeBulkSession(h.writes[0]?.[0])?.state, 'partial');
@@ -259,7 +292,7 @@ test('retention needs explicit approval and changing the draft or starting a sca
   assert.equal(h.workspace.state.retention, null);
   assert.match(h.workspace.state.status, /not changed/u);
   await h.workspace.save();
-  assert.equal(h.workspace.beginScan(false), true);
+  assert.equal(h.workspace.beginScan(false, h.scan), true);
   assert.equal(h.workspace.state.retention, null);
 });
 
@@ -270,7 +303,7 @@ test('write rejection preserves the draft and next scan detaches a saved record 
     },
   });
   h.workspace.setName('Unsaved name');
-  h.workspace.beginScan(true);
+  h.workspace.beginScan(true, h.scan);
   assert.equal(h.workspace.state.name, 'Unsaved name');
   assert.equal(h.workspace.state.startedAt, '2026-09-20T00:00:00.000Z');
   await h.workspace.save();
@@ -278,7 +311,7 @@ test('write rejection preserves the draft and next scan detaches a saved record 
   assert.equal(h.workspace.state.refreshRequired, false);
   assert.equal(h.workspace.state.status, 'Record changed; reopen it.');
   h.workspace.select(h.record);
-  h.workspace.beginScan(true);
+  h.workspace.beginScan(true, h.scan);
   assert.equal(h.workspace.state.currentId, '');
   assert.equal(h.workspace.state.name, '');
 });

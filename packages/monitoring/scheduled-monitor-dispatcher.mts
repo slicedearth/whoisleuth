@@ -12,6 +12,7 @@ import {
   isScheduledMonitorId,
   nextScheduledMonitorRevision,
   pruneScheduledMonitorHistoryToStaticBudget,
+  projectHostedCompactRecord,
   type ScheduledMonitorState,
   type ScheduledRunSource,
   type ScheduledWatchlist,
@@ -130,7 +131,7 @@ function failedLookupResult(source: ScheduledRunSource): CompactWatchlistRecord 
     mutationTypes: [],
   }])[0];
   if (!result) throw new Error('Scheduled monitoring source is invalid.');
-  return result;
+  return projectHostedCompactRecord(result);
 }
 
 export function scheduledLookupResult(
@@ -152,7 +153,7 @@ export function scheduledLookupResult(
     privacyProtected: availability?.privacyProtected,
     mutationTypes: [],
   }])[0] || failedLookupResult(source);
-  return byteLength(result) <= MAX_SCHEDULED_RESULT_BYTES ? result : failedLookupResult(source);
+  return byteLength(result) <= MAX_SCHEDULED_RESULT_BYTES ? projectHostedCompactRecord(result) : failedLookupResult(source);
 }
 
 export function normalizeScheduledMonitorDelivery(value: unknown): ScheduledMonitorDelivery | null {

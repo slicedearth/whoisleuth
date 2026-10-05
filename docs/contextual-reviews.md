@@ -17,8 +17,9 @@ The CLI uses the same models:
 whoisleuth review-evidence selected-input.json --json --strict-exit
 ```
 
-Each input has `schema`, `version: 1` and `evidence`. Unknown versions and fields
-are rejected. Inputs are bounded to 16 MiB; each supplied context list permits
+Each input has `schema`, a supported `version` and `evidence`. Most inputs use
+version 1; domain history also supports version 2 as described below. Unknown
+versions and fields are rejected. Inputs are bounded to 16 MiB; each supplied context list permits
 200 records. `--strict-exit` returns 4 for a partial contextual review. Neither
 adapter contacts a destination or executes selected software.
 
@@ -57,8 +58,12 @@ later. These stages never execute a command, submit a form or open a destination
 
 The Case view compares retained snapshots using the existing source, hostname,
 scan-depth and model-version rules. Registration, DNS, mail and web changes are
-shown alongside source-qualified certificate pins. Equal-time observations are
-not ordered into a change sequence. Retired dependencies must involve the Case
+shown alongside source-qualified certificate pins.
+Registration and nameserver changes target the Case registration domain; mail
+and web changes target the explicit observation hostname. Certificate pins keep
+their own hostname, or an unknown target when none was retained. These targets
+are preserved in review downloads, retained reports and print previews.
+Equal-time observations are not ordered into a change sequence. Retired dependencies must involve the Case
 domain or one of its hostnames. An expected window qualifies the review; it does
 not approve a change automatically or establish transfer or takeover.
 Review prompts connect comparable page, mail, delegation and registration changes
@@ -71,13 +76,31 @@ Schema: `whoisleuth.domain-history.input`. Its `evidence` contains:
 - `caseExport`: an ordinary supported editable Case export, with `version` and
   `cases`; the exact existing Case reader rejects data loss or silent repair.
 - `caseId`: the Case selected from that export.
-- `declarations`: `expectedChanges` and `retiredDependencies` arrays.
+- `declarations`: `expectedChanges` and `retiredDependencies` arrays; version 2
+  also requires `registrationBoundaries`. Version 1 remains readable unchanged.
 
 An expected change is `{family, start, end, reason}`. A retired dependency is
 `{asset, dependency, family, retiredAt, source}`. Families are `registration`,
 `dns`, `mail`, `certificate` and `web`; times are explicit ISO timestamps. The
 reusable input download includes the selected Case and is not duplicated in
 workspace storage when saving the report.
+
+Version-2 registration boundaries are analyst declarations, not confirmed
+registration epochs. Each has `{kind, occurredAt, source, rationale,
+snapshotIds, evidencePinIds}`. Kinds are `registration_reported`,
+`deletion_reported`, `reregistration_reported`, `transfer_reported` and
+`review_boundary`. Supply an explicit ISO time and at least one exact reference
+to a snapshot or evidence pin retained in the selected Case. References must be
+unique; unavailable references fail rather than selecting a replacement.
+Up to 40 boundaries and 20 references of each type per boundary are accepted.
+
+The Case history form exposes the same declarations. Reports count retained
+observations before and at/after a declared time without assigning ownership or
+asserting that deletion, re-registration or transfer occurred. Earlier evidence,
+decisions, exceptions and open follow-ups are not rewritten. Reports retain the
+declared source and exact evidence references, and can be deliberately saved as
+ordinary Case files. The reusable input remains a separate download containing
+the selected Case, not an additional workspace copy.
 
 ## Platform objects
 

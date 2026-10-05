@@ -8,6 +8,7 @@ import { createCaseIncident, openOrCreateCase, recordCaseConclusion, recordCaseR
 import { buildCaseExport, serializeCaseStore } from '../packages/cases/case-storage-model.mts';
 import { appendCaseEvidencePin, type CaseEvidencePin } from '../packages/cases/case-response-model.mts';
 import { readCaseRecheckAnswerContext } from '../packages/cases/case-recheck-model.mts';
+import { readCaseResponseObjects } from '../packages/cases/case-response-object.mts';
 import { caseEvidenceLinkIssues, mergeCaseEvidenceLinks } from '../packages/cases/case-evidence-links.mts';
 import { dispositionLabel, statusLabel } from '../packages/cases/case-record-decisions.mts';
 import { normalizeDomain } from '../packages/cases/case-record-core.mts';
@@ -67,7 +68,7 @@ function retainExistingEntries(before: CaseRecord, after: CaseRecord): void {
   }
   const pairs = [
     [before.notes, after.notes], [before.evidenceHistory, after.evidenceHistory], [before.evidencePins, after.evidencePins],
-    [before.decisions, after.decisions], [before.actions, after.actions], [before.assertions, after.assertions],
+    [before.decisions, after.decisions], [before.assertions, after.assertions],
     [before.manualTrail, after.manualTrail], [before.sightings, after.sightings],
     [before.observedEffects.reviews, after.observedEffects.reviews], [before.closures.records, after.closures.records],
     [before.branches ?? [], after.branches ?? []], [before.attachments ?? [], after.attachments ?? []],
@@ -76,6 +77,13 @@ function retainExistingEntries(before: CaseRecord, after: CaseRecord): void {
     const retained = new Set(next.map(value => canonicalArtifactJsonV2(value)));
     if (prior.some(value => !retained.has(canonicalArtifactJsonV2(value)))) {
       throw new CliUsageError('The operation would remove or alter earlier retained evidence. Export a smaller working set or review it in the console; nothing was written.');
+    }
+  }
+  for (const action of before.actions) {
+    const next = after.actions.find(candidate => candidate.id === action.id);
+    const events = new Set(next?.history.map(event => canonicalArtifactJsonV2(event)) ?? []);
+    if (!next || action.history.some(event => !events.has(canonicalArtifactJsonV2(event)))) {
+      throw new CliUsageError('The operation would alter retained response events. Nothing was written.');
     }
   }
 }
@@ -97,6 +105,49 @@ export function applyCliCaseOperation(cases: CaseRecord[], args: CaseArguments, 
     result = updateCase(cases, current.id, { evidencePin: pin(input, now) }, now);
   } else if (args.operation === 'link' || args.operation === 'withdraw-link') {
     result = updateCase(cases, current.id, args.operation === 'link' ? { evidenceLink: input } : { evidenceLinkWithdrawal: input }, now);
+  } else if (args.operation === 'incident-link') {
+    if (!input) throw new CliUsageError('An incident link requires JSON input.');
+    fields(input, ['url'], 'Incident link');
+    result = updateCase(cases, current.id, { incidentTarget: input.url }, now);
+  } else if (args.operation === 'action') {
+    if (!input) throw new CliUsageError('A response action requires JSON input.');
+    fields(input, ['type', 'recipient', 'contactSource', 'routeObservedAt', 'routeReviewAfter', 'contactLimitations', 'dueAt', 'followUpAt', 'responseObjects', 'originActionId', 'amendment', 'correction'], 'Response action');
+    result = updateCase(cases, current.id, { action: input }, now);
+    const action = result.record.actions.find(candidate => !current.actions.some(prior => prior.id === candidate.id))!;
+    if (!action) throw new CliUsageError('No new action was retained within the Case bounds; nothing was written.');
+    for (const [key, value] of Object.entries(input)) if (canonicalArtifactJsonV2(key === 'responseObjects' ? readCaseResponseObjects(value) : value) !== canonicalArtifactJsonV2(action[key as keyof typeof action])) {
+      throw new CliUsageError(`Action field ${safeTerminalValue(key)} is not canonical; nothing was written.`);
+    }
+  } else if (args.operation === 'action-event') {
+    if (!input || !input.transition || typeof input.transition !== 'object' || Array.isArray(input.transition)) throw new CliUsageError('An action event requires id and transition JSON.');
+    fields(input, ['id', 'transition'], 'Response action event');
+    const transition = input.transition as JsonObject;
+    fields(transition, ['nextState', 'occurredAt', 'sourceClass', 'provenance', 'reference', 'evidencePinId', 'limitations', 'providerOutcome', 'outcomeDetail', 'responseObjects', 'objectOutcome', 'evidenceRequest', 'packetReceipt'], 'Response transition');
+    result = updateCase(cases, current.id, { actionUpdate: input }, now);
+    const previous = current.actions.find(action => action.id === input.id);
+    const event = result.record.actions.find(action => action.id === input.id)?.history.find(candidate => !previous?.history.some(prior => prior.id === candidate.id));
+    if (!event) throw new CliUsageError('The selected action is not retained. Nothing was written.');
+    for (const [key, value] of Object.entries(transition)) if (canonicalArtifactJsonV2(key === 'responseObjects' ? readCaseResponseObjects(value) : value) !== canonicalArtifactJsonV2(event[key as keyof typeof event])) {
+      throw new CliUsageError(`Transition field ${safeTerminalValue(key)} is not canonical; nothing was written.`);
+    }
+  } else if (args.operation === 'recheck-question') {
+    if (!input) throw new CliUsageError('A recheck question requires JSON input.');
+    fields(input, ['statement', 'rationale', 'recheck', 'evidencePinIds'], 'Recheck question');
+    result = updateCase(cases, current.id, { assertion: { ...input, kind: 'next_step' } }, now);
+    const question = result.record.assertions.find(candidate => !current.assertions.some(prior => prior.id === candidate.id))!;
+    if (!question) throw new CliUsageError('No new question was retained within the Case bounds; nothing was written.');
+    for (const [key, value] of Object.entries(input)) if (canonicalArtifactJsonV2(value) !== canonicalArtifactJsonV2(question[key as keyof typeof question])) {
+      throw new CliUsageError(`Question field ${safeTerminalValue(key)} is not canonical; nothing was written.`);
+    }
+  } else if (args.operation === 'close-object') {
+    if (!input?.responseObject) throw new CliUsageError('Object closure requires one explicit responseObject; it cannot close the whole Case.');
+    fields(input, ['responseObject', 'reason', 'summary', 'observedEffectReviewId', 'actionId', 'limitations'], 'Object closure');
+    result = updateCase(cases, current.id, { closure: input }, now);
+    const closure = result.record.closures.records.find(candidate => !current.closures.records.some(prior => prior.id === candidate.id))!;
+    if (!closure) throw new CliUsageError('No new closure was retained within the Case bounds; nothing was written.');
+    for (const [key, value] of Object.entries(input)) if (canonicalArtifactJsonV2(value) !== canonicalArtifactJsonV2(closure[key as keyof typeof closure])) {
+      throw new CliUsageError(`Closure field ${safeTerminalValue(key)} is not canonical; nothing was written.`);
+    }
   } else if (args.operation === 'assess') {
     if (!input) throw new CliUsageError('An assessment requires JSON input.');
     fields(input, ['disposition', 'reviewReasonCode', 'summary', 'rationale', 'evidence'], 'Assessment');
@@ -118,7 +169,7 @@ export function applyCliCaseOperation(cases: CaseRecord[], args: CaseArguments, 
     }
   } else if (args.operation === 'recheck') {
     if (!input) throw new CliUsageError('A recheck requires JSON input.');
-    fields(input, ['state', 'observedAt', 'completeness', 'comparisonSummary', 'source', 'followUpAt', 'limitations', 'collectionDepth', 'recheck', 'observationHostname'], 'Recheck');
+    fields(input, ['state', 'observedAt', 'completeness', 'comparisonSummary', 'source', 'followUpAt', 'limitations', 'collectionDepth', 'recheck', 'observationHostname', 'responseObject', 'objectOutcome'], 'Recheck');
     const recheck = readCaseRecheckAnswerContext(input.recheck);
     if (input.state === 'not_reproduced' && !recheck) {
       throw new CliUsageError('Not reproduced requires a saved recheck question and confirmed comparable conditions. Import the planned Case or record unavailable for a limited observation.');
@@ -134,6 +185,8 @@ export function applyCliCaseOperation(cases: CaseRecord[], args: CaseArguments, 
       comparisonSummary: comparison.value, source: review.source, followUpAt: review.followUpAt,
       limitations: review.limitations, collectionDepth: comparison.collectionDepth,
       ...(review.recheck ? { recheck: review.recheck } : {}),
+      ...(review.responseObject ? { responseObject: review.responseObject } : {}),
+      ...(review.objectOutcome ? { objectOutcome: review.objectOutcome } : {}),
       ...(comparison.observationHostname ? { observationHostname: comparison.observationHostname } : {}),
     };
     for (const [key, value] of Object.entries(input)) {
@@ -164,7 +217,14 @@ function formatCases(cases: readonly CaseRecord[], digest: string): string {
       if (missingPinIds.length) lines.push(`  Referenced pins not retained: ${missingPinIds.map(id => safeTerminalValue(id)).join(', ')}`);
       if (cyclic) lines.push('  Conflicting imported derivation cycle; no order is inferred.');
     }
-    for (const review of record.observedEffects.reviews) lines.push(`Recheck ${safeTerminalValue(review.observedAt, 'time unavailable')} · ${review.state} · ${review.completeness} · ${safeTerminalValue(review.source)}`);
+    for (const action of record.actions) {
+      lines.push(`Action ${safeTerminalValue(action.id)} · ${action.type} · ${action.state}`,
+        `  Objects: ${action.responseObjects?.map(object => `${object.kind}: ${safeTerminalValue(object.identifier)}`).join('; ') || 'unknown binding'}`);
+      for (const event of action.history) lines.push(`  Event ${event.occurredAt} · ${event.sourceClass} · ${event.nextState}${event.objectOutcome ? ` · reported ${event.objectOutcome}` : ''}`,
+        `    Scope: ${event.responseObjects?.map(object => `${object.kind}: ${safeTerminalValue(object.identifier)}`).join('; ') || 'unknown binding'}`);
+    }
+    for (const review of record.observedEffects.reviews) lines.push(`Recheck ${safeTerminalValue(review.observedAt, 'time unavailable')} · ${review.state} · ${review.completeness} · ${safeTerminalValue(review.source)}`,
+      `  Object: ${review.responseObject ? `${review.responseObject.kind}: ${safeTerminalValue(review.responseObject.identifier)}` : 'unknown binding'}${review.objectOutcome ? ` · observed ${review.objectOutcome}` : ''}`);
     lines.push(`Other retained records: ${record.evidenceHistory.length} snapshots, ${record.actions.length} actions, ${record.assertions.length} assertions, ${record.attachments?.length ?? 0} file references.`, '');
   }
   lines.push('Use --json for the full Case export. Attached file bytes remain separate. This command makes no request.', '');

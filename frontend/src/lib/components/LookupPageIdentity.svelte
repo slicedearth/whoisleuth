@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
-  import LookupMetadataDisclosure from '$lib/components/LookupMetadataDisclosure.svelte';
-  import type { HomepageMetadataDisplay } from '$lib/analysis/lookup-homepage-metadata-display.ts';
+  import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
+  import LookupMetadataDisclosure from '#lib/components/LookupMetadataDisclosure.svelte';
+  import type { HomepageMetadataDisplay } from '#lib/analysis/lookup-homepage-metadata-display.ts';
   type Row = { label: string; value: string; danger?: boolean };
   type FingerprintRow = Row & { detail?: string | null };
 

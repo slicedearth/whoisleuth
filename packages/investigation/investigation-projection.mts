@@ -5,6 +5,7 @@
 import { CASE_SCHEMA_VERSION, MAX_CASES } from '../contracts/case-portability.mts';
 import { normalizeCaseStore } from '../cases/case-migration-model.mts';
 import type { CaseRecord, CaseEvidenceSnapshot } from '../cases/case-model.mts';
+import type { InfrastructureObservation } from './infrastructure-observation.mts';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
   MAX_PROFILES,
@@ -30,6 +31,8 @@ import {
   type ObservationEnvelopeDerivation,
 } from './observation-envelope.mts';
 import { projectInvestigationCollections } from './investigation-projection-collections.mts';
+import { INVESTIGATION_ENTITY_TYPES, type InvestigationEntityType } from './investigation-entity.mts';
+export type { InvestigationEntityType } from './investigation-entity.mts';
 import {
   INVESTIGATION_PROJECTION_SCHEMA,
   INVESTIGATION_PROJECTION_VERSION,
@@ -45,20 +48,6 @@ export const MAX_PROJECTION_OBSERVATIONS = 4000;
 export const MAX_PROJECTION_RELATIONSHIPS = 10000;
 export const MAX_PROJECTION_REFERENCES = 100;
 export const MAX_PROJECTION_LIMITATIONS = 20;
-
-export type InvestigationEntityType =
-  | 'domain'
-  | 'nameserver_set'
-  | 'http_origin'
-  | 'favicon'
-  | 'certificate'
-  | 'ip_address'
-  | 'tracking_identifier'
-  | 'favicon_cluster'
-  | 'official_asset_host'
-  | 'brand'
-  | 'case'
-  | 'campaign';
 
 export type InvestigationScanDepth = 'fast' | 'deep' | 'unknown';
 export type InvestigationSourceState = 'absent' | 'invalid' | 'unsupported' | 'supported';
@@ -81,6 +70,7 @@ export const INVESTIGATION_RELATIONSHIP_TYPES = Object.freeze([
   'campaign_contains_domain', 'campaign_contains_case', 'domain_presented_certificate',
   'domain_resolved_to_ip', 'domain_aliases_to_domain', 'domain_uses_mail_server',
   'domain_exposed_tracking_identifier', 'domain_related_by_favicon', 'domain_loaded_official_asset',
+  'certificate_contains_name', 'certificate_contains_pattern', 'subject_observed_provider_role', 'ip_observed_routing_origin',
 ] as const);
 export type InvestigationRelationshipType = typeof INVESTIGATION_RELATIONSHIP_TYPES[number];
 export type InvestigationRelationshipClassification = 'direct' | 'normalized' | 'derived';
@@ -151,6 +141,7 @@ export interface InvestigationObservation {
   truncated: boolean | null;
   schemaVersions: InvestigationSchemaVersions;
   limitations: string[];
+  infrastructureObservation?: InfrastructureObservation;
 }
 
 export interface InvestigationRelationship {
@@ -258,20 +249,7 @@ export interface RelationshipCandidate {
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 const HASH_RE = /^[a-f0-9]{64}$/i;
 const SCAN_DEPTHS = new Set<InvestigationScanDepth>(['fast', 'deep', 'unknown']);
-const ENTITY_TYPES = new Set<InvestigationEntityType>([
-  'domain',
-  'nameserver_set',
-  'http_origin',
-  'favicon',
-  'certificate',
-  'ip_address',
-  'tracking_identifier',
-  'favicon_cluster',
-  'official_asset_host',
-  'brand',
-  'case',
-  'campaign',
-]);
+const ENTITY_TYPES = new Set<InvestigationEntityType>(INVESTIGATION_ENTITY_TYPES);
 const RELATIONSHIP_TYPES = new Set<InvestigationRelationshipType>([
   'domain_uses_nameserver_set',
   'domain_reached_http_origin',
@@ -288,6 +266,7 @@ const RELATIONSHIP_TYPES = new Set<InvestigationRelationshipType>([
   'domain_exposed_tracking_identifier',
   'domain_related_by_favicon',
   'domain_loaded_official_asset',
+  'certificate_contains_name', 'certificate_contains_pattern', 'subject_observed_provider_role', 'ip_observed_routing_origin',
 ]);
 
 const BASE_LIMITATIONS = Object.freeze([

@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
-  import HttpRedirectPath from '$lib/components/HttpRedirectPath.svelte';
-  import LookupMetadataDisclosure from '$lib/components/LookupMetadataDisclosure.svelte';
-  import type { HomepageMetadataDisplay } from '$lib/analysis/lookup-homepage-metadata-display.ts';
+  import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
+  import HttpRedirectPath from '#lib/components/HttpRedirectPath.svelte';
+  import LookupMetadataDisclosure from '#lib/components/LookupMetadataDisclosure.svelte';
+  import type { HomepageMetadataDisplay } from '#lib/analysis/lookup-homepage-metadata-display.ts';
 
   type Row = { label: string; value: string; hash?: boolean };
   type Redirect = { status: string; from: string; to: string; queryOmitted: boolean };

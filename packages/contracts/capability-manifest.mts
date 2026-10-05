@@ -62,6 +62,7 @@ type CapabilityDataClass =
   | 'selected_url_request'
   | 'tls_handshake'
   | 'certificate_search_term'
+  | 'selected_feed_search'
   | 'mail_transport_commands'
   | 'mta_sts_policy_request'
   | 'encrypted_compact_watchlist'
@@ -398,6 +399,8 @@ const CLI_OPERATION_POLICY = Object.freeze({
   'change-packet': offlinePolicy('explicit_document', ['complete', 'partial', 'blocked']),
   'sharing-review': offlinePolicy('explicit_document', ['complete', 'partial', 'blocked']),
   'workflow-plan': offlinePolicy('all_or_nothing', STATIC_OUTCOMES, 'none', 'not_applicable'),
+  'watchlist-review': OFFLINE_PER_ITEM,
+  'domain-feed': offlinePolicy('explicit_per_item', COMPLETE_OR_PARTIAL, 'none', 'cooperative'),
   'workflow-run': Object.freeze({ kind: 'workflow_run' }),
   diff: OFFLINE_PER_SOURCE,
   reconcile: OFFLINE_PER_SOURCE,
@@ -821,6 +824,35 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     privacyLimitations: [limitation],
     legacyCapability: { status: 'unavailable', execution: 'hosted', scanModes: ['deep'], reason },
   })),
+  freezeCapability({
+    id: CAPABILITY_IDS.DOMAIN_FEED_SEARCH,
+    title: 'Optional cached domain-feed search',
+    job: 'investigate',
+    planes: ['hosted_bounded_passive'],
+    trigger: 'explicit_browser_action',
+    networkMode: 'bounded_passive',
+    scanModes: [],
+    disclosedData: ['selected_feed_search'],
+    recipients: ['configured_intelligence_provider'],
+    requestBudget: 'certificate_search',
+    responseBudget: 'bounded_runtime_report',
+    concurrency: 'certificate_search',
+    credentialModel: 'deployment_optional',
+    retention: 'browser_deliberate',
+    export: 'deliberate_bounded',
+    scoringEffect: 'none',
+    authorisation: 'authenticated_explicit_action',
+    cancellation: 'cooperative',
+    partialResults: 'explicit_per_source',
+    outcomes: COMPLETE_OR_LIMITED,
+    privacyLimitations: [
+      'Disabled until operator configuration. Only explicit feed identifiers, exact hosts and literal terms are sent to the configured cache service; Brand and Case identities stay local.',
+      'Queries do not contact candidate targets or enable monitoring. The service retains public feed snapshots, not search terms; refresh requests to fixed publishers contain no analyst selection.',
+      'Manual browser and CLI file review remains available without this connection. Feed membership, file freshness and per-host observation times are separate; inclusion changes no score or availability decision.',
+    ],
+    operationBudgetVariants: [{ featureId: 'domain_feed_search', classId: 'certificate_search' }],
+    legacyCapability: { status: 'disabled', execution: 'hosted', scanModes: [], reason: 'Optional domain feed service is not enabled for this deployment.' },
+  }),
   freezeCapability({
     id: CAPABILITY_IDS.REGISTRAR_RDAP,
     title: 'Eligible registrar RDAP follow-up',

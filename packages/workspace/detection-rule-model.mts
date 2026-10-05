@@ -8,6 +8,7 @@ import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorksp
 import {
   DETECTION_RULE_SCHEMA,
   DETECTION_RULE_SCHEMA_VERSION,
+  DETECTION_RULE_EXPORT_SUPPORTED_VERSIONS,
   MAX_CONDITION_VALUE_LENGTH,
   MAX_CUSTOM_RISK_TOTAL,
   MAX_DETECTION_RULES,
@@ -109,6 +110,7 @@ export const RULE_FIELD_DEFINITIONS: readonly RuleFieldDefinition[] = Object.fre
   { value: 'reusesOfficialAssets', label: 'Official assets reused', kind: 'boolean' },
   { value: 'phishingLanguageMatch', label: 'Phishing-language signal', kind: 'text' },
   { value: 'hasExternalFormAction', label: 'External form action observed', kind: 'boolean' },
+  { value: 'hasExternalPasswordForm', label: 'Password form declares external destination', kind: 'boolean' },
   { value: 'mutationTypes', label: 'Mutation type', kind: 'list' },
   { value: 'nameservers', label: 'Nameserver', kind: 'list' },
   { value: 'httpSecurityHeaders', label: 'HTTP security header', kind: 'list' },
@@ -248,8 +250,12 @@ export function recoverDetectionRuleStore(raw: unknown): { store: DetectionRuleS
   assertWorkspaceDeclaredVersion(raw, 'Detection-rule store');
   const byId = new Map<string, DetectionRule>();
   const source = ruleList(raw);
+  const sourceVersion = detectionRuleStoreVersion(raw);
   let rejected = Math.max(0, source.length - MAX_RULE_INPUT_RECORDS);
   for (const item of source.slice(0, MAX_RULE_INPUT_RECORDS)) {
+    if (sourceVersion === 1 && Array.isArray(record(item).conditions) && (record(item).conditions as unknown[]).some(condition => record(condition).field === 'hasExternalPasswordForm')) {
+      throw new Error('Form-attribution conditions require custom-rule schema 2; historical rules were not reinterpreted.');
+    }
     const rule = normalizeDetectionRule(item);
     if (!rule?.id || byId.has(rule.id)) {
       rejected += 1;
@@ -407,12 +413,15 @@ export function mergeDetectionRules(localRaw: unknown, importedRaw: unknown) {
   if (version !== null && version > DETECTION_RULE_SCHEMA_VERSION) {
     throw new Error(`This custom-rule file uses newer schema ${version}. Update the app before importing it.`);
   }
-  if (version !== DETECTION_RULE_SCHEMA_VERSION) {
+  if (version === null || !DETECTION_RULE_EXPORT_SUPPORTED_VERSIONS.includes(version)) {
     throw new Error(`Expected custom-rule schema ${DETECTION_RULE_SCHEMA_VERSION}.`);
   }
   const local = normalizeDetectionRuleStore(localRaw).rules;
   const byId = new Map(local.map((rule) => [rule.id, rule]));
   const importedList = ruleList(importedRaw);
+  if (version === 1 && importedList.some(item => Array.isArray(record(item).conditions) && (record(item).conditions as unknown[]).some(condition => record(condition).field === 'hasExternalPasswordForm'))) {
+    throw new Error('Form-attribution conditions require custom-rule schema 2; historical rules were not reinterpreted.');
+  }
   let added = 0;
   let updated = 0;
   let skipped = Math.max(0, importedList.length - MAX_RULE_INPUT_RECORDS);

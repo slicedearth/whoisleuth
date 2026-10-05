@@ -39,7 +39,7 @@ export function webCollectionQualityForCapture(value: unknown, depth: string): W
   return normalizeWebCollectionQuality(value) ?? capturedWebCollectionQuality('unknown', 'unknown');
 }
 
-const PAGE_FIELDS = new Set(['activityStatus', 'pageTitle', 'hasPasswordField', 'hasExternalFormAction', 'phishingLanguageMatch', 'pageBaselineMatch']);
+const PAGE_FIELDS = new Set(['activityStatus', 'pageTitle', 'hasPasswordField', 'hasExternalFormAction', 'hasExternalPasswordForm', 'phishingLanguageMatch', 'pageBaselineMatch']);
 const FAVICON_FIELDS = new Set(['faviconHash', 'faviconPHash', 'faviconMatch', 'faviconNearMatch']);
 const COMBINED_FIELDS = new Set(['riskScore', 'riskFactors', 'riskModelVersion', 'opportunityScore', 'opportunityFactors', 'reusesOfficialAssets']);
 

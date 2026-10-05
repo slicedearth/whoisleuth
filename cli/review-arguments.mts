@@ -81,6 +81,7 @@ type IntakeArguments = {
   kind: import('../packages/contracts/message-intake.mts').MessageIntakeKind;
   reportedActions: readonly import('../packages/contracts/message-intake.mts').IdentityAction[];
   trustedAuthHeaders?: readonly string[];
+  intakeContextSource?: string;
   source: string | null;
   output: 'terminal' | 'json';
   strictExit: boolean;
@@ -160,12 +161,12 @@ function parseCaseArguments(parsed: ParsedCommandArguments<CaseArguments['action
     throw new CliUsageError('Only case note accepts and requires --text or --note-file.');
   }
   if (
-    ['pin', 'link', 'withdraw-link', 'assess', 'recheck'].includes(operation)
+    ['pin', 'link', 'withdraw-link', 'assess', 'recheck', 'incident-link', 'action', 'action-event', 'recheck-question', 'close-object'].includes(operation)
       ? !inputSource
       : inputSource !== null
   ) {
     throw new CliUsageError(
-      'Only case pin, link, withdraw-link, assess and recheck accept and require --input.',
+      'This Case mutation requires --input; show, open and note do not accept it.',
     );
   }
   if (expectedFileDigest !== null && (!source || !/^sha256:[a-f0-9]{64}$/u.test(expectedFileDigest))) {
@@ -222,6 +223,7 @@ export const REVIEW_ARGUMENT_PARSERS = Object.freeze({
     reportedActions: parsed.optionValues(
       '--reported-action',
     ) as readonly import('../packages/contracts/message-intake.mts').IdentityAction[],
+    ...(parsed.hasOption('--intake-context') ? { intakeContextSource: parsed.optionValue('--intake-context')! } : {}),
     ...(parsed.hasOption('--trusted-auth-header')
       ? { trustedAuthHeaders: parsed.optionValues('--trusted-auth-header') }
       : {}),

@@ -37,7 +37,7 @@ function profile(baselines: DesiredPostureBaseline[]): BrandProfile {
     id: 'profile-1',
     name: 'Example',
     officialDomains: ['one.example.invalid', 'two.example.invalid', 'three.example.invalid'],
-    productNames: [], tlds: [], approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [],
+    productNames: [], tlds: [], approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], candidateObservations: [], candidateExceptions: [],
     officialChannels: [], rightsReferences: [],
     dkimSelectors: [], retiredDkimSelectors: [], mailProtectionProfile: 'standard', protectionAttestations: [],
     desiredPostureBaselines: baselines,

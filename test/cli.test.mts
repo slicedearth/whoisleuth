@@ -22,6 +22,7 @@ import {
   pagePublicationMetadataFixture,
 } from './homepage-metadata-fixtures.mts';
 import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
+import { LOOKUP_EVIDENCE_SCHEMA_VERSION, SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS, V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../packages/contracts/lookup-evidence.mts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -297,8 +298,10 @@ describe('CLI argument parsing', () => {
     const exportStdout = capture();
     assert.equal(await runCli(['export', '--help'], { stdout: exportStdout.stream, stderr: stderr.stream }), EXIT_CODES.SUCCESS);
     assert.match(exportStdout.value(), /Saved Lookup versions 1 and 2/u);
-    assert.match(exportStdout.value(), /Current schema-\d+ exports/u);
-    assert.match(exportStdout.value(), /published v2 schemas 27, 28 and exact v1 schema 26 remain readable/u);
+    assert.ok(exportStdout.value().includes(`Current schema-${LOOKUP_EVIDENCE_SCHEMA_VERSION} exports`));
+    const historicalV2Versions = SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS
+      .filter(version => version > V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION && version !== LOOKUP_EVIDENCE_SCHEMA_VERSION);
+    assert.ok(exportStdout.value().includes(`published v2 schemas ${historicalV2Versions.join(', ')} and exact v1 schema ${V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} remain readable`));
     assert.match(exportStdout.value(), /other historical and unreleased shapes are unsupported/u);
     assert.equal(stderr.value(), '');
   });

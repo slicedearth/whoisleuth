@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import type {
     ComparisonLedgerMode,
     ComparisonLedgerRow,
     ComparisonLedgerSide,
     ComparisonLedgerState,
-  } from '$lib/analysis/comparison-ledger.ts';
+  } from '#lib/analysis/comparison-ledger.ts';
 
   let {
     rows,

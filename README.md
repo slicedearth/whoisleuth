@@ -10,7 +10,7 @@
   <a href="https://app.netlify.com/projects/whoisleuth/deploys"><img src="https://api.netlify.com/api/v1/badges/600adb21-cece-4a13-8df8-d177ace3d945/deploy-status" alt="Netlify status" /></a>
 </p>
 
-WHOISleuth is a local-first domain investigation and brand-protection tool. It
+WHOISleuth is a local-first domain investigation and brand protection tool. It
 keeps registration, DNS, certificate, website, network and analyst evidence
 separately attributed, including unavailable and partial sources.
 
@@ -48,9 +48,31 @@ WHOISleuth uses three analyst jobs: **Investigate**, **Respond** and **Assure**.
 | **Cases** | Retain evidence, assess findings and prepare response packets. |
 | **Monitor** | Review changes, watchlists, follow-ups and local rules. |
 
+[Candidate review](docs/brand-candidate-review.md) connects explicit Discover
+and feed selections to local Brand review and per-domain Watchlist priorities.
+Save time-bounded keyword campaigns, preview matching rules, and explicitly
+review retained editions from an optional feed service.
+
+[Offline intake](docs/offline-intake-context.md) extracts source-linked addresses
+and labelled hashes from selected material, with explicit phone selection and
+displayed-destination comparison for supplied text. Cases can compare retained text and
+images, preserve declared registration boundaries, prepare an audience-reviewed
+internal handoff, and print a record summary. These reviews do not collect or
+submit anything automatically.
+
 The public [Resources hub](https://www.whoisleuth.com/resources) is the shortest
 user guide. [Application documentation](docs/application-guide.md) covers the
 browser tools and saved work.
+
+The [infrastructure inventory](docs/infrastructure-observations.md) reviews
+retained hostnames, DNS, certificate names and provider roles, with source-linked
+topology and historical comparison.
+
+Response actions can concern several exact domain, page or platform objects in
+one manually reviewed record. Event scopes, provider claims, independent
+comparisons and deliberate object closures remain separate; one resolved object
+does not close another. Historical missing bindings remain unknown. Console and
+the [offline Case file commands](docs/cli.md#local-case-files) submit no reports.
 
 The optional [local application](packages/local-application/README.md) runs the
 same Console on loopback with an explicitly selected filesystem workspace.

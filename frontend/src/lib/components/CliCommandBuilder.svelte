@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { PUBLIC_CLI_GRAMMAR } from '$lib/generated/public-cli-grammar';
-  import { loadDeferredModule, reloadDeferredModulePage } from '$lib/deferred-module';
+  import { PUBLIC_CLI_GRAMMAR } from '#lib/generated/public-cli-grammar.ts';
+  import { loadDeferredModule, reloadDeferredModulePage } from '#lib/deferred-module.ts';
   import { buildCliCommand, isBuildableCliOption, type CommandShell } from '../../../../packages/analysis/cli-command-builder.mts';
   import { MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, type CliCommandGrammar } from '../../../../packages/contracts/cli-grammar.mts';
   import CopyableCommand from './CopyableCommand.svelte';
@@ -11,12 +11,12 @@
   // The caller keys a new editor by command. Drafts never enter location or storage.
   const selected = untrack(() => command);
   const grammar: CliCommandGrammar | undefined = PUBLIC_CLI_GRAMMAR[selected as keyof typeof PUBLIC_CLI_GRAMMAR];
-  type Catalogue = typeof import('$lib/generated/public-cli-catalogue')['PUBLIC_CLI_CATALOGUE'];
+  type Catalogue = typeof import('#lib/generated/public-cli-catalogue.ts')['PUBLIC_CLI_CATALOGUE'];
   let definition = $state.raw<Catalogue['commands'][number] | null>(null);
   let loadError = $state(false);
   onMount(() => {
     const controller = new AbortController();
-    void loadDeferredModule(() => import('$lib/generated/public-cli-catalogue'), { signal: controller.signal })
+    void loadDeferredModule(() => import('#lib/generated/public-cli-catalogue.ts'), { signal: controller.signal })
       .then(module => { definition = module.PUBLIC_CLI_CATALOGUE.commands.find(item => item.id === selected) ?? null; })
       .catch(() => { if (!controller.signal.aborted) loadError = true; });
     return () => controller.abort();

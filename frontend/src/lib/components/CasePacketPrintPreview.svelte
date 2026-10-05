@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { CaseResponsePacket } from '$lib/analysis/case-response-packet.ts';
+  import type { CaseResponsePacket } from '#lib/analysis/case-response-packet.ts';
   import './print-surface.css';
 
   let { packet, onvalidate, onclose }: {
@@ -15,6 +15,7 @@
   let busy = $state(false);
   let printing = $state(false);
   let error = $state('');
+  const correction = $derived(packet.escalationHistory.find(action => action.actionId === packet.actionBinding.selectedActionId)?.correction);
   let mounted = false;
 
   onMount(() => {
@@ -71,7 +72,8 @@
       <dl class="report-facts"><div><dt>Case ID</dt><dd>{packet.case.id}</dd></div><div><dt>Prepared</dt><dd>{@render timestamp(packet.generatedAt)}</dd></div><div><dt>Audience</dt><dd>{packet.profile.audience}</dd></div><div><dt>Analyst disposition</dt><dd>{packet.case.disposition.replaceAll('_', ' ')}</dd></div></dl>
     </header>
 
-    <section aria-labelledby="packet-report-incident"><h3 id="packet-report-incident">Incident</h3>
+    {#if correction}<section aria-labelledby="packet-report-correction"><h3 id="packet-report-correction">{correction.purpose === 'correction' ? 'Correction request' : 'Retraction request'}</h3><p>Original delivery event {correction.deliveryEventId} · canonical packet v{correction.packetVersion}</p><p class="identifier">Original SHA-256: {correction.packetDigestSha256}</p><h4>Analyst reason</h4><p class="prose">{correction.reason}</p><h4>Previous statement</h4><p class="prose">{correction.previousStatement}</p><h4>Corrected statement</h4><p class="prose">{correction.correctedStatement || 'Request to retract the previous statement'}</p><p>Corrected evidence references: {correction.evidencePinIds.join(', ')}</p><p>This new request does not establish sending, acceptance, reversal, restoration or independent recheck.</p></section>{/if}
+    <section aria-labelledby="packet-report-incident"><h3 id="packet-report-incident">{correction ? 'Retained incident context' : 'Incident'}</h3>
       <dl class="report-facts"><div><dt>Category</dt><dd>{packet.incident.category}</dd></div><div><dt>Affected party</dt><dd>{packet.incident.affectedParty}</dd></div><div><dt>Observed</dt><dd>{@render timestamp(packet.incident.observedAt)}</dd></div></dl>
       <p class="prose">{packet.incident.observedHarm}</p>
       <h4>Selected URLs</h4><ul>{#each packet.incident.abusiveUrls as url}<li class="identifier">{url}</li>{/each}</ul>
@@ -103,6 +105,7 @@
 
     {#if packet.artefactReferences.length}<section aria-labelledby="packet-report-files"><h3 id="packet-report-files">Referenced files · {packet.artefactReferences.length}</h3><ol class="evidence-list">{#each packet.artefactReferences as file}<li><h4>{file.label}</h4><p>{file.source} · {file.mediaType} · {file.byteLength === null ? 'Byte length unavailable' : `${file.byteLength.toLocaleString('en-AU')} bytes`}</p><p>{@render timestamp(file.capturedAt)}</p><p class="identifier">SHA-256: {file.digestSha256}</p>{#if file.limitations.length}<ul>{#each file.limitations as limitation}<li>{limitation}</li>{/each}</ul>{/if}</li>{/each}</ol></section>{/if}
 
+    <section class="limitations-group"><h3>Packet limitations</h3><ul>{#each packet.provenance.limitations as limitation}<li>{limitation}</li>{/each}</ul></section>
     <footer><h3>Packet reference</h3><p class="identifier">SHA-256: {packet.integrity.digestSha256}</p><p>{packet.schema} · version {packet.schemaVersion}. The digest identifies the canonical packet JSON, not this printed layout or the truth of its evidence. No submission is performed.</p></footer>
     {#if includeAppendix}<section class="technical-appendix" aria-labelledby="packet-report-appendix"><h3 id="packet-report-appendix">Technical appendix — exact packet JSON</h3><pre>{JSON.stringify(packet, null, 2)}</pre></section>{/if}
   </article>

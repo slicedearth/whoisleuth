@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { LookupEvidenceReplay } from '$lib/analysis/lookup-evidence-replay.ts';
-  import { evidenceStatusChipClass } from '$lib/analysis/evidence-status-tone.ts';
-  import { availabilityStatusDisplay } from '$lib/analysis/availability-status-display.ts';
+  import type { LookupEvidenceReplay } from '#lib/analysis/lookup-evidence-replay.ts';
+  import { evidenceStatusChipClass } from '#lib/analysis/evidence-status-tone.ts';
+  import { availabilityStatusDisplay } from '#lib/analysis/availability-status-display.ts';
   import LookupAssetGraph from './LookupAssetGraph.svelte';
   import LookupMetadataDisclosure from './LookupMetadataDisclosure.svelte';
   let { replay, headingId = 'replay-title', digestDescription = 'verified against supplied checksum' }: {

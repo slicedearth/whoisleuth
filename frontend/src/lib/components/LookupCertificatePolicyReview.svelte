@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
-  import type { CertificatePolicyReview, CertificatePolicyState } from '$lib/analysis/certificate-policy-review.ts';
+  import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
+  import type { CertificatePolicyReview, CertificatePolicyState } from '#lib/analysis/certificate-policy-review.ts';
   let { review }: { review: CertificatePolicyReview } = $props();
   const visible = $derived(review.findings.filter((finding) => finding.state !== 'not_configured'));
   const status = $derived(visible.some((finding) => ['changed', 'apparently_outside_current_policy'].includes(finding.state))

@@ -1,16 +1,17 @@
 <script lang="ts">
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
-  import { onDestroy } from 'svelte';
-  import { PUBLIC_EXAMPLES_INDEX } from '$lib/generated/public-examples-index';
-  import { PUBLIC_EXAMPLE_LOADERS, type PublicExampleId, type PublicExampleOutput } from '$lib/generated/public-examples';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
+  import { onDestroy, onMount } from 'svelte';
+  import { PUBLIC_EXAMPLES_INDEX } from '#lib/generated/public-examples-index.ts';
+  import { PUBLIC_EXAMPLE_LOADERS, type PublicExampleId, type PublicExampleOutput } from '#lib/generated/public-examples.ts';
   import {
     DEFERRED_MODULE_RECOVERY_DETAIL,
     loadDeferredModule,
     reloadDeferredModulePage,
-  } from '$lib/deferred-module';
+  } from '#lib/deferred-module.ts';
 
   type ExampleOutput = PublicExampleOutput;
 
+  let clientReady = $state(false);
   let format = $state('all');
   let direction = $state('all');
   let openedId = $state('');
@@ -84,6 +85,8 @@
     actionStatus = `${example.title} downloaded as a synthetic local example.`;
   }
 
+  onMount(() => { clientReady = true; });
+
   onDestroy(() => {
     active = false;
     loadGeneration += 1;
@@ -92,7 +95,7 @@
 </script>
 
 <section class="gallery" aria-labelledby="example-gallery-title" data-testid="public-example-gallery">
-  <div class="gallery-heading"><div><p class="eyebrow">Inputs and outputs</p><h2 id="example-gallery-title">Open a synthetic format</h2><p>Fictional examples for the current CLI.</p></div><label><span>Example type</span><select bind:value={direction}><option value="all">Inputs and outputs</option><option value="input">Inputs</option><option value="output">Outputs</option></select></label><label><span>Format</span><select bind:value={format}><option value="all">All formats</option>{#each formats as item}<option value={item}>{item}</option>{/each}</select></label></div>
+  <div class="gallery-heading"><div><p class="eyebrow">Inputs and outputs</p><h2 id="example-gallery-title">Open a synthetic format</h2><p>Fictional examples for the current CLI.</p></div><label><span>Example type</span><select bind:value={direction} disabled={!clientReady}><option value="all">Inputs and outputs</option><option value="input">Inputs</option><option value="output">Outputs</option></select></label><label><span>Format</span><select bind:value={format} disabled={!clientReady}><option value="all">All formats</option>{#each formats as item}<option value={item}>{item}</option>{/each}</select></label></div>
   {#if loadError}<div class="load-error" role="alert"><p>{loadError}</p><small>{DEFERRED_MODULE_RECOVERY_DETAIL}</small><button type="button" onclick={reloadDeferredModulePage}>Reload page</button></div>{/if}
   <p class="action-status" role="status" aria-live="polite">{actionStatus}</p>
   <div class="example-grid independent-grid">
@@ -102,7 +105,7 @@
         <h3>{example.title}</h3>
         <p>{example.summary}</p>
         <code>{example.command}</code>
-        <button type="button" disabled={Boolean(loadError)} aria-expanded={openedId === example.id} aria-controls={openedId === example.id && outputFor(example.id) ? `example-output-${example.id}` : undefined} onpointerenter={() => preloadOutput(example.id)} onfocus={() => preloadOutput(example.id)} onclick={() => void toggleOutput(example.id)}>{loadingId === example.id ? `Loading synthetic ${example.direction}…` : openedId === example.id ? `Close synthetic ${example.direction}` : `Open synthetic ${example.direction}`}</button>
+        <button type="button" disabled={!clientReady || Boolean(loadError)} aria-expanded={openedId === example.id} aria-controls={openedId === example.id && outputFor(example.id) ? `example-output-${example.id}` : undefined} onpointerenter={() => preloadOutput(example.id)} onfocus={() => preloadOutput(example.id)} onclick={() => void toggleOutput(example.id)}>{loadingId === example.id ? `Loading synthetic ${example.direction}…` : openedId === example.id ? `Close synthetic ${example.direction}` : `Open synthetic ${example.direction}`}</button>
         {#if openedId === example.id && outputFor(example.id)}
           {@const output = outputFor(example.id)!}
           <div class="example-output" id={`example-output-${example.id}`}>

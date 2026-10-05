@@ -14,6 +14,7 @@ import { expectedIconPixels } from '../test/favicon-image-fixtures.mts';
 import { productionChunkPath } from './production-build';
 import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
 import { BROWSER_WORKER_OPERATION_TIMEOUT_MS } from '../frontend/src/lib/browser-worker-operation.ts';
+import { sha256ArtifactBytes } from '../packages/evidence/artifact-integrity.mts';
 import AxeBuilder from '@axe-core/playwright';
 import { encodeBagItEntries, inspectBagItEntries, prepareBagItEntries, readBagItZip } from '../packages/interchange/bagit.mts';
 
@@ -26,6 +27,26 @@ async function openPackages(page: import('@playwright/test').Page) {
   return page.getByRole('region', { name: 'Package and review evidence files' });
 }
 const asFile = (bytes: Uint8Array) => ({ name: 'evidence.zip', mimeType: 'application/zip', buffer: Buffer.from(bytes) });
+
+test('package review discloses selected parent bytes without authenticating declared image edits', async ({ page }) => {
+  const panel = await openPackages(page), before = await readBrowserLocalCollection(page, 'cases');
+  const parent = new Uint8Array([1, 2, 3]);
+  const imageDerivation = { method: 'png-regions-v1' as const, source: { digestSha256: await sha256ArtifactBytes(parent), byteLength: 3 }, operations: ['redact' as const] };
+  for (const included of [false, true]) {
+    const built = await makePackage([...(included ? [{ content: parent, mediaType: 'image/png' as const }] : []), { content: new Uint8Array([4, 5]), mediaType: 'image/png', imageDerivation }]);
+    await panel.getByLabel('Review evidence package', { exact: true }).setInputFiles(asFile(built.bytes));
+    const details = panel.locator('.image-derivation');
+    await expect(details).toHaveCount(1);
+    await details.locator('summary').focus(); await page.keyboard.press('Enter');
+    await expect(details).toContainText(included ? 'Declared in this manifest' : 'Not declared in this manifest');
+    await expect(details).toContainText('does not prove the edits or complete redaction');
+    for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme); await page.setViewportSize({ width, height: 900 }); await expectNoHorizontalOverflow(page);
+    }
+    await panel.getByRole('button', { name: 'Close package review', exact: true }).click();
+  }
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+});
 
 test('packaged Lookup review is temporary, source-qualified and independent of saved Cases', async ({ page }, testInfo) => {
   const panel = await openPackages(page), before = await readBrowserLocalCollection(page, 'cases');

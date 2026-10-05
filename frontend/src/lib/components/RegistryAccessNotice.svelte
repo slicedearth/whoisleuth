@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { officialRegistryLookupFor } from '$lib/analysis/registry-support.ts';
+  import { officialRegistryLookupFor } from '#lib/analysis/registry-support.ts';
 
   let { access, lookupTarget }: { access: Record<string, unknown>; lookupTarget: string } = $props();
 

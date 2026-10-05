@@ -11,6 +11,7 @@ import {
   formatFrontendLoadingReport,
   measureFrontendAsset,
   parseGeneratedRouteNodes,
+  readFrontendRouteNodes,
   previousFrontendRouteMeasurements,
   main,
 } from '../tools/frontend-loading-report.mts';
@@ -136,6 +137,60 @@ describe('frontend loading report', () => {
 };`),
       /dictionary is empty/,
     );
+  });
+
+  test('includes root-only and server-loaded routes without silently omitting unsupported tuples', () => {
+    assert.deepEqual(parseGeneratedRouteNodes(`export const dictionary = {
+      "/404": [26],
+      "/(public)/review": [~27,[,3],[,1]]
+    };`), [
+      { routeKey: '/404', pageNode: 26, layoutNodes: [] },
+      { routeKey: '/(public)/review', pageNode: 27, layoutNodes: [3] },
+    ]);
+    assert.throws(() => parseGeneratedRouteNodes(`export const dictionary = {
+      "/(public)": [4,[3]],
+      "/missing": unexpected
+    };`), /unsupported route tuple/);
+    const manifest = fixtureManifest();
+    const result = buildFrontendLoadingReport({
+      manifest: { ...manifest, '_app.js': { ...manifest['_app.js'], imports: ['_workspace.js'] } },
+      routeNodes: [
+        { routeKey: '/404', pageNode: 4, layoutNodes: [] },
+        { routeKey: '/(public)/docs(console)', pageNode: 4, layoutNodes: [3] },
+      ],
+      measureAsset: file => ({ file, bytes: 10, gzipBytes: 5 }),
+    });
+    assert.equal(result.routes[0]?.access, 'public');
+    assert.equal(result.routes.find(route => route.path === '/docs(console)')?.access, 'public');
+    assert.equal(result.ready, false);
+    assert.equal(result.summary.publicRouteLeak, true);
+  });
+
+  test('reads only the current manifest entry after a clean build or beside stale generated output', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-loading-routes-'));
+    const current = '.svelte-kit/generated/build/client-optimized/app.js';
+    const stale = '.svelte-kit/generated/client/app.js';
+    const manifest = { [current]: { file: 'app.js', name: 'entry/app' } };
+    try {
+      await mkdir(path.dirname(path.join(directory, current)), { recursive: true });
+      await writeFile(path.join(directory, current), 'export const dictionary = {"/(public)/current": [4,[3]]};');
+      const expected = [{ routeKey: '/(public)/current', pageNode: 4, layoutNodes: [3] }];
+      assert.deepEqual(readFrontendRouteNodes(directory, manifest), expected);
+      await mkdir(path.dirname(path.join(directory, stale)), { recursive: true });
+      await writeFile(path.join(directory, stale), 'export const dictionary = {"/(public)/stale": [8,[3]]};');
+      assert.deepEqual(readFrontendRouteNodes(directory, manifest), expected);
+      assert.throws(() => readFrontendRouteNodes(directory, {}), /exactly one application entry/);
+      assert.throws(() => readFrontendRouteNodes(directory, { ...manifest, [stale]: manifest[current] }), /exactly one application entry/);
+      await rm(path.join(directory, current));
+      assert.throws(() => readFrontendRouteNodes(directory, manifest), /ENOENT/);
+      await writeFile(path.join(directory, 'outside.js'), 'export const dictionary = {"/outside": [4]};');
+      assert.throws(() => readFrontendRouteNodes(directory, { 'outside.js': manifest[current] }), /outside the generated root/);
+      assert.throws(() => readFrontendRouteNodes(directory, { '../outside.js': manifest[current] }), /safe relative path/);
+      await symlink(path.join(directory, 'outside.js'), path.join(directory, current));
+      assert.throws(() => readFrontendRouteNodes(directory, manifest), /outside the generated root/);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   test('rejects unsafe manifest paths and malformed asset measurements', () => {

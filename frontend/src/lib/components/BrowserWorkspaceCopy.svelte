@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import { MAX_BROWSER_WORKSPACE_NAME } from '$lib/browser-workspace-directory.ts';
-  import { MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES, MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS } from '$lib/browser-workspace-encryption-model.ts';
-  import type { BrowserWorkspaceCopy, BrowserWorkspaceCopyReport } from '$lib/browser-workspace-copy.ts';
+  import { MAX_BROWSER_WORKSPACE_NAME } from '#lib/browser-workspace-directory.ts';
+  import { MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES, MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS } from '#lib/browser-workspace-encryption-model.ts';
+  import type { BrowserWorkspaceCopy, BrowserWorkspaceCopyReport } from '#lib/browser-workspace-copy.ts';
 
   let { disabled = false, onbusy = () => {}, onchange = () => {} }: { disabled?: boolean; onbusy?: (value: boolean) => void; onchange?: () => void } = $props();
   let name = $state(''), passphrase = $state(''), confirmation = $state(''), busy = $state(false), message = $state(''), error = $state('');
@@ -37,8 +37,8 @@
   async function start() {
     await operation(async () => {
       if (passphrase !== confirmation) throw new Error('The replacement workspace passphrases do not match.');
-      const { openEncryptedWorkspaceCopy } = await import('$lib/browser-workspace-copy.ts');
-      const { WorkspaceDestinationStartError } = await import('$lib/browser-workspace-destination.ts');
+      const { openEncryptedWorkspaceCopy } = await import('#lib/browser-workspace-copy.ts');
+      const { WorkspaceDestinationStartError } = await import('#lib/browser-workspace-destination.ts');
       try {
         const opened = await openEncryptedWorkspaceCopy({ name, passphrase });
         if (disposed) { await opened.close(); return; }

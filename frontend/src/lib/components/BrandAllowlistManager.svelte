@@ -1,9 +1,9 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import type { BrandProfile, BrandProfileSaveResult } from '$lib/brand-profiles';
-  import { addBrandAllowlistValues, MAX_ALLOWLIST_DRAFT_CHARACTERS, MAX_PROFILE_VALUES } from '$lib/analysis/brand-profile-model.ts';
-  import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
-  import { MAX_BRAND_PREVIEW_DOMAINS, previewBrandDomainExclusions, type BrandMatchSourceState } from '$lib/analysis/brand-profile-signals.ts';
+  import type { BrandProfile, BrandProfileSaveResult } from '#lib/brand-profiles.ts';
+  import { addBrandAllowlistValues, MAX_ALLOWLIST_DRAFT_CHARACTERS, MAX_PROFILE_VALUES } from '#lib/analysis/brand-profile-model.ts';
+  import { restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
+  import { MAX_BRAND_PREVIEW_DOMAINS, previewBrandDomainExclusions, type BrandMatchSourceState } from '#lib/analysis/brand-profile-signals.ts';
   import Pagination from './Pagination.svelte';
   import { MAX_CASES } from '../../../../packages/contracts/case-portability.mts';
 

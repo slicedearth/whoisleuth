@@ -1,8 +1,10 @@
 // Append-only response actions: transitions, reconciliation and bounded history.
 import { readCaseEvidenceRequest, readCasePacketAmendment, assertEvidenceRequestEvent, assertEvidenceRequestHistory, assertEvidenceRequestTransition, assertPacketAmendment } from './case-requested-evidence.mts';
+import { readCaseDeliveryPacketReceipt, readCasePacketCorrection, assertDeliveryPacketReceipt, correctionDelivery } from './case-packet-correction.mts';
 import { MAX_INTAKE_LINKS, MAX_MESSAGE_PARTS, type MessageIntakeReport } from '../contracts/message-intake.mts';
 import { emailRecipient } from '../evidence/email-recipient.mts';
 import { responseRouteFreshness } from './response-route-freshness.mts';
+import { readCaseResponseObjects, readCaseResponseObjectOutcome, assertCaseObjectOutcome, sameCaseResponseObject } from './case-response-object.mts';
 
 import {
   CASE_SCHEMA_VERSION,
@@ -222,6 +224,11 @@ function normalizeActionEvent(
   const provenance = text(item.provenance, MAX_RESPONSE_LABEL_LENGTH) || `${sourceClass}_record`;
   if (item.evidenceRequest !== undefined && options.sourceVersion != null && options.sourceVersion < 17) throw new Error('Requested evidence requires Case schema 17.');
   const evidenceRequest = readCaseEvidenceRequest(item.evidenceRequest);
+  if (item.packetReceipt !== undefined && options.sourceVersion != null && options.sourceVersion < 19) throw new TypeError('Delivery receipts require Case schema 19.');
+  const packetReceipt = readCaseDeliveryPacketReceipt(item.packetReceipt);
+  assertDeliveryPacketReceipt(packetReceipt, { previousState, nextState, sourceClass, occurredAt,
+    reference: typeof item.reference === 'string' ? item.reference : null,
+    responseObjects: readCaseResponseObjects(item.responseObjects, options.sourceVersion) }, actionId);
   assertEvidenceRequestEvent(evidenceRequest, { previousState, nextState, sourceClass, providerOutcome: item.providerOutcome });
   const providerOutcome = typeof item.providerOutcome === 'string' && PROVIDER_OUTCOMES.has(item.providerOutcome)
     ? item.providerOutcome as CaseProviderOutcome
@@ -249,7 +256,10 @@ function normalizeActionEvent(
     : null;
   const eventMaterial = {
     previousState,
+    ...(item.responseObjects === undefined ? {} : { responseObjects: readCaseResponseObjects(item.responseObjects, options.sourceVersion)! }),
+    ...(item.objectOutcome === undefined ? {} : { objectOutcome: readCaseResponseObjectOutcome(item.objectOutcome, options.sourceVersion)! }),
     ...(evidenceRequest ? { evidenceRequest } : {}),
+    ...(packetReceipt ? { packetReceipt } : {}),
     nextState,
     occurredAt,
     sourceClass,
@@ -266,6 +276,12 @@ function normalizeActionEvent(
       ? item.originActionId
       : null,
   };
+  if (eventMaterial.objectOutcome) {
+    if (!['submitted', 'acknowledged', 'terminal'].includes(nextState) || previousState === 'authorised') throw new TypeError('Object outcomes require a separate attributed event after submission.');
+    if (sourceClass !== 'provider' && sourceClass !== 'analyst') throw new TypeError('Object outcomes require an attributed provider or analyst event.');
+    if (!eventMaterial.responseObjects?.length) throw new TypeError('Select the objects concerned by this provider outcome; no complete-action resolution is inferred.');
+    for (const object of eventMaterial.responseObjects) assertCaseObjectOutcome(eventMaterial.objectOutcome, object);
+  }
   return {
     id: safeId(item.id, 'action-event', { actionId, ...eventMaterial }),
     ...eventMaterial,
@@ -455,6 +471,9 @@ function normalizeAction(
   assertEvidenceRequestHistory(history.history, history.omitted > 0);
   if (item.amendment !== undefined && options.sourceVersion != null && options.sourceVersion < 17) throw new Error('Packet amendments require Case schema 17.');
   const amendment = readCasePacketAmendment(item.amendment);
+  if (item.correction !== undefined && options.sourceVersion != null && options.sourceVersion < 19) throw new TypeError('Packet corrections require Case schema 19.');
+  const correction = readCasePacketCorrection(item.correction);
+  if (correction && amendment) throw new TypeError('Self-initiated correction and provider-request amendment are separate purposes.');
   const applied = history.history.filter((event) => event.applied);
   const latestReference = [...applied].reverse().find((event) => event.reference)?.reference ?? null;
   const latestProviderOutcome = [...applied].reverse().find((event) => event.providerOutcome) ?? null;
@@ -469,7 +488,9 @@ function normalizeAction(
     : null;
   return {
     id: actionId,
+    ...(item.responseObjects === undefined ? {} : { responseObjects: readCaseResponseObjects(item.responseObjects, options.sourceVersion)! }),
     ...(amendment ? { amendment } : {}),
+    ...(correction ? { correction } : {}),
     type: legacyPlatformReview
       ? 'platform_report'
       : typeof item.type === 'string' && ACTION_TYPES.has(item.type)
@@ -662,9 +683,13 @@ export function appendCaseAction(
   if (item.originActionId != null && !originActionId) throw new Error('A follow-on action requires an existing originating action.');
   const amendment = readCasePacketAmendment(item.amendment);
   if (amendment) assertPacketAmendment(current, originActionId, amendment);
+  const correction = readCasePacketCorrection(item.correction);
+  if (correction) correctionDelivery(current, { originActionId, correction,
+    recipient: text(item.recipient, MAX_RESPONSE_RECIPIENT_LENGTH), responseObjects: readCaseResponseObjects(item.responseObjects) });
   const history = [{
     id: freshId('action-event'),
     previousState: null,
+    ...(item.responseObjects === undefined ? {} : { responseObjects: readCaseResponseObjects(item.responseObjects)! }),
     nextState: 'drafting',
     occurredAt: now,
     sourceClass: 'analyst',
@@ -689,6 +714,10 @@ export function appendCaseAction(
   return normalizeCaseActions([...current, created], now, { sourceVersion: CASE_SCHEMA_VERSION });
 }
 
+export function providerOutcomeRequiresObjectScope(outcome: unknown): boolean {
+  return outcome === 'provider_reports_resolved' || outcome === 'partially_remediated';
+}
+
 export function appendCaseActionTransition(
   current: readonly CaseActionRecord[],
   actionId: string,
@@ -699,6 +728,11 @@ export function appendCaseActionTransition(
   const action = current.find((item) => item.id === actionId);
   if (!action) throw new Error('That case action no longer exists.');
   const item = record(raw);
+  const selectedObjects = readCaseResponseObjects(item.responseObjects);
+  const outcome = readCaseResponseObjectOutcome(item.objectOutcome);
+  if (selectedObjects?.some(object => !action.responseObjects?.some(bound => sameCaseResponseObject(bound, object)))) throw new TypeError('A transition may concern only objects explicitly bound to its action.');
+  if (outcome && !selectedObjects?.length) throw new TypeError('Explicitly select the affected objects for this outcome; it is not applied to every action object.');
+  if (action.responseObjects?.length && providerOutcomeRequiresObjectScope(item.providerOutcome) && !selectedObjects?.length) throw new TypeError('Explicitly select the objects covered by this provider-reported outcome; other action objects remain unchecked.');
   const nextState = typeof item.nextState === 'string' && ACTION_STATES.has(item.nextState)
     ? item.nextState as CaseActionState
     : null;
@@ -728,9 +762,15 @@ export function appendCaseActionTransition(
   if (action.amendment && ['ready_for_review', 'reviewed', 'authorised', 'submitted'].includes(nextState)) {
     assertPacketAmendment(current, action.originActionId, action.amendment);
   }
+  if (action.correction && ['ready_for_review', 'reviewed', 'authorised', 'submitted'].includes(nextState)) correctionDelivery(current, action);
+  const packetReceipt = readCaseDeliveryPacketReceipt(item.packetReceipt);
+  if (packetReceipt && (packetReceipt.recipient !== action.recipient
+    || JSON.stringify(packetReceipt.responseObjects) !== JSON.stringify(action.responseObjects ?? []))) throw new TypeError('The delivered packet receipt no longer matches this action recipient or scope.');
+  if (action.correction && nextState === 'submitted' && !packetReceipt) throw new TypeError('Record the separately prepared correction packet receipt only after actual delivery.');
   const occurredAt = optionalIso(item.occurredAt) ?? now;
   const event = normalizeActionEvent({
     ...item,
+    ...(selectedObjects !== undefined ? { responseObjects: selectedObjects } : action.responseObjects === undefined ? {} : { responseObjects: action.responseObjects }),
     id: freshId('action-event'),
     previousState: action.state,
     nextState,
@@ -753,7 +793,7 @@ export function appendCaseActionTransition(
 }
 
 const ACTION_REVIEW_MATERIAL_FIELDS = [
-  'type', 'recipient', 'contactSource', 'routeObservedAt', 'routeReviewAfter', 'contactLimitations', 'originActionId', 'amendment',
+  'type', 'recipient', 'contactSource', 'routeObservedAt', 'routeReviewAfter', 'contactLimitations', 'originActionId', 'amendment', 'correction', 'responseObjects',
 ] as const satisfies readonly (keyof CaseActionRecord)[];
 
 export function updateCaseAction(
@@ -787,6 +827,7 @@ export function updateCaseAction(
   const materialChanged = ACTION_REVIEW_MATERIAL_FIELDS
     .some((key) => Object.hasOwn(patch, key) && JSON.stringify(record(existing)[key]) !== JSON.stringify(record(updated)[key]));
   if (materialChanged && updated.amendment) assertPacketAmendment(current, updated.originActionId, updated.amendment);
+  if (materialChanged && updated.correction) correctionDelivery(current, updated);
   if (materialChanged && ['submitted', 'acknowledged', 'terminal'].includes(existing.state)) {
     throw new Error('Submitted or terminal action identity and recipient metadata cannot be rewritten; create a linked follow-on action instead.');
   }
@@ -800,6 +841,7 @@ export function updateCaseAction(
         occurredAt: now,
         sourceClass: 'browser_local',
         provenance: 'material_action_change',
+        ...(updated.responseObjects === undefined ? {} : { responseObjects: updated.responseObjects }),
         reference: null,
         evidencePinId: null,
         limitations: ['Material action inputs changed after review; prior readiness, review, or authorisation no longer applies.'],

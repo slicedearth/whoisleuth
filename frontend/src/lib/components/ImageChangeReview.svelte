@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, tick, untrack } from 'svelte';
-  import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
+  import { runInvestigationPackageWorker } from '#lib/investigation-package-worker.ts';
   import { compareObservationContexts, type ObservationContext } from '../../../../packages/comparison/capture-context.mts';
   import type { ImageChange } from '../../../../packages/comparison/image-change.mts';
   import { MAX_EVIDENCE_IMAGE_REGIONS, readImageRegionPlan, type ImageDimensions, type ImageRegion } from '../../../../packages/evidence/image-regions.mts';

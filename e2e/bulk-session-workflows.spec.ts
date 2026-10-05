@@ -1,9 +1,11 @@
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { expect, test } from './fixtures';
 import { BULK_SESSION_SCHEMA, BULK_SESSION_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { MAX_BULK_SESSIONS } from '../packages/workspace/bulk-session-model.mts';
+import { RISK_MODEL_VERSION } from '../packages/analysis/risk-scoring.mts';
 import { richBulkSessionStore } from '../test/bulk-session-fixture.mts';
-import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
+import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, holdBrowserLocalTransaction, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
 
 // Saved Bulk sessions, provenance, resumption and cancellation coverage.
 
@@ -55,6 +57,147 @@ test('a stale saved-session deletion cannot remove a newer peer revision', async
     await expect(page.getByRole('status').filter({ hasText: 'Deleted Peer revised review.' })).toBeVisible();
     expect((await readBrowserLocalCollection(page, 'bulk_sessions')).records).toHaveLength(0);
   } finally { await peer.close(); }
+});
+
+test('held domain file reading cannot replace a typed and admitted queue', { tag: '@timing-sensitive' }, async ({ page }) => {
+  await page.route('**/api/lookup?*', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+    availability: { applicable: true, domain: 'newer.example', state: 'registered', confidence: 'high' },
+    diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+  }) }));
+  await page.evaluate(() => {
+    const state = window as typeof window & { releaseDomainFile?: (value: string) => void; domainFileReleased?: boolean };
+    const original = File.prototype.text;
+    File.prototype.text = function text() {
+      return this.name === 'held-domains.txt' ? new Promise<string>(resolve => {
+        state.releaseDomainFile = value => { resolve(value); queueMicrotask(() => { state.domainFileReleased = true; }); };
+      }) : original.call(this);
+    };
+  });
+  await page.locator('.queue input[type=file]').setInputFiles({ name: 'held-domains.txt', mimeType: 'text/plain', buffer: Buffer.from('older.example') });
+  await page.getByLabel('Domains', { exact: true }).fill('newer.example');
+  await page.getByRole('button', { name: 'Scan 1 domain', exact: true }).click();
+  await page.evaluate(() => (window as typeof window & { releaseDomainFile?: (value: string) => void }).releaseDomainFile?.('older.example'));
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { domainFileReleased?: boolean }).domainFileReleased)).toBe(true);
+  await expect(page.getByLabel('Domains', { exact: true })).toHaveValue('newer.example');
+  await expect(page.getByText(/Loaded.*held-domains.txt/u)).toHaveCount(0);
+  await expect(page.getByText('Completed 1 of 1 lookups.', { exact: true })).toBeVisible();
+});
+
+test('saved Bulk results retain admitted targets and mode after next-run draft edits', async ({ page }) => {
+  const session = richBulkSessionStore(2).sessions[0]!;
+  session.inputDigest = `sha256:${createHash('sha256').update(`${session.mode}\u0000${session.domains.join('\n')}`).digest('hex')}`;
+  await migrateLegacyBrowserData(page, { 'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([session]) });
+  await openBulkWorkspaceTools(page);
+  await page.getByRole('article').filter({ has: page.getByRole('heading', { name: session.name, exact: true }) }).getByRole('button', { name: 'Load', exact: true }).click();
+  await page.getByLabel('Domains', { exact: true }).fill('next-draft.example');
+  const mode = page.getByRole('combobox', { name: 'Scan mode', exact: true });
+  await mode.selectOption('fast');
+  await expect(mode).toHaveValue('fast');
+  await page.getByRole('button', { name: 'Update saved session', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: `Updated ${session.name}.` })).toBeVisible();
+  const actual = (await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: 1 })).records[0]!.value;
+  expect(actual.domains).toEqual(session.domains);
+  expect(actual.mode).toBe(session.mode);
+  expect(actual.inputDigest).toBe(session.inputDigest);
+  expect(actual.results.map((row: { domain: string }) => row.domain)).toEqual(session.results.map(row => row.domain));
+});
+
+test('queued shortlist add then clear preserves unrelated stored members', { tag: '@timing-sensitive' }, async ({ page }) => {
+  const session = richBulkSessionStore(2).sessions[0]!;
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([session]),
+    'whois-rdap-shortlist-v1': currentBrowserLocalDocument('shortlist', { entries: [
+      { domain: session.domains[0], savedAt: session.updatedAt, scanDepth: 'deep', availability: 'registered', mutationTypes: [] },
+      { domain: 'unrelated.example', savedAt: session.updatedAt, scanDepth: 'deep', availability: 'registered', mutationTypes: [] },
+    ] }),
+  });
+  await openBulkWorkspaceTools(page);
+  await page.getByRole('article').filter({ has: page.getByRole('heading', { name: session.name, exact: true }) }).getByRole('button', { name: 'Load', exact: true }).click();
+  await openBulkFilters(page);
+  await expect(page.getByText('1 selected in the filtered set')).toBeVisible();
+  const release = await holdBrowserLocalTransaction(page);
+  try {
+    await page.getByRole('button', { name: 'Select matched', exact: true }).click();
+    await page.getByRole('button', { name: 'Clear filtered selection', exact: true }).click();
+  } finally { await release(); }
+  await expect.poll(async () => (await readBrowserLocalCollection(page, 'shortlist')).records.map(record => record.value.domain)).toEqual(['unrelated.example']);
+  await expect(page.getByText('1 selected in the filtered set')).toHaveCount(0);
+});
+
+test('Monitor review conserves scoped membership and rejects stale replacement consent', async ({ page, context }) => {
+  const session = richBulkSessionStore(1).sessions[0]!;
+  const previous = { updatedAt: session.updatedAt, results: [
+    { domain: 'retained-one.example', availability: 'registered', scanDepth: 'fast' },
+    { domain: 'retained-two.example', availability: 'registered', scanDepth: 'fast' },
+  ], baseline: [], history: [] };
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([session]),
+    'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', { Review: previous }),
+  });
+  await openBulkWorkspaceTools(page);
+  await page.getByRole('article').filter({ has: page.getByRole('heading', { name: session.name, exact: true }) }).getByRole('button', { name: 'Load', exact: true }).click();
+  await openBulkFilters(page);
+  await page.getByRole('button', { name: 'Select matched', exact: true }).click();
+  await expect(page.getByText('1 selected in the filtered set')).toBeVisible();
+  await page.getByLabel('Watchlist name', { exact: true }).fill('Review');
+  await page.getByRole('button', { name: 'Save selected', exact: true }).click();
+  const review = page.getByRole('region', { name: 'Review Monitor membership' });
+  await expect(review).toContainText('Scoped merge');
+  await expect(review).toContainText('Retained current members: 2');
+  await expect(review).toContainText('Added current members: 1');
+  await expect(review).toContainText('Removed current members: 0');
+  await expectNoHorizontalOverflow(page);
+  await review.getByRole('button', { name: 'Confirm scoped merge', exact: true }).click();
+  await expect(review).toHaveCount(0);
+  const merged = (await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 })).records[0]!.value;
+  expect(merged.results.map((row: { domain: string }) => row.domain).sort()).toEqual([...session.domains, 'retained-one.example', 'retained-two.example'].sort());
+  expect(merged.history.at(-1)).toMatchObject({ resultCount: 1 });
+  await page.getByLabel('Watchlist name', { exact: true }).fill('Review');
+  await page.getByRole('button', { name: 'Save to Monitor', exact: true }).click();
+  await expect(review).toContainText('Full snapshot replacement');
+  await expect(review).toContainText('Removed current members: 2');
+  const peer = await context.newPage();
+  try {
+    await peer.goto('/monitor?view=watchlists');
+    peer.once('dialog', dialog => dialog.accept());
+    await peer.getByRole('row', { name: /Review/u }).getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect.poll(async () => (await readBrowserLocalCollection(peer, 'watchlists')).records.length).toBe(0);
+    await review.getByRole('button', { name: 'Confirm snapshot replacement', exact: true }).click();
+    await expect(page.locator('.save-watchlist').getByRole('status')).toContainText('changed after review');
+    expect((await readBrowserLocalCollection(page, 'watchlists')).records).toHaveLength(0);
+  } finally { await peer.close(); }
+});
+
+test('confirmed Monitor replacement survives reload and prepares only the reviewed active members', async ({ page }) => {
+  const session = richBulkSessionStore(1).sessions[0]!;
+  const rows = ['removed-one.example', 'removed-two.example'].map(domain => ({ domain, availability: 'registered', scanDepth: 'fast' }));
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([session]),
+    'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', { Review: {
+      updatedAt: session.updatedAt, results: rows, baseline: rows, history: [],
+      domainMetadata: [{ domain: 'candidate-only.example', contexts: [], candidate: null }],
+    } }),
+  });
+  await openBulkWorkspaceTools(page);
+  await page.getByRole('article').filter({ has: page.getByRole('heading', { name: session.name, exact: true }) }).getByRole('button', { name: 'Load', exact: true }).click();
+  await openBulkFilters(page);
+  await page.getByLabel('Watchlist name', { exact: true }).fill('Review');
+  await page.getByRole('button', { name: 'Save to Monitor', exact: true }).click();
+  const review = page.getByRole('region', { name: 'Review Monitor membership' });
+  await expect(review).toContainText('Removed current members: 3');
+  await expect(review).toContainText('Added current members: 1');
+  await review.getByRole('button', { name: 'Confirm snapshot replacement', exact: true }).click();
+  await expect(review).toHaveCount(0);
+  const saved = (await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 })).records[0]!.value;
+  expect(saved.domainMetadata.map(row => row.domain)).toEqual(session.domains);
+  expect(saved.results.map(row => row.domain)).toEqual(session.domains);
+  await page.goto('/monitor?view=watchlists');
+  await page.reload();
+  const row = page.getByRole('row', { name: /Review/ });
+  await expect(row.getByRole('cell').first()).toHaveText('1');
+  await row.getByRole('button', { name: 'Rescan in Bulk' }).click();
+  await expect(page).toHaveURL(/\/bulk\?source=watchlist&handoff=[0-9a-f]{32}$/u);
+  await expect(page.getByLabel('Domains', { exact: true })).toHaveValue(session.domains.join('\n'));
 });
 
 test('reviews capacity before saving and invalidates consent when another tab changes the affected records', async ({ page, context }) => {
@@ -172,7 +315,7 @@ test('saves compact Bulk sessions, restores them after reload, and compares late
   });
   expect(baseline?.results[0]).toMatchObject({
     risk: 6,
-    riskModelVersion: 8,
+    riskModelVersion: RISK_MODEL_VERSION,
     trusted: null,
     faviconMatch: false,
     faviconNearMatch: false,

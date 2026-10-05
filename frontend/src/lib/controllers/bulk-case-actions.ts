@@ -34,7 +34,7 @@ export function bulkCaseInput(row: ScanResult) {
     ...(normalizeHttpSummary(saved) || {}),
     faviconMatch: saved.faviconMatch, faviconNearMatch: saved.faviconNearMatch,
     reusesOfficialAssets: saved.reusesOfficialAssets, hasPasswordField: saved.hasPasswordField,
-    hasExternalFormAction: saved.hasExternalFormAction, phishingLanguageMatch: saved.phishingLanguageMatch,
+    hasExternalFormAction: saved.hasExternalFormAction, hasExternalPasswordForm: saved.hasExternalPasswordForm, phishingLanguageMatch: saved.phishingLanguageMatch,
     privacyProtected: saved.privacyProtected, idnReferenceMatch: saved.idnReferenceMatch,
     pageBaselineMatch: saved.pageBaselineMatch, hasActiveBrandProfile: saved.hasActiveBrandProfile,
     profileContextState: saved.profileContext.sourceState === 'ready' ? 'ready' : 'unavailable',

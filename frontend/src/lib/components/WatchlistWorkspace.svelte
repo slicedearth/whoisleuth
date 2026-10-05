@@ -1,17 +1,20 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import Pagination from '$lib/components/Pagination.svelte';
-  import EvidenceTimestamp from '$lib/components/EvidenceTimestamp.svelte';
-  import MonitorDomainTimeline from '$lib/components/MonitorDomainTimeline.svelte';
+  import Pagination from '#lib/components/Pagination.svelte';
+  import EvidenceTimestamp from '#lib/components/EvidenceTimestamp.svelte';
+  import MonitorDomainTimeline from '#lib/components/MonitorDomainTimeline.svelte';
+  import WatchlistDomainMetadata from '#lib/components/WatchlistDomainMetadata.svelte';
+  import type { WatchBrandNames } from '#lib/analysis/watchlist-context-labels.ts';
   import {
     fieldLabels,
     formatValue,
     projectWatchlistDomainHistory,
     watchlistHistoryDomains,
+    watchlistActiveDomains,
     type WatchlistEntry,
     type WatchlistEvent,
     type Watchlists,
-  } from '$lib/watchlists';
+  } from '#lib/watchlists.ts';
 
   let {
     watchlists,
@@ -30,6 +33,8 @@
     remove,
     openCase,
     formatDate,
+    refresh,
+    brandNames,
   }: {
     watchlists: Watchlists;
     names: string[];
@@ -47,6 +52,8 @@
     remove: (name: string) => void | Promise<void>;
     openCase: (domain: string) => void;
     formatDate: (value: string | null) => string;
+    refresh: () => Promise<unknown>;
+    brandNames: WatchBrandNames;
   } = $props();
 
   const PAGE_SIZE=25;
@@ -106,11 +113,11 @@
         <thead><tr><th scope="col">Name</th><th scope="col">Domains</th><th scope="col">Checks</th><th scope="col">Latest changes</th><th scope="col">Updated</th><th scope="col">Actions</th></tr></thead>
         <tbody>{#each pagedNames as name}{@const item=watchlists[name]}{#if item}{@const latest=item.history.at(-1)}
           <tr>
-            <th scope="row">{name}</th><td>{item.results.length}</td><td>{item.history.length}</td>
+            <th scope="row">{name}</th><td>{#if item.membershipRecovery}Paused — recovery required{:else}{watchlistActiveDomains(item).length}{/if}</td><td>{item.history.length}</td>
             <td><span class:changed={(latest?.changeCount || 0) > 0}>{latest?.changeCount || 0}</span></td>
             <td>{formatDate(item.updatedAt)}</td>
             <td><div class="actions toolbar">
-              <button class="btn small" onclick={() => rescan(name)}>Rescan in Bulk</button>
+              <button class="btn small" onclick={() => rescan(name)} disabled={Boolean(item.membershipRecovery)}>Rescan in Bulk</button>
               <button class="btn small" onclick={() => { focusedDomain=''; setSelected(name); setChangedOnly(false); }}>History</button>
               <button id={`watchlist-delete-${name}`} class="btn small danger" onclick={() => void removeAndFocus(name)}>Delete</button>
             </div></td>
@@ -121,10 +128,20 @@
     <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Watchlist pages" />
   </section>
 {:else}
-  <section class="empty-state card"><h2>No watchlists saved</h2><p>Run a Bulk scan, then save its results to begin a saved monitoring timeline.</p><a id="empty-watchlist-open-bulk" href="/bulk">Open Bulk →</a></section>
+  <section class="empty-state card"><h2>No watchlists saved</h2><p>Add reviewed Brand candidates without collection, or save observed Bulk results to begin an evidence timeline.</p><a id="empty-watchlist-open-bulk" href="/bulk">Open Bulk →</a></section>
 {/if}
 
 {#if entry}
+  {#if entry.membershipRecovery}
+    <section class="card recovery" aria-label="Watchlist membership recovery">
+      <h2>{selected}: preserved for recovery</h2>
+      <p>This older snapshot contains more than 2,000 distinct domains across its observations and membership records. Scanning and editing are paused; no domains or Brand contexts have been discarded.</p>
+      <p>Review the retained history and contexts below, then export JSON before creating a separate watchlist with your selected domains. The original stays preserved until you explicitly delete it.</p>
+      <p>{entry.domainMetadata.length} membership records · {entry.results.length} current {entry.results.length === 1 ? 'observation' : 'observations'} · 0 active scan targets.</p>
+      <button class="btn" onclick={downloadWatchlists}>Export preserved watchlists</button>
+    </section>
+  {/if}
+  <WatchlistDomainMetadata name={selected} {entry} {brandNames} onrefresh={refresh} />
   <section id="watchlist-history" class="history card" aria-labelledby="watchlist-history-title" tabindex="-1">
     <header class="section-head">
       <div>
@@ -197,7 +214,7 @@
 <style>
   .message{color:var(--accent);font-size:var(--text-sm)}
   .wl-toolbar{padding:16px}
-  .watchlists,.history{padding:var(--card-pad)}
+  .watchlists,.history,.recovery{padding:var(--card-pad)}
   .watchlists table{min-width:44rem;table-layout:fixed}
   .watchlists th,.watchlists td{overflow-wrap:anywhere}
   .watchlists th:last-child{width:30%}

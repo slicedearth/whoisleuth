@@ -151,6 +151,21 @@ function session(id = 'session-one', overrides: Record<string, unknown> = {}) {
 }
 
 describe('saved Bulk sessions', () => {
+  test('preserves form attribution only in its declared epoch and leaves old associations unknown', () => {
+    const historical = { schema: BULK_SESSION_SCHEMA, version: 6, sessions: [session()] };
+    const migrated = normalizeBulkSessionStore(historical);
+    assert.equal(migrated.sessions[0]?.results[0]?.hasExternalPasswordForm, null);
+    const current = normalizeBulkSessionStore({
+      schema: BULK_SESSION_SCHEMA, version: 7,
+      sessions: [session('form-evidence', { results: [result('priority.invalid', { hasExternalPasswordForm: true })] })],
+    });
+    assert.equal(current.sessions[0]?.results[0]?.hasExternalPasswordForm, true);
+    assert.deepEqual(normalizeBulkSessionStore(JSON.parse(serializeBulkSessionStore(current))), current);
+    const relabelled = JSON.parse(serializeBulkSessionStore(current));
+    relabelled.version = 6;
+    assert.throws(() => normalizeBulkSessionStore(relabelled), /schema 7/u);
+  });
+
   test('round trips independent source clocks without substituting row or session dates', () => {
     const input = session('source-clocks', { results: [result('priority.invalid', { observedAt: LATER, sourceCoverage: [
       { source: 'dns', state: 'complete', observedAt: FIRST },
@@ -173,6 +188,7 @@ describe('saved Bulk sessions', () => {
     assert.equal(normalizeBulkSession(wire.sessions[0]), null);
     assert.deepEqual(normalizeBulkSessionStore(wire.sessions).sessions, []);
     wire.sessions[0].results[0].relationship.version = 2;
+    delete wire.sessions[0].results[0].hasExternalPasswordForm;
     assert.deepEqual(normalizeBulkSessionStore({ ...wire, version: 4 }).sessions, []);
     for (const invalid of [null, {}, { sourceState: 'mixed' }, { sourceState: 'ready', activeProfileId: 'missing-revision' }]) {
       const explicit = structuredClone(wire);

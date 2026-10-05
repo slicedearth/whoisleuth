@@ -81,7 +81,7 @@ type CliCommandDefinition = Readonly<{
   }>;
 }>;
 
-const CLI_CASE_OPERATIONS = ['show', 'open', 'note', 'pin', 'link', 'withdraw-link', 'assess', 'recheck'] as const;
+const CLI_CASE_OPERATIONS = ['show', 'open', 'note', 'pin', 'link', 'withdraw-link', 'assess', 'recheck', 'incident-link', 'action', 'action-event', 'recheck-question', 'close-object'] as const;
 const CLI_INDICATOR_OPERATIONS = ['revise', 'inspect', 'stix', 'misp'] as const;
 
 const CLI_META_ACTIONS: readonly CliMetaAction[] = Object.freeze([
@@ -244,6 +244,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--json': flag('Write structured JSON to stdout or the selected output file.'),
   '--reported-action': optionDefinition('enum', 'Record an analyst-reported identity action; repeat for separate actions.', { values: IDENTITY_ACTIONS.map(action => action.id), occurrence: 'repeatable' }),
   '--trusted-auth-header': optionDefinition('text', 'Select a recognised receiver header by part:header-index. This records analyst trust, not independent authentication; repeat for separate headers.', { occurrence: 'repeatable' }),
+  '--intake-context': optionDefinition('file', 'Read one selected version-1 distribution declaration or version-2 digest-bound phone/destination selection file. Declarations remain attributed claims.'),
   '--package': flag('Verify a portable evidence ZIP or encrypted package rather than a single report.'),
   '--folder': file('Verify the evidence package within this selected folder.'),
   '--quiet': flag('Suppress ordinary terminal presentation.', 'idempotent'),

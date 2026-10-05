@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
+  import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
   import { securityPostureReview, summarizeSecurityPostureReview } from '../../../../lib/website-security-posture.mts';
   type Finding = {
     id: string;

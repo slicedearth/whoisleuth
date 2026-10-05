@@ -21,6 +21,42 @@ async function pinForm(page: import('@playwright/test').Page) {
   return details.locator('form').first();
 }
 
+for (const entry of ['fresh launch', 'already-open login fragment'] as const) {
+test(`${entry} clears its token and history before one delayed local session exchange`, async ({ page, localApplication }) => {
+  let exchanges = 0;
+  let scrubbedBeforeExchange = false;
+  let received!: () => void, release!: () => void;
+  const requested = new Promise<void>(resolve => { received = resolve; });
+  const permitted = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/local-session', async route => {
+    exchanges++;
+    const location = new URL(page.url());
+    scrubbedBeforeExchange = location.pathname === '/login' && location.hash === '';
+    received();
+    await permitted;
+    await route.continue();
+  });
+  try {
+    if (entry === 'fresh launch') await page.goto(localApplication.instance.launchUrl);
+    else {
+      await page.goto(`${localApplication.instance.origin}/login?next=https%3A%2F%2Foutside.invalid%2F`);
+      await expect(page.getByRole('heading', { name: 'Open local workspace', exact: true })).toBeVisible();
+      await expect(page.getByRole('status')).toHaveCount(0);
+      await page.evaluate(hash => { location.hash = hash; }, new URL(localApplication.instance.launchUrl).hash);
+    }
+    await requested;
+    expect(scrubbedBeforeExchange).toBe(true);
+    const token = new URL(localApplication.instance.launchUrl).hash.slice(1);
+    expect(await page.evaluate(value => !JSON.stringify(history.state).includes(value), token)).toBe(true);
+    expect(exchanges).toBe(1);
+    release();
+    await expect(page).toHaveURL(`${localApplication.instance.origin}/dashboard`);
+    await expect(page.locator('#main-content > .workspace-scope strong')).toHaveText('Filesystem workspace');
+    expect(exchanges).toBe(1);
+  } finally { release(); }
+});
+}
+
 test('an unconfirmed filesystem recovery write keeps the form and blocks repeat writes until review', async ({ page, localApplication }) => {
   await openLocalApplication(page, localApplication);
   await openCasesView(page); await createCase(page, 'uncertain-recovery.example');

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { BulkSortDirection, BulkSortKey } from '$lib/analysis/bulk-sort.ts';
-  import type { BulkAgeFilter, BulkGroupBy, BulkLifecycleFilter, BulkMailFilter, BulkSourceFilter } from '$lib/analysis/bulk-triage.ts';
+  import type { BulkSortDirection, BulkSortKey } from '#lib/analysis/bulk-sort.ts';
+  import type { BulkAgeFilter, BulkGroupBy, BulkLifecycleFilter, BulkMailFilter, BulkSourceFilter } from '#lib/analysis/bulk-triage.ts';
 
   type Filter = 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'profile_unevaluated' | 'errors';
   type IndicatorFormat = 'domains' | 'hosts' | 'dnsmasq' | 'rpz' | 'stix' | 'misp';

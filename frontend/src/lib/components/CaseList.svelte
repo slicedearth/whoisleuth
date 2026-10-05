@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Pagination from '$lib/components/Pagination.svelte';
+  import Pagination from '#lib/components/Pagination.svelte';
   import { caseNumber, caseTypeRecords } from '../../../../packages/cases/case-workflow-metadata.mts';
   import {
     dispositionLabel,
@@ -7,8 +7,8 @@
     statusLabel,
   } from '../../../../packages/cases/case-record-decisions.mts';
   import type { CaseRecord } from '../cases.ts';
-  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
-  import { handlesLocalLink } from '$lib/link-activation';
+  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
+  import { handlesLocalLink } from '#lib/link-activation.ts';
 
   let { records, selectCase, formatDate, currentPage, pageCount, setPage, calibrationMode = false, calibrationCaseIds, toggleCalibrationCase }: {
     records: CaseRecord[];

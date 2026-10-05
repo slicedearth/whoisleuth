@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { createWorkspaceIdleTimer, readWorkspaceIdleMinutes, saveWorkspaceIdleMinutes, WORKSPACE_IDLE_MINUTES } from '$lib/browser-workspace-lock.ts';
+  import { createWorkspaceIdleTimer, readWorkspaceIdleMinutes, saveWorkspaceIdleMinutes, WORKSPACE_IDLE_MINUTES } from '#lib/browser-workspace-lock.ts';
   let { id }: { id: string } = $props();
   let minutes = $state(0), message = $state(''), error = $state('');
   let timer: ReturnType<typeof createWorkspaceIdleTimer> | undefined;

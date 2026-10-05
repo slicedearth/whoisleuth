@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { handlesLocalLink } from '$lib/link-activation';
-  import { loadDeferredModule, DEFERRED_MODULE_RECOVERY_DETAIL, reloadDeferredModulePage } from '$lib/deferred-module';
-  import type { DocumentationResult } from '$lib/documentation-search';
+  import { handlesLocalLink } from '#lib/link-activation.ts';
+  import { loadDeferredModule, DEFERRED_MODULE_RECOVERY_DETAIL, reloadDeferredModulePage } from '#lib/deferred-module.ts';
+  import type { DocumentationResult } from '#lib/documentation-search.ts';
 
   let { initialQuery = '', onopen }: { initialQuery?: string; onopen: (href: string) => void | Promise<void> } = $props();
   const id = $props.id();
@@ -18,7 +18,7 @@
     query = initialQuery.slice(0, 256);
     const controller = new AbortController();
     void tick().then(() => { if (!controller.signal.aborted) input.focus(); });
-    void loadDeferredModule(() => import('$lib/documentation-search'), { signal: controller.signal }).then(module => {
+    void loadDeferredModule(() => import('#lib/documentation-search.ts'), { signal: controller.signal }).then(module => {
       if (!controller.signal.aborted) search = module.createDocumentationSearch();
     }).catch(() => { if (!controller.signal.aborted) failed = true; })
       .finally(() => { if (!controller.signal.aborted) loading = false; });

@@ -8,6 +8,7 @@ import { HTTP_SECURITY_HEADER_TOKENS, normalizeHttpSummary } from '../cases/http
 import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { registryDateIso } from '../evidence/registry-dates.mts';
+import { normalizeWatchDomainMetadata, type WatchDomainMetadata } from './brand-candidate-workflow.mts';
 import { mergeWebCollectionQuality, normalizeWebCollectionQuality, webCollectionAllowsComparison, type WebCollectionQuality } from '../evidence/collection-quality.mts';
 import {
   MAX_WATCHLIST_CHANGES_PER_EVENT,
@@ -17,6 +18,7 @@ import {
   MAX_WATCHLIST_INPUT_RECORDS,
   MAX_WATCHLIST_MUTATION_TYPES,
   MAX_WATCHLIST_NAMESERVERS,
+  WATCHLIST_RECOVERY_METADATA,
 } from '../contracts/workspace-portability.mts';
 
 export {
@@ -80,6 +82,8 @@ export interface WatchlistEntry {
   results: CompactWatchlistRecord[];
   baseline: WatchlistComparableRecord[];
   history: WatchlistHistoryEvent[];
+  domainMetadata: WatchDomainMetadata[];
+  membershipRecovery?: 'legacy_overflow';
 }
 
 export interface AppendWatchlistScanOptions {
@@ -122,6 +126,7 @@ const DEEP_FIELDS = new Set([
   'faviconMatch',
   'faviconNearMatch',
   'hasPasswordField',
+  'hasExternalPasswordForm',
   'phishingLanguageMatch',
   'reusesOfficialAssets',
   'riskModelVersion',
@@ -154,6 +159,7 @@ const FIELD_LABELS: Record<string, string> = {
   faviconMatch: 'Official favicon match',
   faviconNearMatch: 'Official favicon near-match',
   hasPasswordField: 'Password form',
+  hasExternalPasswordForm: 'External password-form destination',
   phishingLanguageMatch: 'Phishing language',
   reusesOfficialAssets: 'Official asset reuse',
   riskScore: 'Risk score',
@@ -181,6 +187,7 @@ const HISTORY_CATEGORY_FIELDS: Record<string, Set<string>> = {
     'faviconMatch',
     'faviconNearMatch',
     'hasPasswordField',
+    'hasExternalPasswordForm',
     'phishingLanguageMatch',
     'reusesOfficialAssets',
   ]),
@@ -334,6 +341,7 @@ function compactRecord(value: unknown): CompactWatchlistRecord | null {
     faviconMatch: typeof record.faviconMatch === 'boolean' ? record.faviconMatch : null,
     faviconNearMatch: typeof record.faviconNearMatch === 'boolean' ? record.faviconNearMatch : null,
     hasPasswordField: typeof record.hasPasswordField === 'boolean' ? record.hasPasswordField : null,
+    hasExternalPasswordForm: typeof record.hasExternalPasswordForm === 'boolean' ? record.hasExternalPasswordForm : null,
     phishingLanguageMatch: boundedText(record.phishingLanguageMatch, MAX_TITLE_LENGTH),
     reusesOfficialAssets: typeof record.reusesOfficialAssets === 'boolean' ? record.reusesOfficialAssets : null,
     riskModelVersion,
@@ -390,7 +398,7 @@ function classifyChange(
     }
     return { kind: 'availability_changed', tone: 'warn' };
   }
-  if (['faviconMatch', 'faviconNearMatch', 'hasPasswordField', 'reusesOfficialAssets'].includes(field) && before === false && after === true) {
+  if (['faviconMatch', 'faviconNearMatch', 'hasPasswordField', 'hasExternalPasswordForm', 'reusesOfficialAssets'].includes(field) && before === false && after === true) {
     return { kind: 'risk_signal_added', tone: 'danger' };
   }
   if (field === 'phishingLanguageMatch' && !before && after) return { kind: 'risk_signal_added', tone: 'danger' };
@@ -548,8 +556,18 @@ function initialHistoryEvent(
   };
 }
 
+/** Active membership excludes historical baselines and includes unobserved candidates. */
+export function watchlistActiveDomains(entry: Pick<WatchlistEntry, 'results' | 'domainMetadata' | 'membershipRecovery'>): string[] {
+  if (entry.membershipRecovery) return [];
+  return normalizeWatchDomainMetadata(entry.domainMetadata, entry.results.map(record => record.domain)).map(record => record.domain);
+}
+
+export function assertWatchlistEditable(entry: Pick<WatchlistEntry, 'membershipRecovery'> | null | undefined): void {
+  if (entry?.membershipRecovery) throw new Error('This older watchlist is paused for membership recovery. Export its preserved records and create a separate watchlist with at most 2,000 selected domains.');
+}
+
 /** @param {object} entry */
-export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
+export function normalizeWatchlistEntry(entry: unknown, options: { recoverLegacyMembership?: boolean } = {}): WatchlistEntry {
   const input = plainRecord(entry) || {};
   const rawResults = Array.isArray(input.results) ? input.results : [];
   const results = compactWatchlistResults(rawResults);
@@ -581,13 +599,20 @@ export function normalizeWatchlistEntry(entry: unknown): WatchlistEntry {
       };
     }).slice(-MAX_WATCHLIST_HISTORY_EVENTS)
     : [];
-  const normalized = {
+  const metadata = normalizeWatchDomainMetadata(input.domainMetadata);
+  const membership = new Set([...metadata.map(record => record.domain), ...results.map(record => record.domain)]);
+  const recovery = membership.size > MAX_WATCHLIST_DOMAINS
+    && (options.recoverLegacyMembership || input.membershipRecovery === 'legacy_overflow');
+  if (input.membershipRecovery !== undefined && (!recovery || input.membershipRecovery !== 'legacy_overflow')) throw new TypeError('Watchlist membership recovery state is invalid.');
+  const normalized: WatchlistEntry = {
     updatedAt: normalizeExplicitIsoTimestamp(input.updatedAt),
     results,
     baseline,
     history,
+    domainMetadata: recovery ? metadata : normalizeWatchDomainMetadata(metadata, results.map(record => record.domain)),
+    ...(recovery ? WATCHLIST_RECOVERY_METADATA : {}),
   };
-  if (normalized.history.length === 0) normalized.history.push(initialHistoryEvent(normalized, baseline));
+  if (normalized.history.length === 0 && (results.length || baseline.length)) normalized.history.push(initialHistoryEvent(normalized, baseline));
   return normalized;
 }
 
@@ -614,6 +639,7 @@ export function appendWatchlistScan(
     ? options.mode as WatchlistScanMode
     : 'saved';
   const previous = existingEntry ? normalizeWatchlistEntry(existingEntry) : null;
+  assertWatchlistEditable(previous);
   const current = compactWatchlistResults(results);
   const changes = previous
     ? diffWatchlistBaseline(previous.baseline, current, options.ignoredDomains || new Set())
@@ -636,6 +662,7 @@ export function appendWatchlistScan(
       results: current,
       baseline: mergeWatchlistBaseline(previous?.baseline || [], current),
       history,
+      domainMetadata: normalizeWatchDomainMetadata(previous?.domainMetadata, current.map(record => record.domain)),
     },
     changes,
   };
@@ -676,6 +703,7 @@ export function watchlistHistoryDomains(entry: unknown) {
   for (const record of [...normalized.results, ...normalized.baseline]) {
     if (record?.domain) current.add(record.domain);
   }
+  for (const metadata of normalized.domainMetadata) current.add(metadata.domain);
   for (const event of normalized.history) {
     for (const change of event.changes) {
       if (change.domain && !current.has(change.domain)) historical.add(change.domain);

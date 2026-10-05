@@ -114,7 +114,7 @@
       "portable": {
         "workspaceArchive": {
           "caseCount": 8,
-          "totalBytes": 50138,
+          "totalBytes": 50141,
           "retainedEvidenceBytes": 35927
         },
         "cliCasePack": {
@@ -344,7 +344,7 @@
       "portable": {
         "workspaceArchive": {
           "caseCount": 24,
-          "totalBytes": 138897,
+          "totalBytes": 138900,
           "retainedEvidenceBytes": 107867
         },
         "cliCasePack": {
@@ -397,7 +397,7 @@
           },
           {
             "kind": "evidence_pin",
-            "payloadDigest": "sha256:85dab9c789aeb537b37830d49eb05a2b23fc5f6b8e2a4d76ec027e2b3636e1db",
+            "payloadDigest": "sha256:acbc4fabeb03637d271d9f1c7e1d2b02556377734e72b9c36915043c979376cc",
             "occurrences": 500,
             "payloadBytes": 601,
             "grossDuplicateBytes": 299899
@@ -430,7 +430,7 @@
           },
           {
             "kind": "evidence_pin",
-            "payloadDigest": "sha256:e6797abd7696e08c8911f75bdb5e90afe255095ef742d2c79c76ca779b24f869",
+            "payloadDigest": "sha256:1d14bd58109a577b6982890a41875eac46579584673aeb5504b9223004057e85",
             "occurrences": 500,
             "exactForms": 1,
             "payloadBytes": 601,
@@ -454,7 +454,7 @@
       "portable": {
         "workspaceArchive": {
           "caseCount": 500,
-          "totalBytes": 2088810,
+          "totalBytes": 2088813,
           "retainedEvidenceBytes": 1557501
         },
         "cliCasePack": {

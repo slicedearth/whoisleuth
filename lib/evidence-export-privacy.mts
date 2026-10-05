@@ -18,7 +18,7 @@ const PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
   'expiresInDays', 'privacyProtected', 'dnssec', 'activityStatus',
   'websiteProbeStatus', 'websiteProbeDetail', 'http', 'deepScanComplete',
   'faviconHash', 'faviconPHash', 'pageTitle', 'hasPasswordField',
-  'phishingLanguageMatch', 'hasExternalFormAction', 'externalAssetHosts',
+  'phishingLanguageMatch', 'hasExternalFormAction', 'hasExternalPasswordForm', 'externalAssetHosts',
   'pageIdentity', 'credentialSurfaceProfile', 'structuredDataIdentity',
   'technologyProfile', 'pageRoleProfile', 'clientBehaviorProfile',
   'securityPosture', 'dns', 'tls', 'hasMx', 'hasNullMx', 'mxHosts', 'hasSpf',
@@ -116,6 +116,7 @@ const LOOKUP_AVAILABILITY_PORTABLE_NESTED_KEYS = new Set([
   // Credential, structured identity, role, behaviour, technology, and posture
   // projections. Only fixed categories/counts and bounded descriptions enter.
   'credentialSurfaceVersion', 'methods', 'actions', 'missing', 'get', 'post',
+  'formAttribution', 'unassociatedInputs', 'index', 'destinations', 'relationship', 'origin',
   'dialog', 'other', 'sameOrigin', 'external', 'cleartext', 'unclassified',
   'inputs', 'classifiedCount', 'categories', 'password', 'email', 'username',
   'one_time_code', 'payment', 'inputsObserved', 'classifiedInputs',
@@ -345,6 +346,7 @@ function projectLookupEvidenceAvailabilityValue(
   if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
   if (typeof value === 'string') {
     const normalizedParent = normalizedEvidenceKey(path.at(-1) || '');
+    if (path.join('.') === 'credentialSurfaceProfile.formAttribution.forms.destinations.origin') return portableOrigin(value);
     if (PORTABLE_URL_KEYS.has(normalizedParent)) return portableUri(value, legacyUris);
     if (PORTABLE_ORIGIN_COLLECTION_KEYS.has(normalizedParent)) return portableOrigin(value);
     return projectLookupEvidenceAvailabilityString(value);
@@ -363,7 +365,7 @@ function projectLookupEvidenceAvailabilityValue(
     const boundedCount = Number.isSafeInteger(item)
       && Number(item) >= 0
       && Number(item) <= LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS;
-    const credentialCategoryCount = parentPath === 'credentialSurfaceProfile.inputs.categories'
+    const credentialCategoryCount = ['credentialSurfaceProfile.inputs.categories', 'credentialSurfaceProfile.formAttribution.forms.categories'].includes(parentPath)
       && boundedCount;
     const sanClassCount = parentPath === 'tls.certificate.subjectAltNames.classes'
       && LOOKUP_AVAILABILITY_TLS_SAN_CLASS_KEYS.has(key)

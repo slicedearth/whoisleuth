@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import type { RelationshipContribution } from '../../../../packages/comparison/relationship-provenance.mts';
 
   let { sources }: { sources: readonly RelationshipContribution[] } = $props();

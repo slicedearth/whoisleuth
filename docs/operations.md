@@ -118,8 +118,8 @@ uses `local` and links to the repository root rather than claiming an exact
 source revision.
 
 `frontend/static/social-preview.svg` is the canonical social-preview source.
-Render the reviewed 1280×640 `social-preview.png` from it, then run the public
-resource asset test before delivery.
+Run `node tools/brand-assets.mts --write` to render its 1280×640 PNG and derive
+the logo/favicon assets from their shared vector owner, then inspect the result.
 
 ## Optional external intelligence
 
@@ -156,6 +156,12 @@ never evidence of safety.
 The connector contract under `lib/threat-intelligence-contract.mts` defines the
 bounded provider interface. It does not load arbitrary plugin code or enable a
 provider on its own.
+
+Cached domain-feed search is a separate, optional service rather than a Lookup
+provider. See [domain-feed service operation](domain-feed-service.md) for its
+loopback listener, fixed refresh sources, server-side connection, cache limits
+and rollback. It remains disabled unless configured; manual file review is
+available independently.
 
 ## Request limits and operation admission
 

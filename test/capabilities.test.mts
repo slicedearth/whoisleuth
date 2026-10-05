@@ -40,6 +40,23 @@ test('unknown runtimes fail to a bounded generic report without changing feature
   assert.match(requiredValue(report.limitations[0]), /runtime instance/i);
 });
 
+test('feed capability reports explicit configuration without requests or disclosing connection secrets', () => {
+  const report = (env: Record<string, unknown>) => featureById(capabilityReport('express', env), 'domain_feed_search');
+  assert.equal(report({}).status, 'disabled');
+  assert.equal(report({ WHOISLEUTH_DOMAIN_FEED_ENABLED: '1' }).status, 'unavailable');
+  const configured = {
+    WHOISLEUTH_DOMAIN_FEED_ENABLED: '1',
+    WHOISLEUTH_DOMAIN_FEED_URL: 'https://feed.example/',
+    WHOISLEUTH_DOMAIN_FEED_TOKEN: 'x'.repeat(43),
+  };
+  assert.equal(report(configured).status, 'supported');
+  assert.equal(report({ ...configured, WHOISLEUTH_DOMAIN_FEED_URL: 'https://feed.example/?private=1' }).status, 'unavailable');
+  const publicReport = JSON.stringify(report(configured));
+  assert.doesNotMatch(publicReport, /feed\.example/u);
+  assert.equal(publicReport.includes(configured.WHOISLEUTH_DOMAIN_FEED_TOKEN), false);
+  assert.equal(report({ ...configured, WHOISLEUTH_DOMAIN_FEED_ENABLED: '0' }).status, 'disabled');
+});
+
 test('capability reports distinguish configured distributed and unavailable budgets', () => {
   const distributed: OperationBudgetProvider = {
     mode: 'redis_rest',

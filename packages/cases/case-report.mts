@@ -16,6 +16,7 @@ import { webCollectionScoreLimitation } from '../evidence/collection-quality.mts
 import { analystInteroperabilityTags } from '../analysis/analyst-taxonomy.mts';
 import { caseEvidenceLinkIssues } from './case-evidence-links.mts';
 import { caseTypeSummary } from './case-workflow-metadata.mts';
+import { caseClosureHistoryQualification } from './case-response-outcomes.mts';
 import {
   buildPortableGeneratorMetadata,
   portableGeneratorAttribution,
@@ -23,6 +24,9 @@ import {
 } from '../analysis/portable-generator.mts';
 import { buildCaseResponseLifecycleSummary, CASE_EVIDENCE_RELATION_STANCES } from './case-response-model.mts';
 import { normalizeCaseBrandProfileIds } from './case-brand-profile-references.mts';
+import { EVIDENCE_FOLLOW_UP_CASE_REPORT_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { OBJECT_RESPONSE_CASE_REPORT_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { CASE_DELIVERY_RECEIPT_LIMITATION } from './case-packet-correction.mts';
 import { CASE_RECHECK_CONDITIONS } from './case-recheck-model.mts';
 import { escapeCaseMarkdownInline as escapeMarkdownInline } from './case-markdown.mts';
 import {
@@ -229,6 +233,7 @@ function pickKnownSnapshotFields(snapshot: CaseEvidenceSnapshot): ReportSnapshot
     reusesOfficialAssets: snapshot.reusesOfficialAssets,
     hasPasswordField: snapshot.hasPasswordField,
     hasExternalFormAction: snapshot.hasExternalFormAction,
+    ...(snapshot.hasExternalPasswordForm === undefined ? {} : { hasExternalPasswordForm: snapshot.hasExternalPasswordForm }),
     phishingLanguageMatch: snapshot.phishingLanguageMatch,
     privacyProtected: snapshot.privacyProtected ?? null,
     idnReferenceMatch: snapshot.idnReferenceMatch ?? null,
@@ -379,6 +384,8 @@ export function buildCaseReportVerificationProjection(
 ) {
   const generated = buildCaseReport(caseRecord, options).json;
   if (schemaVersion === CASE_REPORT_SCHEMA_VERSION) return generated;
+  if (schemaVersion === OBJECT_RESPONSE_CASE_REPORT_SCHEMA_VERSION) return { ...generated, schemaVersion };
+  if (schemaVersion === EVIDENCE_FOLLOW_UP_CASE_REPORT_SCHEMA_VERSION) return { ...generated, schemaVersion };
   if (caseRecord.evidenceHistory.some(snapshot => snapshot.webCollectionQuality !== undefined)) {
     throw new TypeError('Published report formats cannot declare newer collection-quality fields.');
   }
@@ -587,6 +594,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     for (const pin of response.evidencePins) {
       lines.push(`- **${escapeMarkdownInline(pin.label)}:** ${escapeMarkdownInline(pin.value)}`);
       lines.push(`  Source: ${escapeMarkdownInline(pin.source)}; observed ${escapeMarkdownInline(pin.observedAt ?? 'Time unavailable')}; completeness ${escapeMarkdownInline(pin.completeness)}.`);
+      if (pin.responseObject) lines.push(`  Exact object: ${escapeMarkdownInline(pin.responseObject.kind)} · ${escapeMarkdownInline(pin.responseObject.identifier)}`);
       if (pin.limitations.length) lines.push(`  Limitations: ${escapeMarkdownInline(pin.limitations.join('; '))}`);
     }
     lines.push('');
@@ -663,10 +671,16 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     for (const action of response.actions) {
       lines.push(`- **${escapeMarkdownInline(action.type.replaceAll('_', ' '))}:** ${escapeMarkdownInline(action.recipient)} (${escapeMarkdownInline(action.state)})`);
       lines.push(`  Contact source: ${escapeMarkdownInline(action.contactSource)}; updated ${escapeMarkdownInline(action.updatedAt)}.`);
+      lines.push(`  Object binding: ${action.responseObjects?.length ? action.responseObjects.map(object => `${escapeMarkdownInline(object.kind)} · ${escapeMarkdownInline(object.identifier)}`).join('; ') : 'Unknown; historical or unbound actions do not establish exact-object coverage.'}`);
       if (action.routeObservedAt) lines.push(`  Route reviewed: ${escapeMarkdownInline(action.routeObservedAt)}`);
       if (action.routeReviewAfter) lines.push(`  Route review due: ${escapeMarkdownInline(action.routeReviewAfter)}`);
       if (action.originActionId) lines.push(`  Originating action: ${escapeMarkdownInline(action.originActionId)}`);
       if (action.amendment) lines.push(`  Amendment of submitted packet SHA-256: ${action.amendment.packetDigestSha256}; request events: ${action.amendment.requestEventIds.map(escapeMarkdownInline).join(', ')}`);
+      if (action.correction) lines.push(`  ${action.correction.purpose === 'correction' ? 'Correction request' : 'Retraction request'} for delivery event ${escapeMarkdownInline(action.correction.deliveryEventId)}; packet v${action.correction.packetVersion} SHA-256: ${action.correction.packetDigestSha256}`,
+        `  Reason: ${escapeMarkdownInline(action.correction.reason)}`, `  Previous statement: ${escapeMarkdownInline(action.correction.previousStatement)}`,
+        `  Corrected statement: ${escapeMarkdownInline(action.correction.correctedStatement || 'Request to retract the previous statement')}`,
+        `  Corrected evidence pins: ${action.correction.evidencePinIds.map(escapeMarkdownInline).join(', ')}`,
+        '  Preparation is not delivery, recipient acceptance, restoration or independent recheck.');
       for (const event of action.history) if (event.evidenceRequest) {
         const request = event.evidenceRequest;
         lines.push(`  Requested evidence [${request.state}]: ${escapeMarkdownInline(request.summary)}; deadline: ${request.dueAt ?? 'not stated'}; original packet: ${request.packetDigestSha256}${event.applied ? '' : ' (retained conflict)'}`,
@@ -681,7 +695,11 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
       for (const event of action.history) {
         lines.push(`  - ${escapeMarkdownInline(event.occurredAt)} · ${escapeMarkdownInline(event.previousState ?? 'none')} → ${escapeMarkdownInline(event.nextState)} · ${escapeMarkdownInline(event.sourceClass)} · ${event.applied ? 'applied' : 'retained conflict'}`);
         if (event.providerOutcome) lines.push(`    Provider outcome at this time: ${escapeMarkdownInline(event.providerOutcome.replaceAll('_', ' '))}`);
+        if (event.responseObjects?.length) lines.push(`    Objects at this event: ${event.responseObjects.map(object => `${escapeMarkdownInline(object.kind)} · ${escapeMarkdownInline(object.identifier)}`).join('; ')}`);
+        if (event.objectOutcome) lines.push(`    Source-reported object outcome: ${escapeMarkdownInline(event.objectOutcome)}; not independent verification or causation.`);
         if (event.reference) lines.push(`    Event reference: ${escapeMarkdownInline(event.reference)}`);
+        if (event.packetReceipt) lines.push(`    Retained packet v${event.packetReceipt.packetVersion}: ${event.packetReceipt.packetDigestSha256}; recipient ${escapeMarkdownInline(event.packetReceipt.recipient)}; audience ${escapeMarkdownInline(event.packetReceipt.profile)}; generated ${event.packetReceipt.packetGeneratedAt}`,
+          `    ${CASE_DELIVERY_RECEIPT_LIMITATION}`);
         if (event.evidencePinId) lines.push(`    Evidence pin: ${escapeMarkdownInline(event.evidencePinId)}`);
         if (event.limitations.length) lines.push(`    Limitations: ${escapeMarkdownInline(event.limitations.join('; '))}`);
       }
@@ -722,6 +740,8 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   if (!response.observedEffects.reviews.length) lines.push('- No independent observed-effect review recorded.');
   for (const review of response.observedEffects.reviews) {
     lines.push(`- **${escapeMarkdownInline(review.state.replaceAll('_', ' '))}** (${escapeMarkdownInline(review.observedAt)}): ${escapeMarkdownInline(review.source)}; class ${escapeMarkdownInline(review.sourceClass)}; completeness ${escapeMarkdownInline(review.completeness)}.`);
+    if (review.responseObject) lines.push(`  Exact object: ${escapeMarkdownInline(review.responseObject.kind)} · ${escapeMarkdownInline(review.responseObject.identifier)}`);
+    if (review.objectOutcome) lines.push(`  Independently recorded object outcome: ${escapeMarkdownInline(review.objectOutcome)}; point-in-time observation, not report causation or recurrence.`);
     if (review.recheck) {
       lines.push(`  Question ${escapeMarkdownInline(review.recheck.questionId)}: ${escapeMarkdownInline(review.recheck.question)}`);
       lines.push(`  Recheck target: ${escapeMarkdownInline(review.recheck.targetHostname)}; retained comparison conditions: ${escapeMarkdownInline(review.recheck.conditions)}`);
@@ -737,10 +757,14 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   if (!response.closures.records.length) lines.push('- No deliberate analyst closure recorded.');
   for (const closure of response.closures.records) {
     lines.push(`- **Closure · ${escapeMarkdownInline(closure.reason.replaceAll('_', ' '))}** (${escapeMarkdownInline(closure.createdAt)}): ${escapeMarkdownInline(closure.summary)}`);
+    lines.push(`  Scope: ${closure.responseObject ? `${escapeMarkdownInline(closure.responseObject.kind)} · ${escapeMarkdownInline(closure.responseObject.identifier)}; other objects and the Case remain independent.` : 'Whole Case analyst decision.'}`);
     if (closure.observedEffectReviewId) lines.push(`  Independent review: ${escapeMarkdownInline(closure.observedEffectReviewId)}`);
     if (closure.actionId) lines.push(`  Provider action: ${escapeMarkdownInline(closure.actionId)}`);
+    const qualification = caseClosureHistoryQualification(closure, response.actions);
+    if (qualification) lines.push(`  History qualification: ${escapeMarkdownInline(qualification)}`);
     if (closure.limitations.length) lines.push(`  Limitations: ${escapeMarkdownInline(closure.limitations.join('; '))}`);
   }
+  if (response.closures.omitted) lines.push(`- Closure records not retained: ${response.closures.omitted}. ${escapeMarkdownInline(response.closures.limitations.join('; '))}`);
   lines.push('');
 
   // Analyst notes (only when included)

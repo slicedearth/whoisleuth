@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { INVESTIGATION_ENTITY_LABELS as typeLabels } from '../../../../packages/investigation/investigation-entity.mts';
   import { onMount, tick } from 'svelte';
   import Pagination from './Pagination.svelte';
   import {
@@ -7,15 +8,15 @@
     isDeferredModuleLoadError,
     loadDeferredModule,
     reloadDeferredModulePage,
-  } from '$lib/deferred-module';
+  } from '#lib/deferred-module.ts';
   import {
     MAX_INVESTIGATION_CONTEXT_PREVIEW_RESULTS,
     type InvestigationContextPreview,
-  } from '$lib/analysis/investigation-context-preview.ts';
+  } from '#lib/analysis/investigation-context-preview.ts';
   import type {
     InvestigationSearchResult,
-  } from '$lib/analysis/investigation-search.ts';
-  import type { InvestigationSearchSession } from '$lib/investigation-search-session';
+  } from '#lib/analysis/investigation-search.ts';
+  import type { InvestigationSearchSession } from '#lib/investigation-search-session.ts';
 
   let { query }: { query: string } = $props();
   let loadState = $state<'loading' | 'ready' | 'unavailable'>('loading');
@@ -64,20 +65,6 @@
     return () => { active = false; };
   });
 
-  const typeLabels: Record<InvestigationSearchResult['entityType'], string> = {
-    domain: 'Domain',
-    nameserver_set: 'Nameserver set',
-    http_origin: 'HTTP origin',
-    favicon: 'Favicon',
-    certificate: 'Certificate',
-    ip_address: 'IP address',
-    tracking_identifier: 'Tracking identifier',
-    favicon_cluster: 'Favicon relationship',
-    official_asset_host: 'Official asset host',
-    brand: 'Brand profile',
-    case: 'Case',
-    campaign: 'Campaign',
-  };
   const storeLabels: Record<InvestigationSearchResult['sourceStore'], string> = {
     cases: 'Cases',
     campaigns: 'Campaigns',
@@ -102,7 +89,7 @@
     void (async () => {
       try {
         const module = await loadDeferredModule(
-          () => import('$lib/investigation-search'),
+          () => import('#lib/investigation-search.ts'),
           { signal: controller.signal },
         );
         const loaded = await module.loadLocalInvestigationSearchSession(controller.signal);

@@ -29,6 +29,7 @@ export type CaseDraftValues<T extends CaseDraftFields> = {
 export function createCaseDraft<T extends CaseDraftFields>(
   caseId: () => string, form: string, initial: T,
   objectLists: Partial<Record<keyof T, Record<string, string>>> = {},
+  onInvalidate: () => void = () => {},
 ) {
   // A checkbox default selects its initial value, not its only permitted value.
   const defaults = structuredClone(initial) as CaseDraftValues<T>;
@@ -43,6 +44,7 @@ export function createCaseDraft<T extends CaseDraftFields>(
     restoreFields: fields => { value = restoreCaseDraftFields(fields, defaults, objectLists); },
     resetFields: () => { value = structuredClone(defaults); },
     retention,
+    onInvalidate,
     storage: transient ?? {
       read: () => readBrowserLocalData('case_drafts'),
       update: async change => {

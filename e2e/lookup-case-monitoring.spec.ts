@@ -175,10 +175,14 @@ test('an Incident URL sends only its hostname and retains exact Case context onl
   const incidentContext = caseCard.locator('.incident-context-tool');
   await expect(incidentContext).toContainText(`Lookup sent only ${lookupTarget}`);
   await expect(incidentContext).toContainText('query and a fragment');
+  const created = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   await incidentContext.getByLabel('Investigation objective').fill('Review the observed page and preserve only the evidence needed for response preparation.');
   await incidentContext.getByRole('button', { name: 'Save Incident context' }).click();
 
-  const originOnly = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const originOnly = await readBrowserLocalCollection(page, 'cases', {
+    minimumRecords: 1,
+    minimumRevision: created.manifest.revision + 1,
+  });
   expect(JSON.stringify(originOnly.records[0]?.value)).not.toContain('reference=fixture');
   expect(originOnly.records[0]?.value?.workflowMetadata?.investigationContext).toEqual(
     expect.objectContaining({ incidentUrl: 'https://login.incident.invalid', urlRetention: 'origin_only' }),

@@ -1,8 +1,10 @@
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { rm, writeFile } from 'node:fs/promises';
 import { readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
 import { requireJsonRecord as record } from './maintainer-tool-helpers.mts';
 import type { RunInstalledCli } from './installed-cli-check.mts';
+import { buildInvestigationPackage } from '../packages/investigation/investigation-package.mts';
 
 /** Exact-byte package, folder and encrypted-container round trips. */
 export async function checkInstalledCliEvidence(repositoryRoot: string, temporaryRoot: string, run: RunInstalledCli): Promise<void> {
@@ -26,8 +28,24 @@ export async function checkInstalledCliEvidence(repositoryRoot: string, temporar
     || !Array.isArray(packageDetails.entries) || packageDetails.entries.length !== 2
     || record(packageDetails.entries[0], 'Installed package JSON').state !== 'admitted'
     || record(packageDetails.entries[1], 'Installed package binary').state !== 'opaque'
-    || record(packageDetails.entries[1], 'Installed package binary').byteLength !== 4) {
+    || record(packageDetails.entries[1], 'Installed package binary').byteLength !== 4
+    || packageDetails.entries.some(entry => record(entry, 'Installed package entry').imageDerivation !== null)) {
     throw new TypeError('Installed package round trip did not preserve file identity and separate assurance.');
+  }
+  const imageDeclaration = { method: 'png-regions-v1' as const,
+    source: { digestSha256: `sha256:${'a'.repeat(64)}`, byteLength: 100 }, operations: ['redact', 'outline'] as const };
+  const selectedImage = await buildInvestigationPackage({ workflow: 'Selected image', configurationDigestSha256: null,
+    artifacts: [{ content: new Uint8Array([1, 2, 3]), mediaType: 'image/png', imageDerivation: imageDeclaration }],
+  }, '2026-10-04T00:00:00.000Z', '2.6.0');
+  const imageOutput = path.join(temporaryRoot, 'selected-image.zip');
+  await writeFile(imageOutput, selectedImage.bytes, { flag: 'wx', mode: 0o600 });
+  const imageReview = record(JSON.parse(await run(['verify-artifact', imageOutput, '--package', '--json', '--strict-exit'],
+    'selected image derivation verification')), 'Selected image review');
+  const imageEntries = record(imageReview.package, 'Selected image package').entries;
+  const imageEntry = Array.isArray(imageEntries) && imageEntries.length === 1 ? record(imageEntries[0], 'Selected image entry') : null;
+  if (imageReview.state !== 'verified' || imageEntry?.state !== 'opaque'
+    || !isDeepStrictEqual(imageEntry.imageDerivation, imageDeclaration)) {
+    throw new TypeError('Installed image review lost declared parent identity or required unselected parent bytes.');
   }
   const folderOutput = path.join(temporaryRoot, 'evidence-folder');
   const encryptedOutput = path.join(temporaryRoot, 'evidence.wlep');

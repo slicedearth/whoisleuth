@@ -9,7 +9,8 @@ import {
 import {
   latestObservationCohort,
 } from '../evidence/latest-observations.mts';
-import { readCaseRecheckAnswerContext } from './case-recheck-model.mts';
+import { readCaseRecheckAnswerContext, assertRecheckNonReproduction, COMPARATIVE_CASE_OBJECT_OUTCOMES } from './case-recheck-model.mts';
+import { readCaseResponseObject, readCaseResponseObjectOutcome, assertCaseObjectOutcome, sameCaseResponseObject, type CaseResponseObject } from './case-response-object.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   CASE_CLOSURE_REASONS,
@@ -25,6 +26,7 @@ import {
   type CaseObservedEffectSourceClass,
   type CaseObservedEffectState,
   type CasePinCompleteness,
+  type CaseEvidencePin,
   type CaseResponseLifecycleSummary,
   type CaseResponseTimestampOptions,
 } from './case-response-records.mts';
@@ -64,6 +66,13 @@ function normalizeObservedEffectReview(
   if (!source || !observedAt) return null;
   const createdAt = iso(item.createdAt, observedAt || fallback, options);
   const recheck = readCaseRecheckAnswerContext(item.recheck, options.sourceVersion);
+  const responseObject = readCaseResponseObject(item.responseObject, options.sourceVersion);
+  const objectOutcome = readCaseResponseObjectOutcome(item.objectOutcome, options.sourceVersion);
+  assertCaseObjectOutcome(objectOutcome, responseObject);
+  if (objectOutcome && (item.state === 'unavailable' || item.state === 'not_checked')) throw new TypeError('Unavailable or unchecked collection cannot establish an object outcome.');
+  if (objectOutcome && COMPARATIVE_CASE_OBJECT_OUTCOMES.includes(objectOutcome)
+    && (item.completeness !== 'complete' || !recheck?.responseObject || recheck.conditionsMatch !== 'comparable')) throw new TypeError('An independently observed object state change requires complete evidence and comparable exact-object conditions.');
+  if (recheck?.responseObject && !sameCaseResponseObject(recheck.responseObject, responseObject)) throw new TypeError('The recheck answer and observation must concern the same exact object.');
   if (recheck && item.state === 'not_reproduced' && (item.completeness !== 'complete' || recheck.conditionsMatch !== 'comparable')) {
     throw new TypeError('A question cannot be marked not reproduced from incomplete evidence or unconfirmed comparison conditions.');
   }
@@ -95,6 +104,8 @@ function normalizeObservedEffectReview(
     sightingId,
     followUpAt: optionalIso(item.followUpAt, options),
     ...(recheck ? { recheck } : {}),
+    ...(responseObject ? { responseObject } : {}),
+    ...(objectOutcome ? { objectOutcome } : {}),
     createdAt,
   };
 }
@@ -198,6 +209,7 @@ function normalizeClosure(
   const summary = text(item.summary, MAX_RESPONSE_RATIONALE_LENGTH);
   if (!summary) return null;
   const createdAt = iso(item.createdAt, fallback, options);
+  const responseObject = readCaseResponseObject(item.responseObject, options.sourceVersion);
   const observedEffectReviewId = typeof item.observedEffectReviewId === 'string'
     && SAFE_ID_RE.test(item.observedEffectReviewId)
     && (!validReviewIds || validReviewIds.has(item.observedEffectReviewId))
@@ -218,13 +230,15 @@ function normalizeClosure(
     && (!reviewPredatesClosure || linkedReview?.state !== 'changed')) return null;
   const linkedProviderEvents = actionId ? linkContext.providerResolutionEvents?.get(actionId) ?? [] : [];
   if (linkContext.providerResolutionEvents && reason === 'provider_reported_resolution_not_independently_checked'
-    && !linkedProviderEvents.some((event) => Date.parse(event.occurredAt) <= Date.parse(createdAt))) return null;
+    && !linkedProviderEvents.some((event) => Date.parse(event.occurredAt) <= Date.parse(createdAt)
+      && (responseObject ? event.responseObjects?.some(object => sameCaseResponseObject(object, responseObject)) : !event.responseObjects?.length))) return null;
   const linkLimitations = [
     ...(item.observedEffectReviewId != null && !observedEffectReviewId ? ['A malformed or dangling observed-effect review reference was omitted from this closure.'] : []),
     ...(item.actionId != null && !actionId ? ['A malformed or dangling response-action reference was omitted from this closure.'] : []),
   ];
   return {
     id: safeId(item.id, 'case-closure', { reason: item.reason, summary, createdAt }),
+    ...(responseObject === undefined ? {} : { responseObject }),
     reason,
     summary,
     observedEffectReviewId,
@@ -245,8 +259,11 @@ export function buildCaseClosureLinkContext(
       createdAt: review.createdAt,
     }] as const)),
     providerResolutionEvents: new Map(actions.map((action) => [action.id, action.history
-      .filter((event) => event.applied && event.providerOutcome === 'provider_reports_resolved')
-      .map((event) => ({ eventId: event.id, occurredAt: event.occurredAt }))] as const)),
+      // Reconciliation can change projection, but not the identity of a retained
+      // typed receipt supporting an already-authored historical decision.
+      .filter((event) => event.providerOutcome === 'provider_reports_resolved')
+      .map((event) => ({ eventId: event.id, occurredAt: event.occurredAt,
+        ...(event.responseObjects === undefined ? {} : { responseObjects: event.responseObjects }) }))] as const)),
   };
 }
 
@@ -308,13 +325,24 @@ export function caseClosureReviewBlocker(
   reason: CaseClosureReason | null,
   review: CaseObservedEffectReview | null | undefined,
   now: string,
+  responseObject?: CaseResponseObject,
+  evidencePins: readonly CaseEvidencePin[] = [],
 ): string | null {
+  if (review?.responseObject && !sameCaseResponseObject(responseObject, review.responseObject)) return 'This independent review concerns one object. Select that object for closure; it cannot close the whole Case.';
   if (reason !== 'independently_not_reproduced' && reason !== 'infrastructure_changed') return null;
   const expected = reason === 'independently_not_reproduced' ? 'not_reproduced' : 'changed';
   const invalidLink = reason === 'independently_not_reproduced'
     ? 'This closure reason requires a linked independent not-reproduced review.'
     : 'This closure reason requires a linked independent changed review.';
   if (!review || review.state !== expected) return invalidLink;
+  if (responseObject) {
+    if (!sameCaseResponseObject(responseObject, review.responseObject)) return 'Object-specific technical closure requires a linked independent review explicitly bound to this exact object; historical missing binding remains unknown.';
+    if (!review.recheck || !sameCaseResponseObject(responseObject, review.recheck.responseObject)) return 'Object-specific technical closure requires a complete exact-object baseline and current review under comparable conditions.';
+    try {
+      assertRecheckNonReproduction('not_reproduced', review.recheck, review.completeness, evidencePins,
+        evidencePins.find(pin => pin.id === review.evidencePinId), review.observedAt);
+    } catch (cause) { return cause instanceof Error ? cause.message : 'The exact-object review cannot support technical closure.'; }
+  }
   const observedAt = normalizeExplicitIsoTimestamp(review.observedAt);
   const createdAt = normalizeExplicitIsoTimestamp(review.createdAt);
   const closedAt = normalizeExplicitIsoTimestamp(now);
@@ -328,12 +356,48 @@ export function caseClosureReviewBlocker(
   return null;
 }
 
+/** Latest applicable provider cohort, never the action-wide summary or an old receipt. */
+export function caseClosureProviderBlocker(action: CaseActionRecord | null | undefined, responseObject: CaseResponseObject | undefined, now: string): string | null {
+  const blocked = 'This closure reason requires a linked typed provider-reported-resolution outcome for the latest applicable object observation.';
+  const closedAt = normalizeExplicitIsoTimestamp(now);
+  if (!action || !closedAt) return blocked;
+  if (responseObject ? !action.responseObjects?.some(object => sameCaseResponseObject(object, responseObject)) : action.responseObjects?.length) return blocked;
+  // A losing workflow transition is still retained evidence. Select the
+  // exact-object cohort before checking whether its receipts were applied.
+  const events = action.history.filter(event => (event.providerOutcome !== null || event.objectOutcome !== undefined)
+    && Date.parse(event.occurredAt) <= Date.parse(closedAt)
+    && (responseObject ? event.responseObjects?.some(object => sameCaseResponseObject(object, responseObject)) : !event.responseObjects?.length));
+  const cohort = latestObservationCohort(events, event => event.occurredAt);
+  if (!cohort.latest.length || cohort.undated.length || cohort.latest.some(event => !event.applied || event.providerOutcome !== 'provider_reports_resolved'
+    || event.objectOutcome === 'restored' || event.objectOutcome === 'disputed')
+    || new Set(cohort.latest.map(event => event.objectOutcome ?? null)).size !== 1) return blocked;
+  return null;
+}
+
+export function caseClosureActionBlocker(reason: CaseClosureReason | null, action: CaseActionRecord | null | undefined, responseObject: CaseResponseObject | undefined, now: string): string | null {
+  if (action?.responseObjects?.length && (!responseObject || !action.responseObjects.some(object => sameCaseResponseObject(object, responseObject)))) return 'This action concerns explicitly bound objects. Select one of them for this closure; other objects remain independent.';
+  return reason === 'provider_reported_resolution_not_independently_checked' ? caseClosureProviderBlocker(action, responseObject, now) : null;
+}
+
+/** Derived presentation only: never rewrite the analyst's summary or limitations. */
+export function caseClosureHistoryQualification(closure: CaseClosureRecord, actions: readonly CaseActionRecord[]): string | null {
+  if (closure.reason !== 'provider_reported_resolution_not_independently_checked') return null;
+  const action = actions.find(candidate => candidate.id === closure.actionId);
+  // Evaluate the retained history, not a wall-clock freshness claim. Future-dated
+  // or conflicting receipts cannot silently make an old decision authoritative.
+  const latestAt = (action?.history ?? []).reduce((latest, event) =>
+    Date.parse(event.occurredAt) > Date.parse(latest) ? event.occurredAt : latest, closure.createdAt);
+  return caseClosureProviderBlocker(action, closure.responseObject, latestAt) === null ? null
+    : 'As of the latest retained receipt, provider history does not support a new closure for this scope. This historical analyst decision is preserved; it does not establish current remediation.';
+}
+
 export function appendCaseClosure(
   current: CaseClosureHistory,
   raw: unknown,
   now: string,
   observedEffects: CaseObservedEffectHistory,
   actions: readonly CaseActionRecord[],
+  evidencePins: readonly CaseEvidencePin[] = [],
 ): CaseClosureHistory {
   const item = record(raw);
   const reason = typeof item.reason === 'string' && CLOSURE_REASONS.has(item.reason)
@@ -345,15 +409,11 @@ export function appendCaseClosure(
   const action = typeof item.actionId === 'string'
     ? actions.find((candidate) => candidate.id === item.actionId) ?? null
     : null;
-  const reviewBlocker = caseClosureReviewBlocker(reason, review, now);
+  const responseObject = readCaseResponseObject(item.responseObject);
+  const reviewBlocker = caseClosureReviewBlocker(reason, review, now, responseObject, evidencePins);
   if (reviewBlocker) throw new Error(reviewBlocker);
-  if (reason === 'provider_reported_resolution_not_independently_checked'
-    && (action?.providerOutcome !== 'provider_reports_resolved'
-      || !action.history.some((event) => event.applied
-        && event.providerOutcome === 'provider_reports_resolved'
-        && Date.parse(event.occurredAt) <= Date.parse(now)))) {
-    throw new Error('This closure reason requires a linked typed provider-reported-resolution outcome.');
-  }
+  const actionBlocker = caseClosureActionBlocker(reason, action, responseObject, now);
+  if (actionBlocker) throw new Error(actionBlocker);
   const linkContext = buildCaseClosureLinkContext(observedEffects, actions);
   const created = normalizeClosure({ ...item, id: freshId('case-closure'), createdAt: now }, now,
     new Set(observedEffects.reviews.map((candidate) => candidate.id)),
@@ -415,6 +475,7 @@ export function buildCaseResponseLifecycleSummary(input: Readonly<{
     ? 'missing' as const
     : latestObservedChangeAt ? 'available' as const : 'ambiguous' as const;
   const latestClosure = [...(input.closures?.records ?? [])]
+    .filter(closure => closure.responseObject === undefined)
     .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt) || compareCodeUnits(right.id, left.id))[0] ?? null;
   return {
     providerOutcomeState,

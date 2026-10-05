@@ -6,7 +6,7 @@
     type ForceGraphLinkKind,
     type ForceGraphLinkInput,
     type ForceGraphNodeInput,
-  } from '$lib/analysis/visualization-models.ts';
+  } from '#lib/analysis/visualization-models.ts';
 
   let {
     title,

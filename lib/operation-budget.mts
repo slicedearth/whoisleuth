@@ -37,6 +37,7 @@ const OPERATION_FEATURES = Object.freeze({
   AVAILABILITY_FAST: 'availability_fast',
   AVAILABILITY_DEEP: 'availability_deep',
   CERTIFICATE_TRANSPARENCY: 'certificate_transparency',
+  DOMAIN_FEED_SEARCH: 'domain_feed_search',
   DOMAIN_POSTURE: 'domain_posture',
 });
 
@@ -51,6 +52,7 @@ const OPERATION_FEATURE_CLASSES = Object.freeze({
   [OPERATION_FEATURES.AVAILABILITY_FAST]: OPERATION_CLASSES.REGISTRY_LIGHT,
   [OPERATION_FEATURES.AVAILABILITY_DEEP]: OPERATION_CLASSES.REGISTRY_DEEP,
   [OPERATION_FEATURES.CERTIFICATE_TRANSPARENCY]: OPERATION_CLASSES.CERTIFICATE_SEARCH,
+  [OPERATION_FEATURES.DOMAIN_FEED_SEARCH]: OPERATION_CLASSES.CERTIFICATE_SEARCH,
   [OPERATION_FEATURES.DOMAIN_POSTURE]: OPERATION_CLASSES.POSTURE_AUDIT,
 });
 
@@ -138,6 +140,7 @@ function operationFeatureFor(feature: unknown, { fast = false, compact = false }
   if (feature === 'rdap_nameserver_search') return OPERATION_FEATURES.RDAP_NAMESERVER_SEARCH;
   if (feature === 'whois') return OPERATION_FEATURES.WHOIS;
   if (feature === 'certificate_transparency') return OPERATION_FEATURES.CERTIFICATE_TRANSPARENCY;
+  if (feature === 'domain_feed_search') return OPERATION_FEATURES.DOMAIN_FEED_SEARCH;
   if (feature === 'domain_posture') return OPERATION_FEATURES.DOMAIN_POSTURE;
   return null;
 }

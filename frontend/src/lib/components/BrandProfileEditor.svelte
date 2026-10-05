@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { BrandProfile } from '$lib/brand-profiles';
-  import type { BrandEditorField, BrandEditorValues } from '$lib/controllers/brand-profile-editor.ts';
+  import type { BrandProfile } from '#lib/brand-profiles.ts';
+  import type { BrandEditorField, BrandEditorValues } from '#lib/controllers/brand-profile-editor.ts';
   import BrandIdentityReferencesEditor from './BrandIdentityReferencesEditor.svelte';
 
   const id = $props.id();

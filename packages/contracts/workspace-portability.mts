@@ -19,11 +19,13 @@ export const BRAND_PROFILE_SCHEMA = 'whoisleuth.brand-profiles';
 export const PUBLIC_BRAND_PROFILE_SCHEMA_VERSION = 6;
 // Historical readers retain a fixed published identity when the writer moves.
 export const PUBLISHED_V2_2_BRAND_PROFILE_SCHEMA_VERSION = 7;
-export const BRAND_PROFILE_SCHEMA_VERSION = 9;
+export const BRAND_PROFILE_SCHEMA_VERSION = 11;
 export const BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS = Object.freeze([
   PUBLIC_BRAND_PROFILE_SCHEMA_VERSION,
   PUBLISHED_V2_2_BRAND_PROFILE_SCHEMA_VERSION,
   8,
+  9,
+  10,
   BRAND_PROFILE_SCHEMA_VERSION,
 ]);
 export const SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS = BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS;
@@ -33,6 +35,17 @@ export const MAX_PROFILE_VALUE_INPUTS = MAX_PROFILE_VALUES * 4;
 export const MAX_PROFILE_STORE_BYTES = 4 * 1024 * 1024;
 export const MAX_PROFILE_IMPORT_BYTES = MAX_PROFILE_STORE_BYTES * 8;
 export const MAX_PROFILE_NAME_LENGTH = 100;
+export const MAX_CANDIDATE_OBSERVATIONS = 200;
+export const MAX_CANDIDATE_MATCHES = 20;
+export const MAX_CANDIDATE_SOURCES = 12;
+export const MAX_CANDIDATE_TEXT = 300;
+export const MAX_CANDIDATE_EXCEPTIONS = 200;
+export const MAX_CANDIDATE_EXCEPTION_HISTORY = 8;
+export const MAX_BRAND_KEYWORD_CAMPAIGNS = 20;
+export const MAX_BRAND_KEYWORD_CAMPAIGN_HISTORY = 8;
+export const MAX_BRAND_KEYWORD_TERMS = 20;
+export const MAX_BRAND_KEYWORD_TERM_LENGTH = 80;
+export const MAX_WATCH_CONTEXTS = 20;
 export const MAX_PROFILE_TEXT_LENGTH = 200;
 export const MAX_PROFILE_DOMAIN_LENGTH = 253;
 export const MAX_PROFILE_URL_LENGTH = 2_048;
@@ -61,14 +74,21 @@ export const MAX_CAMPAIGN_INPUT_RECORDS = 500;
 export const MAX_CAMPAIGN_STORE_BYTES = 512 * 1024;
 
 export const WATCHLIST_SCHEMA = 'whoisleuth.watchlists';
-export const WATCHLIST_SCHEMA_VERSION = 4;
-export const WATCHLIST_BROWSER_SUPPORTED_VERSIONS = Object.freeze([2, 3, WATCHLIST_SCHEMA_VERSION]);
+export const WATCHLIST_SCHEMA_VERSION = 6;
+export const WATCHLIST_BROWSER_SUPPORTED_VERSIONS = Object.freeze([2, 3, 4, 5, WATCHLIST_SCHEMA_VERSION]);
 export const WATCHLIST_EXPORT_SUPPORTED_VERSIONS = WATCHLIST_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_WATCHLISTS = 100;
 export const MAX_WATCHLIST_INPUTS = MAX_WATCHLISTS * 4;
 export const MAX_WATCHLIST_NAME_LENGTH = 100;
 export const MAX_WATCHLIST_STORE_BYTES = 2 * 1024 * 1024;
 export const MAX_WATCHLIST_IMPORT_BYTES = 2 * 1024 * 1024;
+// Recovery metadata is not new analyst data. Reserve only its exact JSON cost;
+// the store writer still enforces the ordinary budget after subtracting it.
+export const WATCHLIST_RECOVERY_METADATA = Object.freeze({ membershipRecovery: 'legacy_overflow' as const });
+export const WATCHLIST_RECOVERY_METADATA_BYTES = JSON.stringify(WATCHLIST_RECOVERY_METADATA).length - 1;
+export const MAX_WATCHLIST_READ_BYTES = MAX_WATCHLIST_STORE_BYTES + MAX_WATCHLISTS * WATCHLIST_RECOVERY_METADATA_BYTES;
+// Date.toISOString() produces at most 27 ASCII characters, including extended years.
+export const MAX_WATCHLIST_PORTABLE_BYTES = MAX_WATCHLIST_READ_BYTES + JSON.stringify({ exportedAt: '+999999-12-31T23:59:59.999Z' }).length - 1;
 export const MAX_WATCHLIST_HISTORY_EVENTS = 12;
 export const MAX_WATCHLIST_CHANGES_PER_EVENT = 500;
 export const MAX_WATCHLIST_DOMAINS = 2_000;
@@ -99,9 +119,9 @@ export const MAX_CT_HISTORY_QUERY_LENGTH = 200;
 export const MAX_CT_HISTORY_STORE_BYTES = 1024 * 1024;
 
 export const DETECTION_RULE_SCHEMA = 'whoisleuth.detection-rules';
-export const DETECTION_RULE_SCHEMA_VERSION = 1;
-export const DETECTION_RULE_BROWSER_SUPPORTED_VERSIONS = Object.freeze([DETECTION_RULE_SCHEMA_VERSION]);
-export const DETECTION_RULE_EXPORT_SUPPORTED_VERSIONS = Object.freeze([DETECTION_RULE_SCHEMA_VERSION]);
+export const DETECTION_RULE_SCHEMA_VERSION = 2;
+export const DETECTION_RULE_BROWSER_SUPPORTED_VERSIONS = Object.freeze([1, DETECTION_RULE_SCHEMA_VERSION]);
+export const DETECTION_RULE_EXPORT_SUPPORTED_VERSIONS = DETECTION_RULE_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_DETECTION_RULES = 50;
 export const MAX_RULE_CONDITIONS = 8;
 export const MAX_RULE_INPUT_RECORDS = 250;
@@ -134,8 +154,8 @@ export const MAX_WEBSITE_SNAPSHOT_STORE_BYTES = 512 * 1024;
 export const MAX_WEBSITE_SNAPSHOT_IMPORT_BYTES = 768 * 1024;
 
 export const BULK_SESSION_SCHEMA = 'whoisleuth.bulk-sessions';
-export const BULK_SESSION_SCHEMA_VERSION = 6;
-export const BULK_SESSION_BROWSER_SUPPORTED_VERSIONS = Object.freeze([4, 5, BULK_SESSION_SCHEMA_VERSION]);
+export const BULK_SESSION_SCHEMA_VERSION = 7;
+export const BULK_SESSION_BROWSER_SUPPORTED_VERSIONS = Object.freeze([4, 5, 6, BULK_SESSION_SCHEMA_VERSION]);
 export const SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS = BULK_SESSION_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_BULK_SESSIONS = 10;
 export const MAX_BULK_SESSION_ROWS = 2_000;
@@ -207,12 +227,14 @@ export const WORKSPACE_PORTABILITY_IDENTITY_CONSTANTS = Object.freeze([
 export const WORKSPACE_PORTABILITY_BOUND_CONSTANTS = Object.freeze([
   'MAX_PROFILES', 'MAX_PROFILE_VALUES', 'MAX_PROFILE_VALUE_INPUTS', 'MAX_PROFILE_STORE_BYTES', 'MAX_PROFILE_IMPORT_BYTES',
   'MAX_PROFILE_NAME_LENGTH', 'MAX_PROFILE_TEXT_LENGTH', 'MAX_PROFILE_DOMAIN_LENGTH', 'MAX_PROFILE_URL_LENGTH', 'MAX_PROFILE_TLD_LENGTH',
+  'MAX_BRAND_KEYWORD_CAMPAIGNS', 'MAX_BRAND_KEYWORD_CAMPAIGN_HISTORY', 'MAX_BRAND_KEYWORD_TERMS', 'MAX_BRAND_KEYWORD_TERM_LENGTH',
   'MAX_OFFICIAL_CHANNELS', 'MAX_RIGHTS_REFERENCES', 'MAX_DKIM_SELECTOR_LENGTH',
   'MAX_DKIM_SELECTORS', 'MAX_PROTECTION_ATTESTATIONS', 'MAX_DESIRED_POSTURE_BASELINES', 'MAX_DESIRED_POSTURE_RECORDS',
   'MAX_DESIRED_POSTURE_SUPPRESSIONS', 'MAX_DESIRED_POSTURE_OBSERVATIONS', 'MAX_DESIRED_POSTURE_CHANGE_WINDOWS',
   'MAX_CAMPAIGNS', 'MAX_CAMPAIGN_DOMAINS', 'MAX_CAMPAIGN_NAME_LENGTH', 'MAX_CAMPAIGN_DESCRIPTION_LENGTH',
   'MAX_CAMPAIGN_IMPORT_BYTES', 'MAX_CAMPAIGN_INPUT_RECORDS', 'MAX_CAMPAIGN_STORE_BYTES',
   'MAX_WATCHLISTS', 'MAX_WATCHLIST_INPUTS', 'MAX_WATCHLIST_NAME_LENGTH', 'MAX_WATCHLIST_STORE_BYTES', 'MAX_WATCHLIST_IMPORT_BYTES',
+  'MAX_WATCHLIST_READ_BYTES', 'MAX_WATCHLIST_PORTABLE_BYTES',
   'MAX_WATCHLIST_HISTORY_EVENTS', 'MAX_WATCHLIST_CHANGES_PER_EVENT', 'MAX_WATCHLIST_DOMAINS', 'MAX_WATCHLIST_INPUT_RECORDS',
   'MAX_WATCHLIST_NAMESERVERS', 'MAX_WATCHLIST_MUTATION_TYPES', 'MAX_WATCHLIST_HISTORY_DOMAIN_OPTIONS',
   'MAX_SHORTLIST_ENTRIES', 'MAX_SHORTLIST_INPUTS', 'MAX_SHORTLIST_STORE_BYTES', 'MAX_SHORTLIST_IMPORT_BYTES', 'MAX_SHORTLIST_FACTORS',
@@ -262,7 +284,7 @@ export const BRAND_PROFILE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   supportedVersions: BRAND_PROFILE_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_PROFILE_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Published versions 6, 7 and 8 migrate directly to the current profile envelope. Version 9 preserves earlier page baselines while admitting independently versioned native-tree fingerprints; incompatible fingerprint algorithms are not compared.',
+  note: 'Versions 6–10 remain readable without invented keyword campaigns. Version 11 adds bounded, revisioned, time-limited Brand keyword intent without collection authority; candidate provenance and independent page-fingerprint algorithms remain intact.',
 });
 export const CAMPAIGN_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.campaigns', kind: 'browser_store', schema: null, currentVersion: CAMPAIGN_SCHEMA_VERSION,
@@ -275,7 +297,7 @@ export const WATCHLIST_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.watchlists', kind: 'browser_store', schema: null, currentVersion: WATCHLIST_SCHEMA_VERSION,
   supportedVersions: WATCHLIST_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
-  byteBudget: MAX_WATCHLIST_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
+  byteBudget: MAX_WATCHLIST_READ_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
   note: 'Public version 2 remains readable without inferred collection outcomes. Version 3 retains explicit page and favicon collection quality; unversioned maps are outside the compatibility boundary.',
 });
 export const SHORTLIST_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
@@ -295,7 +317,7 @@ export const CT_HISTORY_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
 export const DETECTION_RULE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.detection-rules', kind: 'browser_store', schema: null, currentVersion: DETECTION_RULE_SCHEMA_VERSION,
   supportedVersions: DETECTION_RULE_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
-  futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite',
+  futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_RULE_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
   note: 'Only allowlisted structured rule fields and operators survive normalisation; the schema string belongs to portable exports.',
 });
@@ -340,7 +362,7 @@ export const BRAND_PROFILE_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   supportedVersions: SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_PROFILE_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Supported exports merge non-destructively by bounded normalised profile identity.',
+  note: 'Supported exports merge non-destructively by bounded profile identity. Candidate decisions cannot be reassigned to a different Brand identifier with the same name.',
 });
 export const CAMPAIGN_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.campaigns', kind: 'export', schema: CAMPAIGN_SCHEMA, currentVersion: CAMPAIGN_SCHEMA_VERSION,
@@ -353,8 +375,8 @@ export const WATCHLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.watchlists', kind: 'export', schema: WATCHLIST_SCHEMA, currentVersion: WATCHLIST_SCHEMA_VERSION,
   supportedVersions: WATCHLIST_EXPORT_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
-  byteBudget: MAX_WATCHLIST_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Public version 2 and current version 3 merge non-destructively. Historical records have unknown collection quality; incomplete current checks cannot erase a usable baseline.',
+  byteBudget: MAX_WATCHLIST_PORTABLE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
+  note: 'Versions 2–5 remain readable. Version 6 preserves older membership overflow as paused, exportable records without activating or pruning domains. New active membership remains bounded. Brand contexts and incomplete-check baselines remain preserved.',
 });
 export const SHORTLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.shortlist', kind: 'export', schema: SHORTLIST_SCHEMA, currentVersion: SHORTLIST_SCHEMA_VERSION,
@@ -366,7 +388,7 @@ export const SHORTLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
 export const DETECTION_RULE_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.detection-rules', kind: 'export', schema: DETECTION_RULE_SCHEMA, currentVersion: DETECTION_RULE_SCHEMA_VERSION,
   supportedVersions: DETECTION_RULE_EXPORT_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
-  futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge',
+  futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_RULE_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
   note: 'Non-destructive rule merge; imported conditions remain allowlisted and non-executable.',
 });
@@ -462,8 +484,9 @@ type WorkspaceLifecyclePortableDefinition = Readonly<{
   schema: string;
   builder: string;
   merger: string;
-  serializerHookId: 'workspace.portable.json' | 'workspace.portable.json-line' | 'workspace.portable.archive-section';
+  serializerHookId: 'workspace.portable.json' | 'workspace.portable.json-line' | 'workspace.portable.archive-section' | 'workspace.portable.watchlist-json';
   indentSpaces: 0 | 2;
+  compactFallback?: true;
   terminalLf: boolean;
 }>;
 
@@ -491,6 +514,15 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
     itemBounds: [
       { id: 'profiles', path: 'profiles', maximum: MAX_PROFILES, handling: 'truncate' },
       { id: 'profile-values', path: 'profiles[].values', maximum: MAX_PROFILE_VALUES, handling: 'truncate' },
+      { id: 'candidate-observations', path: 'profiles[].candidateObservations', maximum: MAX_CANDIDATE_OBSERVATIONS, handling: 'truncate' },
+      { id: 'candidate-matches', path: 'profiles[].candidateObservations[].matches', maximum: MAX_CANDIDATE_MATCHES, handling: 'reject' },
+      { id: 'candidate-sources', path: 'profiles[].candidateObservations[].sources', maximum: MAX_CANDIDATE_SOURCES, handling: 'reject' },
+      { id: 'candidate-exceptions', path: 'profiles[].candidateExceptions', maximum: MAX_CANDIDATE_EXCEPTIONS, handling: 'truncate' },
+      { id: 'exception-history', path: 'profiles[].candidateExceptions[].history', maximum: MAX_CANDIDATE_EXCEPTION_HISTORY, handling: 'truncate' },
+      { id: 'keyword-campaigns', path: 'profiles[].keywordCampaigns', maximum: MAX_BRAND_KEYWORD_CAMPAIGNS, handling: 'reject' },
+      { id: 'keyword-campaign-history', path: 'profiles[].keywordCampaigns[].history', maximum: MAX_BRAND_KEYWORD_CAMPAIGN_HISTORY, handling: 'reject' },
+      { id: 'keyword-positive-terms', path: 'profiles[].keywordCampaigns[].positiveTerms', maximum: MAX_BRAND_KEYWORD_TERMS, handling: 'reject' },
+      { id: 'keyword-negative-terms', path: 'profiles[].keywordCampaigns[].negativeTerms', maximum: MAX_BRAND_KEYWORD_TERMS, handling: 'reject' },
     ],
     portable: {
       descriptor: BRAND_PROFILE_EXPORT_COMPATIBILITY,
@@ -536,14 +568,17 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
       { id: 'watchlists', path: 'watchlists', maximum: MAX_WATCHLISTS, handling: 'truncate' },
       { id: 'domains', path: 'watchlists[].results', maximum: MAX_WATCHLIST_DOMAINS, handling: 'drop_value' },
       { id: 'history', path: 'watchlists[].history', maximum: MAX_WATCHLIST_HISTORY_EVENTS, handling: 'truncate' },
+      { id: 'domain-contexts', path: 'watchlists[].domainMetadata', maximum: MAX_WATCHLIST_DOMAINS, handling: 'reject' },
+      { id: 'brand-contexts', path: 'watchlists[].domainMetadata[].contexts', maximum: MAX_WATCH_CONTEXTS, handling: 'truncate' },
     ],
     portable: {
       descriptor: WATCHLIST_EXPORT_COMPATIBILITY,
       schema: WATCHLIST_SCHEMA,
       builder: 'buildWatchlistExport',
       merger: 'mergeWatchlistStores',
-      serializerHookId: 'workspace.portable.json',
+      serializerHookId: 'workspace.portable.watchlist-json',
       indentSpaces: 2,
+      compactFallback: true,
       terminalLf: false,
     },
   },
@@ -720,6 +755,34 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
 ]);
 
 const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly Pick<SchemaLifecycleFixture, 'id' | 'path' | 'bytes' | 'sha256' | 'schema' | 'version'>[] = Object.freeze([
+  { id: 'workspace.browser.brand.v11', path: 'test/fixtures/workspace-lifecycle/browser-brand-v11.json', bytes: 38, sha256: 'c727cd501774f0f89a39f399a01216065b6ed7048bfed97bbcdaf10e651a7133', schema: 'whoisleuth.browser.brand-profile-store', version: 11 },
+  { id: 'workspace.portable.brand.v11', path: 'test/fixtures/workspace-lifecycle/portable-brand-v11.json', bytes: 123, sha256: 'c5023e1eebe187cf355c4fb53b7d8a755dc0ffb01a3deeb9b9dd7032007933d9', schema: 'whoisleuth.brand-profiles', version: 11 },
+  { id: 'workspace.browser.watchlist.v6', path: 'test/fixtures/workspace-lifecycle/browser-watchlist-v6.json', bytes: 76, sha256: '16df0f813b17f1765862f5c2ff41c2db9c7d6d76e75f24746aa6d75b59d3f02e', schema: 'whoisleuth.browser.watchlist-store', version: 6 },
+  { id: 'workspace.portable.watchlist.v6', path: 'test/fixtures/workspace-lifecycle/portable-watchlist-v6.json', bytes: 120, sha256: 'ced22d0d16e839e0b4625f8799eef30a776908abf3af998de6fad5b549898987', schema: 'whoisleuth.watchlists', version: 6 },
+  { id: 'workspace.browser.brand.v10', path: 'test/fixtures/workspace-lifecycle/browser-brand-v10.json', bytes: 38, sha256: 'bebf3a72ba57c06246e6169ebd9a597eb5b867508db85e1db0e3d763bc0839bc', schema: 'whoisleuth.browser.brand-profile-store', version: 10 },
+  { id: 'workspace.portable.brand.v10', path: 'test/fixtures/workspace-lifecycle/portable-brand-v10.json', bytes: 123, sha256: '85cd7c58696f8219484ac88210ad7ab4a0ad1c9798e8cb02ff6ebb3fd2c82d8a', schema: 'whoisleuth.brand-profiles', version: 10 },
+  { id: 'workspace.browser.watchlist.v5', path: 'test/fixtures/workspace-lifecycle/browser-watchlist-v5.json', bytes: 76, sha256: '11eabd20f952611307a5c84291c7892c15d3748f7ada5549813e1d705967c2c0', schema: 'whoisleuth.browser.watchlist-store', version: 5 },
+  { id: 'workspace.portable.watchlist.v5', path: 'test/fixtures/workspace-lifecycle/portable-watchlist-v5.json', bytes: 120, sha256: '732d4bda46e907bdd4d343ce36999a2787a0057029ee4dba0c4ef462f2822fed', schema: 'whoisleuth.watchlists', version: 5 },
+  {
+    id: 'workspace.browser.detection.v2', path: 'test/fixtures/workspace-lifecycle/browser-detection-v2.json',
+    bytes: 34, sha256: '2db6ae8eb9d24cb86924a7020c6f3eebfa41b5fc5848a53e239465db622c2312',
+    schema: 'whoisleuth.browser.detection-rule-store', version: 2,
+  },
+  {
+    id: 'workspace.portable.detection.v2', path: 'test/fixtures/workspace-lifecycle/portable-detection-v2.json',
+    bytes: 293, sha256: 'bf4409e18ef0b721f5a7e2f14a06f2fada88287114ec17775fef42e7ed38072a',
+    schema: 'whoisleuth.detection-rules', version: 2,
+  },
+  {
+    id: 'workspace.browser.bulk.v7', path: 'test/fixtures/workspace-lifecycle/browser-bulk-v7.json',
+    bytes: 77, sha256: '6b02cbd48a939a34d8f292da2b6bc8e8b59f3ed1b9c106a8e9e271ec0e949459',
+    schema: 'whoisleuth.browser.bulk-session-store', version: 7,
+  },
+  {
+    id: 'workspace.portable.bulk.v7', path: 'test/fixtures/workspace-lifecycle/portable-bulk-v7.json',
+    bytes: 338, sha256: 'f7e14d866eeb4e94b5390086e278348bfa0610ace72776fee4fbf24871ab3393',
+    schema: 'whoisleuth.bulk-sessions', version: 7,
+  },
   {
     id: 'workspace.browser.watchlist.v4', path: 'test/fixtures/workspace-lifecycle/browser-watchlist-v4.json',
     bytes: 76, sha256: '059930ee54d1bc65ac68ef6d3a8ac8cd8e53f682fe9a857512e2b6c57e93d5fe',
@@ -1252,6 +1315,13 @@ const WORKSPACE_LIFECYCLE_HOOKS: readonly SchemaLifecycleHook[] = Object.freeze(
     exportName: 'serialiseWorkspacePortableJson',
   },
   {
+    id: 'workspace.portable.watchlist-json',
+    role: 'serialiser',
+    runtime: 'shared',
+    module: 'packages/workspace/watchlist-store.mts',
+    exportName: 'serializeWatchlistExport',
+  },
+  {
     id: 'workspace.portable.json-line',
     role: 'serialiser',
     runtime: 'shared',
@@ -1368,6 +1438,7 @@ function workspacePortableSerialisation(
     encoding: 'utf-8',
     bom: false,
     indentSpaces: definition.portable.indentSpaces,
+    ...(definition.portable.compactFallback ? { compactFallback: true as const } : {}),
     terminalLf: definition.portable.terminalLf,
     propertyOrder: 'normalised_fixed',
     canonicalisation: null,

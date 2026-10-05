@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { CaseRecord } from '$lib/cases';
-  import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
-  import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
+  import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import { caseEvidenceLinkIssues, caseEvidenceSharedContext, type CaseEvidenceLink } from '../../../../packages/cases/case-evidence-links.mts';
   import { MAX_RESPONSE_RATIONALE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
@@ -33,9 +33,10 @@
 
 <details class="evidence-relationships">
   <summary>Evidence relationships and shared sources</summary>
+  <p>A later result may reuse your submitted report. Record known reuse and separately documented observations; otherwise leave independence unknown. Who submitted material alone proves neither. Missing provider results do not prevent a qualified draft.</p>
   {#if shared.length}
     <details><summary>Shared retained context · {shared.length} {shared.length === 1 ? 'group' : 'groups'}</summary>
-      <p>Matching source labels, checkpoints or imported content are shown separately. They do not establish independent corroboration.</p>
+      <p>Matching source labels, checkpoints or imported content are shown separately. These are overlapping context groups, not counts of independent sources. They do not establish dependence or independent corroboration by themselves.</p>
       {#each shared as group}<p><strong>{group.label}</strong></p><CaseLinkedEvidence pins={record.evidencePins} ids={group.pinIds} />{/each}
     </details>
   {/if}

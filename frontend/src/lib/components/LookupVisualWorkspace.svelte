@@ -1,18 +1,18 @@
 <script lang="ts">
-  import AnalystEvidencePivots from '$lib/components/AnalystEvidencePivots.svelte';
-  import EvidenceTopology from '$lib/components/EvidenceTopology.svelte';
-  import LookupActivationContext from '$lib/components/LookupActivationContext.svelte';
-  import LookupAssetGraph from '$lib/components/LookupAssetGraph.svelte';
-  import LookupLifecycle from '$lib/components/LookupLifecycle.svelte';
-  import type { ActivationContext } from '$lib/analysis/activation-context.ts';
-  import type { AnalystEvidencePivot } from '$lib/analysis/analyst-evidence-pivots.ts';
+  import AnalystEvidencePivots from '#lib/components/AnalystEvidencePivots.svelte';
+  import EvidenceTopology from '#lib/components/EvidenceTopology.svelte';
+  import LookupActivationContext from '#lib/components/LookupActivationContext.svelte';
+  import LookupAssetGraph from '#lib/components/LookupAssetGraph.svelte';
+  import LookupLifecycle from '#lib/components/LookupLifecycle.svelte';
+  import type { ActivationContext } from '#lib/analysis/activation-context.ts';
+  import type { AnalystEvidencePivot } from '#lib/analysis/analyst-evidence-pivots.ts';
   import {
     projectEvidenceTopology,
     type EvidenceTopologyInput,
     type EvidenceTopologyTarget,
-  } from '$lib/analysis/evidence-topology.ts';
-  import type { LookupAssetGraph as LookupAssetGraphModel } from '$lib/analysis/lookup-asset-graph.ts';
-  import type { LifecycleEventInput } from '$lib/analysis/visualization-models.ts';
+  } from '#lib/analysis/evidence-topology.ts';
+  import type { LookupAssetGraph as LookupAssetGraphModel } from '#lib/analysis/lookup-asset-graph.ts';
+  import type { LifecycleEventInput } from '#lib/analysis/visualization-models.ts';
 
   export type LookupVisualView = 'sources' | 'relationships' | 'timeline';
 

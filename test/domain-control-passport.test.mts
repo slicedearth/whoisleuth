@@ -58,7 +58,7 @@ function profile(): BrandProfile {
     tlds: ['test'],
     approvedPartnerDomains: [],
     allowlistedDomains: [],
-    allowlistedRegistrars: [],
+    allowlistedRegistrars: [], candidateObservations: [], candidateExceptions: [],
     officialChannels: [],
     rightsReferences: [],
     dkimSelectors: ['private-selector'],

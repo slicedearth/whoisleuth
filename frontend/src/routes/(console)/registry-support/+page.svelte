@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { onMount } from 'svelte';
-  import PageHeading from '$lib/components/PageHeading.svelte';
-  import Pagination from '$lib/components/Pagination.svelte';
-  import SourceReliabilityDashboard from '$lib/components/SourceReliabilityDashboard.svelte';
+  import PageHeading from '#lib/components/PageHeading.svelte';
+  import Pagination from '#lib/components/Pagination.svelte';
+  import SourceReliabilityDashboard from '#lib/components/SourceReliabilityDashboard.svelte';
   import {
     filterRegistrySupportRows,
     inspectRegistrySupport,
@@ -15,14 +15,14 @@
     registrySupportLabel,
     safeOfficialRegistryLookupUrl,
     sortRegistrySupportRows,
-  } from '$lib/analysis/registry-support.ts';
+  } from '#lib/analysis/registry-support.ts';
   import {
     lookupCapabilityRows,
     lookupCapabilityStateLabel,
     LOOKUP_CAPABILITY_MATRIX_VERSION,
     type LookupCapabilityState,
     type LookupCapabilityTarget,
-  } from '$lib/analysis/lookup-capability-matrix.ts';
+  } from '#lib/analysis/lookup-capability-matrix.ts';
 
   const PAGE_SIZE = 50;
   type CapabilityTargetFilter = 'all' | LookupCapabilityTarget;

@@ -25,6 +25,13 @@ The browser and CLI share runtime-neutral contracts and analysis rules. They do
 not share storage adapters, authentication state or implicit network effects.
 Express and Netlify adapters call the same request services and evidence rules.
 
+Domain-feed import shares a streamed parser and candidate projection across
+browser workers and the CLI. Deliberately retained matches use the existing
+Brand and Watchlist stores. An optional separate feed process maintains a
+bounded public-data index; authenticated application adapters proxy explicit
+searches only when configured. The browser never receives its credentials.
+Feed refreshes and website builds are independent.
+
 ## Component ownership
 
 | Layer | Owns | Does not own |
@@ -49,6 +56,15 @@ adapters.
 Console routes compose view effects around responsibility-specific controllers.
 Domain models own validation; storage adapters own transactions and conflict
 checks. A committed write and a failed subsequent refresh remain distinct.
+The static frontend adapter, preprocessing, browser policy and bundler plugins
+are configured in `frontend/vite.config.ts`. Frontend imports use the native
+`#lib/*` package mapping with explicit extensions; its TypeScript project extends
+the framework's `$app/tsconfig`. Application version checks share the recorded
+build identity and have no periodic polling interval.
+The mark and outlined wordmark share vector geometry in
+`frontend/src/lib/brand-identity.ts`. `node tools/brand-assets.mts --write`
+regenerates the static logos, native-size favicons and social preview without
+external assets or font dependencies.
 The [contributor owner guide](../CONTRIBUTING.md#find-the-owner) locates the
 current components, controllers and adapters. CLI workflow
 recipe definitions supply both the command grammar choices and plan catalogue;

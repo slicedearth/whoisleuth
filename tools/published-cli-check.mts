@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 
 import { normalizeBoundedSemanticVersion } from '../packages/analysis/semantic-version.mts';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import { candidateDependencyAuditInput } from './installed-dependency-evidence.mts';
 import {
   WHOISLEUTH_PROJECT_URL,
   WHOISLEUTH_SOURCE_ISSUES_URL,
@@ -30,6 +31,11 @@ type WritableLike = { write(value: string): unknown };
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 type CheckOptions = Readonly<{ fetcher?: Fetcher; requestTimeoutMs?: number }>;
 type MainOptions = Readonly<{ stdout?: WritableLike; stderr?: WritableLike; fetcher?: Fetcher }>;
+type ReviewedCliCandidate = CliPackageReport & Readonly<{
+  publicationEnabled: true;
+  archiveFilename: string;
+  archiveSha256: string;
+}>;
 
 type PublishedCliReport = Readonly<{
   schema: typeof PUBLISHED_CLI_CHECK_SCHEMA;
@@ -65,6 +71,7 @@ export const PUBLISHED_CLI_CHECK_SCHEMA = 'whoisleuth.published-cli-check';
 export const PUBLISHED_CLI_CHECK_VERSION = 3;
 const MAX_METADATA_BYTES = 512 * 1024;
 const MAX_CANDIDATE_REPORT_BYTES = 64 * 1024;
+const MAX_INSTALLED_DEPENDENCY_BYTES = 5 * 1024 * 1024;
 const MAX_ERROR_LENGTH = 512;
 const MAX_CLI_PACKAGE_TAR_BYTES = MAX_CLI_PACKAGE_UNPACKED_BYTES + (MAX_CLI_PACKAGE_PROCESSING_ITEMS * 2 * 512) + 1_024;
 export const PUBLISHED_CLI_REQUEST_TIMEOUT_MS = 120_000;
@@ -241,7 +248,7 @@ function validatedTarballUrl(value: unknown, version: string): string {
   return parsed.toString();
 }
 
-export function validateCandidateReport(value: unknown, expectedVersionValue: unknown): CliPackageReport {
+export function validateCandidateReport(value: unknown, expectedVersionValue: unknown): ReviewedCliCandidate {
   const expectedVersion = normalizeSemanticVersion(expectedVersionValue);
   const report = record(value, 'Reviewed candidate report');
   exactKeys(report, [
@@ -271,7 +278,7 @@ export function validateCandidateReport(value: unknown, expectedVersionValue: un
     || report.installedChecks.some((item) => typeof item !== 'string' || !item || item.length > 80)) {
     throw new TypeError('Reviewed installed checks must be a bounded non-empty string array.');
   }
-  return Object.freeze(report as unknown as CliPackageReport);
+  return Object.freeze(report as unknown as ReviewedCliCandidate);
 }
 
 export function validatePublishedManifest(value: unknown, expectedVersionValue: unknown) {
@@ -319,6 +326,39 @@ export function validatePublishedManifest(value: unknown, expectedVersionValue: 
   return Object.freeze({ integrity, shasum, tarball, fileCount, unpackedBytes, runtimeDependencies: dependencies, registrySignatureCount: dist.signatures.length });
 }
 
+async function readReviewedCandidate(expectedVersion: string, candidateReportPath: string, candidateArchivePath: string) {
+  const [reportBytes, archiveBytes] = await Promise.all([
+    readBoundedRegularFile(candidateReportPath, { maximumBytes: MAX_CANDIDATE_REPORT_BYTES, minimumBytes: 1, label: 'Reviewed candidate report' }),
+    readBoundedRegularFile(candidateArchivePath, { maximumBytes: MAX_CLI_PACKAGE_PACKED_BYTES, minimumBytes: 1, label: 'Reviewed candidate archive' }),
+  ]);
+  const candidate = validateCandidateReport(parseJson(reportBytes, 'Reviewed candidate report', MAX_CANDIDATE_REPORT_BYTES), expectedVersion);
+  if (path.basename(candidateArchivePath) !== candidate.archiveFilename) throw new TypeError('Selected candidate archive filename does not match the reviewed report.');
+  if (archiveBytes.byteLength !== candidate.packedBytes || sha256(archiveBytes) !== candidate.archiveSha256) {
+    throw new TypeError('Selected candidate archive bytes do not match the reviewed report.');
+  }
+  return { candidate, archiveBytes };
+}
+
+/** Recheck an exact retained bundle offline; this neither audits nor publishes. */
+export async function verifyRetainedCandidate(
+  expectedVersionValue: unknown, candidateReportPath: string, candidateArchivePath: string, installedDependenciesPath: string,
+) {
+  const { candidate } = await readReviewedCandidate(normalizeSemanticVersion(expectedVersionValue), candidateReportPath, candidateArchivePath);
+  const bytes = await readBoundedRegularFile(installedDependenciesPath, { maximumBytes: MAX_INSTALLED_DEPENDENCY_BYTES, minimumBytes: 1, label: 'Installed candidate dependencies' });
+  const evidence = record(parseJson(bytes, 'Installed candidate dependencies', MAX_INSTALLED_DEPENDENCY_BYTES), 'Installed candidate dependencies');
+  const admitted = candidateDependencyAuditInput(evidence);
+  const packages = record(admitted.lockfile.packages, 'Installed packages');
+  const installedCandidate = record(packages[`node_modules/${candidate.packageName}`], 'Installed candidate');
+  if (evidence.packageName !== candidate.packageName || evidence.packageVersion !== candidate.packageVersion
+    || admitted.archiveSha256 !== candidate.archiveSha256
+    || JSON.stringify(Object.entries(record(installedCandidate.dependencies ?? {}, 'Installed runtime dependencies')).sort())
+      !== JSON.stringify(Object.entries(candidate.runtimeDependencies).sort())) {
+    throw new TypeError('Installed dependency evidence does not match the reviewed candidate.');
+  }
+  return Object.freeze({ packageName: candidate.packageName, packageVersion: candidate.packageVersion,
+    archiveSha256: candidate.archiveSha256, installedDependenciesSha256: sha256(bytes) });
+}
+
 export async function checkPublishedCli(
   expectedVersionValue: unknown,
   candidateReportPath: string,
@@ -326,16 +366,7 @@ export async function checkPublishedCli(
   options: CheckOptions = {},
 ): Promise<PublishedCliReport> {
   const expectedVersion = normalizeSemanticVersion(expectedVersionValue);
-  const reportInfo = await stat(candidateReportPath);
-  const archiveInfo = await stat(candidateArchivePath);
-  if (!reportInfo.isFile() || reportInfo.size > MAX_CANDIDATE_REPORT_BYTES) throw new TypeError('Reviewed candidate report is not a bounded regular file.');
-  if (!archiveInfo.isFile() || archiveInfo.size < 1 || archiveInfo.size > MAX_CLI_PACKAGE_PACKED_BYTES) throw new TypeError('Reviewed candidate archive is not a bounded regular file.');
-  const [reportBytes, archiveBytes] = await Promise.all([readFile(candidateReportPath), readFile(candidateArchivePath)]);
-  const candidate = validateCandidateReport(parseJson(reportBytes, 'Reviewed candidate report', MAX_CANDIDATE_REPORT_BYTES), expectedVersion);
-  if (path.basename(candidateArchivePath) !== candidate.archiveFilename) throw new TypeError('Selected candidate archive filename does not match the reviewed report.');
-  if (archiveBytes.byteLength !== candidate.packedBytes || sha256(archiveBytes) !== candidate.archiveSha256) {
-    throw new TypeError('Selected candidate archive bytes do not match the reviewed report.');
-  }
+  const { candidate, archiveBytes } = await readReviewedCandidate(expectedVersion, candidateReportPath, candidateArchivePath);
   const candidateTarPayload = boundedTarPayload(archiveBytes, 'Reviewed candidate archive');
 
   const fetcher = options.fetcher || fetch;
@@ -418,13 +449,17 @@ export function formatPublishedCliReport(report: PublishedCliReport): string {
   ].join('\n');
 }
 
-export function parseArguments(args: readonly string[]): Readonly<{ version: string; candidateReport: string; candidateArchive: string; json: boolean }> {
+export function parseArguments(args: readonly string[]): Readonly<{ version: string; candidateReport: string; candidateArchive: string; json: boolean; installedDependencies?: string }> {
   const json = args.includes('--json');
   const values = args.filter((argument) => argument !== '--json');
   const reportIndex = values.indexOf('--candidate-report');
   const archiveIndex = values.indexOf('--candidate-archive');
+  if (values.length === 8 && reportIndex === 1 && archiveIndex === 3 && values[5] === '--installed-dependencies' && values[7] === '--offline'
+    && values[2] && values[4] && values[6] && args.filter(argument => argument === '--json').length <= 1) {
+    return { version: normalizeSemanticVersion(values[0]), candidateReport: values[2], candidateArchive: values[4], installedDependencies: values[6], json };
+  }
   if (values.length !== 5 || reportIndex !== 1 || archiveIndex !== 3 || !values[2] || !values[4] || args.filter((argument) => argument === '--json').length > 1) {
-    throw new TypeError('Usage: node tools/published-cli-check.mts <version> --candidate-report <report.json> --candidate-archive <archive.tgz> [--json]');
+    throw new TypeError('Usage: node tools/published-cli-check.mts <version> --candidate-report <report.json> --candidate-archive <archive.tgz> [--installed-dependencies <evidence.json> --offline] [--json]');
   }
   return { version: normalizeSemanticVersion(values[0]), candidateReport: values[2], candidateArchive: values[4], json };
 }
@@ -434,6 +469,11 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
   const stderr = options.stderr || process.stderr;
   try {
     const parsed = parseArguments(args);
+    if (parsed.installedDependencies) {
+      const report = await verifyRetainedCandidate(parsed.version, parsed.candidateReport, parsed.candidateArchive, parsed.installedDependencies);
+      stdout.write(`${parsed.json ? JSON.stringify(report, null, 2) : `Reviewed candidate bundle: PASS\nArchive SHA-256: ${report.archiveSha256}\nInstalled dependency evidence SHA-256: ${report.installedDependenciesSha256}`}\n`);
+      return 0;
+    }
     const report = await checkPublishedCli(parsed.version, parsed.candidateReport, parsed.candidateArchive, options.fetcher ? { fetcher: options.fetcher } : {});
     stdout.write(`${parsed.json ? JSON.stringify(report, null, 2) : formatPublishedCliReport(report)}\n`);
     return 0;

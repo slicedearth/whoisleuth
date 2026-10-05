@@ -4,15 +4,15 @@
     DesiredPostureBaseline,
     DesiredPostureChangeWindow,
     DesiredPostureSuppression,
-  } from '$lib/analysis/brand-profile-model.ts';
+  } from '#lib/analysis/brand-profile-model.ts';
   import {
     DESIRED_POSTURE_SUPPRESSION_FIELDS,
     MAX_DESIRED_POSTURE_CHANGE_WINDOWS,
     MAX_DESIRED_POSTURE_SUPPRESSIONS,
     MAX_DESIRED_POSTURE_RECORDS,
-  } from '$lib/analysis/brand-profile-model.ts';
-  import type { BrandProfile, BrandProfileSaveResult } from '$lib/brand-profiles';
-  import { DESIRED_POSTURE_FIELD_LABELS } from '$lib/analysis/owned-domain-posture-review.ts';
+  } from '#lib/analysis/brand-profile-model.ts';
+  import type { BrandProfile, BrandProfileSaveResult } from '#lib/brand-profiles.ts';
+  import { DESIRED_POSTURE_FIELD_LABELS } from '#lib/analysis/owned-domain-posture-review.ts';
   import { domainControlRecordMode, normalizeDomainControlRecordSettings } from '../../../../packages/evidence/domain-control-runtime.mts';
   import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
   import { DOMAIN_CONTROL_RECORD_LIST_FIELDS, DOMAIN_CONTROL_RECORD_MODE_OPTIONS, MAX_CURRENT_DOMAIN_CONTROL_RECORDS, MAX_DOMAIN_CONTROL_DOMAIN_LENGTH, MAX_DOMAIN_CONTROL_DS_PRESENTATION_LENGTH, MAX_DOMAIN_CONTROL_MX_TEXT_LENGTH, MAX_DOMAIN_CONTROL_CAA_PRESENTATION_LENGTH, type DomainControlRecordField, type DomainControlRecordModes } from '../../../../packages/contracts/domain-control-manifest.mts';

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { parseBoundedJson } from '$lib/bounded-json';
-  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
-  import { failedLocalMutationOutcome, LocalRecordConflictError } from '$lib/local-mutation-outcome';
-  import { INVESTIGATION_RECIPES, type InvestigationRecipeId } from '$lib/analysis/investigation-guide.ts';
+  import { parseBoundedJson } from '#lib/bounded-json.ts';
+  import { createDraftRevision, restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
+  import { failedLocalMutationOutcome, LocalRecordConflictError } from '#lib/local-mutation-outcome.ts';
+  import { INVESTIGATION_RECIPES, type InvestigationRecipeId } from '#lib/analysis/investigation-guide.ts';
   import { prepareTemplateLessonRevision } from '../../../../packages/workspace/template-lesson-revision.mts';
   import {
     deleteInvestigationTemplate,
@@ -14,7 +14,7 @@
     MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES,
     saveInvestigationTemplate,
     type InvestigationTemplate,
-  } from '$lib/investigation-templates';
+  } from '#lib/investigation-templates.ts';
 
   type StageDraft = {
     id: string;

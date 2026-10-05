@@ -2,13 +2,14 @@ import { boundedJsonLimitsForBytes, parseBoundedJson, parseBoundedJsonObject } f
 import { normalizeBoundedSemanticVersion } from '../analysis/semantic-version.mts';
 import { canonicalArtifactJsonV2, sha256ArtifactBytes, sha256ArtifactDigestV2, SORTED_JSON_V2 } from '../evidence/artifact-integrity.mts';
 import { array, digest, enumeration, exact, fail, integer, iso, strings, text, validateIntegrity, type UnknownRecord } from '../evidence/artifact-structure.mts';
+import { readImageDerivationDeclaration, type ImageDerivationDeclaration } from '../evidence/image-regions.mts';
 import { SELECTED_FILE_MEDIA_TYPES as INVESTIGATION_FILE_MEDIA_TYPES } from '../contracts/selected-file-limits.mts';
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES } from '../contracts/investigation-package-limits.mts';
 export { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, INVESTIGATION_FILE_MEDIA_TYPES };
 
 export const INVESTIGATION_MANIFEST_SCHEMA = 'whoisleuth.investigation-manifest';
-export const INVESTIGATION_MANIFEST_VERSION = 3;
-export const SUPPORTED_INVESTIGATION_MANIFEST_VERSIONS = [2, INVESTIGATION_MANIFEST_VERSION] as const;
+export const INVESTIGATION_MANIFEST_VERSION = 4;
+export const SUPPORTED_INVESTIGATION_MANIFEST_VERSIONS = [2, 3, INVESTIGATION_MANIFEST_VERSION] as const;
 // Independently bounds the path-free metadata, not the selected file content.
 import { MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES } from '../contracts/investigation-package-limits.mts';
 export { MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES } from '../contracts/investigation-package-limits.mts';
@@ -32,6 +33,7 @@ export type InvestigationManifestArtifactInput = Readonly<{
   content: string | Uint8Array;
   mediaType?: FileMediaType;
   source?: Readonly<{ identity: string | null; observedAt: string | null }>;
+  imageDerivation?: ImageDerivationDeclaration | null;
 }>;
 export type InvestigationManifestInput = Readonly<{
   workflow: string;
@@ -90,7 +92,9 @@ export async function prepareInvestigationManifest(
     if (bytes.byteLength > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES - totalBytes) throw new TypeError('Manifest artefacts exceed the combined limit.');
     totalBytes += bytes.byteLength;
     const mediaType = enumeration(artifact.mediaType ?? (typeof artifact.content === 'string' ? 'application/json' : 'application/octet-stream'), INVESTIGATION_FILE_MEDIA_TYPES, 'Artefact media type');
-    return { bytes, mediaType, source: sourceDeclaration(artifact.source) };
+    const imageDerivation = artifact.imageDerivation == null ? null : readImageDerivationDeclaration(artifact.imageDerivation);
+    if (imageDerivation && mediaType !== 'image/png') throw new TypeError('Image derivation requires a PNG media declaration.');
+    return { bytes, mediaType, source: sourceDeclaration(artifact.source), imageDerivation };
   });
   const artifacts = [];
   for (const [index, file] of selected.entries()) {
@@ -102,7 +106,7 @@ export async function prepareInvestigationManifest(
       byteLength: file.bytes.byteLength,
       contentDigestSha256: await sha256ArtifactBytes(file.bytes),
       canonicalDigestSha256: metadata ? await sha256ArtifactDigestV2(metadata.value) : null,
-      mediaType: file.mediaType, source: file.source,
+      mediaType: file.mediaType, source: file.source, imageDerivation: file.imageDerivation,
     }));
   }
   const unsigned = Object.freeze({
@@ -121,6 +125,7 @@ export async function prepareInvestigationManifest(
       'Source identities, observation times and media types are declarations, not independently authenticated evidence. Missing source times remain unknown.',
       'Packaging events use the local clock. They do not establish earlier custody, a trusted timestamp, a signature, source accuracy or current validity.',
       'Digests establish content identity. JSON parsing and declared schema metadata do not establish that a source format is supported or its claims are true.',
+      'Image derivation declares an immediate parent fingerprint and editing operations, not proof of transformation or complete redaction. Parent bytes need not be included; missing declarations leave editing history unknown.',
     ]),
   });
   const manifest = Object.freeze({ ...unsigned, integrity: Object.freeze({
@@ -136,18 +141,23 @@ export async function buildInvestigationManifest(input: InvestigationManifestInp
 }
 
 export type InvestigationManifest = Awaited<ReturnType<typeof buildInvestigationManifest>>;
-type PublicManifestArtifact = Omit<InvestigationManifest['artifacts'][number], 'mediaType' | 'source' | 'canonicalDigestSha256'> & Readonly<{ canonicalDigestSha256: string }>;
+type PublicManifestArtifact = Omit<InvestigationManifest['artifacts'][number], 'mediaType' | 'source' | 'canonicalDigestSha256' | 'imageDerivation'> & Readonly<{ canonicalDigestSha256: string }>;
 export type PublicInvestigationManifest = Omit<InvestigationManifest, 'version' | 'application' | 'audience' | 'artifacts' | 'steps'> & Readonly<{
   version: 2;
   application: Readonly<{ name: 'WHOISleuth CLI'; version: string }>;
   artifacts: readonly PublicManifestArtifact[];
   steps: readonly Omit<InvestigationManifest['steps'][number], 'action' | 'occurredAt'>[];
 }>;
-export type SupportedInvestigationManifest = InvestigationManifest | PublicInvestigationManifest;
+export type InvestigationManifestV3 = Omit<InvestigationManifest, 'version' | 'artifacts'> & Readonly<{
+  version: 3;
+  artifacts: readonly Omit<InvestigationManifest['artifacts'][number], 'imageDerivation'>[];
+}>;
+export type SupportedInvestigationManifest = InvestigationManifest | InvestigationManifestV3 | PublicInvestigationManifest;
 
 export function validateInvestigationManifest(value: UnknownRecord): asserts value is UnknownRecord & SupportedInvestigationManifest {
   const version = integer(value.version, 'Investigation manifest version', 2, INVESTIGATION_MANIFEST_VERSION);
-  const current = version === INVESTIGATION_MANIFEST_VERSION;
+  const current = version >= 3;
+  const withImageDerivation = version >= 4;
   const root = exact(value, ['schema', 'version', 'generatedAt', 'application', 'workflow', 'configuration', 'artifacts', 'steps', 'summary', 'limitations', 'integrity', ...(current ? ['audience'] : [])], 'Investigation manifest');
   if (root.schema !== INVESTIGATION_MANIFEST_SCHEMA) fail('Investigation manifest schema');
   iso(root.generatedAt, 'Investigation manifest generatedAt');
@@ -166,7 +176,7 @@ export function validateInvestigationManifest(value: UnknownRecord): asserts val
   if (steps.length !== artifacts.length) fail('Investigation manifest step count');
   let totalBytes = 0;
   for (const [index, candidate] of artifacts.entries()) {
-    const item = exact(candidate, ['sequence', 'id', 'schema', 'version', 'byteLength', 'contentDigestSha256', 'canonicalDigestSha256', ...(current ? ['mediaType', 'source'] : [])], `Investigation manifest artifact ${index + 1}`);
+    const item = exact(candidate, ['sequence', 'id', 'schema', 'version', 'byteLength', 'contentDigestSha256', 'canonicalDigestSha256', ...(current ? ['mediaType', 'source'] : []), ...(withImageDerivation ? ['imageDerivation'] : [])], `Investigation manifest artifact ${index + 1}`);
     if (integer(item.sequence, 'Investigation manifest artifact sequence', 1, artifacts.length) !== index + 1 || item.id !== `artifact-${index + 1}`) fail('Investigation manifest artifact order');
     if (item.schema !== null) text(item.schema, 'Investigation manifest artifact schema', 160);
     if (item.version !== null) integer(item.version, 'Investigation manifest artifact version', 1, 1_000);
@@ -175,6 +185,10 @@ export function validateInvestigationManifest(value: UnknownRecord): asserts val
     const mediaType = current ? enumeration(item.mediaType, INVESTIGATION_FILE_MEDIA_TYPES, 'Artefact media type') : 'application/json';
     if (mediaType === 'application/json') digest(item.canonicalDigestSha256, 'Investigation manifest canonical digest');
     else if (item.canonicalDigestSha256 !== null || item.schema !== null || item.version !== null) fail('Opaque artefact JSON metadata');
+    if (withImageDerivation && item.imageDerivation !== null) {
+      readImageDerivationDeclaration(item.imageDerivation);
+      if (mediaType !== 'image/png') fail('Image derivation media type');
+    }
     if (current) {
       const source = exact(item.source, ['identity', 'observedAt'], 'Artefact source');
       if (source.identity !== null) text(source.identity, 'Artefact source identity', 240);
@@ -199,11 +213,31 @@ export async function readInvestigationManifest(raw: string): Promise<SupportedI
   return value;
 }
 
+/** Matches selected manifest entries, not unselected attachment declarations. */
+export function investigationImageParentIncluded(
+  manifest: SupportedInvestigationManifest,
+  artifact: SupportedInvestigationManifest['artifacts'][number],
+): boolean | null {
+  if (!('imageDerivation' in artifact) || !artifact.imageDerivation) return null;
+  const parent = artifact.imageDerivation.source;
+  return manifest.artifacts.some(entry => entry.id !== artifact.id
+    && entry.contentDigestSha256 === parent.digestSha256 && entry.byteLength === parent.byteLength);
+}
+
 export function formatInvestigationManifest(manifest: SupportedInvestigationManifest): string {
   const lines = ['Investigation manifest', `Workflow       ${manifest.workflow}`, `Tool version   ${manifest.application.version}`,
     `Artifacts      ${manifest.summary.artifactCount}`, `Total bytes    ${manifest.summary.totalBytes}`,
     `Configuration  ${manifest.configuration.digestSha256 ?? 'not supplied'}`, `Integrity      ${manifest.integrity.digestSha256}`, '', 'Ordered artefacts:'];
-  for (const artifact of manifest.artifacts) lines.push(`  ${artifact.sequence}. ${artifact.schema ?? (artifact.canonicalDigestSha256 ? 'unversioned JSON' : 'opaque file')}${artifact.version ? ` v${artifact.version}` : ''} · ${artifact.contentDigestSha256}`);
+  for (const artifact of manifest.artifacts) {
+    lines.push(`  ${artifact.sequence}. ${artifact.schema ?? (artifact.canonicalDigestSha256 ? 'unversioned JSON' : 'opaque file')}${artifact.version ? ` v${artifact.version}` : ''} · ${artifact.contentDigestSha256}`);
+    if ('imageDerivation' in artifact && artifact.imageDerivation) {
+      const declaration = artifact.imageDerivation;
+      lines.push(`     Declared image derivation: ${declaration.method}; ${declaration.operations.join(', ')}`,
+        `     Parent: ${declaration.source.digestSha256} · ${declaration.source.byteLength} bytes`,
+        `     Parent entry: ${investigationImageParentIncluded(manifest, artifact) ? 'declared in this manifest' : 'not declared in this manifest'}`,
+        '     Declared edits are not proof of transformation or complete redaction.');
+    } else if ('mediaType' in artifact && artifact.mediaType.startsWith('image/')) lines.push('     Editing history: not declared');
+  }
   lines.push('', 'No source file paths or artefact contents are retained in this manifest.', '');
   return lines.join('\n');
 }

@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { afterNavigate, goto, replaceState } from '$app/navigation';
+  import { afterNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
-  import BrandMark from '$lib/components/BrandMark.svelte';
-  import PublicSeo from '$lib/components/PublicSeo.svelte';
-  import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
-  import { protectedReturnTarget } from '$lib/workspaces';
-  import { isLocalApplication } from '$lib/local-application-context.ts';
+  import BrandMark from '#lib/components/BrandMark.svelte';
+  import PublicSeo from '#lib/components/PublicSeo.svelte';
+  import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '#lib/bounded-json-response.ts';
+  import { protectedReturnTarget } from '#lib/workspaces.ts';
+  import { isLocalApplication } from '#lib/local-application-context.ts';
 
   let password=$state('');
   let error=$state('');
@@ -47,7 +47,12 @@
     let token=window.location.hash.slice(1);
     checking=true;
     try {
-      replaceState('/login', page.state);
+      // Ordinary replacement also clears the router URL and history metadata;
+      // shallow navigation would retain the launch URL as the underlying page.
+      await goto('/login', { replace: true, reset: false, state: page.state });
+      if (window.location.hash || page.url.hash || window.location.pathname !== '/login' || page.url.pathname !== '/login') {
+        throw new Error('The launch link could not be cleared.');
+      }
       if (!token) { await checkSession(); return; }
       if (!/^[a-f0-9]{64}$/u.test(token)) throw new Error('Invalid launch link.');
       const { response }=await requestJsonCapped('/api/local-session', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token}) }, {maximumBytes:SMALL_JSON_RESPONSE_BYTES,timeoutMs:15_000});
@@ -63,7 +68,7 @@
     try{
       const { response, body }=await requestJsonCapped('/api/session',{cache:'no-store'},{maximumBytes:SMALL_JSON_RESPONSE_BYTES,timeoutMs:10_000});
       const record=body&&typeof body==='object'&&!Array.isArray(body)?body as Record<string,unknown>:{};
-      if(response.ok&&record.authenticated===true){await goto(returnTarget(),{replaceState:true});return;}
+      if(response.ok&&record.authenticated===true){await goto(returnTarget(),{replace: true});return;}
     }catch{
       error=localApplication ? 'The local application could not be reached. Check that it is still running.' : 'The session service could not be reached. You can still try to sign in.';
     }finally{checking=false;}
@@ -76,7 +81,7 @@
       const record=body&&typeof body==='object'&&!Array.isArray(body)?body as Record<string,unknown>:{};
       if(!response.ok)throw new Error(typeof record.error==='string'?record.error:'Sign-in failed');
       password='';
-      await goto(returnTarget(),{replaceState:true});
+      await goto(returnTarget(),{replace: true});
     }catch(cause){error=cause instanceof Error?cause.message:'Sign-in failed';}
     finally{busy=false;}
   }

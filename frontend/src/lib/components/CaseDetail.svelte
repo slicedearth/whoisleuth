@@ -1,20 +1,20 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { goto } from '$app/navigation';
+  import { beforeNavigate, goto } from '$app/navigation';
   import { tick } from 'svelte';
-  import PageHeading from '$lib/components/PageHeading.svelte';
-  import CaseRelationships from '$lib/components/CaseRelationships.svelte';
-  import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
-  import CaseReportExport from '$lib/components/CaseReportExport.svelte';
-  import CaseResponseWorkspace from '$lib/components/CaseResponseWorkspace.svelte';
-  import CaseBrandAssociations from '$lib/components/CaseBrandAssociations.svelte';
-  import { readCaseNavigationContext } from '$lib/console-workflow-state';
-  import { loadReviewSession } from '$lib/review-session';
-  import { handlesLocalLink } from '$lib/link-activation';
-  import { keepFocusBelow } from '$lib/visible-focus';
-  import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
-  import { CASE_WORKSPACE_SECTIONS, caseWorkspaceHref, caseWorkspaceSection, type CaseWorkspaceSection } from '$lib/analysis/case-response-stage.ts';
-  import type { BrandProfile } from '$lib/brand-profiles';
+  import PageHeading from '#lib/components/PageHeading.svelte';
+  import CaseRelationships from '#lib/components/CaseRelationships.svelte';
+  import EvidenceTimeline from '#lib/components/EvidenceTimeline.svelte';
+  import CaseReportExport from '#lib/components/CaseReportExport.svelte';
+  import CaseResponseWorkspace from '#lib/components/CaseResponseWorkspace.svelte';
+  import CaseBrandAssociations from '#lib/components/CaseBrandAssociations.svelte';
+  import { readCaseNavigationContext } from '#lib/console-workflow-state.ts';
+  import { loadReviewSession } from '#lib/review-session.ts';
+  import { handlesLocalLink } from '#lib/link-activation.ts';
+  import { keepFocusBelow } from '#lib/visible-focus.ts';
+  import { restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
+  import { CASE_WORKSPACE_SECTIONS, caseWorkspaceHref, caseWorkspaceSection, type CaseWorkspaceSection } from '#lib/analysis/case-response-stage.ts';
+  import type { BrandProfile } from '#lib/brand-profiles.ts';
   import {
     CASE_DISPOSITIONS,
     caseStatusOptionsForDirectEdit,
@@ -57,7 +57,7 @@
     brandProfiles: BrandProfile[];
     brandProfilesUnavailable: boolean;
   } = $props();
-  const activeSection = $derived(caseWorkspaceSection(page.url));
+  const activeSection = $derived(caseWorkspaceSection(new URL(page.url.href)));
   const returnContext = $derived(readCaseNavigationContext(record.id));
   let hasSavedReviewReturn = $state(false);
   $effect(() => {
@@ -70,6 +70,22 @@
   const deepLinkTargetId = $derived(page.url.searchParams.get('response') === '1'
     ? `case-response-preflight-${record.id}`
     : page.url.hash.startsWith('#case-response-') ? page.url.hash.slice(1) : null);
+  let deepLinkNavigation: { href: string; caseId: string; origin: Element | null } | null = null;
+  beforeNavigate(({ to }) => {
+    const destination = to?.url;
+    const active = document.activeElement;
+    deepLinkNavigation = destination?.pathname === '/cases'
+      && destination.searchParams.get('case') === record.id
+      && (destination.searchParams.get('response') === '1' || destination.hash.startsWith('#case-response-'))
+      ? {
+        href: destination.href,
+        caseId: record.id,
+        // Section history can preserve focus until the outgoing panel is hidden.
+        // Only that Case's original control may yield to the requested target.
+        origin: active?.closest('[data-case-detail]')?.getAttribute('data-case-detail') === record.id ? active : null,
+      }
+      : null;
+  });
 
   // Reading positions are transient and belong only to this mounted Case.
   const readingPositions = new Map<CaseWorkspaceSection, number>();
@@ -88,7 +104,7 @@
     const generation = ++navigationGeneration;
     readingPositions.set(activeSection, window.scrollY);
     try {
-      await goto(caseWorkspaceHref(caseId, section), { noScroll: true, keepFocus: true });
+      await goto(caseWorkspaceHref(caseId, section), { reset: false });
       await tick();
       if (generation !== navigationGeneration || record.id !== caseId || activeSection !== section) return;
       const navigation = document.querySelector<HTMLElement>('[data-case-detail] .case-sections');
@@ -105,20 +121,32 @@
     if (!article) return;
     let width = window.innerWidth;
     const focus = keepFocusBelow(article, () => navigation);
-    const resize = new ResizeObserver(() => {
-      article.style.setProperty('--case-navigation-height', `${navigation.getBoundingClientRect().height}px`);
+    let frame: number | null = null;
+    const refresh = () => {
+      frame = null;
+      const height = `${navigation.getBoundingClientRect().height}px`;
+      if (article.style.getPropertyValue('--case-navigation-height') !== height) {
+        article.style.setProperty('--case-navigation-height', height);
+      }
       if (width !== window.innerWidth) { readingPositions.clear(); width = window.innerWidth; }
       focus.reveal();
+    };
+    const resize = new ResizeObserver(() => {
+      // Layout writes and focus scrolling must not re-enter resize delivery.
+      if (frame === null) frame = requestAnimationFrame(refresh);
     });
     resize.observe(navigation);
     return { destroy() {
       resize.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
       focus.destroy();
       article.style.removeProperty('--case-navigation-height');
     } };
   }
   $effect(() => {
     const targetId = deepLinkTargetId;
+    const navigation = deepLinkNavigation;
+    const origin = navigation?.href === page.url.href && navigation.caseId === record.id ? navigation.origin : null;
     let current = true;
     void tick().then(() => {
       if (!current || !targetId) return;
@@ -126,9 +154,10 @@
       if (!target?.closest(`[data-case-detail]`)) return;
       if (target instanceof HTMLDetailsElement) target.open = true;
       const heading = target.querySelector<HTMLElement>(':scope > summary') ?? target;
-      if (restoreSubmittedFocus(null, heading, target)) {
+      if (restoreSubmittedFocus(origin, heading, target)) {
         heading.scrollIntoView({ block: 'center', behavior: 'instant' });
       }
+      if (deepLinkNavigation === navigation) deepLinkNavigation = null;
     });
     return () => { current = false; };
   });

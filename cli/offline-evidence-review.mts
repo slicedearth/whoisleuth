@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer';
 
 import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 import { CONTEXT_INPUT_SCHEMAS, reviewContextInput } from '../packages/investigation/context-review.mts';
-import { CONTEXT_REVIEW_KINDS, type ContextReviewKind } from '../packages/contracts/context-review.mts';
+import { CONTEXT_REVIEW_KINDS, DOMAIN_HISTORY_INPUT_SCHEMA, DOMAIN_HISTORY_INPUT_VERSION, type ContextReviewKind } from '../packages/contracts/context-review.mts';
 
 import {
   normalizeEncryptedDnsAdapter,
@@ -33,6 +33,10 @@ import { compareTrustStoreEvidence } from '../lib/trust-store-comparison.mts';
 import { CliUsageError } from './errors.mts';
 import { safeTerminalValue } from './formatters/terminal.mts';
 import { LOCAL_MMDB_QUERY_SCHEMA, LOCAL_MMDB_QUERY_VERSION, LOCAL_MMDB_REVIEW_SCHEMA, LOCAL_MMDB_REVIEW_VERSION, reviewLocalMmdb } from './local-mmdb-review.mts';
+import { INFRASTRUCTURE_OBSERVATION_SCHEMA, MAX_INFRASTRUCTURE_OBSERVATION_BYTES, infrastructureObservationFacts, compareInfrastructureObservations } from '../packages/investigation/infrastructure-observation.mts';
+import { exact } from '../packages/evidence/artifact-structure.mts';
+import { INFRASTRUCTURE_COMPARISON_INPUT_SCHEMA, MAX_INFRASTRUCTURE_COMPARISON_INPUT_BYTES } from '../packages/contracts/external-observation-interchange.mts';
+import { CASE_CONTAINMENT_INPUT_SCHEMA, readCaseContainmentInput, formatCaseContainmentHandoff, type CaseContainmentHandoff } from '../packages/cases/case-containment-handoff.mts';
 
 const OFFLINE_EVIDENCE_REVIEW_SCHEMA = 'whoisleuth.cli.offline-evidence-review';
 const OFFLINE_EVIDENCE_REVIEW_VERSION = 1;
@@ -65,7 +69,8 @@ function parseInput(value: unknown): UnknownRecord {
   }
   const document = record(parsed);
   if (typeof document.schema !== 'string' || document.version !== 1
-    && !(document.schema === LOCAL_MMDB_QUERY_SCHEMA && document.version === LOCAL_MMDB_QUERY_VERSION)) {
+    && !(document.schema === LOCAL_MMDB_QUERY_SCHEMA && document.version === LOCAL_MMDB_QUERY_VERSION)
+    && !(document.schema === DOMAIN_HISTORY_INPUT_SCHEMA && document.version === DOMAIN_HISTORY_INPUT_VERSION)) {
     throw new CliUsageError('Offline evidence review requires a supported versioned input schema.');
   }
   return document;
@@ -74,9 +79,22 @@ function parseInput(value: unknown): UnknownRecord {
 function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toISOString()) {
   const input = parseInput(value);
   if (input.schema === LOCAL_MMDB_QUERY_SCHEMA) throw new CliUsageError('Local MMDB review requires --mmdb <database-file>.');
-  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store' | ContextReviewKind;
+  let kind: 'internal_containment' | 'infrastructure' | 'infrastructure_comparison' | 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store' | ContextReviewKind;
   let result: unknown;
-  if ((CONTEXT_INPUT_SCHEMAS as readonly string[]).includes(input.schema as string)) {
+  if (input.schema === CASE_CONTAINMENT_INPUT_SCHEMA) {
+    kind = 'internal_containment'; result = readCaseContainmentInput(input, generatedAt);
+  } else if (input.schema === INFRASTRUCTURE_OBSERVATION_SCHEMA) {
+    if (typeof value === 'string' && new TextEncoder().encode(value).byteLength > MAX_INFRASTRUCTURE_OBSERVATION_BYTES) throw new TypeError('Infrastructure snapshot input exceeds its byte bound.');
+    kind = 'infrastructure';
+    const retained = infrastructureObservationFacts(input);
+    result = { ...retained, state: retained.snapshot.coverage.state === 'complete' && !retained.snapshot.coverage.truncated ? 'complete' : 'partial' };
+  } else if (input.schema === INFRASTRUCTURE_COMPARISON_INPUT_SCHEMA) {
+    if (typeof value === 'string' && new TextEncoder().encode(value).byteLength > MAX_INFRASTRUCTURE_COMPARISON_INPUT_BYTES) throw new TypeError('Infrastructure comparison input exceeds its byte bound.');
+    const pair = exact(input, ['schema', 'version', 'earlier', 'later'], 'Infrastructure comparison input');
+    if (new TextEncoder().encode(JSON.stringify(pair)).byteLength > MAX_INFRASTRUCTURE_COMPARISON_INPUT_BYTES) throw new TypeError('Infrastructure comparison input exceeds its byte bound.');
+    kind = 'infrastructure_comparison';
+    result = compareInfrastructureObservations(pair.earlier, pair.later);
+  } else if ((CONTEXT_INPUT_SCHEMAS as readonly string[]).includes(input.schema as string)) {
     const review = reviewContextInput(input, generatedAt);
     kind = review.kind;
     result = review;
@@ -174,7 +192,7 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
 async function buildOfflineEvidenceReviewWithLocalResources(
   value: unknown,
   generatedAt = new Date().toISOString(),
-  options: Readonly<{ mmdbPath?: string | null }> = {},
+  options: Readonly<{ mmdbPath?: string | null; signal?: AbortSignal }> = {},
 ) {
   const input = parseInput(value);
   if (input.schema !== LOCAL_MMDB_QUERY_SCHEMA) return buildOfflineEvidenceReview(value, generatedAt);
@@ -184,7 +202,7 @@ async function buildOfflineEvidenceReviewWithLocalResources(
     version: OFFLINE_EVIDENCE_REVIEW_VERSION,
     generatedAt,
     kind: 'geoip' as const,
-    result: await reviewLocalMmdb(input, options.mmdbPath, generatedAt),
+    result: await reviewLocalMmdb(input, options.mmdbPath, generatedAt, options.signal ? { signal: options.signal } : {}),
     limitations: Object.freeze([
       'The review is local and uses only the supplied query metadata and analyst-supplied database. It does not transmit the address or refresh the database.',
     ]),
@@ -192,6 +210,7 @@ async function buildOfflineEvidenceReviewWithLocalResources(
 }
 
 function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvidenceReview>): string {
+  if (document.kind === 'internal_containment') return formatCaseContainmentHandoff(document.result as CaseContainmentHandoff);
   const result = record(document.result);
   if (document.kind === 'geoip' && result.schema === LOCAL_MMDB_REVIEW_SCHEMA && result.version !== LOCAL_MMDB_REVIEW_VERSION) {
     throw new CliUsageError('Offline evidence review does not support this MMDB result version.');
@@ -216,7 +235,28 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
     `Kind   ${document.kind.replaceAll('_', ' ')}`,
     `State  ${state.replaceAll('_', ' ')}`,
   ];
-  if ((CONTEXT_REVIEW_KINDS as readonly string[]).includes(document.kind)) {
+  if (document.kind === 'infrastructure') {
+    const snapshot = record(result.snapshot), scope = record(snapshot.scope), coverage = record(snapshot.coverage);
+    lines.push(`Snapshot ${safeTerminalValue(snapshot.id, '')} · ${safeTerminalValue(snapshot.target, '')} · ${safeTerminalValue(snapshot.observedAt, '')}`,
+      `Coverage ${safeTerminalValue(coverage.state, 'unknown')} · ${safeTerminalValue(coverage.detail, '')}`, `Selected hosts ${listLength(scope.hostnames)}`);
+    for (const item of Array.isArray(result.facts) ? result.facts : []) {
+      const row = record(item), source = record(row.source);
+      lines.push(`${safeTerminalValue(row.hostname, '')} · ${safeTerminalValue(row.family, '')}: ${safeTerminalValue(row.value, '')} · ${safeTerminalValue(source.name, '')} (${safeTerminalValue(source.evidenceClass, '')}) · ${safeTerminalValue(row.observedAt, '')}`);
+    }
+    lines.push('Wildcard patterns are not enumerated hosts. DNS failure, missing values and history do not establish current absence. No requests or watchlist changes were made.');
+  } else if (document.kind === 'infrastructure_comparison') {
+    for (const item of Array.isArray(result.rows) ? result.rows : []) {
+      const row = record(item), source = record(row.source);
+      // Bound individual identities, not the combined label: a valid DNS query
+      // and owner may each occupy all 253 hostname characters.
+      const cohort = Object.entries(record(row.cohort)).map(([key, value]) => `${safeTerminalValue(key)}=${safeTerminalValue(value, '', 253)}`).join(' · ');
+      const times = (value: unknown): string => Array.isArray(value) ? value.map(time => safeTerminalValue(time, '')).join(', ') : '';
+      lines.push(`${safeTerminalValue(row.hostname, '')} · ${safeTerminalValue(row.family, '')} · ${safeTerminalValue(source.name, '')} (${safeTerminalValue(source.evidenceClass, '')}) · ${safeTerminalValue(row.state, '')}`,
+        `  Cohort: ${cohort}`,
+        `  Earlier observations: ${times(row.beforeTimes)}; later observations: ${times(row.afterTimes)}`,
+        `  ${safeTerminalValue(JSON.stringify(row.before), '')} → ${safeTerminalValue(JSON.stringify(row.after), '')}`, `  ${safeTerminalValue(row.detail, '')}`);
+    }
+  } else if ((CONTEXT_REVIEW_KINDS as readonly string[]).includes(document.kind)) {
     lines.push(safeTerminalValue(result.summary, ''));
     for (const item of Array.isArray(result.observations) ? result.observations : []) {
       const row = record(item);

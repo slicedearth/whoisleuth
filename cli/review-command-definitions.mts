@@ -2,6 +2,8 @@ import { CASE_SCHEMA_VERSION, CLI_CASE_PACK_INPUT_CASE_VERSIONS, MAX_CASE_STORE_
 import { MESSAGE_INTAKE_KINDS, MESSAGE_INTAKE_SCHEMA } from '../packages/contracts/message-intake.mts';
 import { IDENTITY_EVENTS_INPUT_SCHEMA } from '../packages/contracts/identity-events.mts';
 import { CONTEXT_INPUT_SCHEMAS, CONTEXT_REVIEW_SCHEMA } from '../packages/contracts/context-review.mts';
+import { CASE_CONTAINMENT_INPUT_SCHEMA, CASE_CONTAINMENT_HANDOFF_SCHEMA } from '../packages/cases/case-containment-handoff.mts';
+import { INTAKE_CONTEXT_SCHEMA } from '../packages/investigation/intake-context.mts';
 import { MANAGED_INDICATOR_SET_SCHEMA, MAX_MANAGED_INDICATOR_SET_BYTES, MAX_MANAGED_INDICATOR_PLAN_BYTES } from '../packages/contracts/analyst-interchange.mts';
 import { CLI_CASE_OPERATIONS, CLI_INDICATOR_OPERATIONS, positional, OPTIONAL_FILE_POSITIONAL, constraint, EMPTY_CONSTRAINTS, commandSeed } from './command-definition.mts';
 
@@ -155,23 +157,23 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
   }),
   intake: commandSeed({
     reference: {
-      description: 'Review message identities, document links, QR destinations, HTTP archives or selected identity events locally.',
+      description: 'Review selected messages, indicators, document links, QR destinations, HTTP archives or identity events locally. Plain text offers phone candidates; --intake-context adds explicit selections and source declarations.',
       example: 'whoisleuth intake email message.eml --json',
-      boundary: 'Offline only: no destination, embedded command or QR payload is opened or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.',
+      boundary: 'Offline only: no destination, embedded command, phone number or QR payload is opened, contacted or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Literal IPs and labelled hashes are bounded text observations, not lookup targets or verdicts; headers, URL contents, QR, HAR and identity-event fields are not scanned for them. Plain-text phone discovery writes only counts, source digest, ranges and status to stderr; --quiet suppresses it. Optional --intake-context reads one separate file up to 8 KiB, not stdin. Version 1 carries distribution declarations; version 2 can also bind explicit phone selections and a supplied destination pair to the exact input digest. Selected phone strings and source declarations enter output; unselected candidates and exact private URLs do not. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.',
     },
-    collection: { scope: 'Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file. No collection or automatic Case write.' },
+    collection: { scope: 'Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic Case write.' },
     summary: 'Review selected files and identity events offline',
-    options: ['--json', '--reported-action', '--trusted-auth-header', '--strict-exit', '--quiet', '--no-color'],
+    options: ['--json', '--reported-action', '--trusted-auth-header', '--intake-context', '--strict-exit', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('kind', 'enum', 1, 1, MESSAGE_INTAKE_KINDS), positional('source', 'file', 0, 1, [], 'argv_or_stdin')]),
     constraints: EMPTY_CONSTRAINTS, handlerOwner: 'review', networkEffect: 'offline', common: true,
-    schemaIdentifiers: Object.freeze([MESSAGE_INTAKE_SCHEMA, IDENTITY_EVENTS_INPUT_SCHEMA]), primaryArtefacts: Object.freeze([]),
+    schemaIdentifiers: Object.freeze([MESSAGE_INTAKE_SCHEMA, INTAKE_CONTEXT_SCHEMA, IDENTITY_EVENTS_INPUT_SCHEMA]), primaryArtefacts: Object.freeze([]),
     planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
   }),
   "review-evidence": commandSeed({
     reference: {
-      description: 'Review versioned protocol evidence, incident sequences, domain history, platform objects, storefronts or connector configuration offline.',
+      description: 'Review versioned protocol evidence, source-qualified infrastructure snapshots/comparisons, incident sequences, domain history, platform objects, storefronts, connector configuration or an explicitly selected internal containment handoff offline.',
       example: 'whoisleuth review-evidence domain-change.json --json --strict-exit',
-      boundary: 'The command reads only the supplied document and, with --mmdb, one explicitly selected local database up to 512 MiB. MMDB parsing and lookup run in one disposable worker with a ten-second processing deadline and an 8 KiB result limit. Version-2 MMDB queries require a justified age policy; unavailable or partial current reviews return 4 under --strict-exit. Historical version-1 MMDB queries preserve their output without freshness admission. No database is bundled, downloaded, updated or transmitted. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.',
+      boundary: 'The command reads only the supplied document and, with --mmdb, one explicitly selected local database up to 512 MiB. MMDB parsing and lookup run in one disposable worker with a ten-second processing deadline and an 8 KiB result limit. Version-2 MMDB queries require a justified age policy; unavailable or partial current reviews return 4 under --strict-exit. Historical version-1 MMDB queries preserve their output without freshness admission. Domain-history v2 accepts explicit source-linked registration boundaries; v1 retains its original semantics. Internal containment selects retained next-step assertions and supporting pins after explicit audience-disclosure review; it does not change their state or execute controls. No database is bundled, downloaded, updated or transmitted. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.',
     },
     collection: { scope: 'Reads one bounded versioned evidence or request-planning document and, only with --mmdb, one selected bounded local database. Performs no collection.' },
     summary: 'Review supplied evidence offline',
@@ -183,6 +185,8 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
     common: true,
     schemaIdentifiers: Object.freeze([
     CONTEXT_REVIEW_SCHEMA,
+    CASE_CONTAINMENT_INPUT_SCHEMA,
+    CASE_CONTAINMENT_HANDOFF_SCHEMA,
     ...CONTEXT_INPUT_SCHEMAS,
     'whoisleuth.cli.offline-evidence-review',
     'whoisleuth.rdap-search-input',
@@ -193,6 +197,8 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
     'whoisleuth.local-mmdb-query',
     'whoisleuth.local-mmdb-review',
     'whoisleuth.encrypted-dns-plan-input',
+    'whoisleuth.infrastructure-observation',
+    'whoisleuth.infrastructure-comparison.input',
   ]),
     primaryArtefacts: Object.freeze([]),
     planSupport: false,
@@ -221,7 +227,7 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
   }),
   case: commandSeed({
     reference: {
-      description: 'Show or open a local Case, append a note or evidence pin, link evidence, withdraw a link, record an assessment, or retain an offline recheck. Use --input for pin, link, withdraw-link, assessment and recheck JSON; --text or --note-file for a note. Link input contains fromPinId, toPinId, kind (derived_from or shared_source), and basis. Withdrawal input contains id and reason. Mutations require --output and always write the complete current Case export.',
+      description: 'Show or open a local Case, append a note or evidence pin, link evidence, record an assessment or offline recheck, retain an incident-link, create an action, append an action-event, save a recheck-question, or close-object. JSON mutations use --input; notes use --text or --note-file. Link input contains fromPinId, toPinId, kind and basis. Action-event input contains id and transition. Explicit responseObjects bind an action; a typed objectOutcome requires an explicit affected subset on its event. Object closure never closes other objects or the Case. Mutations require --output and write the complete current Case export.',
       example: 'whoisleuth case open --domain example.test --output cases.json\n  whoisleuth case show cases.json\n  whoisleuth case note cases.json --text "Review the retained observation" --output cases.json --force',
       boundary: 'No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:<digest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.',
     },

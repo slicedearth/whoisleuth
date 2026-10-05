@@ -7,6 +7,8 @@ import {
   type DomainPostureCollectorDependencies,
 } from '../lib/domain-posture.mts';
 import { requiredValue } from './value-assertions.mts';
+import { parseRdap } from '../lib/rdap.mts';
+import { formatTerminalPosture } from '../cli/formatters/terminal.mts';
 
 const OBSERVED_AT = '2026-08-30T02:30:00.000Z';
 
@@ -97,6 +99,23 @@ function checkById(
 }
 
 describe('domain-posture collection orchestration', () => {
+  test('preserves failed MX and malformed RDAP DS uncertainty through collection and terminal output', async () => {
+    const parsed = parseRdap('domain', { ldhName: 'example.test', secureDNS: { delegationSigned: false,
+      dsData: [{ keyTag: 1234, algorithm: 8, digestType: 2, digest: 'not-hex' }] } });
+    assert.ok(parsed);
+    assert.equal(parsed.dsDataTruncated, true);
+    assert.deepEqual(parsed.dsData, []);
+    const fixture = fixtureDependencies({ mx: new Error('SERVFAIL'), rdap: { fetchedAt: OBSERVED_AT, parsed } });
+    const report = await checkDomainPosture('example.test', {}, fixture.dependencies);
+    assert.equal(checkById(report, 'dnssec').status, 'warning');
+    assert.equal(checkById(report, 'dnssec_delegation_consistency').status, 'info');
+    assert.match(checkById(report, 'tls_rpt').detail, /applicability is unknown/iu);
+    const output = formatTerminalPosture(report);
+    assert.match(output, /Retained DS evidence is incomplete/u);
+    assert.match(output, /applicability is unknown/iu);
+    assert.doesNotMatch(output, /no receiving mail exchanger|no retained DS records agree/iu);
+  });
+
   test('additional DNS collection requires explicit selection and reuses the exact-name observations', async () => {
     const fixture = completeFixture();
     const additional = { id: 'dmarc_inheritance', label: 'Inherited DMARC policy', status: 'info' as const, summary: 'Exact-name policy.', detail: 'Publication only.', records: [], remediation: '' };

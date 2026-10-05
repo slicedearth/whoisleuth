@@ -33,8 +33,8 @@ export const PUBLIC_COVERAGE_SUMMARY = {
     }
   ],
   "summary": {
-    "capabilityFamilies": 32,
-    "cliOperations": 51,
+    "capabilityFamilies": 33,
+    "cliOperations": 53,
     "registrySnapshot": {
       "schema": "whoisleuth\u002eregistry-standards-coverage",
       "version": 1,

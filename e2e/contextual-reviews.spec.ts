@@ -8,7 +8,7 @@ import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts'
 import { openCaseSection } from './console-navigation';
 import { expectNoHorizontalOverflow, readBrowserLocalCollection, useTheme } from './helpers';
 import { failNextFileWrite } from './case-attachment-fixtures';
-import { contextInputs, platformObject, incidentStage } from '../test/context-review-fixtures.mts';
+import { contextInputs, platformObject, incidentStage, historyCase } from '../test/context-review-fixtures.mts';
 import { MAX_CONTEXT_RECORDS } from '../packages/contracts/context-review.mts';
 
 async function openReview(page: Page, name: string) {
@@ -160,6 +160,44 @@ test('storefront review requires current authority and preserves a failed-save d
   await report.getByRole('button', { name: 'Save review in Case' }).click(); await expect(report.getByRole('status')).toContainText('Review saved');
   expect(await retainedJson(page)).toHaveLength(2);
   await review.getByLabel('Official hostname').fill('different.example.test'); await expect(report).toHaveCount(0);
+});
+
+test('domain-history scopes survive report download, print, retention and related-target navigation', async ({ page }, testInfo) => {
+  let selected = historyCase();
+  selected.evidenceHistory = selected.evidenceHistory.map(snapshot => ({ ...snapshot, inputHostname: 'login.example.test', observationHostname: 'login.example.test' }));
+  selected = updateCase([selected], selected.id, { evidencePin: { field: 'fingerprintSha256', category: 'certificate', label: 'Certificate publication', value: 'a'.repeat(64),
+    source: 'Supplied certificate event', sourceSchema: { collection: 'external_observations', schema: 'whoisleuth.certificate-observation-rows', version: 1 },
+    observedAt: '2026-09-22T00:00:00.000Z', completeness: 'partial', observationHostname: 'certificate.example.test',
+    certificateObservation: { eventId: 'event-17', logId: 'fixture-log', certificateSha256: 'a'.repeat(64), issuer: null, notAfter: null, dnsNameCount: 1, namesComplete: true } } }, '2026-09-22T00:00:00.000Z').record;
+  await openSeededTimelineCase(page, selected.domain, [selected], CASE_SCHEMA_VERSION); await openCaseSection(page, 'Evidence');
+  const entry = page.locator('.context-entry'); await entry.locator(':scope > summary').click();
+  await entry.getByRole('button', { name: 'Check domain history', exact: true }).click();
+  const review = entry.getByRole('region', { name: 'Domain history and retired dependencies', exact: true });
+  await review.getByRole('button', { name: 'Review retained history', exact: true }).click();
+  const report = review.locator('.context-report');
+  for (const host of ['example.test', 'login.example.test', 'certificate.example.test']) await expect(report.getByRole('link', { name: `Review ${host} in Lookup`, exact: true })).toBeVisible();
+  const downloadPromise = page.waitForEvent('download'); await report.getByRole('button', { name: 'Download review', exact: true }).click();
+  const download = await downloadPromise, path = testInfo.outputPath('history-review.json'); await download.saveAs(path);
+  const { readFile } = await import('node:fs/promises');
+  const exported = JSON.parse(await readFile(path, 'utf8'));
+  expect(exported.observations.find((row: { label: string }) => row.label === 'registration · Registrar').hostname).toBe('example.test');
+  expect(exported.observations.find((row: { label: string }) => row.label === 'web · Page title').hostname).toBe('login.example.test');
+  expect(exported.observations.find((row: { label: string }) => row.label === 'Retained certificate · Certificate publication').hostname).toBe('certificate.example.test');
+  await report.getByRole('button', { name: 'Print review', exact: true }).click();
+  const print = page.getByRole('dialog', { name: 'Domain history and retired dependencies', exact: true });
+  for (const [heading, hostname] of [
+    ['registration · Registrar · changed', 'example.test'],
+    ['web · Page title · changed', 'login.example.test'],
+    ['Retained certificate · Certificate publication · partial', 'certificate.example.test'],
+  ] as const) {
+    const observation = print.getByRole('listitem').filter({ has: page.getByRole('heading', { name: heading, exact: true }) });
+    await expect(observation).toContainText(`Target: ${hostname}`);
+  }
+  await print.getByRole('button', { name: 'Close print preview', exact: true }).click();
+  await report.getByRole('button', { name: 'Save review in Case', exact: true }).click(); await expect(report.getByRole('status')).toContainText('Review saved');
+  expect((await retainedJson(page)).map(value => JSON.parse(value))).toContainEqual(exported);
+  await report.getByRole('link', { name: 'Review login.example.test in Lookup', exact: true }).click();
+  await expect(page).toHaveURL(/\/lookup\?q=login.example.test&case=/u);
 });
 
 test('domain-history declarations remain qualified and an empty Case does not claim unchanged evidence', async ({ page }) => {

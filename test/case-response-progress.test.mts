@@ -16,6 +16,12 @@ function progress(record: CaseRecord) {
   return buildCaseResponseProgress(record, handoff, NOW);
 }
 
+test('closing one exact object keeps whole-Case outcome tracking in progress', () => {
+  const record = createCase({ domain: 'progress.example', closure: { reason: 'unable_to_proceed', summary: 'This domain-scoped follow-up cannot proceed.', responseObject: { kind: 'domain', identifier: 'progress.example', incidentTargetId: null } } }, NOW);
+  assert.equal(progress(record).stages.find(stage => stage.id === 'outcome_tracking')?.status, 'in_progress');
+  assert.notEqual(record.status, 'closed');
+});
+
 test('response progress distinguishes absent, unlinked and linked observations and decisions', () => {
   const empty = createCase({ domain: 'progress.example' }, NOW);
   const original = structuredClone(empty);

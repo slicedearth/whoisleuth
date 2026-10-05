@@ -1,11 +1,11 @@
 <script lang="ts">
-  import type { CaseRecord } from '$lib/cases';
+  import type { CaseRecord } from '#lib/cases.ts';
   import type { MessageIntakeResult } from '../../../../packages/contracts/message-intake.mts';
   import { MAX_RESPONSE_REFERENCE_LENGTH, MAX_RESPONSE_LABEL_LENGTH } from '../../../../packages/contracts/case-portability.mts';
   import { compareCaseIncomingNotice } from '../../../../packages/cases/case-response-actions.mts';
   import { caseIncidentTargets, caseTypeIds } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { resolvePlatformReportingRoutes } from '../../../../packages/cases/platform-reporting-routes.mts';
-  import { reviewClock } from '$lib/review-clock.ts';
+  import { reviewClock } from '#lib/review-clock.ts';
   let { record, result }: { record: CaseRecord; result: MessageIntakeResult } = $props();
   let actionId = $state(''), reference = $state(''), organisation = $state(''), confirmed = $state(false), page = $state(1);
   const action = $derived(record.actions.find(value => value.id === actionId) ?? null);

@@ -27,6 +27,12 @@ export const MAX_RELATIONSHIP_GRAPH_EXPORT_LINEAGE_PATHS = 8;
 export const MAX_RELATIONSHIP_GRAPH_EXPORT_LINEAGE_STEPS = 8;
 export const MAX_RELATIONSHIP_GRAPH_EXPORT_LIMITATIONS = 12;
 
+const EXPORT_LIMITATIONS = [
+  'This export contains bounded, locally derived investigation pivots and does not establish ownership, coordination, intent, or maliciousness.',
+  'Transient focus, pin, hide, comparison-group, selected-relationship, and private table-view state are excluded from interchange exports.',
+  'Relationship canonical and value fields are bounded display text. Use entityId for canonical identity where present; derived node IDs are not durable cross-export keys.',
+];
+
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 type RelationshipGraphFormat = 'json' | 'graphml' | 'gexf';
 
@@ -281,6 +287,7 @@ function relationshipMetadata(node: CaseRelationshipGraphRelationshipNode) {
   return {
     relationshipType: text(node.type, 40),
     value: text(node.value, 300),
+    ...(node.entityId ? { entityId: node.entityId } : {}),
     description: text(node.description, 300),
     method: text(node.method, 400),
     certaintyClasses: strings(node.classifications, 8, 40),
@@ -314,6 +321,18 @@ function outputFilters(graph: CaseRelationshipGraph): Record<string, string> {
   return Object.fromEntries(FILTER_KEYS.map((key) => [key, text(graph.filters?.[key], 100) || 'all']));
 }
 
+function exportLimitations(graph: CaseRelationshipGraph): string[] {
+  const source = strings(graph.limitations, MAX_RELATIONSHIP_GRAPH_EXPORT_LIMITATIONS + EXPORT_LIMITATIONS.length, 300)
+    .filter(value => !EXPORT_LIMITATIONS.includes(value));
+  const available = MAX_RELATIONSHIP_GRAPH_EXPORT_LIMITATIONS - EXPORT_LIMITATIONS.length;
+  // Keep source order, reserve the fixed explanations and disclose any overflow.
+  const retained = source.length <= available ? source : [
+    ...source.slice(0, available - 1),
+    'Additional graph-level limitations are omitted from this bounded export. Review the source graph and contributing Case evidence before sharing.',
+  ];
+  return [...retained, ...EXPORT_LIMITATIONS];
+}
+
 /**
  * Builds the one canonical document used by all relationship graph exports.
  * Transient focus, pin, hide, comparison-group, selection, and private table
@@ -341,7 +360,7 @@ export function buildRelationshipGraphDocument(
   for (const node of graph.relationshipNodes) {
     const metadata = relationshipMetadata(node);
     if (!metadata.relationshipType || !metadata.value) continue;
-    const semantic = `${metadata.relationshipType}\u0000${metadata.value}`;
+    const semantic = `${metadata.relationshipType}\u0000${metadata.entityId ?? node.value}`;
     const id = stableId('relationship', semantic, seenIds);
     sourceToExportId.set(node.id, id);
     nodes.push({
@@ -397,11 +416,7 @@ export function buildRelationshipGraphDocument(
       edges,
       truncated: graph.truncated === true || observationTruncated,
     },
-    limitations: strings([
-      ...(Array.isArray(graph.limitations) ? graph.limitations : []),
-      'This export contains bounded, locally derived investigation pivots and does not establish ownership, coordination, intent, or maliciousness.',
-      'Transient focus, pin, hide, comparison-group, selected-relationship, and private table-view state are excluded from interchange exports.',
-    ], MAX_RELATIONSHIP_GRAPH_EXPORT_LIMITATIONS, 300),
+    limitations: exportLimitations(graph),
   };
 }
 
@@ -434,8 +449,9 @@ function scalar(value: unknown): string {
 }
 
 const NODE_FIELDS: ReadonlyArray<readonly [string, string]> = [
-  ['kind', 'Kind'], ['canonical', 'Canonical value'], ['label', 'Label'],
+  ['kind', 'Kind'], ['canonical', 'Bounded display value'], ['label', 'Label'],
   ['relationshipType', 'Relationship type'], ['value', 'Relationship value'], ['description', 'Description'],
+  ['entityId', 'Canonical entity identity'],
   ['method', 'Comparison method'], ['certaintyClasses', 'Certainty classes'],
   ['sources', 'Sources'], ['scanDepths', 'Scan depths'], ['firstObservedAt', 'First observed'],
   ['lastObservedAt', 'Last observed'], ['complete', 'Complete'], ['truncated', 'Truncated'],

@@ -45,6 +45,7 @@ function result(
     reusesOfficialAssets: false,
     hasPasswordField: false,
     hasExternalFormAction: null,
+    hasExternalPasswordForm: null,
     phishingLanguageMatch: null,
     riskModelVersion: 6,
     riskFactors: [],

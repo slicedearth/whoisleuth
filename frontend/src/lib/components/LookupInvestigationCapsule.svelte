@@ -1,15 +1,15 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import type { CaseRecord } from '$lib/analysis/case-model.ts';
-  import type { LookupAssetGraph } from '$lib/analysis/lookup-asset-graph.ts';
-  import type { LookupInvestigationBrief } from '$lib/analysis/lookup-investigation-brief.ts';
+  import type { CaseRecord } from '#lib/analysis/case-model.ts';
+  import type { LookupAssetGraph } from '#lib/analysis/lookup-asset-graph.ts';
+  import type { LookupInvestigationBrief } from '#lib/analysis/lookup-investigation-brief.ts';
   import {
     buildInvestigationCapsule,
     investigationCapsuleFilename,
     serializeInvestigationCapsule,
-  } from '$lib/analysis/investigation-capsule.ts';
-  import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
-  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  } from '#lib/analysis/investigation-capsule.ts';
+  import { runInvestigationPackageWorker } from '#lib/investigation-package-worker.ts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import EvidencePackageEncryption from './EvidencePackageEncryption.svelte';
 
   let {

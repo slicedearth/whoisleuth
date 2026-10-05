@@ -63,9 +63,11 @@ test('every authenticated network route rate-limits requests before rejecting mi
   runtime.registerNetworkApiRoutes({
     get(path: string, ...handlers: Handler[]) { registered.set(`GET ${path}`, handlers); },
     post(path: string, ...handlers: Handler[]) { registered.set(`POST ${path}`, handlers); },
+    all(path: string, ...handlers: Handler[]) { registered.set(`ALL ${path}`, handlers); },
   } as unknown as Parameters<typeof runtime.registerNetworkApiRoutes>[0]);
   const routes = ['GET /api/lookup', 'POST /api/lookup', 'GET /api/rdap', 'GET /api/rdap-nameserver-search',
-    'GET /api/whois', 'GET /api/availability', 'GET /api/ct-search', 'GET /api/domain-posture'];
+    'GET /api/whois', 'GET /api/availability', 'GET /api/ct-search', 'GET /api/domain-posture',
+    'POST /api/domain-feed', 'ALL /api/domain-feed'];
   for (const [routeIndex, route] of routes.entries()) {
     const handlers = registered.get(route); assert.ok(handlers, route);
     const request: Request = { headers: { host: 'console.example', 'sec-fetch-site': 'cross-site' },

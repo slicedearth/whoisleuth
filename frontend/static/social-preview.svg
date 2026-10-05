@@ -37,8 +37,7 @@
   <rect width="1280" height="640" fill="url(#grid)" opacity=".72" />
   <path d="M0 560H1280" stroke="#2a3543" />
 
-  <image href="favicon.svg" x="70" y="58" width="60" height="60" />
-  <text x="148" y="101" class="mono" fill="#e6e8ee" font-size="31" font-weight="800" letter-spacing="-.8">WHOISleuth</text>
+  <image href="logo.svg" x="70" y="58" width="340" height="60" />
   <text x="70" y="173" class="mono" fill="#8b93a7" font-size="13" font-weight="750" letter-spacing="2.6">DOMAIN INTELLIGENCE CONSOLE</text>
   <rect x="70" y="190" width="72" height="3" rx="1.5" fill="#5eb3ff" />
 

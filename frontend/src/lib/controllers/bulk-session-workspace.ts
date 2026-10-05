@@ -9,6 +9,8 @@ import { summarizeBulkProfileContexts } from '../analysis/bulk-session-model.ts'
 import type { BulkSession, BulkSessionSavePreview } from '../bulk-sessions.ts';
 import type { BrowserLocalCollectionLoadState } from '../browser-local-data-service.ts';
 import { failedLocalMutationOutcome } from '../local-mutation-outcome.ts';
+import { MAX_BULK_SESSION_ROWS } from '../../../../packages/contracts/workspace-portability.mts';
+import { normalizeDomain } from '../../../../packages/evidence/domain-name.mts';
 
 type Storage = Pick<
   typeof import('../bulk-sessions.ts'),
@@ -20,11 +22,19 @@ type Storage = Pick<
 >;
 type Scan = Readonly<{
   running: boolean;
-  mode: ScanMode;
-  domains: readonly string[];
   results: readonly ScanResult[];
   cancelled: boolean;
 }>;
+export type BulkSessionInput = Readonly<{ mode: ScanMode; domains: readonly string[] }>;
+function snapshotInput(input: BulkSessionInput): BulkSessionInput {
+  if (!['fast', 'deep'].includes(input.mode) || !Array.isArray(input.domains)
+    || !input.domains.length || input.domains.length > MAX_BULK_SESSION_ROWS) {
+    throw new Error('The admitted Bulk input exceeds the supported session bounds.');
+  }
+  const domains = input.domains.map(domain => normalizeDomain(domain));
+  if (domains.some(domain => domain === null)) throw new Error('The admitted Bulk input contains an invalid domain.');
+  return Object.freeze({ mode: input.mode, domains: Object.freeze([...new Set(domains as string[])]) });
+}
 export type BulkSessionWorkspaceState = Readonly<{
   sessions: BulkSession[];
   sourceState: BrowserLocalCollectionLoadState;
@@ -35,6 +45,7 @@ export type BulkSessionWorkspaceState = Readonly<{
   busy: boolean;
   retention: BulkSessionSavePreview | null;
   refreshRequired: boolean;
+  input: BulkSessionInput | null;
 }>;
 type Options = Readonly<{
   loadStorage: () => Promise<Storage>;
@@ -61,6 +72,7 @@ export class BulkSessionWorkspace {
     busy: false,
     retention: null,
     refreshRequired: false,
+    input: null,
   };
 
   constructor(options: Options) {
@@ -88,10 +100,22 @@ export class BulkSessionWorkspace {
   }
 
   /** A scan and a saved-session write must never race over the active result. */
-  beginScan(replace: boolean): boolean {
+  beginScan(replace: boolean, input: BulkSessionInput): boolean {
     if (this.#disposed || this.#state.busy) return false;
+    let admitted: BulkSessionInput;
+    try {
+      admitted = snapshotInput(input);
+      if (!replace && this.#state.input) admitted = snapshotInput({
+        mode: admitted.mode,
+        domains: [...new Set([...this.#state.input.domains, ...admitted.domains])],
+      });
+    } catch (cause) {
+      this.setStatus(cause instanceof Error ? cause.message : 'The Bulk input could not be admitted.');
+      return false;
+    }
     this.#update({
       retention: null,
+      input: admitted,
       ...(replace
         ? {
             currentId: '',
@@ -101,6 +125,12 @@ export class BulkSessionWorkspace {
         : {}),
     });
     return true;
+  }
+
+  /** Navigation restores the result input separately from the next-run queue. */
+  restoreInput(input: BulkSessionInput | null): void {
+    if (this.#disposed || this.#state.busy || this.#options.scan().running) return;
+    this.#update({ input: input ? snapshotInput(input) : null });
   }
 
   select(session: BulkSession): boolean {
@@ -114,6 +144,7 @@ export class BulkSessionWorkspace {
       name: session.name,
       startedAt: session.startedAt,
       retention: null,
+      input: snapshotInput(session),
     });
     return true;
   }
@@ -178,7 +209,12 @@ export class BulkSessionWorkspace {
     const scan = this.#options.scan();
     if (scan.running) return;
     const name = this.#state.name.trim();
-    const domains = [...scan.domains];
+    const input = this.#state.input;
+    if (!input) {
+      this.setStatus('The original admitted input is unavailable. Start a new scan or load a saved session before saving.');
+      return;
+    }
+    const domains = [...input.domains];
     if (!name || !domains.length || !scan.results.length) {
       this.setStatus('Enter a session name and complete at least one result before saving.');
       return;
@@ -194,7 +230,7 @@ export class BulkSessionWorkspace {
       const session = {
         id: this.#state.currentId || createBulkSessionId(),
         name,
-        mode: scan.mode,
+        mode: input.mode,
         state: complete ? 'complete' : scan.cancelled ? 'cancelled' : 'partial',
         domains,
         results,

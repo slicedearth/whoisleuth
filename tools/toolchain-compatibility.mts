@@ -293,7 +293,13 @@ export function buildToolchainCompatibilityReport(input: Readonly<{
     throw new TypeError('Resolved TypeScript does not satisfy the declared root version.');
   }
 
-  const peerOwners = ['node_modules/@sveltejs/kit', 'node_modules/svelte-check'] as const;
+  const lockedPackages = record(lockfile.packages, 'Lockfile packages');
+  // Match package resolution from the frontend workspace. npm may hoist a
+  // dependency or keep it local; the installation layout is not a contract.
+  const peerOwners = ['@sveltejs/kit', 'svelte-check'].map(name => {
+    const local = `frontend/node_modules/${name}`;
+    return Object.hasOwn(lockedPackages, local) ? local : `node_modules/${name}`;
+  });
   const peerRanges = peerOwners.map((installPath) => {
     const peerDependencies = record(packageEntry(lockfile, installPath).peerDependencies, `${installPath} peerDependencies`);
     const range = peerDependencies.typescript;

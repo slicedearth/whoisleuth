@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { tick } from 'svelte';
-  import { compareSavedBulkSessions, type BulkSession, type BulkSessionSavePreview } from '$lib/bulk-sessions';
-  import { classifyBulkSourceCoverage } from '$lib/analysis/bulk-source-coverage.ts';
-  import type { BrowserLocalCollectionLoadState } from '$lib/browser-local-data-service';
+  import { compareSavedBulkSessions, type BulkSession, type BulkSessionSavePreview } from '#lib/bulk-sessions.ts';
+  import { classifyBulkSourceCoverage } from '#lib/analysis/bulk-source-coverage.ts';
+  import type { BrowserLocalCollectionLoadState } from '#lib/browser-local-data-service.ts';
 
   let {
     sessions,

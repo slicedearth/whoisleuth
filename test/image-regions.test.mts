@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { imageRegionPaintRectangles, MAX_EVIDENCE_IMAGE_PIXELS, MAX_EVIDENCE_IMAGE_REGIONS, readEvidenceImageDimensions, readImageDerivation, readImageRegionPlan } from '../packages/evidence/image-regions.mts';
+import { declareImageDerivation, readImageDerivationDeclaration, imageRegionPaintRectangles, MAX_EVIDENCE_IMAGE_PIXELS, MAX_EVIDENCE_IMAGE_REGIONS, readEvidenceImageDimensions, readImageDerivation, readImageRegionPlan } from '../packages/evidence/image-regions.mts';
 import { addCaseAttachments, assertDerivedCaseAttachmentSource, readCaseAttachment } from '../packages/cases/case-attachment-model.mts';
 import { createCase, normalizeCaseStore, projectCaseForAudience, serializeCaseStore } from '../packages/cases/case-model.mts';
 
@@ -11,6 +11,33 @@ const source = readCaseAttachment({ id: 'source-one', fileName: 'private-source.
   retainedAt: now, digestSha256: `sha256:${'a'.repeat(64)}`, byteLength: 100 });
 const derivation = { method: 'png-regions-v1', sourceAttachmentId: source.id, source: { digestSha256: source.digestSha256, byteLength: source.byteLength }, plan };
 const derivative = readCaseAttachment({ ...source, id: 'derived-one', fileName: 'private-derived.png', byteLength: 110, digestSha256: `sha256:${'b'.repeat(64)}`, derivation });
+
+test('shareable image declarations retain only immediate-parent identity and unique operation kinds', () => {
+  const declared = declareImageDerivation(readImageDerivation({ ...derivation, plan: { ...plan, regions: [region, { ...region, kind: 'outline' }, region] } }));
+  assert.deepEqual(declared, { method: 'png-regions-v1', source: { digestSha256: source.digestSha256, byteLength: 100 }, operations: ['redact', 'outline'] });
+  assert.doesNotMatch(JSON.stringify(declared), /private-|source-one|"(?:sourceAttachmentId|plan|regions|coordinates|width|height)":/);
+  const secondGeneration = declareImageDerivation(readImageDerivation({ ...derivation, sourceAttachmentId: derivative.id,
+    source: { digestSha256: derivative.digestSha256, byteLength: derivative.byteLength }, plan: { ...plan, regions: [{ ...region, kind: 'outline' }] } }));
+  assert.equal(secondGeneration.source.digestSha256, derivative.digestSha256);
+  assert.deepEqual(secondGeneration.operations, ['outline']);
+  // No Case lookup or retained parent pixels are needed to declare saved lineage.
+  assert.deepEqual(declareImageDerivation(readCaseAttachment(derivative).derivation!), { ...declared, operations: ['redact'] });
+});
+
+test('image declarations reject private fields, unsupported methods and malformed categories or fingerprints', () => {
+  const declaration = { method: 'png-regions-v1', source: { ...derivation.source }, operations: ['redact'] };
+  const admitted = readImageDerivationDeclaration(declaration);
+  declaration.source.byteLength = 42; declaration.operations.push('outline');
+  assert.equal(admitted.source.byteLength, 100);
+  assert.deepEqual(admitted.operations, ['redact']);
+  assert.ok(Object.isFrozen(admitted.source) && Object.isFrozen(admitted.operations));
+  for (const value of [null, { ...admitted, sourceAttachmentId: source.id }, { ...admitted, plan },
+    { ...admitted, method: 'future-method' }, { ...admitted, operations: [] }, { ...admitted, operations: ['redact', 'redact'] },
+    { ...admitted, operations: ['blur'] }, { ...admitted, operations: ['redact', 'outline', 'redact'] },
+    { ...admitted, source: { ...admitted.source, byteLength: 0 } }, { ...admitted, source: { ...admitted.source, digestSha256: 'invalid' } },
+    { ...admitted, source: { ...admitted.source, url: 'https://private.example/' } },
+  ]) assert.throws(() => readImageDerivationDeclaration(value));
+});
 
 test('decoded dimensions admit the exact pixel bound and reject unsafe work before rendering', () => {
   assert.deepEqual(readEvidenceImageDimensions(4096, 4096), { width: 4096, height: 4096 });

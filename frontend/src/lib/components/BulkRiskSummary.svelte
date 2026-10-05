@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { BulkRiskPresentation } from '$lib/analysis/bulk-route-model.ts';
+  import type { BulkRiskPresentation } from '#lib/analysis/bulk-route-model.ts';
 
   let {
     risk,

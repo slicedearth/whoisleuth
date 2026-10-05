@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { tick } from 'svelte';
   import Pagination from './Pagination.svelte';
-  import type { ParsedMailReport } from '$lib/analysis/mail-report-workbench.ts';
+  import type { ParsedMailReport } from '#lib/analysis/mail-report-workbench.ts';
 
   let { report, position }: { report: ParsedMailReport; position: number } = $props();
   let open = $state(false);

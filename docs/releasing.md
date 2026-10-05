@@ -138,10 +138,39 @@ requires both the version and the release-workflow run ID so it downloads the
 reviewed candidate artifact rather than reconstructing one. Run it only after
 registry publication; an unavailable, still-staged, or non-identical tar
 payload fails.
-The reviewed candidate is retained for 7 days. Protected approval, npm
-promotion, and post-publication verification must finish while that exact
-artifact remains available; after expiry, assemble and review a fresh
-candidate instead of reconstructing the prior archive.
+The workflow retains the reviewed candidate for 90 days, subject to the hosting
+service's effective retention limits. That remains expiring storage, not a
+durable archive. Before expiry, retain the exact `.tgz`, its `.sha256`,
+`cli-package-report.json` and `installed-dependencies.json` together in an
+operator-controlled durable directory outside the checkout.
+Retain actual regular files rather than symbolic links: the bounded bundle
+validator refuses symbolic-link report, archive and dependency-evidence inputs.
+These generated reports contain package/dependency identities and checks, not credentials or
+temporary absolute paths. Record the reviewed source commit and release-workflow run
+ID separately so later verification uses that commit's validator, not a
+reconstructed candidate or an unrelated checkout.
+
+Validate the original directory before copying and the retained directory after
+copying with the same offline command, substituting its directory and version:
+
+```bash
+VERSION="$(node -p "require('./package.json').version")"
+RELEASE_DIRECTORY=/tmp/whoisleuth-cli-release
+node tools/published-cli-check.mts "$VERSION" \
+  --candidate-report "$RELEASE_DIRECTORY/cli-package-report.json" \
+  --candidate-archive "$RELEASE_DIRECTORY/whoisleuth-cli-$VERSION.tgz" \
+  --installed-dependencies "$RELEASE_DIRECTORY/installed-dependencies.json" --offline
+```
+
+This bounded local check binds the selected archive bytes, report and recorded
+installed dependency graph to one candidate identity. It does not rerun an
+advisory audit, certify historical check results, contact a registry or publish
+anything. The release workflow runs it before upload and after download using
+the exact reviewed source. Retained files can supply the explicit paths for
+later post-publication verification after workflow artifact expiry. If no exact
+copy remains, assemble and review a fresh candidate instead of reconstructing
+the prior archive. Publishing durable release assets or changing repository
+permissions requires separate approval; this workflow does neither.
 
 Review schema compatibility whenever a release changes persisted or exported
 evidence:

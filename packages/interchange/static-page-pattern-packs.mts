@@ -8,6 +8,7 @@ import {
   MAX_STATIC_PAGE_PATTERN_PACK_BYTES,
   STATIC_PAGE_PATTERN_PACK_SCHEMA,
   STATIC_PAGE_PATTERN_PACK_VERSION,
+  STATIC_PAGE_PATTERN_PACK_SUPPORTED_VERSIONS,
 } from '../contracts/analyst-interchange.mts';
 
 export {
@@ -172,13 +173,12 @@ export const REVIEWED_STATIC_PAGE_PATTERN_PACKS: readonly StaticPagePatternPack[
     confidence: 'review_required',
     rules: [
       {
-        id: 'pack-password-external-form-v1',
-        name: 'Reviewed pattern: password field and external form destination',
+        id: 'pack-password-external-form-v2',
+        name: 'Reviewed pattern: password form declares external destination',
         enabled: true,
         match: 'all',
         conditions: [
-          { field: 'hasPasswordField', operator: 'equals', value: true },
-          { field: 'hasExternalFormAction', operator: 'equals', value: true },
+          { field: 'hasExternalPasswordForm', operator: 'equals', value: true },
         ],
         riskDelta: 0,
         tag: 'review-external-form',
@@ -203,7 +203,7 @@ export function validateStaticPagePatternPack(raw: unknown): StaticPagePatternPa
   if (item.schema !== STATIC_PAGE_PATTERN_PACK_SCHEMA) {
     throw new Error('This JSON file is not a WHOISleuth static page-pattern pack.');
   }
-  if (item.version !== STATIC_PAGE_PATTERN_PACK_VERSION) {
+  if (typeof item.version !== 'number' || !STATIC_PAGE_PATTERN_PACK_SUPPORTED_VERSIONS.includes(item.version)) {
     throw new Error(`This page-pattern pack requires schema ${STATIC_PAGE_PATTERN_PACK_VERSION}.`);
   }
   const id = text(item.id, 64);
@@ -220,7 +220,7 @@ export function validateStaticPagePatternPack(raw: unknown): StaticPagePatternPa
   }
   const merged = mergeDetectionRules([], {
     schema: DETECTION_RULE_SCHEMA,
-    version: DETECTION_RULE_SCHEMA_VERSION,
+    version: item.version === 2 ? 1 : DETECTION_RULE_SCHEMA_VERSION,
     rules: item.rules,
   });
   if (merged.skipped || merged.added !== item.rules.length) {

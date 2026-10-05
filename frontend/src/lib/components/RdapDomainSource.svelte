@@ -6,7 +6,7 @@
     records as boundedRecords,
     show,
     stringList,
-  } from '$lib/analysis/lookup-display-shared.ts';
+  } from '#lib/analysis/lookup-display-shared.ts';
 
   type JsonRecord = Record<string, unknown>;
 

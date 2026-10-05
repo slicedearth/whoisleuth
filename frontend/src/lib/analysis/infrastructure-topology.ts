@@ -1,4 +1,5 @@
-// Disposable diagram presentation over one already-admitted source page.
+// Disposable bounded diagram presentation over admitted topology rows, with a
+// historical fallback for callers that provide only one source page.
 import type { InvestigationInfrastructureRelationship, InvestigationInfrastructureRelationships } from './investigation-infrastructure.ts';
 import { MAX_INVESTIGATION_SEARCH_RESULTS } from './investigation-search.ts';
 import type { ForceGraphLinkInput, ForceGraphNodeInput } from './visualization-models.ts';
@@ -13,14 +14,16 @@ export const INFRASTRUCTURE_RELATIONSHIP_LABELS: Readonly<Record<InvestigationIn
   domain_aliases_to_domain: 'Retained DNS alias', domain_uses_mail_server: 'Mail-server relationship',
   domain_exposed_tracking_identifier: 'Tracking identifier', domain_related_by_favicon: 'Derived favicon relationship',
   domain_loaded_official_asset: 'Official-asset observation',
+  certificate_contains_name: 'Certificate contains hostname', certificate_contains_pattern: 'Certificate contains wildcard pattern',
+  subject_observed_provider_role: 'Independently attributed provider role', ip_observed_routing_origin: 'Independently sourced routing origin',
 });
 
 export function projectInfrastructureTopology(response: InvestigationInfrastructureRelationships, query = '', focusedEntityId = response.entityId) {
   const search = query.slice(0, 200).trim().toLowerCase();
-  const rows = response.state === 'ready' ? response.rows.slice(0, MAX_INVESTIGATION_SEARCH_RESULTS).filter(row => !search || [
+  const rows = response.state === 'ready' ? (response.topologyRows ?? response.rows).slice(0, MAX_INVESTIGATION_SEARCH_RESULTS).filter(row => !search || [
     row.from.canonical, row.to.canonical, row.type, INFRASTRUCTURE_RELATIONSHIP_LABELS[row.type], row.classification,
     row.method, row.source?.source, row.source?.recordId, row.source?.observedAt,
-  ].some(value => value?.toLowerCase().includes(search))) : [];
+  ].some(value => value?.toLowerCase().includes(search)) || Boolean(response.topologyRows)) : [];
   const identities = new Map<string, InvestigationInfrastructureRelationship['from']>();
   for (const row of rows) for (const entity of [row.from, row.to]) identities.set(entity.id, entity);
   const entities = [...identities.values()].sort((a, b) => Number(b.id === response.entityId) - Number(a.id === response.entityId)

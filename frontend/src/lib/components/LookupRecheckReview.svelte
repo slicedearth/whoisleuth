@@ -5,12 +5,12 @@
     CASE_PIN_COMPLETENESS,
   } from '../../../../packages/cases/case-response-records.mts';
   import type { CaseRecord } from '../cases.ts';
-  import type { LookupRecheckComparison, LookupRecheckOutcomeInput } from '$lib/controllers/lookup-case-controller.ts';
-  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
-  import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
-  import { isoFromUtcInput, utcDateTimeInputAttributes } from '$lib/analysis/case-response-form-values.ts';
+  import type { LookupRecheckComparison, LookupRecheckOutcomeInput } from '#lib/controllers/lookup-case-controller.ts';
+  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '#lib/local-mutation-outcome.ts';
+  import { restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
+  import { isoFromUtcInput, utcDateTimeInputAttributes } from '#lib/analysis/case-response-form-values.ts';
   import { CASE_RECHECK_CONDITIONS, selectCaseRecheckQuestion, type CaseRecheckAnswerContext } from '../../../../packages/cases/case-recheck-model.mts';
-  import { formatChangeEntry, recheckComparisonSummary } from '$lib/analysis/evidence-display.ts';
+  import { formatChangeEntry, recheckComparisonSummary } from '#lib/analysis/evidence-display.ts';
 
   let { record, comparison, busy, save, changed }: {
     record: CaseRecord; comparison: LookupRecheckComparison; busy: boolean;

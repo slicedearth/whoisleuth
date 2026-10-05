@@ -1,13 +1,14 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { formatEvidenceDate } from '$lib/analysis/evidence-time.ts';
-  import { INFRASTRUCTURE_ENTITY_TYPES, type InfrastructureEntityType, type InvestigationInfrastructure } from '$lib/analysis/investigation-infrastructure.ts';
-  import { MAX_INVESTIGATION_SEARCH_QUERY_LENGTH } from '$lib/analysis/investigation-search.ts';
-  import type { InvestigationStoreName } from '$lib/analysis/investigation-projection.ts';
-  import type { InvestigationSearchSession } from '$lib/investigation-search-session';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { INFRASTRUCTURE_ENTITY_TYPES, type InfrastructureEntityType, type InvestigationInfrastructure } from '#lib/analysis/investigation-infrastructure.ts';
+  import { MAX_INVESTIGATION_SEARCH_QUERY_LENGTH } from '#lib/analysis/investigation-search.ts';
+  import type { InvestigationStoreName } from '#lib/analysis/investigation-projection.ts';
+  import type { InvestigationSearchSession } from '#lib/investigation-search-session.ts';
   import Pagination from './Pagination.svelte';
   import InvestigationHistory from './InvestigationHistory.svelte';
   import InfrastructureRelationships from './InfrastructureRelationships.svelte';
+  import InfrastructureSnapshotReview from './InfrastructureSnapshotReview.svelte';
   let { session, onopen }: { session: InvestigationSearchSession; onopen?: (href: string) => void | Promise<void> } = $props();
   let query = $state(''), type = $state<InfrastructureEntityType | ''>(''), store = $state<InvestigationStoreName | ''>(''), since = $state(''), page = $state(1);
   let pending = $state(false), error = $state('');
@@ -18,7 +19,7 @@
   let returnFocus: HTMLElement | undefined, focusPage = false;
   const instanceId = $props.id();
   const response = $derived(completed?.session === session ? completed.response : null);
-  const typeLabels: Record<InfrastructureEntityType, string> = { domain: 'Domain / hostname', ip_address: 'IP address', certificate: 'Certificate', nameserver_set: 'Nameserver set', http_origin: 'HTTP origin' };
+  const typeLabels: Record<InfrastructureEntityType, string> = { domain: 'Domain / hostname', ip_address: 'IP address', certificate: 'Certificate', nameserver_set: 'Nameserver set', http_origin: 'HTTP origin', certificate_pattern: 'Certificate wildcard pattern', provider: 'Source-qualified provider role', routing_asn: 'Independently sourced routing ASN' };
   const fieldLabels: Record<NonNullable<InvestigationInfrastructure['rows'][number]['matchedField']>, string> = {
     canonical: 'Canonical value', label: 'Label', domain: 'Domain', name: 'Name', nameserver: 'Nameserver',
     origin: 'HTTP origin', sha256: 'SHA-256', ip: 'IP address', identifier: 'Identifier', value: 'Relationship value',
@@ -88,6 +89,9 @@
             </dl>
             {#if !row.searchable}<p>No usable source is available for text search.</p>{/if}
             <button type="button" class="btn small" onclick={event => void inspect(row.entityId, row.label, event.currentTarget)}>Inspect retained evidence for {row.label}</button>
+            {#if row.type === 'domain' || row.type === 'ip_address' || row.type === 'routing_asn'}
+              <a class="btn small" href={`/lookup?q=${encodeURIComponent(row.canonical)}#query`}>Prepare Lookup for {row.canonical}</a>
+            {/if}
           </li>
         {/each}
       </ol>
@@ -108,6 +112,7 @@
       {/key}
     </section>
   {/if}
+  <InfrastructureSnapshotReview {session} />
 </section>
 
 <style>

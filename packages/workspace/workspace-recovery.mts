@@ -7,6 +7,39 @@ import type { readWorkspaceArchive } from './workspace-archive.mts';
 
 export type ReviewedWorkspaceArchive = Awaited<ReturnType<typeof readWorkspaceArchive>>;
 
+export type RecoveryFile = Readonly<{
+  digestSha256: string; byteLength: number;
+  references: readonly Readonly<{ caseId: string; attachment: CaseAttachment }>[];
+  state: 'missing' | 'unverified';
+}>;
+
+/** Inspect each bounded storage group; an unreadable group is not absence. */
+export async function inspectRecoveryFiles(archive: ReviewedWorkspaceArchive,
+  read: (group: readonly CaseAttachment[]) => Promise<ReadonlyMap<string, Blob | null>>) {
+  const groups = workspaceAttachmentGroups(archive);
+  const rows = (archive.sections.find(item => item.id === 'cases')!.data as { cases: { id: string; attachments?: unknown }[] }).cases;
+  const references = new Map<string, { caseId: string; attachment: CaseAttachment }[]>();
+  for (const row of rows) for (const attachment of readCaseAttachments(row.attachments) ?? []) {
+    const existing = references.get(attachment.digestSha256) ?? [];
+    existing.push({ caseId: row.id, attachment }); references.set(attachment.digestSha256, existing);
+  }
+  let verified = 0, missing = 0, unverified = 0, bytes = 0;
+  const checklist: RecoveryFile[] = [];
+  for (const group of groups) {
+    let files: ReadonlyMap<string, Blob | null> | null = null;
+    try { files = await read(group); } catch { /* Keep failed reads distinct from missing bytes. */ }
+    for (const item of group) {
+      if (files?.get(item.digestSha256)) { verified++; bytes += item.byteLength; continue; }
+      const state = files === null ? 'unverified' as const : 'missing' as const;
+      if (state === 'missing') missing++; else unverified++;
+      checklist.push(Object.freeze({ digestSha256: item.digestSha256, byteLength: item.byteLength,
+        references: Object.freeze(references.get(item.digestSha256)!), state }));
+    }
+  }
+  return Object.freeze({ expected: verified + missing + unverified, verified, missing, unverified, bytes,
+    checklist: Object.freeze(checklist) });
+}
+
 /** Partition content, not provenance: duplicate references remain in Case data. */
 export function workspaceAttachmentGroups(archive: ReviewedWorkspaceArchive): readonly (readonly CaseAttachment[])[] {
   const section = archive.sections.find(item => item.id === 'cases');

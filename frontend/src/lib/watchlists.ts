@@ -7,13 +7,21 @@ import {
 } from './analysis/watchlist-history.ts';
 import { httpSecurityHeaderLabel } from './analysis/http-summary.ts';
 import {
-  buildWatchlistExport,
-  MAX_WATCHLISTS,
+  serializeWatchlistExport,
   mergeWatchlistStores,
   normalizeWatchlistName,
   serializeWatchlistStore,
+  resolveWatchlistMutationTarget,
+  planWatchlistUpdate,
+  applyReviewedWatchlistUpdate,
+  type WatchlistUpdatePreview,
+  planHostedWatchlistRestore,
+  applyReviewedHostedWatchlistRestore,
+  type HostedWatchlistRestorePreview,
 } from './analysis/watchlist-store.ts';
 import { normalizeDomain } from '../../../packages/evidence/domain-name.mts';
+import { applyCandidateWatchHandoff, planCandidateWatchHandoff, setWatchDomainContext, setWatchDomainContexts, type CandidateWatchInput, type CandidateWatchPlan, type WatchDomainContextEdit } from '../../../packages/workspace/candidate-watch-handoff.mts';
+import type { WatchDomainContext } from '../../../packages/workspace/brand-candidate-workflow.mts';
 import type {
   WatchlistCollection,
   WatchlistEntry,
@@ -26,10 +34,11 @@ import type {
 } from './analysis/watchlist-history.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { LEGACY_WATCHLIST_KEY } from './browser-local-data-contract.ts';
-import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
-export { MAX_WATCHLIST_IMPORT_BYTES } from '../../../packages/contracts/workspace-portability.mts';
+export { MAX_WATCHLIST_PORTABLE_BYTES } from '../../../packages/contracts/workspace-portability.mts';
+export { parseWatchlistExport } from './analysis/watchlist-store.ts';
 
 export const WATCHLIST_KEY = LEGACY_WATCHLIST_KEY;
+export { watchlistActiveDomains } from './analysis/watchlist-history.ts';
 
 export type {
   WatchlistChange,
@@ -44,22 +53,49 @@ export async function loadWatchlists(): Promise<Watchlists> {
   return readBrowserLocalData('watchlists');
 }
 
+export async function addCandidateWatchlist(input: CandidateWatchInput, expectedPlan: CandidateWatchPlan) {
+  const now = new Date().toISOString();
+  return updateBrowserLocalData('watchlists', current => {
+    if (JSON.stringify(planCandidateWatchHandoff(current, input)) !== JSON.stringify(expectedPlan)) throw new Error('The watchlist destination changed after the preview. Preview it again; nothing was overwritten.');
+    const result = applyCandidateWatchHandoff(current, input, now);
+    return { document: result.watchlists, result: result.plan };
+  });
+}
+
+export async function updateWatchContext(name: string, domain: string, input: WatchDomainContext, expected: WatchDomainContext | null) {
+  const changedAt = new Date().toISOString();
+  return updateBrowserLocalData('watchlists', current => {
+    const document = setWatchDomainContext(current, name, domain, { ...input, changedAt }, expected);
+    return { document, result: document };
+  });
+}
+
+export async function updateWatchContexts(name: string, edits: readonly WatchDomainContextEdit[]) {
+  const changedAt = new Date().toISOString();
+  const captured = structuredClone(edits);
+  return updateBrowserLocalData('watchlists', current => {
+    const document = setWatchDomainContexts(current, name, captured.map(edit => ({ ...edit, input: { ...edit.input, changedAt } })));
+    return { document, result: document };
+  });
+}
+
 function boundedWatchlists(all: Watchlists): Watchlists {
   return JSON.parse(serializeWatchlistStore(all)).watchlists as Watchlists;
 }
 
-export function resolveWatchlistMutationTarget(
-  current: Watchlists,
-  requestedName: string,
-): { name: string; previous: WatchlistEntry | null } {
-  const existingName = Object.keys(current).find(
-    (candidate) => candidate.toLowerCase() === requestedName.toLowerCase(),
-  );
-  const previous = existingName ? current[existingName] ?? null : null;
-  if (!previous && Object.keys(current).length >= MAX_WATCHLISTS) {
-    throw new Error('Watchlist storage is full. Export and remove a watchlist before saving more.');
-  }
-  return { name: existingName || requestedName, previous };
+export { resolveWatchlistMutationTarget };
+export { planHostedWatchlistRestore, type HostedWatchlistRestorePreview };
+
+export async function previewWatchlistUpdate(name: string, results: readonly WatchlistComparableRecord[], mode: 'fast' | 'deep', operation: 'merge' | 'replace') {
+  const captured = structuredClone(results);
+  return planWatchlistUpdate(await loadWatchlists(), name, captured, mode, operation);
+}
+
+export async function saveReviewedWatchlistUpdate(reviewed: WatchlistUpdatePreview) {
+  return updateBrowserLocalData('watchlists', current => {
+    const result = applyReviewedWatchlistUpdate(current, reviewed);
+    return { document: result.watchlists, result: result.changes };
+  });
 }
 
 export async function writeWatchlists(all: Watchlists): Promise<void> {
@@ -69,30 +105,16 @@ export async function writeWatchlists(all: Watchlists): Promise<void> {
 export function mergeHostedWatchlist(
   current: Watchlists,
   name: string,
-  hostedEntry: WatchlistEntry,
+  hostedEntry: Omit<WatchlistEntry, 'domainMetadata'>,
 ): Watchlists {
-  const normalizedName = normalizeWatchlistName(name);
-  if (!normalizedName) throw new Error('Hosted watchlist name is invalid.');
-  const all = { ...current } as Watchlists;
-  const existing = Object.keys(all).find((candidate) => candidate.toLowerCase() === normalizedName.toLowerCase());
-  if (!existing && Object.keys(all).length >= MAX_WATCHLISTS) {
-    throw new Error('Watchlist storage is full. Export and remove a watchlist before saving more.');
-  }
-  if (existing && existing !== normalizedName) delete all[existing];
-  Object.defineProperty(all, normalizedName, {
-    value: hostedEntry,
-    writable: true,
-    enumerable: true,
-    configurable: true,
-  });
-  return boundedWatchlists(all);
+  return applyReviewedHostedWatchlistRestore(current, planHostedWatchlistRestore(current, name, hostedEntry));
 }
 
-export async function restoreHostedWatchlist(name: string, hostedEntry: WatchlistEntry): Promise<void> {
-  await updateBrowserLocalData('watchlists', (current) => ({
-    document: mergeHostedWatchlist(current as Watchlists, name, hostedEntry),
-    result: undefined,
-  }));
+export async function restoreHostedWatchlist(reviewed: HostedWatchlistRestorePreview): Promise<Watchlists> {
+  return updateBrowserLocalData('watchlists', current => {
+    const document = applyReviewedHostedWatchlistRestore(current, reviewed);
+    return { document, result: document };
+  });
 }
 
 export async function saveWatchlist(name:string, results:WatchlistComparableRecord[], mode:'fast'|'deep'|'saved'): Promise<WatchlistChange[]> {
@@ -143,7 +165,7 @@ export async function deleteWatchlist(name:string):Promise<Watchlists>{return up
 
 export async function importWatchlists(value:unknown){return updateBrowserLocalData('watchlists',(current)=>{const result=mergeWatchlistStores(current,value);const watchlists=boundedWatchlists(result.watchlists as Watchlists);return{document:watchlists,result:{added:result.added,updated:result.updated,skipped:result.skipped}};});}
 
-export async function exportWatchlists(){const blob=new Blob([serialiseWorkspacePortableJson(buildWatchlistExport(await loadWatchlists()))],{type:'application/json'});downloadLocalFile(blob, `whoisleuth-watchlists-${new Date().toISOString().slice(0,10)}.json`);}
+export async function exportWatchlists(){const blob=new Blob([serializeWatchlistExport(await loadWatchlists())],{type:'application/json'});downloadLocalFile(blob, `whoisleuth-watchlists-${new Date().toISOString().slice(0,10)}.json`);}
 
 export const fieldLabels:Record<string,string>={availability:'Availability',registrarName:'Registrar',nameservers:'Nameservers',createdDate:'Creation date',expiryDate:'Expiry date',privacyProtected:'WHOIS privacy',hasMx:'MX',hasSpf:'SPF',hasDmarc:'DMARC',activityStatus:'Website activity',pageTitle:'Page title',httpEvidenceStatus:'HTTP evidence status',httpFinalOrigin:'Final website origin',httpResponseStatus:'HTTP response status',httpTransportSecurity:'Website transport',httpRedirectCount:'HTTP redirect count',httpCrossOriginRedirect:'Cross-origin redirect',httpHttpsDowngrade:'HTTPS downgrade',httpContentType:'Website content type',httpSecurityHeaders:'Observed security headers',faviconHash:'Favicon',faviconMatch:'Official favicon match',faviconNearMatch:'Official favicon near-match',hasPasswordField:'Password form',phishingLanguageMatch:'Phishing language',reusesOfficialAssets:'Official asset reuse',riskScore:'Risk score'};
 export function formatValue(value:unknown,field=''){if(Array.isArray(value))return (field==='httpSecurityHeaders'?value.map(item=>httpSecurityHeaderLabel(String(item))):value).join(', ')||'None';if(typeof value==='boolean')return value?'Yes':'No';return value==null||value===''?'None':String(value);}

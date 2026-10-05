@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import {
     fetchScheduledMonitoring,
     mutateScheduledMonitoring,
     type ScheduledMonitoringCommand,
     type ScheduledMonitoringResponse,
     type ScheduledWatchlist,
-  } from '$lib/scheduled-monitoring';
-  import type { Capability } from '$lib/capabilities';
-  import type { WatchlistEntry, Watchlists } from '$lib/watchlists';
+  } from '#lib/scheduled-monitoring.ts';
+  import type { Capability } from '#lib/capabilities.ts';
+  import { planHostedWatchlistRestore, type HostedWatchlistRestorePreview, type Watchlists } from '#lib/watchlists.ts';
 
   let {
     capability,
@@ -22,7 +22,7 @@
     localWatchlists: Watchlists;
     localNames: string[];
     localSourceState: 'loading' | 'ready' | 'unavailable';
-    restoreHosted: (name: string, entry: WatchlistEntry) => Promise<void>;
+    restoreHosted: (reviewed: HostedWatchlistRestorePreview) => Promise<string | void>;
     formatDate: (value: string) => string;
   } = $props();
 
@@ -37,6 +37,9 @@
   let requestGeneration = 0;
   let message = $state('');
   let error = $state('');
+  let restorePreview = $state<HostedWatchlistRestorePreview | null>(null);
+  let restoreHeading = $state<HTMLHeadingElement>();
+  let restoreTrigger: HTMLButtonElement | null = null;
   const hosted = $derived(response?.state.watchlists || []);
   const selectedEntry = $derived(selectedLocal ? localWatchlists[selectedLocal] || null : null);
   const selectedHosted = $derived(selectedLocal
@@ -154,26 +157,45 @@
       `Updated the hosted snapshot for "${item.name}".`);
   }
 
-  async function restore(item: ScheduledWatchlist) {
+  async function restore(item: ScheduledWatchlist, trigger: HTMLButtonElement) {
     if (busy || loading) return;
-    const existing = Boolean(localEntryFor(item.name));
-    const prompt = existing
-      ? `Replace the saved watchlist "${item.name}" with the hosted snapshot?`
-      : `Restore the hosted snapshot "${item.name}" into this workspace?`;
-    if (!confirm(prompt)) return;
+    error = '';
+    message = '';
+    try {
+      restorePreview = planHostedWatchlistRestore(localWatchlists, item.name, item.entry);
+      restoreTrigger = trigger;
+      await tick();
+      restoreHeading?.focus();
+    }
+    catch (cause) { restorePreview = null; error = cause instanceof Error ? cause.message : 'Could not preview the hosted snapshot.'; }
+  }
+
+  function cancelRestore() {
+    restorePreview = null;
+    restoreTrigger?.focus();
+  }
+
+  async function confirmRestore() {
+    if (busy || loading || !restorePreview) return;
+    const reviewed = restorePreview;
     const generation = ++requestGeneration;
     busy = true;
     message = '';
     error = '';
     try {
-      await restoreHosted(item.name, item.entry);
+      const saved = await restoreHosted(reviewed);
       if (generation !== requestGeneration) return;
-      message = `${existing ? 'Replaced' : 'Restored'} the saved watchlist "${item.name}".`;
+      restorePreview = null;
+      message = saved || `Restored evidence for "${reviewed.name}"; ${reviewed.retained.length + reviewed.added.length} active domains retained.`;
     } catch (cause) {
       if (generation !== requestGeneration) return;
       error = cause instanceof Error ? cause.message : 'Could not restore the hosted snapshot.';
     } finally {
-      if (generation === requestGeneration) busy = false;
+      if (generation === requestGeneration) {
+        busy = false;
+        await tick();
+        if (!restorePreview) restoreTrigger?.focus();
+      }
     }
   }
 
@@ -206,6 +228,17 @@
       <span>{capability?.reason || 'Hosted monitoring is not available in this deployment.'}</span>
     </div>
   {:else}
+    {#if restorePreview}
+      <section class="restore-preview" aria-labelledby="restore-preview-title">
+        <h3 id="restore-preview-title" bind:this={restoreHeading} tabindex="-1">Review hosted restore: {restorePreview.name}</h3>
+        <p>The hosted snapshot replaces current evidence and history. All local active domains, candidate records and Brand contexts remain. Restoring does not run a scan.</p>
+        <p>{restorePreview.retained.length} retained · {restorePreview.added.length} added · {restorePreview.removed.length} removed. The next Bulk queue contains {restorePreview.retained.length + restorePreview.added.length} of {restorePreview.capacity} permitted domains.</p>
+        {#each [{label:'Retained domains',domains:restorePreview.retained},{label:'Added domains',domains:restorePreview.added}] as group}
+          <details><summary>{group.label} ({group.domains.length})</summary><ul>{#each group.domains as domain}<li>{domain}</li>{/each}</ul></details>
+        {/each}
+        <div class="toolbar"><button class="btn primary" onclick={confirmRestore} disabled={busy || loading || localSourceState !== 'ready'}>Restore reviewed evidence</button><button class="btn" onclick={cancelRestore} disabled={busy}>Cancel restore</button></div>
+      </section>
+    {/if}
     {#if response}
       <div class="capacity" role="group" aria-label="Hosted monitoring capacity">
         <div><strong>{response.capacity.projectedLookupsPerWeek.toLocaleString()}</strong> of {response.capacity.admittedLookupsPerWeek.toLocaleString()} admitted lookups per week</div>
@@ -229,7 +262,7 @@
           <option value={168}>Weekly</option>
         </select>
       </label>
-      <button class="primary" onclick={scheduleSelected} disabled={loading || busy || localSourceState !== 'ready' || !selectedEntry}>
+      <button class="primary" onclick={scheduleSelected} disabled={loading || busy || localSourceState !== 'ready' || !selectedEntry || Boolean(selectedEntry.membershipRecovery)}>
         {selectedHosted ? 'Replace hosted snapshot' : 'Schedule watchlist'}
       </button>
     </div>
@@ -258,8 +291,8 @@
             {#if item.prunedHistoryEvents}<p class="hint">{item.prunedHistoryEvents} older hosted history event{item.prunedHistoryEvents === 1 ? '' : 's'} pruned.</p>{/if}
             <div class="toolbar actions">
               <button class="btn small" onclick={() => toggle(item)} disabled={loading || busy}>{item.enabled ? 'Pause' : 'Resume'}</button>
-              <button class="btn small" onclick={() => replace(item)} disabled={loading || busy || localSourceState !== 'ready' || !localEntryFor(item.name)}>Replace from browser</button>
-              <button class="btn small" onclick={() => restore(item)} disabled={loading || busy || localSourceState !== 'ready'}>Restore to browser</button>
+              <button class="btn small" onclick={() => replace(item)} disabled={loading || busy || localSourceState !== 'ready' || !localEntryFor(item.name) || Boolean(localEntryFor(item.name)?.membershipRecovery)}>Replace from browser</button>
+              <button class="btn small" onclick={event => restore(item, event.currentTarget)} disabled={loading || busy || localSourceState !== 'ready'}>Restore to browser</button>
               <button class="btn small danger" onclick={() => remove(item)} disabled={loading || busy}>Delete hosted copy</button>
             </div>
           </article>
@@ -273,6 +306,9 @@
 
 <style>
   .hosted{margin-top:16px;padding:var(--card-pad)}
+  .restore-preview{margin-block:16px;padding:var(--card-pad);border:1px solid var(--border);border-radius:var(--radius-md);overflow-wrap:anywhere}
+  .restore-preview ul{max-height:16rem;overflow:auto}
+  .restore-preview .toolbar{margin-top:12px;flex-wrap:wrap}
   .hosted h2{margin:0}
   .hosted .section-head p:not(.eyebrow){max-width:760px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .state-row{display:flex;gap:12px;align-items:flex-start;margin-top:18px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-md)}

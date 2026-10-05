@@ -162,6 +162,12 @@ const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '3580829fea761be5:1', primaryLocationStartColumnFingerprint: '59', reason: 'false_positive' as const }),
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'b269a7c62be7cb18:1', primaryLocationStartColumnFingerprint: '56', reason: 'false_positive' as const }),
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e8481cbf82455fde:1', primaryLocationStartColumnFingerprint: '61', reason: 'false_positive' as const }),
+  // Both optional-feed routes run apiRateLimit before authentication,
+  // request parsing and service admission. The real HTTP regression in
+  // domain-feed-api.test.mts verifies POST and method-fallback saturation,
+  // Retry-After and zero service calls after the shared client budget is spent.
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'd86df17038d5a808:1', primaryLocationStartColumnFingerprint: '59', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '98495f541523ba:1', primaryLocationStartColumnFingerprint: '58', reason: 'false_positive' as const }),
   // Launch admission precedes body parsing. Bounded session validation selects
   // separate anonymous/session API buckets; authenticated requests also consume
   // an aggregate bucket before downstream actions. Real HTTP regressions prove

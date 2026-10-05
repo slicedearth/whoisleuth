@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { handlesLocalLink } from '$lib/link-activation';
-  import DocumentationSearch from '$lib/components/DocumentationSearch.svelte';
-  import { revealDocumentationTarget } from '$lib/documentation-anchors';
+  import { handlesLocalLink } from '#lib/link-activation.ts';
+  import DocumentationSearch from '#lib/components/DocumentationSearch.svelte';
+  import { revealDocumentationTarget } from '#lib/documentation-anchors.ts';
   import {
     PUBLIC_REFERENCE_GROUPS,
     publicReferenceDestination,
-  } from '$lib/public-reference-navigation';
+  } from '#lib/public-reference-navigation.ts';
   let {
     currentPath,
     currentTitle,

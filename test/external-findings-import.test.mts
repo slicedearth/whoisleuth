@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
+import { canonicalArtifactJsonV2 } from '../packages/evidence/artifact-integrity.mts';
 import {
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
@@ -11,6 +14,7 @@ import {
   externalFindingCaseProjection,
 } from '../frontend/src/lib/analysis/external-findings-import.ts';
 import { buildCaseExport, createCase, mergeCases } from '../frontend/src/lib/analysis/case-model.ts';
+import { SUPPORTED_EXTERNAL_FINDINGS_VERSIONS } from '../packages/contracts/external-observation-interchange.mts';
 
 const NOW = '2026-07-28T04:00:00.000Z';
 
@@ -34,6 +38,19 @@ function document(overrides: Record<string, unknown> = {}) {
 }
 
 describe('strict external findings import', () => {
+  test('the import guide distinguishes the current writer from supported historical input', () => {
+    const guide = readFileSync(new URL('../docs/external-findings-import.md', import.meta.url), 'utf8');
+    const section = guide.split('## Current and historical schemas')[1]!.split('```')[0]!;
+    assert.equal(Number(/current writer emits version (\d+)/u.exec(section)?.[1]), EXTERNAL_FINDINGS_VERSION);
+    const readers = /reader supports versions ([\d, and]+)/u.exec(section)?.[1]?.match(/\d+/gu)?.map(Number);
+    assert.deepEqual(readers, [...SUPPORTED_EXTERNAL_FINDINGS_VERSIONS]);
+    const example = JSON.parse(/```json\n([\s\S]+?)\n```/u.exec(guide)![1]!);
+    assert.equal(example.schemaVersion, 4);
+    assert.equal(parseExternalFindingsDocument(example).schemaVersion, 4);
+    assert.match(section, /version 4 example below remains supported historical input/u);
+    assert.match(guide, /`infrastructureObservation`: version 5 only/u);
+  });
+
   test('deduplicates only identical admitted findings, retaining distinct references, qualifications and structured values', () => {
     const base = document().findings[0]!;
     const findings = [base, { ...base, reference: 'finding-18' }, { ...base, limitations: ['Different qualification.'] },
@@ -149,7 +166,8 @@ describe('strict external findings import', () => {
   });
 
   test('rejects future schemas, additional fields, controls, and unsupported categories', () => {
-    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 5 })), /schema version 4/u);
+    assert.equal(parseExternalFindingsDocument(document({ schemaVersion: 5 })).schemaVersion, 5);
+    assert.throws(() => parseExternalFindingsDocument(document({ schemaVersion: 6 })), /schema version/u);
     assert.throws(() => parseExternalFindingsDocument({ ...document(), executable: 'no' }), /additional top-level/u);
     assert.throws(() => parseExternalFindingsDocument(document({
       findings: [{ ...document().findings[0], summary: 'bad\u0000value' }],
@@ -266,10 +284,50 @@ describe('strict external findings import', () => {
     assert.equal(first.record.id, current.id);
     assert.equal(first.record.domain, 'review.example');
     assert.equal(first.findingsAdded, 1);
-    assert.match(first.record.evidencePins[0]?.value ?? '', /^Captured hostname login\.review\.example\./u);
+    assert.equal(first.record.evidencePins[0]?.observationHostname, 'login.review.example');
+    assert.ok(first.record.evidencePins[0]?.value.startsWith(parsed.findings[0]!.summary));
     assert.equal(second.findingsAdded, 0);
     assert.equal(second.duplicatesSkipped, 1);
     assert.equal(second.record.evidencePins.length, 1);
+  });
+
+  for (const category of ['dns', 'certificate'] as const) test(`retains exact ${category} hostname and complete finding identity through selected Case export`, () => {
+    const current = createCase({ domain: 'review.example', source: 'lookup' }, NOW);
+    const parsed = parseExternalFindingsDocument(document({
+      findings: ['A', 'B'].map(suffix => ({
+        ...document().findings[0], category, domain: 'login.review.example',
+        summary: `${'x'.repeat(899)}${suffix}`,
+        structuredObservation: {
+          sourceSchema: category === 'dns' ? 'whoisleuth.dns-observation-rows' : 'whoisleuth.certificate-observation-rows',
+          sourceVersion: 1, field: category === 'dns' ? 'a' : 'issuer',
+          value: category === 'dns' ? '192.0.2.1' : 'Fixture issuer',
+        },
+      })),
+    }));
+    const original = structuredClone(parsed);
+    const expectedDigests = parsed.findings.map(finding => createHash('sha256').update(canonicalArtifactJsonV2({
+      sourceName: parsed.source.name, sourceReference: parsed.source.reference, finding,
+    })).digest('hex'));
+    assert.notEqual(expectedDigests[0], expectedDigests[1]);
+    const merged = mergeExternalFindingsIntoCase([current], current.id, parsed, NOW);
+    assert.equal(merged.findingsAdded, 2);
+    assert.equal(merged.duplicatesSkipped, 0);
+    assert.deepEqual(parsed, original);
+    const exported = buildCaseExport(merged.cases, NOW);
+    const restored = mergeCases([], JSON.parse(JSON.stringify(exported))).cases;
+    for (const record of [merged.record, exported.cases[0]!, restored[0]!]) {
+      assert.equal(record.domain, 'review.example');
+      assert.equal(record.evidencePins.length, 2);
+      assert.deepEqual(new Set(record.evidencePins.map(pin => pin.importContentSha256)), new Set(expectedDigests));
+      for (const pin of record.evidencePins) {
+        assert.equal(pin.observationHostname, 'login.review.example');
+        assert.equal(pin.value, parsed.findings[0]!.structuredObservation!.value);
+        assert.equal(pin.sourceSchema?.schema, parsed.findings[0]!.structuredObservation!.sourceSchema);
+      }
+    }
+    const repeated = mergeExternalFindingsIntoCase(restored, current.id, parsed, NOW);
+    assert.equal(repeated.findingsAdded, 0);
+    assert.equal(repeated.duplicatesSkipped, 2);
   });
 
   test('updates only the selected Case identity when recovered local data contains a duplicate domain', () => {

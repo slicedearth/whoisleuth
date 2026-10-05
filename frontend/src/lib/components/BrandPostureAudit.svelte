@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { BrandProfile } from '$lib/brand-profiles';
-  import type { DomainPostureHttpResponse } from '$lib/analysis/client-response-contracts';
-  import { buildOwnedDomainPostureReview, filterPostureComparisons, POSTURE_COMPARISON_FILTERS, OFFICIAL_DOMAIN_REVIEW_BATCH_SIZE, type PostureComparisonFilter, type DomainPostureAuditResult } from '$lib/analysis/owned-domain-posture-review.ts';
-  import { reviewClock } from '$lib/review-clock.ts';
-  import { desiredPostureObservations } from '$lib/analysis/brand-profile-model.ts';
+  import type { BrandProfile } from '#lib/brand-profiles.ts';
+  import type { DomainPostureHttpResponse } from '#lib/analysis/client-response-contracts.ts';
+  import { buildOwnedDomainPostureReview, filterPostureComparisons, POSTURE_COMPARISON_FILTERS, OFFICIAL_DOMAIN_REVIEW_BATCH_SIZE, type PostureComparisonFilter, type DomainPostureAuditResult } from '#lib/analysis/owned-domain-posture-review.ts';
+  import { reviewClock } from '#lib/review-clock.ts';
+  import { desiredPostureObservations } from '#lib/analysis/brand-profile-model.ts';
   import { POSTURE_SOURCE_LABELS } from '../../../../packages/evidence/domain-posture-context.mts';
   import PostureObservationHistory from './PostureObservationHistory.svelte';
   let { active, disabledReason, auditing, results, audit, retainObservation }: {

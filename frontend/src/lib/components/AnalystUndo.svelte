@@ -6,7 +6,7 @@
     runAnalystUndo,
     subscribeAnalystUndo,
     type AnalystUndoAction,
-  } from '$lib/analyst-undo';
+  } from '#lib/analyst-undo.ts';
 
   let action = $state<AnalystUndoAction | null>(null);
   let outcome = $state('');

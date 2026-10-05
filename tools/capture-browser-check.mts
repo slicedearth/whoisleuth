@@ -36,10 +36,35 @@ export async function checkCaptureBrowserIsolation(capture: Capture, launch: Lau
           fetch('${destination}/keepalive', { keepalive: true, mode: 'no-cors' }).catch(() => {});
         });
       </script>` : ''}`;
+      let teardownProbed = false;
       const manifest = await capture({
         targetUrl: 'http://example.test/', outputDirectory: path.join(directory, String(teardown)), timeoutMs: 15_000,
       }, {
-        launchBrowser: launch,
+        launchBrowser: async timeout => {
+          const instance = await launch(timeout);
+          if (!teardown) return instance;
+          const newContext = instance.newContext.bind(instance);
+          instance.newContext = async options => {
+            const context = await newContext(options);
+            const close = context.close.bind(context);
+            context.close = async options => {
+              await close(options);
+              if (teardownProbed) return;
+              teardownProbed = true;
+              // Native pagehide delivery on forced close is not guaranteed.
+              // Prove a real direct request is refused after the capture's
+              // context and routes are gone, while its browser remains alive.
+              const probe = await instance.newPage();
+              try {
+                const before = instance.blockedDirectConnections();
+                await assert.rejects(() => probe.goto(destination, { timeout: 5_000 }));
+                assert.ok(instance.blockedDirectConnections() > before);
+              } finally { await probe.context().close(); }
+            };
+            return context;
+          };
+          return instance;
+        },
         resolveAddresses: async () => [{ address: '192.0.2.10', family: 4 }],
         fetchResource: async url => {
           collected.push(url);
@@ -48,6 +73,7 @@ export async function checkCaptureBrowserIsolation(capture: Capture, launch: Lau
       });
       assert.ok(collected.length > 0);
       assert.ok(collected.every(url => new URL(url).hostname === 'example.test'));
+      assert.equal(teardownProbed, teardown);
       assert.equal(manifest.captures[0]?.completeness, teardown ? 'partial' : 'complete');
       assert.equal(connections, 0);
       rows.push({ teardown, completeness: manifest.captures[0]!.completeness });

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import LookupEvidenceCheckpoint from './LookupEvidenceCheckpoint.svelte';
-  import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
-  import type { CaseRecord } from '$lib/cases';
-  import type { LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
+  import type { CheckpointFact } from '#lib/analysis/case-evidence-checkpoint.ts';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { LocalMutationOutcome } from '#lib/local-mutation-outcome.ts';
 
   let { label, facts, record, ready, busy, status, oncreate, onsave }: {
     label: string;

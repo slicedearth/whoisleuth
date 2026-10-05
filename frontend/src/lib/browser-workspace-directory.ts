@@ -47,6 +47,11 @@ export function readBrowserWorkspace(value: unknown): BrowserWorkspace {
 
 type DirectoryOptions = Readonly<{ indexedDB?: IDBFactory; locks?: LockManager | null; now?: () => string; makeId?: () => string; timeoutMs?: number }>;
 
+/** Availability only: never requests a lock or opens storage. */
+export function browserWorkspaceLocksAvailable(manager: unknown = globalThis.navigator?.locks): manager is LockManager {
+  return manager !== null && typeof manager === 'object' && typeof (manager as LockManager).request === 'function';
+}
+
 export function createBrowserWorkspaceDirectory(options: DirectoryOptions = {}) {
   const factory = () => options.indexedDB ?? globalThis.indexedDB;
   const locks = () => options.locks === undefined ? globalThis.navigator?.locks : options.locks;
@@ -134,7 +139,7 @@ export function createBrowserWorkspaceDirectory(options: DirectoryOptions = {}) 
 
   function requireLocks(): LockManager {
     const manager = locks();
-    if (!manager) throw new Error('Named workspaces require browser Web Locks. The default workspace remains available.');
+    if (!browserWorkspaceLocksAvailable(manager)) throw new Error('Named workspaces require browser Web Locks. The default workspace remains available.');
     return manager;
   }
   const lockName = (id: string) => `whoisleuth-workspace:${browserWorkspaceDatabaseName(id)}`;

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import type { CaseAssociationRetention } from '$lib/cases';
+  import type { CaseAssociationRetention } from '#lib/cases.ts';
   let { retention, busy, confirm, cancel, exportSnapshot }: {
     retention: CaseAssociationRetention; busy: boolean;
     confirm: () => void | Promise<void>; cancel: () => void | Promise<void>;

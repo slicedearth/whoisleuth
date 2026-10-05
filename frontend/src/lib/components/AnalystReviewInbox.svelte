@@ -106,16 +106,16 @@
     .filter((row) => row.totalAtLeast > 0));
 
   function setQueue(value: AnalystReviewQueue) {
-    const url = new URL(route.url);
+    const url = new URL(route.url.href);
     url.searchParams.delete('attention');
     url.searchParams.set('queue', value);
-    void goto(`${url.pathname}${url.search}${url.hash}`, { noScroll: true, keepFocus: true });
+    void goto(`${url.pathname}${url.search}${url.hash}`, { reset: false });
     page = 1;
   }
 
   function retainCaseReturn(event: MouseEvent, item: AnalystReviewItem) {
     if (!handlesLocalLink(event) || !item.caseId) return;
-    const target = new URL(item.href, route.url);
+    const target = new URL(item.href, route.url.href);
     if (target.origin !== route.url.origin || target.pathname !== '/cases' || target.searchParams.get('case') !== item.caseId) return;
     setCaseNavigationContext(item.caseId, `${route.url.pathname}${route.url.search}${route.url.hash}`, 'review inbox');
   }
@@ -154,7 +154,7 @@
     if (retained.size > MAX_ANALYST_REVIEW_ITEMS) return 'Saved and current forms exceed one admitted review queue. Finish or discard current drafts before resuming; no forms were removed.';
     reviewDrafts = [...retained.values()];
     restoreRevision += 1;
-    const url = new URL(route.url);
+    const url = new URL(route.url.href);
     url.searchParams.delete('review');
     url.searchParams.delete('resume');
     url.searchParams.delete('attention');
@@ -162,7 +162,7 @@
     url.searchParams.set('queue', saved.filters.queue);
     if (saved.filters.attentionOnly) url.searchParams.set('attention', '1');
     if (saved.filters.focusedCaseId) url.searchParams.set('case-review', saved.filters.focusedCaseId);
-    await goto(`${url.pathname}${url.search}${url.hash}`, { noScroll: true, keepFocus: true });
+    await goto(`${url.pathname}${url.search}${url.hash}`, { reset: false });
     kindFilter = saved.filters.kind; sourceFilter = saved.filters.source; ageFilter = saved.filters.age;
     caseFilter = saved.filters.caseQuery; priorityFilter = saved.filters.priority; nextActionFilter = saved.filters.nextAction;
     evidenceFamilyFilter = saved.filters.evidenceFamily; lifecycleFilter = saved.filters.lifecycle;

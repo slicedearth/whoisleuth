@@ -133,6 +133,7 @@ const CAPABILITY_PRIVACY_DETAILS = Object.freeze({
   urlscan_search: capabilityPrivacyDetail('Search existing archived public scan verdicts without submitting a scan.', ['archived_scan_review_leads', 'source_health']),
   urlhaus_host: capabilityPrivacyDetail('Search existing malware-host records for one canonical registrable domain.', ['archived_malware_host_review_leads', 'source_health']),
   threatfox_domain_ioc: capabilityPrivacyDetail('Search retained malware indicators for one exact canonical domain.', ['retained_indicator_review_leads', 'source_health']),
+  domain_feed_search: capabilityPrivacyDetail('Match explicit feed identifiers, exact hostnames and literal terms against an optional operator-maintained public feed cache without target collection.', ['exact_feed_candidates', 'snapshot_identity_and_freshness', 'unknown_per_host_event_times', 'explicit_omissions']),
   registrar_rdap: capabilityPrivacyDetail('Retrieve one eligible sponsoring-registrar RDAP publication as a separate source.', ['registrar_registration_publication', 'source_health']),
   network_context: capabilityPrivacyDetail('Add bounded public allocation context for one observed public endpoint address.', ['public_network_allocation_context', 'source_health']),
   reverse_dns: capabilityPrivacyDetail('Resolve bounded reverse-DNS names for one public address.', ['reverse_dns_publication', 'source_health']),

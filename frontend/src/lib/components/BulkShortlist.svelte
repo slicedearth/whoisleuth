@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Pagination from '$lib/components/Pagination.svelte';
-  import type { BrowserLocalCollectionLoadState } from '$lib/browser-local-data-service';
+  import Pagination from '#lib/components/Pagination.svelte';
+  import type { BrowserLocalCollectionLoadState } from '#lib/browser-local-data-service.ts';
   let {
     domains,
     status,

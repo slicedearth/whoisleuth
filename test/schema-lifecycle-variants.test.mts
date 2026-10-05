@@ -467,8 +467,15 @@ describe('schema lifecycle variants and projections', () => {
     assert.equal(family.metadata.serialisationProfiles[0]?.indentSpaces, 0);
     assert.equal(family.metadata.serialisationProfiles[0]?.terminalLf, false);
 
+    const adaptive = familySource();
+    Object.assign(adaptive.metadata.serialisationProfiles[0], { compactFallback: true });
+    assert.equal(defineSchemaLifecycleFamily(adaptive).metadata.serialisationProfiles[0]?.compactFallback, true);
+    assert.equal(family.metadata.serialisationProfiles[0]?.compactFallback, undefined);
+
     for (const [label, mutate] of [
       ['indent', (value: any) => { value.metadata.serialisationProfiles[0].indentSpaces = 1; }],
+      ['fallback type', (value: any) => { value.metadata.serialisationProfiles[0].compactFallback = 'true'; }],
+      ['compact fallback', (value: any) => { Object.assign(value.metadata.serialisationProfiles[0], { indentSpaces: 0, compactFallback: true }); }],
       ['terminal LF', (value: any) => { value.metadata.serialisationProfiles[0].terminalLf = 'false'; }],
     ] as const) {
       const invalid = familySource();

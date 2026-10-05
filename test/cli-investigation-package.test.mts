@@ -49,7 +49,8 @@ test('CLI package creation uses atomic private binary output and verification re
     stderr = '';
     assert.equal(await runCli(['verify-artifact', destination, '--package', '--json', '--strict-exit'], dependencies), 0);
     const report = JSON.parse(stdout);
-    assert.equal(report.version, 4);
+    assert.equal(report.version, 5);
+    assert.ok(report.package.entries.every((entry: { imageDerivation: unknown }) => entry.imageDerivation === null));
     assert.equal(report.artifact.kind, 'investigation_package');
     assert.deepEqual(report.package.entries.map((entry: { state: string }) => entry.state), ['admitted', 'opaque']);
     assert.equal(report.checks.contentIntegrityScope, 'manifest_and_files');
@@ -58,6 +59,31 @@ test('CLI package creation uses atomic private binary output and verification re
     assert.equal(stderr, '');
     assert.equal(requests, 0);
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('offline package reports expose declared image edits without requiring or collecting parent bytes', async () => {
+  const imageDerivation = { method: 'png-regions-v1' as const, source: { digestSha256: `sha256:${'a'.repeat(64)}`, byteLength: 100 }, operations: ['redact', 'outline'] as const };
+  const built = await makePackage([{ content: new Uint8Array([1, 2, 3]), mediaType: 'image/png', imageDerivation }]);
+  const inspected = await inspectInvestigationPackage(built.bytes);
+  assert.equal(inspected.contents.size, 1);
+  assert.deepEqual(inspected.contents.get('artifact-1'), new Uint8Array([1, 2, 3]));
+  const report = await verifyOfflineInvestigationPackage(built.bytes);
+  assert.equal(report.state, 'verified');
+  assert.equal(report.package!.entries[0]!.state, 'opaque');
+  assert.deepEqual(report.package!.entries[0]!.imageDerivation, imageDerivation);
+  assert.deepEqual(report.package!.caseFiles, []);
+  assert.match(report.limitations.join(' '), /not proof of transformation/);
+  let output = '', requests = 0;
+  const dependencies = { readBinaryArtifactInput: () => built.bytes,
+    stdout: { write(value: string | Uint8Array) { output += String(value); } }, stderr: { write() { assert.fail('Unexpected stderr'); } },
+    runUnifiedLookup: async () => { requests++; throw new Error('Unexpected collection'); } };
+  assert.equal(await runCli(['verify-artifact', 'selected.zip', '--package', '--strict-exit'], dependencies), 0);
+  assert.match(output, /Declared image derivation: png-regions-v1; redact, outline/);
+  assert.ok(output.includes(`Parent: ${imageDerivation.source.digestSha256} · 100 bytes`));
+  output = '';
+  assert.equal(await runCli(['verify-artifact', 'selected.zip', '--package', '--json', '--strict-exit'], dependencies), 0);
+  assert.deepEqual(JSON.parse(output).package.entries[0].imageDerivation, imageDerivation);
+  assert.equal(requests, 0);
 });
 
 test('package verification separates checksum failure, unsupported JSON, opaque content and complete-source assurance', async () => {

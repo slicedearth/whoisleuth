@@ -3,7 +3,7 @@
     OFFLINE_INVESTIGATION_SCENARIOS,
     evaluateOfflineScenarioChoice,
     offlineInvestigationScenario,
-  } from '$lib/analysis/offline-investigation-scenarios.ts';
+  } from '#lib/analysis/offline-investigation-scenarios.ts';
 
   let scenarioId = $state(OFFLINE_INVESTIGATION_SCENARIOS[0]?.id ?? '');
   let stepIndex = $state(0);

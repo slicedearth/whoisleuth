@@ -36,6 +36,33 @@ function registeredLookupOptions(homepageFetcher: () => ReturnType<typeof fetchH
 }
 
 describe('website activity classification', () => {
+  test('matches parking nameservers only at valid normalised DNS boundaries', async () => {
+    const ordinaryNameservers = [
+      'ns1.afternic.example', 'ns1.uniregistry.example', 'ns1.squadhelp.example', 'ns1.namedrive.example',
+      'ns1.not-sedoparking.com', 'ns1.sedoparking.com.example', 'ns1.sedoparking.com..',
+      'https://ns1.sedoparking.com', 'ns_1.sedoparking.com', 'ns1.parKingcrew.net',
+    ];
+    const parkingNameservers = ['sedoparking.com', 'ns1.sedoparking.com', 'NS1.PARKINGCREW.NET.',
+      ' ns1.bodis.com. ', 'ns1.afternic.com', 'ns1.squadhelp.com'];
+    for (const nameserver of [...ordinaryNameservers, ...parkingNameservers]) {
+      let requests = 0;
+      const options = registeredLookupOptions(async () => {
+        requests++;
+        return fetchHomepage('example.test', { fetcher: async () => new Response('<main>Ordinary active website</main>', {
+          headers: { 'content-type': 'text/html' },
+        }) });
+      });
+      options.rdapRecord.parsed.nameservers = [nameserver];
+      const result = recordValue(await checkDomainAvailability('example.test', options));
+      const parked = parkingNameservers.includes(nameserver);
+      assert.equal(result.state, parked ? 'for_sale' : 'registered', nameserver);
+      assert.equal(result.activityStatus, parked ? 'parked' : 'active', nameserver);
+      if (parked) assert.equal(result.detail, `Detected a for-sale listing (parking nameserver (${nameserver})).`);
+      else assert.equal(result.detail, 'Domain is registered and shows no for-sale signals.');
+      assert.equal(requests, 1);
+    }
+  });
+
   test('requires contextual domain-sale evidence, not generic commerce or inert copy', async () => {
     for (const [html, expected] of [
       ['<main><h1>Used equipment</h1><button>Make an offer</button></main>', 'registered'],

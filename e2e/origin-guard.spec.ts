@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { createServer } from 'node:net';
 import { BASE_URL } from './constants.ts';
 import { ALLOWED_ORIGIN, installNetworkGuard, installBrowserGuards, isAllowedRequestOrigin, isLookupEndpointUrl, test as guardedTest } from './fixtures';
+import { holdFixtureResponse } from './held-response';
 
 guardedTest('the default context receives the service-worker block before guard installation', async ({ serviceWorkers }) => {
   expect(serviceWorkers).toBe('block');
@@ -23,6 +24,28 @@ guardedTest('offline collection interceptors match both query-bearing and body-b
   for (const url of ['https://example.invalid/api/lookup?q=fixture.example.test', `${ALLOWED_ORIGIN}/api/lookup-extra`, `${ALLOWED_ORIGIN}/api/lookup/other`]) {
     expect(isLookupEndpointUrl(url)).toBe(false);
   }
+});
+
+guardedTest('released response fixtures fall through without removing in-flight page interception', async ({ page }) => {
+  const matches = (url: URL) => url.pathname === '/fixture-held-response';
+  let fallbackRequests = 0;
+  await page.route(url => url.origin === ALLOWED_ORIGIN && matches(url), async route => {
+    fallbackRequests++;
+    await route.fulfill({ json: { source: 'fallback' } });
+  });
+  await page.goto('/dashboard');
+  const request = () => page.evaluate(() => fetch('/fixture-held-response').then(response => response.json()));
+
+  for (const source of ['first', 'second']) {
+    const held = await holdFixtureResponse(page, matches, { json: { source } });
+    const response = request();
+    await held.received;
+    await held.release();
+    expect(await response).toEqual({ source });
+    await held.release();
+    expect(await request()).toEqual({ source: 'fallback' });
+  }
+  expect(fallbackRequests).toBe(2);
 });
 
 // Exercises the predicate every spec's automatic network guard

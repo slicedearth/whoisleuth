@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { describe, test } from 'node:test';
 
 import fixtures from '../fixtures/whois-registry-fixtures.mts';
@@ -10,6 +11,31 @@ function escaped(value: string): string {
 }
 
 describe('WHOIS registry compatibility fixtures', () => {
+  test('reads bare nameserver headers without accepting trailing non-header text', () => {
+    for (const header of ['Nameservers', 'Name Servers:', '  * Nameservers ... :\t', '\tDomain Servers...', 'DNS servers : ']) {
+      const parsed = parseWhoisChain([{ server: 'whois.iana.org', response: '' }, { server: 'whois.example.test', response: `${header}\n ns1.example.test\n ns2.example.test 192.0.2.1\n\n` }]);
+      assert.deepEqual(parsed.nameservers, ['ns1.example.test', 'ns2.example.test'], header);
+    }
+    for (const header of ['Nameservers!', 'Nameservers   !', 'Nameservers: invalid']) {
+      const parsed = parseWhoisChain([{ server: 'whois.iana.org', response: '' }, { server: 'whois.example.test', response: `${header}\n ns1.example.test\n` }]);
+      assert.deepEqual(parsed.nameservers, [], header);
+    }
+    assert.deepEqual(parseWhoisChain([{ server: 'whois.iana.org', response: 'Nameservers\n ns1.example.test\n' }]).nameservers, []);
+  });
+
+  test('finishes increasing hostile whitespace through the complete parser within an isolated execution bound', () => {
+    // A subprocess deadline can stop a synchronous parser regression. This is
+    // a resource guard, not a machine-specific latency or scaling benchmark.
+    execFileSync(process.execPath, ['--input-type=module', '-e', `
+      import assert from 'node:assert/strict';
+      import { parseWhoisChain } from ${JSON.stringify(new URL('../lib/whois-parser.mts', import.meta.url).href)};
+      for (const size of [2000, 8000, 32000, 128000]) {
+        const response = 'Nameservers' + ' '.repeat(size) + '!\\n ns1.example.test\\n';
+        assert.deepEqual(parseWhoisChain([{ server: 'whois.iana.org', response: '' }, { server: 'whois.example.test', response }]).nameservers, []);
+      }
+    `], { timeout: 5000, stdio: 'pipe' });
+  });
+
   test('preserves every parser family across protocol CRLF and LF without mutating the source', () => {
     for (const fixture of fixtures) {
       const chain = fixture.chain.map(hop => ({ ...hop, response: hop.response.replace(/\r?\n/g, '\r\n') }));
