@@ -536,6 +536,7 @@ test('measures a deferred large synthetic public example without collection', as
     path: '/examples',
     prepare: async () => {
       await page.goto('/examples');
+      await expect(disclosure).toBeEnabled();
       await expect(output).toHaveCount(0);
     },
     action: async () => {

@@ -497,16 +497,42 @@ test('a cached CLI module failure recovers only after the accessible reload acti
 
 test('public examples and demo stages terminate failed module activation with reload recovery', async ({ page }) => {
   const examplesChunk = productionChunkPath('src/lib/generated/public-example-outputs/case-handoff.ts');
-  await failChunkOnce(page, examplesChunk);
-  await page.goto('/examples');
+  const exampleRequests = await failChunkOnce(page, examplesChunk);
+  let releaseScripts = () => {};
+  const scriptsReleased = new Promise<void>((resolve) => { releaseScripts = resolve; });
+  let heldScripts = 0;
+  await page.route('**/_app/**', async (route) => {
+    if (route.request().resourceType() === 'script') {
+      heldScripts += 1;
+      await scriptsReleased;
+    }
+    await route.fallback();
+  });
+  const gallery = page.getByTestId('public-example-gallery');
   const example = page.locator('article[data-example="case-handoff"]');
   const exampleButton = example.locator(':scope > button');
+  try {
+    await page.goto('/examples', { waitUntil: 'commit' });
+    await expect.poll(() => heldScripts).toBeGreaterThan(0);
+    await expect(gallery.getByRole('heading', { name: 'Open a synthetic format' })).toBeVisible();
+    await expect(gallery.getByRole('combobox', { name: 'Example type', exact: true })).toBeDisabled();
+    await expect(gallery.getByRole('combobox', { name: 'Format', exact: true })).toBeDisabled();
+    await expect(exampleButton).toBeDisabled();
+    expect(exampleRequests()).toBe(0);
+  } finally {
+    releaseScripts();
+  }
+  await expect(gallery.getByRole('combobox', { name: 'Example type', exact: true })).toBeEnabled();
+  await expect(gallery.getByRole('combobox', { name: 'Format', exact: true })).toBeEnabled();
+  await expect(exampleButton).toBeEnabled();
   await exampleButton.focus();
+  await expect(exampleButton).toBeFocused();
   await page.keyboard.press('Enter');
   const examplesAlert = page.getByRole('alert').filter({ hasText: 'The synthetic example is unavailable.' });
   await expect(examplesAlert).toBeVisible();
   await expect(examplesAlert.getByRole('button', { name: 'Reload page' })).toBeVisible();
   await expect(exampleButton).toBeDisabled();
+  expect(exampleRequests()).toBe(1);
 
   const demoChunk = productionChunkPath('src/lib/components/demo-stages/brands.ts');
   await failChunkOnce(page, demoChunk);
