@@ -130,7 +130,8 @@ test('literal plaintext and MIME HTML retain their distinct indicator extraction
   assert.deepEqual(intakeIndicators(html.report).map(item => item.value), ['192.0.2.19']);
   assert.deepEqual(plain.targets, []);
   assert.deepEqual(html.targets, []);
-  assert.doesNotMatch(JSON.stringify(plain.report) + JSON.stringify(html.report), /<script>|<style>/u);
+  for (const report of [plain.report, html.report])
+    assert.equal(JSON.stringify(report).includes('<'), false, 'The review must omit supplied markup in either text mode.');
 });
 
 test('indicator bounds stop accumulation and mark independent partial coverage', () => {
