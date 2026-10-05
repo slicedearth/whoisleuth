@@ -121,14 +121,24 @@
     if (!article) return;
     let width = window.innerWidth;
     const focus = keepFocusBelow(article, () => navigation);
-    const resize = new ResizeObserver(() => {
-      article.style.setProperty('--case-navigation-height', `${navigation.getBoundingClientRect().height}px`);
+    let frame: number | null = null;
+    const refresh = () => {
+      frame = null;
+      const height = `${navigation.getBoundingClientRect().height}px`;
+      if (article.style.getPropertyValue('--case-navigation-height') !== height) {
+        article.style.setProperty('--case-navigation-height', height);
+      }
       if (width !== window.innerWidth) { readingPositions.clear(); width = window.innerWidth; }
       focus.reveal();
+    };
+    const resize = new ResizeObserver(() => {
+      // Layout writes and focus scrolling must not re-enter resize delivery.
+      if (frame === null) frame = requestAnimationFrame(refresh);
     });
     resize.observe(navigation);
     return { destroy() {
       resize.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
       focus.destroy();
       article.style.removeProperty('--case-navigation-height');
     } };
