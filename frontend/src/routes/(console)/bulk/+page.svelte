@@ -757,6 +757,7 @@
         'Loaded the guided-investigation target. Add only relevant comparison domains before scanning.';
     }
     const loadResults = await Promise.allSettled([activeProfile()]);
+    if (moduleController.signal.aborted) return;
     const [profileResult] = loadResults;
     if (profileResult.status === 'fulfilled') {
       profile = profileResult.value;
@@ -796,6 +797,9 @@
       candidateState && (!investigationTarget || candidateState.guideContext === guideContext)
         ? candidateState
         : null;
+    // Keep the previous snapshot authoritative until profile reconciliation
+    // has admitted its rows. An empty controller is only a loading placeholder.
+    let restorationPending = restored !== null;
     if (restored) {
       setDomainInput(restored.input);
       sessionWorkspace.restoreInput(restored.resultInput ?? null);
@@ -810,6 +814,8 @@
     }
     void initializeLocalContext(handoffNavigation, investigationTarget, restored).finally(
       async () => {
+        if (moduleController.signal.aborted) return;
+        restorationPending = false;
         if (routePage.url.hash !== '#bulk-sessions-title') return;
         workspaceToolsOpen = true;
         workspaceTool = 'sessions';
@@ -826,6 +832,7 @@
       shortlistWorkspace.dispose();
       const wasRunning = scan.running;
       scanController.dispose();
+      if (restorationPending) return;
       const retainedResults = scanController.results;
       const retainedProfileContext = retainedResults.length
         ? summarizeBulkProfileContexts(

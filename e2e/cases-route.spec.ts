@@ -136,6 +136,12 @@ test('Case note and tag saves preserve later drafts and conditional undo does no
   const undo = page.getByRole('region', { name: 'Undo analyst change' });
   await expect(undo).toBeVisible();
   await expect(tags).toHaveValue('later-tag-draft');
+  page.once('dialog', async dialog => { expect(dialog.message()).toContain('Case edits are not saved'); await dialog.dismiss(); });
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+  await expect(tags).toHaveValue('later-tag-draft');
+  await openCaseSection(page, 'History');
+  await expect(note).toHaveValue('Later note draft');
+  page.once('dialog', async dialog => { expect(dialog.message()).toContain('Case edits are not saved'); await dialog.accept(); });
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   await page.locator('.case-head', { hasText: 'other-editor.example' }).click();
   await openCaseMetadata(page);

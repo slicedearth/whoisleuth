@@ -7,6 +7,7 @@ import {
   expectNoHorizontalOverflow,
   useTheme,
   failNextBrowserLocalCollectionReadAfterWrite,
+  failNextBrowserLocalManifestWrite,
   currentBrowserLocalDocument,
   currentBulkSessionBrowserStore,
   holdBrowserLocalTransaction,
@@ -75,6 +76,27 @@ async function seed(page: import('@playwright/test').Page, extra: Record<string,
   ).toBeEnabled();
   return workspace;
 }
+
+test('a rejected candidate decision preserves its selection and permits a deliberate retry', async ({ page }) => {
+  const workspace = await seed(page);
+  const selected = workspace.getByRole('checkbox', { name: candidate.domain, exact: true });
+  await selected.check();
+  const reason = workspace.getByLabel('Reason', { exact: true });
+  await reason.fill('Review the exact nominated candidate.');
+  await workspace.getByLabel('Next review / expiry date (UTC)', { exact: true }).fill('2099-01-01');
+  await failNextBrowserLocalManifestWrite(page, 'analyst_review_state');
+  const save = workspace.getByRole('button', { name: 'Defer selected until review', exact: true });
+  await save.click();
+  const status = workspace.getByRole('status', { name: 'Candidate review action status' });
+  await expect(status).toContainText('0 decisions confirmed saved; 1 decision was not saved; 0 candidates were not attempted');
+  await expect(selected).toBeChecked();
+  await expect(reason).toHaveValue('Review the exact nominated candidate.');
+  await expect(save).toBeEnabled();
+  expect((await readBrowserLocalCollection(page, 'analyst_review_state')).records).toEqual([]);
+  await save.click();
+  await expect(status).toContainText('1 exact Brand candidate decisions recorded');
+  expect((await readBrowserLocalCollection(page, 'analyst_review_state')).records).toHaveLength(1);
+});
 
 test('candidate nomination preserves full Shortlist evidence and a concurrent observed refresh', { tag: '@timing-sensitive' }, async ({ page, context }) => {
   const session = richBulkSessionStore(1).sessions[0]!;

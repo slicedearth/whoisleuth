@@ -90,7 +90,9 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
   let newDomain = $state('');
   let openingCase = $state(false);
   let incidentDraftDirty = $state(false);
-  trackTransientCaseDraft(() => incidentDraftDirty);
+  trackTransientCaseDraft(() => incidentDraftDirty || Boolean(expandedId && (
+    noteDraft.length || tagDraft !== tagExpected.join(', ')
+  )));
   let incidentOpeningIntent: (() => boolean) | null = null;
   let calibrationCaseIds = $state<string[]>([]);
   let calibrationReview = $state.raw<RiskCalibrationExportPreview | null>(null);

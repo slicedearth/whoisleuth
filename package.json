@@ -3,7 +3,7 @@
   "version": "2.6.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "Open-source, local-first domain intelligence and brand-protection console for WHOIS, RDAP, DNS, certificate transparency, lookalike domains, and web evidence.",
+  "description": "Open-source, local-first domain intelligence and brand protection console for WHOIS, RDAP, DNS, certificate transparency, lookalike domains, and web evidence.",
   "keywords": [
     "whois",
     "rdap",

@@ -203,9 +203,12 @@
   })));
   const selectedCandidates = $derived(candidates.filter((c) => selected.has(c.domain)));
   let retainingCandidates = $state(false);
+  let mounted = false;
   async function retainSelectedCandidates() {
     if (!profile || profileSourceState !== 'ready' || retainingCandidates) return;
     const selectedProfile = profile;
+    const submittedCandidates = candidates;
+    const submittedSelection = selected;
     const submitted = [...selectedCandidates];
     const observedAt = new Date().toISOString();
     retainingCandidates = true;
@@ -214,7 +217,8 @@
       const unretained = submitted.filter(candidate => !observations.some(observation => observation.domain === candidate.domain));
       const outcomes = await retainBrandCandidates(selectedProfile.id, observations);
       status = `${outcomes.filter(row => row.state === 'retained').length} candidate domains retained for Brand review; ${outcomes.filter(row => row.state === 'rejected').length + unretained.length} rejected. No collection was authorised.${unretained.length ? ` Matching/provenance bound rejected: ${unretained.map(candidate => candidate.domain).join(', ')}.` : ''}${outcomes.some(row => row.state === 'rejected') ? ` Rejected: ${outcomes.filter(row => row.state === 'rejected').map(row => `${row.domain}: ${row.reason}`).join('; ')}.` : ''}`;
-      if (!unretained.length && outcomes.every(row => row.state === 'retained')) await goto('/brands#brand-candidate-review');
+      if (mounted && profile === selectedProfile && candidates === submittedCandidates && selected === submittedSelection
+        && !unretained.length && outcomes.every(row => row.state === 'retained')) await goto('/brands#brand-candidate-review');
     } catch (cause) { error = cause instanceof Error ? cause.message : 'The selected candidate provenance could not be retained.'; }
     finally { retainingCandidates = false; }
   }
@@ -228,6 +232,7 @@
   );
 
   onMount(() => {
+    mounted = true;
     void (async()=>{
     const [profileResult,historyResult]=await Promise.allSettled([activeProfile(),loadCtHistory()]);
     if(profileResult.status==='fulfilled'){profile=profileResult.value;profileSourceState='ready';}
@@ -239,7 +244,7 @@
     const guidedDomain = normalizeInvestigationGuideDomain(new URL(window.location.href).searchParams.get('q'));
     if (guidedDomain) seed = guidedDomain;
     })();
-    return cancelHostedSearch;
+    return () => { mounted = false; cancelHostedSearch(); };
   });
 
   function referenceDomainsForCandidate(candidate: Candidate): string[] {

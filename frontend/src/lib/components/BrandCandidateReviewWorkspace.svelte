@@ -27,6 +27,7 @@
     type CandidateWatchPlan,
   } from '../../../../packages/workspace/candidate-watch-handoff.mts';
   import { subscribeBrowserLocalData } from '#lib/browser-local-data-service.ts';
+  import { failedLocalMutationOutcome } from '#lib/local-mutation-outcome.ts';
 
   let {
     active,
@@ -38,6 +39,7 @@
   let ready = $state(false),
     busy = $state(false),
     message = $state('');
+  let commitUncertain = $state(false);
   let selected = $state<Set<string>>(new Set()),
     filter = $state('all'),
     name = $state(''),
@@ -75,7 +77,7 @@
   async function refresh() {
     try {
       [watchlists, reviewState] = await Promise.all([loadWatchlists(), loadAnalystReviewState()]);
-      ready = true;
+      ready = !commitUncertain;
     } catch (cause) {
       ready = false;
       message =
@@ -166,7 +168,7 @@
     }
   }
   async function review(disposition: 'suppressed' | 'expected') {
-    if (busy || !chosen.length) return;
+    if (busy || disabled || !ready || !chosen.length) return;
     if (!reason.trim() || !reviewDate) {
       message = 'A reason and future review/expiry date are required.';
       return;
@@ -191,7 +193,12 @@
       message = `${committed} exact Brand candidate decisions recorded. Expiry or changed material provenance returns them to review.`;
       await refresh();
     } catch (cause) {
-      message = `${committed} decisions committed; remaining candidates were not changed. ${cause instanceof Error ? cause.message : 'Review save failed.'}`;
+      const unknown = failedLocalMutationOutcome(cause) === 'unknown';
+      const unattempted = submitted.length - committed - 1;
+      if (unknown) { commitUncertain = true; ready = false; }
+      message = `${committed} ${committed === 1 ? 'decision' : 'decisions'} confirmed saved; ${unknown ? '1 decision may have been saved' : '1 decision was not saved'}; ${unattempted} ${unattempted === 1 ? 'candidate was' : 'candidates were'} not attempted. ${unknown
+        ? 'Reload and review the saved decisions before making another change. Your current selection and reason remain here until you reload.'
+        : cause instanceof Error ? cause.message : 'Review save failed.'}`;
     } finally {
       busy = false;
     }
@@ -277,10 +284,11 @@
   >
   {#if message}<p bind:this={actionStatus} tabindex="-1" role="status" aria-label="Candidate review action status" aria-live="polite">{message}</p>{/if}
   {#if disabled}<p>The saved Brand context is being reconciled or is unavailable. This last-readable review and its drafts remain visible; mutations are disabled.</p>{/if}
-  {#if !ready}<p
+  {#if commitUncertain}<button class="btn" onclick={() => window.location.reload()}>Reload saved decisions</button>
+  {:else if !ready}<p
       >Saved watch and review context is unavailable or loading. Mutations remain disabled.</p
     >{/if}
-  <BrandKeywordCampaigns {active} {onrefresh} disabled={disabled || busy} />
+  <BrandKeywordCampaigns {active} {onrefresh} disabled={disabled || busy || commitUncertain} />
   <DomainFeedCandidateIntake {active} {onrefresh} disabled={disabled || !ready || busy} />
   <label
     >Candidate filter<select bind:value={filter}

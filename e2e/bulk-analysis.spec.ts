@@ -16,6 +16,48 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/bulk');
 });
 
+test('interrupted profile restoration preserves transient Bulk rows without reusing unverified trust or collecting again', { tag: '@timing-sensitive' }, async ({ page }) => {
+  const requests: string[] = [];
+  await page.route('**/api/lookup?*', async route => {
+    const domain = new URL(route.request().url()).searchParams.get('q')!;
+    requests.push(domain);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      availability: { applicable: true, domain, state: 'registered', confidence: 'high', registrarName: 'Retained fixture registrar' },
+      diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+    }) });
+  });
+  await runBulkScan(page, ['retained-navigation.example']);
+  const nav = page.locator('#console-navigation');
+  await nav.getByRole('link', { name: /^Dashboard/u }).click();
+  await expect(page).toHaveURL('/dashboard');
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const release = await holdBrowserLocalTransaction(page);
+    try {
+      await nav.getByRole('link', { name: /^Bulk/u }).click();
+      await expect(page).toHaveURL('/bulk');
+      await expect(page.locator('#domains')).toHaveValue('retained-navigation.example');
+      await expect(page.locator('#results')).toHaveCount(0);
+      await nav.getByRole('link', { name: /^Dashboard/u }).click();
+      await expect(page).toHaveURL('/dashboard');
+    } finally { await release(); }
+  }
+  await failBrowserLocalCollectionReads(page, 'brand_profiles');
+  await nav.getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.locator('#results')).toContainText('retained-navigation.example');
+  await expect(page.locator('.status')).toContainText('Withheld profile-derived trust');
+  expect(requests).toEqual(['retained-navigation.example']);
+  // An explicit new collection must supersede the old restoration snapshot.
+  await page.locator('#domains').fill('replacement-navigation.example');
+  await page.getByRole('button', { name: 'Scan 1 domain', exact: true }).click();
+  await expect(page.locator('.status')).toContainText('Completed 1 of 1 lookups. Brand Profile context was unavailable');
+  await nav.getByRole('link', { name: /^Dashboard/u }).click();
+  await expect(page).toHaveURL('/dashboard');
+  await nav.getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.locator('#results')).toContainText('replacement-navigation.example');
+  await expect(page.locator('#results')).not.toContainText('retained-navigation.example');
+  expect(requests).toEqual(['retained-navigation.example', 'replacement-navigation.example']);
+});
+
 test('single-row Monitor saves preserve another domain and its baseline when a name is reused', async ({ page }) => {
   const requests: string[] = [];
   await page.route('**/api/lookup?*', async route => {

@@ -1,9 +1,9 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
-import { openCaseSection } from './console-navigation';
+import { openCaseMetadata, openCaseSection } from './console-navigation';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { productionChunkPath } from './production-build';
-import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
+import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 
 async function seedCases(page: import('@playwright/test').Page, destination = '/cases') {
   await page.goto('/cases');
@@ -13,6 +13,57 @@ async function seedCases(page: import('@playwright/test').Page, destination = '/
       caseRecord({ id: 'workspace-second', domain: 'second-work.example' }),
     ] }),
   }, { destination });
+}
+
+for (const kind of ['note', 'tags'] as const) {
+  test(`ordinary Case ${kind} drafts protect exits, survive failed saves and clear only after save or discard`, async ({ page }) => {
+    await page.setViewportSize(kind === 'note' ? { width: 390, height: 844 } : { width: 1280, height: 720 });
+    await seedCases(page, '/cases?case=workspace-first');
+    await useTheme(page, kind === 'note' ? 'light' : 'dark');
+    const edit = async () => { if (kind === 'note') await openCaseSection(page, 'History'); else await openCaseMetadata(page); };
+    await edit();
+    const input = page.getByRole('textbox', { name: kind === 'note' ? 'Add note' : /^Additional tags/u, exact: kind === 'note' });
+    const submit = page.getByRole('button', { name: kind === 'note' ? 'Add note' : 'Save tags', exact: true });
+    const draft = kind === 'note' ? 'Exact unsaved note.\nSecond line.' : 'first-tag, second-tag';
+    const prompts: string[] = [];
+    let discard = false;
+    page.on('dialog', async dialog => { prompts.push(dialog.message()); await (discard ? dialog.accept() : dialog.dismiss()); });
+    await input.fill(draft);
+    await openCaseSection(page, 'Evidence');
+    await edit();
+    expect(prompts).toEqual([]);
+    await expect(input).toHaveValue(draft);
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await expect.poll(() => prompts.length).toBe(1);
+    await expect(input).toHaveValue(draft);
+    await page.getByRole('link', { name: 'Review follow-up', exact: true }).click();
+    await expect.poll(() => prompts.length).toBe(2);
+    await expect(input).toHaveValue(draft);
+    await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect.poll(() => prompts.length).toBe(3);
+    await expect(input).toHaveValue(draft);
+    await failNextBrowserLocalManifestWrite(page, 'cases');
+    await submit.click();
+    await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText(/could not save/iu);
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await expect.poll(() => prompts.length).toBe(4);
+    await expect(input).toHaveValue(draft);
+    await submit.click();
+    await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText(kind === 'note' ? 'Added a note' : 'Updated tags');
+    await expect(input).toHaveValue(kind === 'note' ? '' : draft);
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await expect(page).toHaveURL('/cases');
+    expect(prompts).toHaveLength(4);
+    await page.locator('#case-head-workspace-first').click();
+    await edit(); await input.fill('Deliberately discarded draft');
+    discard = true;
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await expect(page).toHaveURL('/cases');
+    expect(prompts).toHaveLength(5);
+    await page.locator('#case-head-workspace-second').click();
+    await edit(); await expect(input).toHaveValue('');
+    await expectNoHorizontalOverflow(page);
+  });
 }
 
 for (const [section, preserveLaterFocus] of [
@@ -214,6 +265,7 @@ test('legacy response deep links still open the packet and Case follow-up keeps 
   await expect(page.locator('#case-response-preflight-workspace-first > summary')).toBeInViewport({ ratio: 1 });
   await page.goForward();
   await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('Keep this draft through response navigation');
+  page.once('dialog', async dialog => { expect(dialog.message()).toContain('Case edits are not saved'); await dialog.accept(); });
   await page.getByRole('link', { name: 'Review follow-up', exact: true }).click();
   await expect(page).toHaveURL('/monitor?view=inbox&queue=all&case-review=workspace-first');
   const inbox = page.getByRole('region', { name: 'Review inbox', exact: true });

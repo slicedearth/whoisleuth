@@ -10,7 +10,7 @@
   <a href="https://app.netlify.com/projects/whoisleuth/deploys"><img src="https://api.netlify.com/api/v1/badges/600adb21-cece-4a13-8df8-d177ace3d945/deploy-status" alt="Netlify status" /></a>
 </p>
 
-WHOISleuth is a local-first domain investigation and brand-protection tool. It
+WHOISleuth is a local-first domain investigation and brand protection tool. It
 keeps registration, DNS, certificate, website, network and analyst evidence
 separately attributed, including unavailable and partial sources.
 
