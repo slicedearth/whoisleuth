@@ -14,8 +14,10 @@ export async function holdFixtureResponse(
   let finish = () => {};
   const handled = new Promise<void>(resolve => { finish = resolve; });
   let calls = 0;
+  let released = false;
   let failure: unknown;
   const handler = async (route: Route) => {
+    if (released) { await route.fallback(); return; }
     calls += 1;
     if (calls !== 1) throw new Error('The held fixture received more than one request.');
     const request = route.request();
@@ -35,7 +37,10 @@ export async function holdFixtureResponse(
       release();
       await handled;
       if (failure) throw failure;
-      await page.unroute(routeMatch, handler);
+      // Keep interception stable while other page requests fall through to
+      // the context guard. Removing a page route mid-navigation can advance
+      // those in-flight routes twice. The context owns final route cleanup.
+      released = true;
     },
   };
 }
