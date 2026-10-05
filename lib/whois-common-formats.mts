@@ -249,7 +249,9 @@ function applyWhoisCommonFormats(
   // sometimes just a hostname, sometimes "hostname  ip.addr" - rather
   // than a per-line "Name Server:" label. Only meaningful on non-root hops.
   if (!isRootHop && nameservers.size === 0) {
-    const headerMatch = text.match(/^[ \t*]*(?:Name ?[Ss]ervers|Domain Servers|DNS servers)[ \t.]*:?[ \t]*$/mi);
+    // Whitespace after a colon belongs to that colon: two independent runs
+    // around an optional colon allow quadratic backtracking on invalid lines.
+    const headerMatch = text.match(/^[ \t*]*(?:Name ?[Ss]ervers|Domain Servers|DNS servers)[ \t.]*(?::[ \t]*)?$/mi);
     if (headerMatch) {
       let found = 0;
       for (const line of text.slice((headerMatch.index ?? 0) + headerMatch[0].length).split('\n')) {
