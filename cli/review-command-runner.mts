@@ -313,8 +313,9 @@ async function runOfflineEvidenceReviewCommand(
     'review-evidence requires one JSON file or a document on stdin.',
   );
   const document = args.mmdbSource
-    ? await buildOfflineEvidenceReviewWithLocalResources(input, context.now(), { mmdbPath: args.mmdbSource })
+    ? await buildOfflineEvidenceReviewWithLocalResources(input, context.now(), { mmdbPath: args.mmdbSource, ...(dependencies.signal ? { signal: dependencies.signal } : {}) })
     : buildOfflineEvidenceReview(input, context.now());
+  dependencies.signal?.throwIfAborted();
   writeReviewReport(context, args, document, formatOfflineEvidenceReview);
   if (args.strictExit) {
     const result = document.result && typeof document.result === 'object' && !Array.isArray(document.result)

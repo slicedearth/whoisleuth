@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { link, open, rename, unlink, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
@@ -16,6 +16,7 @@ import { buildCliLookupTimeline, formatCliLookupTimeline } from '../cli/lookup-t
 import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../cli/investigation-manifest.mts';
 import { CLI_PROGRESS_EVENT_SCHEMA, CLI_PROGRESS_EVENT_VERSION, createCliProgressEvents } from '../cli/progress-events.mts';
 import { runCli } from '../cli/runner.mts';
+import { writePrivateFile } from '../cli/output-file.mts';
 import { lookupStrictExitFindings } from '../cli/strict-exit.mts';
 import type { BulkLookupResult } from '../cli/bulk.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
@@ -564,6 +565,40 @@ describe('safe local output', () => {
     assert.equal(code, EXIT_CODES.CANCELLED);
     assert.equal(saveCalls, 0);
   });
+
+  for (const phase of ['before-publication', 'after-publication', 'not-cancelled'] as const) {
+    test(`browser Lookup save honours the publication boundary (${phase})`, async () => {
+      const directory = await mkdtemp(join(tmpdir(), 'whoisleuth-lookup-publication-'));
+      const destination = join(directory, 'lookup.json');
+      const controller = new AbortController(), entered = deferred<void>(), release = deferred<void>();
+      const stderr = capture();
+      let publications = 0;
+      try {
+        const pending = runCli(['lookup', 'example.test', '--browse', '--save-lookup', destination], {
+          stdout: capture().stream, stderr: stderr.stream, signal: controller.signal, canBrowseLookup: () => true,
+          classifyQuery: () => classifiedDomain('example.test'), runUnifiedLookup: async () => lookupResult('example.test'),
+          browseLookupOperation: async options => options.collect!({ signal: controller.signal, onSourceSettled: () => {} }),
+          writePrivateFile: (path, content, options) => writePrivateFile(path, content, options, {
+            randomUUID, rename, unlink,
+            open: async (...args) => {
+              const handle = await open(...args);
+              return { writeFile: async (...writeArgs) => { await handle.writeFile(...writeArgs); entered.resolve(); await release.promise; },
+                sync: () => handle.sync(), close: () => handle.close() };
+            },
+            link: async (...args) => { await link(...args); publications++; if (phase === 'after-publication') controller.abort(); },
+          }),
+        });
+        await entered.promise;
+        if (phase === 'before-publication') controller.abort();
+        release.resolve();
+        assert.equal(await pending, phase === 'before-publication' ? EXIT_CODES.CANCELLED : EXIT_CODES.SUCCESS);
+        assert.equal(publications, phase === 'before-publication' ? 0 : 1);
+        assert.deepEqual(await readdir(directory), phase === 'before-publication' ? [] : ['lookup.json']);
+        if (phase === 'before-publication') assert.equal(stderr.value(), 'Cancelled by analyst.\n');
+        else { assert.match(stderr.value(), /Saved the completed private Lookup JSON/u); assert.equal((await stat(destination)).mode & 0o777, 0o600); }
+      } finally { release.resolve(); await rm(directory, { recursive: true, force: true }); }
+    });
+  }
 });
 
 describe('strict exit and machine progress events', () => {

@@ -192,7 +192,7 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
 async function buildOfflineEvidenceReviewWithLocalResources(
   value: unknown,
   generatedAt = new Date().toISOString(),
-  options: Readonly<{ mmdbPath?: string | null }> = {},
+  options: Readonly<{ mmdbPath?: string | null; signal?: AbortSignal }> = {},
 ) {
   const input = parseInput(value);
   if (input.schema !== LOCAL_MMDB_QUERY_SCHEMA) return buildOfflineEvidenceReview(value, generatedAt);
@@ -202,7 +202,7 @@ async function buildOfflineEvidenceReviewWithLocalResources(
     version: OFFLINE_EVIDENCE_REVIEW_VERSION,
     generatedAt,
     kind: 'geoip' as const,
-    result: await reviewLocalMmdb(input, options.mmdbPath, generatedAt),
+    result: await reviewLocalMmdb(input, options.mmdbPath, generatedAt, options.signal ? { signal: options.signal } : {}),
     limitations: Object.freeze([
       'The review is local and uses only the supplied query metadata and analyst-supplied database. It does not transmit the address or refresh the database.',
     ]),
