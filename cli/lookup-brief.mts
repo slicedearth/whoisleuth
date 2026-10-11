@@ -255,22 +255,28 @@ export function buildCliLookupBrief(input: string, generatedAt = new Date().toIS
 }
 
 export function formatCliLookupBrief(document: ReturnType<typeof buildCliLookupBrief>): string {
+  const sourceFacts = document.sourceHealth.flatMap((source) => {
+    const facts = document.facts.filter((item) => item.source.id === source.id);
+    return [
+      `  ${safeTerminalValue(source.label)} [${safeTerminalValue(source.state)}; ${source.observedAt ? `observed ${safeTerminalValue(source.observedAt)}` : 'source time not recorded'}]`,
+      ...(facts.length
+        ? facts.map((item) => `    ${safeTerminalValue(item.label)}: ${safeTerminalValue(item.value)}`)
+        : ['    No fact selected for this brief.']),
+    ];
+  });
   return [
     `Lookup brief: ${safeTerminalValue(document.target)}`,
     `Observed  ${safeTerminalValue(document.observedAt)}`,
     `Mode      ${safeTerminalValue(document.mode)}`,
     '',
     'Source-attributed facts',
-    ...(document.facts.length ? document.facts.map((item) => `  ${safeTerminalValue(item.label)}: ${safeTerminalValue(item.value)} (${safeTerminalValue(item.source.label)}; ${safeTerminalValue(item.source.state)}; ${item.source.observedAt ? `observed ${safeTerminalValue(item.source.observedAt)}` : 'source time not recorded'})`) : ['  No bounded fact was available.']),
+    ...sourceFacts,
     '',
     'Contradictions',
     ...(document.contradictions.length ? document.contradictions.flatMap((item) => [
       `  ${safeTerminalValue(item.field)}: ${safeTerminalValue(item.detail)}`,
-      ...item.observations.map((observation) => `    ${safeTerminalValue(observation.source.label)}: ${safeTerminalValue(observation.value)} (${safeTerminalValue(observation.state)}; ${observation.source.observedAt ? `observed ${safeTerminalValue(observation.source.observedAt)}` : 'source time not recorded'})`),
+      ...item.observations.map((observation) => `    ${safeTerminalValue(observation.source.label)}: ${safeTerminalValue(observation.value)} (value state: ${safeTerminalValue(observation.state)}; source state: ${safeTerminalValue(observation.source.state)}; ${observation.source.observedAt ? `observed ${safeTerminalValue(observation.source.observedAt)}` : 'source time not recorded'})`),
     ]) : ['  No conflicting publication field was retained.']),
-    '',
-    'Unknown or incomplete',
-    ...(document.unknowns.length ? document.unknowns.map((item) => `  ${safeTerminalValue(item)}`) : ['  No incomplete source state was identified.']),
     '',
     'Recommended manual actions',
     ...document.actionPlan.flatMap((item, index) => [

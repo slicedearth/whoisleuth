@@ -715,6 +715,13 @@ options override profile defaults.
 and Bulk output. Raw publications and extension fields are not interpreted as
 diagnostics, and missing health metadata remains unmeasured.
 
+The text output of `brief` groups selected facts in an indented source tree.
+Each source keeps its collection state and observation time, including sources
+with no fact selected for the brief; that does not mean the source was empty.
+Conflicting values remain separate and include both the value state and source
+state. The brief uses retained evidence only. Use `--json` for the
+structured report, including its facts, source health, unknowns and action plan.
+
 `mail-review` keeps failed input targets, incomplete DNS coverage and original
 collection times visible. Source-output and review-generation times do not
 stand in for missing observation times. `domain-change` and
