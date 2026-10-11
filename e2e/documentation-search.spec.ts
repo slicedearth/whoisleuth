@@ -3,6 +3,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
 import { documentationSearchDocuments } from '../frontend/src/lib/documentation-search';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 test('the console palette searches documentation without reading saved work or retaining the query', async ({ page }) => {
   await page.goto('/dashboard');
@@ -147,4 +149,110 @@ test('guide printing includes disclosed reference text and restores the reading 
   await page.emulateMedia({ media: 'screen' });
   await expect(page.locator('#glossary')).not.toHaveAttribute('open', '');
   await expect(page.locator('#tool-monitor')).toHaveAttribute('open', '');
+});
+
+test('methodology field cards print independently without saved work and restore the reading state', async ({ page, browserName }, testInfo) => {
+  const collectionRequests: string[] = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) collectionRequests.push(path);
+  });
+  await page.addInitScript(() => {
+    const accesses: string[] = [];
+    Reflect.set(window, 'fieldCardStorageAccess', accesses);
+    IDBFactory.prototype.open = function(name) { accesses.push(`open:${name}`); throw new Error('Public reference must not open saved work'); };
+    IDBFactory.prototype.deleteDatabase = function(name) { accesses.push(`delete:${name}`); throw new Error('Public reference must not delete saved work'); };
+    localStorage.setItem('saved-work-sentinel', 'Private Case sentinel');
+    sessionStorage.setItem('saved-work-sentinel', 'Private draft sentinel');
+  });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/methodology');
+  const print = page.getByRole('button', { name: 'Print this guide', exact: true });
+  await expect(print).toBeEnabled();
+  const disclosure = page.locator('#analyst-field-cards');
+  const toggle = disclosure.locator('summary');
+  const choice = disclosure.getByRole('checkbox', { name: 'Print field cards only', includeHidden: true });
+  const cards = page.getByRole('region', { name: 'Printable analyst reference', includeHidden: true });
+  const authority = page.getByRole('heading', { name: 'Authority-aware registration decisions', includeHidden: true });
+  await expect(disclosure).not.toHaveAttribute('open', '');
+  await expect(choice).not.toBeChecked();
+  await page.evaluate(() => {
+    Reflect.set(window, 'fieldCardPrintCalls', 0);
+    window.print = () => {
+      Reflect.set(window, 'fieldCardPrintCalls', Number(Reflect.get(window, 'fieldCardPrintCalls')) + 1);
+      window.dispatchEvent(new Event('beforeprint'));
+    };
+  });
+
+  // The full guide remains the default, including content closed on screen.
+  await print.focus(); await print.press('Enter');
+  await expect(print).toBeFocused();
+  await page.emulateMedia({ media: 'print' });
+  await expect(authority).toBeVisible();
+  await expect(cards).toBeVisible();
+  await expect(cards.getByRole('article')).toHaveCount(4);
+  await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  await page.emulateMedia({ media: 'screen' });
+  await expect(disclosure).not.toHaveAttribute('open', '');
+
+  await toggle.focus(); await toggle.press('Enter');
+  await expect(disclosure).toHaveAttribute('open', '');
+  const applicationVersion = JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf8')).version;
+  await expect(cards).toContainText(`WHOISleuth ${applicationVersion}`);
+  await expect(cards).toContainText('Missing DNS or an unreachable page alone does not prove');
+  await expect(cards).toContainText('Preparation is not delivery');
+  for (const density of ['comfortable', 'compact'] as const) {
+    await page.getByRole('button', { name: /^Colour theme,/u }).click();
+    await page.getByLabel('Reading density').selectOption(density);
+    await page.getByLabel('Reading density').press('Escape');
+    for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height: width === 320 ? 700 : 720 });
+      await useTheme(page, theme);
+      await choice.focus(); await expect(choice).toBeInViewport();
+      await expectNoHorizontalOverflow(page);
+      expect((await new AxeBuilder({ page }).include('#analyst-field-cards').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+      if (captureVisualEvidenceEnabled()) await disclosure.screenshot({ path: testInfo.outputPath(`field-cards-${density}-${theme}-${width}.png`) });
+    }
+  }
+
+  await choice.focus(); await choice.press('Space');
+  await expect(choice).toBeChecked();
+  await toggle.focus(); await toggle.press('Enter');
+  await print.focus(); await print.press('Enter');
+  await expect(print).toBeFocused();
+  await page.emulateMedia({ media: 'print' });
+  await expect(authority).not.toBeVisible();
+  await expect(cards).toBeVisible();
+  const publicNavigation = page.getByRole('navigation', { name: 'Public navigation', includeHidden: true });
+  await expect(publicNavigation).not.toHaveCount(0);
+  for (const navigation of await publicNavigation.all()) await expect(navigation).not.toBeVisible();
+  await expect(choice).not.toBeVisible();
+  await expect(page.locator('body')).not.toContainText('Private Case sentinel');
+  await expect(page.locator('body')).not.toContainText('Private draft sentinel');
+  if (captureVisualEvidenceEnabled()) {
+    await cards.screenshot({ path: testInfo.outputPath('field-cards-print.png') });
+    if (browserName === 'chromium') await page.pdf({ path: testInfo.outputPath('analyst-field-cards.pdf'), format: 'A4', margin: { top: '12mm', bottom: '12mm', left: '12mm', right: '12mm' } });
+  }
+  expect(await page.evaluate(() => Reflect.get(window, 'fieldCardPrintCalls'))).toBe(2);
+  await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  await page.emulateMedia({ media: 'screen' });
+  await expect(disclosure).not.toHaveAttribute('open', '');
+  await expect(choice).toBeChecked();
+  await expect(authority).toBeVisible();
+  // Print-media emulation hides the trigger and clears browser focus on return;
+  // it does not exercise the native print dialog's focus restoration.
+  await expect(print).toBeEnabled();
+  expect(await page.evaluate(() => Reflect.get(window, 'fieldCardStorageAccess'))).toEqual([]);
+  expect(await page.evaluate(() => [localStorage.getItem('saved-work-sentinel'), sessionStorage.getItem('saved-work-sentinel')])).toEqual(['Private Case sentinel', 'Private draft sentinel']);
+
+  await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Resources', exact: true }).click();
+  await expect(page).toHaveURL('/resources');
+  await page.locator('a[href="/methodology"]').first().click();
+  await expect(page).toHaveURL('/methodology');
+  await expect(choice).not.toBeChecked();
+  await page.goto('/methodology#analyst-field-cards');
+  await expect(disclosure).toHaveAttribute('open', '');
+  await expect(choice).not.toBeChecked();
+  expect(await page.evaluate(() => Reflect.get(window, 'fieldCardStorageAccess'))).toEqual([]);
+  expect(collectionRequests).toEqual([]);
 });

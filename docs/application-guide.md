@@ -49,6 +49,12 @@ Public guides share documentation search, section navigation and print layouts.
 Search finds tasks, commands, examples and glossary terms without reading saved
 work. Direct links open the relevant tool guidance or glossary section.
 
+In **Methodology**, open **Analyst field cards** for a compact scope, source-state,
+comparison and handoff reference. Select **Print field cards only**, then use
+**Print this guide** to print or save a PDF without the longer methodology topics.
+Leave the option clear to print the full guide. The reference identifies the
+application version and contains no saved investigation data.
+
 Use **Practise with real Case forms** in the demo to choose a supplied incident,
 conflicting-source or provider-response scenario. Pin an observation,
 record an evidence-linked conclusion and review an incomplete later capture.
