@@ -763,6 +763,31 @@ export async function verifyOfflineArtifact(
   return Object.freeze({ ...report, manifestIdentity });
 }
 
+function offlineArtifactNextSteps(report: OfflineArtifactVerificationReport): readonly string[] {
+  switch (report.artifact.kind) {
+    case 'saved_lookup':
+      return ['Review retained source states without displaying target values:', '  whoisleuth source-report -- ./lookup.json'];
+    case 'case_export':
+      return ['Read the Case records, including private analyst content:', '  whoisleuth case show -- ./cases.json'];
+    case 'workspace_archive':
+      return ['Inspect section metadata without restoring the archive:', '  whoisleuth inspect-archive -- ./workspace.json'];
+    case 'encrypted_workspace_archive':
+      return report.checks.authenticatedEncryption === 'verified'
+        ? ['Inspect decrypted section metadata without restoring the archive:', '  whoisleuth inspect-archive --passphrase-file ./passphrase.txt -- ./workspace.encrypted.json']
+        : ['Check the encrypted contents using a separate passphrase file:', '  whoisleuth verify-artifact --passphrase-file ./passphrase.txt -- ./workspace.encrypted.json'];
+    case 'lookup_evidence':
+      return ['Review which fields this portable format preserves and omits:', '  whoisleuth interchange-report -- ./evidence.json'];
+    case 'cli_case_pack':
+      return ['Review the Case-pack compatibility and field exclusions:', '  whoisleuth interchange-report -- ./case-pack.json'];
+    case 'signed_review_artifact':
+      return report.artifact.schema === MANAGED_INDICATOR_SET_SCHEMA
+        ? ['Read the retained indicator identities and review windows:', '  whoisleuth indicator-set inspect -- ./indicators.json']
+        : [];
+    default:
+      return [];
+  }
+}
+
 export function formatOfflineArtifactVerification(
   report: OfflineArtifactVerificationReport,
 ): string {
@@ -838,5 +863,7 @@ export function formatOfflineArtifactVerification(
     for (const item of report.package.caseFiles) lines.push(`Case files ${item.entryId} (${item.caseCount} Case${item.caseCount === 1 ? '' : 's'}): ${item.matched} of ${item.references} references matched; ${item.missing} missing`);
   }
   for (const limitation of report.limitations) lines.push(`Limitation: ${limitation}`);
+  const nextSteps = offlineArtifactNextSteps(report);
+  if (nextSteps.length) lines.push('', 'Offline next steps (examples; replace filenames; nothing runs automatically):', ...nextSteps);
   return `${lines.join('\n')}\n`;
 }

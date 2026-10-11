@@ -162,6 +162,14 @@ contract. `interchange-report` describes retained and omitted fields.
 validity and signer trust separate. None of these checks establishes that
 evidence is accurate, current, safe to share or attributable to a person.
 
+The text output of `verify-artifact` suggests compatible offline follow-up
+commands for recognised saved Lookups, Case exports, workspace archives,
+Lookup-evidence reports, Case-packs and managed indicator revisions. These are
+examples with placeholder filenames, not executed actions or a sharing approval.
+Replace the filenames deliberately; a Case or indicator inspection can display
+private contents. Encrypted workspace guidance uses a separate passphrase file,
+never a passphrase in command history. JSON output and `--quiet` are unchanged.
+
 ### Signer trust
 
 Use `verify-signature package.json --trust-store-file trust.json --json` to
