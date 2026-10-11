@@ -74,7 +74,7 @@ export const publicGuideGoals: readonly PublicGuideGoal[] = Object.freeze([
     id: 'track-important-findings',
     title: 'Continue a saved Case',
     summary: 'Reopen retained evidence, review changes and decide the next follow-up without losing the earlier record.',
-    requirements: 'Console access and the browser workspace containing the Case, or a compatible backup to import. Unlock an encrypted workspace first.',
+    requirements: 'Console access and the browser or local-application filesystem workspace containing the Case, or a compatible backup to import. Unlock first if the browser workspace is encrypted.',
     example: Object.freeze({ label: 'Fictional Case practice', href: '/demo#case-practice' }),
     steps: Object.freeze([
       Object.freeze({ id: 'reopen', label: 'Reopen the Case', href: '#tool-cases-input' }),

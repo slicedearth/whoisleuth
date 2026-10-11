@@ -74,7 +74,10 @@ test('public guide separates domain, supplied-message, Brand and retained-Case s
   const message = publicGuideGoals.find(goal => goal.id === 'review-a-message')!;
   assert.match(message.summary, /locally/u);
   assert.match(message.requirements, /does not open its links/u);
-  assert.match(publicGuideGoals.find(goal => goal.id === 'track-important-findings')!.requirements, /workspace.*backup.*encrypted workspace/u);
+  const retainedCase = publicGuideGoals.find(goal => goal.id === 'track-important-findings')!;
+  assert.match(retainedCase.requirements, /browser or local-application filesystem workspace/u);
+  assert.match(retainedCase.requirements, /compatible backup/u);
+  assert.match(retainedCase.requirements, /if the browser workspace is encrypted/u);
 });
 
 test('tool guide covers every public-facing investigation tool once', () => {
