@@ -403,8 +403,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(brandContextReview).toContainText('does not start a network request');
   await selectedQuestion.selectOption('current-web-observation');
   await expect(brandContextReview).toHaveCount(0);
-  await expect(questionReviews.locator('[data-requirement-id="tls-observation"]')).toBeVisible();
-  expect(await questionReviews.locator(':scope > .next-steps > li').count()).toBeLessThanOrEqual(3);
+  // This fixture has complete HTTP evidence and no TLS observation.
+  const websiteReviews = questionReviews.getByRole('list');
+  await expect(websiteReviews).toHaveCount(1);
+  await expect(websiteReviews.getByRole('listitem')).toHaveCount(1);
+  await expect(websiteReviews.getByRole('link', { name: 'TLS', exact: true }))
+    .toHaveAttribute('href', '#evidence-tls');
   await selectedQuestion.selectOption('brand-resemblance');
   await expect(brandContextReview).toBeVisible();
   expect(lookupRequests).toHaveLength(1);
