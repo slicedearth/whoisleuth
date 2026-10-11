@@ -600,6 +600,11 @@ Watchlists, Timeline, Certificates and Custom rules. Case reporting, decision
 summaries and the follow-up calendar are under **Case reports and follow-up
 tools** when Cases are retained.
 
+Each view names the saved records it is opening. Counts remain unavailable until
+the required records are readable; an unsuccessful read is not an empty result.
+If a collection is unavailable, reload to retry the read. Other readable
+collections remain available in their own views.
+
 The Dashboard links its attention count and recent Cases to the corresponding
 saved work. Use **Search** (Ctrl/⌘ K) anywhere in the console to find a page or
 search browser-local records. Opening a destination does not collect evidence.

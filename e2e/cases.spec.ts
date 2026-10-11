@@ -122,6 +122,48 @@ test('Cases and monitoring report unreadable collections without false empty sta
   await expect(workspace.getByRole('button', { name: 'Open or create case', exact: true })).toBeVisible();
   await expect(workspace).toHaveAttribute('aria-busy', 'false');
   await expect(workspace.getByRole('heading', { name: 'Opening saved Cases' })).toHaveCount(0);
+  const monitorPanel = page.locator('#monitor-view-panel');
+  const openingViews = [
+    ['inbox', ['Opening review inbox']],
+    ['certificates', ['Opening certificate review']],
+    ['timeline', ['Opening retained timeline']],
+    ['campaigns', ['Opening saved campaigns']],
+    ['relationships', ['Opening website relationships', 'Opening saved relationships', 'Opening Case relationships']],
+    ['rules', ['Opening custom rules']],
+    ['watchlists', ['Opening saved watchlists']],
+  ] as const;
+  for (const [view, headings] of openingViews) {
+    await openConsoleView(page, 'cases');
+    await expect(page.locator('#case-head-read-recovery')).toBeVisible();
+    const releaseView = await holdBrowserLocalTransaction(page);
+    try {
+      await openConsoleView(page, view);
+      await expect(monitorPanel.locator('.local-collection-state h2')).toHaveText([...headings]);
+      await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName(/count loading$/u);
+      for (const state of await monitorPanel.locator('.local-collection-state').all()) {
+        await expect(state).toHaveAttribute('aria-busy', 'true');
+      }
+    } finally { await releaseView(); }
+    await expect(monitorPanel.locator('.local-collection-state')).toHaveCount(0);
+  }
+  // A readable Case remains available while the relationship-only sources open.
+  await openConsoleView(page, 'cases');
+  await expect(page.locator('#case-head-read-recovery')).toBeVisible();
+  await openConsoleView(page, 'inbox');
+  await expect(monitorPanel.locator('.local-collection-state')).toHaveCount(0);
+  const releaseRelationships = await holdBrowserLocalTransaction(page);
+  try {
+    await openConsoleView(page, 'relationships');
+    await expect(monitorPanel.getByRole('heading', { name: 'Completing relationship context', exact: true })).toBeVisible();
+    await expect(monitorPanel.getByRole('heading', { name: 'Opening Case relationships', exact: true })).toHaveCount(0);
+    await expect(monitorPanel.getByRole('region', { name: 'Relationship workspace', exact: true })).toBeVisible();
+    // Leave before completion: the old view's loading status must not return.
+    await openConsoleView(page, 'inbox');
+    await expect(monitorPanel.getByRole('heading', { name: 'Completing relationship context', exact: true })).toHaveCount(0);
+  } finally { await releaseRelationships(); }
+  await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName(/^Inbox /u);
+  await expect(monitorPanel.locator('.local-collection-state')).toHaveCount(0);
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records).toEqual(retained.records);
   await openConsoleView(page, 'inbox');
   await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true })).toBeVisible();
   await failBrowserLocalCollectionReads(page, 'cases');
