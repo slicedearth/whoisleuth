@@ -36,7 +36,10 @@ Appearance controls offer comfortable or compact reading density. Compact uses
 the full available width for console workspaces; public prose remains constrained.
 Turn off decorative effects for plain card backgrounds without scanlines or glows.
 Reference pages use a plain reading surface in either theme. The console command
-palette includes a keyboard-shortcut reference below its results. Its
+palette includes a keyboard-shortcut reference below its results. Enable
+**Show brief keyboard hints** there for hints beside the page-search field when
+matching destinations are available. The choice lasts for this Console visit;
+reloading or leaving the Console resets it. No keyboard-use history is saved. Its
 **Documentation** scope searches the same public guides and command reference,
 without searching saved Cases. Queries stay in memory and are cleared on close.
 The command reference's **Build this command** editor checks arguments against

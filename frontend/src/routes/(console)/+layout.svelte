@@ -38,6 +38,7 @@
   let session = $state<'checking'|'authenticated'|'unavailable'|'ended'>('checking');
   let navOpen = $state(false);
   let commandOpen = $state(false);
+  let commandKeyboardHints = $state(false);
   let signingOut = $state(false);
   let logoutError = $state('');
   let capabilities = $state<CapabilityReport|null>(null);
@@ -329,7 +330,7 @@
     </main>
     <div inert={navOpen||commandOpen}><AnalystUndo /></div>
     {#if commandOpen}
-      <CommandPalette onclose={closeCommandPalette} />
+      <CommandPalette onclose={closeCommandPalette} bind:keyboardHints={commandKeyboardHints} />
     {/if}
   </div>
 {/if}
