@@ -1,5 +1,59 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_GUIDANCE = {
+  "operationModes": [
+    {
+      "id": "hosted-console",
+      "title": "Hosted Console",
+      "availability": "Website",
+      "task": "Investigate in the browser and keep Cases, Brands and Watchlists together.",
+      "prerequisites": "A supported browser and access to the Console. Nothing to install locally.",
+      "requests": "Collection goes through the website service and runs from its host. Optional sources depend on that deployment; each action discloses what it sends.",
+      "storage": "Saved work stays in the current browser profile. Unencrypted workspaces are plaintext; encrypted named workspaces are optional. Separately configured scheduled monitoring has its own limited hosted storage.",
+      "offline": "Selected-file analysis and retained-evidence review run locally after the page loads. The hosted website is not an offline installation.",
+      "href": "/resources",
+      "linkLabel": "Console task guide",
+      "nodeRequirement": null
+    },
+    {
+      "id": "local-console",
+      "title": "Local application",
+      "availability": "Local archive only",
+      "task": "Use the Console with a filesystem workspace on your own computer.",
+      "prerequisites": "A verified, locally assembled archive. Open its private launch link; no hosted login is used.",
+      "requests": "Explicit collection runs from your computer. Start with --offline to disable collection; starting the application does not investigate a target.",
+      "storage": "Records, drafts and originals live in the selected SQLite folder in plaintext. Encrypted portable backups are separate. Appearance preferences remain browser-local.",
+      "offline": "The installed application serves its own pages over loopback. With --offline, review saved work and selected files without collection. Loopback cookies are host-scoped, not isolated by port; use a dedicated browser profile alongside other local servers.",
+      "href": "#local-application",
+      "linkLabel": "Local application setup",
+      "nodeRequirement": ">=24.19.0"
+    },
+    {
+      "id": "main-cli",
+      "title": "Command-line tool",
+      "availability": "Public npm package",
+      "task": "Collect, inspect and verify evidence from a terminal or an explicit workflow.",
+      "prerequisites": "Install the public package or run its help once; check the installed version and command help.",
+      "requests": "Networked commands run from your computer, not the hosted service. Plans and commands labelled offline do not collect evidence; doctor is offline unless --network is selected.",
+      "storage": "Commands use deliberately selected local inputs and output files, not the browser workspace. Ordinary files are plaintext; encrypted-package commands are separate.",
+      "offline": "After installation, offline commands need only their declared local inputs. Package installation or updating can require a registry download.",
+      "href": "#start",
+      "linkLabel": "CLI installation commands",
+      "nodeRequirement": ">=24"
+    },
+    {
+      "id": "rendered-capture",
+      "title": "Capture companion",
+      "availability": "Separate local archive only",
+      "task": "Render one explicitly authorised page or compare two existing captures offline.",
+      "prerequisites": "Its own verified local archive. Rendering also needs the separately installed matching browser and supported sandbox; help and comparison do not.",
+      "requests": "An authorised capture executes page JavaScript and contacts admitted resource operators from your computer. The browser and pinned collector enforce the companion’s request boundaries. It is not part of the main CLI or hosted Console.",
+      "storage": "Screenshots and minimised manifests are local output files, unencrypted. Screenshots can contain sensitive visible content; review them before sharing.",
+      "offline": "Comparison of supplied captures makes no request. Capturing a page and explicitly downloading the browser require network access.",
+      "href": "#capture-companion",
+      "linkLabel": "Capture companion setup",
+      "nodeRequirement": ">=24"
+    }
+  ],
   "runOnce": [
     "npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth --help",
     "npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth example.test --plan --json"

@@ -1,4 +1,5 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
 import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
@@ -107,17 +108,60 @@ test('reference section navigation is available before client hydration', async 
     const commands = sections.getByRole('link', { name: 'Command reference' });
     await expect(commands).toHaveAttribute('href', '#commands');
     await expect(sections.getByRole('link', { name: 'Capture companion' })).toHaveAttribute('href', '#capture-companion');
+    await expect(sections.getByRole('link', { name: 'Choose how to run' })).toHaveAttribute('href', '#choose-mode');
     const targets = await sections.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('href')));
     expect(new Set(targets).size).toBe(targets.length);
     for (const target of targets) {
       expect(target).toMatch(/^#[a-z][a-z0-9-]*$/u);
       await expect(page.locator(target!)).toHaveCount(1);
     }
+    await sections.getByRole('link', { name: 'Choose how to run' }).click();
+    await expect(page).toHaveURL(/\/cli#choose-mode$/u);
+    const modes = page.getByRole('region', { name: 'Choose how to run WHOISleuth', exact: true });
+    for (const name of ['Hosted Console', 'Local application', 'Command-line tool', 'Capture companion']) {
+      const mode = modes.getByRole('article', { name, exact: true });
+      await expect(mode).toBeVisible();
+      await expect(mode.getByRole('link')).toHaveCount(1);
+    }
+    await expect(modes.getByRole('article', { name: 'Local application', exact: true })).toContainText('SQLite folder in plaintext');
+    await expect(modes.getByRole('article', { name: 'Local application', exact: true })).toContainText('host-scoped, not isolated by port');
+    await expect(modes.getByRole('article', { name: 'Capture companion', exact: true })).toContainText('Separate local archive only');
+    await modes.getByRole('link', { name: 'CLI installation commands', exact: true }).click();
+    await expect(page).toHaveURL(/\/cli#start$/u);
     await commands.click();
     await expect(page).toHaveURL(/\/cli#commands$/u);
   } finally {
     await context.close();
   }
+});
+
+test('installation modes stay accessible without collecting evidence or opening saved work', async ({ page }, testInfo) => {
+  const collectionRequests: string[] = [];
+  page.on('request', request => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(pathname)) collectionRequests.push(pathname);
+  });
+  await page.addInitScript(() => {
+    const scope = window as unknown as { guideStorageAttempts: number };
+    scope.guideStorageAttempts = 0;
+    Object.defineProperty(indexedDB, 'open', { value: () => { scope.guideStorageAttempts++; throw new Error('Public guide must not open saved work'); } });
+  });
+  await page.goto('/cli#choose-mode');
+  await expect(page.getByTestId('public-cli-catalogue')).toHaveAttribute('data-client-ready', 'true');
+  const modes = page.getByRole('region', { name: 'Choose how to run WHOISleuth', exact: true });
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 });
+    await useTheme(page, theme);
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('#choose-mode').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await modes.screenshot({ path: testInfo.outputPath(`operation-modes-${theme}-${width}.png`) });
+  }
+  const localSetup = modes.getByRole('link', { name: 'Local application setup', exact: true });
+  await localSetup.focus(); await localSetup.press('Enter');
+  await expect(page).toHaveURL(/\/cli#local-application$/u);
+  await expect(page.getByRole('heading', { name: 'Console with a filesystem workspace', exact: true })).toBeInViewport();
+  expect(collectionRequests).toEqual([]);
+  expect(await page.evaluate(() => (window as unknown as { guideStorageAttempts: number }).guideStorageAttempts)).toBe(0);
 });
 
 test('homepage presents plain-language goals, restrained branding, and synthetic product previews', async ({ page }) => {

@@ -3,6 +3,8 @@
 The optional local application serves the existing console on your computer and
 keeps saved records, review drafts and retained files in one selected folder.
 It is separate from the command-line evidence tool and rendered-capture companion.
+See the [installation-mode comparison](https://www.whoisleuth.com/cli#choose-mode)
+to choose between the browser, filesystem-local and terminal workflows.
 
 ## Run
 

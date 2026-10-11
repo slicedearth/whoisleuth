@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { buildCliCasePack } from '../cli/case-pack.mts';
 import { applyCliCaseOperation } from '../cli/case-command.mts';
 import { parseCliArguments } from '../cli/arguments.mts';
@@ -329,7 +330,14 @@ function renderPublicCliIndexModule(): string {
 }
 
 function renderPublicCliGuidanceModule(): string {
-  return moduleSource('PUBLIC_CLI_GUIDANCE', CLI_PUBLIC_GUIDANCE);
+  const operationModes = CLI_PUBLIC_GUIDANCE.operationModes.map(({ packageManifest, ...mode }) => {
+    if (!packageManifest) return { ...mode, nodeRequirement: null };
+    const manifest: unknown = JSON.parse(readFileSync(new URL(`../${packageManifest}`, import.meta.url), 'utf8'));
+    const engines = (manifest as { engines?: { node?: unknown } }).engines;
+    if (typeof engines?.node !== 'string' || !engines.node.trim()) throw new TypeError('Package guidance requires its declared Node.js runtime.');
+    return { ...mode, nodeRequirement: engines.node };
+  });
+  return moduleSource('PUBLIC_CLI_GUIDANCE', { ...CLI_PUBLIC_GUIDANCE, operationModes });
 }
 
 function renderPublicCoverageModule(): string {

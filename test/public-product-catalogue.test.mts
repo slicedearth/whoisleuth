@@ -44,6 +44,7 @@ import { WHOISLEUTH_SITE_ORIGIN } from '../lib/project-metadata.mts';
 import { writeAtomically, obsoleteExampleOutputs } from '../tools/public-product-catalogue.mts';
 import { PUBLIC_CLI_CATALOGUE } from '../frontend/src/lib/generated/public-cli-catalogue.ts';
 import { PUBLIC_CLI_GRAMMAR } from '../frontend/src/lib/generated/public-cli-grammar.ts';
+import { PUBLIC_CLI_GUIDANCE } from '../frontend/src/lib/generated/public-cli-guidance.ts';
 import { PUBLIC_EXAMPLE_LOADERS } from '../frontend/src/lib/generated/public-examples.ts';
 
 const GENERATED_DIRECTORY = new URL('../frontend/src/lib/generated/', import.meta.url);
@@ -177,6 +178,40 @@ describe('public product catalogue', () => {
       'whoisleuth workflow-plan --explain evidence-handoff',
       'whoisleuth case-pack cases.json --audience public --reviewed --json',
     ]);
+  });
+
+  test('installation guidance retains distinct request, storage and distribution boundaries', () => {
+    const modes = PUBLIC_CLI_GUIDANCE.operationModes;
+    assert.deepEqual(modes.map(mode => mode.id), ['hosted-console', 'local-console', 'main-cli', 'rendered-capture']);
+    const [hosted, local, cli, capture] = modes;
+    assert.equal(hosted.nodeRequirement, null);
+    assert.match(hosted.requests, /website service.*host/u);
+    assert.match(hosted.storage, /browser profile/u);
+    assert.match(hosted.offline, /not an offline installation/u);
+    assert.match(local.availability, /Local archive only/u);
+    assert.match(local.storage, /SQLite.*plaintext/u);
+    assert.match(local.offline, /--offline/u);
+    assert.match(local.offline, /host-scoped, not isolated by port/u);
+    assert.match(cli.availability, /Public npm package/u);
+    assert.match(cli.requests, /your computer, not the hosted/u);
+    assert.match(capture.availability, /local archive only/u);
+    assert.match(capture.prerequisites, /separately installed matching browser.*sandbox/u);
+    assert.match(capture.requests, /executes page JavaScript/u);
+    assert.match(capture.storage, /unencrypted/u);
+    assert.match(capture.offline, /Comparison.*no request/u);
+    for (const [mode, manifestPath] of [
+      [local, '../packages/local-application/package.json'],
+      [cli, '../packages/cli/package.template.json'],
+      [capture, '../packages/web-capture/package.json'],
+    ] as const) {
+      const manifest = JSON.parse(readFileSync(new URL(manifestPath, import.meta.url), 'utf8'));
+      assert.equal(mode.nodeRequirement, manifest.engines.node);
+      assert.equal(Object.hasOwn(mode, 'packageManifest'), false);
+    }
+    const localManifest = JSON.parse(readFileSync(new URL('../packages/local-application/package.json', import.meta.url), 'utf8'));
+    const captureManifest = JSON.parse(readFileSync(new URL('../packages/web-capture/package.json', import.meta.url), 'utf8'));
+    assert.equal(localManifest.private, true);
+    assert.equal(captureManifest.private, true);
   });
 
   test('discovers individual example payloads from the same canonical catalogue', async () => {

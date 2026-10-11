@@ -12,6 +12,7 @@
     { href: '#tasks', label: 'Common tasks' },
     { href: '#commands', label: 'Command reference' },
     { href: '#browser-handoff', label: 'Browser and CLI handoffs' },
+    { href: '#choose-mode', label: 'Choose how to run' },
     { href: '#capture-companion', label: 'Capture companion' },
     { href: '#local-application', label: 'Local application' },
     { href: '#behaviour', label: 'CLI behaviour' },
@@ -67,7 +68,7 @@
   {/snippet}
 
 <section class="cli-section" id="start" aria-labelledby="start-title">
-  <div class="section-intro"><h2 id="start-title">Run the CLI locally</h2><p>Node.js 24 or later.</p></div>
+  <div class="section-intro"><h2 id="start-title">Run the CLI locally</h2><p>Node.js 24 or later. Choosing between the browser and terminal? <a href="#choose-mode">Compare ways to run WHOISleuth</a>.</p></div>
   <ol class="start-steps">
     <li>
       <span>1</span><div><h3>Run help without installing</h3><CopyableCommand command={PUBLIC_CLI_GUIDANCE.runOnce[0]} label="run-once help command" /></div>
@@ -114,6 +115,25 @@
     {/each}
   </div>
   <p class="handoff-boundary">These checks do not upload, submit or publish an artefact. Browser import remains a separate reviewed action.</p>
+</section>
+
+<section class="cli-section" id="choose-mode" aria-labelledby="choose-mode-title">
+  <div class="section-intro"><h2 id="choose-mode-title">Choose how to run WHOISleuth</h2><p>Choose where you work and where requests originate. Opening this guide does not install anything or start collection.</p></div>
+  <div class="operation-modes">
+    {#each PUBLIC_CLI_GUIDANCE.operationModes as mode}
+      <article aria-labelledby={`mode-${mode.id}`}>
+        <header><p class="availability">{mode.availability}</p><h3 id={`mode-${mode.id}`}>{mode.title}</h3><p>{mode.task}</p></header>
+        <dl>
+          <dt>What you need</dt><dd>{#if mode.nodeRequirement}Node.js <code>{mode.nodeRequirement}</code>.{' '}{/if}{mode.prerequisites}</dd>
+          <dt>Where requests run</dt><dd>{mode.requests}</dd>
+          <dt>Where work is saved</dt><dd>{mode.storage}</dd>
+          <dt>Working offline</dt><dd>{mode.offline}</dd>
+        </dl>
+        <a href={mode.href}>{mode.linkLabel}</a>
+      </article>
+    {/each}
+  </div>
+  <p>These are distribution channels, not a claim that this page’s application revision has been published to each one. Check the intended release or local candidate report before installing; the two optional archives have their own package versions.</p>
 </section>
 
 <section class="cli-section" id="capture-companion" aria-labelledby="capture-companion-title">
@@ -179,6 +199,16 @@
   .recipe-commands{display:grid;gap:6px;margin-top:14px}
   .handoff-recipes p{margin:13px 0 0;color:var(--muted);font-size:var(--type-supporting-size);line-height:1.55}
   .handoff-boundary{margin:13px 0 0;padding:12px 14px;border-left:3px solid var(--interface-accent);background:var(--panel);color:var(--muted);font-size:var(--type-supporting-size);line-height:1.5}
+  .operation-modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 32px}
+  .operation-modes article{min-width:0;padding:18px 0;border-top:1px solid var(--border)}
+  .operation-modes h3{margin:6px 0 10px;font:700 var(--text-lg)/1.35 var(--font-sans)}
+  .operation-modes p,.operation-modes dd{margin:0;line-height:1.6;overflow-wrap:anywhere}
+  .operation-modes .availability{font-size:var(--text-xs);color:var(--muted)}
+  .operation-modes dl{margin:18px 0}
+  .operation-modes dt{margin-top:14px;font-weight:700;font-size:var(--text-sm)}
+  .operation-modes dd{margin-top:4px;color:var(--muted);font-size:var(--text-sm)}
+  .operation-modes a{display:inline-flex;align-items:center;min-height:44px}
+  #choose-mode>p{max-width:85ch;line-height:1.6;color:var(--muted);font-size:var(--text-sm)}
   .boundary-list p{margin:0;padding:14px 0;border-bottom:1px solid var(--border);color:var(--muted);font-size:var(--text-sm);line-height:1.55}
   .exit-codes{margin-top:34px}
   .exit-codes h3{margin:0 0 12px;font:700 var(--text-md) var(--mono)}
@@ -205,7 +235,7 @@
   .package-verification nav{display:flex;flex:0 0 auto;align-items:flex-end;flex-direction:column;gap:6px}
   .package-verification a{color:var(--accent);font:700 var(--text-xs) var(--mono)}
   .package-verification nav a{display:inline-flex;align-items:center;min-height:32px;padding:4px 2px}
-  @media(max-width:900px){.task-groups>section{grid-template-columns:1fr}.start-notes{grid-template-columns:1fr}}
+  @media(max-width:900px){.task-groups>section{grid-template-columns:1fr}.start-notes{grid-template-columns:1fr}.operation-modes{grid-template-columns:1fr}}
   @media(max-width:720px){.cli-section{padding:30px 0;scroll-margin-top:20px}.additional-behaviour,.more-links{grid-template-columns:1fr}.package-verification{align-items:flex-start;flex-direction:column;gap:12px}}
   @media(max-width:440px){.start-steps>li{grid-template-columns:28px minmax(0,1fr);gap:10px}.task-groups>section{padding:15px 0}.exit-codes th{width:48px}.exit-codes th,.exit-codes td{padding:10px}}
 </style>

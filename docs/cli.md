@@ -14,6 +14,11 @@ tasks, then offers searchable commands with examples, option explanations and
 defaults. Command-section links can be bookmarked. Its option guidance and
 installed help derive from the same command definitions.
 
+Not sure which interface to use? The [installation-mode comparison](https://www.whoisleuth.com/cli#choose-mode)
+covers the hosted Console, filesystem-local application, CLI and capture companion,
+including request origin, storage, offline use and distribution. The optional
+application and capture archives are separate from the public CLI package.
+
 The generated [privacy and data-flow catalogue](https://github.com/slicedearth/whoisleuth/blob/main/docs/privacy-data-flow-catalogue.md)
 lists the network, recipient, retention and export boundary for every command.
 
