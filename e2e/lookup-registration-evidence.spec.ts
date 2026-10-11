@@ -1,4 +1,5 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { expandLookupFamilies, expectNoHorizontalOverflow, lookupDomainIdentity, migrateLegacyBrowserData, openLookupOptionalSources, readBrowserLocalCollection, useTheme } from './helpers';
 import { readFileSync } from 'node:fs';
@@ -13,6 +14,7 @@ import { RISK_MODEL_VERSION } from '../packages/analysis/risk-scoring.mts';
 import { INVESTIGATION_CAPSULE_VERSION, LOOKUP_INVESTIGATION_BRIEF_VERSION } from '../packages/contracts/investigation-portability.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { CONFUSABLE_MAPPING_VERSION } from '../lib/idn-confusables.mts';
+import { GENERATED_CONFUSABLE_SOURCE as CONFUSABLE_MAPPING_SOURCE } from '../lib/generated/unicode-confusables.mts';
 import { parseRdap } from '../lib/rdap.mts';
 import { inspectInvestigationPackage } from '../packages/investigation/investigation-package.mts';
 import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
@@ -1483,7 +1485,7 @@ test('bounded WHOIS lifecycle and role-based contacts render in Lookup', async (
   await expectNoHorizontalOverflow(page);
 });
 
-test('IDN review shows Unicode and ASCII together with cautious profile similarity evidence', async ({ page }) => {
+test('IDN review shows Unicode and ASCII together with cautious profile similarity evidence', async ({ page }, testInfo) => {
   await page.evaluate((profileVersion) => {
     const profile = {
       id: 'idn-profile', name: 'Example Brand', officialDomains: ['sample.example'], productNames: [], tlds: ['example'],
@@ -1495,16 +1497,26 @@ test('IDN review shows Unicode and ASCII together with cautious profile similari
     localStorage.setItem('whois-rdap-active-brand-profile-v1', profile.id);
   }, BRAND_PROFILE_SCHEMA_VERSION);
   await migrateLegacyBrowserData(page, {});
-  await page.route('**/api/lookup?*', async (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({
-      query: 'xn--smple-4ve.example', type: 'domain', registrableDomain: 'xn--smple-4ve.example',
-      availability: { state: 'registered', confidence: 'high', domain: 'xn--smple-4ve.example' },
+  const requests: string[] = [];
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q')!;
+    requests.push(domain);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      query: domain, type: 'domain', registrableDomain: domain,
+      availability: { state: 'registered', confidence: 'high', domain },
       rdap: { upstreamStatus: 404, parsed: {} }, whois: { parsed: {}, chain: [] },
       diagnostics: { rdap: { status: 'not_found' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
-    }),
-  }));
+    }) });
+  });
+  const copies: string[] = [];
+  let rejectCopy = false;
+  await page.exposeFunction('recordIdnCopy', (value: string) => {
+    if (rejectCopy) throw new Error('Private clipboard transport detail');
+    copies.push(value);
+  });
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    writeText: (value: string) => (window as unknown as { recordIdnCopy(value: string): Promise<void> }).recordIdnCopy(value),
+  } }));
 
   await page.locator('#query').fill('xn--smple-4ve.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
@@ -1518,7 +1530,45 @@ test('IDN review shows Unicode and ASCII together with cautious profile similari
   await expect(card.getByText('Mixed writing scripts', { exact: true })).toBeVisible();
   await expect(card.getByText('Confusable with an official domain', { exact: true })).toBeVisible();
   await expect(card.getByText('similarity indicators and do not establish maliciousness')).toBeVisible();
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expectNoHorizontalOverflow(page);
+  await expect(card.getByText('sample.example', { exact: true })).toBeVisible();
+  await expect(card).toContainText('not a DNS name or canonical domain identity');
+  for (const [name, value] of [
+    ['Copy exact Unicode display', 'sаmple.example'],
+    ['Copy exact DNS-safe ASCII', 'xn--smple-4ve.example'],
+    ['Copy exact visual skeleton', 'sample.example'],
+  ] as const) {
+    const button = card.getByRole('button', { name, exact: true });
+    await button.focus(); await button.press('Enter');
+    await expect.poll(() => copies.at(-1)).toBe(value);
+    await expect(button).toBeFocused();
+  }
+  expect(copies).toEqual(['sаmple.example', 'xn--smple-4ve.example', 'sample.example']);
+  await expect(page.locator('#query')).toHaveValue('xn--smple-4ve.example');
+  const source = card.locator('details');
+  await source.locator('summary').focus(); await source.locator('summary').press('Enter');
+  await expect(source).toHaveAttribute('open', '');
+  await expect(source.getByRole('link')).toHaveAttribute('href', CONFUSABLE_MAPPING_SOURCE.url);
+  await expect(source).toContainText(CONFUSABLE_MAPPING_SOURCE.sha256);
+  await expect(source).toContainText(`Unicode ${CONFUSABLE_MAPPING_SOURCE.unicodeVersion}`);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 });
+    await useTheme(page, theme);
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('.idn-card').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    const copy = card.getByRole('button', { name: 'Copy exact Unicode display', exact: true });
+    await copy.focus(); await expect(copy).toBeInViewport();
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`idn-identity-${width}-${theme}.png`) });
+  }
+  rejectCopy = true;
+  await card.getByRole('button', { name: 'Copy exact DNS-safe ASCII', exact: true }).click();
+  await expect(card.locator('.copy-fallback')).toHaveText('xn--smple-4ve.example');
+  await expect(card).not.toContainText('Private clipboard transport detail');
+  expect(requests).toEqual(['xn--smple-4ve.example']);
+  await page.locator('#query').fill('example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('button', { name: 'Run lookup' })).toBeEnabled();
+  await expandLookupFamilies(page);
+  await expect(card).toHaveCount(0);
+  expect(requests).toEqual(['xn--smple-4ve.example', 'example.test']);
 });

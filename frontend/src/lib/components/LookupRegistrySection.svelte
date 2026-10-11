@@ -1,6 +1,7 @@
 <script lang="ts">
   import LookupEvidenceSection from './LookupEvidenceSection.svelte';
   import LookupFamilySummary from './LookupFamilySummary.svelte';
+  import IdnIdentityCard from './IdnIdentityCard.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
   import type { LookupSectionControls } from '#lib/controllers/lookup-section-navigation.ts';
   import type { buildLookupRouteAnalysis } from '#lib/analysis/lookup-route-analysis.ts';
@@ -95,34 +96,7 @@
     {/if}
 
     {#if idnAnalysis && (idnAnalysis.hasIdn || idnAnalysis.referenceMatches.length)}
-      <section class="idn-card evidence-card card" aria-labelledby="idn-title">
-        <header class="section-head"
-          ><div
-            ><p class="eyebrow">Domain identity</p><h4 id="idn-title">IDN and confusable review</h4
-            ></div
-          ><span>{idnAnalysis.mappingVersion}</span></header
-        >
-        <div class="idn-forms stat-grid"
-          ><article
-            ><small>Unicode display</small><strong>{idnAnalysis.unicodeDomain}</strong></article
-          ><article><small>DNS-safe ASCII</small><strong>{idnAnalysis.asciiDomain}</strong></article
-          ><article
-            ><small>Writing scripts</small><strong
-              >{idnAnalysis.scripts.join(', ') || 'None detected'}</strong
-            ></article
-          ></div
-        >
-        {#if idnAnalysis.findings.length}<ul class="finding-list"
-            >{#each idnAnalysis.findings as finding}<li
-                class="callout {finding.tone === 'warning' ? 'warn' : 'info'}"
-                ><strong>{finding.label}</strong><span>{finding.detail}</span></li
-              >{/each}</ul
-          >{/if}
-        <p class="card-note"
-          >Review Unicode and ASCII forms together. These are bounded similarity indicators and do
-          not establish maliciousness.</p
-        >
-      </section>
+      <IdnIdentityCard analysis={idnAnalysis} />
     {/if}
 
     <div class="evidence-component" id="evidence-registry"
@@ -160,42 +134,5 @@
   .evidence-component[id] {
     position: relative;
     scroll-margin-top: var(--local-nav-anchor-offset, 88px);
-  }
-  .evidence-card {
-    padding: var(--card-pad);
-  }
-  .evidence-card .section-head p:not(.eyebrow) {
-    margin: 4px 0 0;
-    color: var(--muted);
-    font-size: var(--text-xs);
-  }
-  .evidence-card .stat-grid {
-    margin-top: 14px;
-  }
-  .card-note {
-    margin: 12px 0 0;
-    color: var(--muted);
-    font-size: var(--text-xs);
-    line-height: 1.55;
-  }
-
-  .finding-list {
-    display: grid;
-    gap: 7px;
-    margin: 12px 0 0;
-    padding: 0;
-    list-style: none;
-  }
-  .finding-list .callout {
-    margin: 0;
-  }
-  .finding-list strong {
-    display: block;
-    color: var(--text);
-    font-size: var(--text-xs);
-  }
-  .finding-list span {
-    display: block;
-    margin-top: 3px;
   }
 </style>
