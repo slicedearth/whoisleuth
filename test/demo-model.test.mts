@@ -1,6 +1,8 @@
 import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { syntheticDemoEvidenceScope } from '../frontend/src/lib/analysis/demo-lookup-scope.ts';
+import { buildRetainedEvidenceTimeline, retainedTimelineLanes } from '../frontend/src/lib/analysis/retained-evidence-timeline.ts';
 
 import {
   buildSyntheticDemoExport, createSyntheticDemoState, startSyntheticDemoScenario, MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
@@ -164,6 +166,45 @@ describe('synthetic demo state', () => {
       assert.match(http.limitations.join(' '), /origin does not recover a page path/);
     }
     assert.deepEqual(SYNTHETIC_DEMO_CANDIDATES, before);
+  });
+
+  test('projects fixed source identities without inventing URL, SNI, DNS outcome or family clocks', () => {
+    const before = structuredClone(SYNTHETIC_DEMO_CANDIDATES);
+    const scope = requiredValue(syntheticDemoEvidenceScope('credential-lure'));
+    const source = (id: string) => requiredValue(scope.sources.find(item => item.id === id));
+    const rows = (id: string) => Object.fromEntries(source(id).rows.map(row => [row.label, row.value]));
+    assert.equal(rows('registry')['Returned domain'], 'exampleshop-login.example');
+    assert.equal(rows('whois')['Returned domain'], 'exampleshop-login.example');
+    assert.equal(source('registry').observedAt, '2026-06-26T11:10:00.000Z');
+    assert.equal(source('whois').observedAt, null);
+    assert.equal(source('dns').observedAt, null);
+    assert.equal(rows('dns')['NS outcome'], 'Exact outcome not retained');
+    assert.equal(rows('dns')['Retained HTTPS answer owners'], 'Not retained');
+    assert.equal(rows('http')['Requested URL'], 'Not retained');
+    assert.equal(rows('http')['Final URL'], 'Not retained');
+    assert.equal(source('http').observedAt, null);
+    assert.equal(rows('tls')['Connection hostname (SNI)'], 'Not retained');
+    assert.equal(rows('tls')['Certificate DNS names'], 'exampleshop-login.example, www.exampleshop-login.example');
+    const incomplete = requiredValue(syntheticDemoEvidenceScope('alternate-tld'));
+    assert.ok(incomplete.sources.every(item => item.observedAt === null));
+    for (const id of ['registry', 'whois']) assert.equal(incomplete.sources.find(item => item.id === id)?.rows[0]?.value, 'Not retained');
+    assert.equal(syntheticDemoEvidenceScope('unknown'), null);
+    assert.deepEqual(SYNTHETIC_DEMO_CANDIDATES, before);
+  });
+
+  test('projects fictional Case history as combined observations without multiplying family evidence', () => {
+    const record = requiredValue(syntheticDemoCaseRecord(completeState()));
+    const before = structuredClone(record);
+    const timeline = buildRetainedEvidenceTimeline({ cases: [record], now: record.updatedAt });
+    const observations = timeline.items.filter(item => item.kind === 'case_snapshot');
+    assert.equal(observations.length, 2);
+    assert.ok(observations.every(item => item.family === 'combined'));
+    assert.deepEqual(observations.map(item => item.observedAt).sort(), ['2026-06-27T11:15:00.000Z', '2026-07-01T11:15:00.000Z']);
+    assert.equal(timeline.evaluatedAt, '2026-07-01T11:20:00.000Z');
+    const lanes = retainedTimelineLanes(timeline.items);
+    assert.equal(lanes.find(lane => lane.family === 'combined')?.count, 2);
+    for (const family of ['registration', 'dns', 'tls', 'page']) assert.equal(lanes.find(lane => lane.family === family)?.count, 0);
+    assert.deepEqual(record, before);
   });
 });
 

@@ -59,6 +59,8 @@
   let BulkRelationshipsView=$state<BulkStageModule['BulkRelationships']|null>(null);
   let EvidenceTopologyView=$state<LookupStageModule['EvidenceTopology']|null>(null);
   let EvidenceTimelineView=$state<MonitorStageModule['EvidenceTimeline']|null>(null);
+  let RetainedEvidenceTimelineView=$state<MonitorStageModule['RetainedEvidenceTimeline']|null>(null);
+  let buildRetainedTimeline=$state<MonitorStageModule['buildRetainedEvidenceTimeline']|null>(null);
   let buildSyntheticDemoExportView=$state<MonitorStageModule['buildSyntheticDemoExport']|null>(null);
   let syntheticDemoCaseRecordView=$state<MonitorStageModule['syntheticDemoCaseRecord']|null>(null);
   let syntheticDemoTimelineView=$state<MonitorStageModule['syntheticDemoTimeline']|null>(null);
@@ -66,6 +68,8 @@
   let LookupAcquisitionReviewView=$state<LookupStageModule['LookupAcquisitionReview']|null>(null);
   let LookupAssessmentView=$state<LookupStageModule['LookupAssessment']|null>(null);
   let LookupCollectionTimingView=$state<LookupStageModule['LookupCollectionTiming']|null>(null);
+  let LookupEvidenceScopeView=$state<LookupStageModule['LookupEvidenceScope']|null>(null);
+  let syntheticScope=$state<LookupStageModule['syntheticDemoEvidenceScope']|null>(null);
   let LookupDnsEvidenceView=$state<LookupStageModule['LookupDnsEvidence']|null>(null);
   let LookupFamilySummaryView=$state<LookupStageModule['LookupFamilySummary']|null>(null);
   let LookupHttpEvidenceView=$state<LookupStageModule['LookupHttpEvidence']|null>(null);
@@ -81,6 +85,7 @@
       ?SYNTHETIC_DEMO_CANDIDATES.filter((candidate)=>relatedDomains.includes(candidate.domain))
       :SYNTHETIC_DEMO_CANDIDATES);
   const lookupView=$derived(selected?syntheticDemoLookupView(selected.id):null);
+  const lookupScope=$derived(selected&&syntheticScope?syntheticScope(selected.id):null);
 
   function demoVisualTabKeydown(event:KeyboardEvent){
     const current=demoVisualTabs.indexOf(demoVisualView);let index=-1;
@@ -102,6 +107,7 @@
     limitations:['Fixed fictional evidence; a missing fixture match does not establish safety.'],
   });
   const caseRecord=$derived(syntheticDemoCaseRecordView?.(demoState)??null);
+  const retainedTimeline=$derived(caseRecord&&buildRetainedTimeline?buildRetainedTimeline({cases:[caseRecord],now:caseRecord.updatedAt}):null);
   const lookupTopologyNodes=$derived(selected&&lookupView?[
     {id:'registry',label:'Registry',detail:selected.evidence.registry.status,status:lookupView.registry.rdapError?'partial':'success',href:'#demo-family-registration',side:'left' as const,glyph:'R',family:'registry' as const},
     {id:'dns',label:'DNS',detail:lookupView.dns.status,status:lookupView.dns.status,href:'#demo-family-web',side:'left' as const,glyph:'D',family:'network' as const},
@@ -154,6 +160,8 @@
       LookupAcquisitionReviewView=module.LookupAcquisitionReview;
       LookupAssessmentView=module.LookupAssessment;
       LookupCollectionTimingView=module.LookupCollectionTiming;
+      LookupEvidenceScopeView=module.LookupEvidenceScope;
+      syntheticScope=module.syntheticDemoEvidenceScope;
       LookupDnsEvidenceView=module.LookupDnsEvidence;
       LookupFamilySummaryView=module.LookupFamilySummary;
       LookupHttpEvidenceView=module.LookupHttpEvidence;
@@ -165,6 +173,8 @@
     if(target==='monitor'){
       const module=await loadDeferredModule(()=>import('#lib/components/demo-stages/monitor.ts'),{signal:moduleController.signal});
       EvidenceTimelineView=module.EvidenceTimeline;
+      RetainedEvidenceTimelineView=module.RetainedEvidenceTimeline;
+      buildRetainedTimeline=module.buildRetainedEvidenceTimeline;
       buildSyntheticDemoExportView=module.buildSyntheticDemoExport;
       syntheticDemoCaseRecordView=module.syntheticDemoCaseRecord;
       syntheticDemoTimelineView=module.syntheticDemoTimeline;
@@ -527,7 +537,8 @@
       />{/if}
       {#if lookupFamily==='quality'}
         <div class="family-details card">
-          <p class="family-intro">This fixed timing view demonstrates parallel collection. The signed-in Console also shows each source state, freshness result, limitation, and bounded refresh path.</p>
+          <p class="family-intro">Inspect the fixed source identities and their unknowns, then review the parallel collection timing example. The signed-in Console also provides source-refresh controls.</p>
+          {#if LookupEvidenceScopeView&&lookupScope}<h4>Source identities and times</h4><LookupEvidenceScopeView scope={lookupScope} />{/if}
           {#if LookupCollectionTimingView}<div class="shared-evidence"><LookupCollectionTimingView timing={{version:1,totalMs:860,sources:[{source:'rdap',outcome:'fulfilled',durationMs:240,completedAfterMs:240},{source:'whois',outcome:'fulfilled',durationMs:620,completedAfterMs:690},{source:'domain_evidence',outcome:'fulfilled',durationMs:740,completedAfterMs:820},{source:'network_context',outcome:'fulfilled',durationMs:210,completedAfterMs:860}]}} /></div>{/if}
         </div>
       {/if}
@@ -563,6 +574,10 @@
     {#if !demoState.followUpReady}<div class="follow-up"><p>Load one repeated observation and one later material change to see how the case history separates unchanged evidence from an actual difference.</p><button class="primary" type="button" onclick={loadFollowUp}>Load later synthetic observation</button></div>{/if}
     <h3 class="sr-only">Synthetic case evidence</h3>
     {#if EvidenceTimelineView}<div class="shared-timeline">{#key `${caseRecord.id}:${caseRecord.evidenceHistory.length}`}<EvidenceTimelineView record={caseRecord} />{/key}</div>{/if}
+    {#if RetainedEvidenceTimelineView&&retainedTimeline}<details class="shared-timeline"><summary>Explore the retained investigation timeline</summary>
+      <p>These are the same fictional Case records, not additional observations. Freshness is evaluated at the fixture’s recorded review time: <time datetime={caseRecord.updatedAt}>{formatDate(caseRecord.updatedAt)}</time>.</p>
+      <RetainedEvidenceTimelineView timeline={retainedTimeline} recordNavigation={false} />
+    </details>{/if}
     {#if demoState.followUpReady}
       <section class="change-review card" aria-labelledby="change-review-title"><header><div><p class="eyebrow">Comparison result</p><h3 id="change-review-title">Repeated evidence and material changes stay distinct</h3></div><span>{caseRecord.evidenceHistory.length} retained observations</span></header><div class="change-list">{#each monitorTimeline as entry}<article><div><strong>{entry.label}</strong><time datetime={entry.capturedAt}>{formatDate(entry.capturedAt)}</time></div>{#if entry.repeated}<p>A repeated observation matched this retained state and is counted without inventing a change.</p>{/if}{#if entry.changes.length}<dl>{#each entry.changes as change}<div><dt>{change.field}</dt><dd><span>{displayChangeValue(change.before)}</span><b aria-hidden="true">→</b><span>{displayChangeValue(change.after)}</span></dd></div>{/each}</dl>{:else if !entry.repeated}<p>No material field change in this retained observation.</p>{/if}</article>{/each}</div></section>
     {/if}

@@ -10,6 +10,8 @@ import { compareCaseAssertions } from '../packages/cases/case-assessment-compari
 import { caseSelectedEvidenceSourceLimitations, CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION } from '../packages/cases/case-evidence-links.mts';
 import { latestEvidenceRequests, submittedPacketReceipts } from '../packages/cases/case-requested-evidence.mts';
 import { reviewIdentityIncident } from '../packages/investigation/identity-incident-review.mts';
+import { casePracticeCaptureContexts } from '../frontend/src/lib/analysis/case-practice.ts';
+import { compareObservationContexts } from '../packages/comparison/capture-context.mts';
 
 test('compromised-path practice keeps the root, control assessment and infrastructure readiness separate', () => {
   const record = createCasePracticeRecord('compromised-page');
@@ -86,6 +88,22 @@ test('conditional-capture practice retains both scopes and rejects different or 
     assert.ok(blockers.includes('different_field_or_source'));
   }
   assert.deepEqual(record.observedEffects.reviews, []);
+  const contexts = casePracticeCaptureContexts('conditional-presentation')!;
+  const selected = [...contexts.first, ...contexts.second];
+  assert.deepEqual(selected.map(item => item.observedAt), [CASE_PRACTICE_OBSERVED_AT, CASE_PRACTICE_LATER_AT, CASE_PRACTICE_LATER_AT]);
+  assert.ok(selected.every(item => item.pageBehaviour === null && item.observerLabel === null));
+  const declared = compareObservationContexts(selected.slice(0, 2));
+  assert.deepEqual(declared.rows.find(row => row.id === 'viewport'), { id: 'viewport', label: 'Declared viewport', values: ['390 × 844', '1280 × 720'], state: 'different' });
+  assert.equal(declared.rows.find(row => row.id === 'vantage')?.state, 'different');
+  assert.equal(declared.rows.find(row => row.id === 'observer')?.state, 'unknown');
+  const incomplete = compareObservationContexts(selected);
+  assert.ok(incomplete.rows.every(row => row.state === 'unknown'));
+  assert.equal(incomplete.independence, 'not_verified');
+  assert.equal(selected[2]?.conditions, null);
+  assert.equal(selected[2]?.completeness, 'partial');
+  contexts.first.length = 0;
+  assert.equal(casePracticeCaptureContexts('conditional-presentation')?.first.length, 1);
+  assert.equal(casePracticeCaptureContexts('credential-form'), null);
 });
 
 test('identity practice distinguishes seven supplied mechanisms without confirming exposure or collecting authentication material', () => {

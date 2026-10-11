@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
+import { THEME_STORAGE_KEY } from '../frontend/src/lib/theme.ts';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -30,7 +31,7 @@ test('practice scenarios require deliberate replacement and keep provider outcom
   await verifyIsolation();
 });
 
-test('bounded practice examples preserve scope, reported mechanisms and source-reuse qualifications', async ({ page }) => {
+test('bounded practice examples preserve scope, reported mechanisms and source-reuse qualifications', async ({ page }, testInfo) => {
   const verifyIsolation = await isolateCasePractice(page);
   await page.goto('/demo#case-practice');
   const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
@@ -50,7 +51,40 @@ test('bounded practice examples preserve scope, reported mechanisms and source-r
   ]) {
     await select(id!);
     await expect(practice.getByText(observation!, { exact: true }).first()).toBeVisible();
+    if (id === 'conditional-presentation') {
+      const capture = practice.getByRole('region', { name: 'Fictional capture conditions', exact: true });
+      const summary = capture.getByText('Compare capture conditions', { exact: true });
+      await summary.focus(); await summary.press('Enter');
+      const choices = capture.getByRole('checkbox');
+      await expect(choices).toHaveCount(3);
+      await choices.nth(0).focus(); await choices.nth(0).press('Space');
+      await choices.nth(1).check();
+      const matrix = capture.getByRole('region', { name: 'Selected capture condition comparison', exact: true });
+      await expect(matrix.getByRole('row', { name: /^Declared viewport/ })).toContainText('Different declarations');
+      await expect(matrix.getByRole('row', { name: /^Declared viewport/ })).toContainText('390 × 844');
+      await expect(matrix.getByRole('row', { name: /^Declared viewport/ })).toContainText('1280 × 720');
+      await expect(matrix.getByRole('row', { name: /^Declared observer/ })).toContainText('Not fully declared');
+      await choices.nth(2).check();
+      await expect(matrix.getByRole('row', { name: /^Declared viewport/ })).toContainText('Not fully declared');
+      await expect(capture.getByRole('button', { name: /Use as .* page/ })).toHaveCount(0);
+      for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+        await page.setViewportSize({ width, height: width === 320 ? 700 : 720 });
+        await useTheme(page, theme); await expectNoHorizontalOverflow(page);
+        expect((await new AxeBuilder({ page }).include('.capture-condition-matrix').analyze()).violations).toEqual([]);
+        await matrix.focus(); await expect(matrix).toBeFocused();
+        if (width === 320) {
+          await matrix.press('ArrowRight');
+          await expect.poll(() => matrix.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+          await matrix.evaluate(element => element.scrollLeft = 0);
+        }
+        if (captureVisualEvidenceEnabled()) await matrix.screenshot({ path: testInfo.outputPath(`demo-conditions-${theme}-${width}.png`) });
+      }
+    }
   }
+  await select('conditional-presentation');
+  await practice.getByText('Compare capture conditions', { exact: true }).click();
+  await expect(practice.locator('.capture-condition-matrix').getByRole('status')).toHaveText('0 of 3 observations selected · maximum 20');
+  await expect(practice.getByRole('region', { name: 'Selected capture condition comparison', exact: true })).toHaveCount(0);
   await select('identity-actions');
   await practice.getByText('Review the supplied action mechanisms', { exact: true }).click();
   const mechanisms = practice.getByRole('list', { name: 'Supplied identity action mechanisms', exact: true });
@@ -466,6 +500,22 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(page.getByRole('heading', { name: 'Where this result came from' })).toHaveCount(0);
   await expect(page.getByRole('img', { name: 'Overlapping collection timing for 4 source branches' })).toBeVisible();
   await expect(page.locator('.timing-summary')).toContainText('Network context');
+  const scope = page.locator('#demo-source-quality .scope-disclosure');
+  await scope.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  await expect(scope.getByRole('region', { name: 'Registry RDAP scope', exact: true })).toContainText('exampleshop-login.example');
+  await expect(scope.getByRole('region', { name: 'WHOIS scope', exact: true })).toContainText('Observation time unavailable');
+  await expect(scope.getByRole('region', { name: 'DNS scope', exact: true })).toContainText('Exact outcome not retained');
+  const httpScope = scope.getByRole('region', { name: 'HTTP scope', exact: true });
+  for (const label of ['Requested URL', 'Final URL']) await expect(httpScope.locator('dl > div').filter({ has: page.getByText(label, { exact: true }) }).locator('dd')).toHaveText('Not retained');
+  const tlsScope = scope.getByRole('region', { name: 'TLS connection and certificate scope', exact: true });
+  await expect(tlsScope.locator('dl > div').filter({ has: page.getByText('Connection hostname (SNI)', { exact: true }) }).locator('dd')).toHaveText('Not retained');
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('#demo-source-quality').analyze()).violations).toEqual([]);
+    await scope.locator(':scope > summary').focus();
+    if (captureVisualEvidenceEnabled()) await scope.screenshot({ path: testInfo.outputPath(`demo-scope-${theme}-${width}.png`) });
+  }
 
   await monitorHandoff.click();
   await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeFocused();
@@ -482,12 +532,31 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(changeReview).toContainText('matched this retained state');
   await expect(changeReview).toContainText('Material change');
   await expect(page.locator('.retained-case')).toContainText('History entries2');
+  await page.getByText('Explore the retained investigation timeline', { exact: true }).click();
+  const retainedTimeline = page.getByRole('region', { name: 'Investigation timeline', exact: true });
+  await expect(retainedTimeline.locator('a[href]')).toHaveCount(0);
+  await retainedTimeline.getByText('Evidence family coverage', { exact: true }).click();
+  const families = retainedTimeline.getByRole('list', { name: 'Evidence families', exact: true });
+  const combined = families.getByRole('listitem').filter({ has: page.getByRole('button', { name: 'Show Combined observations', exact: true }) });
+  await expect(combined).toContainText('2 retained records');
+  await expect(families.getByRole('listitem').filter({ has: page.getByRole('button', { name: 'Show DNS', exact: true }) })).toContainText('0 retained records');
+  await combined.getByRole('button').focus(); await page.keyboard.press('Enter');
+  await expect(retainedTimeline.locator('.timeline-list > li')).toHaveCount(2);
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('.timeline-workspace').analyze()).violations).toEqual([]);
+    await combined.getByRole('button').focus();
+    if (captureVisualEvidenceEnabled()) await families.screenshot({ path: testInfo.outputPath(`demo-families-${theme}-${width}.png`) });
+  }
+  await page.getByText('Explore the retained investigation timeline', { exact: true }).click();
 
   const storage = await page.evaluate(() => ({
     local: Object.keys(localStorage),
     session: Object.keys(sessionStorage),
   }));
-  expect(storage.local).toEqual([]);
+  expect(storage.local).toEqual([THEME_STORAGE_KEY]);
+  expect(await page.evaluate(key => localStorage.getItem(key), THEME_STORAGE_KEY)).toBe('dark');
   expect(storage.session).toEqual(['whoisleuth:synthetic-demo:v1']);
 
   const downloadPromise = page.waitForEvent('download');

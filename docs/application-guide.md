@@ -15,6 +15,11 @@ workspace data. Its HTTP examples retain an origin when available, but not full
 requested or final URLs. Those URL rows therefore say **Not retained**; an origin
 does not identify the page path, and an inconclusive example has no observed
 response or final origin.
+The demo's **Source quality** view uses the same source-scope display as Lookup;
+missing query outcomes, connection hostnames and source times stay unknown.
+In its Case step, **Explore the retained investigation timeline** groups the
+existing fictional observations by evidence family without opening saved Cases.
+Combined snapshots do not supply separate clocks for each family.
 
 Brand candidates, the Review Inbox, Bulk's Review view and the saved Case list
 share an **Inspect** workflow. The queue stays beside the current item on wide
@@ -59,6 +64,9 @@ Choose a compromised-page or shared-form scenario to practise exact object scope
 the related-host scenario keeps different affected identities and observations
 separate. The changing landing-page exercise leaves the ad and replacement URL
 open to review. Conditional captures retain their different paths and conditions.
+Their **Compare capture conditions** view compares declared fictional viewport
+and browser context, including an incomplete later attempt with unknown settings.
+The exercise includes no image bytes or page-comparison inputs.
 Other examples distinguish reported account actions, an organisation's existence
 from its claimed campaign endorsement, insufficient logo/edge evidence, and a
 later provider result that reuses a submitted report. Inspect the evidence and

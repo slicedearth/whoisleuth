@@ -475,6 +475,7 @@ export function syntheticDemoLookupView(id: string) {
   const website = candidate.evidence.website;
   const certificate = candidate.evidence.certificate;
   const conclusive = candidate.availability !== 'Unknown';
+  const whoisParsed = { domainName: conclusive ? candidate.domain : null };
   const observedAt = candidate.provenance.lastObservedAt || '2026-06-26T11:15:00.000Z';
   const active = candidate.facts.activityStatus === 'active';
   const baseline = candidate.observations[0];
@@ -556,8 +557,9 @@ export function syntheticDemoLookupView(id: string) {
       rdapPartialDetail: '',
       rdapRows: [],
       whoisError: conclusive ? '' : 'The synthetic WHOIS fixture is inconclusive; no absence finding is inferred.',
+      whoisParsed,
       whoisRows: conclusive ? [
-        { label: 'Domain', value: candidate.domain },
+        { label: 'Domain', value: whoisParsed.domainName! },
         { label: 'Registrar', value: registry.registrar },
         { label: 'Created', value: registry.registeredAt },
         { label: 'Nameservers', value: dns.nameservers.join(', ') || 'Not observed' },

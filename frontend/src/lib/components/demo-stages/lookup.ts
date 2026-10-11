@@ -3,6 +3,8 @@ export { default as LookupLifecycle } from '#lib/components/LookupLifecycle.svel
 export { default as LookupAcquisitionReview } from '#lib/components/DemoLookupAcquisitionReview.svelte';
 export { default as LookupAssessment } from '#lib/components/LookupAssessment.svelte';
 export { default as LookupCollectionTiming } from '#lib/components/LookupCollectionTiming.svelte';
+export { default as LookupEvidenceScope } from '#lib/components/LookupEvidenceScope.svelte';
+export { syntheticDemoEvidenceScope } from '#lib/analysis/demo-lookup-scope.ts';
 export { default as LookupDnsEvidence } from '#lib/components/LookupDnsEvidence.svelte';
 export { default as LookupFamilySummary } from '#lib/components/LookupFamilySummary.svelte';
 export { default as LookupHttpEvidence } from '#lib/components/LookupHttpEvidence.svelte';

@@ -10,6 +10,7 @@ import { caseIncidentTargets } from '../../../../packages/cases/case-workflow-me
 import { caseRecheckAnswerContext } from '../../../../packages/cases/case-recheck-model.mts';
 import { PLATFORM_REPORTING_ROUTES } from '../../../../packages/cases/platform-reporting-routes.mts';
 import { readIncidentStages, reviewIncidentSequence } from '../../../../packages/investigation/incident-sequence-review.mts';
+import type { CaptureManifestContext } from '../../../../packages/interchange/web-capture-import.mts';
 
 export const CASE_PRACTICE_OBSERVED_AT = '2026-09-01T12:00:00.000Z';
 export const CASE_PRACTICE_LATER_AT = '2026-09-02T12:00:00.000Z';
@@ -213,6 +214,23 @@ export const CASE_PRACTICE_SCENARIOS = [
     adequate: 'Keep the provider statement and unavailable independent review separate.', inadequate: '“Closed ticket proves removal.” A provider workflow status is not an independent observation.' },
 ] as const;
 export type CasePracticeScenario = typeof CASE_PRACTICE_SCENARIOS[number]['id'];
+
+/** Declared fictional capture context; no image bytes or page observations are supplied. */
+export function casePracticeCaptureContexts(scenario: CasePracticeScenario): { first: CaptureManifestContext[]; second: CaptureManifestContext[] } | null {
+  if (scenario !== 'conditional-presentation') return null;
+  const context = (observedAt: string, vantageLabel: string | null, viewport: { width: number; height: number } | null): CaptureManifestContext => ({
+    domain: 'conditional.example', observedAt, observerLabel: null, vantageLabel,
+    completeness: viewport ? 'complete' : 'partial', pageBehaviour: null,
+    conditions: viewport ? { browser: 'Fictional browser', browserVersion: '1.0', viewport, deviceScaleFactor: 1,
+      locale: 'en-AU', timezone: 'UTC', colourScheme: 'light' } : null,
+  });
+  return {
+    first: [context(CASE_PRACTICE_OBSERVED_AT, 'Fictional mobile location', { width: 390, height: 844 })],
+    second: [context(CASE_PRACTICE_LATER_AT, 'Different fictional desktop location', { width: 1280, height: 720 }),
+      context(CASE_PRACTICE_LATER_AT, null, null)],
+  };
+}
+
 export function casePracticeDefinition(scenario: CasePracticeScenario) {
   const definition = CASE_PRACTICE_SCENARIOS.find(item => item.id === scenario);
   if (!definition) throw new TypeError('Unknown practice scenario.');

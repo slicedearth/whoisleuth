@@ -17,7 +17,7 @@
   } from '#lib/analysis/retained-evidence-timeline.ts';
 
   const PAGE_SIZE = 50;
-  let { timeline }: { timeline: RetainedEvidenceTimeline } = $props();
+  let { timeline, recordNavigation = true }: { timeline: RetainedEvidenceTimeline; recordNavigation?: boolean } = $props();
   let entity = $state('');
   let caseId = $state('');
   let source = $state('');
@@ -65,7 +65,7 @@
     <div>
       <p class="eyebrow">Retained evidence</p>
       <h2 id="retained-evidence-timeline-title">Investigation timeline</h2>
-      <p>Review source observations and local activity, with storage times kept separate. Open a record for its evidence and analyst context.</p>
+      <p>Review source observations and local activity, with storage times kept separate. {recordNavigation ? 'Open a record for its evidence and analyst context.' : 'These fictional records do not open saved workspace records.'}</p>
     </div>
     <div class="metrics" role="group" aria-label="Timeline summary">
       <span><strong>{timeline.counts.all}</strong> retained events</span>
@@ -143,11 +143,11 @@
             {#if item.caseAssociations?.length}
               <details class="case-associations">
                 <summary>Currently associated Cases ({item.caseAssociations.length})</summary>
-                <ul>{#each item.caseAssociations as association}<li>{#if association.present}<a href={caseWorkspaceHref(association.id)}>{association.label}</a>{:else}{association.label}{/if}</li>{/each}</ul>
+                <ul>{#each item.caseAssociations as association}<li>{#if association.present && recordNavigation}<a href={caseWorkspaceHref(association.id)}>{association.label}</a>{:else}{association.label}{/if}</li>{/each}</ul>
               </details>
             {/if}
             <div class="item-actions">
-              <a class="btn" href={item.href}>Open {item.owner}</a>
+              {#if recordNavigation}<a class="btn" href={item.href}>Open {item.owner}</a>{:else}<span>{item.owner} · fictional record</span>{/if}
               {#if item.truncated}<span class="truncated">Truncated</span>{/if}
             </div>
             <details><summary>Limitations</summary>{#each item.limitations as limitation}<p>{limitation}</p>{/each}</details>

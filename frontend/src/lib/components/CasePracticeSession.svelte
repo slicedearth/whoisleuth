@@ -11,10 +11,13 @@
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CaseRequestedEvidence from './CaseRequestedEvidence.svelte';
   import CaseAssessmentComparison from './CaseAssessmentComparison.svelte';
+  import CaptureConditionMatrix from './CaptureConditionMatrix.svelte';
+  import { casePracticeCaptureContexts } from '#lib/analysis/case-practice.ts';
   import '#lib/components/case-response-stage.css';
 
   let { onreset, scenario }: { onreset: () => void; scenario: CasePracticeScenario } = $props();
   const session = createCasePracticeSession(untrack(() => scenario));
+  const captureContexts = casePracticeCaptureContexts(untrack(() => scenario));
   const definition = $derived(casePracticeDefinition(scenario));
   const routes = $derived(casePracticeRoutes(scenario));
   const initialPinIds = session.read().evidencePins.map(pin => pin.id);
@@ -108,6 +111,10 @@
     <h3 id="practice-evidence" tabindex="-1">Pin a fact with its source</h3>
     <p>{definition.observation} Pin the relevant observation with its source and time <time datetime={CASE_PRACTICE_OBSERVED_AT}>1 September 2026, 12:00 UTC</time>.</p>
     {#each record.evidencePins.filter((_, index) => index !== 1) as pin}<CaseEvidenceFact {pin} />{/each}
+    {#if captureContexts}<section aria-label="Fictional capture conditions">
+      <p>Two fictional manifest summaries describe the mobile capture, the different desktop capture and the incomplete later attempt. The first two explicitly declare example browser settings, viewports and location labels. The later attempt has no recorded conditions. No image bytes or comparable page observations are included.</p>
+      <CaptureConditionMatrix {...captureContexts} firstPage="" secondPage="" choosePage={() => {}} />
+    </section>{/if}
     {#if identityReview}<details class="practice-local"><summary>Review the supplied action mechanisms</summary>
       <p>{identityReview.review.summary} This uses the existing incident-sequence review. The selected order is not proof of causation, and reported actions are not verified account effects.</p>
       <ol aria-label="Supplied identity action mechanisms">{#each identityReview.stages as stage}<li><strong>{stage.id.replaceAll('-', ' ')} · {stage.basis.replaceAll('_', ' ')}</strong><p>{stage.description}</p><p>{stage.source} · occurrence time {stage.occurredAt ?? 'unknown'}</p></li>{/each}</ol>

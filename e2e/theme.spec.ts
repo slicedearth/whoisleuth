@@ -4,16 +4,26 @@ import { expectNoHorizontalOverflow, useTheme } from './helpers';
 const STORAGE_KEY = 'whoisleuth:theme:v1';
 
 test('theme preparation switches the current document and preserves that choice after navigation', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const inheritedTextMatchesTheme = () => page.locator('main').evaluate(element => {
+    const reference = document.createElement('span');
+    reference.style.color = 'var(--text)';
+    document.body.append(reference);
+    try { return getComputedStyle(element).color === getComputedStyle(reference).color; }
+    finally { reference.remove(); }
+  });
   await useTheme(page, 'dark');
   await page.goto('/methodology');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   const navigationStart = await page.evaluate(() => performance.timeOrigin);
   await useTheme(page, 'light');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  expect(await inheritedTextMatchesTheme()).toBe(true);
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(navigationStart);
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await useTheme(page, 'dark');
+  expect(await inheritedTextMatchesTheme()).toBe(true);
   await page.goto('/resources');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
