@@ -69,6 +69,13 @@ the requested-evidence exercise prepares a drafting amendment. Changing scenario
 requires confirming that its Case and drafts should be discarded. Feedback
 checks retained relationships and states, not the quality of free-text reasoning.
 
+For related hosts, conflicting sources and provider-reported resolution, open
+**Find the weak inference** in **Record a conclusion**. Inspect the original
+supplied evidence, choose the statement that exceeds it and select **Explain
+this choice**. The explanation distinguishes the observation from the unsupported
+conclusion; it does not score you or record a Case decision. Closing the exercise,
+changing steps or collapsing practice clears the choice without changing your drafts.
+
 In the source-reuse exercise, record a conclusion citing the provider's reused
 report, then select that conclusion under **Trace sources for** in **Evidence
 relationships and shared sources**. Follow its declared derivation without

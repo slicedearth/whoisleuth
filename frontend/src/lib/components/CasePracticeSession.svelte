@@ -12,6 +12,7 @@
   import CaseRequestedEvidence from './CaseRequestedEvidence.svelte';
   import CaseAssessmentComparison from './CaseAssessmentComparison.svelte';
   import CaseIncidentCoverage from './CaseIncidentCoverage.svelte';
+  import CasePracticeInference from './CasePracticeInference.svelte';
   import CaptureConditionMatrix from './CaptureConditionMatrix.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
   import { casePracticeCaptureContexts } from '#lib/analysis/case-practice.ts';
@@ -22,7 +23,8 @@
   const captureContexts = casePracticeCaptureContexts(untrack(() => scenario));
   const definition = $derived(casePracticeDefinition(scenario));
   const routes = $derived(casePracticeRoutes(scenario));
-  const initialPinIds = session.read().evidencePins.map(pin => pin.id);
+  const suppliedEvidence = session.read().evidencePins;
+  const initialPinIds = suppliedEvidence.map(pin => pin.id);
   provideDocumentCaseDraftStorage(session.storage);
   // Session operations replace detached records; keep them cloneable for the
   // same audience projections used by the saved-workspace workflow.
@@ -32,7 +34,9 @@
   const sourceQualifications = $derived(caseSelectedEvidenceSourceLimitations(record.evidencePins, record.evidenceLinks, record.evidencePins.map(pin => pin.id)));
   let step = $state('evidence');
   let packetComparisonOpen = $state(false);
+  let inferenceOpen = $state(false);
   $effect(() => { if (!visible || step !== 'response') packetComparisonOpen = false; });
+  $effect(() => { if (!visible || step !== 'assessment') inferenceOpen = false; });
   let message = $state('');
   let mutationBusy = $state(false);
   let live = true;
@@ -152,6 +156,9 @@
   <div hidden={step !== 'assessment'}>
     <h3 id="practice-assessment" tabindex="-1">Explain what the evidence supports</h3>
     <p>Select a reviewed disposition, link the evidence and explain the uncertainty. {definition.assessment}</p>
+    {#if 'inference' in definition}<details class="practice-local" bind:open={inferenceOpen}><summary>Find the weak inference</summary>
+      {#if inferenceOpen && visible && step === 'assessment'}<CasePracticeInference exercise={definition.inference} evidence={suppliedEvidence} />{/if}
+    </details>{/if}
     <details><summary>Compare an adequate and an inadequate report</summary><p><strong>Adequate:</strong> {definition.adequate}</p><p><strong>Inadequate:</strong> {definition.inadequate}</p><p>The exercise supports evidence pins, conclusions and rechecks. Other scenario-specific actions described here are guidance unless an interactive response step is provided.</p>{#each routes as route}<p><strong>{route.platformLabel}: {route.label}</strong> · reviewed {route.reviewedAt}, recheck before {route.reviewAfter}. The official reference is available in Resources reporting guidance. {route.privacyNote}</p>{/each}</details>
     <CaseAssessmentStage {record} mode="quick" {mutationBusy} {persist} onmessage={value => message = value} />
     {#if scenario === 'trust-claim'}<CaseAssessmentComparison record={{ ...record, assertions: record.assertions.filter(assertion => assertion.kind === 'hypothesis') }} />{/if}

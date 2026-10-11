@@ -2,7 +2,7 @@ import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-cont
 import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, useTheme } from './helpers';
+import { expectFocusedResultsVisible, expectNoHorizontalOverflow, useTheme } from './helpers';
 import { THEME_STORAGE_KEY } from '../frontend/src/lib/theme.ts';
 import { holdPacketFileDigest } from './held-packet-digest';
 
@@ -29,6 +29,98 @@ test('practice scenarios require deliberate replacement and keep provider outcom
   await expect(practice).toContainText('Provider-reported outcome: provider reports resolved');
   await practice.getByText('Check your reasoning', { exact: true }).click();
   await expect(practice.getByRole('list', { name: 'Practice record checks' })).toContainText('Not yet recorded: The incomplete later capture is recorded as unavailable');
+  await verifyIsolation();
+});
+
+test('fictional inference exercises explain evidence limits without recording answers or changing practice drafts', async ({ page }, testInfo) => {
+  const verifyIsolation = await isolateCasePractice(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/demo#case-practice');
+  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const scenario = page.getByRole('combobox', { name: 'Practice scenario', exact: true });
+  const exercise = practice.getByRole('region', { name: 'Fictional inference exercise', exact: true });
+  const disclosure = practice.getByText('Find the weak inference', { exact: true });
+  const explanation = exercise.getByRole('region', { name: 'Inference explanation', exact: true });
+  await expect(practice).toBeVisible();
+  await expect(disclosure).toHaveCount(0);
+  const storedBefore = await page.evaluate(() => ({ local: Object.entries(localStorage).sort(), session: Object.entries(sessionStorage).sort() }));
+
+  for (const [id, weak, bounded, reason] of [
+    ['related-hosts', /prove one operator controls both pages/u, /two different affected identities/u, /not proof of common control/u],
+    ['contradictory-sources', /proves the complete capture was wrong/u, /includes a credential form/u, /no recorded path or viewport/u],
+    ['provider-resolved', /confirms that the page has been removed/u, /^The provider reported resolution/u, /independent capture failed/u],
+  ] as const) {
+    await scenario.selectOption(id);
+    await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
+    await practice.getByRole('button', { name: '2. Record a conclusion', exact: true }).click();
+    const draft = practice.getByLabel('Conclusion summary', { exact: true });
+    await draft.fill('Keep this unsubmitted explanation');
+    await disclosure.focus(); await disclosure.press('Enter');
+    await expect(exercise.getByRole('radio')).toHaveCount(3);
+    await expect(exercise.getByRole('button', { name: 'Explain this choice', exact: true })).toBeDisabled();
+    await exercise.getByText('Supplied evidence', { exact: true }).click();
+    const evidence = exercise.getByRole('list', { name: 'Original fictional evidence', exact: true });
+    await expect(evidence).toContainText('Fictional');
+    await expect(evidence).toContainText('source state: unavailable');
+    await expect(evidence).not.toContainText('Keep this unsubmitted explanation');
+    await exercise.getByText('Supplied evidence', { exact: true }).click();
+    const boundedChoice = exercise.getByRole('radio', { name: bounded });
+    await boundedChoice.focus(); await boundedChoice.press('Space');
+    await exercise.getByRole('button', { name: 'Explain this choice', exact: true }).click();
+    await expect(explanation.getByRole('heading')).toHaveText('This statement stays within the supplied evidence');
+    await expect(explanation.getByRole('heading')).toBeFocused();
+    await exercise.getByRole('radio', { name: weak }).check();
+    await expect(explanation).toHaveCount(0);
+    await exercise.getByRole('button', { name: 'Explain this choice', exact: true }).click();
+    await expect(explanation.getByRole('heading')).toHaveText('This conclusion goes beyond the evidence');
+    await expect(explanation).toContainText(reason);
+    await expect(draft).toHaveValue('Keep this unsubmitted explanation');
+    await explanation.getByRole('button', { name: 'Try again', exact: true }).click();
+    await expect(exercise.getByRole('group', { name: 'Which conclusion goes beyond the evidence?', exact: true }).locator('legend')).toBeFocused();
+    await expect(exercise.getByRole('radio', { checked: true })).toHaveCount(0);
+    await exercise.getByRole('radio', { name: weak }).check();
+    await exercise.getByRole('button', { name: 'Explain this choice', exact: true }).click();
+  }
+
+  expect(await page.evaluate(() => ({ local: Object.entries(localStorage).sort(), session: Object.entries(sessionStorage).sort() }))).toEqual(storedBefore);
+  for (const density of ['comfortable', 'compact'] as const) {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.getByRole('button', { name: /^Colour theme,/u }).click();
+    await page.getByLabel('Reading density').selectOption(density);
+    await page.getByLabel('Reading density').press('Escape');
+    await expect(page.locator('html')).toHaveAttribute('data-density', density);
+    for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height: width === 320 ? 700 : 720 });
+      await useTheme(page, theme);
+      await explanation.getByRole('heading').focus();
+      await expectFocusedResultsVisible(page, explanation.getByRole('heading'), explanation.getByRole('heading'));
+      await expectNoHorizontalOverflow(page);
+      expect((await new AxeBuilder({ page }).include('.inference-practice').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+      if (captureVisualEvidenceEnabled()) {
+        await page.screenshot({ path: testInfo.outputPath(`inference-${density}-${theme}-${width}-viewport.png`) });
+        await exercise.screenshot({ path: testInfo.outputPath(`inference-${density}-${theme}-${width}.png`) });
+      }
+    }
+  }
+  await disclosure.click(); await disclosure.click();
+  await expect(explanation).toHaveCount(0);
+  await expect(exercise.getByRole('radio', { checked: true })).toHaveCount(0);
+  await exercise.getByRole('radio').first().check();
+  await practice.getByRole('button', { name: '1. Pin a fact', exact: true }).click();
+  await expect(exercise).toHaveCount(0);
+  await practice.getByRole('button', { name: '2. Record a conclusion', exact: true }).click();
+  await disclosure.click();
+  await expect(exercise.getByRole('radio', { checked: true })).toHaveCount(0);
+  await expect(practice.getByLabel('Conclusion summary', { exact: true })).toHaveValue('Keep this unsubmitted explanation');
+  await practice.getByText('Check your reasoning', { exact: true }).click();
+  await expect(practice.getByRole('list', { name: 'Practice record checks', exact: true })).toContainText('Not yet recorded: The decision links retained evidence');
+  await exercise.getByRole('radio').first().check();
+  await page.getByText('Practise with real Case forms', { exact: true }).click();
+  await page.getByText('Practise with real Case forms', { exact: true }).click();
+  await expect(exercise).toHaveCount(0);
+  await disclosure.click();
+  await expect(exercise.getByRole('radio', { checked: true })).toHaveCount(0);
+  await expect(practice.getByLabel('Conclusion summary', { exact: true })).toHaveValue('Keep this unsubmitted explanation');
   await verifyIsolation();
 });
 

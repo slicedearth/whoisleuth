@@ -94,6 +94,10 @@ export async function previewCasePracticePackets(supplied: CaseRecord, signal?: 
   return [baseline, comparison];
 }
 
+export type CasePracticeInference = Readonly<{
+  statements: readonly Readonly<{ text: string; exceedsEvidence: boolean; explanation: string }>[];
+}>;
+
 export const CASE_PRACTICE_SCENARIOS = [
   { id: 'credential-form', title: 'An ordinary-looking sign-in page',
     observation: 'A supplied lookalike page repeats a reference page’s original offer text, without a logo or brand name, then asks for an email address and password. The supplied form action points to https://case-practice.example/collect; no credentials were entered.',
@@ -126,7 +130,15 @@ export const CASE_PRACTICE_SCENARIOS = [
     question: 'Is the service-a claim still observable?', conditions: 'Exact service-a page and claimed identity, not any sibling hostname.',
     source: 'Fictional separately scoped page captures', urls: ['https://accounts.parent.example/service-a', 'https://jobs.parent.example/service-b'], routes: [],
     adequate: 'List each host, affected identity, observation and source link separately, with the shared-parent relationship qualified.',
-    inadequate: '“One IP, one actor, one brand.” This collapses distinct incidents and overstates infrastructure evidence.' },
+    inadequate: '“One IP, one actor, one brand.” This collapses distinct incidents and overstates infrastructure evidence.',
+    inference: { statements: [
+      { text: 'The supplied captures show two different affected identities.', exceedsEvidence: false,
+        explanation: 'This describes the two attributed page accounts without turning a shared parent or address into common control.' },
+      { text: 'The shared parent and edge address prove one operator controls both pages.', exceedsEvidence: true,
+        explanation: 'Shared infrastructure is a lead, not proof of common control. Each page and affected identity still needs its own evidence.' },
+      { text: 'The failed service-a recheck does not establish the later state of service-b.', exceedsEvidence: false,
+        explanation: 'The incomplete attempt concerns service-a. It supplies neither a later observation nor a removal finding for service-b.' },
+    ] } satisfies CasePracticeInference },
   { id: 'fake-shop', title: 'A storefront promise and copied listing',
     observation: 'A supplied shop listing uses copied product prose and an unusually strong delivery promise. A customer alleges non-delivery; no purchase, counterfeit inspection or test payment occurred.',
     assessment: 'Keep observed listing content separate from the customer allegation. Fraud, copyright, trademark and trade-dress grounds need different evidence and authority.',
@@ -252,13 +264,29 @@ export const CASE_PRACTICE_SCENARIOS = [
     assessment: 'Link both sources to the conclusion. Their scope differs, so do not silently pick a winner or count them as independent corroboration.',
     recheck: 'The next capture timed out. It cannot resolve the earlier disagreement.', question: 'Is the credential form still present?', conditions: 'Same exact page and viewport for both source accounts.',
     source: 'Fictional supplied capture', urls: ['https://case-practice.example/offer'], routes: [],
-    adequate: 'Link both attributed accounts and explain the difference in scope.', inadequate: '“Pick the account that supports the conclusion.” This hides contradictory evidence.' },
+    adequate: 'Link both attributed accounts and explain the difference in scope.', inadequate: '“Pick the account that supports the conclusion.” This hides contradictory evidence.',
+    inference: { statements: [
+      { text: 'The review that saw no form proves the complete capture was wrong.', exceedsEvidence: true,
+        explanation: 'The review has no recorded path or viewport. These accounts cannot resolve each other without comparable scope; retain both and the uncertainty.' },
+      { text: 'One supplied capture includes a credential form.', exceedsEvidence: false,
+        explanation: 'This is limited to the attributed capture. It does not claim that every page or later visit shows the same form.' },
+      { text: 'The later timeout leaves the earlier disagreement unresolved.', exceedsEvidence: false,
+        explanation: 'A failed later capture adds no page content with which to decide between the earlier accounts.' },
+    ] } satisfies CasePracticeInference },
   { id: 'provider-resolved', title: 'A provider says the report is resolved',
     observation: 'A fictional provider acknowledged the earlier complaint and reported resolution. The only later capture timed out.',
     assessment: 'Keep the provider statement separate from the independent technical observation. A provider outcome is not evidence that the page was removed.',
     recheck: 'Review whether the original page condition was independently observed again. An incomplete capture cannot establish removal.', question: 'Is the reported page condition still observable?', conditions: 'Exact reported page with a complete comparable capture.',
     source: 'Fictional provider statement and page summary', urls: ['https://case-practice.example/offer'], routes: [],
-    adequate: 'Keep the provider statement and unavailable independent review separate.', inadequate: '“Closed ticket proves removal.” A provider workflow status is not an independent observation.' },
+    adequate: 'Keep the provider statement and unavailable independent review separate.', inadequate: '“Closed ticket proves removal.” A provider workflow status is not an independent observation.',
+    inference: { statements: [
+      { text: 'The provider reported resolution.', exceedsEvidence: false,
+        explanation: 'This attributes the statement to the provider. It does not turn that statement into an independent observation.' },
+      { text: 'The timeout supplies no independent later page content.', exceedsEvidence: false,
+        explanation: 'The retained later capture is unavailable. Missing page content does not establish that the page or reported condition has disappeared.' },
+      { text: 'The provider’s resolution confirms that the page has been removed.', exceedsEvidence: true,
+        explanation: 'The provider reported an outcome, but the independent capture failed. A complete, comparable observation is still needed to assess the exact page condition.' },
+    ] } satisfies CasePracticeInference },
 ] as const;
 export type CasePracticeScenario = typeof CASE_PRACTICE_SCENARIOS[number]['id'];
 
