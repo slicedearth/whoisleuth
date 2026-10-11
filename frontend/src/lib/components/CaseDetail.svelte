@@ -3,6 +3,7 @@
   import { beforeNavigate, goto } from '$app/navigation';
   import { tick } from 'svelte';
   import PageHeading from '#lib/components/PageHeading.svelte';
+  import EvidenceTimestamp from '#lib/components/EvidenceTimestamp.svelte';
   import CaseRelationships from '#lib/components/CaseRelationships.svelte';
   import EvidenceTimeline from '#lib/components/EvidenceTimeline.svelte';
   import CaseReportExport from '#lib/components/CaseReportExport.svelte';
@@ -31,7 +32,7 @@
     record, allRecords, tagDraft, setTagDraft, noteDraft, setNoteDraft, pendingNoteCaseIds,
     selectCase, returnToList, setStatus, setDisposition, setReviewReason,
     addBrandProfileAssociation, removeBrandProfileAssociation, saveTags, addNote, removeCase,
-    refreshCases, installCommittedCaseSnapshot, setMessage, formatDate, brandProfiles, brandProfilesUnavailable,
+    refreshCases, installCommittedCaseSnapshot, setMessage, brandProfiles, brandProfilesUnavailable,
   }: {
     record: CaseRecord;
     allRecords: CaseRecord[];
@@ -53,7 +54,6 @@
     refreshCases: () => void | Promise<void>;
     installCommittedCaseSnapshot: (cases: CaseRecord[]) => void;
     setMessage: (value: string) => void;
-    formatDate: (value: string) => string;
     brandProfiles: BrandProfile[];
     brandProfilesUnavailable: boolean;
   } = $props();
@@ -175,7 +175,7 @@
       <span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span>
       <span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span>
       <span title={`Complete Case number: ${caseNumber(record.id)}`}>Case …{caseNumber(record.id).slice(-8)}</span>
-      <span>Updated <time datetime={record.updatedAt}>{formatDate(record.updatedAt)}</time></span>
+      <span>Updated <EvidenceTimestamp value={record.updatedAt} label="Case update time" /></span>
     </div>
   </div>
   <div class="case-actions">
@@ -183,7 +183,7 @@
     <a class="btn" href={`/monitor?view=inbox&queue=all&case-review=${encodeURIComponent(record.id)}`}>Review follow-up</a>
     <details class="case-more">
       <summary>Case options</summary>
-      <div><span>Source: {sourceLabel(record.source)}</span><span>Opened {formatDate(record.createdAt)}</span><span class="complete-id">{caseNumber(record.id)}</span><button id={`case-delete-${record.id}`} class="btn danger" onclick={() => void removeCase(record)}>Delete case</button></div>
+      <div><span>Source: {sourceLabel(record.source)}</span><span>Opened <EvidenceTimestamp value={record.createdAt} label="Case opening time" /></span><span class="complete-id">{caseNumber(record.id)}</span><button id={`case-delete-${record.id}`} class="btn danger" onclick={() => void removeCase(record)}>Delete case</button></div>
     </details>
   </div>
   <div aria-hidden="true"></div>
@@ -223,7 +223,7 @@
         <textarea id={`note-${record.id}`} value={noteDraft} oninput={(event) => setNoteDraft(event.currentTarget.value)} rows="3" placeholder="Observations, evidence or decisions"></textarea>
         <button class="btn" type="submit" disabled={!noteDraft.trim() || pendingNoteCaseIds.includes(record.id)}>{pendingNoteCaseIds.includes(record.id) ? 'Adding…' : 'Add note'}</button>
       </form>
-      {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><time datetime={note.createdAt}>{formatDate(note.createdAt)}</time><p>{note.body}</p></li>{/each}</ol>{/if}
+      {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><div class="note-time"><EvidenceTimestamp value={note.createdAt} label="note time" /></div><p>{note.body}</p></li>{/each}</ol>{/if}
     {/snippet}
     {#snippet exports()}<CaseReportExport {record} onmessage={setMessage} />{/snippet}
   </CaseResponseWorkspace>
@@ -253,7 +253,7 @@
   .note-edit textarea { width: 100%; margin-block: 6px 8px; }
   .notes { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
   .notes li { padding: 12px; border-bottom: 1px solid var(--border); }
-  .notes time { color: var(--muted); font-size: var(--text-xs); }
+  .note-time { color: var(--muted); font-size: var(--text-xs); }
   .notes p { margin: 6px 0 0; font-size: var(--text-sm); line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
   @media(max-width: 720px) { .field-grid { grid-template-columns: minmax(0,1fr); } }
   .mobile-section{display:none}

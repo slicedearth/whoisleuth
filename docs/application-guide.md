@@ -614,6 +614,11 @@ Select a Case to open its workspace. **All Cases** returns to the retained list
 filters. Direct Case links open that record in this browser, not in another
 person's workspace.
 
+The Case's update time, opening time under **Case options**, and note times in
+**History** display in UTC. Their **Copy** controls keep the exact stored value,
+including fractional seconds. Copying a time does not update the Case. If the
+clipboard is unavailable, the exact value appears as selectable text.
+
 **Saved Case views** retains the current status, disposition, search and sort
 choices. Name a view, then select **Save as new view**. **Apply view** runs those
 filters against the currently retained Cases; it does not collect evidence.

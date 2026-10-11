@@ -3,7 +3,7 @@ import { expect, test } from './fixtures';
 import { openCaseMetadata, openCaseSection } from './console-navigation';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { productionChunkPath } from './production-build';
-import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
+import { currentBrowserLocalDocument, expectFocusedResultsVisible, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 
 async function seedCases(page: import('@playwright/test').Page, destination = '/cases') {
   await page.goto('/cases');
@@ -183,8 +183,27 @@ for (const [section, preserveLaterFocus] of [
   });
 }
 
-test('Case detail replaces the list and returns to its retained filters and focus', async ({ page }) => {
-  await seedCases(page);
+test('Case detail replaces the list and returns to its retained filters and focus', async ({ page }, testInfo) => {
+  const copied: string[] = [];
+  let refuseCopy = false;
+  await page.exposeFunction('recordFixtureCaseTimeCopy', (value: string) => {
+    if (refuseCopy) throw new Error('Private clipboard failure');
+    copied.push(value);
+  });
+  await page.addInitScript(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    writeText: (value: string) => (window as unknown as { recordFixtureCaseTimeCopy(value: string): Promise<void> }).recordFixtureCaseTimeCopy(value),
+  } }));
+  const openedAt = '2026-06-01T02:03:04.123Z';
+  const updatedAt = '2026-06-03T04:05:06.789Z';
+  const noteAt = '2026-06-02T03:04:05.456Z';
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [
+      caseRecord({ id: 'workspace-first', domain: 'first-work.example', evidenceHistory: [snapshot()],
+        createdAt: openedAt, updatedAt, notes: [{ createdAt: noteAt, body: 'Retained review note.' }] }),
+      caseRecord({ id: 'workspace-second', domain: 'second-work.example' }),
+    ] }),
+  }, { destination: '/cases' });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
   const search = page.getByRole('textbox', { name: 'Search', exact: true });
   await search.fill('first-work');
   const row = page.locator('#case-head-workspace-first');
@@ -197,6 +216,46 @@ test('Case detail replaces the list and returns to its retained filters and focu
   await expect(page.getByRole('group', { name: 'Case response presentation', includeHidden: true })).toBeHidden();
   await expect(page.getByRole('textbox', { name: /^Additional tags/, includeHidden: true })).toBeHidden();
   await expect(page.getByRole('group', { name: 'Retained Case records' })).toContainText('1 snapshot');
+  const detail = page.locator('[data-case-detail="workspace-first"]');
+  await detail.getByText('Case options', { exact: true }).click();
+  await openCaseSection(page, 'History');
+  for (const [label, value] of [['Case update time', updatedAt], ['Case opening time', openedAt], ['note time', noteAt]] as const) {
+    const control = detail.getByRole('button', { name: new RegExp(`Copy exact ${label}:`, 'u') });
+    await expect(control).toHaveAttribute('title', value);
+    await expect(control.locator('time')).toHaveAttribute('datetime', value);
+    await expect(control.locator('time')).toContainText('UTC');
+    await control.focus();
+    await control.press('Enter');
+    await expect.poll(() => copied.at(-1)).toBe(value);
+    await expect(control).toBeFocused();
+    await expect(detail.getByText(`Exact ${label} copied.`, { exact: true })).toHaveCount(1);
+  }
+  expect(copied).toEqual([updatedAt, openedAt, noteAt]);
+  refuseCopy = true;
+  await detail.getByRole('button', { name: /Copy exact note time:/u }).click();
+  await expect(detail.locator('.notes .evidence-timestamp code')).toHaveText(noteAt);
+  await expect(detail.getByText('Clipboard unavailable. Select the exact timestamp below.', { exact: true })).toBeVisible();
+  await expect(detail).not.toContainText('Private clipboard failure');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expectNoHorizontalOverflow(page);
+      await expect(detail.getByRole('button', { name: /Copy exact Case update time:/u })).toBeVisible();
+      await expect(detail.getByRole('button', { name: /Copy exact Case opening time:/u })).toBeVisible();
+      await expect(detail.locator('.notes .evidence-timestamp code')).toBeVisible();
+      for (const name of [/Copy exact Case update time:/u, /Copy exact Case opening time:/u, /Copy exact note time:/u]) {
+        const control = detail.getByRole('button', { name });
+        await control.focus();
+        await expectFocusedResultsVisible(page, control, control);
+      }
+      if (captureVisualEvidenceEnabled()) {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.screenshot({ path: testInfo.outputPath(`case-times-${theme}-${width}.png`), fullPage: true });
+      }
+    }
+  }
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 })).toEqual(before);
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   await expect(search).toHaveValue('first-work');
   await expect(page.locator('.case-head')).toHaveCount(1);

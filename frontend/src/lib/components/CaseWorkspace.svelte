@@ -656,7 +656,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
             noteDraft, setNoteDraft: (value: string) => { noteRevision.changed(); noteDraft = value; }, pendingNoteCaseIds,
             selectCase, returnToList, setStatus, setDisposition, setReviewReason, addBrandProfileAssociation, removeBrandProfileAssociation,
             saveTags, addNote, removeCase, refreshCases, installCommittedCaseSnapshot, setMessage: (value: string) => caseMessage = value,
-            formatDate: date, brandProfiles, brandProfilesUnavailable }} />
+            brandProfiles, brandProfilesUnavailable }} />
       {/key}
     {:else}
     {#if guidedDomains.length}
