@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildCaseDecisionOverview } from '../packages/cases/case-decision-overview.mts';
+import { buildCaseDecisionOverview, caseQuestionNextActions } from '../packages/cases/case-decision-overview.mts';
 import { createCase } from '../packages/cases/case-model.mts';
 import { caseRecheckComparisonWarnings } from '../packages/cases/case-recheck-model.mts';
 import type { CaseEvidencePin, CaseDecisionRecord, CaseActionRecord } from '../packages/cases/case-response-records.mts';
@@ -84,4 +84,35 @@ test('manual acknowledgement schedules follow-up without implying removal or alt
   assert.equal(buildCaseDecisionOverview(record, '2026-09-10T10:01:00Z').reviews[0]?.due, true);
   assert.equal(buildCaseDecisionOverview(record, 'not a timestamp').reviews[0]?.due, null);
   assert.deepEqual(record, before); assert.equal(record.observedEffects.reviews.length, 0);
+});
+
+test('question reviews are scoped, deterministic and leave further reviews reachable without changing a Case', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  record.evidencePins = [pin, { ...pin, id: 'limited', completeness: 'partial', observedAt: null }, { ...pin, id: 'unrelated', sourceState: 'unavailable' }];
+  record.assertions = [{ id: 'question', kind: 'hypothesis', statement: 'Which observation applies?', rationale: null, state: 'open',
+    evidencePinIds: ['missing', 'pin-one', 'limited', 'limited'], evidenceRelations: [{ evidencePinId: 'limited', stance: 'contradicts' }], createdAt: NOW, updatedAt: NOW },
+  { id: 'other', kind: 'hypothesis', statement: 'A separate question', rationale: null, state: 'open', evidencePinIds: ['pin-one'],
+    evidenceRelations: [{ evidencePinId: 'pin-one', stance: 'supports' }], createdAt: NOW, updatedAt: NOW }];
+  const before = structuredClone(record);
+  const overview = buildCaseDecisionOverview(record, NOW);
+  const next = caseQuestionNextActions(overview, 'question');
+  assert.deepEqual(next.actions.map(action => action.id), ['links', 'relationships', 'observations']);
+  assert.deepEqual(next.further.map(action => action.id), ['classification']);
+  assert.match(next.actions[2]!.reason, /^1 linked observation is/);
+  assert.ok(next.actions.every(action => action.prerequisite && action.limitation && action.expectedOutcome));
+  assert.deepEqual(caseQuestionNextActions(overview, 'other'), { actions: [], further: [] });
+  assert.deepEqual(caseQuestionNextActions(overview, 'missing'), { actions: [], further: [] });
+  assert.deepEqual(record, before);
+  record.assertions[0]!.state = 'resolved';
+  assert.deepEqual(caseQuestionNextActions(buildCaseDecisionOverview(record, NOW), 'question'), { actions: [], further: [] });
+});
+
+test('an unlinked assessment receives a local review, not an invented source or collection instruction', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  record.assertions = [{ id: 'question', kind: 'hypothesis', statement: 'Does the report apply?', rationale: null, state: 'open',
+    evidencePinIds: [], createdAt: NOW, updatedAt: NOW }];
+  const next = caseQuestionNextActions(buildCaseDecisionOverview(record, NOW), 'question');
+  assert.deepEqual(next.actions.map(action => [action.id, action.section]), [['links', 'assessment']]);
+  assert.match(next.actions[0]!.reason, /No evidence is linked/);
+  assert.deepEqual(next.further, []);
 });

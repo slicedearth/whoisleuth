@@ -19,7 +19,7 @@ import {
   buildLookupEvidenceImpactPlan,
   type LookupEvidenceImpactPlan,
 } from '../frontend/src/lib/analysis/lookup-evidence-impact.ts';
-import { buildLookupReviewActionModel } from '../frontend/src/lib/analysis/lookup-review-action-model.ts';
+import { buildLookupReviewActionModel, lookupQuestionNextActions } from '../frontend/src/lib/analysis/lookup-review-action-model.ts';
 import type { LookupTaskView } from '../frontend/src/lib/analysis/lookup-presentation.ts';
 import type { LookupSourceRefreshPlan } from '../frontend/src/lib/analysis/lookup-source-refresh.ts';
 
@@ -203,8 +203,59 @@ function integratedFixture() {
     quality,
     facts: decisionFacts,
   });
-  return { decisionSupport, decisionFacts, evidenceImpact };
+  return { decisionSupport, decisionFacts, evidenceImpact, readiness };
 }
+
+test('question actions preserve canonical order and details without offering unsupported collection', () => {
+  const fixture = integratedFixture();
+  const model = buildLookupReviewActionModel({ support: fixture.decisionSupport, facts: fixture.decisionFacts, evidenceImpact: fixture.evidenceImpact });
+  const claim = fixture.readiness.entries[0]!;
+  const queue = model.evidenceImprovements;
+  const before = structuredClone({ queue, claim });
+  const next = lookupQuestionNextActions(queue, claim);
+  assert.deepEqual(next.actions.map(action => action.item.requirementId), ['registry-whois']);
+  assert.match(next.actions[0]!.prerequisite, /starts no request/);
+  assert.equal(next.actions[0]!.item.expectedEffect, queue.displayedItems[0]!.expectedEffect);
+  assert.equal(next.actions[0]!.item.disclosure, queue.displayedItems[0]!.disclosure);
+  assert.deepEqual(next.further, []);
+  assert.deepEqual(next.unavailable, []);
+  assert.deepEqual(lookupQuestionNextActions(queue, undefined), { actions: [], further: [], unavailable: [] });
+  assert.deepEqual(lookupQuestionNextActions(queue, { ...claim, id: 'current-web-observation' }).actions, []);
+  assert.deepEqual(lookupQuestionNextActions(queue, { ...claim, state: 'ready' }).actions, []);
+  assert.deepEqual({ queue, claim }, before);
+
+  for (const state of ['unsupported', 'skipped'] as const) {
+    const unavailable = lookupQuestionNextActions(queue, { ...claim, requirements: [{ ...claim.requirements[0]!, state, coverageState: state }] });
+    assert.equal(unavailable.actions.length, 0, state);
+    assert.equal(unavailable.unavailable.length, 1, state);
+  }
+  const noRefresh = lookupQuestionNextActions({ ...queue, displayedItems: [{ ...queue.displayedItems[0]!, refreshAvailable: false }] }, claim);
+  assert.equal(noRefresh.actions.length, 0);
+  assert.match(noRefresh.unavailable[0]!.reason, /No eligible collection path/);
+  assert.equal(lookupQuestionNextActions(queue, { ...claim, requirements: [{ ...claim.requirements[0]!, state: 'complete' }] }).actions.length, 0);
+});
+
+test('question shortlists deduplicate requirements, leave every further review reachable and qualify local context', () => {
+  const fixture = integratedFixture();
+  const model = buildLookupReviewActionModel({ support: fixture.decisionSupport, facts: fixture.decisionFacts, evidenceImpact: fixture.evidenceImpact });
+  const queue = model.evidenceImprovements;
+  const claim = fixture.readiness.entries[0]!;
+  const ids = ['registry-rdap', 'registry-whois', 'dns-observation', 'http-observation'] as const;
+  const requirements = ids.map(id => ({ ...claim.requirements[0]!, id }));
+  const items = ids.map(requirementId => ({ ...queue.displayedItems[0]!, requirementId, id: `${claim.id}:${requirementId}` }));
+  const next = lookupQuestionNextActions({ ...queue, displayedItems: [...items, items[0]!] }, { ...claim, requirements });
+  assert.deepEqual(next.actions.map(action => action.item.requirementId), ['registry-rdap', 'registry-whois', 'dns-observation']);
+  assert.deepEqual(next.further.map(action => action.item.requirementId), ['http-observation']);
+  assert.deepEqual(next.unavailable, []);
+  const local = { ...items[0]!, requirementId: 'reviewed-brand-profile', mode: 'local_review' as const, basis: 'task_context' as const, refreshAvailable: false, evidenceState: null };
+  const localClaim = { ...claim, requirements: [{ ...claim.requirements[0]!, id: 'reviewed-brand-profile' as const, mode: 'local_review' as const, evidenceId: null, coverageState: null, state: 'unknown' as const }] };
+  assert.equal(lookupQuestionNextActions({ ...queue, displayedItems: [local] }, localClaim).actions.length, 1);
+  const unavailable = lookupQuestionNextActions({ ...queue, displayedItems: [local] }, { ...localClaim, requirements: [{ ...localClaim.requirements[0]!, state: 'unavailable' }] });
+  assert.equal(unavailable.actions.length, 0);
+  assert.match(unavailable.unavailable[0]!.reason, /context is unavailable/);
+  const unbound = lookupQuestionNextActions({ ...queue, displayedItems: [{ ...items[0]!, basis: 'unbound_requirement', refreshAvailable: true }] }, { ...claim, requirements });
+  assert.equal(unbound.actions.length, 0);
+});
 
 test('review-action model ranks all source actions once and exposes exact fact or contextual basis', () => {
   const fixture = integratedFixture();

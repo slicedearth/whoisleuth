@@ -90,7 +90,9 @@ test('the decision overview retains opposing evidence and unknowns across respon
   const record = caseRecord({ domain: 'decision-overview.example',
     evidencePins: [pin, { ...pin, id: 'contrary-pin', label: 'Separate observation', value: 'The supplied screenshot shows a different page', source: 'Analyst-supplied screenshot', observedAt: null, completeness: 'unknown' }],
     assertions: [{ id: 'assessment', kind: 'hypothesis', statement: 'Does this page imitate the reported service?', rationale: 'Compare the retained observations.', state: 'open',
-      evidencePinIds: ['supporting-pin', 'contrary-pin'], evidenceRelations: [{ evidencePinId: 'supporting-pin', stance: 'supports' }, { evidencePinId: 'contrary-pin', stance: 'contradicts' }], createdAt: at, updatedAt: at }],
+      evidencePinIds: ['supporting-pin', 'contrary-pin'], evidenceRelations: [{ evidencePinId: 'supporting-pin', stance: 'supports' }, { evidencePinId: 'contrary-pin', stance: 'contradicts' }], createdAt: at, updatedAt: at },
+      { id: 'separate-assessment', kind: 'hypothesis', statement: 'What did the complete observation retain?', rationale: null, state: 'open',
+        evidencePinIds: ['supporting-pin'], evidenceRelations: [{ evidencePinId: 'supporting-pin', stance: 'supports' }], createdAt: at, updatedAt: at }],
     decisions: [{ id: 'decision', summary: 'Further review needed', rationale: 'The two sources disagree.', confidence: 'low', confidenceBasis: 'The supplied screenshot is undated.', evidencePinIds: ['supporting-pin', 'contrary-pin'], createdAt: at }],
   });
   await openSeededTimelineCase(page, record.domain, [record], CASE_SCHEMA_VERSION);
@@ -100,6 +102,20 @@ test('the decision overview retains opposing evidence and unknowns across respon
   await expect(overview.getByRole('region', { name: 'Supporting evidence' })).toContainText('Direct HTTP observation');
   await expect(overview.getByRole('region', { name: 'Contrary evidence' })).toContainText('Observation time unavailable');
   await expect(overview).toContainText('Further review needed');
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const nextReviews = overview.getByRole('region', { name: 'Next reviews for the selected assessment' });
+  await expect(nextReviews.getByRole('button', { name: 'Compare opposing or unresolved evidence', exact: true })).toBeVisible();
+  await expect(nextReviews.getByRole('button', { name: 'Inspect observation gaps', exact: true })).toBeVisible();
+  await expect(nextReviews.getByRole('button')).toHaveCount(2);
+  await overview.getByRole('combobox', { name: 'Open assessment' }).selectOption('separate-assessment');
+  await expect(nextReviews).toHaveCount(0);
+  await overview.getByRole('combobox', { name: 'Open assessment' }).selectOption('assessment');
+  const observationReview = nextReviews.getByRole('button', { name: 'Inspect observation gaps', exact: true });
+  await observationReview.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('navigation', { name: 'Case sections' }).getByRole('link', { name: 'Evidence', exact: true })).toHaveAttribute('aria-current', 'page');
+  await openCaseSection(page, 'Summary');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   await overview.getByText('Incomplete or undated pinned evidence · 1', { exact: true }).click();
   await expect(overview).toContainText('Separate observation');
   for (const theme of ['light', 'dark'] as const) {

@@ -45,3 +45,48 @@ export function buildCaseDecisionOverview(record: CaseRecord, now: string) {
     reviews,
   };
 }
+
+/** Suggestions refer only to the selected assertion's retained links. */
+export function caseQuestionNextActions(
+  overview: ReturnType<typeof buildCaseDecisionOverview>,
+  assertionId: string | undefined,
+) {
+  const claim = overview.claims.find(item => item.assertion.id === assertionId);
+  const actions: Array<Readonly<{
+    id: string; label: string; reason: string; expectedOutcome: string;
+    prerequisite: string; limitation: string; section: 'evidence' | 'assessment';
+  }>> = [];
+  if (!claim) return { actions, further: actions };
+  const missing = claim.references.filter(reference => !reference.pin).length;
+  if (!claim.references.length || missing) actions.push({
+    id: 'links', label: 'Review evidence links', section: 'assessment',
+    reason: missing ? `${missing} linked evidence reference${missing === 1 ? ' is' : 's are'} unavailable.` : 'No evidence is linked to this assessment.',
+    expectedOutcome: 'Identify which retained observations support this question and review missing references.',
+    prerequisite: 'Select exact retained pins in the assessment; linking evidence is a deliberate save.',
+    limitation: 'A missing reference does not establish that the observation never existed.',
+  });
+  if (claim.references.some(reference => reference.stance === 'contradicts' || reference.stance === 'unresolved')) actions.push({
+    id: 'relationships', label: 'Compare opposing or unresolved evidence', section: 'assessment',
+    reason: 'This assessment has contrary or unresolved evidence relationships.',
+    expectedOutcome: 'Compare source scope and observation times before revising the explanation.',
+    prerequisite: 'Read the linked observations and record your reasoning explicitly.',
+    limitation: 'Disagreement alone does not establish which explanation is correct.',
+  });
+  const gapIds = new Set(overview.evidenceGaps.map(pin => pin.id));
+  const gaps = claim.references.filter(reference => reference.pin && gapIds.has(reference.id)).length;
+  if (gaps) actions.push({
+    id: 'observations', label: 'Inspect observation gaps', section: 'evidence',
+    reason: `${gaps} linked observation${gaps === 1 ? ' is' : 's are'} incomplete or undated.`,
+    expectedOutcome: 'Identify the missing scope, source state or observation time for this question.',
+    prerequisite: 'Inspect the retained source details. Any further collection requires its own explicit action.',
+    limitation: 'Reviewing a gap cannot recover unretained evidence or turn a failed observation into absence.',
+  });
+  if (claim.references.some(reference => reference.pin && reference.stance === null)) actions.push({
+    id: 'classification', label: 'Classify evidence relationships', section: 'assessment',
+    reason: 'Some retained links have no supporting, contrary or unresolved relationship recorded.',
+    expectedOutcome: 'Make the relationship between each observation and this assessment explicit.',
+    prerequisite: 'Review each linked pin before deliberately saving its relationship.',
+    limitation: 'An analyst-assigned relationship is reasoning, not an independent source observation.',
+  });
+  return { actions: actions.slice(0, 3), further: actions.slice(3) };
+}

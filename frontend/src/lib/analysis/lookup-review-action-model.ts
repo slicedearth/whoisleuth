@@ -24,6 +24,7 @@ import {
 } from './lookup-decision-support.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
 import { LOOKUP_GUIDANCE_TASKS } from '../../../../packages/investigation/lookup-task-guidance.mts';
+import type { LookupClaimReadinessEntry } from './lookup-claim-readiness.ts';
 
 export const LOOKUP_REVIEW_ACTION_MODEL_VERSION = 1 as const;
 
@@ -64,6 +65,39 @@ export type LookupReviewActionModel = Readonly<{
   recommendedNextReviews: LookupRecommendedReviewQueue;
   evidenceImprovements: LookupEvidenceImprovementQueue;
 }>;
+
+/** A navigation shortlist, not permission to collect or a prediction of success. */
+export function lookupQuestionNextActions(
+  queue: LookupEvidenceImprovementQueue,
+  claim: LookupClaimReadinessEntry | undefined,
+) {
+  const requirements = new Map<string, LookupClaimReadinessEntry['requirements'][number]>(
+    claim?.requirements.map(item => [item.id, item]),
+  );
+  const seen = new Set<string>();
+  const available: Array<Readonly<{ item: LookupEvidenceImpactItem; prerequisite: string }>> = [];
+  const unavailable: Array<Readonly<{ item: LookupEvidenceImpactItem; reason: string }>> = [];
+  for (const item of queue.displayedItems) {
+    if (!claim || claim.state === 'ready' || item.claimId !== claim.id || seen.has(item.requirementId)) continue;
+    seen.add(item.requirementId);
+    const requirement = requirements.get(item.requirementId);
+    if (!requirement || requirement.state === 'complete') continue;
+    const reason = requirement.state === 'unsupported' || item.evidenceState === 'unsupported'
+      ? 'This source is not supported for the current result.'
+      : requirement.state === 'skipped' || requirement.coverageState === 'skipped' || item.evidenceState === 'not_collected'
+        ? 'This source was not collected. Review the original scope before selecting any additional collection.'
+        : item.mode === 'network_collection' && (!item.refreshAvailable || item.basis === 'unbound_requirement')
+          ? 'No eligible collection path is bound to this requirement.'
+          : item.mode === 'local_review' && requirement.state === 'unavailable'
+            ? 'The browser-local context is unavailable. Restore access before reviewing it.'
+            : null;
+    if (reason) unavailable.push({ item, reason });
+    else available.push({ item, prerequisite: item.mode === 'network_collection'
+      ? 'Review the source options and request disclosure, then choose whether to collect. Opening this evidence path starts no request.'
+      : 'Review the selected browser-local context. Any save or decision remains a separate action.' });
+  }
+  return { actions: available.slice(0, 3), further: available.slice(3), unavailable };
+}
 
 type CanonicalActionOccurrence = Readonly<{
   action: DecisionFactNextAction;

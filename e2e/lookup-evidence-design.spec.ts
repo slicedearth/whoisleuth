@@ -54,7 +54,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     '@journey-first-domain-assessment',
     '@journey-acquisition-uncertainty-review',
   ],
-}, async ({ page }) => {
+}, async ({ page }, testInfo) => {
   test.slow();
   const reviewedAt = new Date('2026-08-21T12:00:00.000Z');
   await page.clock.setFixedTime(reviewedAt);
@@ -392,6 +392,32 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
     };
   });
   const impactSummary = impactPlan.locator(':scope > summary');
+  const questionReviews = detailedAssessment.getByRole('region', { name: 'Next reviews for your question' });
+  const selectedQuestion = questionReviews.getByRole('combobox', { name: 'Question to review' });
+  await selectedQuestion.selectOption('brand-resemblance');
+  const brandContextReview = questionReviews.locator('[data-requirement-id="reviewed-brand-profile"]');
+  await expect(brandContextReview).toBeVisible();
+  await expect(brandContextReview.getByRole('link')).toHaveAttribute('href', '#case-response');
+  await brandContextReview.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(brandContextReview).toContainText('does not start a network request');
+  await selectedQuestion.selectOption('current-web-observation');
+  await expect(brandContextReview).toHaveCount(0);
+  await expect(questionReviews.locator('[data-requirement-id="tls-observation"]')).toBeVisible();
+  expect(await questionReviews.locator(':scope > .next-steps > li').count()).toBeLessThanOrEqual(3);
+  await selectedQuestion.selectOption('brand-resemblance');
+  await expect(brandContextReview).toBeVisible();
+  expect(lookupRequests).toHaveLength(1);
+  const originalViewport = page.viewportSize();
+  const originalTheme = await page.evaluate(() => document.documentElement.dataset.theme);
+  for (const theme of ['light', 'dark']) for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
+    await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await questionReviews.screenshot({ path: testInfo.outputPath(`question-reviews-${theme}-${width}.png`) });
+  }
+  await page.evaluate(value => { if (value) document.documentElement.dataset.theme = value; else delete document.documentElement.dataset.theme; }, originalTheme);
+  if (originalViewport) await page.setViewportSize(originalViewport);
   await impactSummary.focus();
   await impactSummary.press('Enter');
   await expect(impactPlan).toHaveAttribute('open', '');

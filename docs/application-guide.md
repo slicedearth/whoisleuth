@@ -170,6 +170,14 @@ buffer responses show them together. A finished source can still be partial,
 failed or unsupported.
 Only the final validated result can be saved. Cancelling discards the incomplete
 response; already-admitted requests may finish within their existing bounds.
+
+In the detailed assessment, **Next reviews for your question** narrows evidence
+gaps to a few relevant steps. Select a question to change that shortlist; the
+full evidence-gap details remain below it. Each step explains its expected
+benefit; **Before you continue** covers prerequisites and request disclosure. Unsupported, uncollected
+or unbound sources remain gaps, not available collection actions. Opening a
+review path starts no request and does not change saved evidence.
+
 Under **Source quality**, expand **Compare the completed plan and source outcomes**
 for the finished target and mode, separately dated source records and diagnostic
 states. Original optional selections are not retained, so missing output does
@@ -656,6 +664,12 @@ its retained value and limitations. **Linked evidence** opens the actual facts
 behind a decision, assertion, response event or sighting. Supporting and
 contradicting relationships remain explicit; a missing reference is not
 replaced with another observation.
+
+The selected Case's **Decision overview** suggests local reviews for the open
+assessment: missing links, opposing observations, incomplete or undated evidence,
+and unclassified relationships. Suggestions use only that assessment's linked
+records. They navigate to the existing Evidence or Assessment section; any
+evidence collection, relationship edit or decision remains deliberate.
 
 If snapshots share the latest capture time, or any snapshot is undated, the
 timeline retains them without selecting a latest assessment. Record updates do
