@@ -67,7 +67,7 @@
     {/if}
     {#if deliveryMetadata}<LookupMetadataDisclosure label="Observed HTTP delivery metadata" metadata={deliveryMetadata} />{/if}
     {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-    <p class="card-note">Point-in-time response metadata from the homepage request already used for deep analysis. Redirects and headers provide context; missing security headers do not establish maliciousness.</p>
+    <p class="card-note">Requested and final URLs come from this HTTP collection; query strings are not retained. A requested URL alone does not establish that a page was reached. Redirects and headers provide context; missing security headers do not establish maliciousness.</p>
   </div>
 </details>
 

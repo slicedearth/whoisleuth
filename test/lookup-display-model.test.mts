@@ -18,12 +18,13 @@ import {
   pagePublicationMetadataFixture,
 } from './homepage-metadata-fixtures.mts';
 import { extractHtmlSignals } from '../lib/html-signals.mts';
-import { buildHttpObservation } from '../lib/http-intelligence.mts';
+import { buildHttpObservation, failedHttpObservation, skippedHttpObservation } from '../lib/http-intelligence.mts';
 import {
   MAX_LOOKUP_DISPLAY_ARRAY_ITEMS,
   MAX_LOOKUP_DISPLAY_RECORDS,
   MAX_LOOKUP_DISPLAY_STRING_ITEMS,
   MAX_LOOKUP_DISPLAY_TEXT_LENGTH,
+  rec,
   records,
   show,
   stringList,
@@ -319,6 +320,33 @@ function emptyNetworkDisplayInput() {
     tlsDiagnostics: {},
   };
 }
+
+test('HTTP display keeps requested and final provenance separate without recovering omitted URL data', () => {
+  const failed = failedHttpObservation([{ url: 'https://portal.example.test/selected?token=private-sentinel', error: 'Fixture timeout' }]);
+  const successful = buildHttpObservation({
+    requestedUrl: 'https://portal.example.test/selected?token=private-sentinel',
+    finalUrl: 'https://destination.example.test/final?token=other-private-sentinel',
+    response: new Response('', { status: 200 }),
+  });
+  for (const [observation, requested, final] of [
+    [failed, 'https://portal.example.test/selected', 'Not retained'],
+    [successful, 'https://portal.example.test/selected', 'https://destination.example.test/final'],
+    [skippedHttpObservation(), 'Not retained', 'Not retained'],
+  ] as const) {
+    const retained: JsonRecord = JSON.parse(JSON.stringify(observation));
+    const original = structuredClone(retained);
+    const model = buildLookupNetworkDisplay({
+      ...emptyNetworkDisplayInput(), httpEvidence: retained,
+      httpResponse: rec(retained.response),
+    });
+    assert.equal(model.httpRows.find(row => row.label === 'Requested URL')?.value, requested);
+    assert.equal(model.httpRows.find(row => row.label === 'Final URL')?.value, final);
+    assert.doesNotMatch(JSON.stringify(model), /private-sentinel|token=/u);
+    assert.deepEqual(retained, original);
+  }
+  const historical = buildLookupNetworkDisplay({ ...emptyNetworkDisplayInput(), httpEvidence: { requestUrl: 'https://example.test/' } });
+  assert.equal(historical.httpRows.find(row => row.label === 'Final URL')?.value, 'Not retained');
+});
 
 test('projects malformed, partial, incompatible, and conflicting network evidence without inventing absence', () => {
   const malformed = buildLookupNetworkDisplay({

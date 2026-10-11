@@ -12,6 +12,7 @@ import { TLS_PROFILE_VERSION } from '../lib/lookup-network-evidence-bounds.mts';
 import { analyzeWebsiteTechnology } from '../lib/website-technology.mts';
 import { analyzeWebsiteSecurityPosture } from '../lib/website-security-posture.mts';
 import { expectLookupTargetAligned } from './lookup-design-fixtures';
+import { buildHttpObservation, failedHttpObservation } from '../lib/http-intelligence.mts';
 
 // Lookup fixtures use injected protocol responses or locally rejected inputs. The shared
 // browser and server guards prevent live collection.
@@ -378,6 +379,64 @@ test('DNS rehearsal retains null MX and exposes incomplete intent in the view an
       if (viewport.width === 320) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`dns-rehearsal-${theme}.png`) }); }
     }
   }
+});
+
+test('HTTP scope separates failed requests from retained final destinations', async ({ page }, testInfo) => {
+  const requested = 'https://scope.example.test/';
+  const final = 'https://destination.example.test/a-retained-path-with-several-components';
+  const observedAt = '2026-09-01T00:00:00.000Z';
+  let failed = false;
+  let requests = 0;
+  await page.route('**/api/lookup?*', route => {
+    requests += 1;
+    expect(new URL(route.request().url()).searchParams.get('q')).toBe('scope.example.test');
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      query: 'scope.example.test', type: 'domain', inputHostname: 'scope.example.test', registrableDomain: 'example.test', isSubdomain: true,
+      rdap: { parsed: {} }, whois: { parsed: {}, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' } },
+      availability: {
+        state: 'registered', domain: 'example.test', observationHostname: 'scope.example.test',
+        http: failed
+          ? failedHttpObservation([{ url: requested, error: 'Fixture timeout' }], { observedAt })
+          : buildHttpObservation({ requestedUrl: requested, finalUrl: final, response: new Response('', { status: 200 }) }, { observedAt }),
+      },
+    }) });
+  });
+  for (const shouldFail of [false, true]) {
+    failed = shouldFail;
+    await page.locator('#query').fill('https://scope.example.test/private-input?token=input-sentinel');
+    await page.getByRole('radio', { name: /Deep/u }).check();
+    await Promise.all([
+      page.waitForResponse(response => new URL(response.url()).pathname === '/api/lookup'),
+      page.getByRole('button', { name: 'Run lookup', exact: true }).click(),
+    ]);
+    await expect(page.getByRole('heading', { name: 'scope.example.test', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Run lookup', exact: true })).toBeEnabled();
+    const expand = page.getByRole('button', { name: 'Expand details: Web and DNS evidence' });
+    if (await expand.isVisible()) await expand.click();
+    const card = page.locator('.http-card');
+    await expect(card.locator(':scope > summary .evidence-status')).toHaveText(shouldFail ? 'error' : 'success');
+    await card.locator(':scope > summary').focus();
+    if (await card.getAttribute('open') === null) await card.locator(':scope > summary').press('Enter');
+    const rows = card.locator('.http-grid > article');
+    await expect(rows.filter({ has: page.getByText('Requested URL', { exact: true }) }).locator('strong')).toHaveText(requested);
+    await expect(rows.filter({ has: page.getByText('Final URL', { exact: true }) }).locator('strong')).toHaveText(shouldFail ? 'Not retained' : final);
+    await expect(card).not.toContainText('private-input');
+    await expect(card).not.toContainText('input-sentinel');
+    if (shouldFail) await expect(card).not.toContainText(final);
+    for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height: 800 });
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) {
+        await card.locator(':scope > summary').focus();
+        await rows.filter({ has: page.getByText('Final URL', { exact: true }) })
+          .evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.screenshot({ path: testInfo.outputPath(`http-scope-${shouldFail ? 'failed' : 'complete'}-${width}-${theme}.png`) });
+      }
+    }
+  }
+  expect(requests).toBe(2);
 });
 
 test('HTTP evidence presents bounded redirect provenance and response metadata', async ({ page }) => {

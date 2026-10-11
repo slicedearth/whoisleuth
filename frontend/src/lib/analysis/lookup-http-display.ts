@@ -73,7 +73,8 @@ export function buildLookupHttpDisplay(input: {
 
   return {
     httpRows: [
-      { label: 'Final URL', value: show(httpEvidence.finalUrl || httpEvidence.requestUrl) },
+      { label: 'Requested URL', value: httpEvidence.requestUrl ? show(httpEvidence.requestUrl) : 'Not retained' },
+      { label: 'Final URL', value: httpEvidence.finalUrl ? show(httpEvidence.finalUrl) : 'Not retained' },
       {
         label: 'Response',
         value: responseStatus === null ? 'Not observed' : `HTTP ${responseStatus}`,

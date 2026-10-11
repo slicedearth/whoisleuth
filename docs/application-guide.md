@@ -270,6 +270,12 @@ Review retained paths and page text before sharing. Compact Case and website
 snapshots identify selected-page observations but omit paths and queries, so
 their web fields cannot establish a same-page change.
 
+In **HTTP evidence**, **Requested URL** and **Final URL** are separate retained
+values. A failed attempt can retain its requested URL without a final destination;
+the missing field says **Not retained**, rather than repeating the requested URL.
+These values omit query strings and do not recover a pasted URL from the input
+form. Review redirect and capture limitations alongside the response.
+
 Registration queries use the registrable domain. Deep DNS, TLS and web probes
 use the selected hostname; registration-delegation checks keep their own domain.
 The header identifies this scope. Older exports keep their original
