@@ -9,6 +9,7 @@
   import { reviewClock } from '#lib/review-clock.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
+  import CopyButton from './CopyButton.svelte';
 
   let { record, persist, mutationBusy, onamendment }: {
     record: CaseRecord; persist: PersistCaseResponse; mutationBusy: boolean; onamendment: (id: string) => void | Promise<void>;
@@ -22,6 +23,9 @@
   const requests = $derived(record.actions.flatMap(owner => latestEvidenceRequests(owner).map(event => ({ owner, event }))));
   const selected = $derived(action && latestEvidenceRequests(action).find(event => event.evidenceRequest.id === draft.value.requestId));
   const receipts = $derived(action ? submittedPacketReceipts(action) : []);
+  const selectedReceipt = $derived(receipts.find(receipt => receipt.digestSha256 === draft.value.packetDigest));
+  const componentId = $props.id();
+  const packetDigestId = `${componentId}-packet-digest`;
   const amendmentDraft = createCaseDraft(() => record.id, 'packet-amendment', { actionId: '', eventId: '' });
   let preparationControl = $state<HTMLSelectElement>();
   let expanded = $state(false);
@@ -125,7 +129,20 @@
         <fieldset><legend>Retained evidence pins</legend>{#each record.evidencePins as pin}<label class="pin-choice"><input type="checkbox" bind:group={draft.value.pinIds} value={pin.id}>{pin.label} · {pin.source}</label>{/each}{#if !record.evidencePins.length}<p>Add evidence pins in Evidence before marking this prepared.</p>{/if}</fieldset>
         <label class="field">Preparation or unavailability reason<textarea bind:value={draft.value.rationale} maxlength={MAX_RESPONSE_RATIONALE_LENGTH} required={draft.value.state === 'unavailable'} rows="2"></textarea></label>
       {:else if action}
-        <label class="field">Original submitted packet<select bind:value={draft.value.packetDigest} required><option value="">Select the delivery receipt</option>{#each receipts as receipt}<option value={receipt.digestSha256}>{receipt.occurredAt} · {receipt.digestSha256.slice(0, 16)}…</option>{/each}</select></label>
+        <label class="field">Original submitted packet
+          <select bind:value={draft.value.packetDigest} aria-describedby={selectedReceipt ? packetDigestId : undefined} required>
+            <option value="">Select the delivery receipt</option>
+            {#each receipts as receipt, index}
+              <option value={receipt.digestSha256}>Receipt {index + 1} · {receipt.digestSha256.slice(0, 12)}…{receipt.digestSha256.slice(-8)} · {receipt.occurredAt}</option>
+            {/each}
+          </select>
+        </label>
+        {#if selectedReceipt}
+          <div class="packet-identity" role="group" aria-label="Selected packet digest">
+            <p id={packetDigestId}>Original packet SHA-256: <code>{selectedReceipt.digestSha256}</code></p>
+            <CopyButton value={selectedReceipt.digestSha256} label="Copy digest" description="Copy original submitted packet SHA-256" />
+          </div>
+        {/if}
         <label class="field">Evidence requested<textarea bind:value={draft.value.summary} maxlength={MAX_RESPONSE_VALUE_LENGTH} rows="2" required></textarea></label>
         <label class="field">Provider deadline <small>UTC; leave blank if not stated</small><input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={draft.value.dueAt}></label>
         <label class="field">Provider request reference<input bind:value={draft.value.reference} maxlength="500"></label>
@@ -143,4 +160,5 @@
   .requests p{margin:8px 0}.requests button{margin:4px 6px 4px 0}code{overflow-wrap:anywhere;word-break:break-all}
   fieldset{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm)}.pin-choice{display:flex;align-items:flex-start;gap:8px;padding:6px 0}
   .stack{display:grid;gap:12px}.field{display:grid;gap:5px}select,input,textarea{min-width:0;width:100%}.pin-choice input{width:auto;flex-shrink:0}
+  .packet-identity{min-width:0}.packet-identity p{margin:0 0 8px}.packet-identity code{user-select:all}
 </style>

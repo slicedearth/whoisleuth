@@ -8,14 +8,29 @@ import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, readBrow
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
 test('requested evidence preserves failed drafts and creates a separately reviewed amendment to the exact original packet', async ({ page }, testInfo) => {
+  let copied = '', refuseCopy = false;
+  await page.exposeFunction('copyFixturePacketDigest', (value: string) => {
+    if (refuseCopy) throw new Error('Private clipboard failure');
+    copied = value;
+  });
+  await page.addInitScript(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    writeText: (value: string) => (window as unknown as { copyFixturePacketDigest(value: string): Promise<void> }).copyFixturePacketDigest(value),
+  } }));
   await page.clock.setFixedTime('2026-09-23T10:00:00.000Z');
   const at = '2026-09-20T10:00:00.000Z';
-  const digest = 'a'.repeat(64);
+  const firstDigest = 'a'.repeat(64);
+  const similarDigest = `${'a'.repeat(56)}${'b'.repeat(8)}`;
+  const digest = `${'a'.repeat(16)}${'c'.repeat(40)}${'b'.repeat(8)}`;
   const action = currentActionFixture({ id: 'original-report', type: 'internal_review', recipient: 'Example response desk',
     contactSource: 'Analyst reviewed contact', routeObservedAt: at, contactLimitations: [], dueAt: null,
     targetState: 'acknowledged', reference: 'Original provider receipt', followUpAt: null, outcome: 'Received',
     createdAt: at, updatedAt: '2026-09-20T10:05:00.000Z' });
-  action.history.find(event => event.nextState === 'submitted')!.reference = `response-packet-sha256:${digest}`;
+  const delivery = action.history.find(event => event.nextState === 'submitted')!;
+  delivery.reference = `response-packet-sha256:${firstDigest}`;
+  action.history.splice(action.history.indexOf(delivery) + 1, 0, ...[similarDigest, digest].map((value, index) => ({
+    ...delivery, id: `repeated-delivery-${index}`, previousState: 'submitted' as const,
+    reference: `response-packet-sha256:${value}`,
+  })));
   const record = caseRecord({ domain: 'requested-evidence.example.test', actions: [action], evidencePins: [{
     id: 'requested-pin', checkpointId: null, field: 'http.status', category: 'http', label: 'Observed page', value: 'A retained observation',
     source: 'Fixture observation', sourceState: 'complete', sourceSchema: null, observedAt: at, collectionDepth: 'deep',
@@ -30,7 +45,48 @@ test('requested evidence preserves failed drafts and creates a separately review
   await region.locator('summary').first().click();
   const form = region.getByRole('form', { name: 'Requested evidence review', exact: true });
   await form.getByRole('combobox', { name: 'Submitted action', exact: true }).selectOption(action.id);
-  await form.getByRole('combobox', { name: 'Original submitted packet', exact: true }).selectOption(digest);
+  const beforeInspection = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const packet = form.getByRole('combobox', { name: 'Original submitted packet', exact: true });
+  const identity = form.getByRole('group', { name: 'Selected packet digest', exact: true });
+  await expect(identity).toHaveCount(0);
+  await expect(packet.locator('option:not([value=""])')).toHaveText([
+    `Receipt 1 · aaaaaaaaaaaa…aaaaaaaa · ${delivery.occurredAt}`,
+    `Receipt 2 · aaaaaaaaaaaa…bbbbbbbb · ${delivery.occurredAt}`,
+    `Receipt 3 · aaaaaaaaaaaa…bbbbbbbb · ${delivery.occurredAt}`,
+  ]);
+  const copy = identity.getByRole('button', { name: 'Copy original submitted packet SHA-256', exact: true });
+  for (const value of [firstDigest, similarDigest, digest]) {
+    await packet.selectOption(value);
+    await expect(identity.locator('p code')).toHaveText(value);
+    await expect(packet).toHaveAccessibleDescription(`Original packet SHA-256: ${value}`);
+    await expect(copy).toHaveText('Copy digest');
+    await copy.focus(); await copy.press('Enter');
+    await expect.poll(() => copied).toBe(value);
+    await expect(copy).toBeFocused();
+    await expect(copy).toHaveText('Copied');
+  }
+  refuseCopy = true;
+  await copy.click();
+  await expect(identity.locator('.copy-fallback')).toHaveText(digest);
+  await expect(identity).not.toContainText('Private clipboard failure');
+  await packet.selectOption('');
+  await expect(identity).toHaveCount(0);
+  await packet.selectOption(digest);
+  await expect(identity.locator('p code')).toHaveText(digest);
+  await expect(copy).toHaveText('Copy digest');
+  expect((await readBrowserLocalCollection(page, 'cases')).records).toEqual(beforeInspection.records);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const [width, height] of [[320, 700], [390, 844], [1280, 720]] as const) {
+      await page.setViewportSize({ width, height });
+      await expectNoHorizontalOverflow(page);
+      expect((await new AxeBuilder({ page }).include('.requested-evidence').analyze()).violations).toEqual([]);
+      if (captureVisualEvidenceEnabled()) {
+        await packet.evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.screenshot({ path: testInfo.outputPath(`packet-digest-${theme}-${width}.png`) });
+      }
+    }
+  }
   await form.getByLabel('Evidence requested', { exact: true }).fill('Provide the retained page evidence');
   await form.getByLabel('Provider deadline').fill('2026-09-22T12:00');
   await form.getByLabel('Provider request reference', { exact: true }).fill('Private provider request');

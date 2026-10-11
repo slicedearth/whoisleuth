@@ -972,7 +972,9 @@ Provider acknowledgement or reported resolution remains analyst-recorded state,
 not independently observed remediation.
 
 In **Requested evidence and amendments**, choose a recorded packet delivery and
-record the provider's request and any stated UTC deadline. Review it against
+check its full SHA-256 digest beside the selector. Receipt labels show both ends
+of the digest; **Copy digest** copies the complete value. Record the provider's
+request and any stated UTC deadline. Review it against
 retained pins, or record why the evidence cannot be provided. **Create drafting
 amendment** starts a linked action: review its recipient and select all prepared
 pins in its response packet before authorising it. Preparation is not delivery;
