@@ -13,6 +13,17 @@ recipient, retention and export boundaries.
 The public demo uses fixed fictional evidence and does not write protected
 workspace data.
 
+Brand candidates, the Review Inbox, Bulk's Review view and the saved Case list
+share an **Inspect** workflow. The queue stays beside the current item on wide
+screens; narrow screens show one pane at a time. **Back to queue** returns to the
+inspection control without clearing filters or checked candidates. Escape closes
+inspection when focus is outside an editing control. Where a separate evidence
+inspector is available, **Reading layout** adjusts its width without changing data.
+Inspection makes no request and does not select an item for a batch action.
+Case inspection is a read-only preview; **Open Case workspace** opens its editor.
+Review Inbox forms retain their drafts while another item is inspected; use the
+existing explicit review checkpoint to retain them across a reload.
+
 Appearance controls offer comfortable or compact reading density. Compact uses
 the full available width for console workspaces; public prose remains constrained.
 Turn off decorative effects for plain card backgrounds without scanlines or glows.

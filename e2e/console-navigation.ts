@@ -84,6 +84,15 @@ export async function openCasePacket(page: Page) {
 export async function openInboxReview(item: Locator) {
   const details = item.locator(':scope > details');
   const summary = details.locator(':scope > summary');
+  await expect(details).toBeAttached();
+  if (!(await summary.isVisible())) {
+    const workbench = item.page().getByRole('region', { name: 'Review items', exact: true });
+    const id = await item.getAttribute('id');
+    expect(id).toBeTruthy();
+    const inspect = workbench.locator(`button[aria-controls=${JSON.stringify(id)}]`);
+    if (!(await inspect.isVisible())) await workbench.getByRole('button', { name: 'Back to queue', exact: true }).click();
+    await inspect.click();
+  }
   await expect(summary).toBeVisible();
   if (await details.getAttribute('open') === null) await summary.click();
   await expect(details).toHaveAttribute('open', '');

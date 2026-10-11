@@ -10,7 +10,43 @@ import {
   holdBrowserLocalTransaction,
   migrateLegacyBrowserData,
   readBrowserLocalCollection,
+  useTheme,
 } from './helpers';
+
+test('retained Case inspection leaves the saved record and queue filters unchanged', async ({ page }, testInfo) => {
+  await page.goto('/cases');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [
+      caseRecord({ id: 'peek-case', domain: 'peek.example', evidenceHistory: [snapshot()] }),
+      caseRecord({ id: 'other-case', domain: 'other.example' }),
+    ] }),
+  }, { destination: '/cases' });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  const requests: string[] = [];
+  page.on('request', request => { if (request.url().includes('/api/')) requests.push(request.url()); });
+  const search = page.getByRole('textbox', { name: 'Search', exact: true });
+  await search.fill('peek');
+  const workbench = page.getByRole('region', { name: 'Saved Case review', exact: true });
+  const inspect = workbench.getByRole('button', { name: /^Inspect saved Case /u });
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1280, 1920]) {
+      await page.setViewportSize({ width, height: 844 });
+      await inspect.click();
+      await expect(workbench.getByRole('heading', { name: 'peek.example', exact: true })).toBeFocused();
+      await expect(workbench.getByRole('button', { name: 'Copy Case number', exact: true })).toBeVisible();
+      await expect(workbench.getByRole('complementary')).toContainText('0 retained pins');
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`case-inspector-${theme}-${width}.png`), fullPage: true });
+      await workbench.getByRole('button', { name: 'Back to queue', exact: true }).click();
+      await expect(inspect).toBeFocused();
+      await expect(search).toHaveValue('peek');
+      await expect(page).toHaveURL('/cases');
+    }
+  }
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 })).toEqual(before);
+  expect(requests).toEqual([]);
+});
 
 test('direct and legacy Cases navigation restore the same canonical selection', async ({ page }) => {
   await page.goto('/cases');

@@ -38,6 +38,13 @@ test('review navigation spans pages and an explicit checkpoint restores filters,
   await items.first().getByRole('combobox', { name: 'Review outcome', exact: true }).selectOption('open');
   await items.first().getByLabel('Rationale', { exact: true }).fill('Unfinished first review.\nKeep the contrary observation.');
   await items.first().getByLabel('Next review', { exact: true }).fill('2026-10-15T12:30:45.678');
+  await inbox.getByRole('button', { name: 'Back to queue', exact: true }).click();
+  await openInboxReview(items.first());
+  await expect(items.first().getByLabel('Rationale', { exact: true })).toHaveValue('Unfinished first review.\nKeep the contrary observation.');
+  await items.first().locator(':scope > details > summary').click();
+  const detailId = await items.first().getAttribute('id');
+  await expect(inbox.locator(`button[aria-controls=${JSON.stringify(detailId)}]`)).toBeFocused();
+  await openInboxReview(items.first());
   const firstTitle = await items.first().getByRole('heading').textContent();
   await openInboxReview(items.nth(24));
   await items.nth(24).getByRole('button', { name: 'Next item', exact: true }).click();

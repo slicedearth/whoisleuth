@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, tick, type Snippet } from 'svelte';
+  import { restoreSubmittedFocus } from '../controllers/submitted-draft.ts';
 
   let {
     label,
@@ -18,38 +19,39 @@
     inspector?: Snippet;
     onclose: () => void;
   } = $props();
-  let root = $state<HTMLElement>(), queuePane = $state<HTMLElement>(), heading = $state<HTMLHeadingElement>();
+  let root = $state<HTMLElement>(), queuePane = $state<HTMLElement>(), readingPane = $state<HTMLElement>(), heading = $state<HTMLHeadingElement>();
   let previous: string | null = null;
   let origin: HTMLElement | null = null;
   let disposed = false;
   let width = $state('balanced');
-  $effect(() => {
+  $effect.pre(() => {
     const current = selected;
     if (current === previous) return;
+    const wasSelected = previous !== null;
     previous = current;
-    if (!current) return;
     const focused = document.activeElement;
-    if (focused instanceof HTMLElement && queuePane?.contains(focused)) origin = focused;
+    if (current === null) {
+      if (wasSelected && focused instanceof HTMLElement && readingPane?.contains(focused)) {
+        const destination = origin;
+        void tick().then(() => {
+          if (!disposed && selected === null) restoreSubmittedFocus(focused, destination?.isConnected ? destination : queuePane, root);
+        });
+      }
+      return;
+    }
+    if (!(focused instanceof HTMLElement) || !queuePane?.contains(focused)) return;
+    origin = focused;
     void tick().then(() => {
-      if (!disposed && selected === current) heading?.focus();
+      if (!disposed && selected === current) restoreSubmittedFocus(focused, heading, root);
     });
   });
   onDestroy(() => { disposed = true; origin = null; });
-  async function close() {
-    const destination = origin;
-    onclose();
-    await tick();
-    if (!disposed && selected === null) {
-      if (destination?.isConnected) destination.focus();
-      else queuePane?.focus();
-    }
-  }
   function keydown(event: KeyboardEvent) {
     if (event.key !== 'Escape' || event.defaultPrevented || !selected
       || !(event.target instanceof HTMLElement) || !root?.contains(event.target)
       || event.target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
     event.preventDefault();
-    void close();
+    onclose();
   }
 </script>
 
@@ -59,18 +61,18 @@
     <div class="workbench-queue" bind:this={queuePane} tabindex="-1" aria-label={`${label} queue`}>
       {@render queue()}
     </div>
-    <div class="workbench-reading" class:empty={selected === null} data-width={width}>
+    <div class="workbench-reading" class:empty={selected === null} data-width={width} bind:this={readingPane}>
       {#if selected !== null}
         <header>
-          <button class="btn" type="button" onclick={() => void close()} aria-keyshortcuts="Escape">Back to queue</button>
+          <button class="btn" type="button" onclick={onclose} aria-keyshortcuts="Escape">Back to queue</button>
           <h3 bind:this={heading} tabindex="-1">{detailTitle}</h3>
           {#if inspector}<label class="reading-width">Reading layout<select bind:value={width}><option value="balanced">Balanced</option><option value="evidence">Wider evidence</option><option value="stacked">Stacked</option></select></label>{/if}
         </header>
-        <div class="workbench-detail">{@render children()}</div>
-        {#if inspector}<aside aria-label="Retained evidence inspector">{@render inspector()}</aside>{/if}
       {:else}
-        <p>Choose <strong>Inspect</strong> beside an item to read its retained evidence. Checkboxes select items for a separate batch action.</p>
+        <p>Choose <strong>Inspect</strong> beside an item to read its retained evidence.</p>
       {/if}
+      <div class="workbench-detail" hidden={selected === null}>{@render children()}</div>
+      {#if inspector}<aside aria-label="Retained evidence inspector" hidden={selected === null}>{@render inspector()}</aside>{/if}
     </div>
   </div>
 </section>
@@ -78,10 +80,11 @@
 <style>
   .workbench { container: workbench / inline-size; min-width: 0; }
   .workbench-layout { display: grid; grid-template-columns: minmax(13rem, 1fr) minmax(0, 2fr); gap: 1.25rem; align-items: start; }
+  .workbench-layout:not(.inspecting) { grid-template-columns: minmax(0, 1fr); }
   .workbench-queue, .workbench-reading, .workbench-detail, aside { min-width: 0; overflow-wrap: anywhere; }
   .workbench-queue { max-height: 42rem; overflow: auto; scrollbar-gutter: stable; }
   .workbench-reading { border-inline-start: 1px solid var(--border); padding-inline-start: 1.25rem; }
-  .workbench-reading.empty { color: var(--muted); }
+  .workbench-reading.empty { color: var(--muted); border: 0; padding: 0; }
   header { display: flex; align-items: start; gap: .75rem; flex-wrap: wrap; margin-bottom: 1rem; grid-column: 1 / -1; }
   header h3 { flex: 1 1 15rem; margin: 0; font-size: var(--text-lg); overflow-wrap: anywhere; }
   header button { min-height: 44px; }

@@ -8,6 +8,7 @@
   import { analystReviewNeedsAttention } from '../analysis/analyst-review-attention.ts';
   import Pagination from './Pagination.svelte';
   import AnalystReviewInboxItem from './AnalystReviewInboxItem.svelte';
+  import AnalystWorkbench from './AnalystWorkbench.svelte';
   import ReviewSessionControl from './ReviewSessionControl.svelte';
   import type { ReviewFormDraft, ReviewSessionPosition } from '../../../../packages/contracts/review-session-contract.mts';
   import { resolveReviewSessionSelection } from '../../../../packages/workspace/review-session.mts';
@@ -290,10 +291,25 @@
   {/if}
 
   {#if visible.length}
+    <AnalystWorkbench label="Review items" selected={currentItem?.id ?? null} detailTitle="Review detail" onclose={() => expandedId = null}>
+      {#snippet queue()}
+        <ol class="review-queue">
+          {#each visible as item (item.id)}
+            <li class:inspected={expanded === item.id}>
+              <strong>{item.title}</strong>
+              <span>{item.evidenceFamily.replaceAll('_', ' ')} · {item.completeness}</span>
+              <span>{item.lifecycle.state.replaceAll('_', ' ')} · {item.nextAction.replaceAll('_', ' ')}</span>
+              <button class="btn" type="button" aria-label={`Inspect review: ${item.title}`} aria-controls={`review-detail-${encodeURIComponent(item.id)}`} aria-pressed={expanded === item.id} onclick={() => expandedId = item.id}>Inspect</button>
+            </li>
+          {/each}
+        </ol>
+        <Pagination currentPage={currentPage} {pageCount} setPage={(value) => { page = value; expandedId = undefined; }} ariaLabel="Review inbox pages" />
+      {/snippet}
+      {#snippet children()}
     <ol class="items" bind:this={itemsElement}>
       {#key restoreRevision}
       {#each visible as item, index (item.id)}
-        <li>
+        <li id={`review-detail-${encodeURIComponent(item.id)}`} hidden={expanded !== item.id}>
           <AnalystReviewInboxItem {item} {now} expanded={expanded === item.id}
             onexpand={() => expandedId = item.id} oncollapse={() => expandedId = null}
             {...(reviewDrafts.find(draft => draft.id === item.id) ? { restoredDraft: reviewDrafts.find(draft => draft.id === item.id)! } : {})}
@@ -308,7 +324,8 @@
       {/each}
       {/key}
     </ol>
-    <Pagination currentPage={currentPage} {pageCount} setPage={(value) => { page = value; expandedId = undefined; }} ariaLabel="Review inbox pages" />
+      {/snippet}
+    </AnalystWorkbench>
   {:else if !inbox.items.length && !inbox.truncated}
     <div class="empty-start">
       <h2 id="review-inbox-title" tabindex="-1">No retained review items</h2>
@@ -364,6 +381,11 @@
   .admission-warning{display:grid;gap:7px;margin-top:14px}.admission-warning .warning{margin:0}.admission-warning details{font-size:var(--text-xs)}.admission-warning summary{cursor:pointer;font:700 var(--text-xs) var(--mono)}.admission-warning ul{display:grid;gap:4px;margin:8px 0 0;padding:0;list-style:none}.admission-warning li{display:flex;justify-content:space-between;gap:16px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}.admission-warning li span:first-child{color:var(--text);text-transform:capitalize}
   .items{display:grid;gap:0;margin:0;padding:0;list-style:none}
   .items>li{min-width:0}
+  .review-queue { display: grid; list-style: none; margin: 0; padding: 0; }
+  .review-queue li { display: grid; gap: .5rem; padding: .75rem; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+  .review-queue li.inspected { background: var(--panel-raised); box-shadow: inset 3px 0 var(--interface-accent); }
+  .review-queue span { color: var(--muted); font-size: var(--text-xs); }
+  .review-queue button { justify-self: start; min-height: 44px; }
   .selected-review{margin:14px 0;color:var(--muted);font-size:var(--text-sm);line-height:1.5;overflow-wrap:anywhere}
   .empty,.warning,.limitations{color:var(--muted);font-size:var(--text-sm)}
   .warning{color:var(--amber)}

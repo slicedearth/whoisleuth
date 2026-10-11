@@ -91,7 +91,7 @@ for (const collected of [true, false]) {
   });
 }
 
-test('single-row Monitor saves preserve another domain and its baseline when a name is reused', async ({ page }) => {
+test('single-row Monitor saves preserve another domain and its baseline when a name is reused', async ({ page }, testInfo) => {
   const requests: string[] = [];
   await page.route('**/api/lookup?*', async route => {
     const domain = new URL(route.request().url()).searchParams.get('q')!;
@@ -108,6 +108,27 @@ test('single-row Monitor saves preserve another domain and its baseline when a n
   const name = cockpit.getByLabel('Monitor list for the current row');
   const save = cockpit.getByRole('button', { name: 'Save current to Monitor' });
   await name.fill('Shared review');
+  await cockpit.getByRole('button', { name: 'Back to queue', exact: true }).click();
+  const inspect = cockpit.getByRole('button', { name: 'Inspect retained first-review.example', exact: true });
+  await inspect.click();
+  await expect(name).toHaveValue('Shared review');
+  await cockpit.getByRole('button', { name: 'Back to queue', exact: true }).click();
+  await expect(inspect).toBeFocused();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await inspect.click();
+  await expect(inspect).toBeHidden();
+  await expectNoHorizontalOverflow(page);
+  await expect(name).toHaveValue('Shared review');
+  if (captureVisualEvidenceEnabled()) {
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 1280]) {
+        await page.setViewportSize({ width, height: 844 });
+        await expectNoHorizontalOverflow(page);
+        await page.screenshot({ path: testInfo.outputPath(`bulk-inspector-${theme}-${width}.png`), fullPage: true });
+      }
+    }
+  }
   await save.click();
   await expect(cockpit.getByRole('status')).toContainText('Saved first-review.example to Shared review');
   const before = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
@@ -829,7 +850,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   await expect(cockpit.locator('.review-state')).toHaveText('reviewed');
   await cockpit.getByRole('button', { name: 'Next unresolved' }).focus();
   await page.keyboard.press('Alt+ArrowRight');
-  await expect(cockpit.getByRole('heading', { level: 3 })).toHaveText('right-review.example');
+  await expect(cockpit.getByRole('heading', { name: 'right-review.example', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/bulk/u);
   const monitorName = cockpit.getByLabel('Monitor list for the current row');
   await monitorName.focus();

@@ -6,6 +6,13 @@ In Brands, **Candidate review** shows matching reasons, full observed hostnames,
 source intervals, unknown revisions and coverage gaps. Pattern groups disclose
 their contributing rows; they do not establish common ownership.
 
+Use **Inspect** to read a candidate's source evidence beside the filtered queue.
+Inspection and checked batch selections are separate: opening one candidate does
+not add it to a Watchlist preview. Search, order and page stay in place when you
+choose **Back to queue**. Focus an Inspect button and press P to open it by
+keyboard; the shortcut is not active while editing a field. On narrow screens,
+the inspector replaces the queue until you return.
+
 Select individual candidates to shortlist, dismiss with a reason and expiry,
 defer until review, or preview an exact Watchlist destination. Selections across
 filters remain explicit in the preview. Duplicate and rejected domains are

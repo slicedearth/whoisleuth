@@ -9,6 +9,10 @@
   import type { CaseRecord } from '../cases.ts';
   import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
   import { handlesLocalLink } from '#lib/link-activation.ts';
+  import AnalystWorkbench from './AnalystWorkbench.svelte';
+  import CaseEvidenceFact from './CaseEvidenceFact.svelte';
+  import CopyButton from './CopyButton.svelte';
+  import { buildCaseDecisionOverview } from '../../../../packages/cases/case-decision-overview.mts';
 
   let { records, selectCase, formatDate, currentPage, pageCount, setPage, calibrationMode = false, calibrationCaseIds, toggleCalibrationCase }: {
     records: CaseRecord[];
@@ -21,8 +25,14 @@
     calibrationCaseIds: string[];
     toggleCalibrationCase: (record: CaseRecord, selected: boolean) => void;
   } = $props();
+  let inspectedId = $state<string | null>(null);
+  const inspected = $derived(records.find(record => record.id === inspectedId) ?? null);
+  const overview = $derived(inspected ? buildCaseDecisionOverview(inspected, new Date().toISOString()) : null);
+  $effect(() => { if (inspectedId && !inspected) inspectedId = null; });
 </script>
 
+<AnalystWorkbench label="Saved Case review" selected={inspected?.id ?? null} detailTitle={inspected?.title || inspected?.domain || ''} onclose={() => inspectedId = null}>
+{#snippet queue()}
 <section class="case-list" aria-label="Saved Cases">
   {#each records as record (record.id)}
     <article class="case card">
@@ -40,15 +50,38 @@
         <time class="updated" datetime={record.updatedAt}>{formatDate(record.updatedAt)}</time>
       </a>
       {#if caseTypeRecords(record).length || record.tags.length}<div class="tag-row">{#each caseTypeRecords(record) as type}<span class="tag">{type.label}</span>{/each}{#each record.tags as tag}<span class="tag">{tag}</span>{/each}</div>{/if}
+      <button class="btn peek" type="button" aria-label={`Inspect saved Case ${caseNumber(record.id)}`} aria-pressed={inspectedId === record.id} onclick={() => inspectedId = record.id}>Inspect retained evidence</button>
     </article>
   {/each}
   {#if !records.length}<p class="count">No cases match the current filters.</p>{/if}
   <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Case pages" />
 </section>
+{/snippet}
+{#snippet children()}
+  {#if inspected && overview}
+    <p><code>{caseNumber(inspected.id)}</code> <CopyButton value={caseNumber(inspected.id)} label="Copy Case number" /></p>
+    <p>{statusLabel(inspected.status)} · {dispositionLabel(inspected.disposition)}</p>
+    <p>{inspected.evidencePins.length} evidence pins · {inspected.assertions.length} analyst assertions · {inspected.actions.length} response actions.</p>
+    <p>{overview.evidenceGaps.length} pins have incomplete evidence or an unavailable observation time. {overview.reviews.length} dated follow-ups are retained.</p>
+    <h4>Analyst conclusions</h4>
+    {#if overview.conclusions.length}<ul>{#each overview.conclusions as row}<li>{row.decision.summary}{#if row.evidenceAddedLater} — evidence was added after this decision.{/if}</li>{/each}</ul>{:else}<p>No dated or undated conclusion is retained.</p>{/if}
+    <a class="btn" href={caseWorkspaceHref(inspected.id)} onclick={event => { if (handlesLocalLink(event) && inspected) { event.preventDefault(); selectCase(inspected); } }}>Open Case workspace</a>
+  {/if}
+{/snippet}
+{#snippet inspector()}
+  {#if inspected}
+    <h4>Evidence pins</h4>
+    <p>First {Math.min(5, inspected.evidencePins.length)} of {inspected.evidencePins.length} retained pins. Open the Case workspace for the complete record and linked history.</p>
+    {#each inspected.evidencePins.slice(0, 5) as pin (pin.id)}<div class="peek-pin"><CaseEvidenceFact {pin} copyable /></div>{/each}
+  {/if}
+{/snippet}
+</AnalystWorkbench>
 
 <style>
-  .case-list { display: grid; gap: 8px; }
+  .case-list { container: case-list / inline-size; display: grid; gap: 8px; }
   .case { min-width: 0; padding: 0; }
+  .peek { margin: 0 1rem 1rem; }
+  .peek-pin { padding-block: .75rem; border-bottom: 1px solid var(--border); }
   .case-head { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 12px; align-items: center; padding: 16px; color: var(--text); text-decoration: none; border-radius: inherit; }
   .case-head:hover { background: var(--panel-raised); }
   .case-head:hover strong { color: var(--accent); }
@@ -60,6 +93,6 @@
   .tag { padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
   .calibration-select { display: flex; align-items: center; gap: 8px; padding: 12px 16px 0; color: var(--muted); font-size: var(--text-xs); }
   .calibration-select input { width: 18px; height: 18px; }
-  @media(max-width: 900px) { .case-head { grid-template-columns: minmax(0,1fr) auto; } .updated { grid-column: 1/-1; } }
-  @media(max-width: 540px) { .case-head { grid-template-columns: minmax(0,1fr); gap: 10px; } }
+  @container case-list (max-width: 900px) { .case-head { grid-template-columns: minmax(0,1fr) auto; } .updated { grid-column: 1/-1; } }
+  @container case-list (max-width: 540px) { .case-head { grid-template-columns: minmax(0,1fr); gap: 10px; } }
 </style>
