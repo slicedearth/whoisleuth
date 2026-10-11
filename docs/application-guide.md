@@ -11,7 +11,10 @@ Network collection and external actions remain explicit. The generated
 recipient, retention and export boundaries.
 
 The public demo uses fixed fictional evidence and does not write protected
-workspace data.
+workspace data. Its HTTP examples retain an origin when available, but not full
+requested or final URLs. Those URL rows therefore say **Not retained**; an origin
+does not identify the page path, and an inconclusive example has no observed
+response or final origin.
 
 Brand candidates, the Review Inbox, Bulk's Review view and the saved Case list
 share an **Inspect** workflow. The queue stays beside the current item on wide

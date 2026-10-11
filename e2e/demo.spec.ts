@@ -350,7 +350,7 @@ async function workspaceNeedsScroll(page: Page) {
   });
 }
 
-test('completes the guided synthetic workflow without investigation requests or production-store access', async ({ page }) => {
+test('completes the guided synthetic workflow without investigation requests or production-store access', async ({ page }, testInfo) => {
   test.slow();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const apiRequestPaths: string[] = [];
@@ -412,6 +412,40 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(page.getByRole('heading', { name: 'HTTP evidence' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'TLS and certificate evidence' })).toBeVisible();
   await expect(page.getByText('Also separated in the signed-in Console')).toBeVisible();
+  const http = page.getByRole('group', { name: 'HTTP evidence', exact: true });
+  const checkHttpScope = async (origin: string, response: string) => {
+    const summary = http.locator(':scope > summary');
+    await summary.focus();
+    if (await http.getAttribute('open') === null) await summary.press('Enter');
+    for (const [label, value] of [
+      ['Requested URL', 'Not retained'], ['Final URL', 'Not retained'],
+      ['Final origin', origin], ['Response', response],
+    ] as const) {
+      const row = http.getByRole('article').filter({ has: page.getByText(label, { exact: true }) });
+      await expect(row).toHaveCount(1);
+      await expect(row.getByText(value, { exact: true })).toBeVisible();
+    }
+    await expect(http.getByText('Connection attempts', { exact: true })).toHaveCount(0);
+    await expect(http).toContainText('fixed demonstration evidence, not a live website observation');
+  };
+  await checkHttpScope('https://exampleshop-login.example', 'HTTP 200');
+  const viewport = page.viewportSize();
+  const originalTheme = await page.evaluate(() => document.documentElement.dataset.theme);
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
+    await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) {
+      await http.getByRole('article').filter({ has: page.getByText('Final URL', { exact: true }) })
+        .evaluate(row => row.scrollIntoView({ block: 'center' }));
+      await page.screenshot({ path: testInfo.outputPath(`demo-http-${theme}-${width}.png`) });
+    }
+  }
+  await page.evaluate(value => {
+    if (value) document.documentElement.dataset.theme = value;
+    else delete document.documentElement.dataset.theme;
+  }, originalTheme);
+  if (viewport) await page.setViewportSize(viewport);
 
   await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   await expect(page.locator('.dns-card')).toHaveCount(0);
@@ -474,6 +508,12 @@ test('completes the guided synthetic workflow without investigation requests or 
   const restoredHeading = page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' });
   await expect(restoredHeading).toBeVisible();
   await expect(restoredHeading).not.toBeFocused();
+  await page.getByRole('navigation', { name: 'Synthetic tool substeps' }).getByRole('button', { name: /^Bulk/ }).click();
+  await page.getByRole('button', { name: 'All candidates · 3' }).click();
+  await page.getByRole('button', { name: 'Inspect exampleshop.invalid', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'exampleshop.invalid', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Expand details: Web, DNS, and TLS evidence' }).click();
+  await checkHttpScope('Not retained', 'Not observed');
   await page.getByRole('button', { name: 'Reset demo' }).click();
   await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeFocused();
   expect(await page.evaluate(() => sessionStorage.getItem('whoisleuth:synthetic-demo:v1'))).toBeNull();

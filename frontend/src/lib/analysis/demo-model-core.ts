@@ -11,6 +11,7 @@ import { inspectRdapCapabilities } from '../../../../lib/rdap-capabilities.mts';
 import { parseBoundedJson } from '../bounded-json.ts';
 import { SYNTHETIC_BRAND } from '../synthetic-brand.ts';
 import { capturedWebCollectionQuality } from '../../../../packages/evidence/collection-quality.mts';
+import { buildLookupHttpDisplay } from './lookup-http-display.ts';
 import {
   MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
   MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES,
@@ -476,6 +477,21 @@ export function syntheticDemoLookupView(id: string) {
   const conclusive = candidate.availability !== 'Unknown';
   const observedAt = candidate.provenance.lastObservedAt || '2026-06-26T11:15:00.000Z';
   const active = candidate.facts.activityStatus === 'active';
+  const baseline = candidate.observations[0];
+  // The synthetic snapshots retain an origin, not full request/final URLs or
+  // connection attempts. Do not reconstruct those from the candidate hostname.
+  const http = buildLookupHttpDisplay({
+    httpEvidence: {
+      requestUrl: null, finalUrl: null,
+      transportSecurity: baseline?.httpTransportSecurity ?? null,
+      redirectCount: baseline?.httpRedirectCount ?? null,
+    },
+    httpResponse: {
+      status: baseline?.httpResponseStatus ?? null,
+      contentType: baseline?.httpContentType ?? null,
+    },
+    httpSecurityHeaders: {},
+  });
   const postureFindings = conclusive ? [
     ...(candidate.facts.websiteComplete ? [{ id: 'https-transport', category: 'Transport', state: 'observed', tone: 'configured', label: 'HTTPS transport observed', detail: 'The fixed homepage fixture uses HTTPS.', evidence: ['HTTP fixture'] }] : []),
     ...(candidate.facts.certificateHostnameMatched === true ? [{ id: 'certificate-hostname', category: 'Certificate', state: 'observed', tone: 'configured', label: 'Certificate hostname matched', detail: 'The fixed certificate fixture includes the candidate hostname.', evidence: ['TLS fixture'] }] : []),
@@ -677,15 +693,18 @@ export function syntheticDemoLookupView(id: string) {
       complete: candidate.facts.websiteComplete,
       rows: [
         { label: 'Observation', value: website.detail },
-        { label: 'Final origin', value: candidate.facts.websiteComplete ? `https://${candidate.domain}` : 'Not observed' },
-        { label: 'Response', value: candidate.facts.websiteComplete ? 'HTTP 200' : 'Not observed' },
+        ...http.httpRows,
+        { label: 'Final origin', value: baseline?.httpFinalOrigin ?? 'Not retained' },
       ],
       crossOriginRedirect: false,
       httpsDowngrade: false,
-      redirects: [],
-      attempts: [{ url: `https://${candidate.domain}`, detail: 'Synthetic fixture; no connection was attempted' }],
+      redirects: http.httpRedirects,
+      attempts: http.httpAttempts,
       metadata: [],
-      limitations: ['This is fixed demonstration evidence, not a live website observation.'],
+      limitations: [
+        'This is fixed demonstration evidence, not a live website observation.',
+        'Full requested and final URLs and connection attempts are not retained in this fixture. A final origin does not recover a page path.',
+      ],
     },
     securityTxt: {
       state: active ? 'present' : conclusive ? 'not_found' : 'skipped',

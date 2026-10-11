@@ -114,7 +114,7 @@ describe('synthetic demo state', () => {
       ['Success', 'Success', 'Success', 'Success', 'Success', 'Success'],
     );
     assert.equal(requiredValue(lookup.dns.rows[0]).label, 'Nameservers');
-    assert.equal(requiredValue(lookup.http.attempts[0]).detail, 'Synthetic fixture; no connection was attempted');
+    assert.deepEqual(lookup.http.attempts, []);
     assert.equal(lookup.securityTxt.state, 'present');
     assert.equal(lookup.credentialSurface.classifiedCount, 3);
     assert.equal(lookup.credentialSurface.categories.password, 1);
@@ -143,6 +143,27 @@ describe('synthetic demo state', () => {
     assert.equal(record.evidenceHistory.length, 2);
     assert.notEqual(requiredValue(record.evidenceHistory[0]).firstCapturedAt, requiredValue(record.evidenceHistory[0]).capturedAt);
     assert.equal(syntheticDemoCaseRecord(createSyntheticDemoState()), null);
+  });
+
+  test('keeps synthetic HTTP origins separate from unavailable full URL provenance', () => {
+    const before = structuredClone(SYNTHETIC_DEMO_CANDIDATES);
+    for (const [id, origin, response] of [
+      ['credential-lure', 'https://exampleshop-login.example', 'HTTP 200'],
+      ['character-edit', 'https://examplesh0p.example', 'HTTP 200'],
+      ['alternate-tld', 'Not retained', 'Not observed'],
+    ] as const) {
+      const http = requiredValue(syntheticDemoLookupView(id)).http;
+      const rows = Object.fromEntries(http.rows.map(row => [row.label, row.value]));
+      assert.equal(rows['Requested URL'], 'Not retained');
+      assert.equal(rows['Final URL'], 'Not retained');
+      assert.equal(rows['Final origin'], origin);
+      assert.equal(rows.Response, response);
+      assert.deepEqual(http.attempts, []);
+      assert.deepEqual(http.redirects, []);
+      assert.match(http.limitations.join(' '), /fixed demonstration evidence, not a live website observation/);
+      assert.match(http.limitations.join(' '), /origin does not recover a page path/);
+    }
+    assert.deepEqual(SYNTHETIC_DEMO_CANDIDATES, before);
   });
 });
 
