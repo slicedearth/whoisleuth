@@ -191,6 +191,9 @@ request from the domains actually returned by registry, registrar and WHOIS
 publications. It also shows retained DNS collection context and record outcomes,
 HTTP request and final URLs, and the TLS connection hostname and certificate
 names. Each source keeps its own time; WHOIS referrals retain separate hop times.
+Explicitly unissued referrals remain visible as **Not queried**, including the
+final marker after the request limit. A missing historical query time alone
+does not mean that no request was issued.
 Missing identities and times remain unavailable. Most DNS record families do not
 retain individual answer owners, so a returned record value is not presented as
 its owner. Certificate wildcards and inherited CAA policies do not establish

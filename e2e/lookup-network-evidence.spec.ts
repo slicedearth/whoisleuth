@@ -15,6 +15,7 @@ import { expectLookupTargetAligned, sectionedLookupFixture } from './lookup-desi
 import { buildHttpObservation, failedHttpObservation } from '../lib/http-intelligence.mts';
 import { createLookupViewModel, parseLookupHttpResponse } from '../lib/lookup-response-contract.mts';
 import { buildTlsObservation } from '../lib/tls-intelligence.mts';
+import { MAX_WHOIS_QUERY_HOPS } from '../lib/whois-contracts.mts';
 
 // Lookup fixtures use injected protocol responses or locally rejected inputs. The shared
 // browser and server guards prevent live collection.
@@ -43,6 +44,7 @@ test('source scope keeps completed identities separate from query drafts and rep
       mx: { status: 'error', detail: 'timeout' } },
   };
   const fixture = { ...base, query: 'portal.example.test', inputHostname: 'portal.example.test', isSubdomain: true,
+    diagnostics: { ...base.diagnostics, whois: { ...base.diagnostics.whois, status: 'partial' } },
     availability: { ...base.availability, observationHostname: 'portal.example.test', webObservationMode: 'selected_url', http, dns,
       tls: buildTlsObservation({ sniHost: 'portal.example.test', peerCertificate: { subjectaltname: 'DNS:*.example.test' } },
         { observedAt: '2026-01-01T07:00:00.000Z', now: new Date('2026-01-01T07:00:00.000Z') }),
@@ -51,6 +53,8 @@ test('source scope keeps completed identities separate from query drafts and rep
     whois: { parsed: { domainName: 'whois.example.test' }, chain: [
       { server: 'whois.registry.example.test', queriedAt: '2026-01-01T03:00:00.000Z' },
       { server: 'whois.registrar.example.test', queriedAt: '2026-01-01T04:00:00.000Z' },
+      ...Array.from({ length: MAX_WHOIS_QUERY_HOPS - 2 }, (_, index) => ({ server: `whois.hop${index + 3}.example.test` })),
+      { server: 'whois.unissued.example.test', queryProfile: 'not-issued' },
     ] },
   };
   const admitted = parseLookupHttpResponse(fixture);
@@ -75,6 +79,8 @@ test('source scope keeps completed identities separate from query drafts and rep
   await expect(value('Registry RDAP', 'Returned domain')).toHaveText('registry.example.test');
   await expect(value('WHOIS', 'Returned domain')).toHaveText('whois.example.test');
   await expect(value('WHOIS', 'Hop 2 · whois.registrar.example.test')).toContainText('04:00:00 UTC');
+  await expect(value('WHOIS', 'Hop 3 · whois.hop3.example.test')).toHaveText('Query time not retained');
+  await expect(value('WHOIS', `Hop ${MAX_WHOIS_QUERY_HOPS + 1} · whois.unissued.example.test`)).toHaveText('Not queried');
   await expect(value('DNS', 'Collection hostname')).toHaveText('portal.example.test');
   await expect(value('DNS', 'A outcome')).toHaveText('No data for this record type (NODATA)');
   await expect(value('DNS', 'AAAA outcome')).toHaveText('Records returned');

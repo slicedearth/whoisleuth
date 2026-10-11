@@ -3,18 +3,15 @@
 // exact same defensive input boundary.
 
 import { MAX_WHOIS_BYTES } from './whois-transport.mts';
+import { MAX_WHOIS_CHAIN_HOPS } from './whois-contracts.mts';
 import type { WhoisChain } from './whois-chain.mts';
 
 type UnknownRecord = Record<string, unknown>;
 
-// Collection performs at most six network queries and may retain one seventh,
-// non-issued hop explaining a loop or hop-limit termination.
-const MAX_WHOIS_HOPS = 7;
-
 export function normalizeWhoisChain(value: unknown): WhoisChain {
   if (!Array.isArray(value)) return [];
   const normalized: WhoisChain = [];
-  for (const hopValue of value.slice(0, MAX_WHOIS_HOPS)) {
+  for (const hopValue of value.slice(0, MAX_WHOIS_CHAIN_HOPS)) {
     if (!hopValue || typeof hopValue !== 'object' || Array.isArray(hopValue)) continue;
     const hop = hopValue as UnknownRecord;
     if (typeof hop.server !== 'string' || !hop.server.trim()) continue;

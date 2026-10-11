@@ -4,6 +4,9 @@ import { buildLookupEvidenceScope } from '../frontend/src/lib/analysis/lookup-ev
 import { parseLookupHttpResponse, type LookupHttpResponse } from '../frontend/src/lib/analysis/lookup-response.ts';
 import { MAX_LOOKUP_TLS_ALT_NAMES } from '../packages/analysis/lookup-network-evidence-bounds.mts';
 import { rec } from '../frontend/src/lib/analysis/lookup-display-shared.ts';
+import { buildWhoisChainUncached, type WhoisChain } from '../lib/whois-chain.mts';
+import { MAX_WHOIS_CHAIN_HOPS, MAX_WHOIS_QUERY_HOPS } from '../lib/whois-contracts.mts';
+import { normalizeWhoisChain } from '../lib/whois-normalization.mts';
 
 function fixture(): LookupHttpResponse {
   return {
@@ -38,7 +41,65 @@ function row(result: ReturnType<typeof buildLookupEvidenceScope>, id: string, la
   return row.value;
 }
 
+function scopeForWhoisChain(chain: WhoisChain) {
+  const response = { query: 'example.com', type: 'domain', rdap: { parsed: {} }, whois: { parsed: {}, chain },
+    diagnostics: {}, availability: { domain: 'example.com' } };
+  const before = structuredClone(response);
+  const admitted = parseLookupHttpResponse(response);
+  assert.ok(admitted.ok, 'The chain must pass the real response boundary before projection');
+  const result = buildLookupEvidenceScope(admitted.value);
+  assert.deepEqual(response, before);
+  return result;
+}
+
 describe('retained Lookup source scope', () => {
+  test('retains the final unissued referral after the collector exhausts its request bound', async () => {
+    let calls = 0;
+    const chain = await buildWhoisChainUncached('example.com', {
+      whoisQuery: async () => {
+        calls += 1;
+        return `Domain Name: EXAMPLE.COM\nwhois: hop${calls}.example\nRemark: private-response-sentinel\n`;
+      },
+    });
+    assert.equal(calls, MAX_WHOIS_QUERY_HOPS);
+    assert.equal(chain.length, MAX_WHOIS_CHAIN_HOPS);
+    assert.equal(chain.at(-1)?.queryProfile, 'not-issued');
+    assert.equal(chain.at(-1)?.queriedAt, undefined);
+    const result = scopeForWhoisChain(chain);
+    const hops = result.sources.find(source => source.id === 'whois')!.rows.slice(1);
+    assert.equal(hops.length, chain.length);
+    assert.deepEqual(hops.at(-1), { label: `Hop ${chain.length} · hop${calls}.example`, value: 'Not queried' });
+    assert.ok(hops.slice(0, -1).every(hop => / UTC$/u.test(hop.value)));
+    assert.doesNotMatch(JSON.stringify(result), /private-response-sentinel/u);
+
+    const overflow = [...chain, { server: 'overflow.example', queryProfile: 'not-issued' }];
+    assert.equal(normalizeWhoisChain(overflow).length, MAX_WHOIS_CHAIN_HOPS);
+    assert.equal(normalizeWhoisChain(overflow).at(-1)?.server, chain.at(-1)?.server);
+    assert.deepEqual(scopeForWhoisChain(overflow).sources.find(source => source.id === 'whois')?.rows.slice(1), hops);
+  });
+
+  test('distinguishes shorter unissued policy and loop markers from unknown historical query times', async () => {
+    let calls = 0;
+    const loop = await buildWhoisChainUncached('example.com', {
+      whoisQuery: async server => {
+        calls += 1;
+        return `Domain Name: EXAMPLE.COM\nwhois: ${server}\n`;
+      },
+    });
+    assert.equal(calls, 1);
+    assert.equal(loop.length, 2);
+    assert.equal(row(scopeForWhoisChain(loop), 'whois', `Hop 2 · ${loop[0]!.server}`), 'Not queried');
+    assert.equal(row(scopeForWhoisChain([{ server: 'registry capability policy', queryProfile: 'not-issued' }]),
+      'whois', 'Hop 1 · registry capability policy'), 'Not queried');
+    for (const historical of [
+      { server: 'history.example' },
+      { server: 'history.example', queryProfile: 'plain-domain' },
+      { server: 'history.example', queriedAt: '2026-01-01', error: 'Legacy incomplete response' },
+    ]) {
+      assert.equal(row(scopeForWhoisChain([historical]), 'whois', 'Hop 1 · history.example'), 'Query time not retained');
+    }
+  });
+
   test('keeps request context, separate returned domains and each source clock distinct', () => {
     const original = fixture();
     const before = structuredClone(original);

@@ -1,4 +1,4 @@
-import { MAX_WHOIS_QUERY_HOPS } from '../../../../lib/whois-contracts.mts';
+import { MAX_WHOIS_CHAIN_HOPS } from '../../../../lib/whois-contracts.mts';
 import { MAX_LOOKUP_DNS_RECORDS_PER_TYPE, MAX_LOOKUP_TLS_ALT_NAMES } from '../../../../packages/analysis/lookup-network-evidence-bounds.mts';
 import { DNS_QUERY_OUTCOMES, dnsAddressFamilyEvidence, readDnsQueryOutcome } from '../../../../packages/evidence/dns-query-outcome.mts';
 import { lookupObservationHostname } from '../../../../packages/evidence/lookup-target.mts';
@@ -66,11 +66,12 @@ export function buildLookupEvidenceScope(original: LookupHttpResponse) {
   }
   sources.push(source('whois', 'WHOIS', { status: whoisDiagnostic.status ?? null }, [
     { label: 'Returned domain', value: retained(view.whoisParsed.domainName) },
-    ...records(view.whois.chain, MAX_WHOIS_QUERY_HOPS).map((hop, index) => ({
+    ...records(view.whois.chain, MAX_WHOIS_CHAIN_HOPS).map((hop, index) => ({
       label: `Hop ${index + 1} · ${retained(hop.server)}`,
-      value: formatEvidenceDate(normalizeExplicitIsoTimestamp(hop.queriedAt), 'Query time not retained'),
+      value: hop.queryProfile === 'not-issued' ? 'Not queried'
+        : formatEvidenceDate(normalizeExplicitIsoTimestamp(hop.queriedAt), 'Query time not retained'),
     })),
-  ], 'Referral hops keep their own query times. A hop time is not a single observation time for the merged WHOIS record.'));
+  ], 'Referral hops keep their own query times. Explicitly unissued hops are not queried; a missing historical query time alone does not establish that. A hop time is not a single observation time for the merged WHOIS record.'));
 
   const dnsRows: ScopeRow[] = [{ label: 'Collection hostname', value: hostname ?? 'Not retained' }];
   // These are retained record fields, not a second catalogue of collector questions.
