@@ -4,10 +4,15 @@ import { expect, test } from './fixtures';
 import { caseRecord, openCaseResponseWorkspace, openSeededTimelineCase } from './case-test-fixtures';
 import { caseWorkspaceActionStatus } from './case-response-fixtures';
 import { openCaseSection } from './console-navigation';
-import { expectNoHorizontalOverflow, readBrowserLocalCollection, useTheme } from './helpers';
+import { expectFocusedResultsVisible, expectNoHorizontalOverflow, readBrowserLocalCollection, useTheme } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
 test('distinguishes retained facts and reveals the exact evidence behind decisions, assertions and sightings', async ({ page }, testInfo) => {
+  const collectionRequests: string[] = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) collectionRequests.push(path);
+  });
   const at = '2026-09-01T00:00:00.000Z';
   const pins = ['old.example.test', `new-${'x'.repeat(240)}.example.test`].map((value, index) => ({
     id: `evidence-${index + 1}`, checkpointId: 'checkpoint-one', field: `dns.field-${index}`, category: 'dns',
@@ -32,6 +37,24 @@ test('distinguishes retained facts and reveals the exact evidence behind decisio
   await assessment.getByRole('combobox', { name: 'Review reason', exact: true }).selectOption('other_reviewed');
   await assessment.getByLabel('Conclusion summary', { exact: true }).fill('Review the later infrastructure separately');
   await assessment.getByLabel('Evidence-based rationale', { exact: true }).fill('This conclusion references the second retained fact only.');
+  const prompts = assessment.locator('details.decision-review-prompts');
+  const beforePrompt = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  await expect(prompts).not.toHaveAttribute('open', '');
+  await assessment.getByLabel('Evidence-based rationale', { exact: true }).focus();
+  await page.keyboard.press('Tab');
+  await expect(prompts.locator('summary')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(prompts).toHaveAttribute('open', '');
+  await expect(prompts).toContainText('retained observations weaken this conclusion');
+  await expect(prompts).toContainText('same object, time and collection conditions');
+  await expect(prompts).toContainText('What remains unresolved');
+  await expect(assessment.getByLabel('Conclusion summary', { exact: true })).toHaveValue('Review the later infrastructure separately');
+  await expect(assessment.getByLabel('Evidence-based rationale', { exact: true })).toHaveValue('This conclusion references the second retained fact only.');
+  await expect(second).toBeChecked();
+  await expect(first).not.toBeChecked();
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records).toEqual(beforePrompt.records);
+  await page.keyboard.press('Enter');
+  await expect(prompts).not.toHaveAttribute('open', '');
   await assessment.getByRole('button', { name: 'Record conclusion', exact: true }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('Recorded an analyst decision');
   const decision = assessment.locator('ol.records').first().locator(':scope > li').first();
@@ -53,6 +76,8 @@ test('distinguishes retained facts and reveals the exact evidence behind decisio
   await retainedAssertion.getByText('Linked evidence (2)', { exact: true }).click();
   await expect(retainedAssertion.locator('.linked-evidence li').filter({ hasText: pins[0]!.value })).toContainText('contradicts');
   await expect(retainedAssertion.locator('.linked-evidence li').filter({ hasText: pins[1]!.value })).toContainText('supports');
+  await assessment.getByText('Record an analyst decision', { exact: true }).click();
+  await prompts.locator('summary').click();
 
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
@@ -67,6 +92,14 @@ test('distinguishes retained facts and reveals the exact evidence behind decisio
           .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
         expect(accessibility.violations).toEqual([]);
       }
+      await assessment.getByLabel('Rationale', { exact: true }).focus();
+      await page.keyboard.press('Tab');
+      await expectFocusedResultsVisible(page, prompts.locator('summary'), prompts.locator('summary'));
+      await expect(prompts.getByRole('list')).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      if ((viewport.width === 320 || viewport.width === 1280) && captureVisualEvidenceEnabled()) {
+        await page.screenshot({ path: testInfo.outputPath(`assessment-prompts-${theme}-${viewport.width}.png`) });
+      }
     }
   }
 
@@ -80,4 +113,5 @@ test('distinguishes retained facts and reveals the exact evidence behind decisio
   await observation.getByRole('button', { name: 'Record sighting', exact: true }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('Recorded a source-qualified sighting');
   expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.sightings).toEqual([expect.objectContaining({ evidencePinId: 'evidence-2' })]);
+  expect(collectionRequests).toEqual([]);
 });

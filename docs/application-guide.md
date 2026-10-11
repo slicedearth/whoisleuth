@@ -685,6 +685,11 @@ open; resizing the viewport clears those positions. On wide screens, Assessment
 places retained evidence beside the conclusion form. In Advanced, **Compare
 explanations** shows two retained assertions against their linked observations,
 including opposing or unresolved relationships and shared source context.
+**Consider another explanation** offers optional questions while writing a
+conclusion: review contrary observations, their scope and unresolved alternatives.
+The prompt does not select evidence or change a record. **Evidence considered**
+can include observations that weaken the conclusion; explain their effect in the
+rationale and retain unresolved hypotheses or unknowns as structured assertions.
 Case response forms save workspace-local recovery
 drafts. Their status distinguishes a recovery copy from a submitted Case
 record. After reopening a Case, restore a saved draft explicitly and review it
