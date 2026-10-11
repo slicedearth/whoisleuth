@@ -914,7 +914,14 @@ and beacon attempts. Each request distinguishes a supplied, refused or unavailab
 response and whether collection started. Disabled transports and interactions not
 exercised are listed separately; an unseen request is not evidence of absence.
 **Compare another capture** compares those records from two manifests before any
-PNG is selected. Review the declared conditions alongside changes. Missing
+PNG is selected. **Compare capture conditions** lets you select 2–20 observations
+from either manifest, with all available observations listed across pages. Review
+declared observers, vantages, browser versions, viewports, scale, locale, timezone
+and colour scheme side by side, then deliberately choose the first and second
+page observations. Entries without retained page observations remain available for
+condition review, not page comparison. Condition selections do not select image
+files or import evidence. Exact capture URLs and login/session state remain
+unavailable here; image dimensions do not establish a viewport. Missing
 observations remain qualified, and historical manifests have no page-observation
 data. For a page you own or are authorised to review, **Record an expected
 change** adds your reason and a digest of the selected observations to the Case

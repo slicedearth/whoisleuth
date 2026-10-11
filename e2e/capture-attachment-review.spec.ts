@@ -8,6 +8,119 @@ import { storedFiles, openRetainedFiles, failNextFileWrite } from './case-attach
 import { createHash } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
 import { sourceImage } from './case-image-fixtures';
+import { readWebCaptureManifest } from '../packages/interchange/web-capture-import.mts';
+import { externalFindingsCaseTargets } from '../packages/interchange/external-findings-import.mts';
+
+test('multi-capture conditions remain selectable, bounded and separate from eligible page pairs', async ({ page }, testInfo) => {
+  const { manifest, manifestBytes } = captureReviewFixture();
+  const conditions = { browser: 'chromium', browserVersion: '151', viewport: { width: 1024, height: 768 }, deviceScaleFactor: 1, locale: 'en-AU', timezone: 'UTC', colourScheme: 'light' };
+  const first = { ...manifest, captures: Array.from({ length: 11 }, (_, index) => ({ ...manifest.captures[0]!,
+    domain: index < 2 ? 'capture.example' : `capture-${index}.capture.example`, observerLabel: 'Analyst A', vantageLabel: 'Declared network',
+    conditions: index === 2 ? null : { ...conditions, locale: index === 1 ? 'en-GB' : 'en-AU' },
+  })) };
+  const second = { ...first, captures: first.captures.map(capture => ({ ...capture, capturedAt: '2026-09-01T01:00:00.000Z', observerLabel: 'Analyst B' })) };
+  // Exercise admitted multi-capture data, including repeated domains and instants.
+  expect(readWebCaptureManifest(first).captures).toHaveLength(11);
+  expect(readWebCaptureManifest(second).captures).toHaveLength(11);
+  expect(externalFindingsCaseTargets(readWebCaptureManifest(first).document, 'capture.example')).toEqual([...new Set(first.captures.map(capture => capture.domain))]);
+  await openCasesView(page); await createCase(page, 'capture.example'); await openCaseSection(page, 'Evidence');
+  const capture = page.locator('.capture-workspace'); await capture.locator(':scope > summary').click();
+  const before = await readBrowserLocalCollection(page, 'cases');
+  const requests: string[] = []; page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) requests.push(request.url()); });
+  const firstInput = capture.getByLabel('Select capture manifest', { exact: true });
+  await firstInput.setInputFiles({ name: 'first.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(first)) });
+  const comparison = capture.locator('.capture-comparison'); await comparison.locator(':scope > summary').click();
+  const secondInput = comparison.getByLabel('Comparison capture manifest', { exact: true });
+  await secondInput.setInputFiles({ name: 'second.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(second)) });
+  const firstPage = comparison.getByRole('combobox', { name: 'First page observation', exact: true });
+  const secondPage = comparison.getByRole('combobox', { name: 'Second page observation', exact: true });
+  await expect(firstPage).toHaveValue(''); await expect(secondPage).toHaveValue('');
+  const matrix = comparison.locator('.capture-condition-matrix'); await matrix.locator(':scope > summary').click();
+  const count = matrix.locator('.selection-status').getByRole('status');
+  const row = (label: string) => matrix.getByRole('listitem').filter({ has: page.getByText(label, { exact: true }) });
+  const grid = matrix.getByRole('region', { name: 'Selected capture condition comparison', exact: true });
+  await expect(count).toHaveText('0 of 22 observations selected · maximum 20');
+  await expect(grid).toHaveCount(0);
+  const firstCheck = row('First manifest · capture 1').getByRole('checkbox');
+  await firstCheck.focus(); await firstCheck.press('Space'); await expect(firstCheck).toBeChecked();
+  await row('First manifest · capture 2').getByRole('checkbox').check();
+  await expect(grid.getByRole('columnheader')).toHaveCount(3);
+  await expect(grid.getByRole('rowheader', { name: 'Declared locale Different declarations', exact: true })).toBeVisible();
+  await expect(matrix).toContainText('Observation times: the same instant.');
+  await row('First manifest · capture 3').getByRole('checkbox').check();
+  const viewport = grid.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Declared viewport Not fully declared', exact: true }) });
+  await expect(viewport.getByRole('cell')).toHaveText(['1024 × 768', '1024 × 768', 'Not declared']);
+  await expect(firstPage).toHaveValue(''); await expect(secondPage).toHaveValue('');
+  await row('First manifest · capture 2').getByRole('button', { name: 'Use as first page', exact: true }).click();
+  await expect(firstPage).toHaveValue('1');
+  const pages = matrix.getByRole('navigation', { name: 'Capture observations', exact: true });
+  await pages.getByRole('button', { name: 'Next', exact: true }).click();
+  await row('Second manifest · capture 1').getByRole('button', { name: 'Use as second page', exact: true }).click();
+  await expect(secondPage).toHaveValue('0');
+  await expect(comparison.getByRole('region', { name: 'Page dependency comparison', exact: true })).toBeVisible();
+  await expect(count).toHaveText('3 of 22 observations selected · maximum 20');
+  await expect(comparison.getByRole('combobox', { name: 'First screenshot', exact: true })).toHaveCount(0);
+  await matrix.getByText('How to interpret this comparison', { exact: true }).click();
+  await expect(matrix).toContainText('Exact capture URLs and login or session state are not retained');
+  await expect(matrix).toContainText('Viewports are declarations, not image dimensions.');
+
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: width === 320 ? 700 : 720 });
+      if (captureVisualEvidenceEnabled()) {
+        await count.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath(`capture-selection-${theme}-${width}.png`) });
+      }
+      await grid.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+      await grid.focus(); await expect(grid).toBeFocused();
+      if (width === 320) {
+        await grid.evaluate(element => { element.scrollLeft = 0; });
+        await grid.press('ArrowRight');
+        await expect.poll(() => grid.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+      }
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`capture-matrix-${theme}-${width}.png`) });
+    }
+    expect((await new AxeBuilder({ page }).include('.capture-comparison').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+  }
+  await matrix.getByRole('button', { name: 'Clear condition selection', exact: true }).click();
+  await pages.getByRole('button', { name: 'Previous', exact: true }).click();
+  for (const checkbox of await matrix.getByRole('checkbox').all()) await checkbox.check();
+  await pages.getByRole('button', { name: 'Next', exact: true }).click();
+  for (const checkbox of await matrix.getByRole('checkbox').all()) await checkbox.check();
+  await expect(count).toHaveText('20 of 22 observations selected · maximum 20');
+  await expect(grid.getByRole('columnheader')).toHaveCount(21);
+  await pages.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(matrix.getByRole('checkbox')).toHaveCount(2);
+  for (const checkbox of await matrix.getByRole('checkbox').all()) await expect(checkbox).toBeDisabled();
+  await pages.getByRole('button', { name: 'Previous', exact: true }).click();
+  await row('First manifest · capture 11').getByRole('checkbox').uncheck();
+  await pages.getByRole('button', { name: 'Next', exact: true }).click();
+  await row('Second manifest · capture 10').getByRole('checkbox').check();
+  await expect(count).toHaveText('20 of 22 observations selected · maximum 20');
+
+  const historical = { ...manifest, schemaVersion: 2, captures: [{ ...manifest.captures[0]!, pageBehaviour: undefined }] };
+  await secondInput.setInputFiles({ name: 'historical.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(historical)) });
+  await expect(secondPage).toHaveValue('');
+  await expect(secondPage.locator('option').nth(1)).toHaveJSProperty('disabled', true);
+  await secondPage.focus(); await secondPage.press('ArrowDown'); await secondPage.press('Enter');
+  await expect(secondPage).toHaveValue('');
+  await expect(comparison.getByRole('region', { name: 'Page dependency comparison', exact: true })).toHaveCount(0);
+  await matrix.locator(':scope > summary').click();
+  await expect(count).toHaveText('0 of 12 observations selected · maximum 20');
+  await expect(grid).toHaveCount(0);
+  await pages.getByRole('button', { name: 'Next', exact: true }).click();
+  const historicalRow = row('Second manifest · capture 1');
+  await expect(historicalRow).toContainText('Page observations not retained');
+  await expect(historicalRow.getByRole('button')).toHaveCount(0);
+  await historicalRow.getByRole('checkbox').check();
+  await row('First manifest · capture 11').getByRole('checkbox').check();
+  await expect(grid.getByRole('rowheader', { name: 'Declared viewport Not fully declared', exact: true })).toBeVisible();
+  await firstInput.setInputFiles({ name: 'replacement.json', mimeType: 'application/json', buffer: manifestBytes });
+  await expect(matrix).toHaveCount(0);
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  expect(await storedFiles(page)).toEqual([]); expect(requests).toEqual([]);
+});
 
 test('page dependency comparison works without images and records only an explicitly expected change', async ({ page }, testInfo) => {
   await openCasesView(page); await createCase(page, 'capture.example'); await openCaseSection(page, 'Evidence');

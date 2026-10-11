@@ -7,6 +7,7 @@
   import ArtifactPreview from './ArtifactPreview.svelte';
   import ImageChangeReview from './ImageChangeReview.svelte';
   import PageBehaviourComparison from './PageBehaviourComparison.svelte';
+  import CaptureConditionMatrix from './CaptureConditionMatrix.svelte';
   import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
 
   let { left, caseDomain, persist, mutationBusy }: { left: BrowserCaptureAttachmentReview; caseDomain: string; persist: PersistCaseResponse; mutationBusy: boolean } = $props();
@@ -25,8 +26,8 @@
   $effect(() => { left; untrack(() => { controller?.abort(); controller = null; busy = false; right = null; manifest = null; leftKey = ''; rightKey = ''; error = ''; }); });
   $effect(() => { if (leftChoices.length === 1) leftKey = leftChoices[0]!.key; });
   $effect(() => { if (rightChoices.length === 1) rightKey = rightChoices[0]!.key; });
-  $effect(() => { leftObservation = left.captures.length === 1 ? '0' : ''; });
-  $effect(() => { rightObservation = right?.captures.length === 1 ? '0' : ''; });
+  $effect(() => { leftObservation = left.captures.length === 1 && left.captures[0]?.pageBehaviour ? '0' : ''; });
+  $effect(() => { rightObservation = right?.captures.length === 1 && right.captures[0]?.pageBehaviour ? '0' : ''; });
   onDestroy(() => controller?.abort());
 
   async function select(event: Event, isManifest: boolean) {
@@ -59,8 +60,10 @@
     {#if busy}<p role="status">Checking comparison capture…</p><button class="btn" type="button" onclick={cancel}>Cancel comparison capture</button>{/if}
     {#if error}<p role="alert">{error}</p>{/if}
     {#if right}
-      <div class="choices"><label>First page observation<select bind:value={leftObservation}><option value="">Select observation</option>{#each left.captures as item, index}<option value={String(index)}>{item.domain} · {item.observedAt ?? 'time unknown'} · {index + 1}</option>{/each}</select></label>
-        <label>Second page observation<select bind:value={rightObservation}><option value="">Select observation</option>{#each right.captures as item, index}<option value={String(index)}>{item.domain} · {item.observedAt ?? 'time unknown'} · {index + 1}</option>{/each}</select></label></div>
+      <CaptureConditionMatrix first={left.captures} second={right.captures} firstPage={leftObservation} secondPage={rightObservation}
+        choosePage={(side, index) => { if (side === 'first') leftObservation = String(index); else rightObservation = String(index); }} />
+      <div class="choices"><label>First page observation<select bind:value={leftObservation}><option value="">Select observation</option>{#each left.captures as item, index}<option value={String(index)} disabled={!item.pageBehaviour}>{item.domain} · {item.observedAt ?? 'time unknown'} · {index + 1}{item.pageBehaviour ? '' : ' · Page observations not retained'}</option>{/each}</select></label>
+        <label>Second page observation<select bind:value={rightObservation}><option value="">Select observation</option>{#each right.captures as item, index}<option value={String(index)} disabled={!item.pageBehaviour}>{item.domain} · {item.observedAt ?? 'time unknown'} · {index + 1}{item.pageBehaviour ? '' : ' · Page observations not retained'}</option>{/each}</select></label></div>
       {#if leftObservation !== '' && rightObservation !== ''}
         {#key `${leftObservation}:${rightObservation}:${right.captures[Number(rightObservation)]?.observedAt}`}
           <PageBehaviourComparison left={left.captures[Number(leftObservation)]!} right={right.captures[Number(rightObservation)]!} {caseDomain} {persist} {mutationBusy} />

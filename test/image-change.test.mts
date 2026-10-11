@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { compareImagePixels, IMAGE_CHANGE_GRID_AXIS } from '../packages/comparison/image-change.mts';
-import { compareObservationContexts, readCaptureConditions } from '../packages/comparison/capture-context.mts';
+import { compareObservationContexts, readCaptureConditions, MAX_CAPTURE_COMPARISON_CONTEXTS } from '../packages/comparison/capture-context.mts';
 
 function image(width = 4, height = 3) { const pixels = new Uint8Array(width * height * 4); for (let i = 3; i < pixels.length; i += 4) pixels[i] = 255; return { width, height, pixels }; }
 const context = { observedAt: '2026-09-13T00:00:00.000Z', observerLabel: 'analyst-a', vantageLabel: 'declared-egress-a', conditions: {
@@ -63,4 +63,22 @@ test('context readers reject unsupported fields, malformed times and unbounded c
   assert.throws(() => readCaptureConditions({ ...context.conditions, viewport: { width: 10000, height: 10000 } }), TypeError);
   assert.throws(() => compareObservationContexts([context, { ...context, observedAt: '2026-09-13' }]), TypeError);
   assert.throws(() => compareObservationContexts([context, { ...context, vantageLabel: 'x'.repeat(81) }]), TypeError);
+});
+test('multi-observation comparison preserves every selected context within its existing boundary', () => {
+  const inputs = Array.from({ length: MAX_CAPTURE_COMPARISON_CONTEXTS }, (_, index) => ({ ...context,
+    observerLabel: `analyst-${index}`, conditions: index === 0 ? null : { ...context.conditions, locale: index % 2 ? 'en-AU' : 'en-GB' },
+  }));
+  const original = structuredClone(inputs);
+  const result = compareObservationContexts(inputs);
+  assert.equal(result.observations.length, MAX_CAPTURE_COMPARISON_CONTEXTS);
+  assert.equal(result.rows.find(row => row.id === 'observer')?.state, 'different');
+  assert.deepEqual(result.rows.find(row => row.id === 'observer')?.values, inputs.map(input => input.observerLabel));
+  assert.equal(result.rows.find(row => row.id === 'viewport')?.values[0], null);
+  assert.equal(result.rows.find(row => row.id === 'viewport')?.state, 'unknown');
+  assert.equal(result.time.state, 'same_instant');
+  assert.equal(result.independence, 'not_verified');
+  assert.deepEqual(inputs, original);
+  assert.throws(() => compareObservationContexts([]), /between 2 and 20/u);
+  assert.throws(() => compareObservationContexts([context]), /between 2 and 20/u);
+  assert.throws(() => compareObservationContexts([...inputs, context]), /between 2 and 20/u);
 });

@@ -2,6 +2,8 @@ import { exact, text } from '../evidence/artifact-structure.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { readEvidenceImageDimensions } from '../evidence/image-regions.mts';
 
+export const MAX_CAPTURE_COMPARISON_CONTEXTS = 20;
+
 export type CaptureConditions = Readonly<{
   browser: string; browserVersion: string; viewport: Readonly<{ width: number; height: number }>;
   deviceScaleFactor: number; locale: string; timezone: string; colourScheme: 'light' | 'dark';
@@ -31,7 +33,7 @@ export function readObservationLabel(raw: unknown): string | null {
 }
 
 export function compareObservationContexts(input: readonly ObservationContext[]) {
-  if (!Array.isArray(input) || input.length < 2 || input.length > 20) throw new TypeError('Compare between 2 and 20 observation contexts.');
+  if (!Array.isArray(input) || input.length < 2 || input.length > MAX_CAPTURE_COMPARISON_CONTEXTS) throw new TypeError(`Compare between 2 and ${MAX_CAPTURE_COMPARISON_CONTEXTS} observation contexts.`);
   const observations = input.map(value => {
     const observedAt = value.observedAt === null ? null : normalizeExplicitIsoTimestamp(value.observedAt);
     if (value.observedAt !== null && !observedAt) throw new TypeError('Observation time must include an explicit timezone.');
