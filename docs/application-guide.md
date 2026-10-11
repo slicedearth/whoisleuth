@@ -699,6 +699,14 @@ projection. Undated evidence remains visible, and Bulk session activity is
 labelled separately from source observation time. Analyst decisions and their
 retained history appear as local activity, with links to the review and its
 currently associated Cases. Unavailable Case identifiers remain visible.
+**Evidence family coverage** groups those same records into registration, DNS,
+TLS/certificate, HTTP/page, external-report and analyst-decision lanes. Select a
+lane to read its records across all pages. Other filters still apply. Combined
+snapshots keep their capture clock rather than inventing separate source times;
+unclassified pin categories remain separate. Earliest/latest times and undated
+counts describe retained records, not continuous coverage. Equal-time records
+are not merged, missing records do not prove absence, and later-retained old
+observations do not reconstruct what was known at a past date.
 The review inbox explains each queue assignment; **Earlier decisions** shows
 the retained rationale and dates. Historic omissions are stated explicitly.
 Expand an item to review its evidence and decision, or use **Previous item** and

@@ -6,11 +6,13 @@ import { createRelationshipObservation } from '../frontend/src/lib/analysis/rela
 import {
   buildRetainedEvidenceTimeline,
   filterRetainedEvidenceTimeline,
+  retainedTimelineLanes,
 } from '../frontend/src/lib/analysis/retained-evidence-timeline.ts';
 import { normalizeWatchlistEntry } from '../frontend/src/lib/analysis/watchlist-history.ts';
 import { normalizeWebsiteProfileSnapshot } from '../frontend/src/lib/analysis/website-snapshot-model.ts';
 import { buildAnalystReviewInbox } from '../frontend/src/lib/analysis/analyst-review-inbox.ts';
 import { emptyAnalystReviewStateStore, setAnalystReviewDecision } from '../packages/monitoring/analyst-review-state.mts';
+import { normalizeCaseAssertions } from '../packages/cases/case-response-model.mts';
 
 const OBSERVED_AT = '2026-07-20T00:00:00.000Z';
 const STORED_AT = '2026-07-21T00:00:00.000Z';
@@ -48,6 +50,84 @@ test('review activity retains every admitted decision, all current Case associat
   assert.deepEqual(timeline.omissions, [{ source: 'Earlier analyst decisions no longer retained', count: 1 }]);
   assert.ok(decisions.slice(1).every((item) => item.limitations.some((value) => value.includes('historical associations were not stored'))));
   assert.deepEqual(state, before);
+  const lane = retainedTimelineLanes(timeline.items).find(lane => lane.family === 'analyst_decision');
+  assert.equal(lane?.count, 9);
+  assert.equal(lane?.clock, 'Decision');
+  assert.equal(lane?.latest, state.records[0]!.reviewedAt);
+  assert.equal(lane?.earliest, '2026-07-20T00:01:00.000Z');
+});
+
+test('family lanes use retained categories, preserve conflicting equal-time pins and keep late storage separate', () => {
+  const input = createCase({ domain: 'family.example', source: 'lookup', evidence: { capturedAt: STORED_AT, scanDepth: 'deep', availability: 'registered' },
+    evidencePins: [
+      { category: 'registration', label: 'Registrar', value: 'Example registrar', source: 'registry', observedAt: OBSERVED_AT, completeness: 'complete' },
+      { category: 'dns', label: 'A records', value: '192.0.2.1', source: 'resolver one', observedAt: OBSERVED_AT, completeness: 'complete' },
+      { category: 'dns', label: 'A records', value: '192.0.2.2', source: 'resolver two', observedAt: OBSERVED_AT, completeness: 'complete' },
+      { category: 'dns', label: 'MX outcome', value: 'Query failed', source: 'resolver one', observedAt: null, completeness: 'inconclusive' },
+      { category: 'tls', label: 'Certificate', value: 'Certificate context', source: 'TLS', observedAt: '2026-07-19T00:00:00.000Z' },
+      { category: 'certificate', label: 'Published certificate', value: 'Publication context', source: 'Certificate log', observedAt: OBSERVED_AT },
+      { category: 'http', label: 'HTTP response', value: '200', source: 'HTTP', observedAt: OBSERVED_AT },
+      { category: 'page_identity', label: 'Page title', value: 'Example page', source: 'page', observedAt: OBSERVED_AT },
+      { category: 'page', label: 'Imported page', value: 'Page observation', source: 'Imported capture', observedAt: OBSERVED_AT },
+      { category: 'future_category', label: 'DNS in a title', value: 'Retained context', source: 'DNS', observedAt: OBSERVED_AT },
+    ],
+  }, STORED_AT);
+  const [record] = normalizeCaseStore(JSON.parse(serializeCaseStore([input]))).cases;
+  assert.ok(record);
+  assert.equal(record.evidencePins.length, 10);
+  const before = structuredClone(record);
+  const timeline = buildRetainedEvidenceTimeline({ cases: [record], now: STORED_AT });
+  const lanes = retainedTimelineLanes(timeline.items);
+  assert.deepEqual(lanes.map(lane => [lane.family, lane.count]), [
+    ['registration', 1], ['dns', 3], ['tls', 2], ['page', 3], ['external_report', 0], ['analyst_decision', 0],
+    ['combined', 1], ['relationship', 0], ['activity', 0], ['unclassified', 1],
+  ]);
+  const dnsLane = lanes.find(lane => lane.family === 'dns')!;
+  assert.deepEqual(dnsLane, { family: 'dns', label: 'DNS', clock: 'Observed', count: 3, undated: 1, limited: 1, earliest: OBSERVED_AT, latest: OBSERVED_AT });
+  const dns = filterRetainedEvidenceTimeline(timeline, { ...ALL_FILTERS, family: 'dns' });
+  assert.equal(dns.length, 3);
+  assert.equal(new Set(dns.map(item => item.id)).size, 3);
+  assert.deepEqual(new Set(dns.map(item => item.source)), new Set(['resolver one', 'resolver two']));
+  assert.ok(dns.every(item => item.storedAt === STORED_AT));
+  assert.deepEqual(filterRetainedEvidenceTimeline(timeline, { ...ALL_FILTERS, family: 'dns', time: 'undated' }).map(item => item.title), ['Evidence pin · MX outcome']);
+  assert.equal(lanes.find(lane => lane.family === 'tls')?.earliest, '2026-07-19T00:00:00.000Z');
+  assert.equal(lanes.find(lane => lane.family === 'tls')?.latest, OBSERVED_AT);
+  assert.equal(lanes.find(lane => lane.family === 'combined')?.latest, STORED_AT);
+  assert.ok(timeline.limitations.some(value => value.includes('not a reconstruction')));
+  assert.deepEqual(record, before);
+});
+
+test('empty and undated family lanes do not invent observations or use storage as a source clock', () => {
+  const record = createCase({ domain: 'undated.example', evidencePin: {
+    category: 'tls', label: 'Undated certificate context', value: 'Retained value', source: 'TLS', observedAt: null,
+  } }, STORED_AT);
+  const timeline = buildRetainedEvidenceTimeline({ cases: [record], now: STORED_AT });
+  const lane = retainedTimelineLanes(timeline.items).find(lane => lane.family === 'tls')!;
+  assert.equal(lane.count, 1);
+  assert.equal(lane.undated, 1);
+  assert.equal(lane.earliest, null);
+  assert.equal(lane.latest, null);
+  assert.ok(retainedTimelineLanes([]).every(lane => lane.count === 0 && lane.earliest === null && lane.latest === null));
+  const filtered = filterRetainedEvidenceTimeline(timeline, { ...ALL_FILTERS, entity: 'elsewhere', family: 'tls' });
+  assert.equal(filtered.length, 0);
+  assert.equal(timeline.items.length, 1);
+});
+
+test('external report lanes use the claimed observation clock, not import or publisher update time', () => {
+  const record = createCase({ domain: 'report.example' }, STORED_AT);
+  record.assertions = normalizeCaseAssertions([{
+    id: 'external-report', kind: 'hypothesis', statement: 'External context', state: 'open', createdAt: STORED_AT, updatedAt: STORED_AT,
+    provenance: { origin: 'external_import', format: 'stix', sourceName: 'Fixture report', sourceDigestSha256: 'a'.repeat(64),
+      publisher: null, externalId: null, entityType: 'domain', entityValue: 'report.example', observedAt: OBSERVED_AT,
+      createdAt: '2026-07-01T00:00:00.000Z', modifiedAt: '2026-07-22T00:00:00.000Z', confidence: null, labels: [], markings: [],
+    },
+  }], STORED_AT);
+  assert.equal(record.assertions.length, 1);
+  const timeline = buildRetainedEvidenceTimeline({ cases: [record], now: STORED_AT });
+  assert.equal(timeline.items.length, 1);
+  assert.equal(timeline.items[0]?.family, 'external_report');
+  assert.equal(timeline.items[0]?.storedAt, STORED_AT);
+  assert.equal(retainedTimelineLanes(timeline.items).find(lane => lane.family === 'external_report')?.latest, OBSERVED_AT);
 });
 
 test('review-only timelines preserve orphan histories without inventing evidence dates or Case records', () => {
@@ -78,7 +158,7 @@ test('review-only timelines preserve orphan histories without inventing evidence
 
 test('all admitted pins remain searchable beyond the former 2,000-entry projection limit', () => {
   const cases = Array.from({ length: 75 }, (_, index) => {
-    const record = createCase({ domain: `retained-${index}.example`, evidencePin: { label: 'Undated fact', value: 'Known value', source: 'whois', observedAt: null } }, STORED_AT);
+    const record = createCase({ domain: `retained-${index}.example`, evidencePin: { label: 'Undated fact', value: 'Known value', source: 'whois', category: index === 74 ? 'dns' : null, observedAt: null } }, STORED_AT);
     record.evidencePins = Array.from({ length: 40 }, (_, pin) => ({ ...record.evidencePins[0]!, id: `pin-${index}-${pin}` }));
     return record;
   });
@@ -91,6 +171,8 @@ test('all admitted pins remain searchable beyond the former 2,000-entry projecti
   assert.equal(timeline.freshnessCounts.unknown, 3_000);
   assert.equal(filterRetainedEvidenceTimeline(timeline, { ...ALL_FILTERS, entity: 'retained-74.example', time: 'undated' }).length, 40);
   assert.equal(filterRetainedEvidenceTimeline(timeline, { ...ALL_FILTERS, time: '7d' }).length, 0);
+  assert.equal(filterRetainedEvidenceTimeline(timeline, { ...ALL_FILTERS, family: 'dns' }).length, 40);
+  assert.equal(retainedTimelineLanes(timeline.items).find(lane => lane.family === 'dns')?.count, 40);
 });
 
 test('full relationship membership stays searchable and unavailable clocks never become current', () => {
@@ -133,6 +215,7 @@ test('the timeline retains the complete supported Case history and counts nested
   assert.equal(overBound.items.length, 25);
   assert.equal(overBound.truncated, true);
   assert.deepEqual(overBound.omissions, [{ source: 'Case snapshots outside the source bound', count: 1 }]);
+  assert.equal(retainedTimelineLanes(overBound.items).find(lane => lane.family === 'combined')?.count, 25);
   const undated = buildRetainedEvidenceTimeline({ cases: [{ ...record, evidenceHistory: [{ ...history[0]!, capturedAt: '' }] }], now: STORED_AT });
   assert.equal(undated.items.length, 1);
   assert.equal(undated.items[0]?.observedAt, null);
@@ -244,6 +327,10 @@ test('retained evidence timeline keeps observation, storage, source, and owner c
   assert.equal(timeline.items.find((item) => item.kind === 'bulk_session')?.observedAt, null);
   assert.equal(timeline.items.find((item) => item.kind === 'bulk_session')?.activityAt, OBSERVED_AT);
   assert.equal(timeline.counts.activity, 1);
+  assert.equal(timeline.items.find(item => item.kind === 'bulk_session')?.family, 'activity');
+  assert.equal(timeline.items.find(item => item.kind === 'website_snapshot')?.family, 'page');
+  assert.equal(timeline.items.find(item => item.kind === 'watchlist_check')?.family, 'combined');
+  assert.equal(timeline.items.find(item => item.kind === 'relationship')?.family, 'relationship');
   assert.ok(timeline.items.every((item) => item.storedAt === STORED_AT));
   assert.ok(timeline.items.every((item) => item.href.startsWith('/')));
   assert.doesNotMatch(JSON.stringify(timeline), /Example Registrar/u);

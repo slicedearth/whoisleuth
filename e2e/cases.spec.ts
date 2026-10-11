@@ -868,6 +868,69 @@ test('projects retained evidence into a filterable source-attributed timeline', 
   await expectNoHorizontalOverflow(page);
 });
 
+test('timeline family coverage preserves source clocks, same-time records and undated evidence', async ({ page }, testInfo) => {
+  const observedAt = '2026-07-20T00:00:00.000Z';
+  const storedAt = '2026-07-25T00:00:00.000Z';
+  await page.clock.setFixedTime(storedAt);
+  await page.goto('/monitor?view=timeline');
+  const evidencePins = [
+    { category: 'registration', label: 'Registrar', value: 'Example registrar' },
+    { category: 'dns', label: 'Resolver one answer', value: '192.0.2.1' },
+    { category: 'dns', label: 'Resolver two answer', value: '192.0.2.2' },
+    { category: 'dns', label: 'Undated mail check', value: 'Unavailable', observedAt: null, completeness: 'inconclusive' },
+    { category: 'tls', label: 'Certificate context', value: 'Retained certificate', observedAt: '2026-07-19T00:00:00.000Z' },
+    { category: 'page_identity', label: 'Page title', value: 'Example page' },
+    { category: 'other', label: 'DNS mentioned in text', value: 'Other context' },
+  ].map((pin, index) => ({ id: `family-pin-${index}`, checkpointId: null, field: null, source: 'Fixture source', sourceState: 'complete',
+    sourceSchema: null, observedAt, collectionDepth: 'deep', completeness: 'complete', truncated: false, transitionExpectation: null,
+    limitations: [], createdAt: storedAt, ...pin }));
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord({ id: 'family-case', domain: 'family.example',
+      evidenceHistory: [snapshot({ capturedAt: storedAt })], evidencePins, updatedAt: storedAt,
+    })] },
+  }, { clearStorage: true, destination: '/monitor?view=timeline' });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(before.records[0]?.value.evidencePins).toHaveLength(7);
+  const timeline = page.getByRole('region', { name: 'Investigation timeline', exact: true });
+  await expect(timeline.locator('.timeline-list article')).toHaveCount(8);
+  const coverage = timeline.locator('details').filter({ has: page.locator(':scope > summary', { hasText: 'Evidence family coverage' }) });
+  await coverage.locator(':scope > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(coverage).toHaveAttribute('open', '');
+  const dns = coverage.getByRole('button', { name: 'Show DNS', exact: true });
+  const lane = coverage.getByRole('listitem').filter({ has: page.getByRole('button', { name: 'Show DNS', exact: true }) });
+  await expect(lane).toContainText('3 retained records · 1 undated');
+  await expect(lane.locator('time')).toHaveCount(2);
+  expect(await lane.locator('time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')))).toEqual([observedAt, observedAt]);
+  await dns.focus();
+  await page.keyboard.press('Enter');
+  await expect(dns).toHaveAttribute('aria-pressed', 'true');
+  await expect(dns).toBeFocused();
+  await expect(timeline.locator('.timeline-list article')).toHaveCount(3);
+  await expect(timeline.getByRole('heading', { name: 'Evidence pin · Resolver one answer', exact: true })).toBeVisible();
+  await expect(timeline.getByRole('heading', { name: 'Evidence pin · Resolver two answer', exact: true })).toBeVisible();
+  await expect(timeline).toContainText('Observation time unavailable');
+  await timeline.getByRole('combobox', { name: 'Event time', exact: true }).selectOption('undated');
+  await expect(timeline.locator('.timeline-list article')).toHaveCount(1);
+  await expect(timeline.getByRole('heading', { name: 'Evidence pin · Undated mail check', exact: true })).toBeVisible();
+  await timeline.getByRole('button', { name: 'Clear filters', exact: true }).click();
+  await expect(timeline.locator('.timeline-list article')).toHaveCount(8);
+  await coverage.getByRole('button', { name: 'Show External reports', exact: true }).click();
+  await expect(timeline.getByRole('heading', { name: 'No retained events match', exact: true })).toBeVisible();
+  await coverage.getByRole('button', { name: 'Show all families', exact: true }).click();
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await dns.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      await expect(dns).toBeVisible();
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`timeline-families-${viewport.width}-${theme}.png`) });
+    }
+  }
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(before);
+});
+
 test('the timeline renders every supported Case snapshot after storage admission', async ({ page }) => {
   await page.goto('/monitor?view=timeline');
   const start = Date.parse('2026-07-22T00:00:00.000Z');
