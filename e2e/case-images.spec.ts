@@ -123,6 +123,10 @@ test('edited PNGs preserve originals and source context, verify every output pix
   expect(derivative.id).not.toBe(original.id); expect(derivative.digestSha256).not.toBe(original.digestSha256);
   expect(derivative.source).toBe(original.source); expect(derivative.observedAt).toBe(original.observedAt);
   expect(derivative.derivation).toMatchObject({ method: 'png-regions-v1', sourceAttachmentId: original.id, source: { digestSha256: original.digestSha256, byteLength: original.byteLength } });
+  const derivation = files.locator('.derivation');
+  await derivation.getByText('Derived image details', { exact: true }).click();
+  await expect(derivation).toContainText('This declared history is not an independent check');
+  await expect(derivation).toContainText(original.digestSha256);
   for (const [label, name] of [[`Download original ${IMAGE_NAME}`, IMAGE_NAME], [`Download derivative ${derivative.fileName}`, derivative.fileName]] as const) {
     const download = page.waitForEvent('download'); await files.getByRole('button', { name: label, exact: true }).click();
     const saved = await download, output = await readFile((await saved.path())!);

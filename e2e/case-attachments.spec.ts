@@ -75,9 +75,19 @@ test('selected originals require a deliberate atomic save and preserve drafts ac
   expect((await storedFiles(page))[0]!.bytes).toEqual([...FILE_BYTES]);
   await page.reload(); files = await openRetainedFiles(page);
   const preview = files.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true });
+  const verification = files.getByRole('status').filter({ hasText: 'Size and SHA-256 verified for this preview' });
+  await expect(verification).toHaveCount(0);
+  await expect(files).toContainText(`Recorded size: ${FILE_BYTES.length} bytes`);
+  await expect(files).toContainText(`Recorded SHA-256: sha256:${createHash('sha256').update(FILE_BYTES).digest('hex')}`);
+  await expect(files).toContainText('Declared source: Analyst-selected fixture');
+  await files.getByText('File verification and provenance', { exact: true }).click();
+  await expect(files).toContainText('Listing it does not read the file');
   await preview.focus(); await page.keyboard.press('Enter');
   await expect(files.locator('pre')).toContainText('A deliberately retained original');
+  await expect(verification).toBeVisible();
+  await expect(verification).toContainText('The declared source and accuracy are not verified');
   await files.getByRole('button', { name: 'Close file preview', exact: true }).click();
+  await expect(verification).toHaveCount(0);
   await expect(preview).toBeFocused();
   const download = page.waitForEvent('download');
   await files.getByRole('button', { name: `Download original ${FILE_NAME}`, exact: true }).click();
@@ -132,6 +142,8 @@ test('missing and damaged file bodies remain explicit without rewriting Case evi
   await files.getByRole('button', { name: 'Retain selected files', exact: true }).click();
   await expect(files.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true })).toBeVisible();
   const before = await readBrowserLocalCollection(page, 'cases');
+  await files.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true }).click();
+  await expect(files.getByRole('status').filter({ hasText: 'Size and SHA-256 verified for this preview' })).toBeVisible();
   for (const mode of ['corrupt', 'missing'] as const) {
     await page.evaluate(async action => {
       const request = indexedDB.open('whoisleuth-browser-data-v1');
@@ -151,6 +163,7 @@ test('missing and damaged file bodies remain explicit without rewriting Case evi
     await files.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true }).click();
     await expect(files.getByRole('alert')).toContainText(mode === 'missing' ? 'original bytes are missing' : 'could not be verified');
     await expect(files.locator('pre')).toHaveCount(0);
+    await expect(files.getByRole('status').filter({ hasText: 'Size and SHA-256 verified for this preview' })).toHaveCount(0);
     expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   }
   files = await selectOriginal(page, 'restored-original.json');
@@ -158,6 +171,7 @@ test('missing and damaged file bodies remain explicit without rewriting Case evi
   await expect(files.getByRole('button', { name: 'Preview restored-original.json', exact: true })).toBeVisible();
   await files.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true }).click();
   await expect(files.locator('pre')).toContainText('A deliberately retained original');
+  await expect(files.getByRole('status').filter({ hasText: 'Size and SHA-256 verified for this preview' })).toBeVisible();
   expect(await storedFiles(page)).toHaveLength(1);
   const restored = await readBrowserLocalCollection(page, 'cases');
   expect(restored.manifest.revision).toBe(before.manifest.revision + 1);

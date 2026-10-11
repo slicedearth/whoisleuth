@@ -112,7 +112,12 @@
 <details class="case-files">
   <summary bind:this={summary}>Retained files <span>{record.attachments?.length ?? 0}</span></summary>
   <div class="files-body">
-    <p>Keep selected originals in this workspace. File digests identify bytes, not their source or accuracy. Ordinary JSON backups contain references only; keep a separate copy of the originals.</p>
+    <p>Keep selected originals in this workspace. Ordinary JSON backups contain references only; keep a separate copy of the originals.</p>
+    <details class="integrity-explainer">
+      <summary>File verification and provenance</summary>
+      <p>A saved reference records the expected size and SHA-256. Listing it does not read the file. Preview, download and export check the stored bytes against both values.</p>
+      <p>Sources, observation times and image-edit history are recorded declarations. Matching bytes do not verify those declarations or the accuracy of the contents.</p>
+    </details>
     <label class="file-select btn">{preparing ? 'Checking selected files…' : 'Choose original files'}<input bind:this={input} type="file" multiple disabled={preparing || mutationBusy || Boolean(loading) || imageBusy} onchange={select}></label>
     {#if pending.length}
       <section aria-label="Files selected for retention" class="pending-files">
@@ -137,11 +142,11 @@
       </details>
       <ul class="retained-files">{#each record.attachments as attachment (attachment.id)}
         <li>
-          <div class="file-heading"><h4>{attachment.fileName}</h4><span>{attachment.byteLength.toLocaleString('en-AU')} bytes · {attachment.mediaType}</span></div>
-          <p>{attachment.source ?? 'Source not declared'} · {#if attachment.observedAt}Observed <time datetime={attachment.observedAt}>{attachment.observedAt.replace('T', ' ').replace('Z', ' UTC')}</time>{:else}Observation time unknown{/if}</p>
+          <div class="file-heading"><h4>{attachment.fileName}</h4><span>Recorded size: {attachment.byteLength.toLocaleString('en-AU')} bytes · {attachment.mediaType}</span></div>
+          <p>Declared source: {attachment.source ?? 'not recorded'} · {#if attachment.observedAt}Observed <time datetime={attachment.observedAt}>{attachment.observedAt.replace('T', ' ').replace('Z', ' UTC')}</time>{:else}Observation time unknown{/if}</p>
           <p>Retained <time datetime={attachment.retainedAt}>{attachment.retainedAt.replace('T', ' ').replace('Z', ' UTC')}</time></p>
-          <p class="file-digest"><code>{attachment.digestSha256}</code></p>
-          {#if attachment.derivation}<details class="derivation"><summary>Derived image details</summary><p>Edited from attachment <code>{attachment.derivation.sourceAttachmentId}</code> using {attachment.derivation.method}. The observation time belongs to the source, not the edit.</p><p>Source digest: <code>{attachment.derivation.source.digestSha256}</code></p><ol>{#each attachment.derivation.plan.regions as region}<li>{region.kind === 'redact' ? 'Redact' : 'Outline'}: left {region.x}, top {region.y}, {region.width} × {region.height} source pixels</li>{/each}</ol></details>{/if}
+          <p class="file-digest">Recorded SHA-256: <code>{attachment.digestSha256}</code></p>
+          {#if attachment.derivation}<details class="derivation"><summary>Derived image details</summary><p>Recorded as edited from attachment <code>{attachment.derivation.sourceAttachmentId}</code> using {attachment.derivation.method}. The observation time belongs to the source, not the edit. This declared history is not an independent check of the source pixels or the edits.</p><p>Source digest: <code>{attachment.derivation.source.digestSha256}</code></p><ol>{#each attachment.derivation.plan.regions as region}<li>{region.kind === 'redact' ? 'Redact' : 'Outline'}: left {region.x}, top {region.y}, {region.width} × {region.height} source pixels</li>{/each}</ol></details>{/if}
           <div class="file-actions">
             {#if supportsArtifactPreview(attachment.mediaType)}<button class="btn" type="button" aria-label={`Preview ${attachment.fileName}`} disabled={mutationBusy || Boolean(loading) || preparing || imageBusy} onclick={event => void open(attachment, false, event.currentTarget)}>Preview</button>{/if}
             <button class="btn" type="button" aria-label={`Download ${attachment.derivation ? 'derivative' : 'original'} ${attachment.fileName}`} disabled={mutationBusy || Boolean(loading) || preparing || imageBusy} onclick={event => void open(attachment, true, event.currentTarget)}>Download {attachment.derivation ? 'derivative' : 'original'}</button>
@@ -155,6 +160,7 @@
     {#if preview}
       <section aria-label={`File preview: ${preview.attachment.fileName}`} class="file-preview">
         <button class="btn" type="button" disabled={mutationBusy || imageBusy} onclick={() => void closePreview()}>Close file preview</button>
+        <p role="status">Size and SHA-256 verified for this preview. The declared source and accuracy are not verified by this check.</p>
         {#key preview.attachment.id}
           {#if preview.attachment.mediaType === 'image/png'}
             <CaseImageReview bind:this={imageReview} {record} attachment={preview.attachment} file={preview.file} {mutationBusy} {persistOperation} onbusy={value => imageBusy = value} />
@@ -176,6 +182,7 @@
   .retained-files>li{display:grid;gap:8px;min-width:0;padding:15px 0;border-top:1px solid var(--border)}.file-heading{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:baseline;min-width:0}.file-heading span{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
   .file-digest code{font:400 var(--text-2xs)/1.5 var(--mono);overflow-wrap:anywhere}.file-actions,.remove-file{display:flex;flex-wrap:wrap;gap:8px}.remove-file{align-items:center}.file-actions button{white-space:normal;overflow-wrap:anywhere;max-width:100%}.file-error{color:var(--danger)}
   .file-preview{display:grid;gap:14px;min-width:0;border-top:1px solid var(--border);padding-top:14px}.file-preview>button{justify-self:start}.derivation{min-width:0}.derivation summary{padding:8px 0}.derivation p,.derivation li{font-size:var(--text-xs);overflow-wrap:anywhere}.derivation ol{padding-left:1.5em}
+  .integrity-explainer{min-width:0}.integrity-explainer>summary{padding:8px 0}.integrity-explainer p{margin-top:8px}
   .file-export-selection{min-width:0}.file-export-selection>summary{padding:8px 0}.file-export-selection>p{margin:10px 0}.export-selection{display:grid;gap:4px}.export-selection label{display:flex;align-items:center;gap:8px;min-width:0;min-height:44px;font-size:var(--text-xs);overflow-wrap:anywhere}.export-selection input{flex:none}
   @media(max-width:600px){.source-fields{grid-template-columns:minmax(0,1fr)}.files-body{padding:12px}.file-actions{align-items:stretch}.file-actions button{flex:1 1 100%}}
 </style>

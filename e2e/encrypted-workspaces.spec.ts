@@ -78,8 +78,10 @@ test('retained original bytes use the encrypted workspace keys and remain unavai
   await unlock(page, row.name); files = await openRetainedFiles(page);
   await files.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true }).click();
   await expect(files.locator('pre')).toContainText('A deliberately retained original');
+  await expect(files.getByRole('status').filter({ hasText: 'Size and SHA-256 verified for this preview' })).toBeVisible();
   await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
   await expect(page.locator('pre')).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: 'Size and SHA-256 verified for this preview' })).toHaveCount(0);
   expect(await storedFiles(page, namedDatabase(row.id))).toEqual(persisted);
 });
 
