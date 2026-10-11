@@ -1,5 +1,6 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page, Request } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { CLI_COMMANDS, RUNNABLE_INVESTIGATION_PLAN_RECIPES } from '../cli/command-reference.mts';
 import { PUBLIC_COVERAGE_SUMMARY } from '../frontend/src/lib/generated/public-coverage-summary.ts';
 import { PUBLIC_METHODOLOGY } from '../frontend/src/lib/generated/public-methodology.ts';
@@ -519,6 +520,14 @@ test('keeps the final CLI section current at the end of the document', async ({ 
 
 test('renders methodology and deferred coverage from fixed metadata without requests', async ({ page }, testInfo) => {
   const investigationRequests = collectInvestigationRequests(page);
+  await page.context().clearCookies();
+  await page.addInitScript(() => {
+    Reflect.set(window, 'coverageStorageAttempts', 0);
+    IDBFactory.prototype.open = function() {
+      Reflect.set(window, 'coverageStorageAttempts', Number(Reflect.get(window, 'coverageStorageAttempts')) + 1);
+      throw new Error('Public coverage must not open saved work');
+    };
+  });
   await page.goto('/methodology');
   await expect(page.locator('.topic-grid article')).toHaveCount(PUBLIC_METHODOLOGY.topics.length);
   await expect(page.getByRole('heading', { name: 'Authority-aware registration decisions' })).toBeVisible();
@@ -560,6 +569,71 @@ test('renders methodology and deferred coverage from fixed metadata without requ
   await expect(standard).toHaveCount(0);
   await optionalOnly.uncheck();
   await expect(standard).toBeVisible();
+
+  const search = catalogue.getByRole('searchbox', { name: 'Find a capability' });
+  const scope = catalogue.getByRole('combobox', { name: 'Capability scope' });
+  const reset = catalogue.getByRole('button', { name: 'Reset filters' });
+  const cards = catalogue.locator('.capability-grid article');
+  const total = PUBLIC_COVERAGE_SUMMARY.summary.capabilityFamilies;
+  await search.fill('  DNS INTELLIGENCE  ');
+  await expect(cards).toHaveCount(1);
+  await expect(standard).toBeVisible();
+  await expect(cards).toContainText('Resolver answers are point-in-time publications and do not prove provider ownership or control.');
+  await expect(catalogue.getByRole('status')).toHaveText(`Showing 1 of ${total} implemented capability families.`);
+  await search.fill('point-in-time publications');
+  await expect(cards).toHaveCount(1);
+  await expect(standard).toBeVisible();
+  await scope.selectOption('respond');
+  await expect(cards).toHaveCount(0);
+  await optionalOnly.check();
+  await search.fill('private-coverage-query.example.test');
+  await expect(catalogue.getByRole('status')).toHaveText(`Showing 0 of ${total} implemented capability families.`);
+  await expect(catalogue.getByText(/No capabilities match the selected filters/u)).toBeVisible();
+  expect(await page.evaluate(() => `${location.href} ${JSON.stringify(localStorage)} ${JSON.stringify(sessionStorage)}`)).not.toContain('private-coverage-query');
+  await reset.focus(); await page.keyboard.press('Enter');
+  await expect(reset).toBeFocused();
+  await expect(search).toHaveValue('');
+  await expect(scope).toHaveValue('all');
+  await expect(optionalOnly).not.toBeChecked();
+  await expect(cards).toHaveCount(total);
+  await search.fill('DNS intelligence');
+
+  for (const density of ['comfortable', 'compact'] as const) {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.getByRole('button', { name: /^Colour theme,/u }).click();
+    await page.getByLabel('Reading density').selectOption(density);
+    await page.getByLabel('Reading density').press('Escape');
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720]] as const) {
+        await page.setViewportSize({ width, height });
+        await scope.focus(); await page.keyboard.press('Shift+Tab');
+        await expect(search).toBeFocused();
+        await expect.poll(() => search.evaluate(input => {
+          const bounds = input.getBoundingClientRect();
+          return [bounds.top + 4, bounds.bottom - 4].every(y => input.contains(document.elementFromPoint(bounds.left + bounds.width / 2, y)));
+        })).toBe(true);
+        await expectNoHorizontalOverflow(page);
+        expect((await new AxeBuilder({ page }).include('.coverage-catalogue').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+        if ((width === 320 || width === 1280) && captureVisualEvidenceEnabled()) {
+          await page.screenshot({ path: testInfo.outputPath(`coverage-${density}-${theme}-${width}-viewport.png`) });
+          await catalogue.screenshot({ path: testInfo.outputPath(`coverage-${density}-${theme}-${width}.png`) });
+        }
+      }
+    }
+  }
+  expect(await page.evaluate(() => Reflect.get(window, 'coverageStorageAttempts'))).toBe(0);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const documentation = page.getByRole('navigation', { name: 'Documentation', exact: true });
+  await documentation.getByRole('link', { name: 'Examples', exact: true }).click();
+  await expect(page).toHaveURL(/\/examples$/u);
+  await documentation.getByRole('link', { name: 'Coverage', exact: true }).click();
+  await page.getByRole('button', { name: 'Open capability catalogue' }).click();
+  await expect(search).toHaveValue('');
+  await expect(scope).toHaveValue('all');
+  await expect(optionalOnly).not.toBeChecked();
+  await expect(cards).toHaveCount(total);
+  expect(await page.evaluate(() => Reflect.get(window, 'coverageStorageAttempts'))).toBe(0);
   expect(investigationRequests).toEqual([]);
 });
 
