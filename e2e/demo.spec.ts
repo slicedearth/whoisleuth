@@ -386,6 +386,7 @@ async function workspaceNeedsScroll(page: Page) {
 
 test('completes the guided synthetic workflow without investigation requests or production-store access', async ({ page }, testInfo) => {
   test.slow();
+  const verifyIsolation = await isolateCasePractice(page);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const apiRequestPaths: string[] = [];
   page.on('request', (request) => {
@@ -552,12 +553,13 @@ test('completes the guided synthetic workflow without investigation requests or 
   await page.getByText('Explore the retained investigation timeline', { exact: true }).click();
 
   const storage = await page.evaluate(() => ({
-    local: Object.keys(localStorage),
-    session: Object.keys(sessionStorage),
+    local: Object.keys(localStorage).sort(),
+    session: Object.keys(sessionStorage).sort(),
   }));
-  expect(storage.local).toEqual([THEME_STORAGE_KEY]);
+  expect(storage.local).toEqual(['saved-work-sentinel', THEME_STORAGE_KEY].sort());
   expect(await page.evaluate(key => localStorage.getItem(key), THEME_STORAGE_KEY)).toBe('dark');
-  expect(storage.session).toEqual(['whoisleuth:synthetic-demo:v1']);
+  expect(storage.session).toEqual(['saved-work-sentinel', 'whoisleuth:synthetic-demo:v1'].sort());
+  await verifyIsolation();
 
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export synthetic case report' }).click();
@@ -588,6 +590,7 @@ test('completes the guided synthetic workflow without investigation requests or 
   expect(await page.evaluate(() => sessionStorage.getItem('whoisleuth:synthetic-demo:v1'))).toBeNull();
   expect(apiRequestPaths.length).toBeGreaterThan(0);
   expect(apiRequestPaths.every((path) => path === '/api/session')).toBe(true);
+  await verifyIsolation();
 });
 
 test('settles long-to-short stage transitions at one stable workspace anchor', async ({ page }) => {
