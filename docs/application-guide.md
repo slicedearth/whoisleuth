@@ -66,8 +66,19 @@ relationships and shared sources**. Follow its declared derivation without
 counting repeated material as independent support. The credential-page exercise
 also uses **Exact incident-object coverage**: inspect each recipient's drafting,
 simulated delivery and response history, then the independently reviewed page.
-The advertisement stays unresolved. Packet identity remains unknown because the
-exercise does not create or deliver a packet.
+The advertisement stays unresolved. Packet identity remains unknown for those
+simulated deliveries; no prepared packet is attached to their history.
+
+**Compare fictional response drafts** is a separate, optional exercise. Choose
+**Compare supplied fictional drafts** to inspect two in-memory draft packets
+from a fresh copy of the supplied Case. They change recipient, exact page or
+advertisement scope, and selected evidence. Open a difference to inspect both
+complete values. A pin absent from one packet is still retained in the source
+Case. The normal packet writer, validation and comparison are used, but neither
+draft is authorised, downloaded, delivered or imported. Your practice edits and
+simulated delivery history are unchanged. Clearing or closing the comparison,
+closing practice, changing steps or scenario, restarting or leaving discards
+the temporary pair.
 
 Choose a compromised-page or shared-form scenario to practise exact object scope;
 the related-host scenario keeps different affected identities and observations

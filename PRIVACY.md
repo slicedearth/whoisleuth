@@ -69,6 +69,10 @@ does not query a live target or write protected workspace data.
 Its Case-form practice keeps edits and unfinished forms only in page memory.
 Restarting, reloading or leaving discards them; it does not open the saved-work
 database, export practice files or expose collection and reporting controls.
+Its optional draft comparison generates and validates two fictional packets in
+memory, without authorising, downloading, delivering or importing them. Closing
+or clearing the comparison or leaving its practice step discards the pair;
+ordinary practice edits remain separate.
 
 ## Standalone local application
 

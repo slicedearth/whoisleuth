@@ -13,10 +13,11 @@
   import CaseAssessmentComparison from './CaseAssessmentComparison.svelte';
   import CaseIncidentCoverage from './CaseIncidentCoverage.svelte';
   import CaptureConditionMatrix from './CaptureConditionMatrix.svelte';
+  import DeferredSurface from './DeferredSurface.svelte';
   import { casePracticeCaptureContexts } from '#lib/analysis/case-practice.ts';
   import '#lib/components/case-response-stage.css';
 
-  let { onreset, scenario }: { onreset: () => void; scenario: CasePracticeScenario } = $props();
+  let { onreset, scenario, visible = true }: { onreset: () => void; scenario: CasePracticeScenario; visible?: boolean } = $props();
   const session = createCasePracticeSession(untrack(() => scenario));
   const captureContexts = casePracticeCaptureContexts(untrack(() => scenario));
   const definition = $derived(casePracticeDefinition(scenario));
@@ -30,6 +31,8 @@
   const identityReview = $derived(scenario === 'identity-actions' ? casePracticeIdentityReview() : null);
   const sourceQualifications = $derived(caseSelectedEvidenceSourceLimitations(record.evidencePins, record.evidenceLinks, record.evidencePins.map(pin => pin.id)));
   let step = $state('evidence');
+  let packetComparisonOpen = $state(false);
+  $effect(() => { if (!visible || step !== 'response') packetComparisonOpen = false; });
   let message = $state('');
   let mutationBusy = $state(false);
   let live = true;
@@ -157,8 +160,12 @@
     <div hidden={step !== 'response'} class="practice-response">
       <h3 id="practice-response" tabindex="-1">Separate page response from advertisement distribution</h3>
       <p>The supplied lure leads to a copied offer and credential form. The reference prose has no logo or brand name. Copyright authority is unverified; this exercise makes no rights declaration. No actual packet export or provider submission occurs.</p>
-      <p>Open <strong>Exact incident-object coverage</strong> to inspect the page and advertisement separately as you progress. The shared response-history view distinguishes drafting, simulated delivery, a provider acknowledgement and an independent page review. Packet identity stays unknown because this exercise exports no packet.</p>
+      <p>Open <strong>Exact incident-object coverage</strong> to inspect the page and advertisement separately as you progress. The shared response-history view distinguishes drafting, simulated delivery, a provider acknowledgement and an independent page review. Those simulated deliveries have no retained packet identity; the optional draft comparison below stays separate.</p>
       <CaseIncidentCoverage {record} />
+      <details class="practice-local" bind:open={packetComparisonOpen}><summary>Compare fictional response drafts</summary>
+        {#if packetComparisonOpen && visible && step === 'response'}<DeferredSurface load={() => import('./CasePracticePacketComparison.svelte')} props={{}}
+          loadingLabel="Opening fictional packet comparison." unavailableLabel="The fictional packet comparison could not be opened." />{/if}
+      </details>
       <details class="practice-local"><summary>Preview the separate internal follow-up</summary>
         <p>Use the existing retained question and its linked fictional pin. This preview uses the normal audience projection but cannot save, download, send a task or apply a control.</p>
         <label>Practice handoff audience<select bind:value={practiceAudience} disabled={localReviewBusy}><option value="internal">Internal</option><option value="trusted">Trusted recipient</option><option value="public">Public preview</option></select></label>

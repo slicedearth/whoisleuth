@@ -350,7 +350,7 @@
 
 <details id="case-practice" class="case-practice-entry card" bind:open={practiceOpen} ontoggle={event=>{if(event.currentTarget.isConnected&&event.currentTarget.open)practiceStarted=true;}}>
   <summary onpointerenter={preloadCasePractice} onfocus={preloadCasePractice}>Practise with real Case forms</summary>
-  {#if practiceStarted}{#key practiceGeneration}<DeferredSurface load={()=>import('#lib/components/CasePractice.svelte')} props={{onreset:()=>{practiceGeneration+=1;}}} onready={()=>{if(practiceGeneration>0)document.getElementById('case-practice-title')?.focus();}} loadingLabel="Opening the isolated Case practice." unavailableLabel="Case practice could not be loaded." />{/key}{/if}
+  {#if practiceStarted}{#key practiceGeneration}<DeferredSurface load={()=>import('#lib/components/CasePractice.svelte')} props={{onreset:()=>{practiceGeneration+=1;},visible:practiceOpen}} onready={()=>{if(practiceGeneration>0)document.getElementById('case-practice-title')?.focus();}} loadingLabel="Opening the isolated Case practice." unavailableLabel="Case practice could not be loaded." />{/key}{/if}
 </details>
 
 <nav class="demo-steps card" bind:this={demoSteps} aria-label="Synthetic tool substeps">

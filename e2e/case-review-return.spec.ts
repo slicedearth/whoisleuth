@@ -6,6 +6,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { buildCaseExport } from '../packages/cases/case-storage-model.mts';
 import { buildCaseResponsePacket } from '../packages/cases/case-response-packet.mts';
+import { holdPacketFileDigest } from './held-packet-digest';
 import { canonicalArtifactJsonV2 } from '../packages/evidence/artifact-integrity.mts';
 import { createCase, updateCase } from '../packages/cases/case-record-operations.mts';
 import type { CaseRecord } from '../packages/cases/case-model.mts';
@@ -45,30 +46,6 @@ function reviewed(current: CaseRecord) {
 }
 function upload(value: unknown) { return { name: 'review-return.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(value)) }; }
 
-async function holdPacketFileDigest(page: Page) {
-  await page.evaluate(() => {
-    const original = crypto.subtle.digest.bind(crypto.subtle);
-    const scope = window as unknown as { packetDigestHeld: boolean; releasePacketDigest: () => Promise<void> };
-    scope.packetDigestHeld = false;
-    let release!: () => void, finished!: () => void;
-    const held = new Promise<void>(resolve => release = resolve), completed = new Promise<void>(resolve => finished = resolve);
-    scope.releasePacketDigest = async () => {
-      release(); await completed;
-      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-    };
-    crypto.subtle.digest = async (algorithm, data) => {
-      const text = new TextDecoder().decode(data as ArrayBuffer);
-      if (text.includes('"schema":"whoisleuth.case-response-packet"') && text.includes('"integrity":')) {
-        crypto.subtle.digest = original;
-        scope.packetDigestHeld = true;
-        await held;
-        try { return await original(algorithm, data); } finally { finished(); }
-      }
-      return original(algorithm, data);
-    };
-  });
-}
-
 test('selected Case exports compare read-only with exact records, replacement and disposal', async ({ page }, testInfo) => {
   const { section, current } = await seed(page);
   let lookupRequests = 0;
@@ -97,7 +74,7 @@ test('selected Case exports compare read-only with exact records, replacement an
   const values = comparison.getByRole('region', { name: 'Selected comparison values', exact: true });
   await expect(values.getByRole('heading', { level: 4 })).toBeFocused();
   await expect(values.getByRole('region', { name: 'Baseline export text', exact: true })).toContainText('Keep the original note');
-  await expect(values.getByText('Not present in this selected export.', { exact: true })).toBeVisible();
+  await expect(values.getByText('Not present in this selected copy.', { exact: true })).toBeVisible();
   await comparison.getByRole('button', { name: 'Next differences', exact: true }).click();
   await expect(values).toHaveCount(0);
   await comparison.getByRole('button', { name: 'Inspect Notes comparison-only-note', exact: true }).click();

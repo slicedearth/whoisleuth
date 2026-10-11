@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createCasePracticeRecord, createCasePracticeSession, CASE_PRACTICE_LATER_AT, CASE_PRACTICE_SCENARIOS, reviewCasePracticeInput, previewCasePracticeContainment, casePracticeFeedback, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeRoutes } from '../frontend/src/lib/analysis/case-practice.ts';
+import { createCasePracticeRecord, createCasePracticeSession, CASE_PRACTICE_LATER_AT, CASE_PRACTICE_SCENARIOS, reviewCasePracticeInput, previewCasePracticeContainment, previewCasePracticePackets, casePracticeFeedback, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeRoutes } from '../frontend/src/lib/analysis/case-practice.ts';
+import { compareCaseHandoffCopies } from '../packages/cases/case-handoff-comparison.mts';
+import { validateCaseResponsePacket } from '../packages/cases/case-response-packet-validation.mts';
 import { normalizeCase } from '../packages/cases/case-record-operations.mts';
 import { replaceCaseDraft } from '../packages/cases/case-drafts.mts';
 import { caseRecheckAnswerContext } from '../packages/cases/case-recheck-model.mts';
@@ -43,6 +45,51 @@ test('the existing offer-page practice runs deterministic offline owners without
   assert.equal(excluded.state, 'partial'); assert.equal(excluded.assertions[0]!.evidence[0]!.state, 'not_selected');
   const publicPreview = await previewCasePracticeContainment(record, 'public', true);
   assert.deepEqual(publicPreview.assertions, []); assert.deepEqual(publicPreview.evidencePins, []);
+  assert.deepEqual(record, before);
+});
+
+test('fictional packet comparison retains exact identities and omitted source pins without authorising or changing practice', async () => {
+  const record = createCasePracticeRecord(), before = structuredClone(record);
+  const [baseline, comparison] = await previewCasePracticePackets(record);
+  for (const copy of [baseline, comparison]) {
+    assert.equal(copy.kind, 'response_packet');
+    assert.equal(copy.caseId, record.id);
+    assert.equal(copy.domain, record.domain);
+    await validateCaseResponsePacket(copy.record);
+    assert.equal(copy.record.reviewRequired, true);
+    assert.equal(copy.record.submissionPerformed, false);
+    const authority = copy.record.authorisation as Record<string, unknown>;
+    assert.equal(authority.status, 'draft');
+    assert.equal(authority.confirmedAt, null);
+    assert.equal(authority.suppliedReviewDigestSha256, null);
+    const actions = copy.record.escalationHistory as Record<string, unknown>[];
+    assert.equal(actions.length, 1);
+    assert.equal(actions[0]!.state, 'drafting');
+    assert.equal(JSON.stringify(actions).includes('packetReceipt'), false);
+  }
+  const changes = compareCaseHandoffCopies(baseline, comparison);
+  assert.equal(changes.state, 'ready');
+  assert.equal(changes.rows.find(row => row.field === 'recipientRoute')?.state, 'changed');
+  assert.equal(changes.rows.find(row => row.field === 'incident')?.state, 'changed');
+  assert.equal(changes.rows.find(row => row.field === 'actionBinding')?.state, 'unchanged');
+  const action = changes.rows.find(row => row.field === 'escalationHistory')!;
+  assert.equal(action.state, 'changed');
+  assert.ok(action.recordId);
+  assert.deepEqual((action.baseline as { responseObjects: unknown }).responseObjects, [record.evidencePins[0]!.responseObject]);
+  assert.deepEqual((action.comparison as { responseObjects: unknown }).responseObjects, [record.evidencePins[3]!.responseObject]);
+  const selected = changes.rows.filter(row => row.field === 'selectedEvidence');
+  assert.deepEqual(selected.filter(row => row.state === 'baseline_only').map(row => row.recordId), [record.evidencePins[0]!.id, record.evidencePins[2]!.id]);
+  assert.deepEqual(selected.filter(row => row.state === 'comparison_only').map(row => row.recordId), [record.evidencePins[3]!.id]);
+  assert.deepEqual(record, before);
+  assert.equal(record.actions.length, 0);
+  assert.equal(record.evidencePins.length, 4);
+});
+
+test('fictional packet preparation rejects other scenarios and stops an already cancelled attempt', async () => {
+  await assert.rejects(previewCasePracticePackets(createCasePracticeRecord('provider-resolved')), /supplied offer-page/u);
+  const controller = new AbortController(); controller.abort();
+  const record = createCasePracticeRecord(), before = structuredClone(record);
+  await assert.rejects(previewCasePracticePackets(record, controller.signal), { name: 'AbortError' });
   assert.deepEqual(record, before);
 });
 

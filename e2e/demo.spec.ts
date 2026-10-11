@@ -4,6 +4,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
 import { THEME_STORAGE_KEY } from '../frontend/src/lib/theme.ts';
+import { holdPacketFileDigest } from './held-packet-digest';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -196,6 +197,113 @@ test('source-linked and containment practice uses real offline reviews without s
   }
   expect((await new AxeBuilder({ page }).include('.case-practice').analyze()).violations).toEqual([]);
   await verifyIsolation();
+});
+
+test('fictional draft comparison shares the complete read-only view without saved-work or delivery access', async ({ page }, testInfo) => {
+  const verifyIsolation = await isolateCasePractice(page);
+  let downloads = 0; page.on('download', () => downloads++);
+  await page.goto('/demo#case-practice');
+  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  await practice.getByRole('button', { name: '4. Rehearse separate response scopes', exact: true }).click();
+  await practice.getByText('Compare fictional response drafts', { exact: true }).click();
+  const comparison = practice.getByRole('region', { name: 'Fictional response draft comparison', exact: true });
+  const prepare = comparison.getByRole('button', { name: 'Compare supplied fictional drafts', exact: true });
+  await expect(prepare).toBeVisible();
+  await expect(comparison.getByRole('heading', { name: 'Fictional draft differences', exact: true })).toHaveCount(0);
+  await prepare.focus(); await prepare.press('Enter');
+  await expect(comparison.getByRole('heading', { name: 'Fictional draft differences', exact: true })).toBeFocused();
+  await expect(comparison).toContainText('Both packets remain unauthorised drafts.');
+  await comparison.getByRole('button', { name: 'Inspect Recipient Route', exact: true }).click();
+  const values = comparison.getByRole('region', { name: 'Selected comparison values', exact: true });
+  await expect(values.getByRole('region', { name: 'Baseline draft value', exact: true })).toContainText('earlier-desk@example.invalid');
+  await expect(values.getByRole('region', { name: 'Comparison draft value', exact: true })).toContainText('later-desk@example.invalid');
+  await comparison.getByRole('button', { name: 'Inspect Incident', exact: true }).click();
+  await expect(values.getByRole('region', { name: 'Baseline draft value', exact: true })).toContainText('https://case-practice.example/offer');
+  await expect(values.getByRole('region', { name: 'Comparison draft value', exact: true })).toContainText('https://distribution.example/ad/7');
+  const omitted = comparison.locator('.records > li').filter({ hasText: 'Only in baseline draft' }).first();
+  await omitted.getByRole('button').click();
+  await expect(values.getByText('Not present in this selected copy.', { exact: true })).toBeVisible();
+  const history = comparison.getByRole('button', { name: /^Inspect Escalation History /u });
+  await history.focus(); await history.press('Enter');
+  await expect(values.getByRole('heading', { level: 4 })).toBeFocused();
+  await expect(values.getByRole('region', { name: 'Baseline draft value', exact: true })).toContainText('"kind":"page"');
+  await expect(values.getByRole('region', { name: 'Comparison draft value', exact: true })).toContainText('"kind":"advertisement"');
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    await values.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('.practice-packets').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) {
+      await values.getByRole('heading', { level: 4 }).focus();
+      await expect(values.getByRole('heading', { level: 4 })).toBeFocused();
+      await comparison.screenshot({ path: testInfo.outputPath(`fictional-packets-${theme}-${width}.png`) });
+      await values.screenshot({ path: testInfo.outputPath(`fictional-packet-values-${theme}-${width}.png`) });
+    }
+  }
+  // A current failure is unavailable, not an empty or successfully compared pair.
+  await comparison.getByRole('button', { name: 'Clear fictional comparison', exact: true }).click();
+  await holdPacketFileDigest(page, true); await prepare.click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { packetDigestHeld: boolean }).packetDigestHeld)).toBe(true);
+  await page.evaluate(() => (window as unknown as { releasePacketDigest: () => Promise<void> }).releasePacketDigest());
+  await expect(comparison.getByRole('alert')).toHaveText('The fictional drafts could not be compared. Your practice Case and drafts are unchanged.');
+  await expect(comparison.getByRole('region', { name: 'Selected comparison values', exact: true })).toHaveCount(0);
+  await expect(prepare).toBeEnabled(); await prepare.click();
+  await expect(comparison.getByRole('heading', { name: 'Fictional draft differences', exact: true })).toBeFocused();
+  await expect(comparison.getByRole('alert')).toHaveCount(0);
+  await verifyIsolation(); expect(downloads).toBe(0);
+});
+
+test('fictional packet comparison discards held completions without overwriting practice drafts or replacement scopes', async ({ page }) => {
+  const verifyIsolation = await isolateCasePractice(page);
+  let downloads = 0; page.on('download', () => downloads++);
+  await page.goto('/demo#case-practice');
+  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const draft = practice.locator('form[data-recovery-form="evidence-pin"]').getByLabel('Label', { exact: true });
+  await draft.fill('Keep this practice draft');
+  const disclosure = practice.getByText('Compare fictional response drafts', { exact: true });
+  const comparison = practice.getByRole('region', { name: 'Fictional response draft comparison', exact: true });
+  const prepare = comparison.getByRole('button', { name: 'Compare supplied fictional drafts', exact: true });
+  const ready = comparison.getByRole('heading', { name: 'Fictional draft differences', exact: true });
+  async function open() {
+    await practice.getByRole('button', { name: '4. Rehearse separate response scopes', exact: true }).click();
+    if (await disclosure.locator('..').getAttribute('open') === null) await disclosure.click();
+    await expect(prepare).toBeVisible();
+  }
+  for (const disposal of ['clear', 'close', 'outer', 'step', 'scenario', 'restart'] as const) {
+    await open();
+    // Alternate old success/failure; neither may overwrite a replacement pair.
+    await holdPacketFileDigest(page, ['close', 'step', 'restart'].includes(disposal));
+    await prepare.click();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { packetDigestHeld: boolean }).packetDigestHeld)).toBe(true);
+    await expect(ready).toHaveCount(0);
+    if (disposal === 'clear') await comparison.getByRole('button', { name: 'Clear fictional comparison', exact: true }).click();
+    else if (disposal === 'close') { await disclosure.click(); await expect(comparison).toHaveCount(0); }
+    else if (disposal === 'outer') {
+      const outer = page.getByText('Practise with real Case forms', { exact: true });
+      await outer.click(); await expect(comparison).toHaveCount(0); await outer.click();
+    } else if (disposal === 'step') {
+      await practice.getByRole('button', { name: '1. Pin a fact', exact: true }).click();
+      await expect(comparison).toHaveCount(0); await expect(draft).toHaveValue('Keep this practice draft');
+    } else if (disposal === 'scenario') {
+      await page.getByRole('combobox', { name: 'Practice scenario', exact: true }).selectOption('provider-resolved');
+      await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
+      await expect(practice).toContainText('Provider-reported outcome: provider reports resolved');
+      await expect(comparison).toHaveCount(0);
+      await page.getByRole('combobox', { name: 'Practice scenario', exact: true }).selectOption('credential-form');
+      await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
+    } else {
+      await practice.getByRole('button', { name: 'Discard practice and restart', exact: true }).click();
+      await expect(comparison).toHaveCount(0); await expect(draft).toHaveValue('');
+    }
+    await open(); await expect(ready).toHaveCount(0); await prepare.click(); await expect(ready).toBeVisible();
+    const identities = comparison.getByText('Fictional packet identities', { exact: true }).locator('..').locator('code');
+    await expect(identities).toHaveCount(2);
+    const replacement = await identities.allTextContents();
+    await page.evaluate(() => (window as unknown as { releasePacketDigest: () => Promise<void> }).releasePacketDigest());
+    await expect(identities).toHaveText(replacement); await expect(ready).toBeVisible();
+    await expect(comparison.getByRole('alert')).toHaveCount(0); await expect(prepare).toBeEnabled();
+    await comparison.getByRole('button', { name: 'Clear fictional comparison', exact: true }).click();
+  }
+  await verifyIsolation(); expect(downloads).toBe(0);
 });
 
 test('requested-evidence practice creates only a drafting amendment without saved-work access', async ({ page }) => {

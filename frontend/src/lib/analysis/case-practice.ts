@@ -12,6 +12,7 @@ import { caseRecheckAnswerContext } from '../../../../packages/cases/case-rechec
 import { PLATFORM_REPORTING_ROUTES } from '../../../../packages/cases/platform-reporting-routes.mts';
 import { readIncidentStages, reviewIncidentSequence } from '../../../../packages/investigation/incident-sequence-review.mts';
 import type { CaptureManifestContext } from '../../../../packages/interchange/web-capture-import.mts';
+import type { CaseHandoffCopy } from '../../../../packages/cases/case-handoff-comparison.mts';
 
 export const CASE_PRACTICE_OBSERVED_AT = '2026-09-01T12:00:00.000Z';
 export const CASE_PRACTICE_LATER_AT = '2026-09-02T12:00:00.000Z';
@@ -46,6 +47,51 @@ export async function previewCasePracticeContainment(record: CaseRecord, audienc
   const { previewCaseContainmentHandoff } = await import('../../../../packages/cases/case-containment-handoff.mts');
   return previewCaseContainmentHandoff(record, { audience, recipientRole: 'security_operations', assertionIds: [followUp.id],
     evidencePinIds: includeSupportingPin ? [source.id] : [] }, CASE_PRACTICE_JOURNEY_AT);
+}
+
+/** Two detached draft selections, not changes to practice or its simulated deliveries. */
+export async function previewCasePracticePackets(supplied: CaseRecord, signal?: AbortSignal): Promise<readonly [CaseHandoffCopy, CaseHandoffCopy]> {
+  signal?.throwIfAborted();
+  const source = structuredClone(supplied);
+  const page = source.evidencePins[0]?.responseObject, advertisement = source.evidencePins[3]?.responseObject;
+  const urls = casePracticeDefinition('credential-form').urls;
+  if (source.domain !== 'case-practice.example' || page?.kind !== 'page' || page.identifier !== urls[0]
+    || advertisement?.kind !== 'advertisement' || advertisement.identifier !== urls[1] || !source.evidencePins[2]) {
+    throw new TypeError('Use the supplied offer-page practice record.');
+  }
+  const [{ buildCaseResponsePacket }, { readCaseHandoffCopy }] = await Promise.all([
+    import('../../../../packages/cases/case-response-packet.mts'),
+    import('../../../../packages/cases/case-handoff-comparison.mts'),
+  ]);
+  signal?.throwIfAborted();
+  let detached = updateCase([source], source.id, { action: {
+    type: 'internal_review', recipient: 'earlier-desk@example.invalid',
+    contactSource: 'Fictional internal comparison only', routeObservedAt: CASE_PRACTICE_OBSERVED_AT,
+    responseObjects: [page], contactLimitations: ['Reserved fictional recipient. No delivery or authority is claimed.'],
+  } }, CASE_PRACTICE_JOURNEY_AT).record;
+  const actionId = detached.actions.at(-1)!.id;
+  const common = {
+    profile: 'internal_soc', actionId, category: 'Fictional review comparison', affectedParty: 'Fictional example service',
+    observedHarm: 'Supplied example only; no live observation, legal authority or external use is claimed.',
+    observedAt: CASE_PRACTICE_OBSERVED_AT,
+  };
+  async function readDraft(record: CaseRecord, url: string, selectedEvidencePinIds: string[]) {
+    signal?.throwIfAborted();
+    const packet = (await buildCaseResponsePacket(record, { ...common, abusiveUrls: [url], selectedEvidencePinIds }, CASE_PRACTICE_JOURNEY_AT)).json;
+    signal?.throwIfAborted();
+    const bytes = new TextEncoder().encode(JSON.stringify(packet));
+    try {
+      const copy = await readCaseHandoffCopy(bytes);
+      signal?.throwIfAborted();
+      return copy;
+    } finally { bytes.fill(0); }
+  }
+  const baseline = await readDraft(detached, page.identifier, [source.evidencePins[0]!.id, source.evidencePins[2]!.id]);
+  detached = updateCase([detached], detached.id, { actionUpdate: {
+    id: actionId, recipient: 'later-desk@example.invalid', responseObjects: [advertisement],
+  } }, CASE_PRACTICE_JOURNEY_AT).record;
+  const comparison = await readDraft(detached, advertisement.identifier, [source.evidencePins[3]!.id]);
+  return [baseline, comparison];
 }
 
 export const CASE_PRACTICE_SCENARIOS = [
