@@ -77,6 +77,61 @@ async function seed(page: import('@playwright/test').Page, extra: Record<string,
   return workspace;
 }
 
+test('candidate inspection preserves queue state and keeps inspected and submitted domains separate', async ({ page }) => {
+  const candidates = [candidate, ...Array.from({ length: 29 }, (_, index) => ({
+    ...candidate,
+    domain: `sample-${String(index).padStart(2, '0')}.example`,
+    sources: [{ ...candidate.sources[0]!, observedHostname: `login.sample-${String(index).padStart(2, '0')}.example` }],
+  }))];
+  const workspace = await seed(page, { 'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([{ ...profile, candidateObservations: candidates }]) });
+  const requests: string[] = [];
+  page.on('request', request => { if (request.url().includes('/api/')) requests.push(request.url()); });
+  await workspace.getByRole('checkbox', { name: candidate.domain, exact: true }).check();
+  await workspace.getByLabel('Candidate search').fill('sample-');
+  await workspace.getByLabel('Candidate order').selectOption('domain');
+  await workspace.getByRole('navigation', { name: 'Candidate pages' }).getByRole('button', { name: 'Next', exact: true }).click();
+  const inspect = workspace.getByRole('button', { name: 'Inspect sample-25.example', exact: true });
+  await inspect.focus();
+  await inspect.press('p');
+  await expect(workspace.getByRole('heading', { name: 'sample-25.example', exact: true })).toBeFocused();
+  const evidence = workspace.getByRole('complementary', { name: 'Retained evidence inspector' });
+  await expect(evidence).toContainText('login.sample-25.example');
+  await expect(evidence).toContainText('Start unknown');
+  await expect(evidence).toContainText('partial');
+  await workspace.getByLabel('Destination watchlist').fill('Only checked candidates');
+  await workspace.getByLabel('Reason', { exact: true }).fill('A checked nomination, not the open inspector.');
+  await workspace.getByRole('button', { name: 'Preview exact watchlist handoff' }).click();
+  const preview = workspace.getByRole('region', { name: 'Watchlist handoff preview' });
+  await expect(preview).toContainText(candidate.domain);
+  await expect(preview).not.toContainText('sample-25.example');
+  await workspace.getByRole('button', { name: 'Back to queue', exact: true }).click();
+  await expect(inspect).toBeFocused();
+  await expect(workspace.getByLabel('Candidate search')).toHaveValue('sample-');
+  await expect(workspace.getByLabel('Candidate order')).toHaveValue('domain');
+  await expect(workspace.getByRole('navigation', { name: 'Candidate pages' })).toContainText('Page 2 of 2');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1280, 1920]) {
+      await page.setViewportSize({ width, height: 844 });
+      await inspect.click();
+      await expect(workspace.getByRole('heading', { name: 'sample-25.example', exact: true })).toBeFocused();
+      await expectNoHorizontalOverflow(page);
+      await expect(evidence).toBeVisible();
+      if (width <= 390) await expect(workspace.getByLabel('Candidate search')).toBeHidden();
+      if (captureVisualEvidenceEnabled()) {
+        await workspace.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: test.info().outputPath(`candidate-inspector-${theme}-${width}.png`), fullPage: true });
+      }
+      await workspace.getByRole('button', { name: 'Back to queue', exact: true }).click();
+      await expect(inspect).toBeFocused();
+      await expect(workspace.getByLabel('Candidate search')).toHaveValue('sample-');
+    }
+  }
+  await workspace.getByLabel('Candidate search').fill('');
+  await expect(workspace.getByRole('checkbox', { name: candidate.domain, exact: true })).toBeChecked();
+  expect(requests).toEqual([]);
+});
+
 test('a rejected candidate decision preserves its selection and permits a deliberate retry', async ({ page }) => {
   const workspace = await seed(page);
   const selected = workspace.getByRole('checkbox', { name: candidate.domain, exact: true });
