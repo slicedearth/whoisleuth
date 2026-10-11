@@ -46,9 +46,12 @@
 </script>
 
 <details class="review-session" bind:open={expanded}>
-  <summary>Review position{saved ? ' · saved' : ''}</summary>
-  <p class="notice">Keep the current filters, selected item and unfinished review forms for a later visit. Case drafts recover separately; no collection or decision is replayed.</p>
-  {#if saved}<p class="notice">Saved <time datetime={saved.updatedAt}>{formatEvidenceDate(saved.updatedAt)}</time>.</p>{/if}
+  <summary>Pause and resume review <span class="checkpoint-state">{#if ready}{#if saved}Saved <time datetime={saved.updatedAt}>{formatEvidenceDate(saved.updatedAt)}</time>{:else}No saved checkpoint{/if}{:else}{busy ? 'Loading saved checkpoint…' : 'Saved checkpoint unavailable'}{/if}</span></summary>
+  <p class="notice">Save your place before leaving. This keeps the current filters, selected item and copies of unfinished review forms in this workspace. It does not submit those forms. Case drafts recover separately.</p>
+  <div class="checkpoint-preview">
+    <section aria-label="Current review position"><h4>Current review</h4><p>Current filters · {position.selected ? 'one selected item' : 'no selected item'} · {position.drafts.length} unfinished review {position.drafts.length === 1 ? 'form' : 'forms'}.</p></section>
+    {#if ready && saved}<section aria-label="Saved review checkpoint"><h4>Saved for later</h4><p>Saved filters · {saved.selected ? 'one selected item' : 'no selected item'} · {saved.drafts.length} review-form {saved.drafts.length === 1 ? 'copy' : 'copies'}.</p><p>Later navigation and edits do not update this checkpoint. Resuming checks current evidence and keeps newer open drafts.</p></section>{/if}
+  </div>
   <div class="toolbar">
     <button class="btn" type="button" bind:this={saveButton} disabled={!ready || busy} onclick={() => void save()}>Save current position</button>
     {#if saved}
@@ -60,4 +63,14 @@
   <p role="status">{busy ? 'Updating review position…' : message}</p>
 </details>
 
-<style>.review-session{margin-block:12px}.toolbar{display:flex;flex-wrap:wrap;gap:8px}</style>
+<style>
+  .review-session{margin-block:12px;min-width:0}
+  summary{min-height:44px;overflow-wrap:anywhere}
+  .checkpoint-state{display:inline-block;margin-inline-start:8px;color:var(--muted);font:400 var(--text-sm)/1.5 var(--font-sans)}
+  .checkpoint-preview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-block:16px}
+  .checkpoint-preview section{min-width:0;line-height:1.6;overflow-wrap:anywhere}
+  .checkpoint-preview h4{margin:0 0 4px;font:650 var(--text-sm)/1.5 var(--font-sans)}
+  .checkpoint-preview p{margin:0 0 8px;font-size:var(--text-sm)}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px}
+  @media(max-width:640px){.checkpoint-preview{grid-template-columns:1fr}}
+</style>

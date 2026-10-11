@@ -782,9 +782,12 @@ The review inbox explains each queue assignment; **Earlier decisions** shows
 the retained rationale and dates. Historic omissions are stated explicitly.
 Expand an item to review its evidence and decision, or use **Previous item** and
 **Next item** across the complete filtered queue. Switching items, pages or
-filters preserves unfinished decision forms for this visit. Use **Review
-position → Save current position** to retain the selection, filters and open
-review forms in this workspace. Later navigation does not update that checkpoint.
+filters preserves unfinished decision forms for this visit. Open **Pause and
+resume review** before leaving. **Current review** describes the current selection
+and unfinished review forms; **Saved for later** describes the separate saved
+copies. Choose **Save current position** to retain those forms and the filters
+in this workspace without submitting them. The collapsed control shows whether
+a checkpoint is saved and when. Later navigation and edits do not update it.
 **Resume saved review** restores it against current records, keeps newer open
 drafts and flags changed or unavailable evidence. Changed-evidence drafts require
 explicit review before submission. A draft with an uncertain write outcome stays

@@ -1,9 +1,10 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { currentCaseFixture, currentCaseCollection } from '../test/support/current-case.mts';
 import { openCaseMetadata, openInboxReview, inboxReviewControls } from './console-navigation';
-import { migrateLegacyBrowserData, readBrowserLocalCollection, expectNoHorizontalOverflow, useTheme } from './helpers';
+import { migrateLegacyBrowserData, readBrowserLocalCollection, expectNoHorizontalOverflow, expectFocusedResultsVisible, useTheme, failNextBrowserLocalCollectionRead } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { REVIEW_SESSION_SCHEMA, REVIEW_SESSION_VERSION } from '../packages/contracts/review-session-contract.mts';
 
@@ -27,6 +28,13 @@ test('review navigation spans pages and an explicit checkpoint restores filters,
   const requests: string[] = [];
   await page.route(/\/api\/(lookup|dns|tls|certificates?|certificate-transparency)(\/|\?|$)/u, async route => { requests.push(route.request().url()); await route.abort(); });
   await seed(page);
+  const checkpointSummary = page.locator('.review-session > summary');
+  await expect(checkpointSummary).toContainText('Pause and resume review');
+  await expect(checkpointSummary).toContainText('No saved checkpoint');
+  await checkpointSummary.focus(); await checkpointSummary.press('Enter');
+  await expect(page.getByRole('region', { name: 'Current review position', exact: true })).toContainText('0 unfinished review forms');
+  expect((await readBrowserLocalCollection(page, 'review_session')).records).toHaveLength(0);
+  await checkpointSummary.press('Enter');
   const inbox = page.getByRole('region', { name: 'Review inbox', exact: true });
   await inbox.getByText('Advanced filters', { exact: true }).click();
   await inbox.getByRole('combobox', { name: 'Item type', exact: true }).selectOption('case');
@@ -54,12 +62,21 @@ test('review navigation spans pages and an explicit checkpoint restores filters,
   await expect(items.first().locator(':scope > details > summary')).toBeFocused();
   const selectedTitle = await items.first().getByRole('heading').textContent();
   let control = await checkpoint(page);
+  await expect(control.getByRole('region', { name: 'Current review position', exact: true })).toContainText('1 unfinished review form');
+  await expect(control.getByRole('region', { name: 'Saved review checkpoint', exact: true })).toHaveCount(0);
   await control.getByRole('button', { name: 'Save current position', exact: true }).click();
   await expect(control.getByRole('status')).toContainText('Review position saved');
   const cases = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 30 });
   const saved = (await readBrowserLocalCollection(page, 'review_session', { minimumRecords: 1 })).records[0]!.value;
   expect(saved.drafts).toHaveLength(1);
   expect(saved.drafts[0]!.rationale).toContain('contrary observation');
+  await expect(control.getByRole('region', { name: 'Saved review checkpoint', exact: true })).toContainText('1 review-form copy');
+  await expect(checkpointSummary.locator('time')).toHaveAttribute('datetime', saved.updatedAt);
+  await items.first().locator('details.lifecycle-controls > summary').click();
+  await items.first().getByLabel('Rationale', { exact: true }).fill('This later draft is not in the saved checkpoint.');
+  await expect(control.getByRole('region', { name: 'Current review position', exact: true })).toContainText('2 unfinished review forms');
+  await expect(control.getByRole('region', { name: 'Saved review checkpoint', exact: true })).toContainText('1 review-form copy');
+  expect((await readBrowserLocalCollection(page, 'review_session', { minimumRecords: 1 })).records[0]!.value).toEqual(saved);
   await page.reload();
   control = await checkpoint(page);
   await control.getByRole('button', { name: 'Resume saved review', exact: true }).click();
@@ -83,13 +100,40 @@ test('review navigation spans pages and an explicit checkpoint restores filters,
   const decision = (await readBrowserLocalCollection(page, 'analyst_review_state', { minimumRecords: 1 })).records[0]!.value;
   expect(decision.reviewDueAt).toBe('2026-10-15T12:30:45.678Z');
   expect(decision.rationale).toBe('Unfinished first review. Keep the contrary observation.');
-  for (const theme of ['light', 'dark'] as const) {
-    await useTheme(page, theme);
-    for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720]] as const) {
-      await page.setViewportSize({ width, height }); await expectNoHorizontalOverflow(page);
-      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`review-session-${theme}-${width}.png`), fullPage: true }); }
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const density of ['comfortable', 'compact'] as const) {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.getByRole('button', { name: /^Colour theme,/u }).click();
+    await page.getByLabel('Reading density').selectOption(density);
+    await page.getByLabel('Reading density').press('Escape');
+    await expect(page.locator('html')).toHaveAttribute('data-density', density);
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720]] as const) {
+        await page.setViewportSize({ width, height }); await expectNoHorizontalOverflow(page);
+        await control.getByRole('button', { name: 'Save current position', exact: true }).focus();
+        await page.keyboard.press('Shift+Tab');
+        await expectFocusedResultsVisible(page, checkpointSummary, checkpointSummary);
+        expect((await new AxeBuilder({ page }).include('.review-session').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+        if ((width === 320 || width === 1280) && captureVisualEvidenceEnabled()) {
+          await page.screenshot({ path: testInfo.outputPath(`review-session-${density}-${theme}-${width}-viewport.png`) });
+          await control.screenshot({ path: testInfo.outputPath(`review-session-${density}-${theme}-${width}.png`) });
+        }
+      }
     }
   }
+  await failNextBrowserLocalCollectionRead(page, 'review_session');
+  await control.getByRole('button', { name: 'Reload saved position', exact: true }).click();
+  await expect(control.getByRole('status')).toContainText('could not be read');
+  await expect(checkpointSummary).toContainText('Saved checkpoint unavailable');
+  await expect(control.getByRole('region', { name: 'Saved review checkpoint', exact: true })).toHaveCount(0);
+  await expect(control.getByRole('button', { name: 'Save current position', exact: true })).toBeDisabled();
+  await expect(control.getByRole('button', { name: 'Resume saved review', exact: true })).toBeDisabled();
+  expect((await readBrowserLocalCollection(page, 'review_session', { minimumRecords: 1 })).records[0]!.value).toEqual(saved);
+  if (captureVisualEvidenceEnabled()) await control.screenshot({ path: testInfo.outputPath('review-session-unavailable.png') });
+  await control.getByRole('button', { name: 'Reload saved position', exact: true }).click();
+  await expect(checkpointSummary.locator('time')).toHaveAttribute('datetime', saved.updatedAt);
+  await expect(control.getByRole('region', { name: 'Saved review checkpoint', exact: true })).toContainText('1 review-form copy');
   expect(requests).toEqual([]);
 });
 
@@ -173,5 +217,7 @@ test('an uncertain restored review cannot be resubmitted and draft removal recov
   expect((await readBrowserLocalCollection(page, 'analyst_review_state')).records).toHaveLength(0);
   await control.getByRole('button', { name: 'Discard saved position and forms', exact: true }).click();
   await expect(control.getByRole('button', { name: 'Save current position', exact: true })).toBeFocused();
+  await expect(control.locator('summary')).toContainText('No saved checkpoint');
+  await expect(control.getByRole('region', { name: 'Saved review checkpoint', exact: true })).toHaveCount(0);
   expect((await readBrowserLocalCollection(page, 'review_session')).records).toHaveLength(0);
 });
