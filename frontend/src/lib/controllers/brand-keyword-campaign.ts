@@ -2,6 +2,8 @@ import {
   reviseBrandKeywordCampaign,
   matchBrandKeywordTerms,
   brandKeywordCampaignState,
+  keywordCampaignCorpusRevision,
+  type KeywordCampaignCorpus,
   type BrandKeywordCampaign,
   type BrandKeywordCampaignInput,
   type BrandKeywordCampaignSnapshot,
@@ -11,8 +13,6 @@ import {
   MAX_CANDIDATE_OBSERVATIONS,
   type WatchPriority,
 } from '../../../../packages/workspace/brand-candidate-workflow.mts';
-import type { BrandProfile } from '../../../../packages/workspace/brand-profile-model.mts';
-import { sha256IdentityHex } from '../../../../packages/evidence/record-identity.mts';
 import {
   profileDomainMatch,
   previewBrandDomainExclusions,
@@ -63,23 +63,9 @@ export function explainKeywordCampaignMatch(
   };
 }
 
-type CampaignCorpus = Pick<BrandProfile, 'id' | 'name' | 'updatedAt' | 'candidateObservations'
-  | 'candidateExceptions' | 'officialDomains' | 'approvedPartnerDomains' | 'allowlistedDomains'>;
-
-/** Page-memory identity only: any changed source, declaration or review invalidates the preview. */
-export function keywordCampaignCorpusRevision(profile: CampaignCorpus) {
-  if (profile.candidateObservations.length > MAX_CANDIDATE_OBSERVATIONS)
-    throw new RangeError('The retained candidate corpus exceeds its supported bound; no partial comparison was prepared.');
-  return sha256IdentityHex(new TextEncoder().encode(JSON.stringify([
-    profile.id, profile.name, profile.updatedAt, profile.candidateObservations,
-    profile.candidateExceptions, profile.officialDomains, profile.approvedPartnerDomains,
-    profile.allowlistedDomains,
-  ])));
-}
-
 /** Compare the explicitly selected, already validated Brand corpus without changing its records. */
 export function compareKeywordCampaignCorpus(
-  profile: CampaignCorpus,
+  profile: KeywordCampaignCorpus,
   before: BrandKeywordCampaign | null,
   after: BrandKeywordCampaign,
   now: string,

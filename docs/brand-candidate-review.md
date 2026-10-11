@@ -97,6 +97,14 @@ comparisons stay in page memory; only **Save reviewed campaign revision** persis
 the validated campaign intent. It does not rewrite candidate attribution or
 reviews, add Watchlist entries or perform collection.
 
+When a retained-candidate comparison is selected, saving also checks its
+fingerprint against current browser storage, including after a concurrent-write
+retry. If another tab changes that context, nothing is saved: the draft stays
+open, the Brand is refreshed and a fresh preview is required. A failed refresh
+keeps saving disabled until reload. Editing without a retained-candidate
+comparison still checks the campaign revision and preserves unrelated current
+Brand data, but does not freeze a corpus that was never selected.
+
 The start is inclusive and the end exclusive. The dates describe the analyst's
 review window, not a domain's registration or source-observation time. Scheduled,
 paused, expired and unavailable-clock campaigns cannot create new nominations.

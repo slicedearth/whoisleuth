@@ -6,17 +6,17 @@
     previewKeywordCampaignDraft,
     previewKeywordCampaignHosts,
     compareKeywordCampaignCorpus,
-    keywordCampaignCorpusRevision,
     type KeywordCampaignDraft,
     type KeywordCampaignComparison,
   } from '#lib/controllers/brand-keyword-campaign.ts';
   import {
     brandKeywordCampaignState,
+    keywordCampaignCorpusRevision,
     type BrandKeywordCampaign,
   } from '../../../../packages/workspace/brand-keyword-campaign.mts';
   import { WATCH_PRIORITIES } from '../../../../packages/workspace/brand-candidate-workflow.mts';
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
-  import { failedLocalMutationOutcome } from '#lib/local-mutation-outcome.ts';
+  import { failedLocalMutationOutcome, LocalRecordConflictError } from '#lib/local-mutation-outcome.ts';
   import { createDraftRevision, restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
   import BrandCampaignComparison from './BrandCampaignComparison.svelte';
 
@@ -136,6 +136,7 @@
         submitted.input,
         submitted.expectedRevision,
         new Date().toISOString(),
+        comparison?.revision ?? null,
       );
       committed = true;
       if (!isCurrent()) return;
@@ -145,6 +146,20 @@
       await onrefresh();
     } catch (cause) {
       if (isCurrent()) {
+        if (!committed && cause instanceof LocalRecordConflictError) {
+          clearPreview();
+          message = 'The saved Brand context changed. The campaign was not saved; refreshing the retained context.';
+          try {
+            await onrefresh();
+            if (isCurrent()) message = 'The campaign was not saved because the retained context changed. Your draft is preserved and the Brand has been refreshed. Preview it again before saving.';
+          } catch {
+            if (isCurrent()) {
+              unavailable = true;
+              message = 'The campaign was not saved. The retained context changed, but the Brand could not be refreshed. Your draft is preserved; reload before retrying.';
+            }
+          }
+          return;
+        }
         unavailable = committed || failedLocalMutationOutcome(cause) === 'unknown';
         message = committed
           ? 'The campaign revision was saved, but the visible Brand could not be refreshed. The draft remains available; reload before another edit.'

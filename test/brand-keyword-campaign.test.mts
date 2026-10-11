@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { BrowserLocalDataProvider, type BrowserLocalDataUpdater, type LocalDataCollectionDefinition } from '../frontend/src/lib/browser-local-data.ts';
+import { saveBrandKeywordCampaign } from '../frontend/src/lib/brand-profiles.ts';
+import { LocalRecordConflictError } from '../frontend/src/lib/local-mutation-outcome.ts';
 import {
   attributeKeywordCampaignCandidate,
   brandKeywordCampaignState,
   keywordCampaignDefaultPriority,
   keywordCampaignFeedSelection,
   keywordCampaignMatchContext,
+  keywordCampaignCorpusRevision,
   matchBrandKeywordTerms,
   mergeBrandKeywordCampaigns,
   normalizeBrandKeywordCampaigns,
@@ -36,7 +40,6 @@ import {
   previewKeywordCampaignHosts,
   explainKeywordCampaignMatch,
   compareKeywordCampaignCorpus,
-  keywordCampaignCorpusRevision,
 } from '../frontend/src/lib/controllers/brand-keyword-campaign.ts';
 
 const NOW = '2000-01-03T00:00:00.000Z',
@@ -591,6 +594,47 @@ test('corpus identity includes retained provenance and declarations even when th
     { approvedPartnerDomains: ['launch.example'] }, { allowlistedDomains: ['launch.example'] },
     { candidateObservations: [{ ...candidate, sources: [{ ...candidate.sources[0]!, observedHostname: 'login.launch.example' }] }] },
   ]) assert.notEqual(keywordCampaignCorpusRevision({ ...corpus, ...update }), identity);
+});
+
+test('campaign writes check the reviewed corpus on every persistence attempt while ordinary edits preserve current context', async t => {
+  for (const [name, value] of Object.entries({
+    indexedDB: { open: () => assert.fail('The unit persistence boundary must not open a database.') },
+    localStorage: { getItem: () => null },
+  })) {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, name);
+    Object.defineProperty(globalThis, name, { configurable: true, value });
+    t.after(() => { if (previous) Object.defineProperty(globalThis, name, previous); else Reflect.deleteProperty(globalThis, name); });
+  }
+  let records = [structuredClone(profile)], retry: typeof records | null = null, attempts = 0, writes = 0;
+  t.mock.method(BrowserLocalDataProvider.prototype, 'initialize', async () => ({ state: 'ready', migratedCollections: [] }));
+  // Execute the production mutation callback against fresh snapshots, as the provider does after a conflict.
+  t.mock.method(BrowserLocalDataProvider.prototype, 'update', async <T, R>(definition: LocalDataCollectionDefinition<T>, updater: BrowserLocalDataUpdater<T, R>) => {
+    assert.equal(definition.id, 'brand_profiles');
+    attempts++;
+    let result = await updater(structuredClone(records) as T);
+    if (retry) {
+      records = retry; retry = null; attempts++;
+      result = await updater(structuredClone(records) as T);
+    }
+    records = result.document as typeof records; writes++;
+    return result.result;
+  });
+  const expected = keywordCampaignCorpusRevision(profile);
+  const peer = { ...structuredClone(profile), allowlistedDomains: ['peer.example'] };
+  records = [peer];
+  await assert.rejects(saveBrandKeywordCampaign(profile.id, input, 1, LATER, expected), LocalRecordConflictError);
+  assert.equal(writes, 0); assert.deepEqual(records, [peer]);
+  records = [structuredClone(profile)]; retry = [peer]; attempts = 0;
+  await assert.rejects(saveBrandKeywordCampaign(profile.id, input, 1, LATER, expected), LocalRecordConflictError);
+  assert.equal(attempts, 2); assert.equal(writes, 0); assert.deepEqual(records, [peer]);
+  const saved = await saveBrandKeywordCampaign(profile.id, input, 1, LATER, keywordCampaignCorpusRevision(peer));
+  assert.equal(saved.revision, 2); assert.equal(writes, 1);
+  assert.deepEqual(records[0]!.allowlistedDomains, peer.allowlistedDomains);
+  records = [peer];
+  assert.equal((await saveBrandKeywordCampaign(profile.id, input, 1, LATER)).revision, 2);
+  assert.deepEqual(records[0]!.allowlistedDomains, peer.allowlistedDomains);
+  await assert.rejects(saveBrandKeywordCampaign(profile.id, input, 1, LATER), /revision/u);
+  assert.equal(writes, 2);
 });
 
 test('untrusted campaign arrays reject accessors, custom prototypes and lowercasing expansion before using their contents', () => {

@@ -2,6 +2,7 @@ import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { sha256IdentityHex } from '../evidence/record-identity.mts';
 import { ordinaryWorkspaceRecord, assertWorkspaceInputGraph } from './hostile-input.mts';
 import {
+  MAX_CANDIDATE_OBSERVATIONS,
   WATCH_PRIORITIES,
   normalizeCandidateObservation,
   type BrandCandidateObservation,
@@ -14,6 +15,7 @@ import {
   MAX_BRAND_KEYWORD_TERM_LENGTH,
   MAX_PROFILE_NAME_LENGTH,
 } from '../contracts/workspace-portability.mts';
+import type { BrandProfile } from './brand-profile-model.mts';
 
 export {
   MAX_BRAND_KEYWORD_CAMPAIGNS,
@@ -46,6 +48,20 @@ export type BrandKeywordCampaignInput = Omit<
   'revision' | 'changedAt'
 > &
   Readonly<{ id: string }>;
+
+export type KeywordCampaignCorpus = Pick<BrandProfile, 'id' | 'name' | 'updatedAt' | 'candidateObservations'
+  | 'candidateExceptions' | 'officialDomains' | 'approvedPartnerDomains' | 'allowlistedDomains'>;
+
+/** Transient comparison identity, checked again against the authoritative write snapshot. */
+export function keywordCampaignCorpusRevision(profile: KeywordCampaignCorpus) {
+  if (profile.candidateObservations.length > MAX_CANDIDATE_OBSERVATIONS)
+    throw new RangeError('The retained candidate corpus exceeds its supported bound; no partial comparison was prepared.');
+  return sha256IdentityHex(new TextEncoder().encode(JSON.stringify([
+    profile.id, profile.name, profile.updatedAt, profile.candidateObservations,
+    profile.candidateExceptions, profile.officialDomains, profile.approvedPartnerDomains,
+    profile.allowlistedDomains,
+  ])));
+}
 
 /** Shared feed and campaign literals are plain substrings, never regular expressions. */
 export function normalizeBrandKeywordTerms(value: unknown): readonly string[] {

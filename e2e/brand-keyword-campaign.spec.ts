@@ -183,6 +183,63 @@ test('campaign preview and retained revision preserve exact source provenance an
   expect(requests).toEqual([]);
 });
 
+for (const failRefresh of [false, true]) test(`a peer corpus edit rejects a stale comparison and preserves drafts${failRefresh ? ' when refresh fails' : ' until a fresh preview'}`, async ({ page, context }) => {
+  const { panel } = await seed(page, [saved], comparisonCorpus());
+  await panel.getByRole('button', { name: 'Edit campaign Example launch' }).click();
+  await panel.getByLabel('Positive literal terms', { exact: true }).fill('release');
+  await panel.getByLabel('Example hostnames to preview (optional)').fill('release.example');
+  await panel.getByRole('checkbox', { name: /Compare this Brand’s retained candidates/u }).check();
+  await panel.getByRole('button', { name: 'Preview keyword campaign', exact: true }).click();
+  const comparison = panel.getByRole('region', { name: 'Retained candidate comparison' });
+  await expect(comparison).toBeVisible();
+  const peer = await context.newPage();
+  try {
+    await peer.goto('/brands');
+    const allowlist = peer.getByRole('region', { name: 'Allowlist', exact: true });
+    await allowlist.getByLabel('Add domains').fill('launch.example');
+    await allowlist.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
+    await allowlist.getByRole('button', { name: 'Save allowlist', exact: true }).click();
+    await expect(peer.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved the allowlist');
+    const peerState = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+    expect(peerState.records[0]!.value.keywordCampaigns![0]!.revision).toBe(1);
+    await expect(comparison).toBeVisible();
+    if (failRefresh) await page.evaluate(() => {
+      const original = IDBObjectStore.prototype.get;
+      let reads = 0;
+      IDBObjectStore.prototype.get = function (query) {
+        if (this.name === 'manifests' && query === 'brand_profiles' && ++reads === 2) {
+          IDBObjectStore.prototype.get = original;
+          throw new DOMException('Fixture refresh unavailable', 'InvalidStateError');
+        }
+        return original.call(this, query);
+      };
+    });
+    await panel.getByRole('button', { name: 'Save reviewed campaign revision' }).click();
+    await expect(panel.getByRole('status', { name: 'Keyword campaign action status' })).toContainText(
+      failRefresh ? 'The campaign was not saved. The retained context changed, but the Brand could not be refreshed.' : 'Preview it again before saving',
+    );
+    await expect(comparison).toHaveCount(0);
+    await expect(panel.getByRole('button', { name: 'Save reviewed campaign revision' })).toHaveCount(0);
+    await expect(panel.getByLabel('Positive literal terms', { exact: true })).toHaveValue('release');
+    await expect(panel.getByLabel('Example hostnames to preview (optional)')).toHaveValue('release.example');
+    expect(await readBrowserLocalCollection(page, 'brand_profiles')).toEqual(peerState);
+    if (failRefresh) {
+      await expect(panel.getByRole('button', { name: 'Preview keyword campaign', exact: true })).toBeDisabled();
+      return;
+    }
+    await panel.getByRole('button', { name: 'Preview keyword campaign', exact: true }).click();
+    await comparison.getByLabel('Show comparison results').selectOption('removed');
+    await expect(comparison.getByRole('listitem')).toContainText('Exact domain allowlist entry');
+    await panel.getByRole('button', { name: 'Save reviewed campaign revision' }).click();
+    await expect(panel.getByRole('status', { name: 'Keyword campaign action status' })).toContainText('revision 2 saved');
+    const after = (await readBrowserLocalCollection(page, 'brand_profiles')).records[0]!.value;
+    expect(after.keywordCampaigns![0]!.positiveTerms).toEqual(['release']);
+    expect(after.allowlistedDomains).toEqual(['launch.example']);
+    expect(after.candidateObservations).toEqual(peerState.records[0]!.value.candidateObservations);
+    expect(after.candidateExceptions).toEqual(peerState.records[0]!.value.candidateExceptions);
+  } finally { await peer.close(); }
+});
+
 test('paused and expired campaign intent cannot start a feed scan and leaves retained intent readable', async ({
   page,
 }) => {
