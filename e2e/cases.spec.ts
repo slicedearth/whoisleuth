@@ -100,6 +100,29 @@ test('legacy Case destinations retain guided inputs and canonical navigation cle
 
 test('Cases and monitoring report unreadable collections without false empty states', async ({ page }) => {
   await page.goto('/monitor');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [
+      caseRecord({ id: 'read-recovery', domain: 'retained-case.example' }),
+    ] }),
+  }, { destination: '/monitor' });
+  const retained = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const release = await holdBrowserLocalTransaction(page);
+  const workspace = page.getByRole('region', { name: 'Cases', exact: true });
+  try {
+    await openConsoleView(page, 'cases');
+    await expect(workspace.getByRole('heading', { name: 'Opening saved Cases' })).toBeVisible();
+    await expect(workspace).toHaveAttribute('aria-busy', 'true');
+    await expect(workspace.getByText('Reading Case records from this workspace.')).toBeVisible();
+    await expect(workspace.getByRole('heading', { name: 'No cases yet' })).toHaveCount(0);
+    await expect(workspace.getByRole('button', { name: 'Open or create case', exact: true })).toHaveCount(0);
+  } finally {
+    await release();
+  }
+  await expect(page.locator('#case-head-read-recovery')).toBeVisible();
+  await expect(workspace.getByRole('button', { name: 'Open or create case', exact: true })).toBeVisible();
+  await expect(workspace).toHaveAttribute('aria-busy', 'false');
+  await expect(workspace.getByRole('heading', { name: 'Opening saved Cases' })).toHaveCount(0);
+  await openConsoleView(page, 'inbox');
   await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true })).toBeVisible();
   await failBrowserLocalCollectionReads(page, 'cases');
   await failBrowserLocalCollectionReads(page, 'watchlists');
@@ -114,6 +137,12 @@ test('Cases and monitoring report unreadable collections without false empty sta
   await expect(page.getByRole('tab', { name: /^Watchlists/ })).toHaveAccessibleName('Watchlists count unavailable');
   await expect(page.getByRole('heading', { name: 'Watchlists unavailable' })).toBeVisible();
   await expect(page.getByText(/No watchlists/i)).toHaveCount(0);
+  await openConsoleView(page, 'cases');
+  await expect(workspace.getByRole('heading', { name: 'Cases unavailable' })).toBeVisible();
+  await expect(workspace).toContainText('Reload to retry');
+  await page.reload();
+  await expect(page.locator('#case-head-read-recovery')).toBeVisible();
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records).toEqual(retained.records);
 });
 
 test('recorded operations reporting stays aggregate, source-qualified, and usable on mobile', async ({ page }) => {

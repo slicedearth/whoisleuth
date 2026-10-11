@@ -709,7 +709,9 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
       props={{ cases, oncomplete: refreshCases, oncommitted: installCommittedCaseSnapshot, onmessage: (value: string) => caseMessage = value }} />
     {/if}
   {:else}
-    <LocalCollectionState state={casesSourceState} title="Cases unavailable" detail="Saved cases could not be read, so the count, empty state, imports, and mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
+    <LocalCollectionState state={casesSourceState}
+      loadingTitle="Opening saved Cases" loadingDetail="Reading Case records from this workspace."
+      title="Cases unavailable" detail="Saved cases could not be read, so the count, empty state, imports, and mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
   {/if}
 </section>
 

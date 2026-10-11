@@ -614,6 +614,10 @@ Select a Case to open its workspace. **All Cases** returns to the retained list
 filters. Direct Case links open that record in this browser, not in another
 person's workspace.
 
+**Opening saved Cases** identifies the workspace read. If that read fails, the
+unavailable message explains how to retry by reloading the page; unreadable
+records are not presented as an empty Case list.
+
 The Case's update time, opening time under **Case options**, and note times in
 **History** display in UTC. Their **Copy** controls keep the exact stored value,
 including fractional seconds. Copying a time does not update the Case. If the
