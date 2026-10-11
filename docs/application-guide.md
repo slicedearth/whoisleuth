@@ -609,6 +609,13 @@ from another, or shares its source, with an analyst-supplied basis. Shared sourc
 labels, collection checkpoints and imported-content identities are listed
 separately. A relationship can be withdrawn with a reason; its original record
 remains. These declarations do not add confidence or establish independence.
+**Trace sources for** starts from an assessment claim, recorded decision or
+evidence pin. It follows active derivations towards their sources and declared
+shared-source links in both directions, preserving cycles and missing references.
+Context groups remain separate and are not traversed as declarations. Related
+withdrawn links can be included as history, but do not extend the trace. This
+read-only view changes neither the claim nor its evidence; a record without
+linked pins cannot establish source independence.
 If a later flag reuses your submitted report, record that known relationship.
 If its method is unknown, keep independence unknown rather than inferring either
 corroboration or dependence. Separately documented new observations retain their

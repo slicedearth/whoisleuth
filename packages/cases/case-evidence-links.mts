@@ -115,6 +115,30 @@ export function caseEvidenceLinkIssues(links: readonly CaseEvidenceLink[], pins:
   }));
 }
 
+/** Follow declared sources, not automatic context matches or withdrawn links. */
+export function traceCaseEvidenceSources(links: readonly CaseEvidenceLink[], rootPinIds: readonly string[]) {
+  array(links, 'Retained evidence relationships', MAX_CASE_EVIDENCE_LINKS);
+  const roots = [...new Set(array(rootPinIds, 'Selected evidence pins', MAX_CASE_EVIDENCE_PINS).map(identifier))];
+  const neighbours = new Map<string, Array<{ linkId: string; pinId: string }>>();
+  function add(from: string, to: string, linkId: string) {
+    const entries = neighbours.get(from) ?? [];
+    entries.push({ linkId, pinId: to }); neighbours.set(from, entries);
+  }
+  for (const link of links) if (!link.withdrawal) {
+    add(link.fromPinId, link.toPinId, link.id);
+    if (link.kind === 'shared_source') add(link.toPinId, link.fromPinId, link.id);
+  }
+  const pinIds = new Set(roots), linkIds = new Set<string>();
+  // Set iteration visits newly reached pins once, including unresolved references.
+  for (const pinId of pinIds) for (const edge of neighbours.get(pinId) ?? []) {
+    linkIds.add(edge.linkId); pinIds.add(edge.pinId);
+  }
+  return {
+    rootPinIds: roots, pinIds: [...pinIds], linkIds: [...linkIds],
+    withdrawnLinkIds: links.filter(link => link.withdrawal && (pinIds.has(link.fromPinId) || pinIds.has(link.toPinId))).map(link => link.id),
+  };
+}
+
 /** Matching context is disclosed, never counted as independent corroboration. */
 export function caseEvidenceSharedContext(pins: readonly CaseEvidencePin[]) {
   const groups = new Map<string, { kind: 'checkpoint' | 'import' | 'source'; label: string; pinIds: string[] }>();

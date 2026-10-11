@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCase, updateCase, mergeCases, buildCaseExport, normalizeCaseStore } from '../packages/cases/case-model.mts';
 import { buildCaseReport } from '../packages/cases/case-report.mts';
-import { readCaseEvidenceLinks, mergeCaseEvidenceLinks, caseEvidenceLinkIssues, caseEvidenceSharedContext, caseSelectedEvidenceSourceLimitations, CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION, MAX_CASE_EVIDENCE_LINKS } from '../packages/cases/case-evidence-links.mts';
+import { readCaseEvidenceLinks, mergeCaseEvidenceLinks, caseEvidenceLinkIssues, caseEvidenceSharedContext, caseSelectedEvidenceSourceLimitations, traceCaseEvidenceSources, CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION, MAX_CASE_EVIDENCE_LINKS } from '../packages/cases/case-evidence-links.mts';
 import { buildCliCasePack, verifyCliCasePack } from '../cli/case-pack.mts';
 import { CASE_SCHEMA_VERSION, MAX_CASE_EVIDENCE_PINS, serialiseCasePortableJson } from '../packages/contracts/case-portability.mts';
 
@@ -14,6 +14,56 @@ function scenario() {
   const [a, b, c] = record.evidencePins.map(pin => pin.id) as [string, string, string];
   return { record, a, b, c, input: { fromPinId: b, toPinId: a, kind: 'derived_from', basis: 'PRIVATE-RELATION-BASIS' } };
 }
+
+test('claim-centred tracing follows source direction and shared-source symmetry without expanding context groups', () => {
+  const { record, a, b, c } = scenario();
+  const links = readCaseEvidenceLinks([
+    { id: 'extract', fromPinId: c, toPinId: b, kind: 'derived_from', basis: 'Extracted from the selected record.', createdAt: NOW },
+    { id: 'shared', fromPinId: a, toPinId: b, kind: 'shared_source', basis: 'Both explicitly reuse the same report.', createdAt: NOW },
+    { id: 'later-use', fromPinId: 'later', toPinId: c, kind: 'derived_from', basis: 'Later reuse, not an upstream source.', createdAt: NOW },
+  ])!;
+  const before = structuredClone({ links, record });
+  assert.deepEqual(traceCaseEvidenceSources(links, [c, c]), {
+    rootPinIds: [c], pinIds: [c, b, a], linkIds: ['extract', 'shared'], withdrawnLinkIds: [],
+  });
+  assert.deepEqual(traceCaseEvidenceSources(links, [a]).pinIds, [a, b]);
+  assert.deepEqual(traceCaseEvidenceSources(links, [b]).pinIds, [b, a]);
+  assert.ok(caseEvidenceSharedContext(record.evidencePins).some(group => group.pinIds.includes(c)));
+  assert.equal(traceCaseEvidenceSources(links, [a]).pinIds.includes(c), false, 'Matching context does not create a traversal edge.');
+  assert.deepEqual({ links, record }, before);
+});
+
+test('source tracing keeps cycles and broken references finite without reviving withdrawn paths', () => {
+  const base = { kind: 'derived_from', basis: 'Imported declaration.', createdAt: NOW };
+  const links = readCaseEvidenceLinks([
+    { ...base, id: 'one', fromPinId: 'a', toPinId: 'b' },
+    { ...base, id: 'two', fromPinId: 'b', toPinId: 'a' },
+    { ...base, id: 'broken', fromPinId: 'b', toPinId: 'not-retained' },
+    { ...base, id: 'retired', fromPinId: 'a', toPinId: 'c', withdrawal: { at: NOW, reason: 'Attribution corrected.' } },
+    { ...base, id: 'beyond-retired', fromPinId: 'c', toPinId: 'd' },
+  ])!;
+  const result = traceCaseEvidenceSources(links, ['a']);
+  assert.deepEqual(result.pinIds, ['a', 'b', 'not-retained']);
+  assert.deepEqual(result.linkIds, ['one', 'two', 'broken']);
+  assert.deepEqual(result.withdrawnLinkIds, ['retired']);
+  assert.deepEqual(caseEvidenceLinkIssues(links, []).filter(row => result.linkIds.includes(row.link.id) && row.cyclic).map(row => row.link.id), ['one', 'two']);
+  assert.deepEqual(traceCaseEvidenceSources(links, ['unknown-root']), { rootPinIds: ['unknown-root'], pinIds: ['unknown-root'], linkIds: [], withdrawnLinkIds: [] });
+  assert.deepEqual(traceCaseEvidenceSources(links, []), { rootPinIds: [], pinIds: [], linkIds: [], withdrawnLinkIds: [] });
+});
+
+test('source traversal is bounded and cannot alter the privacy-minimised selected-output qualification', () => {
+  const { record, input, b } = scenario();
+  const linked = updateCase([record], record.id, { evidenceLink: input }, NOW).record;
+  const before = structuredClone(linked);
+  const traced = traceCaseEvidenceSources(linked.evidenceLinks!, [b]);
+  assert.equal(traced.pinIds.length, 2);
+  assert.equal(JSON.stringify(traced).includes(input.basis), false);
+  assert.deepEqual(caseSelectedEvidenceSourceLimitations(linked.evidencePins, linked.evidenceLinks, [b]), [CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION]);
+  assert.deepEqual(linked, before);
+  assert.throws(() => traceCaseEvidenceSources(new Array(MAX_CASE_EVIDENCE_LINKS + 1).fill({}), [b]));
+  assert.throws(() => traceCaseEvidenceSources([], new Array(MAX_CASE_EVIDENCE_PINS + 1).fill(b)));
+  assert.throws(() => traceCaseEvidenceSources([], ['x'.repeat(65)]));
+});
 
 test('declarations retain distinct pins and do not change their confidence, completeness or source time', () => {
   const { record, input } = scenario();

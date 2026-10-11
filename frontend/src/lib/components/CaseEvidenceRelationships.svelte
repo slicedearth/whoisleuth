@@ -2,21 +2,38 @@
   import type { CaseRecord } from '#lib/cases.ts';
   import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
   import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
-  import { caseEvidenceLinkIssues, caseEvidenceSharedContext, type CaseEvidenceLink } from '../../../../packages/cases/case-evidence-links.mts';
+  import { caseEvidenceLinkIssues, caseEvidenceSharedContext, traceCaseEvidenceSources, type CaseEvidenceLink } from '../../../../packages/cases/case-evidence-links.mts';
   import { MAX_RESPONSE_RATIONALE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
+  import Pagination from './Pagination.svelte';
 
   let { record, persist, mutationBusy }: { record: CaseRecord; persist: PersistCaseResponse; mutationBusy: boolean } = $props();
   const id = $props.id();
   const draft = createCaseDraft(() => record.id, 'evidence-relationship', { fromPinId: '', toPinId: '', kind: 'derived_from' as CaseEvidenceLink['kind'], basis: '' });
   const withdrawal = createCaseDraft(() => record.id, 'evidence-relationship-withdrawal', { id: '', reason: '' });
   const rows = $derived(caseEvidenceLinkIssues(record.evidenceLinks ?? [], record.evidencePins));
-  const shared = $derived(caseEvidenceSharedContext(record.evidencePins));
+  const choices = $derived([
+    ...record.assertions.map(item => ({ id: `claim:${item.id}`, group: 'Assessment claims', label: item.statement,
+      detail: `${item.kind} · ${item.state}`, pinIds: item.evidencePinIds, relations: item.evidenceRelations ?? [] })),
+    ...record.decisions.map(item => ({ id: `decision:${item.id}`, group: 'Recorded decisions', label: item.summary,
+      detail: `Decision recorded ${item.createdAt}`, pinIds: item.evidencePinIds, relations: [] })),
+    ...record.evidencePins.map((item, index) => ({ id: `pin:${item.id}`, group: 'Evidence pins', label: `${index + 1} · ${item.label}`,
+      detail: 'Retained evidence pin', pinIds: [item.id], relations: [] })),
+  ]);
+  let focus = $state(''), relationshipPage = $state(1), activeCaseId = $state('');
+  const selected = $derived(choices.find(choice => choice.id === focus));
+  const trace = $derived(selected ? traceCaseEvidenceSources(record.evidenceLinks ?? [], selected.pinIds) : null);
+  const shared = $derived(caseEvidenceSharedContext(record.evidencePins).filter(group => !trace || group.pinIds.some(id => trace.pinIds.includes(id))));
+  const missing = $derived(trace?.pinIds.filter(id => !record.evidencePins.some(pin => pin.id === id)) ?? []);
   let showHistory = $state(false);
   let historyControl: HTMLInputElement | undefined = $state();
-  const displayed = $derived(rows.filter(row => showHistory || !row.link.withdrawal));
+  const displayed = $derived(rows.filter(row => (!row.link.withdrawal || showHistory)
+    && (!trace || trace.linkIds.includes(row.link.id) || (showHistory && trace.withdrawnLinkIds.includes(row.link.id)))));
+  $effect(() => { if (activeCaseId !== record.id) { activeCaseId = record.id; focus = ''; showHistory = false; } });
+  $effect(() => { if (focus && !choices.some(choice => choice.id === focus)) focus = ''; });
+  $effect(() => { displayed; relationshipPage = 1; });
   async function save() {
     const unchanged = draft.capture();
     if (await draft.persist(persist, { evidenceLink: { ...draft.value } }, 'Recorded the analyst-declared evidence relationship.') && unchanged()) {
@@ -34,6 +51,26 @@
 <details class="evidence-relationships">
   <summary>Evidence relationships and shared sources</summary>
   <p>A later result may reuse your submitted report. Record known reuse and separately documented observations; otherwise leave independence unknown. Who submitted material alone proves neither. Missing provider results do not prevent a qualified draft.</p>
+  {#if choices.length}
+    <label class="field source-focus">Trace sources for<select bind:value={focus}>
+      <option value="">All evidence relationships</option>
+      {#each ['Assessment claims', 'Recorded decisions', 'Evidence pins'] as group}
+        {#if choices.some(choice => choice.group === group)}<optgroup label={group}>{#each choices.filter(choice => choice.group === group) as choice (choice.id)}<option value={choice.id}>{choice.label}</option>{/each}</optgroup>{/if}
+      {/each}
+    </select></label>
+  {/if}
+  {#if selected && trace}
+    <section class="source-trace" aria-label="Selected evidence source trace">
+      <h4>{selected.label}</h4><p>{selected.detail}</p>
+      <p>Follows active derivations towards their declared sources and shared-source links in either direction. Matching context groups and withdrawn links are not followed.</p>
+      {#if selected.pinIds.length}<CaseLinkedEvidence pins={record.evidencePins} ids={selected.pinIds} relations={selected.relations} />
+      {:else}<p>This record cites no evidence pins. Its source dependence cannot be traced.</p>{/if}
+      {#if missing.length}<p>{missing.length} referenced evidence {missing.length === 1 ? 'pin is' : 'pins are'} not retained. Linked evidence and relationship entries identify the missing references; their content is not reconstructed.</p>{/if}
+      {#if displayed.some(row => row.cyclic)}<p>Active derivations contain a cycle. No source order is inferred from those conflicting links.</p>{/if}
+      {#if !trace.linkIds.length}<p>No active source relationships are retained for this selection. This does not establish independence.</p>{/if}
+      <p role="status">Active relationships in trace: {trace.linkIds.length} · Related withdrawn relationships: {trace.withdrawnLinkIds.length}</p>
+    </section>
+  {/if}
   {#if shared.length}
     <details><summary>Shared retained context · {shared.length} {shared.length === 1 ? 'group' : 'groups'}</summary>
       <p>Matching source labels, checkpoints or imported content are shown separately. These are overlapping context groups, not counts of independent sources. They do not establish dependence or independent corroboration by themselves.</p>
@@ -43,7 +80,7 @@
   {#if rows.length}
     <label class="history-toggle"><input type="checkbox" bind:this={historyControl} bind:checked={showHistory}>Include withdrawn relationships</label>
     <ul class="relationships" aria-label="Analyst-declared evidence relationships">
-      {#each displayed as { link, missingPinIds, cyclic }}
+      {#each displayed.slice((relationshipPage - 1) * 12, relationshipPage * 12) as { link, missingPinIds, cyclic } (link.id)}
         <li><strong>{record.evidencePins.find(pin => pin.id === link.fromPinId)?.label ?? link.fromPinId}</strong>
           {link.kind === 'derived_from' ? 'derived from' : 'shares a source with'}
           <strong>{record.evidencePins.find(pin => pin.id === link.toPinId)?.label ?? link.toPinId}</strong>
@@ -55,6 +92,7 @@
         </li>
       {/each}
     </ul>
+    <Pagination currentPage={relationshipPage} pageCount={Math.ceil(displayed.length / 12)} setPage={next => relationshipPage = next} ariaLabel="Evidence relationships" />
   {/if}
   {#if record.evidencePins.length > 1}
     <form class="relationship-form" aria-label="Record evidence relationship" data-recovery-form={draft.form} oninput={draft.changed} onsubmit={event => { event.preventDefault(); void save(); }}>
@@ -83,4 +121,5 @@
   .relationship-form{display:grid;gap:12px;margin:16px 0;max-width:760px}.field{display:grid;gap:5px}select,textarea{width:100%;min-width:0;max-width:100%}
   .relationships{padding:0;list-style:none;display:grid;gap:12px}.relationships li{padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);min-width:0}
   .history-toggle{display:flex;align-items:center;gap:8px;padding:12px 0}.relationships p{margin:8px 0}
+  .source-focus{max-width:760px;margin:16px 0}.source-trace{min-width:0;margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm)}.source-trace h4{margin:0}.source-trace p{margin:8px 0}
 </style>
