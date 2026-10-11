@@ -60,6 +60,15 @@ the requested-evidence exercise prepares a drafting amendment. Changing scenario
 requires confirming that its Case and drafts should be discarded. Feedback
 checks retained relationships and states, not the quality of free-text reasoning.
 
+In the source-reuse exercise, record a conclusion citing the provider's reused
+report, then select that conclusion under **Trace sources for** in **Evidence
+relationships and shared sources**. Follow its declared derivation without
+counting repeated material as independent support. The credential-page exercise
+also uses **Exact incident-object coverage**: inspect each recipient's drafting,
+simulated delivery and response history, then the independently reviewed page.
+The advertisement stays unresolved. Packet identity remains unknown because the
+exercise does not create or deliver a packet.
+
 Choose a compromised-page or shared-form scenario to practise exact object scope;
 the related-host scenario keeps different affected identities and observations
 separate. The changing landing-page exercise leaves the ad and replacement URL

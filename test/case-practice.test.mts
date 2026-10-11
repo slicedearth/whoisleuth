@@ -5,7 +5,7 @@ import { normalizeCase } from '../packages/cases/case-record-operations.mts';
 import { replaceCaseDraft } from '../packages/cases/case-drafts.mts';
 import { caseRecheckAnswerContext } from '../packages/cases/case-recheck-model.mts';
 import { createCaseDraftRecovery, type CaseDraftRecoveryState } from '../frontend/src/lib/controllers/case-draft-recovery.ts';
-import { caseIncidentTargets } from '../packages/cases/case-workflow-metadata.mts';
+import { caseIncidentTargets, buildCaseIncidentCoverage } from '../packages/cases/case-workflow-metadata.mts';
 import { latestEvidenceRequests, submittedPacketReceipts } from '../packages/cases/case-requested-evidence.mts';
 
 test('practice starts from fictional, separately attributed complete and unavailable observations', () => {
@@ -77,6 +77,10 @@ test('connected practice records separate recipient material, simulated delivery
     assert.deepEqual(materials.map(item => item.incident.abusiveUrls), [['https://case-practice.example/offer'], ['https://distribution.example/ad/7']]);
     assert.deepEqual(materials.map(item => item.selectedEvidence.map(pin => pin.label)), [['Earlier page', 'Reference offer text'], ['Advertisement distribution object']]);
     assert.ok(materials.every(item => item.selectedEvidence.every(pin => !Object.hasOwn(pin, 'value'))));
+    const preparedCoverage = buildCaseIncidentCoverage(prepared);
+    assert.deepEqual(preparedCoverage.map(row => row.responseObject.kind), ['page', 'advertisement']);
+    assert.ok(preparedCoverage.every(row => row.actionCoverage === 'bound' && row.responseContexts.length === 1
+      && row.responseContexts[0]!.currentState === 'drafting' && row.responseContexts[0]!.deliveryEvents.length === 0));
     const signature = JSON.stringify(materials);
     session.edit({ actionUpdate: { id: prepared.actions[0]!.id, recipient: 'changed-recipient@example.invalid' } });
     assert.throws(() => session.journey('deliver', signature), /changed/u);
@@ -84,6 +88,11 @@ test('connected practice records separate recipient material, simulated delivery
     assert.deepEqual(casePracticeJourneyActions(delivered).map(action => action.state), ['acknowledged', 'submitted']);
     assert.equal(delivered.observedEffects.reviews.length, 0, 'acknowledgement cannot invent independent remediation');
     assert.ok(delivered.actions.every(action => action.history.some(event => event.nextState === 'submitted' && event.reference?.startsWith('Practice-only'))));
+    const deliveredCoverage = buildCaseIncidentCoverage(delivered);
+    assert.deepEqual(deliveredCoverage.map(row => row.providerEvents.length), [1, 0]);
+    assert.ok(deliveredCoverage.every(row => row.responseContexts[0]!.reviewEvents.length === 2
+      && row.responseContexts[0]!.deliveryEvents.length === 1 && row.reviews.length === 0));
+    assert.ok(deliveredCoverage.flatMap(row => row.responseContexts[0]!.deliveryEvents).every(event => !event.packetReceipt), 'do not invent exported packet receipts');
     const closed = session.journey('close-page');
     assert.equal(casePracticeJourneyActions(closed)[0]!.state, 'terminal');
     assert.equal(casePracticeJourneyActions(closed)[1]!.state, 'submitted');
@@ -91,6 +100,9 @@ test('connected practice records separate recipient material, simulated delivery
     assert.deepEqual(caseIncidentTargets(closed).map(target => target.url), ['https://distribution.example/ad/7']);
     assert.notEqual(closed.status, 'resolved');
     assert.equal(closed.closures.records.length, 0, 'closing one page must not close the whole Case');
+    const closedCoverage = buildCaseIncidentCoverage(closed);
+    assert.equal(closedCoverage.find(row => row.responseObject.kind === 'page')!.reviews[0]!.state, 'not_reproduced');
+    assert.equal(closedCoverage.find(row => row.responseObject.kind === 'advertisement')!.observationCoverage, 'unknown');
     assert.deepEqual(normalizeCase(closed), closed);
     assert.deepEqual(initial.actions, []);
     assert.throws(() => session.journey('close-page'), /separate fictional deliveries/u);
@@ -166,7 +178,8 @@ test('practice uses the same non-reproduction boundary and retains unavailable e
   const session = createCasePracticeSession(), before = session.read();
   const later = before.evidencePins[1]!;
   const review = { state: 'not_reproduced', observedAt: later.observedAt!, sourceClass: 'analyst', source: later.source,
-    completeness: later.completeness, evidencePinId: later.id, recheck: caseRecheckAnswerContext(before.assertions[0]!, 'comparable') };
+    completeness: later.completeness, evidencePinId: later.id, responseObject: later.responseObject,
+    recheck: caseRecheckAnswerContext(before.assertions[0]!, 'comparable') };
   assert.throws(() => session.edit({ observedEffectReview: review }), /complete|partial/iu);
   assert.deepEqual(session.read(), before);
   const saved = session.edit({ observedEffectReview: { ...review, state: 'unavailable' } });

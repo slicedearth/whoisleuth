@@ -100,9 +100,31 @@ test('bounded practice examples preserve scope, reported mechanisms and source-r
   await select('dependent-sources');
   await practice.getByText('Review source reuse and disclosure', { exact: true }).click();
   await expect(practice.getByText('Selected evidence has retained shared-source or derivation context.', { exact: false }).first()).toBeVisible();
-  await practice.getByText('Evidence relationships and shared sources', { exact: true }).click();
+  await practice.getByText('Evidence relationships and shared sources', { exact: true }).and(practice.locator('summary')).click();
   await expect(practice.getByText('A later result may reuse your submitted report.', { exact: false })).toBeVisible();
   await expect(practice.getByRole('list', { name: 'Analyst-declared evidence relationships', exact: true }).getByRole('listitem')).toHaveCount(1);
+  await practice.getByRole('button', { name: '2. Record a conclusion', exact: true }).click();
+  const decision = practice.locator('form[data-recovery-form="decision"]');
+  await decision.getByRole('combobox', { name: 'Disposition', exact: true }).selectOption('suspicious');
+  await decision.getByRole('combobox', { name: 'Review reason', exact: true }).selectOption('other_reviewed');
+  await decision.getByLabel('Conclusion summary', { exact: true }).fill('The provider result reuses the original report');
+  await decision.getByLabel('Evidence-based rationale', { exact: true }).fill('The supplied response declares its source; this is not a second independent observation.');
+  await decision.getByRole('checkbox', { name: /Provider explicitly reused the report/u }).check();
+  await decision.getByRole('button', { name: 'Record conclusion', exact: true }).click();
+  await expect(decision.getByLabel('Conclusion summary', { exact: true })).toHaveValue('');
+  await practice.getByRole('button', { name: '1. Pin a fact', exact: true }).click();
+  const sourceFocus = practice.getByRole('combobox', { name: 'Trace sources for', exact: true });
+  await sourceFocus.selectOption({ label: 'The provider result reuses the original report' });
+  const trace = practice.getByRole('region', { name: 'Selected evidence source trace', exact: true });
+  await expect(trace.getByRole('status')).toContainText('Active relationships in trace: 1');
+  const relationships = practice.getByRole('list', { name: 'Analyst-declared evidence relationships', exact: true });
+  await expect(relationships).toContainText('Original supplied report');
+  await expect(relationships).not.toContainText('Separately documented page observation');
+  const unknown = await sourceFocus.getByRole('option', { name: /Provider collection method unknown/u }).getAttribute('value');
+  expect(unknown).toBeTruthy(); await sourceFocus.selectOption(unknown!);
+  await expect(trace.getByRole('status')).toContainText('Active relationships in trace: 0');
+  await expect(trace).toContainText('This does not establish independence.');
+  await sourceFocus.selectOption({ label: 'The provider result reuses the original report' });
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     await page.setViewportSize({ width: 320, height: 800 });
@@ -199,7 +221,7 @@ test('requested-evidence practice creates only a drafting amendment without save
   await verifyIsolation();
 });
 
-test('real Case forms practise evidence, conclusions and inconclusive rechecks without saved-work access', async ({ page }) => {
+test('real Case forms practise evidence, conclusions and inconclusive rechecks without saved-work access', async ({ page }, testInfo) => {
   const verifyIsolation = await isolateCasePractice(page);
   await page.goto('/demo#case-practice');
   const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
@@ -253,6 +275,21 @@ test('real Case forms practise evidence, conclusions and inconclusive rechecks w
   await expect(adCopy).toContainText('ad-review@example.invalid');
   await expect(pageCopy).toContainText('https://case-practice.example/offer');
   await expect(adCopy).toContainText('https://distribution.example/ad/7');
+  await practice.getByText('Exact incident-object coverage · 2 retained objects', { exact: true }).click();
+  const coverage = practice.getByRole('region', { name: 'Incident link coverage table', exact: true });
+  const pageRow = coverage.getByRole('row').filter({ hasText: 'https://case-practice.example/offer' });
+  const adRow = coverage.getByRole('row').filter({ hasText: 'https://distribution.example/ad/7' });
+  await expect(pageRow).toContainText('1 explicitly bound action');
+  await expect(adRow).toContainText('1 explicitly bound action');
+  const inspectPage = pageRow.getByRole('button', { name: 'Inspect response history', exact: true });
+  await inspectPage.focus(); await inspectPage.press('Enter');
+  const pageHistoryHeading = practice.getByText('Response history · page · https://case-practice.example/offer', { exact: true });
+  const pageHistory = pageHistoryHeading.locator('..');
+  const adHistory = practice.getByText('Response history · advertisement · https://distribution.example/ad/7', { exact: true }).locator('..');
+  await expect(pageHistoryHeading).toBeFocused();
+  await pageHistory.getByText('Action and recipient context · 1', { exact: true }).click();
+  await expect(pageHistory).toContainText('Current action: drafting');
+  await expect(pageHistory).toContainText('No exact-object delivery event retained.');
   for (const copy of [pageCopy, adCopy]) {
     await copy.getByText('Inspect exact fictional recipient material', { exact: true }).click();
     const material = JSON.parse(await copy.locator('pre').innerText()) as { selectedEvidence: Record<string, unknown>[] };
@@ -269,12 +306,27 @@ test('real Case forms practise evidence, conclusions and inconclusive rechecks w
   await expect(records).toContainText('Practice-only ad delivery reference');
   await expect(records).toContainText('Practice-only page acknowledgement');
   await expect(practice.locator('#practice-response')).toBeFocused();
+  await pageHistory.getByText('Recorded deliveries · 1', { exact: true }).click();
+  await expect(pageHistory).toContainText('Practice-only page delivery reference');
+  await expect(pageHistory).toContainText('Exact packet identity, preparation time and historical recipient are not retained');
+  await pageHistory.getByText('Source-attributed response events · 1', { exact: true }).click();
+  await expect(pageHistory).toContainText('accepted for review · provider');
+  await expect(adHistory.getByText(/^Source-attributed response events/u)).toHaveCount(0);
   await practice.getByRole('button', { name: 'Record supplied independent review and close only the page scope', exact: true }).click();
   await expect(records.locator(':scope > li').filter({ hasText: 'page-review@example.invalid' })).toContainText('terminal');
   await expect(records.locator(':scope > li').filter({ hasText: 'ad-review@example.invalid' })).toContainText('submitted');
   await expect(practice.locator('.practice-status')).toContainText('advertisement remains unresolved');
-  await page.setViewportSize({ width: 320, height: 700 });
-  await expectNoHorizontalOverflow(page);
+  await expect(pageRow).toContainText('Analyst-resolved link');
+  await expect(adRow).toContainText('Open link');
+  await expect(adRow).toContainText('independent reviews: 0');
+  await pageHistory.getByText(/^Independent object reviews ·/u).click();
+  await expect(pageHistory).toContainText('not reproduced · complete');
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    await pageHistoryHeading.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('.coverage').analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`practice-response-${theme}-${width}.png`) });
+  }
   await verifyIsolation();
 });
 

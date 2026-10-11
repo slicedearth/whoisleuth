@@ -11,6 +11,7 @@
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CaseRequestedEvidence from './CaseRequestedEvidence.svelte';
   import CaseAssessmentComparison from './CaseAssessmentComparison.svelte';
+  import CaseIncidentCoverage from './CaseIncidentCoverage.svelte';
   import CaptureConditionMatrix from './CaptureConditionMatrix.svelte';
   import { casePracticeCaptureContexts } from '#lib/analysis/case-practice.ts';
   import '#lib/components/case-response-stage.css';
@@ -122,6 +123,7 @@
     </details>{/if}
     {#if scenario === 'dependent-sources'}<details class="practice-local"><summary>Review source reuse and disclosure</summary>
       <p>{record.evidencePins.length} retained evidence records are not a count of independent sources. The supplied provider response declares reuse; the other observation and unknown-method result retain their own attribution.</p>
+      <p>In <strong>Record a conclusion</strong>, cite <strong>Provider explicitly reused the report</strong>. Return to this step, open <strong>Evidence relationships and shared sources</strong> and choose your conclusion under <strong>Trace sources for</strong>. Follow the declared link back to the original report; the separately documented observation is not part of that derivation.</p>
       {#each sourceQualifications as limitation}<p>{limitation}</p>{:else}<p>No known shared-source relationship is retained. That does not establish independence.</p>{/each}
       <p>New response and internal-handoff disclosures use a fixed qualification when relevant; private relationship identities and basis text are not automatically included. No export occurs here.</p>
     </details>{/if}
@@ -155,6 +157,8 @@
     <div hidden={step !== 'response'} class="practice-response">
       <h3 id="practice-response" tabindex="-1">Separate page response from advertisement distribution</h3>
       <p>The supplied lure leads to a copied offer and credential form. The reference prose has no logo or brand name. Copyright authority is unverified; this exercise makes no rights declaration. No actual packet export or provider submission occurs.</p>
+      <p>Open <strong>Exact incident-object coverage</strong> to inspect the page and advertisement separately as you progress. The shared response-history view distinguishes drafting, simulated delivery, a provider acknowledgement and an independent page review. Packet identity stays unknown because this exercise exports no packet.</p>
+      <CaseIncidentCoverage {record} />
       <details class="practice-local"><summary>Preview the separate internal follow-up</summary>
         <p>Use the existing retained question and its linked fictional pin. This preview uses the normal audience projection but cannot save, download, send a task or apply a control.</p>
         <label>Practice handoff audience<select bind:value={practiceAudience} disabled={localReviewBusy}><option value="internal">Internal</option><option value="trusted">Trusted recipient</option><option value="public">Public preview</option></select></label>

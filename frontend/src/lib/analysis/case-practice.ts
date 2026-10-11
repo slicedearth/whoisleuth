@@ -7,6 +7,7 @@ import { appendCaseAction, appendCaseActionTransition } from '../../../../packag
 import { countEvidenceLinkedCaseDecisions } from '../../../../packages/cases/case-response-model.mts';
 import { buildCaseResponseReviewInputs } from '../../../../packages/cases/case-response-packet.mts';
 import { caseIncidentTargets } from '../../../../packages/cases/case-workflow-metadata.mts';
+import { caseResponseObjectChoices } from '../../../../packages/cases/case-response-object.mts';
 import { caseRecheckAnswerContext } from '../../../../packages/cases/case-recheck-model.mts';
 import { PLATFORM_REPORTING_ROUTES } from '../../../../packages/cases/platform-reporting-routes.mts';
 import { readIncidentStages, reviewIncidentSequence } from '../../../../packages/investigation/incident-sequence-review.mts';
@@ -327,8 +328,10 @@ function addPracticeScopeEvidence(record: CaseRecord, scenario: CasePracticeScen
 export function createCasePracticeRecord(scenario: CasePracticeScenario = 'credential-form'): CaseRecord {
   const definition = casePracticeDefinition(scenario);
   const domain = definition.urls.length ? new URL(definition.urls[0]!).hostname : 'case-practice.example';
-  const initial = createCase({ domain, title: definition.title,
+  let initial = createCase({ domain, title: definition.title,
     note: 'Practice material only. No domain was contacted and no external report was submitted.' }, CASE_PRACTICE_OBSERVED_AT);
+  for (const url of definition.urls) initial = updateCase([initial], initial.id, { incidentTarget: url }, CASE_PRACTICE_LATER_AT).record;
+  const objects = scenario === 'credential-form' ? practiceJourneyObjects(initial) : [];
   const primaryLabel = scenario === 'requested-amendment' ? 'Original request and delivery context'
     : scenario === 'identity-actions' ? 'Supplied incident accounts'
       : scenario === 'dependent-sources' ? 'Original supplied report'
@@ -336,18 +339,20 @@ export function createCasePracticeRecord(scenario: CasePracticeScenario = 'crede
   const observed = updateCase([initial], initial.id, { evidencePins: [
     { label: primaryLabel, value: definition.observation,
       source: definition.source, observedAt: CASE_PRACTICE_OBSERVED_AT, observationHostname: initial.domain,
+      ...(objects[0] ? { responseObject: objects[0] } : {}),
       completeness: 'complete', sourceState: 'complete', limitations: [definition.assessment, 'Complete supplied summary, not comprehensive collection or proof of an allegation.'] },
     { label: 'Later capture did not complete', value: definition.recheck,
       source: 'Fictional later capture', observedAt: CASE_PRACTICE_LATER_AT, observationHostname: initial.domain,
+      ...(objects[0] ? { responseObject: objects[0] } : {}),
       completeness: 'partial', sourceState: 'unavailable', limitations: ['No later page content is available. This cannot establish absence.'] },
   ] }, CASE_PRACTICE_LATER_AT);
   let result = updateCase(observed.cases, initial.id, { assertion: { kind: 'next_step',
       statement: definition.question, state: 'open',
     ...(scenario === 'credential-form' ? { evidenceRelations: [{ evidencePinId: observed.record.evidencePins[0]!.id, stance: 'unresolved' }] } : {}),
     recheck: { targetHostname: initial.domain, baselinePinId: observed.record.evidencePins[0]!.id,
+      ...(objects[0] ? { responseObject: objects[0] } : {}),
       conditions: definition.conditions },
   } }, CASE_PRACTICE_LATER_AT).record;
-  for (const url of definition.urls) result = updateCase([result], result.id, { incidentTarget: url }, CASE_PRACTICE_LATER_AT).record;
   if (scenario === 'credential-form') {
     result = updateCase([result], result.id, { evidencePins: [
       { label: 'Reference offer text', value: 'The original fictional reference says “Review your account tools before the offer expires”. The candidate repeats this prose without a logo or brand name.',
@@ -355,6 +360,7 @@ export function createCasePracticeRecord(scenario: CasePracticeScenario = 'crede
         completeness: 'complete', sourceState: 'complete', limitations: ['Text correspondence is analyst supplied, not an automated similarity score or proof of copyright entitlement.'] },
       { label: 'Advertisement distribution object', value: 'Supplied ad creative seven leads to the candidate offer; one intermediate hop is unobserved.',
         source: 'Fictional supplied advertisement', observedAt: CASE_PRACTICE_OBSERVED_AT, observationHostname: 'distribution.example',
+        responseObject: objects[1],
         completeness: 'partial', sourceState: 'complete', limitations: ['Later distribution has not been reviewed; unknown hops and advertiser control remain unestablished.'] },
     ] }, CASE_PRACTICE_LATER_AT).record;
   }
@@ -398,6 +404,15 @@ export function createCasePracticeRecord(scenario: CasePracticeScenario = 'crede
 }
 
 const JOURNEY_SOURCE = 'Fictional practice recipient';
+function practiceJourneyObjects(record: CaseRecord) {
+  const choices = caseResponseObjectChoices(record);
+  return casePracticeDefinition('credential-form').urls.map((identifier, index) => {
+    const kind = index === 0 ? 'page' : 'advertisement';
+    const object = choices.find(choice => choice.object.kind === kind && choice.object.identifier === identifier)?.object;
+    if (!object) throw new Error('The exact fictional response object is no longer retained.');
+    return object;
+  });
+}
 export function casePracticeJourneyActions(record: CaseRecord) {
   return record.actions.filter(action => action.contactSource === JOURNEY_SOURCE)
     .sort((left, right) => Number(left.type !== 'security_contact_report') - Number(right.type !== 'security_contact_report'));
@@ -416,11 +431,12 @@ export function casePracticeJourneyMaterials(record: CaseRecord) {
 function advancePracticeJourney(record: CaseRecord, operation: 'prepare' | 'deliver' | 'close-page', reviewed?: string): CaseRecord {
   const apply = (patch: CasePatch) => { record = updateCase([record], record.id, patch, CASE_PRACTICE_JOURNEY_AT).record; };
   const actions = casePracticeJourneyActions(record);
+  const objects = practiceJourneyObjects(record);
   if (operation === 'prepare') {
     if (actions.length) throw new Error('The fictional recipient actions are already prepared.');
     if (!countEvidenceLinkedCaseDecisions(record.decisions, record.evidencePins)) throw new Error('Record an evidence-linked conclusion before preparing the fictional copies.');
-    for (const [type, recipient] of [['security_contact_report', 'page-review@example.invalid'], ['platform_report', 'ad-review@example.invalid']] as const) apply({ action: {
-      type, recipient, contactSource: JOURNEY_SOURCE, routeObservedAt: CASE_PRACTICE_OBSERVED_AT,
+    for (const [index, [type, recipient]] of ([['security_contact_report', 'page-review@example.invalid'], ['platform_report', 'ad-review@example.invalid']] as const).entries()) apply({ action: {
+      type, recipient, contactSource: JOURNEY_SOURCE, routeObservedAt: CASE_PRACTICE_OBSERVED_AT, responseObjects: [objects[index]!],
       contactLimitations: ['Reserved fictional recipient, not a verified official route. No external authority or submission is claimed.'],
     } });
   } else if (operation === 'deliver') {
@@ -439,10 +455,11 @@ function advancePracticeJourney(record: CaseRecord, operation: 'prepare' | 'deli
     const existingPinIds = new Set(record.evidencePins.map(pin => pin.id));
     apply({ evidencePin: { label: 'Complete later exact-page review', value: 'The supplied later offer page contains ordinary text and no credential form under the same unauthenticated viewport. The advertisement was not reviewed.',
       source: record.evidencePins[0]!.source, observedAt: CASE_PRACTICE_JOURNEY_AT, observationHostname: record.domain,
+      responseObject: objects[0],
       completeness: 'complete', sourceState: 'complete', limitations: ['One exact page under supplied comparable conditions; no inference about ads, mail, ownership or safety.'] } });
     const pin = record.evidencePins.find(pin => !existingPinIds.has(pin.id))!;
     apply({ observedEffectReview: { state: 'not_reproduced', observedAt: pin.observedAt!, sourceClass: 'analyst', source: pin.source,
-      completeness: pin.completeness, evidencePinId: pin.id, limitations: pin.limitations,
+      completeness: pin.completeness, evidencePinId: pin.id, limitations: pin.limitations, responseObject: objects[0],
       recheck: caseRecheckAnswerContext(record.assertions[0]!, 'comparable') } });
     apply({ actionUpdate: { id: actions[0]!.id, transition: { nextState: 'terminal', sourceClass: 'analyst', provenance: 'fictional_independent_page_review',
       rationale: 'Close only the page action after the supplied complete comparable review. Advertisement distribution remains unresolved.' } } });
