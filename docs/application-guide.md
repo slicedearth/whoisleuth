@@ -682,6 +682,18 @@ The handoff trail identifies the file and selected entries, not the reviewer's
 identity. CLI packs can supply Case data; use CLI verification separately for
 their checksums and report binding.
 
+**Compare two Case exports** is a separate read-only view. Select a baseline
+and a comparison JSON export for the same Case; saved work is not used as an
+implicit baseline. Inspect changed content, records present in only one copy,
+recipient routes, limitations and exact scope. Records align by their IDs, not
+their position or hostname. A record absent from an export is not proven deleted
+from the Case. Full selected values use the paged local file viewer.
+This comparison accepts the same exact ordinary Case versions as CLI Case
+editing, including supported historical exports. It does not accept response
+packets, CLI packs or encrypted containers. Clear the comparison, close it or
+leave the Case to release the temporary copies. It never adds import permissions
+or includes its internal differences in a recipient attachment.
+
 Opening a Case keeps it selected while moving between Console tools. The
 compact Case context exposes retained hypotheses, pins, decisions, response
 history and follow-up dates. **Clear** removes the selection, not the Case.

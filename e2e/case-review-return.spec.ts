@@ -41,6 +41,89 @@ function reviewed(current: CaseRecord) {
 }
 function upload(value: unknown) { return { name: 'review-return.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(value)) }; }
 
+test('selected Case exports compare read-only with exact records, replacement and disposal', async ({ page }, testInfo) => {
+  const { section, current } = await seed(page);
+  let lookupRequests = 0;
+  await page.route('**/api/lookup**', async route => { lookupRequests++; await route.abort(); });
+  const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  let baseline = current;
+  for (let index = 0; index < 12; index++) baseline = updateCase([baseline], baseline.id, { note: `Baseline note ${index}` }, AFTER).record;
+  const left = buildCaseExport([baseline], AFTER), right = structuredClone(left);
+  right.cases[0]!.notes = right.cases[0]!.notes.slice(1).map((note, index) => ({ ...note, body: `Comparison note ${index}` }));
+  right.cases[0]!.notes.push({ id: 'comparison-only-note', body: 'Deliberately selected new note', createdAt: AFTER });
+  const disclosure = section.getByText('Compare two Case exports', { exact: true });
+  await disclosure.click();
+  const comparison = section.getByRole('region', { name: 'Read-only Case export comparison', exact: true });
+  const status = comparison.getByRole('status', { name: 'Case export comparison status', exact: true });
+  const first = comparison.getByLabel('Baseline export (JSON)', { exact: true });
+  const second = comparison.getByLabel('Comparison export (JSON)', { exact: true });
+  await expect(status).toContainText('Comparison unavailable');
+  await second.setInputFiles(upload(right));
+  await expect(status).toContainText('Comparison unavailable');
+  await first.setInputFiles(upload(left));
+  await expect(status).toContainText('12 changed · 1 only in comparison · 1 only in baseline');
+  await expect(comparison.getByRole('button', { name: /Save|Import|Add|Download/u })).toHaveCount(0);
+  await expect(comparison.getByText('Only in baseline export', { exact: true })).toBeVisible();
+  const inspect = comparison.getByRole('button', { name: `Inspect Notes ${baseline.notes[0]!.id}`, exact: true });
+  await inspect.focus(); await inspect.press('Enter');
+  const values = comparison.getByRole('region', { name: 'Selected comparison values', exact: true });
+  await expect(values.getByRole('heading', { level: 4 })).toBeFocused();
+  await expect(values.getByRole('region', { name: 'Baseline export text', exact: true })).toContainText('Keep the original note');
+  await expect(values.getByText('Not present in this selected export.', { exact: true })).toBeVisible();
+  await comparison.getByRole('button', { name: 'Next differences', exact: true }).click();
+  await expect(values).toHaveCount(0);
+  await comparison.getByRole('button', { name: 'Inspect Notes comparison-only-note', exact: true }).click();
+  await expect(values.getByRole('region', { name: 'Comparison export text', exact: true })).toContainText('Deliberately selected new note');
+  for (const [width, height] of [[320, 700], [1280, 720]] as const) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height }); await useTheme(page, theme);
+    await values.getByRole('heading', { level: 4 }).scrollIntoViewIfNeeded();
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('.handoff-comparison').analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`handoff-comparison-${theme}-${width}.png`) });
+  }
+  await second.setInputFiles(upload(left));
+  await expect(status).toContainText('0 changed · 0 only in comparison · 0 only in baseline');
+  await expect(values).toHaveCount(0);
+  await comparison.getByRole('button', { name: 'Clear comparison', exact: true }).click();
+  await expect(status).toContainText('Comparison unavailable');
+  await expect(comparison.locator('code')).toHaveCount(0);
+
+  // A deliberately held native file read must not repopulate a cleared view.
+  await page.evaluate(() => {
+    const original = Blob.prototype.arrayBuffer;
+    let release!: () => void, finished!: () => void;
+    const held = new Promise<void>(resolve => release = resolve);
+    const completed = new Promise<void>(resolve => finished = resolve);
+    (window as unknown as { releaseHandoffRead: () => Promise<void> }).releaseHandoffRead = async () => {
+      Blob.prototype.arrayBuffer = original; release(); await completed;
+      // Drain continuations from the now-completed read, not a timing delay.
+      await Promise.resolve(); await Promise.resolve();
+    };
+    Blob.prototype.arrayBuffer = async function() {
+      if (this instanceof File && this.name === 'held-comparison.json') {
+        await held;
+        try { return await original.call(this); } finally { finished(); }
+      }
+      return original.call(this);
+    };
+  });
+  await first.setInputFiles({ ...upload({ ...left, version: 0 }), name: 'held-comparison.json' });
+  await expect(comparison.getByText('Reading baseline export…', { exact: true })).toBeVisible();
+  await comparison.getByRole('button', { name: 'Clear comparison', exact: true }).click();
+  await first.setInputFiles(upload(right));
+  await second.setInputFiles(upload(right));
+  await expect(status).toContainText('0 changed · 0 only in comparison · 0 only in baseline');
+  await page.evaluate(() => (window as unknown as { releaseHandoffRead: () => Promise<void> }).releaseHandoffRead());
+  await expect(status).toContainText('0 changed · 0 only in comparison · 0 only in baseline');
+  await expect(comparison.getByRole('alert')).toHaveCount(0);
+  await disclosure.click();
+  await expect(comparison).toHaveCount(0);
+  await disclosure.click();
+  await expect(status).toContainText('Comparison unavailable');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(saved);
+  expect(lookupRequests).toBe(0);
+});
+
 test('encrypted Case handoff includes selected originals, excludes recovery drafts and verifies returned entries', async ({ page }, testInfo) => {
   test.slow();
   const { section } = await seed(page);
