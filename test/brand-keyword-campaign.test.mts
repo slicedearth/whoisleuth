@@ -21,7 +21,7 @@ import {
   normalizeBrandProfileStore,
   serializeBrandProfileStore,
 } from '../packages/workspace/brand-profile-model.mts';
-import { mergeCandidateObservations } from '../packages/workspace/brand-candidate-workflow.mts';
+import { mergeCandidateObservations, reviseCandidateException, candidateMaterialFingerprint, MAX_CANDIDATE_OBSERVATIONS } from '../packages/workspace/brand-candidate-workflow.mts';
 import {
   applyCandidateWatchHandoff,
   planCandidateWatchHandoff,
@@ -34,6 +34,9 @@ import {
   keywordCampaignDraft,
   previewKeywordCampaignDraft,
   previewKeywordCampaignHosts,
+  explainKeywordCampaignMatch,
+  compareKeywordCampaignCorpus,
+  keywordCampaignCorpusRevision,
 } from '../frontend/src/lib/controllers/brand-keyword-campaign.ts';
 
 const NOW = '2000-01-03T00:00:00.000Z',
@@ -479,6 +482,115 @@ test('retained literal quality cases agree between campaign preview and streamin
     assert.equal(preview[0]!.matched, value.expected, value.case);
     assert.equal(review.matches.length === 1, value.expected, value.case);
   }
+});
+
+test('non-match explanations separate missing literals, negative vetoes and the campaign window', () => {
+  const intent = { ...campaign, positiveTerms: ['launch', 'release'], paused: true };
+  assert.deepEqual(explainKeywordCampaignMatch('prelaunch.example', intent, LATER), {
+    terms: ['launch'], excludedTerms: [], matched: true, outcome: 'matched',
+    missingTerms: ['release'], state: 'paused',
+  });
+  assert.deepEqual(explainKeywordCampaignMatch('excluded-launch.example', intent, LATER), {
+    terms: ['launch'], excludedTerms: ['excluded'], matched: false, outcome: 'vetoed',
+    missingTerms: ['release'], state: 'paused',
+  });
+  for (const hostname of ['launc-h.example', 'xn--r8jz45g.example']) {
+    const result = explainKeywordCampaignMatch(hostname, campaign, LATER);
+    assert.equal(result.outcome, 'missing_positive');
+    assert.deepEqual(result.missingTerms, ['launch']);
+  }
+  const next = reviseBrandKeywordCampaign(campaign, { ...input, positiveTerms: ['release'] }, 1, LATER);
+  assert.equal(explainKeywordCampaignMatch('launch.example', next, LATER).matched, false);
+  assert.equal(explainKeywordCampaignMatch('launch.example', next.history[0]!, LATER).matched, true);
+});
+
+test('campaign corpus comparison accounts for every retained candidate without rewriting nominations or reviews', async () => {
+  const { candidate } = await nominations();
+  const domains = ['launch.example', 'release.example', 'launch-release.example', 'unrelated.example'];
+  const corpus = { ...profile, candidateObservations: domains.map(domain => ({ ...candidate, domain })),
+    officialDomains: ['release.example'] };
+  const original = structuredClone(corpus);
+  const proposed = reviseBrandKeywordCampaign(campaign, { ...input, positiveTerms: ['release'] }, 1, LATER);
+  const result = compareKeywordCampaignCorpus(corpus, campaign, proposed, LATER);
+  assert.equal(result.profileId, profile.id);
+  assert.equal(result.profileUpdatedAt, NOW);
+  assert.equal(result.maximum, MAX_CANDIDATE_OBSERVATIONS);
+  assert.equal(result.beforeRevision, 1);
+  assert.equal(result.afterRevision, 2);
+  assert.equal(result.beforeHistoryOmitted, 0);
+  assert.equal(result.beforeMatches, 2);
+  assert.equal(result.afterMatches, 2);
+  assert.deepEqual(result.counts, { added: 1, removed: 1, unchanged_match: 1, unchanged_nonmatch: 1, no_baseline: 0 });
+  assert.deepEqual(result.rows.map(row => [row.domain, row.change]), [
+    ['launch.example', 'removed'], ['release.example', 'added'],
+    ['launch-release.example', 'unchanged_match'], ['unrelated.example', 'unchanged_nonmatch'],
+  ]);
+  assert.equal(result.rows[1]!.declaration?.kind, 'official');
+  assert.deepEqual(result.rows[0]!.sources, candidate.sources);
+  result.rows[0]!.sources[0]!.gap = 'Changed only in the detached preview';
+  assert.deepEqual(corpus, original);
+  assert.deepEqual(corpus.candidateObservations[0]!.matches, candidate.matches);
+});
+
+test('no saved baseline remains unknown and an empty corpus is not evidence of a non-match', () => {
+  const result = compareKeywordCampaignCorpus(profile, null, campaign, LATER);
+  assert.equal(result.beforeRevision, null);
+  assert.equal(result.beforeMatches, null);
+  assert.equal(result.beforeHistoryOmitted, null);
+  assert.deepEqual(result.rows, []);
+  assert.deepEqual(result.counts, { added: 0, removed: 0, unchanged_match: 0, unchanged_nonmatch: 0, no_baseline: 0 });
+  assert.throws(() => compareKeywordCampaignCorpus(profile, { ...campaign, id: 'another-campaign' }, campaign, LATER), /same keyword campaign/u);
+  assert.throws(() => keywordCampaignCorpusRevision({ ...profile,
+    candidateObservations: Array(MAX_CANDIDATE_OBSERVATIONS + 1).fill(null),
+  }), /no partial comparison/u);
+});
+
+test('the complete retained corpus is compared without a hidden preview subset', async () => {
+  const { candidate } = await nominations();
+  const corpus = { ...profile, candidateObservations: Array.from({ length: MAX_CANDIDATE_OBSERVATIONS },
+    (_, index) => ({ ...candidate, domain: `launch-${index}.example` })) };
+  const result = compareKeywordCampaignCorpus(corpus, null, campaign, LATER);
+  assert.equal(result.rows.length, MAX_CANDIDATE_OBSERVATIONS);
+  assert.equal(result.afterMatches, MAX_CANDIDATE_OBSERVATIONS);
+  assert.equal(result.counts.no_baseline, MAX_CANDIDATE_OBSERVATIONS);
+  assert.equal(result.beforeMatches, null);
+  assert.equal(result.rows.at(-1)!.domain, `launch-${MAX_CANDIDATE_OBSERVATIONS - 1}.example`);
+});
+
+test('earlier candidate reviews keep their exact rule, source revision, clock and purpose', async () => {
+  const { candidate } = await nominations();
+  const review = reviseCandidateException(null, {
+    id: 'example-review', domain: candidate.domain, ruleKey: candidate.matches[0]!.ruleKey,
+    purpose: 'irrelevant_match', reason: 'Unrelated use reviewed for this exact retained nomination.',
+    expiresAt: END, enabled: true, reviewedAt: LATER,
+    reviewedFingerprint: candidateMaterialFingerprint(candidate, profile.id, candidate.matches[0]!.ruleKey),
+  }, null);
+  const corpus = { ...profile, candidateObservations: [candidate], candidateExceptions: [review] };
+  const next = reviseBrandKeywordCampaign(campaign, { ...input, positiveTerms: ['release'] }, 1, LATER);
+  const result = compareKeywordCampaignCorpus(corpus, campaign, next, LATER);
+  assert.equal(result.rows[0]!.change, 'removed');
+  assert.deepEqual(result.rows[0]!.reviews, [{
+    purpose: 'irrelevant_match', ruleKey: candidate.matches[0]!.ruleKey, reason: review.reason,
+    revision: 1, reviewedAt: LATER, expiresAt: END, state: 'active', previousRevisions: 0, omittedRevisions: 0,
+  }]);
+  assert.equal(compareKeywordCampaignCorpus(corpus, campaign, next, END).rows[0]!.reviews[0]!.state, 'expired');
+  const changed = { ...corpus, candidateObservations: [{ ...candidate,
+    sources: [{ ...candidate.sources[0]!, revision: 'different-source-edition' }],
+  }] };
+  assert.equal(compareKeywordCampaignCorpus(changed, campaign, next, LATER).rows[0]!.reviews[0]!.state, 'changed');
+  assert.deepEqual(corpus.candidateExceptions, [review]);
+});
+
+test('corpus identity includes retained provenance and declarations even when the profile clock is unchanged', async () => {
+  const { candidate } = await nominations();
+  const corpus = { ...profile, candidateObservations: [candidate] };
+  const identity = keywordCampaignCorpusRevision(corpus);
+  assert.equal(keywordCampaignCorpusRevision(structuredClone(corpus)), identity);
+  for (const update of [
+    { id: 'another-brand' }, { updatedAt: LATER }, { officialDomains: ['launch.example'] },
+    { approvedPartnerDomains: ['launch.example'] }, { allowlistedDomains: ['launch.example'] },
+    { candidateObservations: [{ ...candidate, sources: [{ ...candidate.sources[0]!, observedHostname: 'login.launch.example' }] }] },
+  ]) assert.notEqual(keywordCampaignCorpusRevision({ ...corpus, ...update }), identity);
 });
 
 test('untrusted campaign arrays reject accessors, custom prototypes and lowercasing expansion before using their contents', () => {

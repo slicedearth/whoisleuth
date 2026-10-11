@@ -45,7 +45,12 @@
   });
   $effect(() => {
     const next = JSON.stringify([active.id, campaignId, campaign?.revision]);
-    if (reviewedCampaignKey !== next) { reviewedCampaignKey = next; invalidate(); }
+    if (reviewedCampaignKey !== next) {
+      reviewedCampaignKey = next;
+      // Evaluate freshly saved or selected intent against the current clock, not the last idle tick.
+      now = new Date().toISOString();
+      invalidate();
+    }
   });
   onMount(() => { const timer = setInterval(() => { now = new Date().toISOString(); }, 60_000); return () => clearInterval(timer); });
   onDestroy(() => { operation.invalidate(); statusOperation.invalidate(); });

@@ -74,6 +74,29 @@ canonical hostname text, positive/negative outcomes and separate official,
 partner or allowlist declarations. It makes no request and keeps examples only
 in page memory. A literal match or declaration is not a safety finding.
 
+Select **Compare this Brand’s retained candidates** before previewing to try the
+proposed revision against the Brand's current local candidate corpus. The
+comparison shows new, removed and unchanged literal matches, with positive
+matches, missing positive literals and negative vetoes explained separately.
+Review windows and exact Brand declarations do not alter these literal counts.
+When creating a campaign there is no saved baseline, so no added/removed claim
+is made. An empty corpus is not evidence that a rule has no matches in a feed.
+
+The preview identifies the Brand, saved update time, comparison time and a
+fingerprint of the retained corpus, declarations and earlier reviews. It compares
+every retained candidate, with filters and pagination, not the entire original
+feed. Unretained/deleted candidates and earlier source omissions are unknown.
+Each candidate keeps its source edition, observation interval and coverage.
+Earlier analyst decisions retain their exact rule, reason, revision, expiry and
+applicability at preview time; they are not reused as labels for the proposed revision
+or counted as general benign/malicious ground truth.
+
+Changing the draft, selected corpus, saved revision or retained context invalidates
+the preview. Closing the draft or changing Brand clears it. Examples and
+comparisons stay in page memory; only **Save reviewed campaign revision** persists
+the validated campaign intent. It does not rewrite candidate attribution or
+reviews, add Watchlist entries or perform collection.
+
 The start is inclusive and the end exclusive. The dates describe the analyst's
 review window, not a domain's registration or source-observation time. Scheduled,
 paused, expired and unavailable-clock campaigns cannot create new nominations.
