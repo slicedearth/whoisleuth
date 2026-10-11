@@ -8,6 +8,7 @@ import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
 import { encryptWorkspaceArchive } from '../packages/workspace/workspace-archive-crypto.mts';
+import { MAX_MANAGED_INDICATOR_SET_BYTES } from '../packages/contracts/analyst-interchange.mts';
 
 const NOW = '2026-09-23T00:00:00.000Z';
 const PASSPHRASE = 'synthetic archive passphrase';
@@ -87,6 +88,29 @@ for (const [fixture, expectedCommand] of fixtures) {
     assert.equal(quiet.stderr, '');
   });
 }
+
+test('indicator inspection guidance respects the reader byte bound even when canonical content verifies', async () => {
+  const original = await readFile(new URL('./fixtures/extracted-domain-lifecycle/managed-indicator-set-v1.json', import.meta.url), 'utf8');
+  for (const bytes of [MAX_MANAGED_INDICATOR_SET_BYTES, MAX_MANAGED_INDICATOR_SET_BYTES + 1]) {
+    const raw = original + ' '.repeat(bytes - Buffer.byteLength(original, 'utf8'));
+    const report = await verifyOfflineArtifact(raw);
+    assert.equal(report.summary.inputBytes, bytes);
+    assert.equal(report.state, 'verified');
+    assert.equal(report.checks.contentIntegrity, 'verified');
+    assert.deepEqual(JSON.parse(raw), JSON.parse(original), 'Padding must not change the original manifest content');
+    const inspected = await invoke(['indicator-set', 'inspect', '--no-color'], raw);
+    const next = suggestions(formatOfflineArtifactVerification(report));
+    if (bytes <= MAX_MANAGED_INDICATOR_SET_BYTES) {
+      assert.equal(inspected.code, EXIT_CODES.SUCCESS, inspected.stderr);
+      assert.deepEqual(next, [['indicator-set', 'inspect', '--', './indicators.json']]);
+    } else {
+      assert.notEqual(inspected.code, EXIT_CODES.SUCCESS);
+      assert.equal(inspected.stdout, '');
+      assert.ok(inspected.stderr.includes(`${MAX_MANAGED_INDICATOR_SET_BYTES} bytes`));
+      assert.deepEqual(next, [], 'Do not recommend a command that rejects the verified raw file');
+    }
+  }
+});
 
 test('encrypted guidance separates envelope inspection from authenticated content verification', async () => {
   const archive = await buildWorkspaceArchive({}, { generatedAt: NOW });

@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import { MANAGED_INDICATOR_SET_SCHEMA, MANAGED_INDICATOR_SET_VERSION } from '../packages/contracts/analyst-interchange.mts';
+import { MANAGED_INDICATOR_SET_SCHEMA, MANAGED_INDICATOR_SET_VERSION, MAX_MANAGED_INDICATOR_SET_BYTES } from '../packages/contracts/analyst-interchange.mts';
 import { createHash } from 'node:crypto';
 import type { OfflineInvestigationPackageDetails } from './investigation-package-review.mts';
 import type { BagItReview } from '../packages/interchange/bagit.mts';
@@ -781,6 +781,7 @@ function offlineArtifactNextSteps(report: OfflineArtifactVerificationReport): re
       return ['Review the Case-pack compatibility and field exclusions:', '  whoisleuth interchange-report -- ./case-pack.json'];
     case 'signed_review_artifact':
       return report.artifact.schema === MANAGED_INDICATOR_SET_SCHEMA
+        && report.summary.inputBytes <= MAX_MANAGED_INDICATOR_SET_BYTES
         ? ['Read the retained indicator identities and review windows:', '  whoisleuth indicator-set inspect -- ./indicators.json']
         : [];
     default:
