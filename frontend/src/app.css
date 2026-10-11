@@ -17,8 +17,8 @@
   --accent-rgb: 94 179 255;
   --accent2: #7ee0a8;
   --accent2-rgb: 126 224 168;
-  /* Production dark chrome uses the green secondary accent for selection and
-     decorative wayfinding, while blue remains the primary action/focus hue. */
+  /* Dark decorative chrome uses the green secondary accent; navigation
+     selection is neutral and blue remains the primary action/focus hue. */
   --interface-accent: var(--accent2);
   --interface-accent-rgb: var(--accent2-rgb);
   --brand-mark-primary: #39adfd;
@@ -645,7 +645,7 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .local-nav-select { display: none; }
 .local-nav a { position: relative; flex: 0 0 auto; margin: 0; padding: 8px 12px; border-radius: var(--radius-sm); color: var(--muted); font: 600 var(--text-2xs) var(--mono); letter-spacing: .04em; white-space: nowrap; }
 .local-nav a:hover, .local-nav a:focus-visible { color: var(--text); background: rgb(var(--accent-rgb) / var(--interactive-hover-alpha)); }
-.local-nav a.active { color: var(--text); background: rgb(var(--accent-rgb) / var(--interactive-fill-alpha)); box-shadow: inset 0 -2px var(--interface-accent); }
+.local-nav a.active { color: var(--text); background: var(--panel-raised); box-shadow: inset 0 -2px currentColor; }
 .result-section { --local-nav-anchor-offset: 72px; scroll-margin-top: var(--local-nav-anchor-offset); }
 .paged-results { scroll-margin-top: var(--local-nav-anchor-offset, 72px); }
 @media (max-width: 900px) {
@@ -668,7 +668,7 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .workspace-view-nav { display: flex; flex-wrap: wrap; gap: 2px 6px; min-width: 0; margin: 16px 0; padding-block: 4px; border-bottom: 1px solid var(--border); }
 .workspace-view-nav :is(a, button) { display: inline-flex; align-items: center; gap: 7px; min-width: 0; min-height: 44px; padding: 8px 14px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font: 650 var(--text-sm) var(--font-sans); text-decoration: none; }
 .workspace-view-nav :is(a, button):hover { color: var(--text); background: var(--panel-raised); }
-.workspace-view-nav :is([aria-current='page'], [aria-selected='true'], [aria-pressed='true']) { color: var(--interface-accent); border-bottom-color: var(--interface-accent); }
+.workspace-view-nav :is([aria-current='page'], [aria-selected='true'], [aria-pressed='true']) { color: var(--text); border-bottom-color: currentColor; background: var(--panel-raised); }
 
 /* ---------- Application shell ---------- */
 .shell { --console-toolbar-height: 54px; display: grid; grid-template: "sidebar header" var(--console-toolbar-height) "sidebar main" minmax(0,1fr) / 232px minmax(0,1fr); min-height: 100vh; overflow-x: clip; }
@@ -712,10 +712,10 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .eyebrow { color: var(--interface-accent); font: 700 var(--text-2xs) var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .shell > aside nav a { position: relative; display: flex; align-items: center; gap: 10px; min-height: 40px; margin: 2px 0; padding: 8px 11px 8px 16px; border: 1px solid transparent; border-radius: var(--radius-sm); }
 .shell > aside nav a::before { content: ""; position: absolute; left: 8px; top: 11px; color: var(--interface-accent); font: 700 .72rem var(--mono); }
-.shell > aside nav a.active::before { content: ""; top: 10px; bottom: 10px; width: 2px; border-radius: 2px; background: var(--interface-accent); text-shadow: none; }
-.shell > aside nav a:hover, .shell > aside nav a.active { border-color: var(--border); background: rgb(var(--accent-rgb) / var(--interactive-fill-alpha)); }
-.shell > aside nav a.active { border-left-color: var(--interface-accent); }
-.shell > aside nav a.active strong { color: var(--accent); }
+.shell > aside nav a.active::before { content: ""; top: 10px; bottom: 10px; width: 2px; border-radius: 2px; color: inherit; background: currentColor; text-shadow: none; }
+.shell > aside nav a:hover { border-color: var(--border); background: rgb(var(--accent-rgb) / var(--interactive-fill-alpha)); }
+.shell > aside nav a.active { color: var(--text); border-color: var(--border-strong); border-left-color: currentColor; background: var(--panel-raised); }
+.shell > aside nav a.active strong { color: inherit; }
 .shell > aside nav a strong { font: 650 var(--text-sm) var(--font-sans); }
 .shell > aside nav a small { margin-top: 2px; }
 .session { --appearance-right: auto; --appearance-left: 0; --theme-options-top: auto; --theme-options-bottom: calc(100% + 6px); display: grid; flex: 0 0 auto; gap: 10px; margin: auto 16px 16px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font: var(--text-2xs) var(--mono); }

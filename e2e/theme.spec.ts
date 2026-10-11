@@ -297,7 +297,7 @@ test('light surfaces avoid pure white and separate layers, structural borders, a
   expect(palette.contrast['--control-border']).toBeGreaterThanOrEqual(3);
 });
 
-test('dark chrome restores the deployed secondary accent while light chrome stays blue', async ({ page }) => {
+test('decorative chrome follows the theme accent independently of navigation selection', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/lookup');
 
@@ -318,7 +318,6 @@ test('dark chrome restores the deployed secondary accent while light chrome stay
       probe.style.color = '';
       const selected = getComputedStyle(probe);
       const heading = document.querySelector<HTMLElement>('.heading')!;
-      const navigation = document.querySelector<HTMLElement>('nav a.active')!;
       const prompt = document.querySelector<HTMLElement>('.terminal-strip .prompt-sigil')!;
       const eyebrow = document.querySelector<HTMLElement>('.heading .eyebrow')!;
       const field = document.querySelector<HTMLElement>('#query')!;
@@ -330,8 +329,6 @@ test('dark chrome restores the deployed secondary accent while light chrome stay
         selectedBorder: selected.borderTopColor,
         eyebrow: getComputedStyle(eyebrow).color,
         prompt: getComputedStyle(prompt).color,
-        navArrow: getComputedStyle(navigation, '::before').color,
-        navBorder: getComputedStyle(navigation).borderLeftColor,
         headingRule: getComputedStyle(heading, '::after').backgroundImage,
         caret: getComputedStyle(field).caretColor,
       };
@@ -342,8 +339,6 @@ test('dark chrome restores the deployed secondary accent while light chrome stay
     expect(roles.selectedColour).toBe(roles.interfaceAccent);
     expect(roles.eyebrow).toBe(roles.interfaceAccent);
     expect(roles.prompt).toBe(roles.interfaceAccent);
-    expect(roles.navArrow).toBe(roles.interfaceAccent);
-    expect(roles.navBorder).toBe(roles.interfaceAccent);
     expect(roles.caret).toBe(roles.interfaceAccent);
     expect(roles.headingRule).toContain(roles.interfaceAccent);
     expect(roles.headingRule).toContain(roles.accent);
