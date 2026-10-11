@@ -9,16 +9,17 @@
   import { PUBLIC_RESOURCES } from '#lib/public-resources.ts';
 
   const evidenceSources = [
-    ['Registration first','WHOIS and RDAP stay separate, and only authoritative registry evidence decides registration status.'],
-    ['Supporting context','DNS, certificates, mail and website checks help explain a domain without overriding registration evidence.'],
-    ['A reviewable record','Cases, timelines, relationships and exports keep useful findings together for later review.'],
+    { title: 'Registration first', description: 'WHOIS and RDAP stay separate, and only authoritative registry evidence decides registration status.' },
+    { title: 'Supporting context', description: 'DNS, certificates, mail and website checks help explain a domain without overriding registration evidence.' },
+    { title: 'Offline intake', description: 'Review supplied text, messages and supported files locally without opening their links.', guide: { label: 'Read the intake guide', href: '/resources#tool-lookup-input' } },
+    { title: 'Evidence handoff', description: 'Keep sources and decisions in a Case, review the selected disclosure and export a packet to share yourself.', guide: { label: 'Read the handoff guide', href: '/resources/reporting-and-takedown-guidance' } },
   ];
 
 </script>
 
 <PublicSeo
   title="WHOISleuth | WHOIS, RDAP and domain investigation"
-  description="Check domain registration, DNS, certificates, website platform indicators and network context with clear source attribution."
+  description="Review domain registration and supporting evidence, inspect supplied material locally, and prepare selected Case evidence for a deliberate handoff."
   path="/"
   website
 />
@@ -28,7 +29,7 @@
   <div class="hero-copy">
     <p class="eyebrow hero-kicker">Domain intelligence console</p>
     <h1>Understand a domain.<br><span>Before you act.</span></h1>
-    <p class="lede">Investigate a domain, compare the evidence and keep a reviewable record. Bring registration, DNS, website and certificate observations together in one workspace.</p>
+    <p class="lede">Investigate a domain or inspect material you already have. Compare source evidence, keep a Case and prepare a reviewed handoff.</p>
     <div class="hero-actions">
       <div class="example-action">
         <a class="primary" href="/demo" aria-describedby="example-scope">Explore an example investigation</a>
@@ -48,8 +49,8 @@
 </section>
 
 <section class="evidence" aria-labelledby="evidence-title">
-  <div class="section-intro"><h2 id="evidence-title">Follow the evidence behind a finding</h2><p>See the sources, compare observations and save the material that supports your next decision.</p></div>
-  <div class="evidence-grid">{#each evidenceSources as source}<article><h3>{source[0]}</h3><p>{source[1]}</p></article>{/each}</div>
+  <div class="section-intro"><h2 id="evidence-title">Follow the evidence behind a finding</h2><p>Collect relevant sources or start with supplied material. Compare observations, keep the useful evidence and choose what to share.</p></div>
+  <div class="evidence-grid">{#each evidenceSources as source}<article><h3>{source.title}</h3><div><p>{source.description}</p>{#if source.guide}<a class="evidence-guide" href={source.guide.href}>{source.guide.label}<span aria-hidden="true"> →</span></a>{/if}</div></article>{/each}</div>
 </section>
 
 <section class="learn" aria-labelledby="learn-title">
@@ -80,6 +81,7 @@
   .jobs,.evidence,.learn{padding:72px 0;border-top:1px solid var(--border)}
   .section-intro{max-width:780px;margin-bottom:30px}.section-intro h2,.principles h2{margin:.3rem 0 .7rem;font:700 clamp(1.65rem,3.5vw,2.55rem) var(--mono);letter-spacing:-.045em}.section-intro>p:not(.eyebrow),.principles p{color:var(--muted);line-height:1.65}
   .evidence{display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:clamp(34px,7vw,82px);align-items:start}.evidence .section-intro{margin:0}.evidence-grid{display:grid}.evidence-grid article{display:grid;grid-template-columns:minmax(130px,.42fr) minmax(0,1fr);gap:24px;padding:18px 0;border-top:1px solid var(--border)}.evidence-grid article:last-child{border-bottom:1px solid var(--border)}.evidence-grid h3{margin:0;font:700 1rem var(--mono)}.evidence-grid p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.65}
+  .evidence-grid article>div{min-width:0}.evidence-guide{display:inline-flex;align-items:center;gap:5px;min-height:44px;margin-top:4px;color:var(--accent);font:700 var(--text-xs) var(--font-sans)}
   .principles{margin:35px 0;padding:clamp(24px,5vw,46px);box-shadow:none}.principles>div{max-width:780px}
   .all-resources{display:inline-flex;margin-top:18px;color:var(--accent);font:700 var(--text-xs) var(--mono)}
   @media(max-width:980px){.hero{grid-template-columns:1fr}.hero-preview{max-width:760px}}
