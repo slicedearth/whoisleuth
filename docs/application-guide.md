@@ -691,15 +691,20 @@ The handoff trail identifies the file and selected entries, not the reviewer's
 identity. CLI packs can supply Case data; use CLI verification separately for
 their checksums and report binding.
 
-**Compare two Case exports** is a separate read-only view. Select a baseline
-and a comparison JSON export for the same Case; saved work is not used as an
-implicit baseline. Inspect changed content, records present in only one copy,
+**Compare Case exports or response packets** is a separate read-only view.
+Select two ordinary Case exports or two response packets for the same Case;
+saved work is not used as an implicit baseline. Inspect changed content, records present in only one copy,
 recipient routes, limitations and exact scope. Records align by their IDs, not
 their position or hostname. A record absent from an export is not proven deleted
 from the Case. Full selected values use the paged local file viewer.
 This comparison accepts the same exact ordinary Case versions as CLI Case
-editing, including supported historical exports. It does not accept response
-packets, CLI packs or encrypted containers. Clear the comparison, close it or
+editing and the response-packet versions supported by CLI verification, including
+historical files. Packets must pass semantic, reviewed-input binding and integrity
+checks before comparison; historical packets without an inner review digest keep
+that original contract. Generation times, authorisations and integrity changes
+describe packet state, not new evidence, delivery, acceptance or permission to act.
+Do not mix a Case export with a response packet. CLI packs and encrypted
+containers are not accepted. Clear the comparison, close it or
 leave the Case to release the temporary copies. It never adds import permissions
 or includes its internal differences in a recipient attachment.
 

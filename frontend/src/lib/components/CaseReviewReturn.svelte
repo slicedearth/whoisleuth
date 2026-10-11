@@ -119,7 +119,7 @@
 <section class="case-response-stage review-return" aria-labelledby={`case-review-heading-${record.id}`}>
   <h3 id={`case-review-heading-${record.id}`} tabindex="-1" bind:this={heading}>Review with another analyst</h3>
   <details ontoggle={event => comparing = event.currentTarget.open}>
-    <summary>Compare two Case exports</summary>
+    <summary>Compare Case exports or response packets</summary>
     {#if comparing}{#key record.id}<CaseHandoffComparison caseId={record.id} domain={record.domain} />{/key}{/if}
   </details>
   <details>

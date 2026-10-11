@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
-  import { MAX_EDITABLE_CASE_INPUT_BYTES, CLI_CASE_PACK_INPUT_CASE_VERSIONS } from '../../../../packages/contracts/case-portability.mts';
-  import { compareCaseHandoffCopies, readCaseHandoffCopy, type CaseHandoffCopy, type CaseHandoffChange } from '../../../../packages/cases/case-handoff-comparison.mts';
+  import { CLI_CASE_PACK_INPUT_CASE_VERSIONS, SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS } from '../../../../packages/contracts/case-portability.mts';
+  import { MAX_CASE_HANDOFF_INPUT_BYTES, compareCaseHandoffCopies, readCaseHandoffCopy, type CaseHandoffCopy, type CaseHandoffChange } from '../../../../packages/cases/case-handoff-comparison.mts';
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import ArtifactPreview from './ArtifactPreview.svelte';
 
@@ -41,13 +41,15 @@
     if (!file) return;
     let bytes: Uint8Array | undefined;
     try {
-      if (!file.size || file.size > MAX_EDITABLE_CASE_INPUT_BYTES) throw new Error(`Select a Case export between 1 and ${MAX_EDITABLE_CASE_INPUT_BYTES} bytes.`);
+      if (!file.size || file.size > MAX_CASE_HANDOFF_INPUT_BYTES) throw new Error(`Select a Case export or response packet between 1 and ${MAX_CASE_HANDOFF_INPUT_BYTES} bytes.`);
       bytes = new Uint8Array(await file.arrayBuffer());
       if (generation[side] !== revision) return;
       const copy = await readCaseHandoffCopy(bytes);
       if (generation[side] !== revision) return;
       if (copy.caseId !== caseId || copy.domain !== domain) throw new Error('Select an export for this exact Case ID and domain.');
-      copies = copies.map((previous, index) => index === side ? copy : previous);
+      const next = copies.map((previous, index) => index === side ? copy : previous);
+      compareCaseHandoffCopies(next[0] ?? null, next[1] ?? null);
+      copies = next;
     } catch (cause) {
       if (generation[side] === revision) errors[side] = cause instanceof Error ? cause.message : 'The selected Case export could not be read.';
     } finally {
@@ -61,14 +63,14 @@
 </script>
 
 <section class="handoff-comparison" aria-label="Read-only Case export comparison">
-  <p>Compare two selected copies of this Case. Nothing is imported or saved. Missing entries are absent from that export, not proven deleted from the Case.</p>
+  <p>Compare two Case exports or two response packets for this Case. Nothing is imported or saved. Missing entries are absent from that selected copy, not proven deleted from the Case.</p>
   <div class="selectors">
     {#each labels as label, side}<div>
       <label for={`${id}-${side}`}>{label} (JSON)</label>
       <input bind:this={inputs[side]} id={`${id}-${side}`} type="file" accept="application/json,.json" onchange={event => void selectFile(event, side)}>
       {#if busy[side]}<p role="status">Reading {label.toLowerCase()}…</p>{/if}
       {#if errors[side]}<p role="alert">{errors[side]}</p>{/if}
-      {#if copies[side]}<p>Case schema {copies[side]!.version} · exported {formatEvidenceDate(copies[side]!.exportedAt, 'time not recorded')}</p>
+      {#if copies[side]}<p>{copies[side]!.kind === 'response_packet' ? 'Response packet' : 'Case'} schema {copies[side]!.version} · exported {formatEvidenceDate(copies[side]!.exportedAt, 'time not recorded')}</p>
         <details><summary>{label} file identity</summary><code>{copies[side]!.digest}</code></details>{/if}
     </div>{/each}
   </div>
@@ -103,8 +105,8 @@
     </section>{/if}
   {/if}
   <details><summary>Formats and comparison scope</summary>
-    <p>Ordinary single-Case exports with schemas {CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(', ')} are supported. Response packets, CLI packs and encrypted containers are not accepted here. Use the separate package review to unlock a handoff and deliberately select its exported Case JSON.</p>
-    <p>Records align only by exact IDs. Shared-record order changes are shown separately; other arrays compare as complete values. All selected Case fields participate, including recipient routes, limitations and scope. Export times and file digests describe the copies, not independent observations or reviewer identity. This view adds no import permission and has no download action.</p>
+    <p>Ordinary single-Case exports with schemas {CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(', ')} and response packets with schemas {SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS.join(', ')} are supported. Both selections must be the same kind of file. Packet structure, reviewed-input binding and integrity are checked before comparison; older packets without a reviewed-input binding keep their original contract. CLI packs and encrypted containers are not accepted here. Use the separate package review to unlock a handoff and deliberately select its exported JSON.</p>
+    <p>Records align only by exact IDs. Shared-record order changes are shown separately; other arrays compare as complete values. All selected fields participate, including recipient routes, limitations and scope. Packet generation times, authorisations and integrity blocks describe that packet, not new evidence, submission, acceptance or permission to act. File digests do not authenticate a reviewer. This view adds no import permission and has no download action.</p>
     <p>Copies remain in page memory until replaced, cleared, this comparison is closed or the Case is left. These full private exports can contain notes, filenames and response details.</p>
   </details>
 </section>

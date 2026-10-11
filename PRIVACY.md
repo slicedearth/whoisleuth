@@ -319,9 +319,9 @@ decisions or assertions saves them locally with their original record times,
 plus a handoff entry containing the file digest and selected-record-key digest.
 No upload occurs; file identity does not authenticate the reviewer. Existing
 conflicts, response authorisations and unselected records are not imported.
-Read-only comparison of two deliberately selected Case exports also stays in
-page memory. The full private copies, file digests and selected-value views are
-not saved, uploaded or added to recipient attachments. Replacing a file,
+Read-only comparison of two deliberately selected Case exports or two response
+packets also stays in page memory. The full private copies, file digests and
+selected-value views are not saved, uploaded or added to recipient attachments. Replacing a file,
 clearing or closing the comparison, or leaving the Case releases those temporary
 references. Saved work is not used as an implicit comparison baseline.
 
