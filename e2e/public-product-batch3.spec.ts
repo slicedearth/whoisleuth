@@ -658,7 +658,7 @@ test('contains an optional chunk preload failure without a page error', async ({
   expect(pageErrors).toEqual([]);
 });
 
-test('opens, filters and downloads a large synthetic example without workspace access', async ({ page }) => {
+test('opens, filters and downloads a large synthetic example without workspace access', async ({ page }, testInfo) => {
   const investigationRequests = collectInvestigationRequests(page);
   const exampleChunks = new Map(PUBLIC_EXAMPLES_INDEX.examples.map(example =>
     [productionChunkPath(`src/lib/generated/public-example-outputs/${example.id}.ts`), example.id]));
@@ -674,6 +674,25 @@ test('opens, filters and downloads a large synthetic example without workspace a
     workspace: (await indexedDB.databases()).some((database) => database.name === 'whoisleuth-browser-data-v1'),
   }));
   expect(before.workspace).toBe(false);
+  expect([...requestedExamples]).toEqual([]);
+
+  const outcomes = page.getByRole('region', { name: 'Start with the investigation outcome' });
+  const stories = outcomes.getByRole('article');
+  await expect(stories).toHaveCount(4);
+  const accounts = stories.filter({ has: page.getByRole('heading', { name: 'Two sources disagree', exact: true }) });
+  const accountDetails = accounts.locator('details');
+  await expect(accountDetails).not.toHaveAttribute('open', '');
+  await accountDetails.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(accountDetails).toHaveAttribute('open', '');
+  await expect(accounts).toContainText('neither its path nor viewport');
+  for (const story of await stories.all()) {
+    const details = story.locator('details');
+    if (await details.getAttribute('open') === null) await details.locator('summary').click();
+  }
+  await expect(stories.nth(1)).toContainText('The advertisement was not rechecked');
+  await expect(stories.nth(2)).toContainText('not attribution');
+  await expect(stories.nth(3)).toContainText('not delivery or recipient acceptance');
   expect([...requestedExamples]).toEqual([]);
 
   const gallery = page.getByTestId('public-example-gallery');
@@ -730,6 +749,39 @@ test('opens, filters and downloads a large synthetic example without workspace a
   expect(after).toEqual(before);
   expect(investigationRequests).toEqual([]);
   expect([...requestedExamples].sort()).toEqual(['case-assess-input', 'case-handoff', 'case-pin-input', 'case-recheck-input', 'lookup-preflight']);
+
+  // Appearance controls deliberately save preferences; exercise them after the no-storage comparison.
+  for (const density of ['comfortable', 'compact'] as const) {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.getByRole('button', { name: /^Colour theme,/u }).click();
+    await page.getByLabel('Reading density').selectOption(density);
+    await page.getByLabel('Reading density').press('Escape');
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const [width, height] of [[1280, 720], [1024, 768], [390, 844], [320, 700]] as const) {
+        await page.setViewportSize({ width, height });
+        await outcomes.scrollIntoViewIfNeeded();
+        await expectNoHorizontalOverflow(page);
+        if (width === 320) {
+          expect((await new AxeBuilder({ page }).include('.worked-outcomes').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+        }
+        if (density === 'comfortable' && (width === 320 || width === 1280) && captureVisualEvidenceEnabled()) {
+          await outcomes.screenshot({ path: testInfo.outputPath(`examples-outcomes-${theme}-${width}.png`) });
+        }
+      }
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await accounts.getByRole('link').click();
+  await expect(page).toHaveURL(/\/methodology#method-example-conflicting-page-accounts$/u);
+  await expect(page.locator('#method-example-conflicting-page-accounts')).toHaveAttribute('open', '');
+  await page.goto('/examples');
+  const amendment = outcomes.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Amend the handoff without replacing its history', exact: true }) });
+  await amendment.locator('summary').click();
+  await amendment.getByRole('link').click();
+  await expect(page).toHaveURL(/\/demo#case-practice$/u);
+  await expect(page.getByRole('combobox', { name: 'Practice scenario', exact: true })).toBeVisible();
+  expect(investigationRequests).toEqual([]);
 });
 
 test('uses Investigate, Respond and Assure as the only top-level product jobs', async ({ page }) => {
