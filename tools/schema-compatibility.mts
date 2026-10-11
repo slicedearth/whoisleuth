@@ -32,7 +32,7 @@ import {
   CAPABILITY_MANIFEST_VERSION,
   MAX_CAPABILITY_MANIFEST_BYTES,
 } from '../packages/contracts/capability-manifest.mts';
-import { DOCTOR_SCHEMA, DOCTOR_VERSION } from '../cli/doctor.mts';
+import { DOCTOR_SCHEMA, DOCTOR_VERSION, DOCTOR_SUMMARY_SCHEMA, DOCTOR_SUMMARY_VERSION } from '../packages/contracts/cli-doctor.mts';
 import {
   CLI_COMMAND_CATALOGUE_SCHEMA,
   CLI_COMMAND_CATALOGUE_VERSION,
@@ -567,6 +567,7 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry(LOOKUP_EVIDENCE_COMPATIBILITY),
   ...SCHEMA_LIFECYCLE_REGISTRY.flatMap((family) => family.compatibility.map(lifecycleEntry)),
   outputEntry({ id: 'cli.doctor', schema: DOCTOR_SCHEMA, currentVersion: DOCTOR_VERSION, byteBudget: null, owner: 'cli/doctor.mts', note: 'Bounded runtime and optional explicitly approved network-diagnostic report; normal operation remains offline.' }),
+  outputEntry({ id: 'cli.doctor-summary', schema: DOCTOR_SUMMARY_SCHEMA, currentVersion: DOCTOR_SUMMARY_VERSION, byteBudget: null, owner: 'cli/doctor.mts', note: 'Output-only allowlisted troubleshooting summary; numeric versions, public format declarations and fixed check codes omit private context and free-form diagnostics.' }),
   outputEntry({ id: 'cli.command-catalogue', schema: CLI_COMMAND_CATALOGUE_SCHEMA, currentVersion: CLI_COMMAND_CATALOGUE_VERSION, byteBudget: null, owner: 'packages/contracts/cli-command-catalogue.mts', note: 'Dependency-neutral identity for the installed command, usage, collection-mode, and boundary catalogue without target or evidence values.' }),
   outputEntry({ id: 'cli.lookup-plan', schema: CLI_LOOKUP_PLAN_SCHEMA, currentVersion: CLI_LOOKUP_PLAN_VERSION, byteBudget: null, owner: 'cli/lookup-plan.mts', note: 'Request-free preview of the sources and disclosures associated with an analyst-selected lookup mode.' }),
   outputEntry({ id: 'cli.lookup-timeline', schema: CLI_LOOKUP_TIMELINE_SCHEMA, currentVersion: CLI_LOOKUP_TIMELINE_VERSION, byteBudget: MAX_LOOKUP_TIMELINE_INPUT_BYTES, owner: 'cli/lookup-timeline.mts', note: 'Offline chronological comparison of bounded same-domain saved observations; missing fields and unavailable evidence remain explicit.' }),

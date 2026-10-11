@@ -2,7 +2,8 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCliArguments } from '../cli/arguments.mts';
 import { MAX_CLI_COMPLETION_BYTES, buildShellCompletion } from '../cli/completion.mts';
-import { buildDoctorReport, formatDoctorReport } from '../cli/doctor.mts';
+import { buildDoctorReport, buildDoctorSummary, formatDoctorReport } from '../cli/doctor.mts';
+import { cliInvocationNetworkEffect, commandHelp } from '../cli/command-reference.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { runCli } from '../cli/runner.mts';
 import { SHELL_COMPLETION_PROCESS_OPTIONS, shellCompletionBatchProcessOptions } from './support/shell-completion-harness.mts';
@@ -78,6 +79,69 @@ describe('CLI static completion and manual', () => {
 });
 
 describe('CLI doctor', () => {
+  test('shareable summaries project only public versions, declarations and fixed check codes', async () => {
+    const fail = async () => { throw new Error('PRIVATE_DETAIL https://private.example.test/path?token=PRIVATE_TOKEN cookie=PRIVATE_COOKIE /private-folder/user'); };
+    const report = await buildDoctorReport({
+      version: '2.6.0+PRIVATE_VERSION', generatedAt: 'PRIVATE_TIMESTAMP', network: true,
+      presentation: { interactive: false, color: false, palette: 'auto', width: null },
+      nodeVersion: '24.19.0+PRIVATE_NODE', platform: 'PRIVATE_PLATFORM', architecture: 'PRIVATE_ARCH',
+      resolveAddresses: fail, fetchHttps: fail, queryWhois: fail,
+    });
+    const original = JSON.stringify(report);
+    assert.match(original, /PRIVATE_DETAIL/);
+    const summary = buildDoctorSummary(report, '24.19.0+PRIVATE_NODE');
+    assert.deepEqual(Object.keys(summary).sort(), [
+      'schema', 'version', 'cliVersion', 'nodeVersion', 'state', 'networkRequested',
+      'checkCodes', 'omittedCheckCount', 'declaredFormatIdentifiers', 'formatScope', 'omissions',
+    ].sort());
+    assert.equal(summary.schema, 'whoisleuth.cli.doctor-summary');
+    assert.equal(summary.version, 1);
+    assert.equal(summary.cliVersion, '2.6.0');
+    assert.equal(summary.nodeVersion, '24.19.0');
+    assert.equal(summary.networkRequested, true);
+    assert.equal(summary.state, 'partial');
+    assert.equal(summary.omittedCheckCount, 0);
+    assert.deepEqual(summary.checkCodes, ['runtime_pass', 'platform_pass', 'terminal_pass', 'offline_features_pass', 'public_dns_partial', 'https_transport_partial', 'whois_transport_partial']);
+    assert.ok(summary.declaredFormatIdentifiers.includes('whoisleuth.cli.doctor'));
+    assert.doesNotMatch(JSON.stringify(summary), /PRIVATE_|private\.example|private-folder|token=|cookie=/);
+    assert.equal(JSON.stringify(report), original);
+
+    const unknown = buildDoctorSummary({ ...report, cliVersion: 'PRIVATE_VERSION',
+      checks: [...report.checks, { id: 'PRIVATE_CHECK' as typeof report.checks[number]['id'], label: 'PRIVATE_LABEL', state: 'pass', detail: 'PRIVATE_DETAIL' }],
+    }, 'PRIVATE_NODE');
+    assert.equal(unknown.cliVersion, null);
+    assert.equal(unknown.nodeVersion, null);
+    assert.equal(unknown.omittedCheckCount, 1);
+    assert.equal(unknown.state, 'partial');
+    assert.doesNotMatch(JSON.stringify(unknown), /PRIVATE_/);
+  });
+
+  test('summary output preserves explicit network selection, quiet mode and partial exits', async () => {
+    assert.match(commandHelp('doctor'), /--summary-json/);
+    assert.throws(() => parseCliArguments(['doctor', '--summary-json', '--json']));
+    assert.throws(() => parseCliArguments(['doctor', '--summary-json', '--quiet']));
+    assert.equal(cliInvocationNetworkEffect('doctor', ['--summary-json']), 'offline');
+    for (const args of [['--summary-json'], ['--summary-json', '--network'], ['--network', '--quiet']]) {
+      const stdout = capture(), stderr = capture();
+      let calls = 0;
+      const fail = async () => { calls += 1; throw new Error('PRIVATE_TRANSPORT_DETAIL'); };
+      const code = await runCli(['doctor', ...args], {
+        stdout: stdout.stream, stderr: stderr.stream,
+        resolvePublicAddresses: fail, safeFetch: fail, whoisQuery: fail,
+      });
+      assert.equal(code, args.includes('--network') ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS, stderr.value());
+      assert.equal(calls, args.includes('--network') ? 3 : 0);
+      assert.equal(stderr.value(), '');
+      assert.doesNotMatch(stdout.value(), /PRIVATE_/);
+      if (args.includes('--quiet')) assert.equal(stdout.value(), '');
+      else {
+        const result = JSON.parse(stdout.value());
+        assert.equal(result.schema, 'whoisleuth.cli.doctor-summary');
+        assert.equal(result.networkRequested, args.includes('--network'));
+      }
+    }
+  });
+
   test('is offline by default and makes skipped network state explicit', async () => {
     let networkCalled = false;
     const report = await buildDoctorReport({

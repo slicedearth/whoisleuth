@@ -165,6 +165,16 @@ their focused help. They do not use the hosted login or hosted usage controls.
 `lookup --plan` lists planned source families and disclosure targets before
 collection. `doctor` is offline unless `--network` is selected.
 
+For troubleshooting that you intend to share, use
+`whoisleuth doctor --summary-json > diagnostics.json`. This summary keeps numeric
+CLI/Node versions, fixed check codes and public format identifiers from the command
+catalogue. Those identifiers describe declared formats, not a compatibility test.
+Targets, URLs, filenames, paths, user names, credentials, headers, timestamps and
+free-form diagnostic details are omitted. Version prerelease/build metadata is
+also omitted. Normal terminal and `--json` diagnostics can include error details;
+inspect them before sharing. The summary does not enable network checks or upload
+anything, and it has the same success/partial exit behaviour as the detailed report.
+
 Deep Lookup reports IPv4 and IPv6 results separately, including empty answers,
 NODATA, resolver-reported missing names and query failures. These outcomes remain
 distinct in evidence exports; none alone establishes domain removal.

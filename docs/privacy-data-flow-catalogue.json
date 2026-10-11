@@ -4345,7 +4345,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "The default check is offline. Public DNS and port 43 checks run only when --network is explicitly supplied.",
+        "The default check is offline. Public DNS, HTTPS and port 43 checks run only with --network. --summary-json omits private context and free-form diagnostic details.",
         "Network diagnostics are opt-in and use only fixed public diagnostic destinations."
       ],
       "variants": [

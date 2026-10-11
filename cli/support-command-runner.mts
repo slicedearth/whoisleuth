@@ -11,7 +11,7 @@ import {
   COMMAND_USAGE,
 } from './command-reference.mts';
 import { buildShellCompletion } from './completion.mts';
-import { buildDoctorReport, formatDoctorReport } from './doctor.mts';
+import { buildDoctorReport, buildDoctorSummary, formatDoctorReport } from './doctor.mts';
 import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { formatJsonDocument } from './formatters/json.mts';
@@ -133,9 +133,11 @@ async function runDoctorCommand(
     ? await context.withProgress('Checking public DNS, HTTPS, and WHOIS connectivity', buildReport)
     : await buildReport();
   if (!args.quiet) {
-    context.writeStdout(args.output === 'json'
-      ? formatJsonDocument(report)
-      : context.terminal(formatDoctorReport(report), args.color));
+    context.writeStdout(args.output === 'summary_json'
+      ? formatJsonDocument(buildDoctorSummary(report))
+      : args.output === 'json'
+        ? formatJsonDocument(report)
+        : context.terminal(formatDoctorReport(report), args.color));
   }
   return report.state === 'partial' ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
 }

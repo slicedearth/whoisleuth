@@ -542,6 +542,13 @@ deliberately selects a local file. Existing files are refused unless replacement
 is explicit. CLI files are not uploaded to WHOISleuth and remain under the
 operator's retention and deletion control.
 
+`doctor --summary-json` produces an optional troubleshooting summary on stdout.
+It retains numeric CLI/Node versions, fixed check codes and public format
+identifiers. It omits targets, URLs, file/folder/user names, credentials, headers,
+timestamps, version metadata and free-form diagnostic details. Normal detailed
+diagnostics can include error messages and should be inspected before sharing.
+The summary does not enable network checks or automatically save or upload anything.
+
 With explicit `review-evidence --mmdb`, the CLI reads one selected local database
 of at most 512 MiB. It is not bundled, downloaded, updated or transmitted. Current
 version-2 queries retain the exact-byte SHA-256, byte length, intrinsic database

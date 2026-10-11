@@ -4,7 +4,7 @@ import { terminalOptions, jsonOutput, singleInputAction, type TerminalOptions } 
 
 type CompletionArguments = { action: 'completion'; shell: CompletionShell };
 
-type DoctorArguments = { action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions;
+type DoctorArguments = { action: 'doctor'; network: boolean; output: 'terminal' | 'json' | 'summary_json' } & TerminalOptions;
 
 type CommandsArguments = {
   action: 'commands';
@@ -61,7 +61,7 @@ export const SUPPORT_ARGUMENT_PARSERS = Object.freeze({
   doctor: (parsed: ParsedCommandArguments<DoctorArguments['action']>): DoctorArguments => ({
     action: 'doctor',
     network: parsed.hasOption('--network'),
-    output: jsonOutput(parsed),
+    output: parsed.hasOption('--summary-json') ? 'summary_json' : jsonOutput(parsed),
     ...terminalOptions(parsed),
   }),
   commands: (parsed: ParsedCommandArguments<CommandsArguments['action']>): CommandsArguments => ({
