@@ -470,6 +470,18 @@ test('public starting points keep guide and fictional practice navigation separa
   await page.emulateMedia({ reducedMotion: 'reduce' });
   for (const pathname of ['/', '/resources']) {
     await page.goto(pathname);
+    if (pathname === '/') {
+      const example = page.getByRole('link', { name: 'Explore an example investigation', exact: true });
+      await expect(example).toHaveAttribute('href', '/demo');
+      await expect(example).toHaveAccessibleDescription('Fictional evidence. No live collection.');
+      await expect(page.getByText('Fictional evidence. No live collection.', { exact: true })).toBeVisible();
+      await example.focus();
+      await example.press('Enter');
+      await expect(page).toHaveURL('/demo');
+      await expect(page.getByRole('button', { name: 'Inspect suspicious domain', exact: true })).toBeEnabled();
+      expect(await page.evaluate(() => (window as unknown as { guideStorageAttempts: number }).guideStorageAttempts)).toBe(0);
+      await page.goto('/');
+    }
     const paths = page.getByRole('region', { name: pathname === '/' ? 'WHOISleuth investigation paths' : 'Common WHOISleuth tasks', exact: true });
     await expect(paths.getByRole('article')).toHaveCount(4);
     for (const goal of publicGuideGoals) {

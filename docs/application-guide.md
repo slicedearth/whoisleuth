@@ -10,8 +10,10 @@ Network collection and external actions remain explicit. The generated
 [privacy/data-flow catalogue](privacy-data-flow-catalogue.md) lists request,
 recipient, retention and export boundaries.
 
-The public demo uses fixed fictional evidence and does not write protected
-workspace data. Its HTTP examples retain an origin when available, but not full
+Choose **Explore an example investigation** on the public homepage to enter the
+demo. Its adjacent note identifies fictional evidence and no live collection.
+The demo uses fixed fictional evidence and does not write protected workspace
+data. Its HTTP examples retain an origin when available, but not full
 requested or final URLs. Those URL rows therefore say **Not retained**; an origin
 does not identify the page path, and an inconclusive example has no observed
 response or final origin.

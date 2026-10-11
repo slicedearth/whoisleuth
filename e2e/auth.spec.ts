@@ -69,7 +69,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /Understand a domain.+Before you act/u })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Try the synthetic demo' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Explore an example investigation' })).toBeVisible();
   await expect(page.locator('.public-header').getByRole('link', { name: 'Privacy' })).toHaveCount(0);
   const publicFooter = page.locator('.public-footer');
   const publicPrivacyLink = publicFooter.getByRole('link', { name: 'Privacy' });

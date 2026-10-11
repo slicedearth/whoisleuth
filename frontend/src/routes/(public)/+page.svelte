@@ -29,7 +29,13 @@
     <p class="eyebrow hero-kicker">Domain intelligence console</p>
     <h1>Understand a domain.<br><span>Before you act.</span></h1>
     <p class="lede">Investigate a domain, compare the evidence and keep a reviewable record. Bring registration, DNS, website and certificate observations together in one workspace.</p>
-    <div class="hero-actions"><a class="primary" href="/demo">Try the synthetic demo</a><PublicConsoleCta /></div>
+    <div class="hero-actions">
+      <div class="example-action">
+        <a class="primary" href="/demo" aria-describedby="example-scope">Explore an example investigation</a>
+        <p id="example-scope">Fictional evidence. No live collection.</p>
+      </div>
+      <PublicConsoleCta />
+    </div>
   </div>
   <div class="hero-preview">
     <HomepageProductPreview />
@@ -63,9 +69,12 @@
   .hero h1{max-width:620px;margin:.35rem 0 1rem;font:750 clamp(2.45rem,4vw,3rem)/1 var(--mono);letter-spacing:-.065em}
   .hero h1 span{display:block;color:var(--accent)}
   .lede{max-width:56ch;color:var(--muted);font-size:clamp(1rem,1.5vw,1.1rem);line-height:1.7}
-  .hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:28px}
+  .hero-actions{display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px 10px;margin-top:28px}
   .hero-actions a{display:inline-flex;min-height:44px;align-items:center;justify-content:center;padding:10px 16px;border-radius:var(--radius-sm);font:750 var(--text-xs) var(--font-sans)}
+  .hero-actions > :global(a){min-height:44px}
   .hero-actions .primary{color:var(--primary-text);background:linear-gradient(135deg,var(--primary-start),var(--primary-end))}
+  .example-action{min-width:0;max-width:100%}
+  .example-action p{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .hero-preview{min-width:0}
   .hero-preview :global(.preview-panel){box-shadow:0 18px 48px rgb(var(--shadow-rgb) / .16)}
   .jobs,.evidence,.learn{padding:72px 0;border-top:1px solid var(--border)}
