@@ -9,6 +9,8 @@ test('documentation search finds commands, concepts and tasks using only public 
   assert.ok(search('verify-artifact').some(result => result.href === '/cli#command-verify-artifact'));
   assert.ok(search('DMARC').some(result => result.href === '/resources#term-dmarc'));
   assert.ok(search('brand lookalikes').some(result => result.href === '/resources#find-brand-lookalikes'));
+  assert.ok(search('supplied message').some(result => result.href === '/resources#review-a-message'));
+  assert.ok(search('encrypted workspace').some(result => result.href === '/resources#track-important-findings'));
   assert.deepEqual(search('  '), []);
   assert.deepEqual(search('unmatchabletokenexample'), []);
   assert.ok(search('domain').length <= 12);

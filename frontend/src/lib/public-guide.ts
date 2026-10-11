@@ -8,6 +8,8 @@ export type PublicGuideGoal = {
   id: string;
   title: string;
   summary: string;
+  requirements: string;
+  example: { label: string; href: string };
   steps: readonly PublicGuideStep[];
 };
 
@@ -33,8 +35,10 @@ export type GuideFaq = {
 export const publicGuideGoals: readonly PublicGuideGoal[] = Object.freeze([
   Object.freeze({
     id: 'inspect-one-domain',
-    title: 'Inspect one domain',
+    title: 'Investigate a domain',
     summary: 'Check registration first, then review DNS, certificate and website context.',
+    requirements: 'Console access and a domain to investigate. Choose collection explicitly in Lookup.',
+    example: Object.freeze({ label: 'Fictional domain demo', href: '/demo' }),
     steps: Object.freeze([
       Object.freeze({ id: 'lookup', label: 'Lookup', href: '#tool-lookup' }),
       Object.freeze({ id: 'review-sources', label: 'Review sources', href: '#results' }),
@@ -42,9 +46,23 @@ export const publicGuideGoals: readonly PublicGuideGoal[] = Object.freeze([
     ]),
   }),
   Object.freeze({
+    id: 'review-a-message',
+    title: 'Review a suspicious message',
+    summary: 'Inspect supplied text or a message file locally. Compare displayed links with their destinations before choosing any lookup.',
+    requirements: 'Console access and text or a selected file. Open Review a message, link or selected file in Lookup; review does not open its links.',
+    example: Object.freeze({ label: 'Fictional Case practice', href: '/demo#case-practice' }),
+    steps: Object.freeze([
+      Object.freeze({ id: 'supply', label: 'Supply material', href: '#tool-lookup-input' }),
+      Object.freeze({ id: 'review', label: 'Review indicators', href: '#tool-lookup-result' }),
+      Object.freeze({ id: 'retain', label: 'Retain selected evidence', href: '#tool-cases' }),
+    ]),
+  }),
+  Object.freeze({
     id: 'find-brand-lookalikes',
-    title: 'Find brand lookalikes',
-    summary: 'Define the official brand, find candidates and focus deeper checks on the most useful leads.',
+    title: 'Examine a Brand candidate',
+    summary: 'For brand lookalikes, compare the candidate with the official identity, review its source and decide which evidence needs a closer look.',
+    requirements: 'Console access, a Brand Profile and a candidate. Discover can help prepare a shortlist; similarity is a lead, not a verdict.',
+    example: Object.freeze({ label: 'Fictional candidate demo', href: '/demo' }),
     steps: Object.freeze([
       Object.freeze({ id: 'brands', label: 'Brands', href: '#tool-brands' }),
       Object.freeze({ id: 'discover', label: 'Discover', href: '#tool-discover' }),
@@ -54,12 +72,14 @@ export const publicGuideGoals: readonly PublicGuideGoal[] = Object.freeze([
   }),
   Object.freeze({
     id: 'track-important-findings',
-    title: 'Track important findings',
-    summary: 'Keep a case or watchlist and compare later observations without treating a failed check as absence.',
+    title: 'Continue a saved Case',
+    summary: 'Reopen retained evidence, review changes and decide the next follow-up without losing the earlier record.',
+    requirements: 'Console access and the browser workspace containing the Case, or a compatible backup to import. Unlock an encrypted workspace first.',
+    example: Object.freeze({ label: 'Fictional Case practice', href: '/demo#case-practice' }),
     steps: Object.freeze([
-      Object.freeze({ id: 'save', label: 'Save', href: '#tool-monitor-input' }),
-      Object.freeze({ id: 'monitor', label: 'Monitor', href: '#tool-monitor-result' }),
-      Object.freeze({ id: 'review-changes', label: 'Review changes', href: '#tool-monitor-next' }),
+      Object.freeze({ id: 'reopen', label: 'Reopen the Case', href: '#tool-cases-input' }),
+      Object.freeze({ id: 'review-changes', label: 'Review changes', href: '#tool-monitor-result' }),
+      Object.freeze({ id: 'follow-up', label: 'Choose a follow-up', href: '#tool-monitor-next' }),
     ]),
   }),
 ]);

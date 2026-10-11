@@ -37,7 +37,7 @@
 </section>
 
 <section class="jobs" id="features" aria-labelledby="jobs-title">
-  <div class="section-intro"><p class="eyebrow">Investigate · Respond · Assure</p><h2 id="jobs-title">Start with the work in front of you</h2><p>Investigate a target or candidate set, respond to reviewed findings, or assure retained evidence and controls over time.</p></div>
+  <div class="section-intro"><p class="eyebrow">Investigate · Respond · Assure</p><h2 id="jobs-title">Start with the work in front of you</h2><p>Choose a domain, a suspicious message, a Brand candidate or a saved Case. The guides and fictional examples are open to everyone; your own investigations use the Console.</p></div>
   <PublicGoalPaths goals={publicGuideGoals} />
 </section>
 

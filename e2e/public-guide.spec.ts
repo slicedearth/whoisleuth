@@ -1,7 +1,7 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, useTheme } from './helpers';
+import { expectNoHorizontalOverflow, expectFocusedResultsVisible, useTheme } from './helpers';
 import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
 import { PUBLIC_REFERENCE_DESTINATIONS } from '../frontend/src/lib/public-reference-navigation';
 import { glossaryTerms, guideFaqs, publicGuideGoals, resultStates, toolGuides, referenceGuides } from '../frontend/src/lib/public-guide';
@@ -98,10 +98,21 @@ test('delivered third-party notices include browser framework code independently
   expect(notice).not.toContain('This is the production-package base.');
 });
 
-test('reference section navigation is available before client hydration', async ({ browser }) => {
+test('public task guides and reference sections are available before client hydration', async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
   try {
+    await page.goto('/');
+    const starts = page.getByRole('region', { name: 'WHOISleuth investigation paths', exact: true });
+    for (const goal of publicGuideGoals) {
+      const card = starts.getByRole('article', { name: goal.title, exact: true });
+      await expect(card.getByRole('link', { name: 'Read the guide' })).toHaveAttribute('href', `/resources#${goal.id}`);
+      await expect(card.getByRole('link', { name: goal.example.label })).toHaveAttribute('href', goal.example.href);
+    }
+    const caseGuide = starts.getByRole('article', { name: 'Continue a saved Case', exact: true }).getByRole('link', { name: 'Read the guide' });
+    await caseGuide.focus(); await caseGuide.press('Enter');
+    await expect(page).toHaveURL(/\/resources#track-important-findings$/u);
+    await expect(page.locator('#track-important-findings')).toBeInViewport();
     await page.goto('/cli');
     const sections = page.getByRole('navigation', { name: 'CLI sections' });
     await expect(sections).toBeVisible();
@@ -172,13 +183,13 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.locator('.public-header .mark')).toHaveCount(1);
   await expect(page.locator('.hero .mark')).toHaveCount(0);
   await expect(page.locator('.goal-paths article')).toHaveCount(publicGuideGoals.length);
-  await expect(page.getByRole('heading', { name: 'Inspect one domain' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Inspect one domain guide' })).toHaveAttribute('href', '/resources#inspect-one-domain');
-  await expect(page.getByRole('link', { name: 'Find brand lookalikes guide' })).toHaveAttribute('href', '/resources#find-brand-lookalikes');
-  await expect(page.getByRole('link', { name: 'Track important findings guide' })).toHaveAttribute('href', '/resources#track-important-findings');
+  for (const goal of publicGuideGoals) {
+    const card = page.getByRole('article', { name: goal.title, exact: true });
+    await expect(card).toBeVisible();
+    await expect(card.getByRole('link', { name: 'Read the guide' })).toHaveAttribute('href', `/resources#${goal.id}`);
+    await expect(card.getByRole('link', { name: goal.example.label })).toHaveAttribute('href', goal.example.href);
+  }
   await expect(page.getByRole('link', { name: /Browse the topic library/u })).toHaveAttribute('href', '/resources');
-  await expect(page.getByRole('heading', { name: 'Find brand lookalikes' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Track important findings' })).toBeVisible();
   await expect(page.locator('.product-preview .preview-panel')).toHaveCount(3);
   const candidateButtons = page.locator('.discover-panel .candidate-row');
   await expect(candidateButtons).toHaveCount(3);
@@ -333,17 +344,17 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(page.locator('.page-sections')).toBeVisible();
   const taskPaths = page.getByRole('region', { name: 'Common WHOISleuth tasks' });
   await expect(taskPaths).toBeVisible();
-  await expect(taskPaths.getByRole('heading', { name: 'Inspect one domain' })).toBeVisible();
+  await expect(taskPaths.getByRole('heading', { name: 'Investigate a domain' })).toBeVisible();
   const lookupStep = taskPaths
-    .getByRole('list', { name: 'Inspect one domain steps' })
+    .getByRole('list', { name: 'Investigate a domain steps' })
     .getByRole('link', { name: 'Lookup', exact: true });
   await expect(lookupStep).toHaveAttribute('href', '#tool-lookup');
   await lookupStep.click();
   await expect(page.locator('#tool-lookup')).toBeInViewport();
-  const trackingPath = taskPaths.getByRole('list', { name: 'Track important findings steps' });
+  const trackingPath = taskPaths.getByRole('list', { name: 'Continue a saved Case steps' });
   const trackingSteps = trackingPath.getByRole('link');
   await expect(trackingSteps).toHaveCount(3);
-  await expect(trackingSteps.nth(0)).toHaveAttribute('href', '#tool-monitor-input');
+  await expect(trackingSteps.nth(0)).toHaveAttribute('href', '#tool-cases-input');
   await expect(trackingSteps.nth(1)).toHaveAttribute('href', '#tool-monitor-result');
   await expect(trackingSteps.nth(2)).toHaveAttribute('href', '#tool-monitor-next');
   await trackingSteps.nth(2).click();
@@ -442,6 +453,67 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
   await expect(page.getByRole('heading', { name: 'Domain investigation terms' })).toBeVisible();
   await expect(page.getByRole('article', { name: 'Find your way around a Lookup result' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
+});
+
+test('public starting points keep guide and fictional practice navigation separate from saved work', async ({ page }, testInfo) => {
+  await page.context().clearCookies();
+  const collectionRequests: string[] = [];
+  page.on('request', request => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(pathname)) collectionRequests.push(pathname);
+  });
+  await page.addInitScript(() => {
+    const scope = window as unknown as { guideStorageAttempts: number };
+    scope.guideStorageAttempts = 0;
+    Object.defineProperty(indexedDB, 'open', { value: () => { scope.guideStorageAttempts++; throw new Error('Public starting points must not open saved work'); } });
+  });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const pathname of ['/', '/resources']) {
+    await page.goto(pathname);
+    const paths = page.getByRole('region', { name: pathname === '/' ? 'WHOISleuth investigation paths' : 'Common WHOISleuth tasks', exact: true });
+    await expect(paths.getByRole('article')).toHaveCount(4);
+    for (const goal of publicGuideGoals) {
+      const card = paths.getByRole('article', { name: goal.title, exact: true });
+      await expect(card).toContainText(goal.requirements);
+      await expect(card.getByRole('link', { name: goal.example.label })).toHaveAttribute('href', goal.example.href);
+    }
+    for (const density of ['comfortable', 'compact'] as const) {
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.getByRole('button', { name: /^Colour theme,/u }).click();
+      await page.getByLabel('Reading density').selectOption(density);
+      await page.getByLabel('Reading density').press('Escape');
+      await expect(page.locator('html')).toHaveAttribute('data-density', density);
+      for (const theme of ['light', 'dark'] as const) {
+        await useTheme(page, theme);
+        for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720]] as const) {
+          await page.setViewportSize({ width, height });
+          await expectNoHorizontalOverflow(page);
+          const links = paths.getByRole('link');
+          await links.nth(1).focus(); await page.keyboard.press('Shift+Tab');
+          await expectFocusedResultsVisible(page, links.first(), links.first());
+          expect((await new AxeBuilder({ page }).include('.goal-paths').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+          if ((width === 320 || width === 1280) && captureVisualEvidenceEnabled()) {
+            const name = `${pathname === '/' ? 'home' : 'resources'}-${density}-${theme}-${width}`;
+            await page.screenshot({ path: testInfo.outputPath(`starting-points-${name}-viewport.png`) });
+            await paths.screenshot({ path: testInfo.outputPath(`starting-points-${name}.png`) });
+          }
+        }
+      }
+    }
+    expect(await page.evaluate(() => (window as unknown as { guideStorageAttempts: number }).guideStorageAttempts)).toBe(0);
+  }
+  const messageGuide = page.locator('#review-a-message');
+  await messageGuide.getByRole('link', { name: 'Supply material', exact: true }).click();
+  await expect(page.locator('#tool-lookup')).toHaveAttribute('open', '');
+  await expect(page.locator('#tool-lookup-input')).toBeInViewport();
+  await page.goBack();
+  await messageGuide.getByRole('link', { name: 'Fictional Case practice', exact: true }).click();
+  await expect(page).toHaveURL(/\/demo#case-practice$/u);
+  const practiceScenario = page.getByRole('combobox', { name: 'Practice scenario', exact: true });
+  await expect(practiceScenario).toBeVisible();
+  await expect(practiceScenario.locator('option[value="email-only"]')).toHaveCount(1);
+  expect(await page.evaluate(() => (window as unknown as { guideStorageAttempts: number }).guideStorageAttempts)).toBe(0);
+  expect(collectionRequests).toEqual([]);
 });
 
 test('public footer links remain reachable without overlap on mobile', async ({ page }) => {

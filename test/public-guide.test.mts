@@ -55,19 +55,26 @@ function allStrings(value: unknown): string[] {
   return [];
 }
 
-test('public guide exposes three distinct task-focused starting points', () => {
-  assert.equal(publicGuideGoals.length, 3);
+test('public guide separates domain, supplied-message, Brand and retained-Case starting points', () => {
   assert.equal(unique(publicGuideGoals.map((goal) => goal.id)), true);
-  assert.deepEqual(publicGuideGoals.map((goal) => goal.title), [
-    'Inspect one domain',
-    'Find brand lookalikes',
-    'Track important findings',
+  assert.deepEqual(publicGuideGoals.map((goal) => goal.id), [
+    'inspect-one-domain',
+    'review-a-message',
+    'find-brand-lookalikes',
+    'track-important-findings',
   ]);
   assert.equal(publicGuideGoals.every((goal) => goal.steps.length >= 3 && goal.steps.length <= 4), true);
   for (const goal of publicGuideGoals) {
     assert.equal(unique(goal.steps.map((step) => step.id)), true);
     assert.equal(goal.steps.every((step) => /^#[a-z][a-z0-9-]*$/u.test(step.href)), true);
+    assert.ok(goal.title && goal.summary && goal.requirements && goal.example.label);
+    assert.match(goal.requirements, /Console access/u);
+    assert.match(goal.example.href, /^\/demo(?:#case-practice)?$/u);
   }
+  const message = publicGuideGoals.find(goal => goal.id === 'review-a-message')!;
+  assert.match(message.summary, /locally/u);
+  assert.match(message.requirements, /does not open its links/u);
+  assert.match(publicGuideGoals.find(goal => goal.id === 'track-important-findings')!.requirements, /workspace.*backup.*encrypted workspace/u);
 });
 
 test('tool guide covers every public-facing investigation tool once', () => {
