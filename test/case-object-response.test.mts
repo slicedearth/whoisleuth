@@ -213,6 +213,11 @@ test('normalised imported terminal receipts cannot hide conflicting exact-object
     assert.equal(actions[0]!.history.filter(event => event.nextState === 'terminal' && !event.applied).length, 1);
     assert.notEqual(caseClosureProviderBlocker(actions[0], objects[0], closedAt), null);
     const merged = mergeCases([resolved], JSON.parse(JSON.stringify(buildCaseExport([contradicted], closedAt)))).cases[0]!;
+    const coverage = buildCaseIncidentCoverage(merged).find(row => row.responseObject.identifier === objects[0]!.identifier)!;
+    assert.equal(coverage.unappliedProviderEvents.length, 1);
+    assert.equal(coverage.unappliedProviderEvents[0]!.applied, false);
+    assert.deepEqual(new Set([...coverage.providerEvents, ...coverage.unappliedProviderEvents]
+      .filter(event => event.state === 'terminal').map(event => event.outcome)), new Set(['removed', 'restored']));
     assert.throws(() => updateCase([merged], merged.id, { closure }, closedAt), /latest applicable/);
     const reloaded = normalizeCaseStore(JSON.parse(serializeCaseStore([merged]))).cases[0]!;
     assert.deepEqual(reloaded.actions[0]!.history, merged.actions[0]!.history);

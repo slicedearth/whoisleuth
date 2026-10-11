@@ -837,7 +837,16 @@ assertions remain retained when their metadata is migrated. Exact public inciden
 links can be retained for web or social-platform
 content, resolved without erasing history, and carried into a response packet.
 **Exact incident-object coverage** keeps each link's analyst status separate from
-explicit action binding and independent observation coverage. Manually reviewed
+explicit action binding and independent observation coverage. Expand action and
+recipient context to inspect current routes, review events and recorded
+deliveries. Current route details are not historical recipient snapshots.
+Exact delivery receipts show each packet's generation time, format version,
+audience and canonical JSON digest separately from the delivery time. Preparing
+a packet alone creates no retained delivery; older references without an exact
+receipt leave those details unknown. Linked corrections identify the original
+action, delivery and packet for the affected object subset. Competing retained
+response events remain visible even when not applied to the current action state.
+Manually reviewed
 actions can bind up to 20 typed domain, hostname, page, advertisement, social,
 messaging, storefront, app or other objects in one shared reporting record.
 Choose the affected subset on each provider result; acknowledgement is not

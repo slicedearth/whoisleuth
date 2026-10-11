@@ -1,4 +1,6 @@
-import { expect, test } from './fixtures';
+import AxeBuilder from '@axe-core/playwright';
+import { expect, test, isLookupEndpointUrl } from './fixtures';
+import { correctionFixture } from '../test/case-delivery-correction-fixture.mts';
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { createCase, updateCase } from '../packages/cases/case-record-operations.mts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
@@ -164,4 +166,68 @@ test('object authoring and qualified coverage remain available with native keybo
       if (captureVisualEvidenceEnabled()) await page.screenshot({ path: test.info().outputPath(`object-coverage-${theme}-${width}.png`) });
     }
   }
+});
+
+test('exact-object coverage separates recipients, packet preparation and delivery without changing saved work', async ({ page }) => {
+  const fixture = correctionFixture(), first = await fixture.deliver(), second = await fixture.deliver();
+  fixture.change({ action: fixture.correctionInput(first.event.id) });
+  const correction = fixture.record.actions.find(action => action.correction)!;
+  fixture.change({ action: { type: 'internal_review', recipient: 'Second review desk', contactSource: 'Another reviewed route', responseObjects: [fixture.objects[1]!] } });
+  for (let index = 0; index < 9; index++) fixture.change({ incidentTarget: `https://delivery.example.test/extra-${index}` });
+  let requests = 0;
+  await page.route(url => isLookupEndpointUrl(url.href), route => { requests++; return route.abort(); });
+  await page.clock.setFixedTime(fixture.time());
+  await openSeededTimelineCase(page, fixture.record.domain, [fixture.record], CASE_SCHEMA_VERSION);
+  const beforeView = await readBrowserLocalCollection(page, 'cases');
+  await openCaseClassification(page);
+  const coverage = page.locator('details.coverage').first();
+  await coverage.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  const inspect = async (identifier: string) => {
+    const row = coverage.getByRole('row').filter({ has: page.getByText(identifier, { exact: true }) });
+    const control = row.getByRole('button', { name: 'Inspect response history', exact: true });
+    const detailsId = await control.getAttribute('aria-controls');
+    expect(detailsId).toBeTruthy();
+    await control.focus(); await page.keyboard.press('Enter');
+    const detail = coverage.locator(`[id="${detailsId}"]`);
+    await expect(detail).toHaveJSProperty('open', true);
+    await expect(detail.locator(':scope > summary')).toBeFocused();
+    return detail;
+  };
+  const one = await inspect(fixture.objects[0]!.identifier);
+  const two = await inspect(fixture.objects[1]!.identifier);
+  for (const row of [one, two]) await row.getByText('Action and recipient context · 2', { exact: true }).click();
+  const original = one.getByRole('listitem', { name: `Example review desk · action ${fixture.originalId}`, exact: true });
+  await original.getByText('Current recipient route', { exact: true }).click();
+  await original.getByText('Review and authorisation events · 2', { exact: true }).click();
+  await original.getByText('Recorded deliveries · 2', { exact: true }).click();
+  for (const delivery of [first, second]) await expect(original.locator('code').filter({ hasText: delivery.receipt.packetDigestSha256 })).toBeVisible();
+  await expect(original).toContainText('Packet prepared:');
+  await expect(original).toContainText('Analyst-recorded delivery:');
+  const linked = one.getByRole('listitem', { name: `Example review desk · action ${correction.id}`, exact: true });
+  await linked.getByText('Linked correction', { exact: true }).click();
+  await expect(linked).toContainText(first.event.id);
+  await expect(linked.locator('code')).toHaveText(first.receipt.packetDigestSha256);
+  await expect(linked).toContainText('No exact-object delivery event retained');
+  await expect(two).toContainText('Second review desk');
+  await expect(one).not.toContainText('Second review desk');
+  await expect(two.getByText('Linked correction', { exact: true })).toHaveCount(0);
+  await expect(coverage.getByText(/Independent object reviews/u)).toHaveCount(0);
+  for (const theme of ['light', 'dark'] as const) for (const viewport of [{ width: 320, height: 700 }, { width: 1280, height: 720 }]) {
+    await useTheme(page, theme); await page.setViewportSize(viewport);
+    const scroll = coverage.getByRole('region', { name: 'Incident link coverage table', exact: true });
+    await scroll.focus();
+    if (viewport.width === 320) { await scroll.press('ArrowRight'); await expect.poll(() => scroll.evaluate(element => element.scrollLeft)).toBeGreaterThan(0); }
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('details.coverage').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    await original.scrollIntoViewIfNeeded();
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: test.info().outputPath(`object-response-context-${theme}-${viewport.width}.png`) });
+  }
+  await coverage.getByRole('button', { name: 'Next links', exact: true }).click();
+  const last = await inspect('https://delivery.example.test/extra-8');
+  await expect(last).toContainText('No action or recipient context retained for this exact object');
+  await expect(last.getByText(/Example review desk/u)).toHaveCount(0);
+  await coverage.getByRole('button', { name: 'Previous links', exact: true }).click();
+  await inspect(fixture.objects[0]!.identifier);
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(beforeView);
+  expect(requests).toBe(0);
 });
