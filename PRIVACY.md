@@ -206,7 +206,7 @@ Cases and currently open forms are unchanged.
 Tab-scoped dictionaries, candidate handoffs, guided-investigation progress and
 similar transient state use bounded memory or `sessionStorage`. The one-use
 candidate handoff uses a random token and is removed when accepted. Appearance
-preferences (colour, reading density and decorative effects) can use `localStorage`. These records are not uploaded merely because
+preferences (colour, reading density, decorative effects and terminal-style headers) can use `localStorage`. These records are not uploaded merely because
 they exist.
 
 Named workspaces use separate IndexedDB databases and a local directory of

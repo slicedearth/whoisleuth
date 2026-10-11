@@ -300,6 +300,10 @@ test('light surfaces avoid pure white and separate layers, structural borders, a
 test('decorative chrome follows the theme accent independently of navigation selection', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/lookup');
+  await page.getByRole('button', { name: /^Colour theme,/ }).click();
+  await page.getByRole('checkbox', { name: 'Terminal-style headers', exact: true }).check();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.terminal-strip')).toBeVisible();
 
   for (const theme of ['Dark', 'Light'] as const) {
     await chooseTheme(page, theme);
@@ -471,6 +475,38 @@ test('the theme trigger identifies its rendered appearance panel', async ({ page
   await page.getByRole('option', { name: 'System theme' }).click();
   await expect(trigger).not.toHaveAttribute('aria-controls');
   await expect(panel).toHaveCount(0);
+});
+
+test('terminal headers are optional, reversible and independent of other appearance choices', async ({ page }) => {
+  await page.goto('/dashboard');
+  await page.evaluate(() => localStorage.setItem('whoisleuth:appearance:v1', 'compact:minimal'));
+  await page.reload();
+  const strip = page.locator('.terminal-strip');
+  await expect(strip).toHaveCount(1);
+  await expect(strip).toBeHidden();
+  await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
+  await expect(page.locator('html')).toHaveAttribute('data-effects', 'minimal');
+  await page.getByRole('button', { name: /^Colour theme,/ }).click();
+  const terminal = page.getByRole('checkbox', { name: 'Terminal-style headers', exact: true });
+  await expect(terminal).not.toBeChecked();
+  await terminal.focus();
+  await page.keyboard.press('Space');
+  await expect(terminal).toBeChecked();
+  await expect(strip).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: /^Colour theme,/ })).toBeFocused();
+  await page.reload();
+  await expect(strip).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
+  await expect(page.locator('html')).toHaveAttribute('data-effects', 'minimal');
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /^Colour theme,/ }).click();
+  await page.getByRole('checkbox', { name: 'Terminal-style headers', exact: true }).uncheck();
+  await expect(strip).toBeHidden();
+  await page.keyboard.press('Escape');
+  await page.reload();
+  await expect(strip).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem('whoisleuth:appearance:v1'))).toBe('compact:minimal');
 });
 
 test('the public theme control inherits its canvas and keeps an opaque option surface', async ({ page }) => {

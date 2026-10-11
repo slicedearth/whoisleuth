@@ -54,12 +54,15 @@ test('reading preferences persist without touching saved work and synchronise be
     await page.getByLabel('Reading density').selectOption('comfortable');
     await expect(other.locator('html')).toHaveAttribute('data-density', 'comfortable');
     expect(await page.evaluate(() => localStorage.getItem('whoisleuth:appearance:v1'))).toBe('comfortable:minimal');
+    await page.getByLabel('Terminal-style headers', { exact: true }).check();
+    await expect(other.locator('html')).toHaveAttribute('data-console-style', 'terminal');
+    await expect(other.locator('html')).toHaveAttribute('data-effects', 'minimal');
   } finally { await other.close(); }
 });
 
 test('the blocking appearance initialiser works before application hydration', async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('whoisleuth:appearance:v1', 'compact:minimal');
+    localStorage.setItem('whoisleuth:appearance:v1', 'compact:minimal:terminal');
     localStorage.setItem('whoisleuth:theme:v1', 'light');
   });
   let release = () => {};
@@ -71,6 +74,7 @@ test('the blocking appearance initialiser works before application hydration', a
     await page.goto('/resources', { waitUntil: 'commit' });
     await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
     await expect(page.locator('html')).toHaveAttribute('data-effects', 'minimal');
+    await expect(page.locator('html')).toHaveAttribute('data-console-style', 'terminal');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     await expect(page.getByRole('heading', { name: 'Guides for common investigation tasks', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Colour theme, System selected' })).toBeVisible();
@@ -95,6 +99,7 @@ test('appearance controls remain usable at narrow and wide widths in both themes
       expect(box!.x + box!.width).toBeLessThanOrEqual(width);
       await expect(page.getByLabel('Reading density')).toBeInViewport();
       await expect(page.getByLabel('Decorative effects')).toBeInViewport();
+      await expect(page.getByLabel('Terminal-style headers', { exact: true })).toBeInViewport();
       await expectNoHorizontalOverflow(page);
       if (width === 390 || width === 1920) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`appearance-${theme}-${width}.png`) }); }
       await page.getByLabel('Reading density').press('Escape');

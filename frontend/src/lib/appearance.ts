@@ -4,25 +4,30 @@ export const APPEARANCE_CHANGE_EVENT = 'whoisleuth:appearance-change';
 export interface AppearancePreference {
   density: 'comfortable' | 'compact';
   effects: 'full' | 'minimal';
+  consoleStyle: 'desk' | 'terminal';
 }
 
-// Four fixed strings keep this browser-wide preference independent of saved
-// evidence, workspace formats and unbounded JSON parsing.
+// Preserve the four existing density/effects values. Four explicit terminal
+// variants add only browser-wide decoration, not workspace or evidence state.
 export function parseAppearancePreference(value: unknown): AppearancePreference {
+  const terminal = value === 'comfortable:full:terminal' || value === 'comfortable:minimal:terminal'
+    || value === 'compact:full:terminal' || value === 'compact:minimal:terminal';
+  const base = terminal ? (value as string).slice(0, -':terminal'.length) : value;
   return {
-    density: value === 'compact:full' || value === 'compact:minimal' ? 'compact' : 'comfortable',
-    effects: value === 'compact:minimal' || value === 'comfortable:minimal' ? 'minimal' : 'full',
+    density: base === 'compact:full' || base === 'compact:minimal' ? 'compact' : 'comfortable',
+    effects: base === 'compact:minimal' || base === 'comfortable:minimal' ? 'minimal' : 'full',
+    consoleStyle: terminal ? 'terminal' : 'desk',
   };
 }
 
 export function serialiseAppearancePreference(value: AppearancePreference): string {
-  return `${value.density === 'compact' ? 'compact' : 'comfortable'}:${value.effects === 'minimal' ? 'minimal' : 'full'}`;
+  return `${value.density === 'compact' ? 'compact' : 'comfortable'}:${value.effects === 'minimal' ? 'minimal' : 'full'}${value.consoleStyle === 'terminal' ? ':terminal' : ''}`;
 }
 
 function currentAppearance(): AppearancePreference {
   if (typeof document === 'undefined') return parseAppearancePreference(null);
-  const { density, effects } = document.documentElement.dataset;
-  return parseAppearancePreference(`${density}:${effects}`);
+  const { density, effects, consoleStyle } = document.documentElement.dataset;
+  return parseAppearancePreference(`${density}:${effects}${consoleStyle === 'terminal' ? ':terminal' : ''}`);
 }
 
 export function readAppearancePreference(): AppearancePreference {
@@ -40,6 +45,7 @@ export function applyAppearancePreference(value: AppearancePreference): void {
   const preference = parseAppearancePreference(serialiseAppearancePreference(value));
   document.documentElement.dataset.density = preference.density;
   document.documentElement.dataset.effects = preference.effects;
+  document.documentElement.dataset.consoleStyle = preference.consoleStyle;
 }
 
 export function setAppearancePreference(value: AppearancePreference): boolean {

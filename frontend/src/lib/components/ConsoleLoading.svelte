@@ -66,7 +66,8 @@
   .console-loading{position:relative;isolation:isolate;display:grid;min-height:100svh;padding:clamp(76px,14vh,108px) clamp(18px,5vw,52px) 24px;overflow:hidden;place-items:start center}
   .console-loading::before{content:"";position:absolute;inset:8%;z-index:-1;opacity:.28;background:radial-gradient(circle at 14% 28%,var(--accent2) 0 2px,transparent 3px),radial-gradient(circle at 82% 18%,var(--accent) 0 2px,transparent 3px),radial-gradient(circle at 76% 78%,var(--violet) 0 2px,transparent 3px),linear-gradient(28deg,transparent 0 34%,color-mix(in srgb,var(--accent) 25%,transparent) 34.2% 34.45%,transparent 34.7%),linear-gradient(151deg,transparent 0 53%,color-mix(in srgb,var(--accent2) 25%,transparent) 53.2% 53.45%,transparent 53.7%);mask-image:radial-gradient(ellipse at center,#000,transparent 72%);pointer-events:none}
   .loading-terminal{width:min(620px,100%);padding:0;overflow:hidden;border-color:var(--border-strong);box-shadow:0 26px 80px rgb(var(--shadow-rgb) / .3)}
-  header{display:flex;justify-content:space-between;gap:14px;padding:10px 14px;border-bottom:1px solid var(--border);background:rgb(var(--overlay-rgb) / .03);color:var(--muted);font:var(--text-2xs) var(--mono)}
+  header{display:none;justify-content:space-between;gap:14px;padding:10px 14px;border-bottom:1px solid var(--border);background:rgb(var(--overlay-rgb) / .03);color:var(--muted);font:var(--text-2xs) var(--mono)}
+  :global(:root[data-console-style='terminal']) header{display:flex}
   .loading-content{padding:clamp(22px,5vw,38px)}
   .loading-identity{display:flex;align-items:center;gap:15px}
   .loading-mark{display:grid;width:54px;height:54px;flex:0 0 auto;place-items:center}
