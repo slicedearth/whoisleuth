@@ -186,6 +186,17 @@ for the finished target and mode, separately dated source records and diagnostic
 states. Original optional selections are not retained, so missing output does
 not establish that a source was declined or had no findings.
 
+**What each source describes** separates the submitted hostname and registration
+request from the domains actually returned by registry, registrar and WHOIS
+publications. It also shows retained DNS collection context and record outcomes,
+HTTP request and final URLs, and the TLS connection hostname and certificate
+names. Each source keeps its own time; WHOIS referrals retain separate hop times.
+Missing identities and times remain unavailable. Most DNS record families do not
+retain individual answer owners, so a returned record value is not presented as
+its owner. Certificate wildcards and inherited CAA policies do not establish
+direct observations of all matching hosts. Opening the disclosure makes no
+request and changes no saved evidence.
+
 ### Fast and Deep collection
 
 Before collecting, **Review a message, link or selected file** accepts pasted text,

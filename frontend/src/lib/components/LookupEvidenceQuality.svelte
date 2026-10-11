@@ -3,6 +3,7 @@
   import { untrack } from 'svelte';
   import type { DecisionFact } from '../../../../packages/evidence/decision-fact.mts';
   import { buildLookupEvidenceQualityModel, buildLookupCollectionOutcomeReview } from '#lib/analysis/lookup-evidence-quality-model.ts';
+  import { buildLookupEvidenceScope } from '#lib/analysis/lookup-evidence-scope.ts';
   import type { LookupEvidenceQualityMatrix } from '#lib/analysis/lookup-decision-support.ts';
   import { formatCollectionDuration } from '#lib/analysis/lookup-display-shared.ts';
   import type { LookupHttpResponse, LookupTiming } from '#lib/analysis/lookup-response.ts';
@@ -39,6 +40,7 @@
     facts: lookupDecisionFacts,
   }));
   const collectionReview = $derived(buildLookupCollectionOutcomeReview(original, depth, model.entries));
+  const evidenceScope = $derived(buildLookupEvidenceScope(original));
 
   const initialFreshnessPolicy = untrack(() => refreshPlan.freshnessPolicy);
   let policyMode = $state<'task-default' | 'analyst-custom'>(initialFreshnessPolicy.id === 'analyst-custom' ? 'analyst-custom' : 'task-default');
@@ -88,6 +90,27 @@
         {#if model.totalMs !== null}<span><strong>{formatCollectionDuration(model.totalMs)}</strong> total</span>{/if}
       </div>
     </header>
+
+    {#if evidenceScope.sources.length}
+    <details class="scope-disclosure">
+      <summary>What each source describes</summary>
+      <p>Identities and times from this completed result. Changing the query field does not change this evidence.</p>
+      <div class="scope-context">
+        <h5>Request context</h5>
+        <dl>{#each evidenceScope.context as row}<div><dt>{row.label}</dt><dd>{row.value}</dd></div>{/each}</dl>
+      </div>
+      <div class="scope-sources">
+        {#each evidenceScope.sources as source (source.id)}
+          <section aria-label={`${source.label} scope`}>
+            <h5>{source.label}</h5>
+            <p class="source-clock">{source.state} · {observed(source.observedAt)}</p>
+            <dl>{#each source.rows as row}<div><dt>{row.label}</dt><dd>{row.value}</dd></div>{/each}</dl>
+            <p class="note">{source.note}</p>
+          </section>
+        {/each}
+      </div>
+    </details>
+    {/if}
 
     {#if collectionReview.groups.length}
     <details class="collection-outcomes">
@@ -260,6 +283,15 @@
   .outcome-groups{display:grid;gap:12px;margin:12px 0;padding-left:20px}.outcome-groups li{min-width:0;overflow-wrap:anywhere}.outcome-groups p{margin:4px 0}.outcome-groups ul{padding-left:20px}
   summary{padding:12px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+  .scope-sources{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;align-items:start;margin:16px 0}
+  .scope-sources section,.scope-context{min-width:0;overflow-wrap:anywhere}
+  .scope-sources section{border-top:1px solid var(--border);padding-top:12px}
+  .scope-disclosure h5{margin:0 0 6px;font-size:var(--text-sm)}
+  .scope-disclosure p{font-size:var(--text-xs);line-height:1.5}
+  .scope-disclosure .source-clock{color:var(--muted);margin:0 0 10px}
+  .scope-disclosure dl{display:grid;gap:8px;margin:0}
+  .scope-disclosure dt{color:var(--muted);font-size:var(--text-2xs)}
+  .scope-disclosure dd{margin:2px 0 0;font:var(--text-xs)/1.5 var(--mono);overflow-wrap:anywhere}
   .matrix{display:grid;gap:7px}
   .matrix-head,.quality-row{display:grid;grid-template-columns:minmax(150px,1.25fr) minmax(92px,.65fr) minmax(155px,1fr) minmax(120px,.8fr) minmax(180px,1.25fr);gap:9px;align-items:start}
   .matrix-head{padding:0 10px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
