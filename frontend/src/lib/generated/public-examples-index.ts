@@ -63,7 +63,7 @@ export const PUBLIC_EXAMPLES_INDEX = {
       "title": "Case assessment input",
       "format": "JSON",
       "command": "whoisleuth case assess synthetic-cases.json --input synthetic-assess.json --output reviewed-cases.json",
-      "summary": "A reviewed disposition linked to a new source-qualified pin. Replace every fictional claim before using it.",
+      "summary": "A reviewed disposition linked to separate supporting and contrary source accounts. Replace every fictional claim before using it.",
       "synthetic": true,
       "notice": "Synthetic reserved-domain example. It is not a live finding and no request was made.",
       "large": false

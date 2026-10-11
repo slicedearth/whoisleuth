@@ -156,6 +156,39 @@ describe('public product catalogue', () => {
     assert.deepEqual([...new Set(publicHostnames)], ['github.com']);
   });
 
+  test('methodology claims preserve the supplied input accounts and do not turn a failed recheck into absence', () => {
+    const methodology = publicMethodology();
+    assert.deepEqual(methodology, publicMethodology());
+    const conflict = methodology.examples.find(example => example.id === 'conflicting-page-accounts');
+    const recheck = methodology.examples.find(example => example.id === 'unavailable-page-recheck');
+    assert.ok(conflict && recheck);
+    const input = JSON.parse(publicExamples().examples.find(example => example.id === 'case-assess-input')!.content);
+    const later = JSON.parse(publicExamples().examples.find(example => example.id === 'case-recheck-input')!.content);
+    assert.deepEqual(input.evidence.map((item: { stance: string }) => item.stance), ['supports', 'contradicts']);
+    for (const [index, source] of conflict.sources.entries()) {
+      const { id: _id, role: _role, ...pin } = source;
+      assert.deepEqual(pin, input.evidence[index].pin);
+    }
+    assert.equal(conflict.sources[0]!.sourceState, 'partial');
+    assert.match(conflict.sources[0]!.value, /form asking for a password/u);
+    assert.notEqual(conflict.sources[0]!.source, conflict.sources[1]!.source);
+    assert.match(conflict.sources[1]!.value, /no password form was seen/u);
+    assert.match(conflict.unknowns.join(' '), /not directly comparable/u);
+    assert.match(conflict.conclusion, /does not establish.*every visitor/u);
+    assert.equal(recheck.sources[1]!.value, later.comparisonSummary);
+    assert.equal(recheck.sources[1]!.sourceState, 'unavailable');
+    assert.equal(recheck.sources[1]!.observationHostname, null);
+    assert.ok(Date.parse(recheck.sources[0]!.observedAt) < Date.parse(recheck.sources[1]!.observedAt));
+    assert.match(recheck.sources[0]!.role, /not current contrary evidence/u);
+    assert.match(recheck.conclusion, /Not established.*no later page content/u);
+    for (const example of methodology.examples) {
+      assert.ok(METHODOLOGY_TOPICS.some(topic => example.rule.href === `#method-${topic.id}`));
+      assert.ok(publicExamples().examples.some(input => example.example.href === `/examples#example-${input.id}`));
+      assert.equal(new Set(example.sources.map(source => source.id)).size, example.sources.length);
+    }
+    assert.doesNotMatch(strings(methodology.examples).join('\n'), /(?:\/Users\/|\/home\/|Cookie:|Authorization:|Set-Cookie:)/iu);
+  });
+
   test('retains byte-exact generated frontend projections without browser execution imports', () => {
     const artifacts = [
       ['public-cli-catalogue.ts', renderPublicCliCatalogueModule()],
