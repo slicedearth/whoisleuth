@@ -95,6 +95,7 @@
       || editableTarget(event.target) || !current) return;
     if (event.code === 'ArrowRight' && canMove) move(1);
     else if (event.code === 'ArrowLeft' && canMove) move(-1);
+    else if (!inspectionOpen) return;
     else if (event.code === 'KeyR' && reviewAvailable) setReviewState(current.resultIndex, 'reviewed');
     else if (event.code === 'KeyD' && reviewAvailable) setReviewState(current.resultIndex, 'deferred');
     else if (event.code === 'KeyS' && shortlistAvailable) toggleSaved(current.resultIndex);

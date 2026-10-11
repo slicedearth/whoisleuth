@@ -80,21 +80,25 @@ export async function openCasePacket(page: Page) {
   return details;
 }
 
-/** Open the selected review without changing its queue or lifecycle decision. */
-export async function openInboxReview(item: Locator) {
-  const details = item.locator(':scope > details');
-  const summary = details.locator(':scope > summary');
-  await expect(details).toBeAttached();
-  if (!(await summary.isVisible())) {
-    const workbench = item.page().getByRole('region', { name: 'Review items', exact: true });
-    const id = await item.getAttribute('id');
-    expect(id).toBeTruthy();
-    const inspect = workbench.locator(`button[aria-controls=${JSON.stringify(id)}]`);
-    if (!(await inspect.isVisible())) await workbench.getByRole('button', { name: 'Back to queue', exact: true }).click();
-    await inspect.click();
-  }
-  await expect(summary).toBeVisible();
-  if (await details.getAttribute('open') === null) await summary.click();
-  await expect(details).toHaveAttribute('open', '');
-  return details;
+/** Queue identity is available before its detail is inspected, including in mobile single-pane mode. */
+export function inboxReviewControls(page: Page, title?: string) {
+  return page.getByRole('region', { name: 'Review items', exact: true }).getByRole('button', {
+    name: title ? `Inspect review: ${title}` : /^Inspect review:/u,
+    exact: Boolean(title), includeHidden: true,
+  });
+}
+
+/** Activate the real queue control before resolving the visible detail it owns. */
+export async function openInboxReview(inspect: Locator) {
+  const workbench = inspect.page().getByRole('region', { name: 'Review items', exact: true });
+  await expect(inspect).toBeAttached();
+  if (!(await inspect.isVisible())) await workbench.getByRole('button', { name: 'Back to queue', exact: true }).click();
+  await expect(inspect).toBeVisible();
+  const id = await inspect.getAttribute('aria-controls');
+  expect(id).toBeTruthy();
+  await inspect.click();
+  const item = workbench.locator(`[id=${JSON.stringify(id)}]`);
+  await expect(item).toBeVisible();
+  await expect(item.locator(':scope > details')).toHaveAttribute('open', '');
+  return item;
 }

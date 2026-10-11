@@ -841,6 +841,29 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   await expect(markReviewed).not.toHaveAttribute('aria-keyshortcuts');
   await cockpit.getByRole('button', { name: 'Enable shortcuts' }).click();
   await expect(markReviewed).toHaveAttribute('aria-keyshortcuts', 'Alt+R');
+  const inspectLeft = cockpit.getByRole('button', { name: 'Inspect retained left-review.example', exact: true });
+  const inspectRight = cockpit.getByRole('button', { name: 'Inspect retained right-review.example', exact: true });
+  await inspectLeft.click();
+  await cockpit.getByRole('button', { name: 'Back to queue', exact: true }).click();
+  await inspectRight.focus();
+  const beforeShortcut = await readBrowserLocalCollection(page, 'bulk_review');
+  await page.keyboard.press('Alt+r');
+  await expect(inspectRight).toBeFocused();
+  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'left-review.example' })).toContainText('unreviewed');
+  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'right-review.example' })).toContainText('unreviewed');
+  expect(await readBrowserLocalCollection(page, 'bulk_review')).toEqual(beforeShortcut);
+  await inspectRight.click();
+  await markReviewed.focus();
+  await page.keyboard.press('Alt+r');
+  await expect(cockpit.locator('.review-state')).toHaveText('reviewed');
+  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'left-review.example' })).toContainText('unreviewed');
+  const afterShortcut = await readBrowserLocalCollection(page, 'bulk_review', { minimumRecords: 1 });
+  expect(afterShortcut.records.map(record => record.value)).toMatchObject([
+    { kind: 'row', domain: 'right-review.example', state: 'reviewed' },
+  ]);
+  await cockpit.getByRole('button', { name: 'Previous unresolved' }).focus();
+  await page.keyboard.press('Alt+ArrowLeft');
+  await expect(cockpit.getByRole('heading', { name: 'left-review.example', exact: true })).toBeVisible();
   // Option changes the character on some layouts, but not the physical key.
   expect(await cockpit.evaluate(element => {
     const event = new KeyboardEvent('keydown', { key: '®', code: 'KeyR', altKey: true, bubbles: true, cancelable: true });
@@ -848,8 +871,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
     return event.defaultPrevented;
   })).toBe(true);
   await expect(cockpit.locator('.review-state')).toHaveText('reviewed');
-  await cockpit.getByRole('button', { name: 'Next unresolved' }).focus();
-  await page.keyboard.press('Alt+ArrowRight');
+  await inspectRight.click();
   await expect(cockpit.getByRole('heading', { name: 'right-review.example', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/bulk/u);
   const monitorName = cockpit.getByLabel('Monitor list for the current row');

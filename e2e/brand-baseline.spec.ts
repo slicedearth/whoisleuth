@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
-import { openInboxReview } from './console-navigation';
+import { openInboxReview, inboxReviewControls } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalManifestWrite, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, openBrandProfileList, openBrandWorkbench, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import {
@@ -1344,9 +1344,8 @@ test('legacy posture records remain readable without claiming current alignment'
   await expect(inbox.getByText('at an unknown time', { exact: true })).toBeVisible();
   await inbox.getByText('Advanced filters', { exact: true }).click();
   await inbox.getByRole('combobox', { name: 'Age', exact: true }).selectOption('unknown');
-  const item = inbox.locator('.items > li');
-  await expect(item).toHaveCount(1);
-  await openInboxReview(item);
+  await expect(inboxReviewControls(page)).toHaveCount(1);
+  const item = await openInboxReview(inboxReviewControls(page));
   await item.locator('summary', { hasText: 'Review state:' }).click();
   await expect(item.getByRole('option', { name: 'Resolved', exact: true })).toHaveJSProperty('disabled', true);
   await page.setViewportSize({ width: 320, height: 700 });

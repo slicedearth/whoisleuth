@@ -1,5 +1,5 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
-import { openCaseSection, openConsoleView, openInboxReview } from './console-navigation';
+import { openCaseSection, openConsoleView, openInboxReview, inboxReviewControls } from './console-navigation';
 import type { Page, Route } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
@@ -90,9 +90,8 @@ test('review history links exact retained decisions and missing associations wit
   await latest.getByRole('link', { name: 'Open review history', exact: true }).press('Enter');
   const inbox = page.getByRole('region', { name: 'Review inbox', exact: true });
   await expect(inbox).toContainText('Showing the selected review and its retained history.');
-  const selected = inbox.locator('.items > li');
-  await expect(selected).toHaveCount(1);
-  await openInboxReview(selected);
+  await expect(inboxReviewControls(page)).toHaveCount(1);
+  const selected = await openInboxReview(inboxReviewControls(page));
   await expect(selected).toContainText('Needs action: The analyst retained this item as open.');
   await selected.locator('details.lifecycle-controls > summary').press('Enter');
   await selected.getByText('Earlier decisions (2)', { exact: true }).press('Enter');

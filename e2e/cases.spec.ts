@@ -1,5 +1,5 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
-import { openCaseClassification, openCaseMetadata, openCaseSection, openConsoleView, openInboxReview } from './console-navigation';
+import { openCaseClassification, openCaseMetadata, openCaseSection, openConsoleView, openInboxReview, inboxReviewControls } from './console-navigation';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
@@ -459,9 +459,8 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
   await detailFilters.getByRole('textbox', { name: 'Case', exact: true }).fill('gap-mobile');
   await detailFilters.getByRole('combobox', { name: 'Severity', exact: true }).selectOption('high');
   await detailFilters.getByRole('combobox', { name: 'Next action', exact: true }).selectOption('refresh');
-  const item = page.locator('.review-inbox .items li', { hasText: 'gap-mobile.invalid' });
-  await expect(item).toBeVisible();
-  await openInboxReview(item);
+  await expect(inboxReviewControls(page)).toHaveCount(1);
+  const item = await openInboxReview(inboxReviewControls(page));
   await expect(item).toContainText('stale');
   await expect(item.getByRole('link', { name: 'Refresh evidence' })).toHaveAttribute('href', '/lookup?q=gap-mobile.invalid&depth=deep&case=case-gap-mobile');
   await item.getByRole('combobox').selectOption('accepted_limitation');
@@ -497,8 +496,7 @@ test('the mobile review inbox reveals and focuses a saved Bulk session', async (
       }]),
   });
 
-  const item = page.locator('.review-inbox .items li', { hasText: 'Continue Incomplete review' });
-  await openInboxReview(item);
+  const item = await openInboxReview(inboxReviewControls(page, 'Continue Incomplete review'));
   await item.getByRole('link', { name: 'Review' }).click();
 
   await expect(page).toHaveURL(/\/bulk#bulk-sessions-title$/u);

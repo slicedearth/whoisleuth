@@ -153,6 +153,77 @@ test('a rejected candidate decision preserves its selection and permits a delibe
   expect((await readBrowserLocalCollection(page, 'analyst_review_state')).records).toHaveLength(1);
 });
 
+test('switching Brand replaces an initial context read and ignores its late failure', { tag: '@timing-sensitive' }, async ({ page }) => {
+  const second = normalizeBrandProfile({
+    ...profile, id: 'second-brand', name: 'Second Brand',
+    candidateObservations: [{ ...candidate, domain: 'second-candidate.example',
+      matches: candidate.matches.map(match => ({ ...match, brandProfileId: 'second-brand' })) }],
+  }, { nowIso: NOW })!;
+  await seed(page, { 'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile, second]) });
+  // Delay one real readonly transaction's acknowledgement, not the database or
+  // Brand selection. Replacement reads can finish before this old one fails.
+  await page.addInitScript(() => {
+    const descriptor = Object.getOwnPropertyDescriptor(IDBTransaction.prototype, 'oncomplete');
+    if (!descriptor?.set) throw new Error('Native transaction completion is unavailable.');
+    const originalGet = IDBObjectStore.prototype.get;
+    let held: IDBTransaction | null = null;
+    const state = { held: false, released: false, release: () => {
+      if (state.released) return;
+      state.released = true;
+      IDBObjectStore.prototype.get = originalGet;
+      Object.defineProperty(IDBTransaction.prototype, 'oncomplete', descriptor);
+      held?.onabort?.call(held, new Event('abort'));
+    } };
+    (window as typeof window & { candidateContextRead?: typeof state }).candidateContextRead = state;
+    Object.defineProperty(IDBTransaction.prototype, 'oncomplete', {
+      ...descriptor,
+      set(this: IDBTransaction, callback: IDBTransaction['oncomplete']) {
+        descriptor.set!.call(this, callback && ((event: Event) => {
+          if (this === held && !state.released) state.held = true;
+          else callback.call(this, event);
+        }));
+      },
+    });
+    IDBObjectStore.prototype.get = function (key: IDBValidKey | IDBKeyRange) {
+      if (!held && this.name === 'manifests' && key === 'watchlists'
+        && this.transaction.mode === 'readonly' && document.querySelector('#brand-candidate-review')) held = this.transaction;
+      return originalGet.call(this, key);
+    };
+  });
+  await page.reload();
+  const workspace = page.locator('#brand-candidate-review');
+  const release = () => page.evaluate(() =>
+    (window as typeof window & { candidateContextRead?: { release: () => void } }).candidateContextRead?.release());
+  try {
+    await expect.poll(() => page.evaluate(() =>
+      (window as typeof window & { candidateContextRead?: { held: boolean } }).candidateContextRead?.held)).toBe(true);
+    await expect(workspace.getByRole('checkbox', { name: candidate.domain, exact: true })).toBeDisabled();
+    const profiles = page.locator('details.brand-profiles');
+    if (await profiles.getAttribute('open') === null) await profiles.locator(':scope > summary').click();
+    await expect(page.getByRole('radio', { name: 'Set Second Brand active', exact: true })).toBeVisible();
+    await page.getByRole('radio', { name: 'Set Second Brand active', exact: true }).check();
+    await expect(workspace.getByRole('heading', { name: 'Candidate review for Second Brand' })).toBeVisible();
+    const selected = workspace.getByRole('checkbox', { name: 'second-candidate.example', exact: true });
+    await expect(selected).toBeEnabled();
+    await selected.check();
+    const reason = workspace.getByLabel('Reason', { exact: true });
+    const destination = workspace.getByLabel('Destination watchlist');
+    await reason.fill('Keep this new Brand draft after the old read finishes.');
+    await destination.fill('Second Brand review');
+    await workspace.getByRole('button', { name: 'Shortlist selected', exact: true }).click();
+    const status = workspace.getByRole('status', { name: 'Candidate review action status' });
+    await expect(status).toContainText('1 domains added to Shortlist');
+    await release();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await expect(selected).toBeEnabled();
+    await expect(selected).toBeChecked();
+    await expect(reason).toHaveValue('Keep this new Brand draft after the old read finishes.');
+    await expect(destination).toHaveValue('Second Brand review');
+    await expect(status).toContainText('1 domains added to Shortlist');
+    await expect(workspace.getByText('Saved watch and review context is unavailable or loading.', { exact: false })).toHaveCount(0);
+  } finally { if (!page.isClosed()) await release(); }
+});
+
 test('candidate nomination preserves full Shortlist evidence and a concurrent observed refresh', { tag: '@timing-sensitive' }, async ({ page, context }) => {
   const session = richBulkSessionStore(1).sessions[0]!;
   session.domains = [candidate.domain];

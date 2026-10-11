@@ -9,7 +9,7 @@ import { createCase } from '../packages/cases/case-record-operations.mts';
 import { buildWorkspaceArchive, readWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
 import { decryptWorkspaceArchive, encryptWorkspaceArchive } from '../packages/workspace/workspace-archive-crypto.mts';
 import { createCase as createCaseThroughForm, openCaseResponseWorkspace } from './case-test-fixtures';
-import { openCaseSection, openInboxReview } from './console-navigation';
+import { openCaseSection, openInboxReview, inboxReviewControls } from './console-navigation';
 import { FILE_BYTES, FILE_NAME, openRetainedFiles, selectOriginal, storedFiles } from './case-attachment-fixtures';
 
 const WORKSPACE_PASSWORD = '<synthetic workspace fixture>';
@@ -25,8 +25,8 @@ test('saved inbox positions protect review drafts and stay outside encrypted por
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
   await createCaseThroughForm(page, 'private-review.example');
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Review inbox', exact: true }).click();
-  let item = page.locator('.review-inbox .items > li').first();
-  await openInboxReview(item); await item.locator('details.lifecycle-controls > summary').click();
+  let item = await openInboxReview(inboxReviewControls(page).first());
+  await item.locator('details.lifecycle-controls > summary').click();
   await item.getByLabel('Rationale', { exact: true }).fill('This unfinished review must remain in the encrypted working workspace.');
   let position = page.locator('.review-session'); await position.locator('summary').click();
   await position.getByRole('button', { name: 'Save current position', exact: true }).click();

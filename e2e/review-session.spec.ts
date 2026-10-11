@@ -2,7 +2,7 @@ import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-cont
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { currentCaseFixture, currentCaseCollection } from '../test/support/current-case.mts';
-import { openCaseMetadata, openInboxReview } from './console-navigation';
+import { openCaseMetadata, openInboxReview, inboxReviewControls } from './console-navigation';
 import { migrateLegacyBrowserData, readBrowserLocalCollection, expectNoHorizontalOverflow, useTheme } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { REVIEW_SESSION_SCHEMA, REVIEW_SESSION_VERSION } from '../packages/contracts/review-session-contract.mts';
@@ -33,20 +33,20 @@ test('review navigation spans pages and an explicit checkpoint restores filters,
   await inbox.getByRole('combobox', { name: 'Source', exact: true }).selectOption('case');
   const items = inbox.locator('.items > li');
   await expect(items).toHaveCount(25);
-  await openInboxReview(items.first());
+  await openInboxReview(inboxReviewControls(page).first());
   await items.first().locator('details.lifecycle-controls > summary').click();
   await items.first().getByRole('combobox', { name: 'Review outcome', exact: true }).selectOption('open');
   await items.first().getByLabel('Rationale', { exact: true }).fill('Unfinished first review.\nKeep the contrary observation.');
   await items.first().getByLabel('Next review', { exact: true }).fill('2026-10-15T12:30:45.678');
   await inbox.getByRole('button', { name: 'Back to queue', exact: true }).click();
-  await openInboxReview(items.first());
+  await openInboxReview(inboxReviewControls(page).first());
   await expect(items.first().getByLabel('Rationale', { exact: true })).toHaveValue('Unfinished first review.\nKeep the contrary observation.');
   await items.first().locator(':scope > details > summary').click();
   const detailId = await items.first().getAttribute('id');
   await expect(inbox.locator(`button[aria-controls=${JSON.stringify(detailId)}]`)).toBeFocused();
-  await openInboxReview(items.first());
+  await openInboxReview(inboxReviewControls(page).first());
   const firstTitle = await items.first().getByRole('heading').textContent();
-  await openInboxReview(items.nth(24));
+  await openInboxReview(inboxReviewControls(page).nth(24));
   await items.nth(24).getByRole('button', { name: 'Next item', exact: true }).click();
   const pages = inbox.getByRole('navigation', { name: 'Review inbox pages', exact: true });
   await expect(pages.getByRole('status')).toHaveText('Page 2 of 2');
@@ -72,7 +72,7 @@ test('review navigation spans pages and an explicit checkpoint restores filters,
   await items.first().getByRole('button', { name: 'Previous item', exact: true }).click();
   await expect(pages.getByRole('status')).toHaveText('Page 1 of 2');
   await expect(items.nth(24).locator(':scope > details > summary')).toBeFocused();
-  await openInboxReview(items.first());
+  await openInboxReview(inboxReviewControls(page).first());
   await expect(items.first().getByRole('heading')).toHaveText(firstTitle!);
   await items.first().locator('details.lifecycle-controls > summary').click();
   await expect(items.first().getByLabel('Rationale', { exact: true })).toHaveValue('Unfinished first review.\nKeep the contrary observation.');
@@ -115,8 +115,8 @@ test('saving a review position rejects a peer-tab creation or replacement until 
 
 test('returning from a Case revalidates the saved review and blocks an older-evidence draft', async ({ page }) => {
   await seed(page, 1);
-  const item = page.locator('.review-inbox .items > li').first();
-  await openInboxReview(item); await item.locator('details.lifecycle-controls > summary').click();
+  const item = await openInboxReview(inboxReviewControls(page).first());
+  await item.locator('details.lifecycle-controls > summary').click();
   await item.getByRole('combobox', { name: 'Review outcome', exact: true }).selectOption('open');
   await item.getByLabel('Rationale', { exact: true }).fill('An earlier-evidence draft.');
   const control = await checkpoint(page);
@@ -139,8 +139,7 @@ test('returning from a Case revalidates the saved review and blocks an older-evi
 
 test('an uncertain restored review cannot be resubmitted and draft removal recovers keyboard focus', async ({ page }) => {
   await seed(page, 1);
-  let item = page.locator('.review-inbox .items > li').first();
-  await openInboxReview(item);
+  let item = await openInboxReview(inboxReviewControls(page).first());
   await item.locator('details.lifecycle-controls > summary').click();
   await item.getByRole('combobox', { name: 'Review outcome', exact: true }).selectOption('open');
   await item.getByLabel('Rationale', { exact: true }).fill('Keep this uncertain review separate from committed decisions.');

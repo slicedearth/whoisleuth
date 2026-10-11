@@ -110,7 +110,6 @@
     }
   }
   onMount(() => {
-    void refresh();
     const clock = setInterval(() => {
       now = new Date().toISOString();
     }, 60_000);
@@ -142,6 +141,8 @@
       reviewDate = '';
       priorityEdited = false;
       priority = 'unassigned';
+      ready = false;
+      void refresh();
     }
   });
   function toggle(domain: string, checked: boolean) {

@@ -1,6 +1,6 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
-import { COMMAND_NAVIGATION_READINESS, openInboxReview } from './console-navigation';
+import { COMMAND_NAVIGATION_READINESS, openInboxReview, inboxReviewControls } from './console-navigation';
 import { beginBrowserInteractionReadiness, isBrowserInteractionReadinessMarked, readBrowserInteractionReadiness } from './performance-sampling';
 import { caseRecord, createCase, snapshot } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
@@ -157,10 +157,7 @@ test('a selected Dashboard review opens Case assessment and returns to the same 
   await expect(page).toHaveURL(/\/monitor\?view=inbox&attention=1&review=/u);
   const inboxUrl = new URL(page.url());
   const returnHref = `${inboxUrl.pathname}${inboxUrl.search}${inboxUrl.hash}`;
-  const selected = page.getByRole('region', { name: 'Review inbox', exact: true }).locator('.items > li').filter({
-    has: page.getByRole('heading', { name: title, exact: true }),
-  });
-  await openInboxReview(selected);
+  const selected = await openInboxReview(inboxReviewControls(page, title));
   const review = selected.getByRole('link', { name: 'Review', exact: true });
   await expect(review).toHaveAttribute('href', '/cases?case=navigation-case&section=assessment');
   await review.click();
