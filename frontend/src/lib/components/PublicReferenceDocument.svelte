@@ -52,6 +52,7 @@
   }).replaceAll('<', '\\u003c'));
   const related = $derived(relatedPublicReferences(currentHref));
   let article: HTMLElement;
+  let printReady = $state(false);
   onMount(() => {
     const openedForPrint: HTMLDetailsElement[] = [];
     const beforePrint = () => {
@@ -72,7 +73,8 @@
     addEventListener('hashchange', revealHash);
     addEventListener('beforeprint', beforePrint);
     addEventListener('afterprint', afterPrint);
-    return () => { cancelAnimationFrame(frame); removeEventListener('hashchange', revealHash); removeEventListener('beforeprint', beforePrint); removeEventListener('afterprint', afterPrint); afterPrint(); };
+    printReady = true;
+    return () => { printReady = false; cancelAnimationFrame(frame); removeEventListener('hashchange', revealHash); removeEventListener('beforeprint', beforePrint); removeEventListener('afterprint', afterPrint); afterPrint(); };
   });
 </script>
 
@@ -106,7 +108,7 @@
         {#each related as item}<a href={item.href}><strong>{item.label}</strong><span>{item.detail}</span></a>{/each}
       </nav>
     {/if}
-    <button class="btn print-document" type="button" onclick={() => window.print()}>Print this guide</button>
+    <button class="btn print-document" type="button" disabled={!printReady} onclick={() => window.print()}>Print this guide</button>
   </article>
 </div>
 

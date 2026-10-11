@@ -107,13 +107,44 @@ test('command contents follow the selected command and preserve subsection links
 });
 
 test('guide printing includes disclosed reference text and restores the reading state', async ({ page }) => {
-  await page.goto('/resources');
+  let releaseScripts = () => {};
+  const scriptsReleased = new Promise<void>(resolve => { releaseScripts = resolve; });
+  let heldScripts = 0;
+  await page.route('**/_app/**', async route => {
+    if (route.request().resourceType() === 'script') {
+      heldScripts++;
+      await scriptsReleased;
+    }
+    await route.fallback();
+  });
+  const print = page.getByRole('button', { name: 'Print this guide', exact: true });
+  try {
+    await page.goto('/resources', { waitUntil: 'commit' });
+    await expect.poll(() => heldScripts).toBeGreaterThan(0);
+    await expect(page.locator('#glossary')).toHaveCount(1);
+    await expect(page.locator('#glossary')).not.toHaveAttribute('open', '');
+    await expect(print).toBeDisabled();
+  } finally { releaseScripts(); }
+  await expect(print).toBeEnabled();
+  // Replace only the native dialog. Exercise the actual button and print handlers.
+  await page.evaluate(() => {
+    Reflect.set(window, 'guidePrintCalls', 0);
+    window.print = () => {
+      Reflect.set(window, 'guidePrintCalls', Number(Reflect.get(window, 'guidePrintCalls')) + 1);
+      window.dispatchEvent(new Event('beforeprint'));
+    };
+  });
+  await page.locator('#tool-monitor > summary').click();
+  await expect(page.locator('#tool-monitor')).toHaveAttribute('open', '');
   await expect(page.locator('#glossary')).not.toHaveAttribute('open', '');
-  await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+  await print.focus();
+  await print.press('Enter');
+  expect(await page.evaluate(() => Reflect.get(window, 'guidePrintCalls'))).toBe(1);
   await page.emulateMedia({ media: 'print' });
   await expect(page.locator('#term-dmarc')).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Public navigation' })).not.toBeVisible();
   await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
   await page.emulateMedia({ media: 'screen' });
   await expect(page.locator('#glossary')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#tool-monitor')).toHaveAttribute('open', '');
 });
