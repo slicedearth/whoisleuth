@@ -43,17 +43,21 @@
     return () => { active = false; };
   });
   function changed() { page = 1; selected = null; focusPage = false; }
+  function revealFocus(target: HTMLElement | undefined, block: ScrollLogicalPosition = 'nearest') {
+    target?.scrollIntoView({ block, behavior: 'instant' });
+    target?.focus({ preventScroll: true });
+  }
   async function inspect(id: string, label: string, origin?: HTMLElement) {
     if (origin) returnFocus = origin;
     if (selected?.id !== id) historySettled = false;
     selected = { id, label };
     await tick();
-    detailHeading?.focus({ preventScroll: true });
+    revealFocus(detailHeading, 'start');
   }
   async function closeDetail() {
     selected = null;
     await tick();
-    (returnFocus?.isConnected ? returnFocus : heading)?.focus({ preventScroll: true });
+    revealFocus(returnFocus?.isConnected ? returnFocus : heading);
   }
   function openSource(event: MouseEvent, href: string) {
     if (!onopen || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -123,5 +127,6 @@
   dl{display:grid;gap:5px;margin:10px 0;font-size:var(--text-xs)}dl>div{display:grid;grid-template-columns:9rem minmax(0,1fr);gap:8px}dd{min-width:0;margin:0;overflow-wrap:anywhere}
   button{max-width:100%;white-space:normal;overflow-wrap:anywhere}details{margin-top:12px}summary{cursor:pointer}ul{padding-left:20px;overflow-wrap:anywhere}
   .selected{min-width:0;margin-top:22px;padding-top:18px;border-top:1px solid var(--border)}.selected h3{margin-top:14px}
+  h3,.inventory button{scroll-margin-block:calc(var(--console-toolbar-height,54px) + 12px)}
   @media(max-width:640px){.filters{grid-template-columns:minmax(0,1fr)}dl>div{grid-template-columns:minmax(0,1fr);gap:0}.inventory>li{padding:12px}}
 </style>

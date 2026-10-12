@@ -10,6 +10,7 @@ import { readFile } from 'node:fs/promises';
 import { parseInfrastructureObservation } from '../packages/investigation/infrastructure-observation.mts';
 import { convertInfrastructureObservation } from '../packages/interchange/external-findings-converters.mts';
 import { externalFindingCaseProjection } from '../packages/interchange/external-findings-import.mts';
+import { MAX_INVESTIGATION_SEARCH_RESULTS } from '../packages/investigation/investigation-search.mts';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 
@@ -123,17 +124,19 @@ test('retained infrastructure exposes exact independent sources and keyboard ret
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [
     caseRecord('inventory-first', 'shared.example'),
     { ...caseRecord('inventory-second', 'shared.example'), updatedAt: '2026-07-20T00:00:00.000Z' },
+    ...Array.from({ length: MAX_INVESTIGATION_SEARCH_RESULTS + 5 }, (_, index) => caseRecord(`inventory-padding-${index}`, `zz-inventory-${index}.example`)),
   ] } });
   await openDashboardSecondaryWorkspaces(page);
   await page.getByText('Browse retained infrastructure', { exact: true }).click();
   const inventory = page.getByRole('region', { name: 'Retained infrastructure inventory', exact: true });
   const rows = inventory.getByRole('list', { name: 'Retained infrastructure identities', exact: true });
-  await expect(rows.getByRole('listitem')).toHaveCount(1);
+  await expect(rows.getByRole('listitem')).toHaveCount(MAX_INVESTIGATION_SEARCH_RESULTS);
   await expect(rows.getByText('2 observations · 2 one-hop relationships', { exact: true })).toBeVisible();
   const inspect = rows.getByRole('button', { name: 'Inspect retained evidence for shared.example', exact: true });
   await inspect.focus(); await inspect.press('Enter');
   const detail = inventory.getByRole('region', { name: 'Selected retained infrastructure evidence', exact: true });
-  await expect(detail.getByRole('heading', { name: 'Retained evidence for shared.example', exact: true })).toBeFocused();
+  const detailHeading = detail.getByRole('heading', { name: 'Retained evidence for shared.example', exact: true });
+  await expectFocusedResultsVisible(page, detailHeading, detailHeading);
   await expect(detail.getByRole('heading', { name: '2 retained observations', exact: true })).toBeVisible();
   await expect(detail.getByRole('heading', { name: '2 one-hop relationships', exact: true })).toBeVisible();
   await expect(detail.getByRole('list', { name: 'Retained relationship sources', exact: true }).getByRole('listitem')).toHaveCount(2);
@@ -151,7 +154,7 @@ test('retained infrastructure exposes exact independent sources and keyboard ret
     }
   }
   await detail.getByRole('button', { name: 'Return to inventory results', exact: true }).click();
-  await expect(inspect).toBeFocused();
+  await expectFocusedResultsVisible(page, inspect, inspect);
   expect(requests).toEqual([]);
 });
 
