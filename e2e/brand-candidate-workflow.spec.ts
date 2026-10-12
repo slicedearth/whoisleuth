@@ -18,8 +18,10 @@ import { richBulkSessionStore } from '../test/bulk-session-fixture.mts';
 import { openConsoleView } from './console-navigation';
 import { normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
 import type { WatchDomainContext, WatchDomainMetadata } from '../packages/workspace/brand-candidate-workflow.mts';
-import { reviseCandidateException, candidateMaterialFingerprint } from '../packages/workspace/brand-candidate-workflow.mts';
+import { reviseCandidateException, candidateMaterialFingerprint, MAX_CANDIDATE_TEXT } from '../packages/workspace/brand-candidate-workflow.mts';
 import { BRAND_PROFILE_SCHEMA, BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
+import { candidateReviewItem } from '../packages/monitoring/brand-candidate-review.mts';
+import { emptyAnalystReviewStateStore, setAnalystReviewDecision } from '../packages/monitoring/analyst-review-state.mts';
 
 const NOW = '2000-01-03T00:00:00.000Z';
 const candidate = {
@@ -40,7 +42,7 @@ const candidate = {
       sourceFirstObservedAt: null,
       sourceLastObservedAt: null,
       firstLocalObservedAt: NOW,
-      completeness: 'partial',
+      completeness: 'partial' as const,
       gap: 'Source interval and continuous coverage are unknown.',
     },
   ],
@@ -129,6 +131,91 @@ test('candidate inspection preserves queue state and keeps inspected and submitt
   }
   await workspace.getByLabel('Candidate search').fill('');
   await expect(workspace.getByRole('checkbox', { name: candidate.domain, exact: true })).toBeChecked();
+  expect(requests).toEqual([]);
+});
+
+test('reusing a candidate reason copies editable text without inheriting a decision or target', async ({ page }, testInfo) => {
+  const nextCandidate = { ...candidate, domain: 'next-candidate.example',
+    sources: [{ ...candidate.sources[0]!, observedHostname: 'login.next-candidate.example' }] };
+  const longCandidate = { ...candidate, domain: 'long-reason.example',
+    sources: [{ ...candidate.sources[0]!, observedHostname: 'login.long-reason.example' }] };
+  const other = normalizeBrandProfile({ ...profile, id: 'other-brand', name: 'Other Brand',
+    candidateObservations: [{ ...candidate, matches: candidate.matches.map(match => ({ ...match, brandProfileId: 'other-brand' })) }],
+  }, { nowIso: NOW })!;
+  const originalReason = 'Review the separately retained page before assessing this nomination.';
+  const longReason = 'x'.repeat(MAX_CANDIDATE_TEXT + 1);
+  let reviews = setAnalystReviewDecision(emptyAnalystReviewStateStore(), candidateReviewItem(candidate, profile, NOW), {
+    disposition: 'suppressed', rationale: originalReason, reviewedAt: NOW, expiresAt: '2097-01-01T00:00:00Z',
+  });
+  reviews = setAnalystReviewDecision(reviews, candidateReviewItem(longCandidate, profile, NOW), {
+    disposition: 'expected', rationale: longReason, reviewedAt: NOW, expiresAt: '2097-01-01T00:00:00Z',
+  });
+  reviews = setAnalystReviewDecision(reviews, candidateReviewItem(other.candidateObservations[0]!, other, NOW), {
+    disposition: 'suppressed', rationale: 'Other Brand wording must not appear in this review.', reviewedAt: NOW, expiresAt: '2097-01-01T00:00:00Z',
+  });
+  const workspace = await seed(page, {
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([{ ...profile, candidateObservations: [candidate, nextCandidate, longCandidate] }, other]),
+    'whoisleuth-analyst-review-state-v1': reviews,
+  });
+  const requests: string[] = [];
+  page.on('request', request => { if (request.url().includes('/api/')) requests.push(request.url()); });
+  const before = await readBrowserLocalCollection(page, 'analyst_review_state');
+  const brandsBefore = await readBrowserLocalCollection(page, 'brand_profiles');
+  const reason = workspace.getByLabel('Reason', { exact: true });
+  await reason.fill('Keep this current draft until explicitly replaced.');
+  await workspace.getByLabel('Next review / expiry date (UTC)', { exact: true }).fill('2099-01-01');
+  await workspace.getByLabel('Analyst review priority').selectOption('p3');
+  await workspace.getByLabel('Destination watchlist').fill('Current selection');
+  await workspace.getByText('Reuse an earlier reason', { exact: true }).click();
+  const sources = workspace.getByRole('combobox', { name: 'Earlier candidate reason', exact: true });
+  await expect(sources.locator('option')).toHaveCount(3);
+  await sources.selectOption({ label: candidate.domain });
+  await expect(workspace.locator('.saved-reason')).toHaveText(originalReason);
+  await expect(reason).toHaveValue('Keep this current draft until explicitly replaced.');
+  const copy = workspace.getByRole('button', { name: 'Replace draft reason with this text', exact: true });
+  await expect(copy).toBeDisabled();
+  await workspace.getByRole('checkbox', { name: nextCandidate.domain, exact: true }).check();
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      await copy.scrollIntoViewIfNeeded();
+      await expect(copy).toBeInViewport();
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`reused-reason-${theme}-${width}.png`) });
+    }
+  }
+  await page.setViewportSize({ width: 320, height: 844 });
+  await copy.focus(); await copy.press('Enter');
+  await expect(reason).toBeFocused();
+  await expect(reason).toBeInViewport();
+  await expect(reason).toHaveValue(originalReason);
+  await expect(workspace.getByRole('checkbox', { name: candidate.domain, exact: true })).not.toBeChecked();
+  await expect(workspace.getByRole('checkbox', { name: nextCandidate.domain, exact: true })).toBeChecked();
+  await expect(workspace.getByLabel('Next review / expiry date (UTC)', { exact: true })).toHaveValue('2099-01-01');
+  await expect(workspace.getByLabel('Analyst review priority')).toHaveValue('p3');
+  await expect(workspace.getByLabel('Destination watchlist')).toHaveValue('Current selection');
+  expect(await readBrowserLocalCollection(page, 'analyst_review_state')).toEqual(before);
+  expect(await readBrowserLocalCollection(page, 'brand_profiles')).toEqual(brandsBefore);
+  expect((await readBrowserLocalCollection(page, 'watchlists')).records).toEqual([]);
+  await sources.selectOption({ label: longCandidate.domain });
+  await expect(workspace.locator('.saved-reason')).toHaveText(longReason);
+  await expect(copy).toBeDisabled();
+  await expect(reason).toHaveValue(originalReason);
+  await reason.fill('Edited for the next candidate only.');
+  await workspace.getByRole('button', { name: 'Defer selected until review', exact: true }).click();
+  await expect(workspace.getByRole('status', { name: 'Candidate review action status' })).toContainText('1 exact Brand candidate decisions recorded');
+  const after = await readBrowserLocalCollection(page, 'analyst_review_state', { minimumRecords: 4 });
+  for (const old of before.records) expect(after.records.find(record => record.id === old.id)).toEqual(old);
+  const saved = after.records.find(record => record.value.subjectKey === candidateReviewItem(nextCandidate, profile, NOW).subjectKey)!.value;
+  expect(saved).toMatchObject({ disposition: 'expected', rationale: 'Edited for the next candidate only.', reviewDueAt: '2099-01-01T00:00:00.000Z', expiresAt: '2099-01-01T00:00:00.000Z', history: [] });
+  const profiles = page.locator('details.brand-profiles');
+  if (await profiles.getAttribute('open') === null) await profiles.locator(':scope > summary').click();
+  await page.getByRole('radio', { name: 'Set Other Brand active', exact: true }).check();
+  await expect(workspace.getByRole('heading', { name: 'Candidate review for Other Brand' })).toBeVisible();
+  await expect(sources).toHaveValue('');
+  await expect(reason).toHaveValue('');
+  await expect(workspace.locator('.saved-reason')).toHaveCount(0);
   expect(requests).toEqual([]);
 });
 

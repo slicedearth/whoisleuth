@@ -19,6 +19,16 @@ filters remain explicit in the preview. Duplicate and rejected domains are
 reported separately. Adding a candidate-only watch makes zero requests and
 does not invent availability, a score, a successful check or a baseline.
 
+**Reuse an earlier reason** shows saved wording from this Brand's retained
+candidates, with the original domain and review time. Choose a reason and
+explicitly copy it into the editable draft; replacing existing wording is a
+separate, labelled action. Only the text moves: the selected domains, prior
+decision, evidence, dates, priority and destination do not. Edit it for the
+current selection, then use the ordinary review or Watchlist action. Reasons
+longer than the current field remain readable without a shortened substitute.
+This reuses saved review state, not a separate template store or a global
+decision rule. Changing Brand clears the source choice and draft.
+
 Watch priorities are analyst urgency: P1 immediate, P2 prompt, P3 routine,
 P4 background or unassigned. They are not Risk, confidence, Case severity,
 collection depth or scheduling. A watch reason and optional next-review date

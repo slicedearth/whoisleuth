@@ -24,6 +24,7 @@
   import { projectBrandCandidateReview } from '../../../../packages/monitoring/brand-candidate-review.mts';
   import {
     candidateMaterialFingerprint,
+    MAX_CANDIDATE_TEXT,
     WATCH_PRIORITIES,
     type WatchPriority,
   } from '../../../../packages/workspace/brand-candidate-workflow.mts';
@@ -61,6 +62,8 @@
   let priorityEdited = $state(false);
   let now = $state(new Date().toISOString());
   let actionStatus = $state<HTMLParagraphElement>();
+  let reasonInput: HTMLTextAreaElement;
+  let reasonSource = $state('');
   let inspected = $state<string | null>(null), search = $state(''), sort = $state('retained'), page = $state(1);
   let alive = true, readGeneration = 0;
   const lifetime = createDraftRevision(() => active.id);
@@ -78,6 +81,8 @@
   const inspectedRow = $derived(rows.find(row => row.candidate.domain === inspected) ?? null);
   $effect(() => { if (inspected && !inspectedRow) inspected = null; });
   const chosen = $derived(rows.filter((row) => selected.has(row.candidate.domain)));
+  const reasonSources = $derived(rows.filter(row => row.lifecycle.decision !== null));
+  const reasonSourceRow = $derived(reasonSources.find(row => row.item.subjectKey === reasonSource));
   const campaignDefault = $derived(keywordCampaignDefaultPriority(chosen.map(row => row.candidate), active.id, active.keywordCampaigns ?? []));
   $effect(() => { if (!priorityEdited) priority = campaignDefault ?? 'unassigned'; });
   const exceptionRow = $derived(rows.find((row) => row.candidate.domain === exceptionDomain));
@@ -138,6 +143,7 @@
       exceptionDomain = '';
       exceptionRule = '';
       reason = '';
+      reasonSource = '';
       reviewDate = '';
       priorityEdited = false;
       priority = 'unassigned';
@@ -150,6 +156,13 @@
     checked ? next.add(domain) : next.delete(domain);
     selected = next;
     preview = null;
+  }
+  function reuseReason() {
+    const text = reasonSourceRow?.lifecycle.decision?.rationale;
+    if (busy || disabled || !ready || !chosen.length || !text || text.length > MAX_CANDIDATE_TEXT) return;
+    reason = text;
+    message = 'Earlier wording copied into the editable reason. No decision was saved.';
+    reasonInput.focus();
   }
   function showPreview() {
     preview = null;
@@ -386,7 +399,25 @@
     >{/if}
   <fieldset disabled={busy || disabled || !ready}>
     <legend>Explicit selected-domain review</legend>
-    <label>Reason<textarea bind:value={reason} maxlength="300" rows="2"></textarea></label>
+    <details>
+      <summary>Reuse an earlier reason</summary>
+      <p>Reason draft for {chosen.length} selected {chosen.length === 1 ? 'domain' : 'domains'} in {active.name}. Copy wording, then edit it for this selection.</p>
+      {#if reasonSources.length}
+        <label>Earlier candidate reason<select bind:value={reasonSource}>
+          <option value="">Choose a saved reason for this Brand</option>
+          {#each reasonSources as row (row.item.subjectKey)}<option value={row.item.subjectKey}>{row.candidate.domain}</option>{/each}
+        </select></label>
+        {#if reasonSourceRow?.lifecycle.decision}
+          {@const previous = reasonSourceRow.lifecycle.decision}
+          <p>Saved for <strong>{reasonSourceRow.candidate.domain}</strong> on {formatEvidenceDate(previous.reviewedAt)}. This is earlier wording, not a finding about the current selection.</p>
+          <p class="saved-reason">{previous.rationale}</p>
+          {#if previous.rationale.length > MAX_CANDIDATE_TEXT}<p>This reason is longer than the current {MAX_CANDIDATE_TEXT}-character field. It remains readable here; no shortened copy is substituted.</p>{/if}
+          <button class="btn" type="button" onclick={reuseReason} disabled={!chosen.length || previous.rationale.length > MAX_CANDIDATE_TEXT}>{reason ? 'Replace draft reason with this text' : 'Use this reason'}</button>
+          <p>Only text is copied. Selection, decisions, evidence, dates, priority and destination stay unchanged.</p>
+        {/if}
+      {:else}<p>No earlier reasons are retained for this Brand’s current candidates. A reason becomes reusable after you explicitly save a candidate review.</p>{/if}
+    </details>
+    <label>Reason<textarea bind:this={reasonInput} bind:value={reason} maxlength={MAX_CANDIDATE_TEXT} rows="2"></textarea></label>
     <label>Next review / expiry date (UTC)<input type="date" bind:value={reviewDate} /></label>
     <div class="toolbar"
       ><button class="btn" onclick={() => void shortlist()} disabled={!chosen.length}
@@ -537,6 +568,7 @@
   .candidate-review summary {
     cursor: pointer;
   }
+  .saved-reason { padding: .75rem; background: var(--panel-raised); border-radius: var(--radius-sm); }
   .candidate-review .toolbar {
     display: flex;
     flex-wrap: wrap;
