@@ -125,6 +125,25 @@
                   <summary><span>{check.label}</span><strong>{check.status}</strong></summary>
                   <p>{check.summary}</p>
                   {#if check.detail}<p>{check.detail}</p>{/if}
+                  {#if check.id === 'dmarc_inheritance'}
+                    {#if check.dmarcPolicyContext}
+                      {@const policy = check.dmarcPolicyContext}
+                      <section class="policy-scope" aria-label="DMARC policy scope"><dl>
+                        <div><dt>Discovery</dt><dd>{policy.complete ? 'Complete bounded walk' : 'Incomplete; policy undetermined'}</dd></div>
+                        <div><dt>Policy relation</dt><dd>{policy.relation === 'undetermined' ? 'Not determined' : policy.relation === 'exact' ? 'Exact queried name' : 'Inherited from an ancestor'}</dd></div>
+                        <div><dt>Selected owner</dt><dd>{#if policy.owner}<code>_dmarc.{policy.owner}</code>{:else}No selected policy{/if}</dd></div>
+                        <div><dt>Owner observation time</dt><dd>{#if policy.observedAt}<time datetime={policy.observedAt}>{policy.observedAt}</time>{:else}Time unavailable{/if}</dd></div>
+                        {#if policy.policy}
+                          <div><dt>Published owner policy</dt><dd>{policy.policy}</dd></div>
+                          <div><dt>Existing subdomain policy</dt><dd>{policy.subdomainPolicy}</dd></div>
+                          <div><dt>Nonexistent subdomain policy</dt><dd>{policy.nonexistentPolicy}</dd></div>
+                          <div><dt>Declared boundary</dt><dd>{policy.psd === 'y' ? 'Public-suffix policy' : policy.psd === 'n' ? 'Organisational boundary' : 'Not explicitly declared'}</dd></div>
+                          <div><dt>Test mode</dt><dd>{policy.testMode ? 'Yes' : 'No'}</dd></div>
+                        {/if}
+                      </dl></section>
+                      <p>Subdomain values include DMARC defaults where tags were omitted. This is recursive DNS publication, not message authentication. Structured scope is available only in this review; saved observations and portable output keep their existing fields.</p>
+                    {:else}<p>Structured policy-owner scope was not retained for this observation.</p>{/if}
+                  {/if}
                   {#if check.sourceContext}<p>{POSTURE_SOURCE_LABELS[check.sourceContext.source]} · observed {check.sourceContext.observedAt || 'at an unknown time'} · {check.sourceContext.state}{#if check.sourceContext.omittedRecords !== 0} · {check.sourceContext.omittedRecords === null ? 'omissions unknown' : `${check.sourceContext.omittedRecords} records omitted`}{/if}</p>{/if}
                   {#if check.remediation}<p><b>Next:</b> {check.remediation}</p>{/if}
                   {#if check.records.length}<pre>{check.records.join('\n')}</pre>{/if}
@@ -209,6 +228,7 @@
   .checks summary{display:list-item;cursor:pointer;font-size:var(--text-xs);overflow-wrap:anywhere}
   .checks summary strong{float:inline-end;margin-inline-start:10px;white-space:nowrap;text-transform:capitalize}.checks details.danger summary strong{color:var(--danger)}.checks details.warning summary strong{color:var(--amber)}.checks details.pass summary strong{color:var(--accent2)}
   .checks p{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.checks pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--text-2xs)}
+  .policy-scope{min-width:0;font-size:var(--text-xs)}.policy-scope dl{display:grid;gap:10px}.policy-scope dl>div{min-width:0}.policy-scope dt{color:var(--muted)}.policy-scope dd{margin:4px 0 0;overflow-wrap:anywhere;line-height:1.5}.policy-scope code{white-space:normal;overflow-wrap:anywhere}
   .analysis{margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .analysis>summary{display:list-item;cursor:pointer;font-size:var(--text-xs);font-weight:700;overflow-wrap:anywhere}
   .analysis>summary strong{float:inline-end;margin-inline-start:12px;color:var(--accent2);text-transform:capitalize}

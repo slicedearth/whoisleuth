@@ -121,7 +121,13 @@ function versionedResult(
 }
 
 function buildCliPostureDocument(requestedDomain: string, report: Readonly<object>, generatedAt = new Date().toISOString()): UnknownRecord {
-  return versionedResult(report, CLI_POSTURE_SCHEMA, CLI_POSTURE_SCHEMA_VERSION, generatedAt, 'requestedDomain', requestedDomain);
+  const checks = (report as UnknownRecord).checks;
+  const retained = Array.isArray(checks) ? { ...report, checks: checks.map(check => {
+    if (!check || typeof check !== 'object' || Array.isArray(check)) return check;
+    const { dmarcPolicyContext: _transient, ...fields } = check as UnknownRecord;
+    return fields;
+  }) } : report;
+  return versionedResult(retained, CLI_POSTURE_SCHEMA, CLI_POSTURE_SCHEMA_VERSION, generatedAt, 'requestedDomain', requestedDomain);
 }
 
 function buildCliHttpDocument(requestedDomain: string, result: Readonly<object>, generatedAt = new Date().toISOString()): UnknownRecord {

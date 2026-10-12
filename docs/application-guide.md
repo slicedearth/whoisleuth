@@ -634,6 +634,13 @@ do not enable this option. Reporting destinations are in the same organisational
 scope only when their DNS-derived boundaries agree. Unknown boundaries do not
 make a missing optional authorisation record a configuration error.
 
+The current inherited-policy result includes structured discovery completeness,
+selected owner, observation time and policy values with DMARC defaults applied.
+Incomplete discovery
+keeps the selected policy undetermined. This live review context is not added
+to saved Brand observations, Case snapshots or portable exports; historical
+records without it remain unqualified rather than reconstructed from prose.
+
 Other Brand views include:
 
 - a cross-domain posture matrix over saved baselines and retained observations;

@@ -1,5 +1,6 @@
 import { normalizeExplicitIsoTimestamp } from './observation.mts';
 import { normalizeDomain } from './domain-name.mts';
+import type { DmarcPolicyContext } from './dmarc-policy-context.mts';
 
 export const DOMAIN_POSTURE_COMPARISON_VERSION = 1;
 export const MAX_POSTURE_CHECKS = 32;
@@ -30,6 +31,8 @@ export type DomainPostureCheck = {
   records: string[];
   remediation: string;
   sourceContext?: DomainPostureSourceContext;
+  /** Transient current-review scope; durable observation and CLI writers exclude it. */
+  dmarcPolicyContext?: DmarcPolicyContext;
 };
 
 function contextRecord(value: unknown, keys: readonly string[], label: string): Record<string, unknown> {

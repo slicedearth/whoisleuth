@@ -117,6 +117,17 @@ describe('posture output', () => {
     assert.match(output, /Next\s+Publish a policy/);
   });
 
+  test('durable v1 output excludes transient policy context while preserving existing output and the source report', () => {
+    const report = postureReport();
+    const before = structuredClone(report);
+    const ordinary = buildCliPostureDocument('example.test', report, '2026-07-14T02:00:00.000Z');
+    const transient = { ...report, checks: report.checks.map(check => ({ ...check, dmarcPolicyContext: { marker: 'transient-only-sentinel' } })) };
+    const sourceBefore = structuredClone(transient);
+    assert.deepEqual(buildCliPostureDocument('example.test', transient, '2026-07-14T02:00:00.000Z'), ordinary);
+    assert.deepEqual(transient, sourceBefore); assert.deepEqual(report, before);
+    assert.doesNotMatch(JSON.stringify(ordinary), /dmarcPolicyContext|transient-only-sentinel/);
+  });
+
   test('terminal-only record caps are explicit and do not alter the machine report', () => {
     const records = Array.from({ length: MAX_POSTURE_TERMINAL_RECORDS + 2 }, (_, index) => `record-${index}`);
     const document = buildCliPostureDocument('example.test', postureReport({

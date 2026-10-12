@@ -349,6 +349,10 @@ records can be sensitive and remain browser-local until deliberately exported.
 Saved settings reviews also retain source times, completeness, the profile
 identifier and a digest of its collection settings. They do not retain raw
 DNS or registry responses.
+An opted-in inherited-DMARC review can show typed policy-owner, discovery and
+observation-time context in page memory. That structured context is excluded
+from saved settings observations, Case snapshots and portable CLI output;
+historical missing context is not reconstructed.
 
 Public CLI Case packs exclude Brand Profile references, actions, observed-effect
 reviews and closure records. Every audience, including public, retains domain

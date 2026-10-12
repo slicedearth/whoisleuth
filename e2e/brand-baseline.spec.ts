@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import AxeBuilder from '@axe-core/playwright';
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openInboxReview, inboxReviewControls } from './console-navigation';
 import { expect, test } from './fixtures';
@@ -1150,7 +1151,11 @@ test('additional DNS review is explicit, visible and not retained as a backgroun
     selections.push(query.get('includeInheritedDns'));
     const report = postureFixture(query.get('q') || 'stored.example');
     if (query.get('includeInheritedDns') === '1') {
-      report.checks.push({ id: 'dmarc_inheritance', label: 'Inherited DMARC policy', status: 'info', summary: 'Inherited policy published at _dmarc.example.', detail: 'Existing and nonexistent names remain separate.', records: ['Recursive DNS TXT _dmarc.example · policy reject'], remediation: '' });
+      const inheritance: import('../packages/evidence/domain-posture-context.mts').DomainPostureCheck = { id: 'dmarc_inheritance', label: 'Inherited DMARC policy', status: 'info', summary: 'Inherited policy published at _dmarc.example.', detail: 'Existing and nonexistent names remain separate.', records: ['Recursive DNS TXT _dmarc.example · policy reject'], remediation: '',
+        dmarcPolicyContext: { version: 1, source: 'recursive_dns_txt', relation: 'inherited', complete: true,
+          owner: 'example', observedAt: '2026-06-01T00:00:00.000Z', policy: 'reject', subdomainPolicy: 'quarantine', nonexistentPolicy: 'reject', psd: 'y', testMode: false,
+          discovery: [{ owner: query.get('q')!, state: 'not_found', observedAt: '2026-06-01T00:00:00.000Z' }, { owner: 'example', state: 'observed', observedAt: '2026-06-01T00:00:00.000Z' }] } };
+      report.checks.push(inheritance);
       report.summary.info += 1;
       report.dmarcAuthorizations = [
         { destination: 'reports.stored.example', reportType: 'aggregate', recordName: null, state: 'self', error: null },
@@ -1175,6 +1180,10 @@ test('additional DNS review is explicit, visible and not retained as a backgroun
   expect(selections).toEqual([null, '1']);
   const disclosure = page.locator('.checks details').filter({ has: page.getByText('Inherited DMARC policy', { exact: true }) });
   await disclosure.locator('summary').click(); await expect(disclosure).toContainText('Recursive DNS TXT _dmarc.example');
+  const scope = disclosure.getByRole('region', { name: 'DMARC policy scope', exact: true });
+  await expect(scope).toContainText('Inherited from an ancestor');
+  await expect(scope).toContainText('_dmarc.example');
+  await expect(scope.locator('div').filter({ hasText: 'Existing subdomain policy' }).locator('dd')).toHaveText('quarantine');
   const reporting = page.locator('.audit details').filter({ has: page.getByText('DMARC reporting authorisation', { exact: true }) });
   await reporting.locator('summary').click();
   await expect(reporting).toContainText('same organisational scope');
@@ -1182,6 +1191,8 @@ test('additional DNS review is explicit, visible and not retained as a backgroun
   for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
     await page.setViewportSize({ width, height: 800 }); await useTheme(page, theme);
     await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('[aria-label="DMARC policy scope"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await scope.screenshot({ path: testInfo.outputPath(`policy-scope-${width}-${theme}.png`) });
     if (captureVisualEvidenceEnabled()) await reporting.screenshot({ path: testInfo.outputPath(`reporting-${width}-${theme}.png`) });
   }
   await page.reload(); await openBrandWorkbench(page, 'posture'); await expect(option).not.toBeChecked();

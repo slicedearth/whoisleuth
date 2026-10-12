@@ -151,6 +151,8 @@ For an explicit inherited-policy and direct parent-delegation review, use
 option, posture collection keeps its existing exact-name scope. The extra
 results distinguish recursive policy publication from sampled parent referrals;
 they do not establish name existence, message authentication or DNSSEC validity.
+The machine-readable posture document keeps its existing versioned fields;
+the website's transient structured policy scope is not included in that export.
 
 | Mode | Behaviour |
 | --- | --- |

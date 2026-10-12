@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { buildDesiredPostureHistory, buildOwnedDomainPostureReview, filterPostureComparisons, officialDomainReviewBatch, type DesiredPostureComparison } from '../frontend/src/lib/analysis/owned-domain-posture-review.ts';
+import { buildDesiredPostureHistory, buildDesiredPostureObservation, buildOwnedDomainPostureReview, filterPostureComparisons, officialDomainReviewBatch, type DesiredPostureComparison } from '../frontend/src/lib/analysis/owned-domain-posture-review.ts';
 import type { BrandProfile } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import type { DomainPostureHttpResponse } from '../frontend/src/lib/analysis/client-response-contracts.ts';
 import { brandPostureObservationContext } from '../frontend/src/lib/analysis/brand-profile-model.ts';
@@ -89,6 +89,19 @@ const report = {
 } satisfies DomainPostureHttpResponse;
 
 describe('owned-domain posture review', () => {
+  test('explicit saved observations exclude current-only structured policy context', () => {
+    const transient: DomainPostureHttpResponse = { ...report, checks: [...report.checks, {
+      id: 'dmarc_inheritance', label: 'Inherited policy', status: 'info', summary: 'Publication reviewed', detail: '', records: ['Synthetic bounded policy observation'], remediation: '',
+      dmarcPolicyContext: { version: 1, source: 'recursive_dns_txt', relation: 'exact', complete: true,
+        owner: 'example.test', observedAt: '2026-06-01T00:00:00.000Z', policy: 'reject', subdomainPolicy: 'quarantine', nonexistentPolicy: 'none', psd: 'u', testMode: false,
+        discovery: [{ owner: 'example.test', state: 'observed', observedAt: '2026-06-01T00:00:00.000Z' }] },
+    }] };
+    const before = structuredClone(transient);
+    const retained = buildDesiredPostureObservation(transient);
+    assert.deepEqual(retained.checks.at(-1), { id: 'dmarc_inheritance', status: 'info', records: ['Synthetic bounded policy observation'] });
+    assert.doesNotMatch(JSON.stringify(retained), /dmarcPolicyContext|recursive_dns_txt/);
+    assert.deepEqual(transient, before);
+  });
   test('organizes desired state without upgrading limited evidence', () => {
     const review = buildOwnedDomainPostureReview(profile, report, '2026-06-01T00:00:00.000Z');
     assert.equal(review.profileLabel, 'Active mail domain');

@@ -6,6 +6,7 @@ import { buildDnssecQuery, DNS_TYPE_NS, normalizeResolverEndpoint, parseDnssecRe
 import { defaultTcpExchange, type DnsExchange } from './service-binding-dns.mts';
 import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
 import type { DomainPostureCheck } from '../packages/evidence/domain-posture-context.mts';
+import { normalizeDmarcPolicyContext } from '../packages/evidence/dmarc-policy-context.mts';
 
 type DnsObservation = DmarcDnsObservation;
 export type InheritanceDnsDependencies = Readonly<{
@@ -51,8 +52,20 @@ export async function reviewInheritedDmarc(
       ? `Published policy: ${selected.parsed.policy}. Test mode: ${selected.parsed.testMode ? 'yes' : 'no'}.`
       : `For an existing name: ${selected.parsed.subdomainPolicy}. For a nonexistent name: ${selected.parsed.nonexistentSubdomainPolicy}. Test mode: ${selected.parsed.testMode ? 'yes' : 'no'}. Name existence is not inferred from this review.`
     : 'Invalid or unavailable records do not establish absence or a usable inherited policy.';
-  return check('dmarc_inheritance', 'Inherited DMARC policy', incomplete || !selected ? 'warning' : 'info', summary,
-    `${detail} Discovery follows RFC 9989 with at most eight owners. This is publication evidence, not message authentication or a guarantee of receiver behaviour.`, rows.map(row => row.record));
+  const effective = !incomplete ? selected : null;
+  return {
+    ...check('dmarc_inheritance', 'Inherited DMARC policy', incomplete || !selected ? 'warning' : 'info', summary,
+      `${detail} Discovery follows RFC 9989 with at most eight owners. This is publication evidence, not message authentication or a guarantee of receiver behaviour.`, rows.map(row => row.record)),
+    dmarcPolicyContext: normalizeDmarcPolicyContext({
+      version: 1, source: 'recursive_dns_txt', complete: !incomplete,
+      relation: effective ? effective.owner === domain ? 'exact' : 'inherited' : 'undetermined',
+      owner: effective?.owner ?? null, observedAt: effective?.observedAt ?? null,
+      policy: effective?.parsed.policy ?? null, subdomainPolicy: effective?.parsed.subdomainPolicy ?? null,
+      nonexistentPolicy: effective?.parsed.nonexistentSubdomainPolicy ?? null,
+      psd: effective?.psd ?? null, testMode: effective?.parsed.testMode ?? null,
+      discovery: rows.map(row => ({ owner: row.owner, state: row.state, observedAt: row.observedAt })),
+    }, domain)!,
+  };
 }
 
 function nameservers(value: unknown): string[] | null {
