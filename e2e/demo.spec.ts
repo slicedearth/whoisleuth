@@ -49,6 +49,8 @@ test('fictional inference exercises explain evidence limits without recording an
     ['related-hosts', /prove one operator controls both pages/u, /two different affected identities/u, /not proof of common control/u],
     ['contradictory-sources', /proves the complete capture was wrong/u, /includes a credential form/u, /no recorded path or viewport/u],
     ['provider-resolved', /confirms that the page has been removed/u, /^The provider reported resolution/u, /independent capture failed/u],
+    ['trust-claim', /proves that this separate campaign is authorised/u, /text and image describe different organisers/u, /not authority for this campaign/u],
+    ['dependent-sources', /response that reused it are independent observations/u, /response declares reuse/u, /Repetition is not a separate observation/u],
   ] as const) {
     await scenario.selectOption(id);
     await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
@@ -83,6 +85,16 @@ test('fictional inference exercises explain evidence limits without recording an
   }
 
   expect(await page.evaluate(() => ({ local: Object.entries(localStorage).sort(), session: Object.entries(sessionStorage).sort() }))).toEqual(storedBefore);
+  const retainedDraft = practice.getByLabel('Conclusion summary', { exact: true });
+  const presentationOptions = page.getByRole('group', { name: 'Optional fictional presentation', exact: true });
+  await expect(presentationOptions.getByRole('checkbox', { checked: true })).toHaveCount(0);
+  await expect(page.getByRole('complementary', { name: 'Fictional practice companion', exact: true })).toHaveCount(0);
+  await presentationOptions.getByRole('checkbox', { name: 'Larger practice reading', exact: true }).check();
+  await presentationOptions.getByRole('checkbox', { name: 'Show practice companion', exact: true }).check();
+  await expect(page.getByRole('complementary', { name: 'Fictional practice companion', exact: true })).toBeVisible();
+  await expect(retainedDraft).toHaveValue('Keep this unsubmitted explanation');
+  await expect(explanation).toContainText('Repetition is not a separate observation');
+  expect(await page.evaluate(() => ({ local: Object.entries(localStorage).sort(), session: Object.entries(sessionStorage).sort() }))).toEqual(storedBefore);
   for (const density of ['comfortable', 'compact'] as const) {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.getByRole('button', { name: /^Colour theme,/u }).click();
@@ -99,6 +111,8 @@ test('fictional inference exercises explain evidence limits without recording an
       if (captureVisualEvidenceEnabled()) {
         await page.screenshot({ path: testInfo.outputPath(`inference-${density}-${theme}-${width}-viewport.png`) });
         await exercise.screenshot({ path: testInfo.outputPath(`inference-${density}-${theme}-${width}.png`) });
+        await presentationOptions.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath(`practice-presentation-${density}-${theme}-${width}.png`) });
       }
     }
   }
@@ -803,6 +817,9 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(page.getByRole('button', { name: /^Pin checkpoint /u })).toHaveCount(0);
   await page.getByText('Explore the retained investigation timeline', { exact: true }).click();
   const retainedTimeline = page.getByRole('region', { name: 'Investigation timeline', exact: true });
+  const journalRows = await retainedTimeline.locator('.timeline-list').innerText();
+  await retainedTimeline.getByRole('checkbox', { name: 'Field journal reading layout', exact: true }).check();
+  expect(await retainedTimeline.locator('.timeline-list').innerText()).toBe(journalRows);
   await expect(retainedTimeline.locator('a[href]')).toHaveCount(0);
   await retainedTimeline.getByText('Evidence family coverage', { exact: true }).click();
   const families = retainedTimeline.getByRole('list', { name: 'Evidence families', exact: true });
@@ -816,7 +833,10 @@ test('completes the guided synthetic workflow without investigation requests or 
     await expectNoHorizontalOverflow(page);
     expect((await new AxeBuilder({ page }).include('.timeline-workspace').analyze()).violations).toEqual([]);
     await combined.getByRole('button').focus();
-    if (captureVisualEvidenceEnabled()) await families.screenshot({ path: testInfo.outputPath(`demo-families-${theme}-${width}.png`) });
+    if (captureVisualEvidenceEnabled()) {
+      await families.screenshot({ path: testInfo.outputPath(`demo-families-${theme}-${width}.png`) });
+      await retainedTimeline.locator('.timeline-list').screenshot({ path: testInfo.outputPath(`demo-journal-${theme}-${width}.png`) });
+    }
   }
   await page.getByText('Explore the retained investigation timeline', { exact: true }).click();
 

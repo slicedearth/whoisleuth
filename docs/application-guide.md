@@ -84,6 +84,15 @@ the requested-evidence exercise prepares a drafting amendment. Changing scenario
 requires confirming that its Case and drafts should be discarded. Feedback
 checks retained relationships and states, not the quality of free-text reasoning.
 
+Optional **Larger practice reading** and **Show practice companion** choices are
+page-local presentation aids. They do not change the fictional records, grade
+decisions or appear in evidence exports. Source-reuse and campaign-authority
+exercises explain why repeated reports or an organisation directory entry do
+not establish independent observation or authority for a separate offer.
+The retained investigation timeline also offers a **Field journal reading
+layout**, using the same entries, filters, pagination and separately labelled
+clocks. It does not reconstruct missing observations or change the theme.
+
 In a prepared response packet, **Recipient reading view** offers the full report,
 brief emphasis, selected evidence and its contained timeline. These views contain
 only the packet's existing projection; printing still uses its full report and

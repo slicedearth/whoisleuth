@@ -27,6 +27,7 @@
   let time = $state<RetainedTimelineTimeFilter>('all');
   let family = $state<'' | RetainedTimelineFamily>('');
   let page = $state(1);
+  let journal = $state(false);
   const matching = $derived(filterRetainedEvidenceTimeline(timeline, { entity, caseId, source, area, freshness, eventType, time }));
   const lanes = $derived(retainedTimelineLanes(matching));
   const filtered = $derived(family ? matching.filter(item => item.family === family) : matching);
@@ -60,7 +61,7 @@
   }
 </script>
 
-<section class="timeline-workspace" aria-labelledby="retained-evidence-timeline-title">
+<section class="timeline-workspace" class:journal aria-labelledby="retained-evidence-timeline-title">
   <header>
     <div>
       <p class="eyebrow">Retained evidence</p>
@@ -73,6 +74,7 @@
       <span><strong>{timeline.freshnessCounts.stale}</strong> stale</span>
     </div>
   </header>
+  <label class="journal-choice"><input type="checkbox" bind:checked={journal}> Field journal reading layout</label>
 
   <div class="filters" role="group" aria-label="Timeline filters">
     <label>Entity<input type="search" bind:value={entity} oninput={resetPage} maxlength="253" placeholder="Filter domains"></label>
@@ -167,6 +169,7 @@
 </section>
 
 <style>
+  .journal-choice{display:flex;align-items:center;gap:8px;min-height:44px;font-size:var(--text-sm)}.journal-choice input{width:18px;height:18px;flex:none}.journal article{padding:clamp(16px,3vw,26px);border-radius:var(--radius-sm)}.journal article>p{font-size:var(--text-sm);line-height:1.75;max-width:75ch}.journal article h3{font-size:var(--text-lg)}.journal dl{grid-template-columns:repeat(2,minmax(0,1fr))}.journal dl div{border:0;padding:7px 0;border-bottom:1px solid var(--border);border-radius:0;background:transparent}@media(max-width:480px){.journal dl{grid-template-columns:1fr}}@media print{.journal-choice{display:none}}
   .timeline-workspace{display:grid;gap:14px}.timeline-workspace>header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.timeline-workspace>header h2{margin:0}.timeline-workspace>header p:not(.eyebrow){max-width:760px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .metrics{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.metrics span{padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font:650 var(--text-2xs) var(--mono);white-space:nowrap}.metrics strong{color:var(--accent)}
   .filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.filters label{display:grid;gap:4px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}.filters select,.filters input{min-width:0;width:100%}.filters button{min-height:38px}

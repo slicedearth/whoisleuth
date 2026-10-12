@@ -13,6 +13,22 @@ import { reviewIdentityIncident } from '../packages/investigation/identity-incid
 import { casePracticeCaptureContexts } from '../frontend/src/lib/analysis/case-practice.ts';
 import { compareObservationContexts } from '../packages/comparison/capture-context.mts';
 
+test('authority and reused-source exercises retain independently defined evidence limits without changing Cases', () => {
+  for (const [scenario, weak, careful, reason] of [
+    ['trust-claim', /directory entry proves.*campaign is authorised/u, /text and image describe different organisers/u, /not authority for this campaign/u],
+    ['dependent-sources', /reused it are independent observations/u, /response declares reuse/u, /Repetition is not a separate observation/u],
+  ] as const) {
+    const record = createCasePracticeRecord(scenario), before = structuredClone(record);
+    const exercise = casePracticeDefinition(scenario).inference!;
+    assert.equal(exercise.statements.find(statement => weak.test(statement.text))?.exceedsEvidence, true);
+    assert.equal(exercise.statements.find(statement => careful.test(statement.text))?.exceedsEvidence, false);
+    assert.match(exercise.statements.find(statement => weak.test(statement.text))!.explanation, reason);
+    assert.equal(exercise.statements.length, 3);
+    assert.equal(record.disposition, 'unreviewed'); assert.equal(record.decisions.length, 0);
+    assert.deepEqual(record, before);
+  }
+});
+
 test('compromised-path practice keeps the root, control assessment and infrastructure readiness separate', () => {
   const record = createCasePracticeRecord('compromised-page');
   assert.deepEqual(caseIncidentTargets(record).map(item => item.url), ['https://publisher.example/old-guide']);
