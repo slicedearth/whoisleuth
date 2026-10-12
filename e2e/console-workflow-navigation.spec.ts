@@ -164,7 +164,8 @@ test('pinned checkpoints and successful Case visits survive Console navigation w
   await pin(ids[0]!).click(); await expect(page.getByRole('status').filter({ hasText: 'already pinned' })).toBeVisible();
   await pin(ids[4]!).click(); await expect(page.getByRole('status').filter({ hasText: 'Four checkpoints are already pinned' })).toBeVisible();
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Lookup', exact: true }).click();
-  const tray = page.locator('details').filter({ has: page.getByText('Pinned checkpoints · 4 of 4', { exact: true }) });
+  await page.getByText('Tab references', { exact: true }).click();
+  const tray = page.getByText('Pinned checkpoints · 4 of 4', { exact: true }).and(page.locator('summary')).locator('..');
   await tray.locator(':scope > summary').click();
   const references = tray.getByRole('list', { name: 'Pinned Case checkpoint references', exact: true });
   await expect(references.locator('li')).toHaveCount(4);
@@ -199,7 +200,7 @@ test('pinned checkpoints and successful Case visits survive Console navigation w
   }
   expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 })).manifest).toEqual(before.manifest);
   await page.setViewportSize({ width: 1280, height: 720 });
-  const visits = page.locator('details').filter({ has: page.getByText('Visited Cases · 1', { exact: true }) });
+  const visits = page.getByText('Visited Cases · 1', { exact: true }).and(page.locator('summary')).locator('..');
   await visits.locator(':scope > summary').click();
   await visits.getByRole('link', { name: /Case tray-case · Evidence/u }).click();
   await expect(page).toHaveURL('/cases?case=tray-case&section=evidence');

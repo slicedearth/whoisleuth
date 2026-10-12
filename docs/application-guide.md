@@ -104,7 +104,8 @@ explicitly selected. Closing it, refreshing the packet or changing source, optio
 the comparison; different representations do not establish deletion or redaction.
 
 **Pin checkpoint** in a Case evidence timeline keeps up to four exact references
-in the current tab. **Pinned checkpoints** in the Console context can re-open
+in the current tab. Open **Tab references** in the Console context, then
+**Pinned checkpoints** to re-open
 their evidence and stage two same-Case checkpoints in the existing comparison.
 Unavailable references remain explicit; another checkpoint is never substituted.
 **Visited Cases** provides a bounded navigation trail, not an observed

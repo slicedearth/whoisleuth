@@ -54,6 +54,7 @@
   let revealInvestigationGuideOnMount = $state(false);
   let selectedCaseId = $state<string | null>(null);
   let referenceViewPresent = $state(false);
+  let tabReferencesOpen = $state(false);
   const showCaseContext = $derived(Boolean(selectedCaseId)
     && page.url.pathname !== '/cases'
     && !(page.url.pathname === '/monitor' && (page.url.searchParams.get('view') === 'cases' || page.url.searchParams.has('case'))));
@@ -336,13 +337,22 @@
           <BrowserWorkspaceIndicator compact />
           <span class="context-backend" role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span>
         </div>
-        <details class="context-storage">
-          <summary>{localApplication ? 'Filesystem storage · plaintext' : 'Browser-local storage'}</summary>
-          <p>{localApplication ? 'Saved records and original files remain in the selected filesystem workspace. Encrypted backups are separate.' : 'Saved records remain in this browser’s selected workspace. Opening another workspace replaces this page; other tabs keep their own selection.'}</p>
-          <p>{capabilityStatusDetail()} This is the reported configuration, not a live source-health check.</p>
-        </details>
+        <div class="context-details">
+          <details class="context-storage">
+            <summary>{localApplication ? 'Filesystem storage · plaintext' : 'Browser-local storage'}</summary>
+            <p>{localApplication ? 'Saved records and original files remain in the selected filesystem workspace. Encrypted backups are separate.' : 'Saved records remain in this browser’s selected workspace. Opening another workspace replaces this page; other tabs keep their own selection.'}</p>
+            <p>{capabilityStatusDetail()} This is the reported configuration, not a live source-health check.</p>
+          </details>
+          <details class="context-storage" bind:open={tabReferencesOpen}>
+            <summary>Tab references</summary>
+            {#if tabReferencesOpen}
+              {#if referenceViewPresent}
+                <DeferredSurface load={() => import('#lib/components/ConsoleReferenceView.svelte')} props={{}} loadingLabel="Opening tab reference view…" unavailableLabel="Tab references could not be displayed. Saved evidence has not changed." />
+              {:else}<p>No checkpoints or Case visits are retained in this tab.</p>{/if}
+            {/if}
+          </details>
+        </div>
         {#if showCaseContext && selectedCaseId}<DeferredSurface load={() => import('#lib/components/SelectedCaseContext.svelte')} props={{caseId:selectedCaseId,compact:true}} loadingLabel="Reading selected Case…" unavailableLabel="Selected Case context could not be loaded." />{/if}
-        {#if referenceViewPresent}<DeferredSurface load={() => import('#lib/components/ConsoleReferenceView.svelte')} props={{}} loadingLabel="Opening tab reference view…" unavailableLabel="Tab references could not be displayed. Saved evidence has not changed." />{/if}
       </section>
       {#if investigationGuideRequested}<DeferredSurface load={() => import('#lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}
       {@render children()}
@@ -362,6 +372,9 @@
   .context-task>span{color:var(--muted)}
   .context-backend{max-width:100%;font:600 var(--text-xs) var(--mono);color:var(--muted);white-space:nowrap;text-overflow:clip}
   .context-storage{margin-top:4px;font-size:var(--text-xs);color:var(--muted)}
+  .context-details{display:flex;flex-wrap:wrap;gap:0 16px;align-items:start;min-width:0}
+  .context-details>details{min-width:0;max-width:100%;flex:0 1 auto}
+  .context-details>details[open]{flex:1 1 100%}
   .context-storage>summary{min-height:44px;display:list-item;align-content:center;cursor:pointer;width:fit-content;max-width:100%;padding-block:8px}
   .context-storage>p{max-width:85ch;line-height:1.6;margin:6px 0 12px}
   .workspace-recovery{width:min(760px,calc(100% - 32px));margin:20px auto;padding:20px}

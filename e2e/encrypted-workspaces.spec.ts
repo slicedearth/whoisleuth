@@ -219,6 +219,7 @@ for (const relock of ['manual', 'idle'] as const) test(`workspace lifecycle keep
   await page.goto('/dashboard'); const row = await createEncrypted(page, 'Cancellable lock'); await unlock(page, row.name);
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
   await createCaseThroughForm(page, 'cancel-lock.example'); const form = await recoveryPinForm(page), url = page.url();
+  await page.getByText('Tab references', { exact: true }).click();
   await expect(page.getByText('Visited Cases · 1', { exact: true })).toBeVisible();
   await failNextBrowserLocalManifestWrite(page, 'case_drafts');
   await form.getByLabel('Label', { exact: true }).fill('Keep this draft after cancelling lock');

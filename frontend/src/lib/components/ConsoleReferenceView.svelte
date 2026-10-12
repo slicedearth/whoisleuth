@@ -6,7 +6,7 @@
     type ConsoleReferenceView, type PinnedCaseCheckpoint } from '#lib/console-workflow-state.ts';
   import { CASE_WORKSPACE_SECTIONS, caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
-  import CaseCheckpointStage from './CaseCheckpointStage.svelte';
+  import DeferredSurface from './DeferredSurface.svelte';
   let view = $state<ConsoleReferenceView>(readConsoleReferenceView());
   let records = $state.raw<readonly CaseRecord[]>([]);
   let phase = $state<'empty' | 'loading' | 'ready' | 'unavailable'>('empty');
@@ -93,7 +93,7 @@
       </ul>
       <div class="actions"><button type="button" class="btn small" disabled={phase !== 'ready' || selected.length !== 2} onclick={review}>Review selected checkpoints</button><button type="button" class="btn small" onclick={() => void remove()}>Clear pinned checkpoints</button></div>
       {#if message}<p role="status">{message}</p>{/if}
-      {#if staged}<CaseCheckpointStage cases={records} initialSelection={staged} />{/if}
+      {#if staged}<DeferredSurface load={() => import('./CaseCheckpointStage.svelte')} props={{ cases: records, initialSelection: staged }} loadingLabel="Opening selected checkpoint comparison…" unavailableLabel="The checkpoint comparison could not be opened. Retained evidence has not changed." />{/if}
     </details>
   {/if}
   {#if view.visits.length}
