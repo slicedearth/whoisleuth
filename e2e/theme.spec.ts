@@ -478,35 +478,68 @@ test('the theme trigger identifies its rendered appearance panel', async ({ page
 });
 
 test('terminal headers are optional, reversible and independent of other appearance choices', async ({ page }) => {
-  await page.goto('/dashboard');
-  await page.evaluate(() => localStorage.setItem('whoisleuth:appearance:v1', 'compact:minimal'));
-  await page.reload();
-  const strip = page.locator('.terminal-strip');
-  await expect(strip).toHaveCount(1);
-  await expect(strip).toBeHidden();
-  await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
-  await expect(page.locator('html')).toHaveAttribute('data-effects', 'minimal');
-  await page.getByRole('button', { name: /^Colour theme,/ }).click();
-  const terminal = page.getByRole('checkbox', { name: 'Terminal-style headers', exact: true });
-  await expect(terminal).not.toBeChecked();
-  await terminal.focus();
-  await page.keyboard.press('Space');
-  await expect(terminal).toBeChecked();
-  await expect(strip).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: /^Colour theme,/ })).toBeFocused();
-  await page.reload();
-  await expect(strip).toBeVisible();
-  await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
-  await expect(page.locator('html')).toHaveAttribute('data-effects', 'minimal');
-  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: /^Colour theme,/ }).click();
-  await page.getByRole('checkbox', { name: 'Terminal-style headers', exact: true }).uncheck();
-  await expect(strip).toBeHidden();
-  await page.keyboard.press('Escape');
-  await page.reload();
-  await expect(strip).toBeHidden();
-  expect(await page.evaluate(() => localStorage.getItem('whoisleuth:appearance:v1'))).toBe('compact:minimal');
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/dashboard');
+    await page.evaluate(() => localStorage.setItem('whoisleuth:appearance:v1', 'compact:minimal'));
+    await page.reload();
+    const mobile = width === 390;
+    const toggle = page.getByRole('button', { name: 'Toggle navigation', exact: true });
+    const trigger = page.getByRole('button', { name: /^Colour theme,/ });
+    if (mobile) await toggle.click();
+    const strip = page.locator('.terminal-strip');
+    await expect(strip).toHaveCount(1);
+    await expect(strip).toBeHidden();
+    await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
+    await expect(page.locator('html')).toHaveAttribute('data-effects', 'minimal');
+    const terminal = page.getByRole('checkbox', { name: 'Terminal-style headers', exact: true });
+    const effects = page.getByRole('checkbox', { name: 'Decorative effects', exact: true });
+    const tabToTerminal = async () => {
+      await trigger.click();
+      await expect(trigger).toBeFocused();
+      for (const theme of ['Dark', 'Light', 'System']) {
+        await page.keyboard.press('Tab');
+        await expect(page.getByRole('option', { name: `${theme} theme`, exact: true })).toBeFocused();
+      }
+      for (const control of [page.getByLabel('Reading density'), effects, terminal]) {
+        await page.keyboard.press('Tab');
+        await expect(control).toBeFocused();
+        await expect(control).toBeInViewport();
+      }
+    };
+    await tabToTerminal();
+    await expect(terminal).not.toBeChecked();
+    await page.keyboard.press('Shift+Tab');
+    await expect(effects).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(terminal).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(terminal).toBeChecked();
+    await expect(strip).toBeVisible();
+    if (mobile) {
+      await page.keyboard.press('Tab');
+      await expect(page.getByRole('link', { name: 'WHOISleuth Dashboard', exact: true })).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
+      await expect(trigger).toBeFocused();
+    }
+    await page.keyboard.press('Escape');
+    await expect(mobile ? toggle : trigger).toBeFocused();
+    await page.reload();
+    if (mobile) await toggle.click();
+    await expect(strip).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
+    await expect(page.locator('html')).toHaveAttribute('data-effects', 'minimal');
+    await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+    await tabToTerminal();
+    await page.keyboard.press('Space');
+    await expect(terminal).not.toBeChecked();
+    await expect(strip).toBeHidden();
+    await page.keyboard.press('Escape');
+    await page.reload();
+    if (mobile) await toggle.click();
+    await expect(strip).toBeHidden();
+    expect(await page.evaluate(() => localStorage.getItem('whoisleuth:appearance:v1'))).toBe('compact:minimal');
+  }
 });
 
 test('the public theme control inherits its canvas and keeps an opaque option surface', async ({ page }) => {

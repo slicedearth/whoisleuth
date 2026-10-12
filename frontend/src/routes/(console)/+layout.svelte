@@ -164,25 +164,21 @@
     window.location.replace('/login');
   }
 
-  function navigationFocusables(){
-    if (!navigationPanel) return [];
-    return [...navigationPanel.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),[tabindex]:not([tabindex="-1"])')]
-      .filter((element) => element.getClientRects().length > 0);
+  function visibleFocusables(container: HTMLElement | undefined){
+    if (!container) return [];
+    return [...container.querySelectorAll<HTMLElement>('a[href],button,input,select,textarea,summary,[tabindex]')]
+      .filter((element) => element.tabIndex >= 0 && !element.matches(':disabled')
+        && !element.closest('[inert]') && element.getClientRects().length > 0);
   }
 
   function visibleShellFocusables(){
-    if(!consoleHeader||!navigationPanel)return [];
-    const selector='a[href],button:not([disabled]),[tabindex]:not([tabindex="-1"])';
-    return [
-      ...consoleHeader.querySelectorAll<HTMLElement>(selector),
-      ...navigationPanel.querySelectorAll<HTMLElement>(selector),
-    ].filter((element)=>element.getClientRects().length>0);
+    return [consoleHeader,navigationPanel].flatMap(visibleFocusables);
   }
 
   async function openNavigation(){
     navOpen=true;
     await tick();
-    navigationFocusables()[0]?.focus();
+    visibleFocusables(navigationPanel)[0]?.focus();
   }
 
   async function closeNavigation(returnFocus=true){
