@@ -5,23 +5,19 @@ import { caseFollowUpSources } from './case-follow-ups.mts';
 import { casePinHasCompleteObservation } from './case-evidence-quality.mts';
 import { caseIncidentObjects } from './case-object-coverage.mts';
 import { caseRequestedEvidenceQueue } from './case-response-queue.mts';
+import { caseAssertionEvidenceReferences, caseEvidenceReferenceResolver } from './case-evidence-references.mts';
 
 /** Read-only projection of bounded Case records. A link is not an inferred verdict. */
 export function buildCaseDecisionOverview(record: CaseRecord, now: string) {
-  const pins = new Map(record.evidencePins.map(pin => [pin.id, pin]));
-  const references = (ids: readonly string[]) => [...new Set(ids)].map(id => ({ id, pin: pins.get(id) ?? null }));
+  const references = caseEvidenceReferenceResolver(record.evidencePins);
   const conclusions = latestObservationCohort(record.decisions, decision => decision.createdAt);
   const latestEvidence = latestObservationCohort([
     ...record.evidencePins.map(pin => pin.createdAt),
     ...record.evidenceHistory.map(snapshot => snapshot.capturedAt),
     ...record.sightings.map(sighting => sighting.createdAt),
   ], value => value).observedAt;
-  const claims = record.assertions.filter(assertion => assertion.state === 'open' && assertion.kind !== 'next_step').map(assertion => {
-    const stances = new Map(assertion.evidenceRelations?.map(relation => [relation.evidencePinId, relation.stance]) ?? []);
-    return { assertion, references: references([...assertion.evidencePinIds, ...stances.keys()]).map(reference => ({
-      ...reference, stance: stances.get(reference.id) ?? null,
-    })) };
-  });
+  const claims = record.assertions.filter(assertion => assertion.state === 'open' && assertion.kind !== 'next_step')
+    .map(assertion => ({ assertion, references: caseAssertionEvidenceReferences(assertion, references) }));
   const sources = caseFollowUpSources(record);
   const nowAt = normalizeExplicitIsoTimestamp(now);
   const reviews = [

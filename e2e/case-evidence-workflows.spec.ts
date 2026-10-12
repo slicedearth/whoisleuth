@@ -1,7 +1,7 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { openCaseSection } from './console-navigation';
-import { boundingBox, expectNoHorizontalOverflow, useTheme } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, readBrowserLocalCollection, useTheme } from './helpers';
 import AxeBuilder from '@axe-core/playwright';
 import { readFileSync } from 'node:fs';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
@@ -472,6 +472,81 @@ test.describe('cross-case comparison', () => {
 });
 
 test.describe('case report export', () => {
+  test('prepared brief and exact statement references retain evidence and leave download bytes unchanged', async ({ page }, testInfo) => {
+    const at = '2026-10-01T00:00:00.000Z';
+    const requests: string[] = [];
+    page.on('request', request => { const pathname = new URL(request.url()).pathname;
+      if (pathname.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(pathname)) requests.push(pathname);
+    });
+    await openSeededTimelineCase(page, 'prepared-reading.invalid', [caseRecord({ id: 'prepared-reading', domain: 'prepared-reading.invalid',
+      notes: [{ body: 'PRIVATE-NOTE-NOT-SELECTED', createdAt: at }],
+      evidencePins: [{ id: 'prepared-pin', checkpointId: null, field: 'http.status', category: 'http', label: 'Prepared source observation', value: 'Retained partial response',
+        source: 'Retained fixture', sourceState: 'partial', sourceSchema: null, observedAt: null, collectionDepth: 'deep', completeness: 'partial', truncated: true,
+        transitionExpectation: null, limitations: ['Incomplete source scope.'], createdAt: at },
+      { id: 'contrary-prepared-pin', checkpointId: null, field: 'http.status', category: 'http', label: 'Opposing retained observation', value: 'Conflicting retained context',
+        source: 'Separate retained fixture', sourceState: 'partial', sourceSchema: null, observedAt: null, collectionDepth: 'deep', completeness: 'partial', truncated: false,
+        transitionExpectation: null, limitations: ['Separate observation scope.'], createdAt: at }],
+      assertions: [{ id: 'prepared-assessment', kind: 'hypothesis', state: 'open', statement: 'Which source applies?', rationale: 'Opposing context needs review.',
+        evidencePinIds: ['prepared-pin', 'contrary-prepared-pin'], evidenceRelations: [{ evidencePinId: 'prepared-pin', stance: 'supports' }, { evidencePinId: 'contrary-prepared-pin', stance: 'contradicts' }], createdAt: at, updatedAt: at },
+      { id: 'prepared-next', kind: 'next_step', state: 'open', statement: 'Review the retained scope', rationale: null, evidencePinIds: [], createdAt: at, updatedAt: at }],
+      decisions: [{ id: 'prepared-decision-a', summary: 'Keep review open', rationale: 'One source remains partial.', confidence: 'low', confidenceBasis: 'Recorded reasoning', evidencePinIds: ['prepared-pin'], createdAt: at },
+      { id: 'prepared-decision-b', summary: 'Consider the opposing explanation', rationale: 'Equally timed alternative reasoning.', confidence: 'low', confidenceBasis: 'Recorded reasoning', evidencePinIds: [], createdAt: at }],
+    })], CASE_SCHEMA_VERSION);
+    const savedBefore = await readBrowserLocalCollection(page, 'cases');
+    await openCaseSection(page, 'Response');
+    const trigger = page.locator('.export-controls').getByRole('button', { name: 'Preview report', exact: true });
+    await trigger.click();
+    const preview = page.getByRole('dialog', { name: 'Case report preview', exact: true });
+    await preview.getByText('Exact JSON download', { exact: true }).click();
+    const exactJson = preview.getByRole('region', { name: 'Exact report JSON', exact: true });
+    const beforeBytes = await exactJson.locator('pre').textContent();
+    expect(beforeBytes).not.toContain('PRIVATE-NOTE-NOT-SELECTED');
+    await preview.getByRole('button', { name: 'Decision brief', exact: true }).click();
+    const brief = preview.getByRole('region', { name: 'Prepared decision brief' });
+    await expect(brief.getByText('Keep review open', { exact: true })).toBeVisible();
+    await expect(brief.getByText('Consider the opposing explanation', { exact: true })).toBeVisible();
+    await brief.getByLabel('Recorded assessment to focus').selectOption('prepared-assessment');
+    const assessment = brief.getByRole('article', { name: 'Selected prepared assessment' });
+    const evidenceSummary = assessment.locator('summary');
+    await expect(evidenceSummary).toBeVisible(); await evidenceSummary.focus(); await evidenceSummary.press('Enter');
+    await expect(assessment.getByText('Retained partial response', { exact: true })).toBeVisible();
+    await expect(assessment.getByText('Supports this statement', { exact: true })).toBeVisible();
+    await expect(assessment.getByText('Contradicts this statement', { exact: true })).toBeVisible();
+    await expect(assessment.getByText('Conflicting retained context', { exact: true })).toBeVisible();
+    await expect(assessment.getByText('Observation time unavailable', { exact: true })).toHaveCount(2);
+    await expect(assessment.getByText('Incomplete source scope.', { exact: true })).toBeVisible();
+    expect(await exactJson.locator('pre').textContent()).toBe(beforeBytes);
+    for (const theme of ['light', 'dark'] as const) {
+      await preview.getByRole('button', { name: 'Close report preview', exact: true }).click();
+      await useTheme(page, theme); await trigger.click();
+      await preview.getByRole('button', { name: 'Decision brief', exact: true }).click();
+      for (const width of [320, 1280]) {
+        await page.setViewportSize({ width, height: 844 });
+        await expectNoHorizontalOverflow(page);
+        expect((await new AxeBuilder({ page }).include('dialog[open]').analyze()).violations).toEqual([]);
+        if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`prepared-brief-${theme}-${width}.png`) });
+      }
+    }
+    // Each reopened preview has its own preparation time. Compare within that exact preparation.
+    await preview.getByText('Exact JSON download', { exact: true }).click();
+    const currentBytes = await exactJson.locator('pre').textContent();
+    await preview.getByRole('button', { name: 'Full report', exact: true }).click();
+    const full = preview.getByRole('article', { name: 'Case report contents' });
+    const statement = full.getByRole('heading', { name: 'Which source applies?', exact: true }).locator('..');
+    await statement.locator('summary').click();
+    await expect(statement.getByText('Retained partial response', { exact: true })).toBeVisible();
+    expect(await exactJson.locator('pre').textContent()).toBe(currentBytes);
+    const downloadPromise = page.waitForEvent('download');
+    await preview.getByRole('button', { name: /^Download previewed JSON/u }).click();
+    const download = await downloadPromise;
+    expect(Buffer.concat(await (await download.createReadStream()).toArray()).toString('utf8')).toBe(currentBytes);
+    await preview.getByRole('button', { name: 'Close report preview', exact: true }).click();
+    await expect(trigger).toBeFocused();
+    const savedAfter = await readBrowserLocalCollection(page, 'cases');
+    expect(savedAfter.records).toEqual(savedBefore.records); expect(savedAfter.manifest.revision).toBe(savedBefore.manifest.revision);
+    expect(requests).toEqual([]);
+  });
+
   test('export JSON for a case with correct filename and content', async ({ page }, testInfo) => {
     await openSeededTimelineCase(page, 'export-json.invalid', [
       caseRecord({

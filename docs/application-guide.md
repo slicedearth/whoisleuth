@@ -737,6 +737,14 @@ its source, observation time and completeness, not surrounding notes or raw data
 before an ordinary Case report download. Previewed downloads use the same
 prepared bytes; changing the Case or options requires a fresh preview. These
 reports are separate from authorised response packets.
+Choose **Decision brief** to focus on a recorded assessment, the latest dated
+conclusions, undated conclusions and recorded next steps. Equally timed
+conclusions remain separate; undated decisions are not ranked as older.
+**Inspect linked evidence** opens exact references within the prepared report,
+including opposing, unresolved and unavailable links. It does not fetch evidence
+or substitute a newer live Case value. **Full report** restores the complete
+reading view. These choices do not change download bytes or printing; long
+reasoning and limitations remain available without a one-page truncation.
 **Print or save PDF** formats the complete prepared ordinary report, with
 all sections expanded, selected notes, imported restrictions, source identities
 and omission warnings intact. Long values wrap safely; ISO times ending in Z
