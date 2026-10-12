@@ -197,6 +197,12 @@ workspace passphrase is lost.
 
 ### Guided investigations
 
+The Console context bar keeps the current task, workspace identity and reported
+backend together. Expand the storage disclosure for browser or filesystem
+details; filesystem storage is plaintext and encrypted backups are separate
+exports. A selected Case keeps its own expandable evidence context. Workspace lock controls and
+unavailable-state messages remain visible rather than being hidden in details.
+
 Starting a guide opens its current step. On ordinary tool entry, the retained
 guide appears as a compact disclosure above the tool. Open it to select a step,
 review request permissions or record an outcome. Selecting a step does not

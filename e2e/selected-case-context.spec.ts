@@ -5,6 +5,7 @@ import { TEST_SITE_PASSWORD } from './constants';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { currentActionFixture } from './case-response-fixtures';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
+import { consoleWorkspaceIdentity } from './console-navigation';
 import { currentBrowserLocalDocument, expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, migrateLegacyBrowserData, openNativeLinkInNewTab, readBrowserLocalCollection, useTheme } from './helpers';
 
 const DOMAIN = 'selected-context.example';
@@ -35,6 +36,16 @@ test('selected Case context follows tool navigation without changing saved evide
   page.on('request', (request) => { if (/\/api\/(?:lookup|discover|bulk|mail)/u.test(request.url())) collections.push(request.url()); });
   await expect(page.getByRole('region', { name: 'Selected Case', exact: true })).toHaveCount(0);
   await navigate(page, 'Bulk');
+  const shellContext = page.getByRole('region', { name: 'Current investigation context', exact: true });
+  await expect(consoleWorkspaceIdentity(page)).toHaveText('Default');
+  await expect(shellContext.getByRole('note', { name: 'Current task', exact: true })).toContainText('Bulk');
+  const storage = shellContext.locator('details.context-storage');
+  await expect(storage).not.toHaveAttribute('open');
+  await storage.locator('summary').focus(); await page.keyboard.press('Enter');
+  await expect(storage).toHaveAttribute('open', '');
+  await expect(storage).toContainText('not a live source-health check');
+  await page.keyboard.press('Enter');
+  await expect(storage).not.toHaveAttribute('open');
   const context = page.getByRole('region', { name: 'Selected Case', exact: true });
   await expect(context.getByRole('link', { name: DOMAIN, exact: true })).toBeVisible();
   await context.locator(':scope > details > summary').click();
@@ -46,6 +57,8 @@ test('selected Case context follows tool navigation without changing saved evide
   await expect(context.getByRole('region', { name: 'Case follow-up dates' }).locator('time')).toHaveAttribute('datetime', '2026-06-08T00:00:00.000Z');
   for (const label of ['Lookup', 'Discover', 'Brands', 'Monitoring', 'Dashboard']) {
     await navigate(page, label);
+    await expect(shellContext.getByRole('note', { name: 'Current task', exact: true })).toContainText(label);
+    await expect(consoleWorkspaceIdentity(page)).toHaveText('Default');
     await expect(context.getByRole('link', { name: DOMAIN, exact: true })).toBeVisible();
   }
   expect(collections).toEqual([]);

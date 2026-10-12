@@ -8,6 +8,7 @@ import { createCase, openCasesView, openCaseResponseWorkspace } from './case-tes
 import { selectOriginal, openRetainedFiles, FILE_BYTES, FILE_NAME } from './case-attachment-fixtures';
 import { downloadWorkspaceArchive, downloadEncryptedWorkspaceArchive, reviewWorkspaceBackup, workspaceArchiveRegion } from './workspace-backup';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
+import { consoleWorkspaceIdentity } from './console-navigation';
 import { caseStoreAtCapacity } from '../test/workspace-backup-capacity-fixture.mts';
 import { serializeCaseStore } from '../packages/cases/case-storage-model.mts';
 import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
@@ -51,7 +52,7 @@ test(`${entry} clears its token and history before one delayed local session exc
     expect(exchanges).toBe(1);
     release();
     await expect(page).toHaveURL(`${localApplication.instance.origin}/dashboard`);
-    await expect(page.locator('#main-content > .workspace-scope strong')).toHaveText('Filesystem workspace');
+    await expect(consoleWorkspaceIdentity(page)).toHaveText('Filesystem workspace');
     expect(exchanges).toBe(1);
   } finally { release(); }
 });

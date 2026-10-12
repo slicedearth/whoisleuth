@@ -57,6 +57,8 @@
     && page.url.pathname !== '/cases'
     && !(page.url.pathname === '/monitor' && (page.url.searchParams.get('view') === 'cases' || page.url.searchParams.has('case'))));
   const wideWorkspace = $derived(['/lookup', '/bulk', '/cases', '/monitor', '/brands'].includes(page.url.pathname));
+  const currentTask = $derived(consoleNavigationGroups.flatMap(group => group.items)
+    .find(item => isNavigationItemActive(item, page.url))?.label ?? 'Console');
   setContext(CAPABILITY_CONTEXT, () => capabilities);
   beforeNavigate(({ to, willUnload, cancel }) => {
     // Leaving an unlocked console replaces the document, including cached
@@ -314,12 +316,23 @@
         {/each}
       </nav>
       <nav class="reference-nav" aria-label="Reference"><p class="eyebrow">Reference</p>{#each referenceNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} title={item.detail} target={item.opensInNewTab?'_blank':undefined} rel={item.opensInNewTab?'noopener noreferrer':undefined} aria-label={item.opensInNewTab?`${item.label}. Opens in a new tab.`:undefined} onclick={()=>navOpen=false}><IntelligenceIcon name={item.icon} size={18} /><strong>{item.label}</strong></a>{/each}</nav>
-      <div class="session"><ThemeSelector /><div class="session-row"><span role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>
+      <div class="session"><ThemeSelector /></div>
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
     <main id="main-content" use:keepFocusBelow={() => consoleHeader} class:wide-workspace={wideWorkspace} tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>
-      <BrowserWorkspaceIndicator />
-      {#if showCaseContext && selectedCaseId}<DeferredSurface load={() => import('#lib/components/SelectedCaseContext.svelte')} props={{caseId:selectedCaseId}} loadingLabel="Reading selected Case…" unavailableLabel="Selected Case context could not be loaded." />{/if}
+      <section class="console-context" aria-label="Current investigation context">
+        <div class="context-bar">
+          <p class="context-task" role="note" aria-label="Current task"><span>Task</span><strong>{currentTask}</strong></p>
+          <BrowserWorkspaceIndicator compact />
+          <span class="context-backend" role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span>
+        </div>
+        <details class="context-storage">
+          <summary>{localApplication ? 'Filesystem storage · plaintext' : 'Browser-local storage'}</summary>
+          <p>{localApplication ? 'Saved records and original files remain in the selected filesystem workspace. Encrypted backups are separate.' : 'Saved records remain in this browser’s selected workspace. Opening another workspace replaces this page; other tabs keep their own selection.'}</p>
+          <p>{capabilityStatusDetail()} This is the reported configuration, not a live source-health check.</p>
+        </details>
+        {#if showCaseContext && selectedCaseId}<DeferredSurface load={() => import('#lib/components/SelectedCaseContext.svelte')} props={{caseId:selectedCaseId,compact:true}} loadingLabel="Reading selected Case…" unavailableLabel="Selected Case context could not be loaded." />{/if}
+      </section>
       {#if investigationGuideRequested}<DeferredSurface load={() => import('#lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}
       {@render children()}
       <SiteFooter console />
@@ -332,6 +345,14 @@
 {/if}
 
 <style>
+  .console-context{min-width:0;margin-bottom:18px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+  .context-bar{display:flex;align-items:center;gap:8px 20px;flex-wrap:wrap;min-width:0}
+  .context-task{display:flex;align-items:baseline;gap:8px;margin:0;font-size:var(--text-xs)}
+  .context-task>span{color:var(--muted)}
+  .context-backend{max-width:100%;font:600 var(--text-xs) var(--mono);color:var(--muted);white-space:nowrap;text-overflow:clip}
+  .context-storage{margin-top:4px;font-size:var(--text-xs);color:var(--muted)}
+  .context-storage>summary{min-height:44px;display:list-item;align-content:center;cursor:pointer;width:fit-content;max-width:100%;padding-block:8px}
+  .context-storage>p{max-width:85ch;line-height:1.6;margin:6px 0 12px}
   .workspace-recovery{width:min(760px,calc(100% - 32px));margin:20px auto;padding:20px}
   .workspace-error{display:flex;justify-content:center;margin:40px 16px 20px}.workspace-access{width:min(480px,100%);padding:clamp(20px,4vw,34px);min-width:0;overflow-wrap:anywhere}
   .storage-upgrade{margin-top:16px}.storage-upgrade>summary{min-height:44px;cursor:pointer}.storage-upgrade button{min-height:44px;max-width:100%;padding:8px 13px;white-space:normal}

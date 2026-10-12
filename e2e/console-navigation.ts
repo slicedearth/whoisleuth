@@ -11,6 +11,10 @@ export const COMMAND_NAVIGATION_READINESS: readonly BrowserReadinessTarget[] = [
 ];
 
 type ConsoleView = 'cases' | 'inbox' | 'campaigns' | 'relationships' | 'timeline' | 'certificates' | 'watchlists' | 'rules';
+/** Workspace identity is semantic, independent of Console shell nesting. */
+export function consoleWorkspaceIdentity(page: Page) {
+  return page.getByRole('note', { name: 'Active workspace', exact: true }).locator('strong');
+}
 const monitoringViews = new Set<ConsoleView>(['timeline', 'certificates', 'watchlists', 'rules']);
 const viewLabels = { inbox: 'Inbox', campaigns: 'Campaigns', relationships: 'Relationships', timeline: 'Timeline', certificates: 'Certificates', watchlists: 'Watchlists', rules: 'Custom rules' } as const;
 

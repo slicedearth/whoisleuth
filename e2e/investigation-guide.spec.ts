@@ -861,10 +861,18 @@ test('failed guide progress and clear operations retain the draft and visible co
   }, GUIDE_KEY);
   await currentAction(page).getByRole('button', { name: 'Confirm partial', exact: true }).click();
   await expect(page.locator('.guide').getByRole('alert')).toContainText('Could not retain');
+  const plan = page.locator('.guide > .work-plan');
+  await plan.locator(':scope > summary').click();
+  await expect(plan).not.toHaveAttribute('open');
+  await expect(page.locator('.guide').getByRole('alert')).toBeVisible();
+  await plan.locator(':scope > summary').click();
   await expect(rationale).toHaveValue('The selected source needs a later review.');
   await expect(page.locator('.guide')).toContainText('0 of 3 steps reviewed');
   await page.getByRole('button', { name: 'Clear context', exact: true }).click();
   await expect(page.locator('.guide').getByRole('alert')).toContainText('Could not clear');
+  await plan.locator(':scope > summary').click();
+  await expect(page.locator('.guide').getByRole('alert')).toBeVisible();
+  await plan.locator(':scope > summary').click();
   await expect(rationale).toHaveValue('The selected source needs a later review.');
   await page.evaluate(() => { (window as typeof window & { failGuideWrites?: boolean }).failGuideWrites = false; });
   await currentAction(page).getByRole('button', { name: 'Confirm partial', exact: true }).click();

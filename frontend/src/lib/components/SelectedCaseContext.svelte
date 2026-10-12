@@ -13,7 +13,7 @@
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
 
-  let { caseId }: { caseId: string } = $props();
+  let { caseId, compact = false }: { caseId: string; compact?: boolean } = $props();
   let contextState = $state<SelectedCaseContextState | null>(null);
   let open = $state(false);
   let mounted = false;
@@ -63,7 +63,7 @@
 </script>
 
 {#if !insideCaseEditor}
-<section class="selected-case" aria-label="Selected Case" aria-busy={!contextState || contextState.phase === 'loading'}>
+<section class="selected-case" class:compact aria-label="Selected Case" aria-busy={!contextState || contextState.phase === 'loading'}>
   {#if record && context}
     <div class="context-heading">
       <span><span class="context-label">Selected Case</span><a href={href}>{record.domain}</a></span>
@@ -116,6 +116,8 @@
 
 <style>
   .selected-case{min-width:0;margin:0 0 20px;padding:12px 0;border-bottom:1px solid var(--border);font-size:var(--text-sm);overflow-wrap:anywhere}
+  .selected-case.compact{margin:0;padding-block:8px;border-bottom:0}
+  .selected-case.compact .context-heading{font-size:var(--text-xs)}
   .context-heading{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap}
   .context-heading>span:first-child{display:flex;gap:6px 12px;flex-wrap:wrap;min-width:0}
   .context-label{color:var(--muted);font-weight:650}

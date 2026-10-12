@@ -584,6 +584,8 @@ import { isExpectedBrowserLocalDataFailure } from '#lib/browser-local-data-conte
 
 {#if guide && recipe}
   <section class="guide card" aria-labelledby="investigation-guide-title" tabindex="-1" bind:this={guideSection}>
+    {#if localContextError}<p class="local-context-error" role="status">{localContextError}</p>{/if}
+    {#if persistenceError}<p class="local-context-error" role="alert">{persistenceError}</p>{/if}
     <details class="work-plan" bind:open={workPlanOpen}>
       <summary>
         <span class="guide-title" id="investigation-guide-title">{guide.template?.label || recipe.label}: {guide.domain}</span>
@@ -616,9 +618,6 @@ import { isExpectedBrowserLocalDataFailure } from '#lib/browser-local-data-conte
       <div><dt>Retained evidence time</dt><dd>{evidenceContextPending ? 'Loading…' : evidenceContextAvailable ? evidence.timeLabel : 'Unavailable'}</dd></div>
       <div><dt>Next action</dt><dd>{actionStage?.label || 'Review completed plan'}</dd></div>
     </dl>
-    {#if localContextError}<p class="local-context-error" role="status">{localContextError}</p>{/if}
-    {#if persistenceError}<p class="local-context-error" role="alert">{persistenceError}</p>{/if}
-
     {#if actionStage && actionProgress}
       {#key actionStage.id}
         <article class="current-action" tabindex="-1" bind:this={actionPanel}>

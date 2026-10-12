@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect } from './fixtures';
 import { openDashboardSecondaryWorkspaces } from './helpers';
+import { consoleWorkspaceIdentity } from './console-navigation';
 
 // Independent on-disk expectations: selecting another workspace must not change
 // these public default names, or include directory identity in a portable file.
@@ -11,7 +12,7 @@ export const NOW = '2026-09-01T00:00:00.000Z';
 export type DirectoryRow = { id: string; name: string; revision: number; state: string; createdAt: string; updatedAt: string };
 export const namedDatabase = (id: string) => `whoisleuth-workspace-${id}-v1`;
 export const manager = (page: Page) => page.getByRole('region', { name: 'Browser workspaces', exact: true });
-export const indicator = (page: Page) => page.locator('#main-content > .workspace-scope strong');
+export const indicator = consoleWorkspaceIdentity;
 
 export async function directoryRows(page: Page): Promise<DirectoryRow[]> {
   return page.evaluate(async name => {
