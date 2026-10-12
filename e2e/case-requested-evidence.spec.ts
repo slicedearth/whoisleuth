@@ -7,6 +7,84 @@ import { currentActionFixture, caseWorkspaceActionStatus } from './case-response
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, useTheme } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
+test('Case completion retains concurrent evidence-request branches through reconciliation', async ({ page }) => {
+  await page.clock.setFixedTime('2026-09-23T10:00:00.000Z');
+  const at = '2026-09-20T10:00:00.000Z';
+  const digest = 'a'.repeat(64);
+  const action = currentActionFixture({ id: 'concurrent-report', type: 'internal_review', recipient: 'Example response desk',
+    contactSource: 'Analyst reviewed contact', routeObservedAt: at, contactLimitations: [], dueAt: null,
+    targetState: 'acknowledged', reference: 'Recorded provider receipt', followUpAt: null, outcome: 'Received',
+    createdAt: at, updatedAt: at });
+  action.history.find(event => event.nextState === 'submitted')!.reference = `response-packet-sha256:${digest}`;
+  const request = { ...action.history.at(-1)!, id: 'original-request', previousState: 'acknowledged' as const,
+    providerOutcome: 'more_information_requested' as const,
+    evidenceRequest: { id: 'need-page', packetDigestSha256: digest, summary: 'Provide the retained page evidence',
+      dueAt: null, state: 'requested' as const, evidencePinIds: [], rationale: '', previousEventIds: [] } };
+  const first = { ...request, id: 'prepared-one', sourceClass: 'analyst' as const, providerOutcome: null,
+    evidenceRequest: { ...request.evidenceRequest, state: 'prepared' as const, evidencePinIds: ['retained-pin'],
+      rationale: 'First preparation retains the page observation.', previousEventIds: [request.id] } };
+  const second = { ...first, id: 'prepared-two', evidenceRequest: { ...first.evidenceRequest,
+    rationale: 'Second preparation independently selects the observation.' } };
+  action.history.push(request, first, second);
+  const record = caseRecord({ domain: 'concurrent-request.example.test', actions: [action], evidencePins: [{
+    id: 'retained-pin', checkpointId: null, field: 'http.status', category: 'http', label: 'Observed page',
+    value: 'A retained observation', source: 'Fixture observation', sourceState: 'complete', sourceSchema: null,
+    observedAt: at, collectionDepth: 'deep', completeness: 'complete', truncated: false,
+    transitionExpectation: null, limitations: [], createdAt: at,
+  }] });
+  await openSeededTimelineCase(page, record.domain, [record], CASE_SCHEMA_VERSION);
+  await openCaseResponseWorkspace(page, '', 'quick');
+  await openCaseSection(page, 'Summary');
+  await page.locator('.completion-review > summary').click();
+  const completion = page.getByRole('region', { name: 'Case completion review', exact: true });
+  const requests = completion.locator('details').filter({ has: page.locator('summary', { hasText: /^Undelivered evidence requests/u }) });
+  await requests.locator('summary').click();
+  const branches = requests.locator(':scope > ul > li');
+  await expect(requests.locator('summary')).toHaveText('Undelivered evidence requests · 2');
+  await expect(branches).toHaveCount(2);
+  await expect(branches.locator('strong')).toHaveText(['Concurrent preparations need review', 'Concurrent preparations need review']);
+  const before = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
+  expect(before.actions[0]!.history.filter(event => event.evidenceRequest).map(event => event.id))
+    .toEqual([request.id, first.id, second.id]);
+
+  // A real unrelated save replaces the selected Case without reconciling either request branch.
+  await page.locator('.metadata-editor > summary').click();
+  await page.locator('.metadata-editor').getByRole('combobox', { name: /^Status/u }).selectOption('reviewing');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('to Reviewing.');
+  await expect(branches).toHaveCount(2);
+  await expect(branches.locator('strong')).toHaveText(['Concurrent preparations need review', 'Concurrent preparations need review']);
+  expect((await readBrowserLocalCollection(page, 'cases')).records[0]!.value.actions).toEqual(before.actions);
+
+  await completion.getByRole('button', { name: 'Review response and closure', exact: true }).click();
+  const stage = page.getByRole('region', { name: 'Case response actions', exact: true });
+  const outer = stage.locator('details').first();
+  if (!await outer.evaluate(element => element.hasAttribute('open'))) await outer.locator('summary').first().click();
+  const region = stage.locator('.requested-evidence');
+  await region.locator('summary').first().click();
+  const requirements = region.getByRole('list', { name: 'Requested evidence', exact: true });
+  await expect(requirements.locator(':scope > li')).toHaveCount(2);
+  await expect(requirements).toContainText(first.evidenceRequest.rationale);
+  await expect(requirements).toContainText(second.evidenceRequest.rationale);
+  await requirements.getByRole('button', { name: 'Review requested evidence', exact: true }).first().click();
+  const form = region.getByRole('form', { name: 'Requested evidence review', exact: true });
+  await form.getByRole('combobox', { name: 'Evidence preparation', exact: true }).selectOption('unavailable');
+  await form.getByLabel('Preparation or unavailability reason', { exact: true }).fill('Both preparations need a replacement original.');
+  await form.getByRole('button', { name: 'Save evidence preparation', exact: true }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Recorded the requested-evidence review.');
+  await expect(requirements.locator(':scope > li')).toHaveCount(1);
+  const history = (await readBrowserLocalCollection(page, 'cases')).records[0]!.value.actions[0]!.history;
+  expect(history.slice(0, before.actions[0]!.history.length)).toEqual(before.actions[0]!.history);
+  const reconciled = history.filter(event => event.evidenceRequest).at(-1)!;
+  expect(reconciled.evidenceRequest!.previousEventIds.sort()).toEqual([first.id, second.id]);
+  expect(reconciled.evidenceRequest!.state).toBe('unavailable');
+  await openCaseSection(page, 'Summary');
+  await page.locator('.completion-review > summary').click();
+  await expect(requests.locator('summary')).toHaveText('Undelivered evidence requests · 1');
+  await requests.locator('summary').click();
+  await expect(branches).toHaveCount(1);
+  await expect(branches.locator('strong')).toHaveText('Cannot provide; response needs review');
+});
+
 test('requested evidence preserves failed drafts and creates a separately reviewed amendment to the exact original packet', async ({ page }, testInfo) => {
   let copied = '', refuseCopy = false;
   await page.exposeFunction('copyFixturePacketDigest', (value: string) => {

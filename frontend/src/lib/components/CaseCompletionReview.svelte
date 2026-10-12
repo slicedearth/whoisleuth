@@ -219,7 +219,7 @@
           )}{:else}<p>No dated review commitment is retained.</p>{/if}
         {#if review.requests.length}<details
             ><summary>Undelivered evidence requests · {review.requests.length}</summary><ul
-              >{#each visibleRows(review.requests, 'requests') as item (`${item.actionId}:${item.request.id}`)}<li
+              >{#each visibleRows(review.requests, 'requests') as item (JSON.stringify([item.actionId, item.eventId]))}<li
                   ><strong>{item.label}</strong> · {item.recipient}<p>{item.request.summary}</p
                   ><small
                     >{item.deadline
