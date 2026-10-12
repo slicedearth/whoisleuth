@@ -566,6 +566,29 @@ trees and unlisted files. Its package digest and byte count describe the
 canonical stored-ZIP representation, not filesystem metadata. These are
 selected evidence exports, not complete workspace backups.
 
+### Exporting a fixed workflow for review
+
+Select one installed recipe and save its declared steps for review:
+
+```sh
+whoisleuth workflow-plan --explain domain-triage --json --output recipe.json
+```
+
+The document includes the subject requirement, command and argument examples,
+network modes, required approvals, output artefact families and completion guidance.
+To prepare the same recipe for a specific subject:
+
+```sh
+whoisleuth workflow-plan domain-triage example.test --json --output plan.json
+```
+
+Both commands plan offline. The files contain declarative steps rather than
+shell history or executable scripts. Argument examples and approval fields
+describe requirements; they do not record a completed review or grant approval.
+These are review documents, not `workflow-run` checkpoints or custom recipe
+imports. Run an installed recipe deliberately with its required inputs and
+fresh approvals.
+
 ### Resuming a fixed workflow
 
 Inspect a paused run without executing any step or rewriting its checkpoint:
