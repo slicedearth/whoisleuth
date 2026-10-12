@@ -268,6 +268,11 @@ Coverage distinguishes encrypted, unsupported and partially decoded content;
 no document scripts, macros or external resources run. Select HAR to inspect
 request order, origins, statuses and timings without replaying requests. The
 minimised report excludes headers, cookies, bodies and private URL components.
+The timing track compares reported starts and total durations. **Request order**
+switches between archive position and reported start time; original request
+numbers stay visible and the download keeps archive order. Undated records and
+unavailable durations remain explicit. Expand **Reported timings** for phase
+values; TLS timing is part of connect and is not added twice to a total.
 
 Plain-text review also offers possible phone numbers for explicit selection.
 Keep the original spelling, declared source time and whether the text was
