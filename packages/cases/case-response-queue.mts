@@ -16,7 +16,7 @@ export function caseRequestedEvidenceQueue(record: CaseRecord, now: string) {
       const deadline = normalizeExplicitIsoTimestamp(request.dueAt);
       const concurrent = requests.filter(other => other.evidenceRequest.id === request.id).length > 1;
       const editable = ['submitted', 'acknowledged'].includes(action.state);
-      return { actionId: action.id, recipient: action.recipient, eventId: event.id, request,
+      return { owner: action, event, actionId: action.id, recipient: action.recipient, eventId: event.id, request,
         deliveries, concurrent, editable, deadline,
         due: deadline && clock ? Date.parse(deadline) <= Date.parse(clock) : null,
         label: deliveries.length ? 'Delivery recorded' : concurrent ? 'Concurrent preparations need review'

@@ -74,6 +74,8 @@ test('evidence follow-ups preserve deadlines, concurrent preparations and actual
   const pending = caseRequestedEvidenceQueue(record, NOW)[0]!;
   assert.equal(pending.due, true);
   assert.equal(pending.label, 'Evidence requested');
+  assert.equal(pending.owner, record.actions[0]);
+  assert.equal(pending.event, baseEvent, 'the requirement retains its exact source event, not a reconstructed request');
   assert.equal(pending.deliveries.length, 0);
   assert.equal(caseRequestedEvidenceQueue(record, 'unknown')[0]?.due, null);
   assert.deepEqual(record, before);

@@ -989,7 +989,10 @@ request and any stated UTC deadline. Review it against
 retained pins, or record why the evidence cannot be provided. **Create drafting
 amendment** starts a linked action: review its recipient and select all prepared
 pins in its response packet before authorising it. Preparation is not delivery;
-record the new packet's delivery separately. The original digest and request
+record the new packet's delivery separately. Each request shows whether evidence
+is still requested, prepared but not delivered, unavailable, or delivered.
+Concurrent preparations remain separate for review. Deadline and event times
+can be copied exactly from their readable UTC display. The original digest and request
 history remain unchanged. Case exports, reports and CLI Case packs preserve this
 history; public Case packs exclude it.
 

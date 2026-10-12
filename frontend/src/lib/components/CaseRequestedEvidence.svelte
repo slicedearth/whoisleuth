@@ -3,13 +3,15 @@
   import type { CaseRecord } from '#lib/cases.ts';
   import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
   import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
-  import { submittedPacketReceipts, latestEvidenceRequests, evidenceRequestDelivery, type CaseEvidenceRequest } from '../../../../packages/cases/case-requested-evidence.mts';
+  import { submittedPacketReceipts, latestEvidenceRequests, type CaseEvidenceRequest } from '../../../../packages/cases/case-requested-evidence.mts';
+  import { caseRequestedEvidenceQueue } from '../../../../packages/cases/case-response-queue.mts';
   import { MAX_RESPONSE_VALUE_LENGTH, MAX_RESPONSE_RATIONALE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
   import { isoFromUtcInput, utcDateTimeInputAttributes } from '#lib/analysis/case-response-form-values.ts';
   import { reviewClock } from '#lib/review-clock.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   import CopyButton from './CopyButton.svelte';
+  import EvidenceTimestamp from './EvidenceTimestamp.svelte';
 
   let { record, persist, mutationBusy, onamendment }: {
     record: CaseRecord; persist: PersistCaseResponse; mutationBusy: boolean; onamendment: (id: string) => void | Promise<void>;
@@ -20,7 +22,7 @@
   });
   const eligible = $derived(record.actions.filter(action => ['submitted', 'acknowledged'].includes(action.state) && submittedPacketReceipts(action).length));
   const action = $derived(record.actions.find(item => item.id === draft.value.actionId));
-  const requests = $derived(record.actions.flatMap(owner => latestEvidenceRequests(owner).map(event => ({ owner, event }))));
+  const requests = $derived(caseRequestedEvidenceQueue(record, new Date($reviewClock).toISOString()));
   const selected = $derived(action && latestEvidenceRequests(action).find(event => event.evidenceRequest.id === draft.value.requestId));
   const receipts = $derived(action ? submittedPacketReceipts(action) : []);
   const selectedReceipt = $derived(receipts.find(receipt => receipt.digestSha256 === draft.value.packetDigest));
@@ -98,23 +100,20 @@
   {#if !eligible.length}<p>Record a packet delivery digest on a submitted action to track a provider's evidence requests.</p>{/if}
   {#if requests.length}
     <ul class="requests" aria-label="Requested evidence">
-      {#each requests as { owner, event }}
-        {@const request = event.evidenceRequest}
-        {@const deliveries = evidenceRequestDelivery(record.actions, owner.id, event.id)}
+      {#each requests as { owner, event, request, deliveries, concurrent, editable, deadline, due, label } (JSON.stringify([owner.id, event.id]))}
         {@const amendments = record.actions.filter(item => item.originActionId === owner.id && item.amendment?.requestEventIds.includes(event.id))}
-        {@const concurrent = latestEvidenceRequests(owner).filter(item => item.evidenceRequest.id === request.id).length > 1}
         <li>
           <strong>{request.summary}</strong>
-          <p>{owner.recipient} · {deliveries.length ? 'Delivery recorded' : request.state.replaceAll('_', ' ')}</p>
+          <p>{owner.recipient} · {label}</p>
           {#if concurrent}<p>Concurrent preparations remain. Review their evidence together before creating an amendment.</p>{/if}
-          {#if request.dueAt}<p>Provider deadline: {request.dueAt}{!deliveries.length && Date.parse(request.dueAt) < $reviewClock ? ' · overdue' : ''}</p>{:else}<p>No provider deadline recorded.</p>{/if}
-          <details><summary>Request source and packet</summary><p>Event {event.id} · recorded {event.occurredAt}</p><p>Original packet SHA-256: <code>{request.packetDigestSha256}</code></p>{#if event.reference}<p>{event.reference}</p>{/if}<p>Recorded by the analyst; a digest links the receipt, not proof of provider acceptance.</p></details>
+          {#if deadline}<p>Provider deadline: <EvidenceTimestamp value={request.dueAt} label="provider evidence deadline" />{due && !deliveries.length ? ' · overdue' : ''}</p>{:else}<p>No provider deadline recorded.</p>{/if}
+          <details><summary>Request source and packet</summary><p>Event {event.id} · recorded <EvidenceTimestamp value={event.occurredAt} label="evidence request event time" /></p><p>Original packet SHA-256: <code>{request.packetDigestSha256}</code></p>{#if event.reference}<p>{event.reference}</p>{/if}<p>Recorded by the analyst; a digest links the receipt, not proof of provider acceptance.</p></details>
           {#if request.rationale}<p>{request.rationale}</p>{/if}
           {#if request.evidencePinIds.length}<CaseLinkedEvidence pins={record.evidencePins} ids={request.evidencePinIds} />{/if}
-          {#if ['submitted', 'acknowledged'].includes(owner.state)}<button class="btn small" type="button" onclick={() => prepareRequest(owner.id, request.id)} disabled={mutationBusy}>Review requested evidence</button>{/if}
+          {#if editable}<button class="btn small" type="button" onclick={() => prepareRequest(owner.id, request.id)} disabled={mutationBusy}>Review requested evidence</button>{/if}
           {#if request.state === 'prepared' && !concurrent && !amendments.length}<button class="btn small" type="button" onclick={() => createAmendment(owner.id, event.id)} disabled={mutationBusy || amendmentDraft.state.busy}>Create drafting amendment</button>{/if}
           {#each amendments as amendment}<button class="btn small" type="button" onclick={() => onamendment(amendment.id)} disabled={mutationBusy}>Review amendment · {amendment.state.replaceAll('_', ' ')}</button>{/each}
-          {#each deliveries as delivery}<p>Amendment delivery: {delivery.occurredAt} · SHA-256 <code>{delivery.digestSha256}</code></p>{/each}
+          {#each deliveries as delivery}<p>Amendment delivery: <EvidenceTimestamp value={delivery.occurredAt} label="amendment delivery time" /> · SHA-256 <code>{delivery.digestSha256}</code></p>{/each}
         </li>
       {/each}
     </ul>

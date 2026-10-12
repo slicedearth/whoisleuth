@@ -99,6 +99,11 @@ test('requested evidence preserves failed drafts and creates a separately review
   await form.getByRole('button', { name: 'Record evidence request', exact: true }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('Recorded the provider evidence request.');
   await expect(region.getByRole('list', { name: 'Requested evidence', exact: true })).toContainText('overdue');
+  const deadline = region.getByRole('button', { name: /Copy exact provider evidence deadline:/u });
+  await expect(deadline.locator('time')).toHaveAttribute('datetime', '2026-09-22T12:00:00.000Z');
+  refuseCopy = false;
+  await deadline.focus(); await deadline.press('Enter');
+  await expect.poll(() => copied).toBe('2026-09-22T12:00:00.000Z');
   await openCaseSection(page, 'Summary');
   const summary = page.getByRole('group', { name: 'Case summary', exact: true });
   await expect(summary).toContainText('Provide the retained page evidence');
@@ -115,6 +120,17 @@ test('requested evidence preserves failed drafts and creates a separately review
   }
   await summary.getByRole('button', { name: 'Review next evidence request', exact: true }).click();
   await expect(form.getByRole('combobox', { name: 'Evidence preparation', exact: true })).toBeFocused();
+  await form.getByRole('combobox', { name: 'Evidence preparation', exact: true }).selectOption('unavailable');
+  await form.getByLabel('Preparation or unavailability reason', { exact: true }).fill('The original file is not retained.');
+  await form.getByRole('button', { name: 'Save evidence preparation', exact: true }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Recorded the requested-evidence review.');
+  const requirements = region.getByRole('list', { name: 'Requested evidence', exact: true });
+  await expect(requirements).toContainText('Cannot provide; response needs review');
+  await expect(requirements).toContainText('The original file is not retained.');
+  await expect(region.getByRole('button', { name: 'Create drafting amendment', exact: true })).toHaveCount(0);
+  await requirements.getByRole('button', { name: 'Review requested evidence', exact: true }).click();
+  await expect(form.getByRole('combobox', { name: 'Evidence preparation', exact: true })).toHaveValue('unavailable');
+  await form.getByRole('combobox', { name: 'Evidence preparation', exact: true }).selectOption('prepared');
   await form.getByRole('checkbox', { name: 'Observed page · Fixture observation', exact: true }).check();
   await form.getByLabel('Preparation or unavailability reason', { exact: true }).fill('The selected source supplies the requested fact.');
   for (const theme of ['light', 'dark'] as const) {
@@ -129,6 +145,7 @@ test('requested evidence preserves failed drafts and creates a separately review
   await page.setViewportSize({ width: 1280, height: 720 });
   await form.getByRole('button', { name: 'Save evidence preparation', exact: true }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('Recorded the requested-evidence review.');
+  await expect(requirements).toContainText('Prepared; delivery not recorded');
   await region.getByRole('button', { name: 'Create drafting amendment', exact: true }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('Created a drafting amendment.');
   const stored = (await readBrowserLocalCollection(page, 'cases')).records[0]!.value;
@@ -139,9 +156,11 @@ test('requested evidence preserves failed drafts and creates a separately review
   expect(amendment.amendment!.packetDigestSha256).toBe(digest);
   expect(original.history.slice(0, action.history.length)).toEqual(action.history);
   const requestEvents = original.history.filter(event => event.evidenceRequest);
-  expect(requestEvents.map(event => event.evidenceRequest!.state).sort()).toEqual(['prepared', 'requested']);
-  expect(requestEvents.find(event => event.evidenceRequest!.state === 'prepared')!.evidenceRequest!.previousEventIds)
+  expect(requestEvents.map(event => event.evidenceRequest!.state).sort()).toEqual(['prepared', 'requested', 'unavailable']);
+  expect(requestEvents.find(event => event.evidenceRequest!.state === 'unavailable')!.evidenceRequest!.previousEventIds)
     .toEqual([requestEvents.find(event => event.evidenceRequest!.state === 'requested')!.id]);
+  expect(requestEvents.find(event => event.evidenceRequest!.state === 'prepared')!.evidenceRequest!.previousEventIds)
+    .toEqual([requestEvents.find(event => event.evidenceRequest!.state === 'unavailable')!.id]);
   expect(amendment.history.some(event => event.nextState === 'submitted')).toBe(false);
   await expect(region.getByText('Delivery recorded', { exact: true })).toHaveCount(0);
   await region.getByRole('button', { name: 'Review amendment · drafting', exact: true }).click();
