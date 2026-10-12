@@ -16,6 +16,7 @@
   let appearance = $state<AppearancePreference>(parseAppearancePreference(null));
   const id = $props.id();
   let storageWarning = $state('');
+  let ready = $state(false);
   let open = $state(false);
   let trigger: HTMLButtonElement;
   let control: HTMLDivElement;
@@ -32,6 +33,7 @@
     applyThemePreference(preference);
     const stopTheme = observeThemePreference((next) => { preference = next; });
     const stopAppearance = observeAppearancePreference((next) => { appearance = next; });
+    ready = true;
     return () => { stopTheme(); stopAppearance(); };
   });
 
@@ -126,6 +128,7 @@
     <button
       class="theme-trigger"
       type="button"
+      disabled={!ready}
       aria-label={`Colour theme, ${labelFor(preference)} selected`}
       title={`${labelFor(preference)} theme`}
       aria-haspopup="dialog"
