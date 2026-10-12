@@ -39,7 +39,7 @@ test('selected Case context follows tool navigation without changing saved evide
   const shellContext = page.getByRole('region', { name: 'Current investigation context', exact: true });
   await expect(consoleWorkspaceIdentity(page)).toHaveText('Default');
   await expect(shellContext.getByRole('note', { name: 'Current task', exact: true })).toContainText('Bulk');
-  const storage = shellContext.locator('details.context-storage');
+  const storage = shellContext.getByText('Browser-local storage', { exact: true }).and(shellContext.locator('summary')).locator('..');
   await expect(storage).not.toHaveAttribute('open');
   await storage.locator('summary').focus(); await page.keyboard.press('Enter');
   await expect(storage).toHaveAttribute('open', '');

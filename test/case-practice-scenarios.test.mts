@@ -19,7 +19,9 @@ test('authority and reused-source exercises retain independently defined evidenc
     ['dependent-sources', /reused it are independent observations/u, /response declares reuse/u, /Repetition is not a separate observation/u],
   ] as const) {
     const record = createCasePracticeRecord(scenario), before = structuredClone(record);
-    const exercise = casePracticeDefinition(scenario).inference!;
+    const definition = casePracticeDefinition(scenario);
+    assert.ok('inference' in definition && definition.inference, 'This scenario requires its independently checked inference exercise.');
+    const exercise = definition.inference;
     assert.equal(exercise.statements.find(statement => weak.test(statement.text))?.exceedsEvidence, true);
     assert.equal(exercise.statements.find(statement => careful.test(statement.text))?.exceedsEvidence, false);
     assert.match(exercise.statements.find(statement => weak.test(statement.text))!.explanation, reason);

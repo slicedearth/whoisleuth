@@ -38,7 +38,7 @@ test('a failed opening action preserves an already loaded panel and does not rep
   await practice.getByRole('button', { name: 'Discard practice and restart', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'This section loaded, but its opening action could not finish.' })).toBeVisible();
   await expect(practice).toBeVisible();
-  await expect(practice.locator('..')).toHaveAttribute('data-deferred-state', 'ready');
+  await expect(practice.locator('xpath=ancestor::*[@data-deferred-state][1]')).toHaveAttribute('data-deferred-state', 'ready');
   const label = practice.locator('form[data-recovery-form="evidence-pin"]').getByLabel('Label', { exact: true });
   await label.fill('The loaded form is still usable');
   await expect(label).toHaveValue('The loaded form is still usable');
