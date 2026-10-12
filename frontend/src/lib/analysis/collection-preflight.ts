@@ -139,6 +139,7 @@ export function buildLookupCollectionPreflight(input: LookupPreflightInput): Col
       'Cancel stops this browser from waiting; server work already admitted may finish within existing limits.',
       'Optional third-party sources remain off unless selected.',
       'Use existing investigation templates or CLI configuration profiles to repeat supported choices. Website-only optional selections do not transfer to a CLI Lookup command.',
+      'Starting Lookup requests collection. Saved Case and guide context are not replayed as its result.',
     ]),
     cautions: boundedNotes([
       'Redirects, referrals, source eligibility, and retries mean the exact request count cannot be known in advance.',
@@ -175,6 +176,7 @@ export function buildBulkCollectionPreflight(input: BulkPreflightInput): Collect
     controls: boundedNotes([
       `${input.pacingLabel}; at most ${concurrency} ${concurrency === 1 ? 'lookup runs' : 'lookups run'} in parallel.`,
       'Pause stops admitting new work. Cancel stops the queue after requests already in flight settle.',
+      'Start and Retry failed request collection. Loading a saved session does not; Resume keeps recorded rows and collects only unstarted domains.',
     ]),
     cautions: boundedNotes([
       'Referrals, redirects, eligibility, caching and retries can change the number of requests; target and concurrency limits are not request quotas.',
@@ -197,6 +199,7 @@ export function buildGuidedCollectionPreflight(input: GuidedPreflightInput): Col
       input.requiresApproval
         ? input.approved ? 'Collection was approved for this guide step.' : 'Collection does not start until you approve and open this step.'
         : 'This step can open without an additional collection approval.',
+      'Guide progress and retained Case context do not replay collection. Select any saved input explicitly in the opened tool.',
     ]),
     cautions: boundedNotes([
       input.prerequisite.trim() || 'Confirm the target and collection authority before continuing.',

@@ -184,6 +184,18 @@ export type BulkSession = {
   profileContext: BulkProfileContextProvenance;
 };
 
+/** Resume an admitted session without implicitly retrying any recorded row. */
+export function planBulkSessionResume(session: Pick<BulkSession, 'domains' | 'results'>): {
+  retainedRows: number;
+  pendingDomains: string[];
+} {
+  const settled = new Set(session.results.map(row => row.domain));
+  return {
+    retainedRows: session.results.length,
+    pendingDomains: session.domains.filter(domain => !settled.has(domain)),
+  };
+}
+
 export type BulkSessionStore = {
   schema: typeof BULK_SESSION_SCHEMA;
   version: typeof BULK_SESSION_SCHEMA_VERSION;

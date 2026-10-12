@@ -24,6 +24,7 @@ test('describes fast and deep Lookup collection without promising an exact reque
   assert.equal(deep.sources.find((source) => source.id === 'external_intelligence')?.state, 'included');
   assert.equal(deep.sources.find((source) => source.id === 'website_probe')?.state, 'disabled');
   assert.match(deep.cautions.join(' '), /exact request count cannot be known/i);
+  assert.match(deep.controls.join(' '), /Saved Case and guide context are not replayed/u);
 });
 
 test('keeps optional Lookup sources optional and explains multi-target handoff', () => {
@@ -45,6 +46,7 @@ test('distinguishes compact Bulk collection and bounds operator-facing values', 
   assert.match(preflight.controls[0] ?? '', /at most 12 lookups run in parallel/i);
   assert.match(preflight.cautions.join(' '), /compact triage contract/i);
   assert.match(preflight.cautions.join(' '), /limits are not request quotas/u);
+  assert.match(preflight.controls.join(' '), /Loading a saved session does not; Resume keeps recorded rows/u);
   assert.equal(preflight.sources.find((source) => source.id === 'tls_intelligence')?.state, 'disabled');
 });
 
@@ -69,4 +71,5 @@ test('guided request review preserves approval and prerequisite boundaries', () 
   assert.match(preflight.controls[0] ?? '', /does not start until/i);
   assert.match(preflight.cautions[0] ?? '', /confirm authority/i);
   assert.match(preflight.persistence, /records progress locally/i);
+  assert.match(preflight.controls.join(' '), /Select any saved input explicitly/u);
 });

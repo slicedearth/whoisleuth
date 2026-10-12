@@ -13,6 +13,7 @@ import {
   normalizeBulkSession,
   normalizeBulkSessionResult,
   normalizeBulkSessionStore,
+  planBulkSessionResume,
   serializeBulkSessionStore,
   serializeNormalizedBulkSessions,
   summarizeBulkProfileContexts,
@@ -489,10 +490,32 @@ describe('saved Bulk sessions', () => {
       completedAt: null,
     }));
     assert.ok(normalized);
-    assert.deepEqual(
-      normalized.domains.filter((domain) => !new Set(normalized.results.map((item) => item.domain)).has(domain)),
-      ['second.invalid', 'third.invalid'],
-    );
+    const before = structuredClone(normalized);
+    assert.deepEqual(planBulkSessionResume(normalized), {
+      retainedRows: 1,
+      pendingDomains: ['second.invalid', 'third.invalid'],
+    });
+    assert.deepEqual(normalized, before);
+  });
+
+  test('resume preserves recorded failures and original queue order without implying recollection', () => {
+    const normalized = normalizeBulkSession(session('recorded-failure', {
+      state: 'partial',
+      domains: ['later.invalid', 'failed.invalid', 'earlier.invalid', 'complete.invalid'],
+      results: [result('failed.invalid', { status: 'error', error: 'Recorded failure' }), result('complete.invalid')],
+      completedAt: null,
+    }));
+    assert.ok(normalized);
+    const before = structuredClone(normalized);
+    assert.deepEqual(planBulkSessionResume(normalized), {
+      retainedRows: 2,
+      pendingDomains: ['later.invalid', 'earlier.invalid'],
+    });
+    assert.deepEqual(normalized, before);
+    assert.deepEqual(planBulkSessionResume({ domains: ['failed.invalid', 'complete.invalid'], results: normalized.results }), {
+      retainedRows: 2,
+      pendingDomains: [],
+    });
   });
 
   test('rejects reader-only schemas one to three without partial interpretation', () => {

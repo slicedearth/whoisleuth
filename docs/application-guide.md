@@ -486,6 +486,13 @@ Saving retained results uses their admitted targets and collection mode, even
 when the queue has already been edited for the next run. A loaded partial
 session keeps its full original membership during a selected-subset refresh.
 
+**Load** restores the selected session's recorded rows without collection.
+**Resume unstarted** keeps those rows and collects only queued domains without
+a recorded result. Failed rows remain recorded; use **Retry failed** to collect
+them again. Starting a new Lookup or Bulk run requests collection instead.
+Selected Case context and guide progress provide context, not a replayed result;
+they do not imply that saved evidence or a cache has been reused.
+
 Selected rows can continue to Cases, exports or response preparation. Selection
 does not submit a target to a provider or apply a control.
 
