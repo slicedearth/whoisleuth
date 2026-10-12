@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { BULK_SESSION_SCHEMA, BULK_SESSION_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { MAX_BULK_SESSIONS } from '../packages/workspace/bulk-session-model.mts';
@@ -478,7 +479,7 @@ test('resumes only unstarted rows from an explicitly saved partial session', asy
       await page.setViewportSize({ width, height: 800 });
       await expectNoHorizontalOverflow(page);
       await expect(saved.getByRole('button', { name: 'Resume unstarted', exact: true })).toBeEnabled();
-      await saved.screenshot({ path: test.info().outputPath(`saved-reuse-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) await saved.screenshot({ path: test.info().outputPath(`saved-reuse-${theme}-${width}.png`) });
     }
   }
   await saved.getByRole('button', { name: 'Resume unstarted', exact: true }).click();
