@@ -6,6 +6,7 @@
   import { PUBLIC_CLI_GUIDANCE } from '#lib/generated/public-cli-guidance.ts';
   import { PUBLIC_CLI_INDEX } from '#lib/generated/public-cli-index.ts';
   import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../../packages/analysis/project-metadata.mts';
+  const localMode = PUBLIC_CLI_GUIDANCE.operationModes.find(mode => mode.id === 'local-console');
 
   const pageSections = [
     { href: '#start', label: 'Get started' },
@@ -143,8 +144,16 @@
 </section>
 
 <section class="cli-section" id="local-application" aria-labelledby="local-application-title">
-  <div class="section-intro"><h2 id="local-application-title">Console with a filesystem workspace</h2><p>The separate local application serves the Console on your machine and saves records, drafts and original files in a folder you choose. It requires Node.js 24.19 or newer and a verified local package archive.</p></div>
-  <CopyableCommand command="whoisleuth-local --workspace ./review-workspace --init --offline" label="new offline local workspace command" />
+  <div class="section-intro"><h2 id="local-application-title">Console with a filesystem workspace</h2><p>The separate local application serves the Console on your machine and saves records, drafts and original files in a folder you choose. It requires Node.js <code>{localMode?.nodeRequirement ?? 'as declared by the package'}</code> and a verified local package archive.</p></div>
+  <CopyableCommand command={PUBLIC_CLI_GUIDANCE.localArchive.initialize} label="new offline local workspace command" />
+  <details class="compact-disclosure"><summary>Verify and install a local archive</summary>
+    <ul>{#each PUBLIC_CLI_GUIDANCE.localArchive.verification as item}<li>{item}</li>{/each}</ul>
+    <CopyableCommand command={PUBLIC_CLI_GUIDANCE.localArchive.install} label="offline reviewed local archive installation command" />
+  </details>
+  <details class="compact-disclosure"><summary>Upgrade without replacing saved work</summary>
+    <ol>{#each PUBLIC_CLI_GUIDANCE.localArchive.upgrade as item}<li>{item}</li>{/each}</ol>
+    <CopyableCommand command={PUBLIC_CLI_GUIDANCE.localArchive.reopen} label="reopen an existing offline filesystem workspace command" />
+  </details>
   <p>Open the private launch link printed in the terminal. Omit <code>--init</code> when reopening the folder. The workspace is plaintext at rest; use operating-system protection and encrypted portable backups. Browser preferences remain browser-local.</p>
   <p>It listens only on loopback. Starting it makes no collection request; omitting <code>--offline</code> enables the existing explicit collection actions from your machine.</p>
   <a class="btn" href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/packages/local-application/README.md`}>Local installation, backup and recovery</a>

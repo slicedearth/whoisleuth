@@ -119,6 +119,22 @@ const CLI_PUBLIC_GUIDANCE = Object.freeze({
     'A matching package digest detects changed bytes; it does not establish who operated the terminal or whether observed evidence is true or current.',
     'Release-specific final evidence is published only with the reviewed release; this page does not claim a future release has completed that assurance.',
   ]),
+  localArchive: Object.freeze({
+    install: 'npm install --offline --ignore-scripts --omit=optional ./reviewed-local-archive.tgz',
+    initialize: 'npx --no-install whoisleuth-local --workspace ./review-workspace --init --offline',
+    reopen: 'npx --no-install whoisleuth-local --workspace ./review-workspace --offline',
+    verification: Object.freeze([
+      'Use the selected candidate report to check packageName, packageVersion, applicationVersion and archiveSha256. The local package and enclosed application have separate versions.',
+      'Compare the complete archive SHA-256 with archiveSha256 before installing. A matching digest establishes corresponding bytes, not publisher identity or evidence accuracy.',
+      'Archive assembly downloads existing pinned dependencies. Installation from the bundled reviewed archive stays offline with scripts disabled; this channel is not a public npm release.',
+    ]),
+    upgrade: Object.freeze([
+      'Stop every instance using the workspace, then keep an unchanged private whole-folder recovery copy. SQLite and that copy are plaintext.',
+      'Verify the new archive against its own report and install it separately. Reopen a separate rehearsal copy offline without --init; keep the recovery copy untouched.',
+      'Check saved records, recovery drafts and original-file integrity, not just startup. Keep the earlier installation and untouched copy until verification is complete.',
+      'An unsupported workspace version must remain unchanged. Use a compatible application or supported portable backup; never edit a schema marker to force opening.',
+    ]),
+  }),
   commonWorkflows: Object.freeze([
     Object.freeze({ label: 'Plan before collection', command: 'whoisleuth lookup example.test --deep --plan --json' }),
     Object.freeze({ label: 'Review supplied evidence offline', command: 'whoisleuth review-evidence evidence.json --json' }),

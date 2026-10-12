@@ -171,6 +171,23 @@ test('installation modes stay accessible without collecting evidence or opening 
   await localSetup.focus(); await localSetup.press('Enter');
   await expect(page).toHaveURL(/\/cli#local-application$/u);
   await expect(page.getByRole('heading', { name: 'Console with a filesystem workspace', exact: true })).toBeInViewport();
+  const local = page.getByRole('region', { name: 'Console with a filesystem workspace', exact: true });
+  for (const label of ['Verify and install a local archive', 'Upgrade without replacing saved work']) {
+    const summary = local.getByText(label, { exact: true });
+    await summary.focus(); await page.keyboard.press('Enter');
+  }
+  await expect(local).toContainText('archiveSha256');
+  await expect(local).toContainText('keep the recovery copy untouched');
+  await expect(local.locator('code').filter({ hasText: 'npm install' })).toContainText('--offline --ignore-scripts --omit=optional');
+  const reopen = local.locator('code').filter({ hasText: 'npx --no-install whoisleuth-local --workspace ./review-workspace --offline' });
+  await expect(reopen).toHaveCount(1);
+  await expect(reopen).not.toContainText('--init');
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+    await useTheme(page, theme); await page.setViewportSize({ width, height: 844 });
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('#local-application').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await local.screenshot({ path: testInfo.outputPath(`local-upgrade-${theme}-${width}.png`) });
+  }
   expect(collectionRequests).toEqual([]);
   expect(await page.evaluate(() => (window as unknown as { guideStorageAttempts: number }).guideStorageAttempts)).toBe(0);
 });
