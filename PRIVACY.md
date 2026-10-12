@@ -620,6 +620,15 @@ retaining the unredacted original requires a separate choice. Reported account
 actions can be recorded as analyst claims and select recovery guidance. They
 do not establish account compromise.
 
+The public Link Inspector processes one supplied HTTP(S) link or bounded pasted
+plain text in page memory, without sign-in, uploads, target requests or saved
+workspace access. Ordinary page assets and session checks can contact this site;
+input processing does not contact supplied destinations. Input, parsed URLs and
+results are not put in routes, logs, browser storage, default downloads or guide
+printing. Editing, reset and navigation clear the review. Deliberate copy writes
+only the selected value to the device clipboard; review it before sharing.
+Clearing the page does not clear the clipboard.
+
 Text, message, calendar and extracted document text can also retain literal IPs
 and explicitly labelled hashes with their source-part digest. Complete URLs,
 message headers, HAR and identity-event objects are not scanned for these values.

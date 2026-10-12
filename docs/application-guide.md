@@ -254,6 +254,11 @@ request and changes no saved evidence.
 
 ### Fast and Deep collection
 
+For a supplied link or pasted plain text without sign-in, the public
+[Link Inspector](https://www.whoisleuth.com/link-inspector) reviews destinations
+locally without opening them. Broader file intake and retained Case work remain
+in the Console. The public tool does not read or save a workspace.
+
 Before collecting, **Review a message, link or selected file** accepts pasted text,
 MIME email, calendar invitations and still PNGs. It shows the actual destination
 beside a URL displayed in the message, expands supplied redirect parameters and

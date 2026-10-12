@@ -19,6 +19,7 @@ const PRERENDERED_ROUTE_DEFINITIONS = Object.freeze([
   { path: '/discover', indexed: false },
   { path: '/examples', indexed: true },
   { path: '/login', indexed: false },
+  { path: '/link-inspector', indexed: true },
   { path: '/lookup', indexed: false },
   { path: '/methodology', indexed: true },
   { path: '/monitor', indexed: false },

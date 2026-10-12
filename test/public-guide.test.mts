@@ -138,6 +138,7 @@ test('navigation, tool guide, and reference guide use one canonical product voca
     { href: '/methodology', label: 'Methodology' },
     { href: '/coverage', label: 'Coverage' },
     { href: '/examples', label: 'Examples' },
+    { href: '/link-inspector', label: 'Link Inspector' },
     { href: '/privacy', label: 'Privacy' },
     { href: '/terms', label: 'Terms' },
     { href: '/request-policy', label: 'Request policy' },
@@ -149,10 +150,13 @@ test('navigation, tool guide, and reference guide use one canonical product voca
     PUBLIC_REFERENCE_DESTINATIONS.map(({ href, label }) => ({ href, label })),
   );
   assert.deepEqual(publicPrimaryNavigation.map((item) => item.label), ['Demo', 'Resources', 'CLI']);
-  assert.deepEqual(publicReferenceNavigation.map((item) => item.label), ['Methodology', 'Coverage', 'Examples']);
+  assert.deepEqual(publicReferenceNavigation.map((item) => item.href), ['/methodology', '/coverage', '/examples', '/link-inspector']);
   assert.deepEqual(publicPolicyNavigation.map((item) => item.label), ['Privacy', 'Terms', 'Request policy', 'Contact']);
-  assert.deepEqual(publicReferenceSectionNavigation.map((item) => item.label), ['Resources', 'CLI', 'Methodology', 'Coverage', 'Examples']);
-  assert.deepEqual(publicResourceHubNavigation.map((item) => item.label), ['CLI', 'Methodology', 'Coverage', 'Examples']);
+  // Derived consumers must not repeat the independent vocabulary expectation.
+  const cli = publicPrimaryNavigation.find(item => item.href === '/cli');
+  assert.ok(cli);
+  assert.deepEqual(publicReferenceSectionNavigation, [publicResources[0], cli, ...publicReferenceNavigation]);
+  assert.deepEqual(publicResourceHubNavigation, [cli, ...publicReferenceNavigation]);
   assert.deepEqual(publicHeaderNavigation, publicPrimaryNavigation);
   assert.deepEqual(publicFooterNavigation, publicPolicyNavigation);
   assert.deepEqual(publicSiteNavigation, [

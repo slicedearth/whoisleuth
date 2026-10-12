@@ -98,6 +98,7 @@
 
 <section id="tools" class="resource-section" aria-labelledby="tools-title">
   <div class="section-intro"><h2 id="tools-title">Choose the right tool</h2></div>
+  <p><a href="/link-inspector">Open the offline Link Inspector</a> to review pasted links without signing in or opening their destinations.</p>
   <div class="tool-guide">
     {#each toolGuides as tool}
       <details class="tool-entry compact-disclosure" id={`tool-${tool.id}`}>
