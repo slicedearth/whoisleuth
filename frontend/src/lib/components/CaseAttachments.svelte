@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
   import type { CaseRecord } from '#lib/cases.ts';
-  import type { CaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
+  import { reviewCaseImageDerivation, type CaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
   import { declareImageDerivation } from '../../../../packages/evidence/image-regions.mts';
   import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import { isoFromUtcInput, utcDateTimeInputAttributes } from '#lib/analysis/case-response-form-values.ts';
@@ -32,6 +32,10 @@
   let exporting = $state(false);
   let exportIds = $state<string[]>([]);
   const exportReferences = $derived((record.attachments ?? []).filter(item => exportIds.includes(item.id)));
+  const selectedImageEdits = $derived(exportReferences.flatMap(attachment => {
+    const review = reviewCaseImageDerivation(attachment, record.attachments ?? []);
+    return review ? [{ attachment, ...review }] : [];
+  }));
   let generation = 0;
   let activeCaseId: string | undefined;
   let previewTrigger: HTMLButtonElement | null = null;
@@ -137,6 +141,23 @@
           {#each record.attachments as attachment (attachment.id)}<label><input type="checkbox" bind:group={exportIds} value={attachment.id} disabled={exporting || mutationBusy}> {attachment.fileName} · {attachment.byteLength.toLocaleString('en-AU')} bytes</label>{/each}
         </div>
         <p>{exportReferences.length} selected · {record.attachments.length - exportReferences.length} not selected. Missing original bytes stop the export; they are never silently omitted.</p>
+        {#if exportReferences.some(item => item.mediaType.startsWith('image/'))}
+          <details class="selected-image-review">
+            <summary>Review edited images ({selectedImageEdits.length})</summary>
+            <p>This reviews saved declarations, not file bytes or proof of editing. Only the immediate parent is declared; earlier generations are not resolved here. An image without an edit declaration is not necessarily an unedited original.</p>
+            <ul>{#each selectedImageEdits as { attachment, declaration, parentReference, parentHasDeclaredEdits } (attachment.id)}
+              <li>
+                <h4>{attachment.fileName}</h4>
+                <p>Declared edits: {declaration.operations.map(kind => kind === 'redact' ? 'redaction' : 'outline').join(', ')} · {declaration.method}</p>
+                <p>Declared parent: <code>{declaration.source.digestSha256}</code> · {declaration.source.byteLength.toLocaleString('en-AU')} bytes</p>
+                {#if parentReference === 'missing'}<p>The declared parent reference is not retained in this Case. Its earlier editing history is unresolved.</p>
+                {:else if parentReference === 'conflicting'}<p>The retained parent reference conflicts with this declaration. Its editing history cannot be resolved from that reference.</p>
+                {:else}<p>The parent reference matches the recorded fingerprint and size; its bytes have not been checked by this review. {parentHasDeclaredEdits ? 'The parent also declares edits; this export does not resolve the earlier generations.' : 'The parent has no recorded edit declaration; this does not prove it is an unedited original.'}</p>{/if}
+              </li>
+            {/each}</ul>
+            <p>For images with declared edits, the package carries the parent fingerprint and edit types, not this review sheet, filenames or edit coordinates. Parent pixels are included only if separately selected.</p>
+          </details>
+        {/if}
         <EvidenceFileExport workflow="Selected Case files" getFiles={exportFiles} disabled={!exportReferences.length || mutationBusy || preparing || Boolean(loading) || imageBusy || exporting}
           onbusy={value => exporting = value} {onmessage} />
       </details>
@@ -184,5 +205,6 @@
   .file-preview{display:grid;gap:14px;min-width:0;border-top:1px solid var(--border);padding-top:14px}.file-preview>button{justify-self:start}.derivation{min-width:0}.derivation summary{padding:8px 0}.derivation p,.derivation li{font-size:var(--text-xs);overflow-wrap:anywhere}.derivation ol{padding-left:1.5em}
   .integrity-explainer{min-width:0}.integrity-explainer>summary{padding:8px 0}.integrity-explainer p{margin-top:8px}
   .file-export-selection{min-width:0}.file-export-selection>summary{padding:8px 0}.file-export-selection>p{margin:10px 0}.export-selection{display:grid;gap:4px}.export-selection label{display:flex;align-items:center;gap:8px;min-width:0;min-height:44px;font-size:var(--text-xs);overflow-wrap:anywhere}.export-selection input{flex:none}
+  .selected-image-review{min-width:0;margin:12px 0}.selected-image-review>summary{padding:8px 0}.selected-image-review ul{list-style:none;padding:0;margin:12px 0;display:grid;gap:12px}.selected-image-review li{display:grid;gap:6px;min-width:0}.selected-image-review code{overflow-wrap:anywhere;font-size:var(--text-2xs)}
   @media(max-width:600px){.source-fields{grid-template-columns:minmax(0,1fr)}.files-body{padding:12px}.file-actions{align-items:stretch}.file-actions button{flex:1 1 100%}}
 </style>

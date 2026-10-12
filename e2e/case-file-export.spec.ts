@@ -60,6 +60,19 @@ test('selected redacted images carry minimal parent declarations through browser
   const selection = files.locator('.file-export-selection');
   await selection.getByRole('checkbox', { name: derivative.fileName }).check();
   await expect(selection).toContainText('1 selected · 1 not selected');
+  const sheet = selection.locator('.selected-image-review');
+  await sheet.locator(':scope > summary').click();
+  await expect(sheet.getByRole('heading', { name: derivative.fileName, exact: true })).toBeVisible();
+  await expect(sheet).toContainText('Declared edits: redaction, outline');
+  await expect(sheet).toContainText(parent.digestSha256);
+  await expect(sheet).toContainText('parent reference matches the recorded fingerprint and size');
+  await expect(sheet).toContainText('bytes have not been checked by this review');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+    await useTheme(page, theme); await page.setViewportSize({ width, height: 844 });
+    await sheet.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`selected-image-review-${theme}-${width}.png`) });
+  }
   const downloading = page.waitForEvent('download');
   await selection.getByRole('button', { name: 'Download private package', exact: true }).click();
   const download = await downloading, archive = await readFile((await download.path())!);

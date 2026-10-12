@@ -1,7 +1,7 @@
 import { MAX_SELECTED_FILES, SELECTED_FILE_MEDIA_TYPES, type SelectedFileMediaType } from '../contracts/selected-file-limits.mts';
 import { array, enumeration, exactOptional, iso, text } from '../evidence/artifact-structure.mts';
 import { readRetainedFileReference, type RetainedFileReference } from '../evidence/retained-file.mts';
-import { readImageDerivation, type ImageDerivation } from '../evidence/image-regions.mts';
+import { declareImageDerivation, readImageDerivation, type ImageDerivation } from '../evidence/image-regions.mts';
 import type { CaseRecord } from './case-record-contracts.mts';
 
 export type CaseAttachment = RetainedFileReference & Readonly<{
@@ -56,6 +56,23 @@ export function mergeCaseAttachments(local: readonly CaseAttachment[] | undefine
 
 export function caseAttachmentReferences(cases: readonly CaseRecord[]): RetainedFileReference[] {
   return cases.flatMap(record => (record.attachments ?? []).map(({ digestSha256, byteLength }) => ({ digestSha256, byteLength })));
+}
+
+/** Review one declared parent using saved metadata, without resolving earlier edits or reading bytes. */
+export function reviewCaseImageDerivation(attachment: CaseAttachment, retained: readonly CaseAttachment[]) {
+  const derivation = attachment.derivation;
+  if (!derivation) return null;
+  const declaration = declareImageDerivation(derivation);
+  const parents = retained.filter(item => item.id === derivation.sourceAttachmentId);
+  const parent = parents.length === 1 ? parents[0] : undefined;
+  const matches = parent?.mediaType === 'image/png'
+    && parent.digestSha256 === declaration.source.digestSha256
+    && parent.byteLength === declaration.source.byteLength;
+  return {
+    declaration,
+    parentReference: !parents.length ? 'missing' as const : matches ? 'matching' as const : 'conflicting' as const,
+    parentHasDeclaredEdits: matches ? Boolean(parent.derivation) : null,
+  };
 }
 
 export function addCaseAttachments(record: CaseRecord, attachments: readonly CaseAttachment[], updatedAt: string): CaseRecord {

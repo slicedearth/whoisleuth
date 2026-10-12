@@ -1107,7 +1107,12 @@ derivatives with their declared sources and observation times. Missing bytes
 stop the export. Edited images declare their immediate parent fingerprint,
 editing method and operation kinds. The parent may itself be edited and need
 not be selected. These declarations do not prove the edits; missing declarations
-leave editing history unknown. The ZIP uses generated entry names; Case records,
+leave editing history unknown. **Review edited images** lists the declarations
+for the current selection, including whether each exact parent reference is
+retained, missing or conflicting. This metadata review does not read file bytes.
+A parent may also declare edits; earlier generations remain unresolved, and a
+missing edit declaration does not establish an unedited original. The review
+sheet is not included in the package. The ZIP uses generated entry names; Case records,
 filenames and edit coordinates stay in the separate JSON backup. Where supported,
 **Write new evidence folder** creates and verifies a new child inside the
 folder you choose. Otherwise, extract the ZIP locally. Neither option is a

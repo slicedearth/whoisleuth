@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { declareImageDerivation, readImageDerivationDeclaration, imageRegionPaintRectangles, MAX_EVIDENCE_IMAGE_PIXELS, MAX_EVIDENCE_IMAGE_REGIONS, readEvidenceImageDimensions, readImageDerivation, readImageRegionPlan } from '../packages/evidence/image-regions.mts';
-import { addCaseAttachments, assertDerivedCaseAttachmentSource, readCaseAttachment } from '../packages/cases/case-attachment-model.mts';
+import { addCaseAttachments, assertDerivedCaseAttachmentSource, readCaseAttachment, reviewCaseImageDerivation } from '../packages/cases/case-attachment-model.mts';
 import { createCase, normalizeCaseStore, projectCaseForAudience, serializeCaseStore } from '../packages/cases/case-model.mts';
 
 const region = { kind: 'redact', x: 2, y: 3, width: 5, height: 6 } as const;
@@ -11,6 +11,43 @@ const source = readCaseAttachment({ id: 'source-one', fileName: 'private-source.
   retainedAt: now, digestSha256: `sha256:${'a'.repeat(64)}`, byteLength: 100 });
 const derivation = { method: 'png-regions-v1', sourceAttachmentId: source.id, source: { digestSha256: source.digestSha256, byteLength: source.byteLength }, plan };
 const derivative = readCaseAttachment({ ...source, id: 'derived-one', fileName: 'private-derived.png', byteLength: 110, digestSha256: `sha256:${'b'.repeat(64)}`, derivation });
+
+test('image review matches the exact parent reference without claiming checked bytes or unedited history', () => {
+  const before = structuredClone([source, derivative]);
+  assert.deepEqual(reviewCaseImageDerivation(derivative, [source, derivative]), {
+    declaration: { method: 'png-regions-v1', source: { digestSha256: source.digestSha256, byteLength: 100 }, operations: ['redact'] },
+    parentReference: 'matching', parentHasDeclaredEdits: false,
+  });
+  assert.equal(reviewCaseImageDerivation(source, [source, derivative]), null);
+  assert.deepEqual([source, derivative], before);
+});
+
+test('image review preserves missing and conflicting parent references rather than matching by bytes alone', () => {
+  for (const retained of [[], [{ ...source, id: 'same-bytes-other-observation' }]]) {
+    const reviewed = reviewCaseImageDerivation(derivative, retained)!;
+    assert.equal(reviewed.parentReference, 'missing');
+    assert.equal(reviewed.parentHasDeclaredEdits, null);
+    assert.equal(reviewed.declaration.source.digestSha256, source.digestSha256);
+  }
+  for (const retained of [[{ ...source, byteLength: 101 }], [{ ...source, digestSha256: derivative.digestSha256 }],
+    [{ ...source, mediaType: 'image/jpeg' as const }], [source, { ...source }]]) {
+    const reviewed = reviewCaseImageDerivation(derivative, retained)!;
+    assert.equal(reviewed.parentReference, 'conflicting');
+    assert.equal(reviewed.parentHasDeclaredEdits, null);
+  }
+});
+
+test('image review identifies an edited immediate parent without following or merging its history', () => {
+  const second = readCaseAttachment({ ...derivative, id: 'derived-two', digestSha256: `sha256:${'c'.repeat(64)}`,
+    derivation: { ...derivation, sourceAttachmentId: derivative.id,
+      source: { digestSha256: derivative.digestSha256, byteLength: derivative.byteLength }, plan: { ...plan, regions: [{ ...region, kind: 'outline' }] } } });
+  const reviewed = reviewCaseImageDerivation(second, [derivative, second])!;
+  assert.equal(reviewed.parentReference, 'matching');
+  assert.equal(reviewed.parentHasDeclaredEdits, true);
+  assert.deepEqual(reviewed.declaration.operations, ['outline']);
+  assert.equal(reviewed.declaration.source.digestSha256, derivative.digestSha256);
+  assert.doesNotMatch(JSON.stringify(reviewed), /private-|source-one|derived-one|sourceAttachmentId|"regions"|"plan"/);
+});
 
 test('shareable image declarations retain only immediate-parent identity and unique operation kinds', () => {
   const declared = declareImageDerivation(readImageDerivation({ ...derivation, plan: { ...plan, regions: [region, { ...region, kind: 'outline' }, region] } }));
