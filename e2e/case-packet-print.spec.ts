@@ -49,6 +49,16 @@ test('printable packets preserve the exact audience projection, isolate print co
   expect(projected.selectedEvidence).toEqual([expect.objectContaining({ id: 'print-pin', source, observedAt: now, completeness: 'partial' })]);
   expect(projected.selectedEvidence[0]).not.toHaveProperty('value');
   expect(projected.case).not.toHaveProperty('notes');
+  const reportBeforeReading = await dialog.locator('.report-content').innerText();
+  for (const [role, target] of [['Analyst', 'Selected evidence'], ['Domain manager', 'Incident'], ['External reviewer', 'Readiness and unresolved evidence']] as const) {
+    await dialog.getByText('Reading guide', { exact: true }).click();
+    await dialog.getByRole('button', { name: new RegExp(`^${role}`) }).focus();
+    await page.keyboard.press('Enter');
+    await expect(dialog.getByRole('heading', { name: new RegExp(`^${target}`) })).toBeFocused();
+    await expect(dialog.getByRole('navigation', { name: 'Report reading starting points', exact: true })).toBeHidden();
+    expect(await dialog.locator('.report-content').innerText()).toBe(reportBeforeReading);
+    expect(JSON.parse(await dialog.locator('.technical-appendix pre').innerText())).toEqual(projected);
+  }
   await dialog.getByRole('button', { name: 'Close report', exact: true }).click();
   await expect(openReport).toBeFocused();
   const download = page.waitForEvent('download');
@@ -65,7 +75,25 @@ test('printable packets preserve the exact audience projection, isolate print co
       await expect(dialog.getByRole('button', { name: 'Print or save PDF', exact: true })).toBeInViewport();
       expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
       await expectNoHorizontalOverflow(page);
+      await dialog.getByText('Reading guide', { exact: true }).click();
+      const startReview = dialog.getByRole('button', { name: /^External reviewer/ });
+      await expect(startReview).toBeVisible();
+      expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
       if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`packet-report-${theme}-${width}.png`), animations: 'disabled' }); }
+      await startReview.click();
+      const reviewHeading = dialog.getByRole('heading', { name: 'Readiness and unresolved evidence', exact: true });
+      await expect(reviewHeading).toBeFocused();
+      await expect(reviewHeading).toBeInViewport();
+      expect(await reviewHeading.evaluate(element => {
+        const report = element.closest('dialog')!;
+        const controls = report.querySelector<HTMLElement>('.print-controls')!;
+        const bounds = report.getBoundingClientRect(), target = element.getBoundingClientRect();
+        const visibleTop = getComputedStyle(controls).position === 'sticky' ? Math.max(bounds.top, controls.getBoundingClientRect().bottom) : bounds.top;
+        return target.top >= visibleTop && target.bottom <= bounds.bottom;
+      })).toBe(true);
+      if (captureVisualEvidenceEnabled() && (width === 320 || width === 1280)) {
+        await page.screenshot({ path: testInfo.outputPath(`packet-reading-target-${theme}-${width}.png`), animations: 'disabled' });
+      }
     }
     await dialog.getByRole('button', { name: 'Close report', exact: true }).click();
   }
@@ -113,6 +141,7 @@ test('printable packets preserve the exact audience projection, isolate print co
   await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
   await expect(dialog.locator('.print-controls')).toBeHidden();
+  await expect(dialog.getByText('Reading guide', { exact: true })).toBeHidden();
   await expect(page.locator('.shell > header')).toBeHidden();
   await expect(page.getByRole('navigation', { name: 'Case sections', exact: true })).toBeHidden();
   await expect(dialog.locator('.technical-appendix')).toHaveCount(0);

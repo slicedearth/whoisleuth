@@ -1003,6 +1003,10 @@ incident context, source references, UTC times, readiness and response state.
 Print or save it as PDF through the browser, optionally including the exact JSON
 appendix. Printing rechecks the prepared inputs; it does not confirm a saved file
 or record delivery. The report digest identifies the packet JSON, not the PDF.
+The report's **Reading guide** offers starting points for analysts, domain
+managers and external reviewers. It moves to a section of the same prepared
+report; it does not change the selected audience, hide evidence or alter an
+export. The guide itself is not printed.
 
 Provider acknowledgement or reported resolution remains analyst-recorded state,
 not independently observed remediation.
