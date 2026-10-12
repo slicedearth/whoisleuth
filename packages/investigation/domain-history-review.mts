@@ -10,6 +10,11 @@ export const DOMAIN_CHANGE_FAMILIES = ['registration', 'dns', 'mail', 'certifica
 export type DomainChangeFamily = typeof DOMAIN_CHANGE_FAMILIES[number];
 export type ExpectedDomainChange = Readonly<{ family: DomainChangeFamily; start: string; end: string; reason: string }>;
 export type RetiredDependency = Readonly<{ asset: string; dependency: string; family: DomainChangeFamily; retiredAt: string; source: string }>;
+export const RETIRED_DEPENDENCY_REVIEW_STEPS: readonly string[] = Object.freeze([
+  'DNS aliases: review owned CNAME records and delegated nameservers for references to the retired hostname. Record the configuration source and a deliberate cleanup plan; a remaining reference alone does not establish takeover availability.',
+  'Recovery email: review account-recovery and administrator-contact dependencies on the retired mail domain. Confirm a replacement through the account owner before removing access; record a source label, not email addresses or recovery secrets.',
+  'Integration references: review retained application, sign-in, webhook and third-party service configuration for the retired hostname. Record the responsible service and change reference without credentials or complete URLs; retained configuration does not prove a reference is still active.',
+]);
 export const REGISTRATION_BOUNDARY_KINDS = ['registration_reported', 'deletion_reported', 'reregistration_reported', 'transfer_reported', 'review_boundary'] as const;
 export const MAX_REGISTRATION_BOUNDARIES = 40;
 export type RegistrationBoundary = Readonly<{ kind: typeof REGISTRATION_BOUNDARY_KINDS[number]; occurredAt: string; source: string; rationale: string; snapshotIds: readonly string[]; evidencePinIds: readonly string[] }>;
@@ -116,7 +121,8 @@ export function reviewDomainHistory(record: CaseRecord, declarations: unknown, r
   const certificateCount = observations.filter(row => row.label.startsWith('Retained certificate')).length;
   return { schema: CONTEXT_REVIEW_SCHEMA, version: CONTEXT_REVIEW_VERSION, kind: 'domain_history', reviewedAt, title: 'Domain history and retired dependencies', state: orderedPairs < 1 || limitedPairs > 0 ? 'partial' : 'reviewed',
     summary: `Retained snapshots: ${snapshots.length}; time-ordered pairs: ${orderedPairs}; limited pairs: ${limitedPairs}; certificate pins: ${certificateCount}; declared retired dependencies: ${declared.retiredDependencies.length}.${declarationVersion === 2 ? ` Analyst-declared registration boundaries: ${declared.registrationBoundaries.length}.` : ''}`, observations,
-    nextSteps: [...prompts, 'Review changed registration, DNS, mail and web evidence against declared maintenance windows.', 'Recheck owned references to retired dependencies before changing configuration; preserve evidence of legitimate transfers or rebrands.'],
+    nextSteps: [...prompts, 'Review changed registration, DNS, mail and web evidence against declared maintenance windows.', 'Recheck owned references to retired dependencies before changing configuration; preserve evidence of legitimate transfers or rebrands.',
+      ...(declared.retiredDependencies.length ? RETIRED_DEPENDENCY_REVIEW_STEPS : [])],
     limitations: ['This review uses retained Case evidence, not fresh collection. Missing or incompatible fields are not compared.', 'Certificate pins retain their own source and completeness; they are not equivalent to live TLS observations.', 'Changes and retired dependencies do not establish ownership transfer, malicious repurposing or takeover availability.',
       ...(declarationVersion === 2 ? ['Registration boundaries are analyst declarations linked to retained records, not independently verified deletion, re-registration or ownership events. Expiry and registrar changes do not establish those events.'] : [])] };
 }

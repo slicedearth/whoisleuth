@@ -71,6 +71,16 @@ to the retained concern. Incomplete comparisons remain visible. A changed creati
 date asks for reassessment of earlier decisions without asserting a new owner,
 resetting a baseline or discarding history; expiry alone never establishes deletion.
 
+Open **Retirement review checklist** for DNS-alias, recovery-email and retained
+integration-reference prompts. Review the configuration you control, then use
+the existing declaration form to record the affected hostnames, evidence family,
+retirement time and source. The draft shows these details before you prepare a
+review. Prefer a configuration or change-reference label; do not enter recovery
+addresses, credentials or complete URLs. Reports with declared retired dependencies
+include the same suggested next reviews in the browser and CLI. Suggestions do not
+record checks as completed or establish takeover availability. Saving preserves
+the source-qualified declaration, not confirmation that configuration was changed.
+
 Schema: `whoisleuth.domain-history.input`. Its `evidence` contains:
 
 - `caseExport`: an ordinary supported editable Case export, with `version` and

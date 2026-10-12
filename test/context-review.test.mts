@@ -75,6 +75,26 @@ describe('contextual evidence review', () => {
     const fast = { ...record, evidenceHistory: record.evidenceHistory.map(row => ({ ...row, scanDepth: 'fast' })) };
     assert.ok(reviewDomainHistory(fast, declarations, NOW).observations.every(row => !row.label.startsWith('mail') && !row.label.startsWith('web')));
   });
+  test('retirement guidance stays separate from authored declarations in both supported history versions', () => {
+    const record = createCase({ domain: 'example.test' }, NOW);
+    const original = structuredClone(record);
+    for (const version of [1, 2]) {
+      const declarations = { expectedChanges: [], retiredDependencies: [{ asset: 'www.example.test', dependency: 'retired.example.test', family: 'dns', retiredAt: BEFORE, source: 'Owned configuration review' }], ...(version === 2 ? { registrationBoundaries: [] } : {}) };
+      const before = structuredClone(declarations);
+      const report = reviewDomainHistory(record, declarations, NOW, version);
+      assert.equal(report.state, 'partial');
+      assert.deepEqual(report.observations.map(row => ({ state: row.state, source: row.source, time: row.observedAt, hostname: row.hostname })), [
+        { state: 'reported', source: 'Owned configuration review', time: BEFORE, hostname: 'retired.example.test' },
+      ]);
+      for (const prefix of ['DNS aliases:', 'Recovery email:', 'Integration references:']) {
+        assert.equal(report.nextSteps.filter(step => step.startsWith(prefix)).length, 1);
+        assert.equal(reviewDomainHistory(record, { ...declarations, retiredDependencies: [] }, NOW, version).nextSteps.some(step => step.startsWith(prefix)), false);
+      }
+      assert.match(report.nextSteps.join(' '), /does not establish takeover availability/u);
+      assert.deepEqual(declarations, before);
+    }
+    assert.deepEqual(record, original);
+  });
   test('expected windows, retirement relationships and Case export selection fail closed', () => {
     assert.throws(() => readDomainHistoryDeclarations({ expectedChanges: [{ family: 'dns', start: NOW, end: BEFORE, reason: 'Change' }], retiredDependencies: [] }), /ends before/u);
     assert.throws(() => reviewDomainHistory(historyCase(), { expectedChanges: [], retiredDependencies: [{ asset: 'unrelated.test', dependency: 'other.test', family: 'web', retiredAt: BEFORE, source: 'Fixture' }] }, NOW), /involve/u);

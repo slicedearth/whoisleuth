@@ -200,8 +200,16 @@ test('domain-history scopes survive report download, print, retention and relate
   await expect(page).toHaveURL(/\/lookup\?q=login.example.test&case=/u);
 });
 
-test('domain-history declarations remain qualified and an empty Case does not claim unchanged evidence', async ({ page }) => {
+test('domain-history declarations remain qualified and an empty Case does not claim unchanged evidence', async ({ page }, testInfo) => {
   const review = await openReview(page, 'Domain history and retired dependencies');
+  const before = await readBrowserLocalCollection(page, 'cases');
+  const requests: string[] = []; page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) requests.push(request.url()); });
+  const checklist = review.getByText('Retirement review checklist', { exact: true });
+  await checklist.focus(); await page.keyboard.press('Enter');
+  await expect(review.getByText(/^DNS aliases:/)).toBeVisible();
+  await expect(review.getByText(/^Recovery email:/)).toBeVisible();
+  await expect(review.getByText(/^Integration references:/)).toBeVisible();
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await retainedJson(page)).toEqual([]);
   await review.getByRole('button', { name: 'Review retained history', exact: true }).click();
   const report = review.getByRole('region', { name: 'Domain history and retired dependencies', exact: true });
   await expect(report).toContainText('Retained snapshots: 0'); await expect(report).toContainText('Some comparison evidence is unavailable');
@@ -209,11 +217,32 @@ test('domain-history declarations remain qualified and an empty Case does not cl
   await review.getByRole('checkbox', { name: 'I own or am authorised to review the affected assets.', exact: true }).check();
   await review.getByLabel('Owned asset hostname').fill('www.example.test'); await review.getByLabel('Dependency hostname').fill('retired.example.test');
   await review.getByLabel('Retirement time (local)').fill('2026-09-20T10:00'); await review.getByLabel('Source or change reference', { exact: true }).fill('Owned asset register');
-  await review.getByRole('button', { name: 'Add retired dependency' }).click(); await review.getByRole('button', { name: 'Review retained history', exact: true }).click();
+  await review.getByRole('button', { name: 'Add retired dependency' }).click();
+  const declarations = review.getByRole('list', { name: 'Retired dependency declarations', exact: true });
+  await expect(declarations).toContainText('Declared web dependency · Owned asset register');
+  await expect(declarations.locator('time')).toHaveAttribute('datetime', /2026-09-20T/u);
+  await review.getByRole('button', { name: 'Review retained history', exact: true }).click();
   await expect(report).toContainText('Declared retired web dependency · reported'); await expect(report).toContainText('www.example.test depended on retired.example.test');
+  await expect(report.getByText(/^DNS aliases:/)).toBeVisible();
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   await report.getByRole('button', { name: 'Save review in Case' }).click(); await expect(report.getByRole('status')).toContainText('Review saved');
-  expect(await retainedJson(page)).toHaveLength(1);
-  for (const theme of ['light', 'dark'] as const) { await useTheme(page, theme); for (const width of [320, 390, 1024, 1280]) { await page.setViewportSize({ width, height: 900 }); await expectNoHorizontalOverflow(page); } }
+  const files = await retainedJson(page); expect(files).toHaveLength(1);
+  const saved = JSON.parse(files[0]!);
+  expect(saved.observations.map((row: { state: string }) => row.state)).toEqual(['reported']);
+  expect(saved.nextSteps.filter((step: string) => /^(DNS aliases|Recovery email|Integration references):/u.test(step))).toHaveLength(3);
+  expect(requests).toEqual([]);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 2560]) {
+      await page.setViewportSize({ width, height: 900 }); await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled() && [320, 1280].includes(width)) {
+        await checklist.scrollIntoViewIfNeeded(); await page.screenshot({ path: testInfo.outputPath(`retirement-${theme}-${width}.png`) });
+        if (width === 320) await checklist.locator('..').screenshot({ path: testInfo.outputPath(`retirement-guide-${theme}.png`) });
+        await declarations.screenshot({ path: testInfo.outputPath(`retirement-declarations-${theme}-${width}.png`) });
+      }
+    }
+    expect((await new AxeBuilder({ page }).include('.context-entry').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+  }
 });
 
 test('incident sequence keeps source provenance, unknown times and chosen order through a Case save', async ({ page }, testInfo) => {
