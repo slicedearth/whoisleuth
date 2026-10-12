@@ -94,6 +94,31 @@ test('an unconfirmed filesystem recovery write keeps the form and blocks repeat 
   expect(commits).toBe(1);
 });
 
+test('a filesystem Case tag batch commits once and blocks replay after an unknown acknowledgement', async ({ page, localApplication }) => {
+  await openLocalApplication(page, localApplication);
+  for (const domain of ['first-tags.example', 'second-tags.example']) { await openCasesView(page); await createCase(page, domain); }
+  await openCasesView(page); await page.getByText('Organise Case tags', { exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Case batch tagging', exact: true });
+  const selection = page.getByRole('checkbox', { name: /^Select Case .+ for tag changes$/u });
+  await expect(selection).toHaveCount(2); await selection.nth(0).check(); await selection.nth(1).check();
+  await panel.getByLabel('Batch tags', { exact: true }).fill('Review later');
+  const prepare = panel.getByRole('button', { name: 'Preview exact tag changes', exact: true }); await prepare.click();
+  let commits = 0;
+  await page.route('**/api/local-workspace/commit', async route => {
+    commits++; const response = await route.fetch(); expect(response.ok()).toBe(true);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  }, { times: 1 });
+  await page.route('**/api/local-workspace/receipt/*', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await panel.getByRole('button', { name: 'Apply reviewed tag changes', exact: true }).click();
+  await expect(panel.getByRole('status', { name: 'Case tag batch status', exact: true })).toContainText('write outcome is unknown');
+  await expect(prepare).toBeDisabled(); await expect(panel.getByRole('button', { name: 'Discard tag draft and selection' })).toBeDisabled();
+  await expect(panel.getByLabel('Batch tags', { exact: true })).toHaveValue('Review later'); expect(commits).toBe(1);
+  await page.unroute('**/api/local-workspace/receipt/*'); page.once('dialog', dialog => dialog.accept());
+  await panel.getByRole('button', { name: 'Reload saved Cases', exact: true }).click();
+  const list = page.getByRole('region', { name: 'Saved Cases', exact: true });
+  await expect(list.getByText('Review later', { exact: true })).toHaveCount(2); expect(commits).toBe(1);
+});
+
 test('filesystem records, original files and recovery drafts survive restart and browser-data removal', async ({ page, context, localApplication }) => {
   test.slow();
   await openLocalApplication(page, localApplication);

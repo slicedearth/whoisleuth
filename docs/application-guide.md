@@ -37,6 +37,13 @@ rule exceptions. Contributors are paged independently of the candidate queue;
 page. Groups reflect the current filters, may overlap and never select or admit
 their members to a watchlist. Every candidate remains reachable in the queue.
 Case inspection is a read-only preview; **Open Case workspace** opens its editor.
+In the Case list, **Organise Case tags** enables a separate checked selection
+across pages and filters. Preview the exact add/remove result, then apply it once.
+Inspection and calibration selection do not change these targets. Conflicting or
+missing records, excessive tags and storage changes that would prune evidence
+block the whole batch. Tags organise records; they do not change conclusions.
+The draft stays on this page until saved or discarded. After an unknown write
+outcome, reload and inspect saved tags before attempting another batch.
 Review Inbox forms retain their drafts while another item is inspected; use the
 existing explicit review checkpoint to retain them across a reload.
 

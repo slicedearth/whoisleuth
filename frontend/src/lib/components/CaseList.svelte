@@ -13,8 +13,9 @@
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CopyButton from './CopyButton.svelte';
   import { buildCaseDecisionOverview } from '../../../../packages/cases/case-decision-overview.mts';
+  import { MAX_CASE_BATCH_MUTATIONS } from '../../../../packages/cases/case-batch-limits.mts';
 
-  let { records, selectCase, formatDate, currentPage, pageCount, setPage, calibrationMode = false, calibrationCaseIds, toggleCalibrationCase }: {
+  let { records, selectCase, formatDate, currentPage, pageCount, setPage, calibrationMode = false, calibrationCaseIds, toggleCalibrationCase, tagMode = false, tagCaseIds = [], tagSelectionDisabled = false, toggleTagCase }: {
     records: CaseRecord[];
     selectCase: (record: CaseRecord) => void;
     formatDate: (value: string) => string;
@@ -24,6 +25,8 @@
     calibrationMode?: boolean;
     calibrationCaseIds: string[];
     toggleCalibrationCase: (record: CaseRecord, selected: boolean) => void;
+    tagMode?: boolean; tagCaseIds?: readonly string[]; tagSelectionDisabled?: boolean;
+    toggleTagCase?: (record: CaseRecord, selected: boolean) => void;
   } = $props();
   let inspectedId = $state<string | null>(null);
   const inspected = $derived(records.find(record => record.id === inspectedId) ?? null);
@@ -36,6 +39,11 @@
 <section class="case-list" aria-label="Saved Cases">
   {#each records as record (record.id)}
     <article class="case card">
+      {#if tagMode && toggleTagCase}
+        <label class="calibration-select"><input type="checkbox" aria-label={`Select Case ${caseNumber(record.id)} for tag changes`}
+          checked={tagCaseIds.includes(record.id)} disabled={tagSelectionDisabled || (tagCaseIds.length >= MAX_CASE_BATCH_MUTATIONS && !tagCaseIds.includes(record.id))}
+          onchange={event => toggleTagCase?.(record, event.currentTarget.checked)}>Select for tag changes</label>
+      {/if}
       {#if calibrationMode}
         <label class="calibration-select">
           <input type="checkbox" checked={calibrationCaseIds.includes(record.id)} disabled={!isReviewedCaseDisposition(record.disposition) || !record.evidenceHistory.length} onchange={(event) => toggleCalibrationCase(record, event.currentTarget.checked)}>

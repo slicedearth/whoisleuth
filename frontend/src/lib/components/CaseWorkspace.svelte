@@ -26,6 +26,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
     deleteCase,
     editCase,
     editCaseTags,
+    editCaseTagBatch,
     restoreCaseTags,
     exportCases,
     exportRiskCalibrationDataset,
@@ -55,6 +56,9 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
   import CaseFilters from '#lib/components/CaseFilters.svelte';
   import CaseSavedViews from '#lib/components/CaseSavedViews.svelte';
   import CaseList from '#lib/components/CaseList.svelte';
+  import CaseTagBatch from '#lib/components/CaseTagBatch.svelte';
+  import { prepareCaseTagBatch, type CaseTagBatchIntent, type CaseTagBatchPreview } from '../../../../packages/cases/case-tag-batch.mts';
+  import { MAX_CASE_BATCH_MUTATIONS } from '../../../../packages/cases/case-batch-limits.mts';
   import CaseStorageReview from '#lib/components/CaseStorageReview.svelte';
   import PageHeading from '#lib/components/PageHeading.svelte';
   let { initialCases = null, initialMessage = '', onchange }: {
@@ -84,6 +88,8 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
     if (associationRetention && selectedCase?.id !== associationRetention.id && !retentionSaving) associationRetention = null;
   });
   let calibrationMode = $state(false);
+  let tagMode = $state(false), tagCaseIds = $state<string[]>([]);
+  const tagSelectionRevision = createDraftRevision(() => JSON.stringify(tagCaseIds));
   let noteDraft = $state('');
   let tagDraft = $state('');
   let tagExpected = $state<string[]>([]);
@@ -558,6 +564,25 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
   async function reconcileCommittedCaseMutation(committed: Awaited<ReturnType<typeof editCase>>, success: string) {
     await reconcileCommittedCaseSnapshot(committed, success, committed.record);
   }
+  function toggleTagCase(record: CaseRecord, selected: boolean) {
+    if (casesRefreshing) return;
+    tagSelectionRevision.changed();
+    if (!selected) tagCaseIds = tagCaseIds.filter(id => id !== record.id);
+    else if (!tagCaseIds.includes(record.id) && tagCaseIds.length < MAX_CASE_BATCH_MUTATIONS) tagCaseIds = [...tagCaseIds, record.id];
+  }
+  function clearTagSelection() { tagSelectionRevision.changed(); tagCaseIds = []; }
+  async function previewTagBatch(intent: CaseTagBatchIntent) {
+    await refreshCases();
+    return prepareCaseTagBatch(cases, intent);
+  }
+  async function applyTagBatch(preview: CaseTagBatchPreview) {
+    const committed = await editCaseTagBatch(preview);
+    if (mounted) {
+      try { await reconcileCommittedCaseSnapshot(committed, `Tags saved for ${committed.changed} Cases; ${committed.unchanged} already matched.`); }
+      catch { caseMessage = `Tags saved for ${committed.changed} Cases, but the visible workspace could not be reconciled. Reload to review the saved records; do not repeat the write.`; }
+    }
+    return committed;
+  }
   let appliedRouteKey = '';
   async function applyCaseTarget(currentUrl: URL, routeKey: string) {
     if (routeKey === appliedRouteKey || casesSourceState === 'loading')
@@ -693,9 +718,14 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
     <CaseSavedViews filters={currentFilters} onapply={(view) => changeCaseView(() => {
       statusFilter = view.status; dispositionFilter = view.disposition; caseSearch = view.search; caseSort = view.sort;
     })} />
+    <details class="advanced-case-tools" bind:open={tagMode}>
+      <summary>Organise Case tags{tagCaseIds.length ? ` · ${tagCaseIds.length} selected` : ''}</summary>
+      <CaseTagBatch selectedIds={tagCaseIds} disabled={casesRefreshing} onclear={clearTagSelection} captureSelection={tagSelectionRevision.capture} onpreview={previewTagBatch} onapply={applyTagBatch} />
+    </details>
     {#if cases.length}
       <CaseList
         records={pagedCases} {selectCase} {calibrationMode} {calibrationCaseIds} {toggleCalibrationCase} formatDate={date}
+        {tagMode} {tagCaseIds} {toggleTagCase} tagSelectionDisabled={casesRefreshing}
         currentPage={currentCasePage} pageCount={casePageCount} setPage={setCasePage} />
     {:else}
       <section class="empty-state card">
