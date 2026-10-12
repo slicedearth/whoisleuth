@@ -835,7 +835,13 @@ copies. Choose **Save current position** to retain those forms and the filters
 in this workspace without submitting them. The collapsed control shows whether
 a checkpoint is saved and when. Later navigation and edits do not update it.
 **Resume saved review** restores it against current records, keeps newer open
-drafts and flags changed or unavailable evidence. Changed-evidence drafts require
+drafts and flags changed or unavailable evidence. Its **Return-to-work briefing**
+shows the saved queue, the selection's current match, matching retained items,
+restored forms and any newer forms kept open. These are results at resume, not a
+count of new observations. The checkpoint compares the selected item's material
+fingerprint; it does not retain earlier evidence values or a written investigation
+question. An unavailable item may be filtered, outside the admitted results or
+removed; no other item is substituted. Changed-evidence drafts require
 explicit review before submission. A draft with an uncertain write outcome stays
 blocked until the current decision is inspected and the draft is discarded.
 Saved positions are not included in backups or exports. Case form recovery is

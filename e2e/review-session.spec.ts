@@ -83,6 +83,10 @@ test('review navigation spans pages and an explicit checkpoint restores filters,
   await expect(pages.getByRole('status')).toHaveText('Page 2 of 2');
   await expect(items.first().getByRole('heading')).toHaveText(selectedTitle!);
   await expect(items.first().locator(':scope > details > summary')).toBeFocused();
+  const briefing = control.getByRole('region', { name: 'Return-to-work briefing', exact: true });
+  await expect(briefing).toContainText(`${selectedTitle} · unchanged`);
+  await expect(briefing).toContainText('1 restored from the checkpoint · 0 already-open forms kept');
+  await expect(briefing).toContainText('30 at resume, not a count of newly collected evidence');
   await inbox.getByText('Advanced filters', { exact: true }).click();
   await expect(inbox.getByRole('combobox', { name: 'Item type', exact: true })).toHaveValue('case');
   await expect(inbox.getByRole('combobox', { name: 'Source', exact: true })).toHaveValue('case');
@@ -127,6 +131,7 @@ test('review navigation spans pages and an explicit checkpoint restores filters,
   await expect(control.getByRole('status')).toContainText('could not be read');
   await expect(checkpointSummary).toContainText('Saved checkpoint unavailable');
   await expect(control.getByRole('region', { name: 'Saved review checkpoint', exact: true })).toHaveCount(0);
+  await expect(briefing).toHaveCount(0);
   await expect(control.getByRole('button', { name: 'Save current position', exact: true })).toBeDisabled();
   await expect(control.getByRole('button', { name: 'Resume saved review', exact: true })).toBeDisabled();
   expect((await readBrowserLocalCollection(page, 'review_session', { minimumRecords: 1 })).records[0]!.value).toEqual(saved);
@@ -157,6 +162,51 @@ test('saving a review position rejects a peer-tab creation or replacement until 
   } finally { await peer.close(); }
 });
 
+test('resume keeps newer open forms and does not substitute another review after a saved Case is removed', async ({ page }) => {
+  await seed(page, 2);
+  let item = await openInboxReview(inboxReviewControls(page).first());
+  await item.locator('details.lifecycle-controls > summary').click();
+  await item.getByRole('combobox', { name: 'Review outcome', exact: true }).selectOption('open');
+  await item.getByLabel('Rationale', { exact: true }).fill('Earlier checkpoint reasoning.');
+  let control = await checkpoint(page);
+  await control.getByRole('button', { name: 'Save current position', exact: true }).click();
+  await expect(control.getByRole('status')).toContainText('Review position saved');
+  const saved = (await readBrowserLocalCollection(page, 'review_session', { minimumRecords: 1 })).records[0]!.value;
+  const cases = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 })).records;
+  expect(saved.selected?.caseId).toBeTruthy();
+  await item.getByLabel('Rationale', { exact: true }).fill('Newer reasoning kept in the open form.');
+  await control.getByRole('button', { name: 'Resume saved review', exact: true }).click();
+  await expect(control.getByRole('region', { name: 'Return-to-work briefing', exact: true })).toContainText('0 restored from the checkpoint · 1 already-open forms kept');
+  item = page.locator('.review-inbox .items > li').first();
+  await item.locator('details.lifecycle-controls > summary').click();
+  await expect(item.getByLabel('Rationale', { exact: true })).toHaveValue('Newer reasoning kept in the open form.');
+  expect((await readBrowserLocalCollection(page, 'review_session', { minimumRecords: 1 })).records[0]!.value).toEqual(saved);
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 })).records).toEqual(cases);
+  expect((await readBrowserLocalCollection(page, 'analyst_review_state')).records).toHaveLength(0);
+
+  await item.getByRole('link', { name: 'Review', exact: true }).click();
+  await page.locator('.case-more > summary').click();
+  page.once('dialog', dialog => { void dialog.accept(); });
+  await page.getByRole('button', { name: 'Delete case', exact: true }).click();
+  const remaining = cases.filter(record => record.value.id !== saved.selected?.caseId);
+  expect(remaining).toHaveLength(1);
+  await expect.poll(async () => (await readBrowserLocalCollection(page, 'cases')).records).toEqual(remaining);
+  await page.goto('/monitor?view=inbox&queue=all');
+  control = await checkpoint(page);
+  await control.getByRole('button', { name: 'Resume saved review', exact: true }).click();
+  const briefing = control.getByRole('region', { name: 'Return-to-work briefing', exact: true });
+  await expect(briefing).toContainText('No current review selected · unavailable');
+  await expect(briefing).toContainText('1 restored from the checkpoint · 0 already-open forms kept');
+  await expect(page.locator('.review-inbox .items > li')).toHaveCount(1);
+  await expect(page.locator('.review-inbox .items > li > details[open]')).toHaveCount(0);
+  const drafts = page.locator('.current-drafts');
+  await drafts.locator(':scope > summary').click();
+  await expect(drafts).toContainText('Earlier checkpoint reasoning.');
+  expect((await readBrowserLocalCollection(page, 'cases')).records).toEqual(remaining);
+  expect((await readBrowserLocalCollection(page, 'review_session', { minimumRecords: 1 })).records[0]!.value).toEqual(saved);
+  expect((await readBrowserLocalCollection(page, 'analyst_review_state')).records).toHaveLength(0);
+});
+
 test('returning from a Case revalidates the saved review and blocks an older-evidence draft', async ({ page }) => {
   await seed(page, 1);
   const item = await openInboxReview(inboxReviewControls(page).first());
@@ -173,6 +223,7 @@ test('returning from a Case revalidates the saved review and blocks an older-evi
   await page.reload();
   await page.getByRole('link', { name: 'Return to saved review', exact: true }).click();
   await expect(page.locator('.review-session').getByRole('status')).toContainText('changed since this checkpoint');
+  await expect(page.getByRole('region', { name: 'Return-to-work briefing', exact: true })).toContainText('· changed');
   await item.locator('details.lifecycle-controls > summary').click();
   await expect(item.getByLabel('Rationale', { exact: true })).toHaveValue('An earlier-evidence draft.');
   await expect(item.getByRole('button', { name: 'Record decision', exact: true })).toBeDisabled();
@@ -200,6 +251,7 @@ test('an uncertain restored review cannot be resubmitted and draft removal recov
   }, { clearStorage: true, destination: '/monitor?view=inbox&queue=all' });
   control = await checkpoint(page);
   await control.getByRole('button', { name: 'Resume saved review', exact: true }).click();
+  await expect(control.getByRole('region', { name: 'Return-to-work briefing', exact: true })).toContainText('1 form still requires review of the saved record before another submission');
   item = page.locator('.review-inbox .items > li').first();
   await item.locator('details.lifecycle-controls > summary').click();
   await expect(item.getByText('This draft may already have been saved.', { exact: false })).toBeVisible();

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, type ComponentProps } from 'svelte';
   import { restoreSubmittedFocus } from '../controllers/submitted-draft.ts';
   import { page as route } from '$app/state';
   import { goto } from '$app/navigation';
@@ -11,7 +11,7 @@
   import AnalystWorkbench from './AnalystWorkbench.svelte';
   import ReviewSessionControl from './ReviewSessionControl.svelte';
   import type { ReviewFormDraft, ReviewSessionPosition } from '../../../../packages/contracts/review-session-contract.mts';
-  import { resolveReviewSessionSelection } from '../../../../packages/workspace/review-session.mts';
+  import { describeReviewSessionResume, mergeReviewSessionDrafts } from '../../../../packages/workspace/review-session.mts';
   import { MAX_ANALYST_REVIEW_ITEMS } from '../../../../packages/contracts/analyst-review-state-contract.mts';
   import {
     ANALYST_REVIEW_EVIDENCE_FAMILIES,
@@ -149,11 +149,10 @@
     itemsElement?.querySelectorAll<HTMLElement>(':scope > li > details > summary')[visibleIndex]?.focus();
   }
 
-  async function resumeReview(saved: ReviewSessionPosition): Promise<string> {
-    const retained = new Map(reviewDrafts.map(draft => [draft.id, draft]));
-    for (const draft of saved.drafts) if (!retained.has(draft.id)) retained.set(draft.id, draft);
-    if (retained.size > MAX_ANALYST_REVIEW_ITEMS) return 'Saved and current forms exceed one admitted review queue. Finish or discard current drafts before resuming; no forms were removed.';
-    reviewDrafts = [...retained.values()];
+  const resumeReview: ComponentProps<typeof ReviewSessionControl>['onresume'] = async saved => {
+    const retained = mergeReviewSessionDrafts(saved.drafts, reviewDrafts);
+    if (!retained) return { message: 'Saved and current forms exceed one admitted review queue. Finish or discard current drafts before resuming; no forms were removed.' };
+    reviewDrafts = retained.drafts;
     restoreRevision += 1;
     const url = new URL(route.url.href);
     url.searchParams.delete('review');
@@ -168,13 +167,14 @@
     caseFilter = saved.filters.caseQuery; priorityFilter = saved.filters.priority; nextActionFilter = saved.filters.nextAction;
     evidenceFamilyFilter = saved.filters.evidenceFamily; lifecycleFilter = saved.filters.lifecycle;
     await tick();
-    const selected = resolveReviewSessionSelection(saved, filtered);
+    const briefing = describeReviewSessionResume(saved, filtered, retained);
+    const selected = briefing.selected;
     if (selected.index >= 0) await focusReview(selected.index);
     else { page = 1; expandedId = null; }
-    if (selected.state === 'changed') return 'Position restored. The selected review has changed since this checkpoint; inspect the current evidence before deciding.';
-    if (selected.state === 'unavailable' || selected.state === 'ambiguous') return 'Filters restored, but the saved item is unavailable or ambiguous in the current results. No other item was substituted.';
-    return 'Review position restored against current results. No decision or collection was replayed.';
-  }
+    if (selected.state === 'changed') return { briefing, message: 'Position restored. The selected review has changed since this checkpoint; inspect the current evidence before deciding.' };
+    if (selected.state === 'unavailable' || selected.state === 'ambiguous') return { briefing, message: 'Filters restored, but the saved item is unavailable or ambiguous in the current results. No other item was substituted.' };
+    return { briefing, message: 'Review position restored against current results. No decision or collection was replayed.' };
+  };
 
   async function reviewMutation(item: AnalystReviewItem, operation: () => void | Promise<void>) {
     const origin = inboxElement?.contains(document.activeElement) ? document.activeElement : null;

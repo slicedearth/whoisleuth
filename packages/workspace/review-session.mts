@@ -92,3 +92,25 @@ export function resolveReviewSessionSelection<T extends { id: string; subjectKey
   const index = candidates[0]!;
   return { state: items[index]!.materialFingerprint === position.selected.materialFingerprint ? 'unchanged' as const : 'changed' as const, index };
 }
+
+/** Existing open forms win; resuming a checkpoint never submits or prunes them. */
+export function mergeReviewSessionDrafts(saved: readonly ReviewFormDraft[], current: readonly ReviewFormDraft[]) {
+  const retained = new Map(current.map(draft => [draft.id, draft]));
+  const keptOpen = retained.size;
+  for (const draft of saved) if (!retained.has(draft.id)) retained.set(draft.id, draft);
+  if (retained.size > MAX_ANALYST_REVIEW_ITEMS) return null;
+  return { drafts: [...retained.values()], keptOpen, restored: retained.size - keptOpen };
+}
+
+/** A readback of admitted results at resume, not a retained history or live tally. */
+export function describeReviewSessionResume<T extends { id: string; subjectKey: string; materialFingerprint: string; title: string }>(
+  position: ReviewSessionPosition, items: readonly T[], merged: NonNullable<ReturnType<typeof mergeReviewSessionDrafts>>,
+) {
+  const selected = resolveReviewSessionSelection(position, items);
+  return {
+    selected, currentTitle: items[selected.index]?.title ?? null, matchingItems: items.length,
+    restoredDrafts: merged.restored, keptOpenDrafts: merged.keptOpen,
+    uncertainDrafts: merged.drafts.filter(draft => draft.uncertain).length,
+  };
+}
+export type ReviewSessionResumeBriefing = ReturnType<typeof describeReviewSessionResume>;
