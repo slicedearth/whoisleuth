@@ -325,7 +325,7 @@
       <CaseActionStage bind:this={actionStage} {record} {mutationBusy} {persist} mode={presentationMode} onadvanced={() => void openAdvancedStage('response_decision')} />
       <CaseResponsePacketWorkspace
         {record}
-        visible
+        visible={activeSection === 'response'}
         {onmessage}
         onstagechange={updateEvidenceHandoffStage}
         onpacketexported={preparePacketDeliveryRecord}

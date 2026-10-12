@@ -84,6 +84,16 @@ the requested-evidence exercise prepares a drafting amendment. Changing scenario
 requires confirming that its Case and drafts should be discarded. Feedback
 checks retained relationships and states, not the quality of free-text reasoning.
 
+In a prepared response packet, **Recipient reading view** offers the full report,
+brief emphasis, selected evidence and its contained timeline. These views contain
+only the packet's existing projection; printing still uses its full report and
+the optional exact JSON appendix. **Compare disclosures — analyst only** compares
+the actual prepared ordinary report and recipient JSON from the same Case and
+time. It can reveal private fields absent from the packet, so it is excluded from
+printing and every recipient export. Notes enter the internal side only when
+explicitly selected. Closing it, refreshing the packet or changing source, options or section clears
+the comparison; different representations do not establish deletion or redaction.
+
 For related hosts, conflicting sources and provider-reported resolution, open
 **Find the weak inference** in **Record a conclusion**. Inspect the original
 supplied evidence, choose the statement that exceeds it and select **Explain

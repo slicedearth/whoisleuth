@@ -1,9 +1,11 @@
 <script lang="ts">
   import { downloadLocalFile } from '#lib/download-local-file.ts';
-  import { tick } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CasePacketPrintPreview from './CasePacketPrintPreview.svelte';
   import CasePacketDisclosure from './CasePacketDisclosure.svelte';
+  import CaseDisclosureComparison from './CaseDisclosureComparison.svelte';
+  import { prepareCaseReportPreview, type CaseReportPreview } from '../../../../packages/cases/case-report-preview.mts';
   import { buildCaseResponseReviewInputs } from '../../../../packages/cases/case-response-packet.mts';
   import { deliveryReceiptForPacket, type CaseDeliveryPacketReceipt } from '../../../../packages/cases/case-packet-correction.mts';
   import { caseEvidenceChoiceName } from '#lib/analysis/case-evidence-presentation.ts';
@@ -113,6 +115,25 @@
   let printPreview = $state.raw<PreparedPacket | null>(null);
   let printTrigger = $state<HTMLButtonElement>();
   let previewFreshnessChanged = $state(false);
+  let disclosureOpen = $state(false), disclosureNotes = $state(false);
+  let disclosurePair = $state.raw<{ internal: CaseReportPreview; recipient: PreparedPacket; notes: boolean } | null>(null);
+  let disclosureGeneration = 0, disposed = false;
+  let previousDisclosureContext: string | null = null;
+  function disclosureContext() {
+    return visible && packetOpen && packetWizardStep === 3 && disclosureOpen
+      ? JSON.stringify([disclosureNotes, previewFreshnessChanged, packetHandoffSignature()]) : 'closed';
+  }
+  function clearDisclosures() { disclosureGeneration++; disclosurePair = null; }
+  function replaceManualPreview(prepared: PreparedPacket) {
+    if (manualPreview !== prepared) clearDisclosures();
+    manualPreview = prepared;
+  }
+  onDestroy(() => { disposed = true; clearDisclosures(); });
+  $effect(() => {
+    const context = disclosureContext();
+    if (previousDisclosureContext !== null && context !== previousDisclosureContext) clearDisclosures();
+    previousDisclosureContext = context;
+  });
   const previewIsCurrent = $derived(Boolean(manualPreview && !previewFreshnessChanged && manualPreview.signature === packetHandoffSignature()));
 
   const packetReview = $derived.by(() => {
@@ -325,9 +346,10 @@
     if (packetBusy) return;
     packetBusy = true;
     try {
-      manualPreview = await prepareManualPacket(false);
+      const prepared = await prepareManualPacket(false);
+      replaceManualPreview(prepared);
       previewFreshnessChanged = false;
-      onmessage(`Prepared the exact ${manualPreview.built.json.authorisation.status} manual complaint preview. Nothing was copied, downloaded or submitted.`);
+      onmessage(`Prepared the exact ${prepared.built.json.authorisation.status} manual complaint preview. Nothing was copied, downloaded or submitted.`);
       await tick();
       document.getElementById(`manual-complaint-${record.id}`)?.focus({ preventScroll: true });
     } catch (cause) {
@@ -335,6 +357,27 @@
     } finally {
       packetBusy = false;
     }
+  }
+
+  async function comparePreparedDisclosures() {
+    if (packetBusy || !visible || !packetOpen || packetWizardStep !== 3 || !disclosureOpen) return;
+    const context = disclosureContext(); previousDisclosureContext = context;
+    const request = ++disclosureGeneration, signature = packetHandoffSignature(), notes = disclosureNotes;
+    const detached = structuredClone(record), sourceIdentity = JSON.stringify(detached);
+    packetBusy = true; disclosurePair = null;
+    try {
+      const prepared = await prepareManualPacket(true);
+      if (disposed || request !== disclosureGeneration || !visible || !disclosureOpen
+        || context !== disclosureContext()
+        || notes !== disclosureNotes || signature !== packetHandoffSignature()
+        || prepared.responseContext !== sourceIdentity) return;
+      const internal = prepareCaseReportPreview(detached, { includeNotes: notes, includeAttribution: true, applicationVersion: __WHOISLEUTH_VERSION__ }, prepared.generatedAt);
+      if (internal.sourceIdentity !== prepared.responseContext) throw new Error('The prepared source representations differ. Prepare the current Case again.');
+      replaceManualPreview(prepared); disclosurePair = { internal, recipient: prepared, notes };
+      onmessage('Prepared an analyst-only disclosure comparison. Recipient packet bytes and selections are unchanged.');
+    } catch (cause) {
+      if (!disposed && request === disclosureGeneration) onmessage(cause instanceof Error ? cause.message : 'The disclosure comparison could not be prepared.');
+    } finally { if (!disposed) packetBusy = false; }
   }
 
   async function downloadPacket(format: 'json' | 'md' | 'txt') {
@@ -376,7 +419,7 @@
     packetBusy = true;
     try {
       const prepared = await prepareManualPacket(true);
-      manualPreview = prepared;
+      replaceManualPreview(prepared);
       printPreview = prepared;
     } catch (cause) {
       onmessage(cause instanceof Error ? cause.message : 'Could not prepare the printable packet.');
@@ -523,6 +566,13 @@
           <p class="notice">Export stays local. WHOISleuth does not submit a packet, send mail, test the recipient, promise removal or remediation, or treat provider action as an independently observed effect.</p>
           <button class="btn" type="button" onclick={() => void previewManualComplaint()} disabled={packetBusy || !packetPreflight.canExport}>{manualPreview ? 'Refresh manual complaint preview' : 'Preview manual complaint'}</button>
           <button class="btn" type="button" bind:this={printTrigger} onclick={() => void previewPrintablePacket()} disabled={packetBusy || !packetPreflight.canExport}>Preview printable report</button>
+          <details class="internal-disclosure" bind:open={disclosureOpen} ontoggle={event => { if (!event.currentTarget.open) clearDisclosures(); }}>
+            <summary>Compare disclosures — analyst only</summary>
+            <p>This view can expose private values absent from the recipient packet. It is never included in printing or export.</p>
+            <label class="choice"><input type="checkbox" bind:checked={disclosureNotes} onchange={clearDisclosures}> Include Case notes in the internal comparison</label>
+            <button class="btn" type="button" onclick={() => void comparePreparedDisclosures()} disabled={packetBusy || !packetPreflight.canExport}>Compare actual prepared representations</button>
+            {#if disclosurePair}<CaseDisclosureComparison internal={disclosurePair.internal} recipient={disclosurePair.recipient.built.json} />{/if}
+          </details>
           {#if manualPreview}
             {#if previewIsCurrent}
               <label class="field">Exact manual complaint <small>Prepared {manualPreview.generatedAt} · {manualPreview.built.json.authorisation.status}. Copy and export use this prepared packet while its inputs and freshness remain unchanged.</small><textarea id={`manual-complaint-${record.id}`} class="manual-complaint" value={manualPreview.built.email} readonly rows="16" spellcheck="false"></textarea></label>
@@ -551,6 +601,7 @@
 {/if}
 
 <style>
+  .internal-disclosure{margin-block:1rem;padding:.75rem;min-width:0}@media print{.internal-disclosure{display:none!important}}
   details{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   summary{padding:11px 12px;cursor:pointer;font:700 var(--text-xs) var(--mono)}
   details[open]>summary{border-bottom:1px solid var(--border)}

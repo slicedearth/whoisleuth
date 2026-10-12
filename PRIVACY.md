@@ -184,6 +184,12 @@ bounded word sequences in a local worker. Original-byte digests, counts and
 matched excerpts stay in page memory; no file is fetched, uploaded or rewritten.
 Printing an ordinary Case report uses the exact prepared audience/options
 projection. The operating system handles the print or PDF destination.
+An optional analyst-only disclosure comparison prepares the ordinary report
+and recipient packet in page memory. It may show private values absent from
+the recipient projection; notes enter the internal side only when selected.
+The comparison is excluded from printing and every recipient export and is
+cleared on close, packet refresh, source/options changes, section changes or navigation.
+Recipient reading modes use only the actual packet and do not change its bytes.
 
 Unfinished Case response forms are saved automatically as bounded recovery
 drafts in the selected workspace. They remain separate from submitted Case
