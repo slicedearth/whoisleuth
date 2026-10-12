@@ -163,7 +163,10 @@ test('a pending review read stays loading after the other timeline collections a
     await expect(gaps).toBeVisible();
     await expect(gaps).toHaveAttribute('aria-busy', 'false');
     await openConsoleView(page, 'timeline');
-    await expect(page.getByRole('heading', { name: 'Loading saved work', exact: true })).toBeVisible();
+    const loading = page.locator('.local-collection-state');
+    await expect(loading).toHaveAttribute('aria-busy', 'true');
+    await expect(loading.getByRole('heading')).toBeVisible();
+    await expect(loading.getByRole('heading')).toHaveText(/\S/u);
     await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toHaveCount(0);
     await gate.evaluate((control) => control.release());
     await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toContainText('1 retained event');

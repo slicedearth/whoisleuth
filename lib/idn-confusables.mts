@@ -219,7 +219,11 @@ export function unicodeDomainFromAscii(raw: unknown): string | null {
     if (!decoded) return null;
     labels.push(decoded);
   }
-  return labels.join('.');
+  const unicodeDomain = labels.join('.');
+  // URL parsing may accept ASCII ACE labels without validating their decoded
+  // contents. Validate the Unicode form and require the same canonical name;
+  // a successful Punycode decode alone does not establish an IDN identity.
+  return normalizeAsciiDomain(unicodeDomain) === asciiDomain ? unicodeDomain : null;
 }
 
 function scriptForCharacter(character: string): string | null {

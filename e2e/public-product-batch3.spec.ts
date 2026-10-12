@@ -208,7 +208,7 @@ test('long reference labels remain distinct and the mobile navigator works by ke
   }
 });
 
-test('reference pages expose the first recipe on mobile and constrain wide prose', async ({ page }) => {
+test('reference pages expose the first recipe on mobile and constrain wide prose', async ({ page }, testInfo) => {
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     await page.setViewportSize({ width: 320, height: 700 });
@@ -216,8 +216,11 @@ test('reference pages expose the first recipe on mobile and constrain wide prose
     const firstCommand = page.locator('.start-steps .copyable-command').first();
     await expect(firstCommand.getByRole('button', { name: 'Copy run-once help command' })).toBeVisible();
     await expect(firstCommand.locator('code')).toBeInViewport({ ratio: 1 });
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`first-recipe-${theme}.png`) });
     const copy = firstCommand.getByRole('button', { name: 'Copy run-once help command' });
-    await copy.scrollIntoViewIfNeeded();
+    // The initial recipe was checked without scrolling. Centre the control for
+    // the separate keyboard check; nearest-edge scrolling can round below it.
+    await copy.evaluate(element => element.scrollIntoView({ block: 'center' }));
     await copy.focus();
     await expect(copy).toBeFocused();
     await expect(copy).toBeInViewport({ ratio: 1 });

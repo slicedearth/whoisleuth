@@ -237,5 +237,5 @@
   .package-verification nav a{display:inline-flex;align-items:center;min-height:32px;padding:4px 2px}
   @media(max-width:900px){.task-groups>section{grid-template-columns:1fr}.start-notes{grid-template-columns:1fr}.operation-modes{grid-template-columns:1fr}}
   @media(max-width:720px){.cli-section{padding:30px 0;scroll-margin-top:20px}.additional-behaviour,.more-links{grid-template-columns:1fr}.package-verification{align-items:flex-start;flex-direction:column;gap:12px}}
-  @media(max-width:440px){.start-steps>li{grid-template-columns:28px minmax(0,1fr);gap:10px}.task-groups>section{padding:15px 0}.exit-codes th{width:48px}.exit-codes th,.exit-codes td{padding:10px}}
+  @media(max-width:440px){#start .section-intro{margin-bottom:16px}.start-steps>li{grid-template-columns:28px minmax(0,1fr);gap:10px;padding:14px 0}.task-groups>section{padding:15px 0}.exit-codes th{width:48px}.exit-codes th,.exit-codes td{padding:10px}}
 </style>

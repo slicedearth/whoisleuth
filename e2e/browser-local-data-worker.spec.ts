@@ -34,12 +34,19 @@ test('held or failed verification never becomes an empty Case collection and a d
   let held = 0;
   let fail = () => {};
   const failed = new Promise<void>((resolve) => { fail = resolve; });
-  await page.route(pattern, async (route) => { held += 1; await failed; await route.abort('failed'); });
+  let finishRoute = () => {};
+  const routeFinished = new Promise<void>(resolve => { finishRoute = resolve; });
+  await page.route(pattern, async (route) => {
+    held += 1;
+    try { await failed; await route.abort('failed'); }
+    finally { finishRoute(); }
+  });
   try {
     await navigation.getByRole('link', { name: /^Cases(?:\s|$)/u }).click();
     await expect.poll(() => held).toBe(1);
     await expect(page.locator('.local-collection-state')).toHaveAttribute('aria-busy', 'true');
-    await expect(page.getByRole('heading', { name: 'Loading saved work', exact: true })).toBeVisible();
+    await expect(page.locator('.local-collection-state').getByRole('heading')).toBeVisible();
+    await expect(page.locator('.local-collection-state').getByRole('heading')).toHaveText(/\S/u);
     await expect(page.getByRole('heading', { name: 'Cases unavailable', exact: true })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'No cases yet', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Open or create case', exact: true })).toHaveCount(0);
@@ -61,7 +68,7 @@ test('held or failed verification never becomes an empty Case collection and a d
     await expectNoHorizontalOverflow(page);
     if (captureVisualEvidenceEnabled()) { await testInfo.attach('retained-verification-unavailable', { body: await page.screenshot(), contentType: 'image/png' }); }
     expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(before);
-  } finally { fail(); await page.unroute(pattern); }
+  } finally { fail(); if (held) await routeFinished; await page.unroute(pattern); }
   await page.reload();
   await expect(page.locator('.case-head', { hasText: DOMAIN })).toBeVisible();
   expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(before);

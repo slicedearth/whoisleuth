@@ -12,6 +12,10 @@
   } = $props();
 </script>
 
+{#snippet forwardArrow()}
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" focusable="false"><path d="M3 8h10M8 3l5 5-5 5" /></svg>
+{/snippet}
+
 <div class="goal-paths" class:guide={linkSteps} role="region" aria-label={ariaLabel}>
   {#each goals as goal}
     <article id={linkSteps ? goal.id : undefined} aria-labelledby={`goal-${goal.id}-title`}>
@@ -31,9 +35,9 @@
       </ol>
       <div class="path-actions">
         {#if !linkSteps}
-          <a href={`/resources#${goal.id}`} aria-label={`Read the guide: ${goal.title}`}>Read the guide <span aria-hidden="true">→</span></a>
+          <a href={`/resources#${goal.id}`} aria-label={`Read the guide: ${goal.title}`}>Read the guide {@render forwardArrow()}</a>
         {/if}
-        <a href={goal.example.href}>{goal.example.label} <span aria-hidden="true">→</span></a>
+        <a href={goal.example.href}>{goal.example.label} {@render forwardArrow()}</a>
       </div>
     </article>
   {/each}
@@ -66,6 +70,7 @@
   .path-actions{display:flex;flex-wrap:wrap;gap:0 20px;margin-top:auto;padding-top:16px}
   .path-actions a{display:inline-flex;min-height:44px;align-items:center;gap:6px;color:var(--accent);font:700 var(--text-xs) var(--mono);overflow-wrap:anywhere}
   .path-actions a:hover,.path-actions a:focus-visible{color:var(--text)}
+  .path-actions svg{flex:none}
   .guide{grid-template-columns:1fr;gap:0}
   .guide article{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 28px;padding:22px 0;border:0;border-top:1px solid var(--border);border-radius:0;background:transparent}
   .guide h3{font-family:var(--font-sans)}

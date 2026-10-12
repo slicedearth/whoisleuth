@@ -55,7 +55,9 @@ describe('punycode decoding and dual domain representation', () => {
   });
 
   test('does not present malformed ACE labels as an analysed Unicode identity', () => {
-    for (const domain of ['xn--.example', 'xn--a.example', 'xn--abc-.example', 'xn--a-ecp.example', `xn--${'z'.repeat(59)}.example`]) {
+    assert.equal(idn.decodePunycodeLabel('a'), '\u0080', 'Punycode decoding is not domain validity');
+    assert.equal(idn.decodePunycodeLabel('8i7caa'), 'ｗｗｗ', 'mapped characters must not become a different identity');
+    for (const domain of ['xn--.example', 'xn--a.example', 'xn--abc-.example', 'xn--a-ecp.example', 'xn--8i7caa.example', `xn--${'z'.repeat(59)}.example`]) {
       assert.equal(idn.unicodeDomainFromAscii(domain), null, domain);
       assert.equal(idn.analyzeDomainIdn(domain), null, domain);
     }
