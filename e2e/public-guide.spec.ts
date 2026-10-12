@@ -377,7 +377,8 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(cases.locator('dl')).toContainText('Each Case holds evidence');
   await expect(referenceCards).toHaveCount(referenceGuides.length);
   await expect(page.locator('#tool-monitor')).toHaveAttribute('open', '');
-  await expect(page.locator('#tool-monitor-next')).toContainText('Open the relevant Case');
+  await expect(page.locator('#tool-monitor-next')).toContainText(/review evidence.*record a decision.*prepare a response/u);
+  await expect(page.locator('#tool-monitor-next')).toContainText('Collection, response submission and control changes remain separate actions.');
   const resultLayout = page.getByRole('article', { name: 'Find your way around a Lookup result' });
   await expect(resultLayout).toBeVisible();
   await expect(resultLayout.getByText('Relationships and history', { exact: true })).toBeVisible();
