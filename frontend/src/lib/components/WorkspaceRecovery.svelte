@@ -1,15 +1,19 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import type { ReviewedWorkspaceArchive } from '../../../../packages/workspace/workspace-recovery.mts';
+  import type { RetainedFileReference } from '../../../../packages/evidence/retained-file.mts';
+  import { ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA, ENCRYPTED_WORKSPACE_ARCHIVE_VERSION } from '../../../../packages/contracts/case-portability.mts';
   import type { WorkspaceRecovery, WorkspaceRecoveryReport } from '#lib/workspace-recovery.ts';
   import { MAX_BROWSER_WORKSPACE_NAME } from '#lib/browser-workspace-directory.ts';
   import { MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS, MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES } from '#lib/browser-workspace-encryption-model.ts';
   import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../../packages/contracts/selected-file-limits.mts';
   import EvidencePackageInput from './EvidencePackageInput.svelte';
   import RecoveryFileChecklist from './RecoveryFileChecklist.svelte';
+  import CopyButton from './CopyButton.svelte';
 
-  let { readArchive, requireEncryption = false, onbusy = () => {} }: {
+  let { readArchive, archiveFile, archiveSchema, archiveVersion, encryptedSource, requireEncryption = false, onbusy = () => {} }: {
     readArchive: () => ReviewedWorkspaceArchive; requireEncryption?: boolean; onbusy?: (value: boolean) => void;
+    archiveFile: RetainedFileReference; archiveSchema: string; archiveVersion: number; encryptedSource: boolean;
   } = $props();
   let name = $state(`Recovery rehearsal ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`);
   let encrypted = $state(true), passphrase = $state(''), confirmation = $state('');
@@ -18,6 +22,10 @@
   let status = $state<HTMLParagraphElement>();
   let errorStatus = $state<HTMLParagraphElement>();
   let disposed = false;
+  let sourceIndex = $state.raw<WorkspaceRecovery['sourceIndex']>({ originalFiles: 0, packages: [] });
+  let sourcePage = $state(1);
+  const SOURCE_PAGE_SIZE = 20;
+  const sourcePages = $derived(Math.max(1, Math.ceil(sourceIndex.packages.length / SOURCE_PAGE_SIZE)));
   onMount(() => {
     const close = () => { void recovery?.close(); };
     window.addEventListener('pagehide', close);
@@ -36,6 +44,7 @@
       else if (recovery?.writeState === 'unconfirmed') error += ' The write outcome is unconfirmed. Verify the destination or remove the rehearsal; do not repeat the restore.';
       return false;
     } finally {
+      if (!disposed) { sourceIndex = recovery?.sourceIndex ?? { originalFiles: 0, packages: [] }; sourcePage = 1; }
       busy = false; onbusy(false); passphrase = ''; confirmation = '';
       await tick();
       if (!disposed && (document.activeElement === origin || document.activeElement === document.body)) (error ? errorStatus : status)?.focus();
@@ -73,6 +82,34 @@
 <details class="recovery">
   <summary>Rehearse recovery in a separate workspace</summary>
   <p>Restore this reviewed backup without switching workspaces. Section checksums cover saved records and their links; original file bytes must be supplied separately. Preferences are validated in the backup review, not applied to this tab.</p>
+  <details class="set-index">
+    <summary>Recovery set index</summary>
+    <p>This index stays in this review only. It identifies selected bytes, not completed downloads or writes. Use the recovery result below to check the destination.</p>
+    <section aria-label="Selected workspace backup">
+      <h4>Selected workspace backup</h4>
+      <p><code>{archiveSchema}</code> v{archiveVersion}{#if encryptedSource} inside <code>{ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA}</code> v{ENCRYPTED_WORKSPACE_ARCHIVE_VERSION}{/if}</p>
+      <p><code>{archiveFile.digestSha256}</code> · {archiveFile.byteLength.toLocaleString()} bytes{encryptedSource ? ' (encrypted file)' : ''}</p>
+      <CopyButton value={archiveFile.digestSha256} label="Copy SHA-256" description="Copy selected backup SHA-256" />
+    </section>
+    <section aria-label="Matching recovery sources">
+      <h4>Matching recovery sources</h4>
+      <p>{sourceIndex.packages.length} package{sourceIndex.packages.length === 1 ? '' : 's'} · {sourceIndex.originalFiles} original file{sourceIndex.originalFiles === 1 ? '' : 's'} supplied directly.</p>
+      <p>Each original uses its latest matching selection. Re-selecting files can replace a package in this index; saved provenance is unchanged. An unreadable or unmatched selection does not join the set. Format checks do not establish source authenticity.</p>
+      <ol start={(sourcePage - 1) * SOURCE_PAGE_SIZE + 1}>
+        {#each sourceIndex.packages.slice((sourcePage - 1) * SOURCE_PAGE_SIZE, sourcePage * SOURCE_PAGE_SIZE) as item (item.digestSha256)}
+          <li><p><code>{item.manifestSchema}</code> v{item.manifestVersion} · {item.encryptionVersion === null ? 'ZIP' : `Encrypted package v${item.encryptionVersion}`} · {item.matchedFiles} matched original{item.matchedFiles === 1 ? '' : 's'}</p>
+            <p><code>{item.digestSha256}</code> · {item.byteLength.toLocaleString()} bytes</p>
+            <CopyButton value={item.digestSha256} label="Copy SHA-256" description={`Copy recovery package SHA-256 ${item.digestSha256}`} />
+          </li>
+        {/each}
+      </ol>
+      {#if sourcePages > 1}<nav aria-label="Recovery package pages">
+        <button class="btn" type="button" disabled={sourcePage === 1} onclick={() => sourcePage--}>Previous packages</button>
+        <span>Page {sourcePage} of {sourcePages}</span>
+        <button class="btn" type="button" disabled={sourcePage === sourcePages} onclick={() => sourcePage++}>Next packages</button>
+      </nav>{/if}
+    </section>
+  </details>
   {#if !recovery}
     <form onsubmit={event => { event.preventDefault(); void start(); }}>
       <label>Rehearsal workspace name <input bind:value={name} maxlength={MAX_BROWSER_WORKSPACE_NAME} required disabled={busy}></label>
@@ -90,7 +127,7 @@
     <h4>{recovery.workspace.name}</h4>
     <p>Other tabs cannot open this workspace until you finish the rehearsal. Leaving the page keeps its data; keep or delete it deliberately when finished.</p>
     {#if report}
-      <p class="result">{report.caseCount ?? 'Unknown'} Case{report.caseCount === 1 ? '' : 's'} · Case identities {report.identitiesMatch ? 'match' : 'not verified'} · {report.files.verified} of {report.files.expected} unique files verified · {report.files.missing} missing · {report.files.unverified} unverified</p>
+      <p class="result">Last completed verification: {report.caseCount ?? 'Unknown'} Case{report.caseCount === 1 ? '' : 's'} · Case identities {report.identitiesMatch ? 'match' : 'not verified'} · {report.files.verified} of {report.files.expected} unique files verified · {report.files.missing} missing · {report.files.unverified} unverified</p>
       <RecoveryFileChecklist files={report.files.checklist} />
       <details><summary>Section comparison</summary><ul>
         {#each report.sections as section}<li><strong>{section.label}</strong>: {section.state === 'exact' ? 'Checksum matches' : section.state === 'migrated' ? 'Migrated format — review normalised data' : section.state === 'changed' ? 'Data differs from the backup' : 'Not restored'} · {section.records ?? 'Unknown'} of {section.expectedRecords} records</li>{/each}
@@ -113,5 +150,6 @@
 </details>
 
 <style>
+  .set-index{margin-block:14px}.set-index section,.set-index li{min-width:0}.set-index h4{margin-block:12px 6px}.set-index ol{padding-inline-start:22px}.set-index code{overflow-wrap:anywhere;word-break:break-all}.set-index nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
   .recovery{margin-top:18px;border-top:1px solid var(--border);padding-top:14px;min-width:0}summary{cursor:pointer;font-weight:700}p,li{font-size:var(--text-xs);line-height:1.55;color:var(--muted);overflow-wrap:anywhere}form,label{display:grid;gap:6px;min-width:0}form{gap:12px;margin-block:12px}input{min-width:0;max-width:100%}.choice{display:flex;align-items:center;gap:8px}.passwords{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-block:12px}.actions>*{max-width:100%;white-space:normal;overflow-wrap:anywhere}.result{color:var(--text)}h4{overflow-wrap:anywhere}.delete-confirmation{border-left:2px solid var(--danger);padding-left:12px}[role=alert]{color:var(--danger)}.status:empty{display:none}@media(max-width:600px){.passwords{grid-template-columns:minmax(0,1fr)}.actions{display:grid;grid-template-columns:minmax(0,1fr)}}
 </style>

@@ -14,6 +14,7 @@ import { encryptWorkspaceArchive } from '../packages/workspace/workspace-archive
 import { createCase } from '../packages/cases/case-record-operations.mts';
 import type { CaseAttachment } from '../packages/cases/case-attachment-model.mts';
 import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
+import { buildInvestigationPackage } from '../packages/investigation/investigation-package.mts';
 
 const NOW = '2026-09-01T00:00:00.000Z', PASSWORD = '<synthetic recovery fixture>';
 const panel = (page: Page) => page.locator('details.recovery');
@@ -67,6 +68,13 @@ test('downloaded backup and file packages rehearse independently without switchi
   expect(Buffer.from(independent.contents.get('artifact-1')!)).toEqual(bytes);
   expect(independent.manifest.artifacts[0]).toMatchObject({ source: { identity: null, observedAt: null } });
   await review(page, content); const recovery = await start(page);
+  await recovery.getByText('Recovery set index', { exact: true }).click();
+  const archiveIndex = recovery.getByRole('region', { name: 'Selected workspace backup', exact: true });
+  const sourceIndex = recovery.getByRole('region', { name: 'Matching recovery sources', exact: true });
+  await expect(archiveIndex).toContainText(`sha256:${createHash('sha256').update(content).digest('hex')}`);
+  await expect(archiveIndex).toContainText(`${Buffer.byteLength(content).toLocaleString()} bytes`);
+  await expect(archiveIndex).toContainText(`whoisleuth.workspace-archive v${JSON.parse(content).version}`);
+  await expect(sourceIndex.locator('ol > li')).toHaveCount(0);
   await expect(recovery.getByRole('status')).toContainText('recovery is not fully verified');
   await expect(recovery.locator('.result')).toContainText('0 of 1 unique files verified · 1 missing');
   const [row] = await directoryRows(page); expect(row).toBeDefined();
@@ -79,13 +87,33 @@ test('downloaded backup and file packages rehearse independently without switchi
   expect(await storedFiles(page, destination)).toHaveLength(0);
   await packagePassword.fill('wrong recovery package passphrase'); await page.keyboard.press('Enter');
   await expect(recovery.getByRole('alert')).toContainText('could not be unlocked and verified');
+  await expect(sourceIndex.locator('ol > li')).toHaveCount(0);
   expect(await storedFiles(page, destination)).toHaveLength(0);
   await expect(packagePassword).toBeFocused(); await expect(packagePassword).toHaveValue('');
   await packagePassword.fill(packagePassphrase); await page.keyboard.press('Enter');
   await expect(recovery.getByRole('status')).toContainText('Recovery verified for the selected backup data and every referenced file.');
+  const packageDigest = `sha256:${createHash('sha256').update(filePackage).digest('hex')}`;
+  await expect(sourceIndex.locator('ol > li')).toHaveCount(1);
+  await expect(sourceIndex).toContainText(packageDigest);
+  await expect(sourceIndex).toContainText(`${filePackage.length.toLocaleString()} bytes`);
+  await expect(sourceIndex).toContainText('whoisleuth.investigation-manifest v4');
+  await expect(sourceIndex).toContainText('Encrypted package v1 · 1 matched original');
+  await expect(sourceIndex).not.toContainText('files.wlep');
+  await page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable: true,
+    value: { writeText: async (value: string) => { Reflect.set(window, 'recoverySetCopiedDigest', value); } } }); });
+  await sourceIndex.getByRole('button', { name: `Copy recovery package SHA-256 ${packageDigest}`, exact: true }).focus();
+  await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => Reflect.get(window, 'recoverySetCopiedDigest'))).toBe(packageDigest);
   expect((await storedFiles(page, destination))[0]!.bytes).toEqual([...bytes]);
   await recovery.getByLabel('Restore original files', { exact: true }).setInputFiles({ name: 'renamed.png', mimeType: 'image/png', buffer: bytes });
   await expect(recovery.getByRole('status')).toContainText('Recovery verified');
+  await expect(sourceIndex.locator('ol > li')).toHaveCount(0);
+  await expect(sourceIndex).toContainText('1 original file supplied directly');
+  await recovery.getByLabel('Restore evidence package', { exact: true }).setInputFiles({ name: 'renamed-package.wlep', mimeType: 'application/octet-stream', buffer: filePackage });
+  await packagePassword.fill(packagePassphrase); await page.keyboard.press('Enter');
+  await expect(sourceIndex.locator('ol > li')).toHaveCount(1);
+  await expect(sourceIndex).toContainText(packageDigest);
+  await expect(sourceIndex).toContainText('0 original files supplied directly');
   expect(await storedFiles(page, destination)).toHaveLength(1);
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   expect(await page.evaluate(key => sessionStorage.getItem(key), SELECTION)).toBe(originalSelection);
@@ -101,6 +129,10 @@ test('downloaded backup and file packages rehearse independently without switchi
         return rect.width > 0 && rect.left >= parent.left - 1 && rect.right <= parent.right + 1;
       }))).toBe(true);
       if (captureVisualEvidenceEnabled()) { await recovery.screenshot({ path: testInfo.outputPath(`recovery-${theme}-${width}.png`) }); }
+      if (captureVisualEvidenceEnabled() && (width === 320 || width === 1280)) {
+        await sourceIndex.evaluate(element => element.scrollIntoView({ block: 'center' }));
+        await page.screenshot({ path: testInfo.outputPath(`recovery-set-viewport-${theme}-${width}.png`) });
+      }
       if (width === 320 || width === 1280 || width === 3840) {
         const summary = recovery.locator(':scope > summary');
         // Element screenshots reposition the page without changing focus. Make
@@ -116,8 +148,15 @@ test('downloaded backup and file packages rehearse independently without switchi
     }
   }
   await deleteRehearsal(page);
+  await expect(sourceIndex.locator('ol > li')).toHaveCount(0);
   expect(await page.evaluate(name => indexedDB.databases().then(rows => rows.some(item => item.name === name)), destination)).toBe(false);
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  await review(page, `${content}\n`);
+  await panel(page).getByText('Recovery set index', { exact: true }).click();
+  await expect(archiveIndex).toContainText(`sha256:${createHash('sha256').update(`${content}\n`).digest('hex')}`);
+  await expect(archiveIndex).not.toContainText(`sha256:${createHash('sha256').update(content).digest('hex')}`);
+  await expect(sourceIndex.locator('ol > li')).toHaveCount(0);
+  await expect(panel(page).locator('.result')).toHaveCount(0);
 });
 
 test('encrypted backup cannot create a plaintext rehearsal and leaving does not silently delete it', async ({ page }, testInfo) => {
@@ -129,6 +168,10 @@ test('encrypted backup cannot create a plaintext rehearsal and leaving does not 
   await workspaceArchiveRegion(page).getByLabel('Backup passphrase', { exact: true }).fill(PASSWORD);
   await workspaceArchiveRegion(page).getByRole('button', { name: 'Unlock and review', exact: true }).click();
   await panel(page).locator(':scope > summary').click();
+  await panel(page).getByText('Recovery set index', { exact: true }).click();
+  const archiveIndex = panel(page).getByRole('region', { name: 'Selected workspace backup', exact: true });
+  await expect(archiveIndex).toContainText(`sha256:${createHash('sha256').update(JSON.stringify(envelope)).digest('hex')}`);
+  await expect(archiveIndex).toContainText('whoisleuth.encrypted-workspace-archive v1');
   await expect(panel(page).getByRole('checkbox', { name: 'Encrypt rehearsal workspace', exact: true })).toBeChecked();
   await expect(panel(page).getByRole('checkbox', { name: 'Encrypt rehearsal workspace', exact: true })).toBeDisabled();
   for (const theme of ['light', 'dark'] as const) {
@@ -158,6 +201,50 @@ test('encrypted backup cannot create a plaintext rehearsal and leaving does not 
   await page.reload();
   expect(await directoryRows(page)).toHaveLength(1);
   expect(await page.evaluate(id => navigator.locks.request(`whoisleuth-workspace:whoisleuth-workspace-${id}-v1`, { mode: 'shared', ifAvailable: true }, lock => Boolean(lock)), row!.id)).toBe(true);
+});
+
+test('recovery package index keeps distinct matching groups separate from failed destination verification', async ({ page }) => {
+  const bodies = [Buffer.from('First recovery group'), Buffer.from('Second recovery group')];
+  const references: CaseAttachment[] = bodies.map((body, index) => ({ id: `group-${index}`, fileName: `private-group-${index}.txt`,
+    mediaType: 'application/octet-stream', source: null, observedAt: null, retainedAt: NOW, byteLength: body.length,
+    digestSha256: `sha256:${createHash('sha256').update(body).digest('hex')}` }));
+  const packages = await Promise.all(bodies.map(content => buildInvestigationPackage({ workflow: 'Recovery fixture', configurationDigestSha256: null,
+    artifacts: [{ content, mediaType: 'application/octet-stream' }] }, NOW, '2.6.0')));
+  await page.goto('/dashboard'); await review(page, await simpleBackup(references)); const recovery = await start(page);
+  await recovery.getByText('Recovery set index', { exact: true }).click();
+  const index = recovery.getByRole('region', { name: 'Matching recovery sources', exact: true });
+  const add = (position: number) => recovery.getByLabel('Restore evidence package', { exact: true }).setInputFiles({ name: `renamed-${position}.zip`, mimeType: 'application/zip', buffer: Buffer.from(packages[position]!.bytes) });
+  await add(0);
+  await expect(recovery.locator('.result')).toContainText('1 of 2 unique files verified · 1 missing');
+  await expect(index.locator('ol > li')).toHaveCount(1);
+  await page.evaluate(() => {
+    const put = IDBObjectStore.prototype.put, transaction = IDBDatabase.prototype.transaction;
+    let failRead = false, armed = true;
+    IDBObjectStore.prototype.put = function(value: unknown, key?: IDBValidKey) {
+      if (armed && this.transaction.db.name.startsWith('whoisleuth-workspace-') && this.name === 'files') { armed = false; failRead = true; }
+      return key === undefined ? put.call(this, value) : put.call(this, value, key);
+    };
+    IDBDatabase.prototype.transaction = function(...args: Parameters<IDBDatabase['transaction']>) {
+      if (this.name.startsWith('whoisleuth-workspace-') && this.name !== 'whoisleuth-workspace-directory-v1' && (!args[1] || args[1] === 'readonly') && failRead) {
+        failRead = false; throw new DOMException('Synthetic package post-commit read failure', 'UnknownError');
+      }
+      return transaction.apply(this, args);
+    };
+  });
+  await add(1);
+  await expect(recovery.getByRole('alert')).toContainText('The write completed');
+  await expect(index.locator('ol > li')).toHaveCount(2);
+  for (const item of packages) await expect(index).toContainText(`sha256:${createHash('sha256').update(item.bytes).digest('hex')}`);
+  await expect(index).not.toContainText('private-group-');
+  await expect(index).not.toContainText('renamed-');
+  await expect(recovery.locator('.result')).toContainText('Last completed verification:');
+  await expect(recovery.locator('.result')).toContainText('1 of 2 unique files verified');
+  await recovery.getByRole('button', { name: 'Verify restored data', exact: true }).click();
+  await expect(recovery.getByRole('status')).toContainText('Recovery verified');
+  await expect(recovery.locator('.result')).toContainText('2 of 2 unique files verified');
+  await add(0);
+  await expect(index.locator('ol > li')).toHaveCount(2);
+  await deleteRehearsal(page);
 });
 
 test('a committed restore followed by failed reconciliation offers verification, not a second restore', { tag: '@cross-browser-critical' }, async ({ page }) => {

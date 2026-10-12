@@ -1,12 +1,13 @@
 import { WORKSPACE_ARCHIVE_COLLECTIONS } from '../../../packages/contracts/browser-local-collection-manifest.mts';
 import { buildWorkspaceArchive, mergeReadyWorkspaceArchiveData, readWorkspaceArchive } from '../../../packages/workspace/workspace-archive.mts';
-import { compareRecoveredWorkspace, inspectRecoveryFiles, matchRecoveryFiles, workspaceAttachmentGroups, type ReviewedWorkspaceArchive } from '../../../packages/workspace/workspace-recovery.mts';
+import { compareRecoveredWorkspace, inspectRecoveryFiles, matchRecoveryFiles, recoverySourceIndex, workspaceAttachmentGroups, type RecoveryPackageIdentity, type ReviewedWorkspaceArchive } from '../../../packages/workspace/workspace-recovery.mts';
+import { sha256ArtifactBytes } from '../../../packages/evidence/artifact-integrity.mts';
 import { browserWorkspaceDirectory } from './browser-workspace-directory.ts';
 import { openBrowserWorkspaceDestination } from './browser-workspace-destination.ts';
 export { WorkspaceDestinationStartError as WorkspaceRecoveryStartError } from './browser-workspace-destination.ts';
 import { currentBrowserWorkspaceId } from './browser-workspace-context.ts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../packages/contracts/selected-file-limits.mts';
-import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../../../packages/contracts/investigation-package-limits.mts';
+import { ENCRYPTED_INVESTIGATION_PACKAGE_VERSION, MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../../../packages/contracts/investigation-package-limits.mts';
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data-content.ts';
 import type { CaseRecord } from '../../../packages/cases/case-model.mts';
 
@@ -44,6 +45,8 @@ export async function openWorkspaceRecovery(input: ReviewedWorkspaceArchive, opt
   options = { name: options.name, requireEncryption: options.requireEncryption };
   let attempted = false, closing = false, pending: Promise<unknown> | null = null, closed: Promise<void> | null = null;
   let writeState: 'not_started' | 'unconfirmed' | 'committed' = 'not_started';
+  // Matching describes selected bytes, independently of any subsequent write.
+  const sources = new Map<string, RecoveryPackageIdentity | null>();
   function run<T>(operation: () => Promise<T>): Promise<T> {
     if (closing || pending) return Promise.reject(new Error('Finish the current recovery operation before starting another.'));
     writeState = 'not_started';
@@ -67,6 +70,7 @@ export async function openWorkspaceRecovery(input: ReviewedWorkspaceArchive, opt
       closing = true;
       closed = (async () => {
         await pending?.catch(() => {});
+        sources.clear();
         await destination.close();
       })();
     }
@@ -75,6 +79,7 @@ export async function openWorkspaceRecovery(input: ReviewedWorkspaceArchive, opt
   return Object.freeze({
     workspace,
     get writeState() { return writeState; },
+    get sourceIndex() { return recoverySourceIndex(sources); },
     restore: () => run(async () => {
       if (attempted) throw new Error('This rehearsal has already attempted its write. Verify the destination or remove it; do not repeat the write.');
       attempted = true;
@@ -100,14 +105,24 @@ export async function openWorkspaceRecovery(input: ReviewedWorkspaceArchive, opt
       const selected = input.map(file => file.slice());
       return run(async () => {
         let files = selected;
+        let packageIdentity: RecoveryPackageIdentity | null = null;
         if (kind === 'package') {
           const { runInvestigationPackageWorker } = await import('./investigation-package-worker.ts');
           if (selected.length !== 1 || !selected[0]!.size || selected[0]!.size > MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES) throw new Error('Select one bounded evidence package.');
           const reviewed = await runInvestigationPackageWorker('inspect', { file: selected[0]!, ...(passphrase === undefined ? {} : { passphrase }) });
           if (!reviewed.identityVerified) throw new Error('The evidence package contains an unverified file. Nothing was added.');
           files = [...reviewed.contents.values()];
+          const bytes = new Uint8Array(await selected[0]!.arrayBuffer());
+          try {
+            packageIdentity = Object.freeze({ digestSha256: await sha256ArtifactBytes(bytes), byteLength: bytes.byteLength,
+              manifestSchema: reviewed.manifest.schema, manifestVersion: reviewed.manifest.version,
+              encryptionVersion: reviewed.encryption === 'verified' ? ENCRYPTED_INVESTIGATION_PACKAGE_VERSION : null });
+          } finally { bytes.fill(0); }
         }
         const matched = await matchRecoveryFiles(groups, files);
+        // Only complete successful matching can replace an original's source.
+        // Failed or unreadable selections leave the earlier index unchanged.
+        for (const item of matched) sources.set(item.reference.digestSha256, packageIdentity);
         writeState = 'unconfirmed';
         await provider.update(CASES_COLLECTION, current => {
           if (CASES_COLLECTION.serialize(current) !== CASES_COLLECTION.serialize(documents.get('cases') as CaseRecord[])) throw new Error('The restored Cases do not match the reviewed recovery state. Nothing was added.');

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { buildWorkspaceArchive, mergeReadyWorkspaceArchiveData, prepareWorkspaceArchive, readWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
-import { compareRecoveredWorkspace, inspectCaseOriginalFiles, inspectRecoveryFiles, matchRecoveryFiles, workspaceAttachmentGroups } from '../packages/workspace/workspace-recovery.mts';
+import { compareRecoveredWorkspace, inspectCaseOriginalFiles, inspectRecoveryFiles, matchRecoveryFiles, recoverySourceIndex, workspaceAttachmentGroups, type RecoveryPackageIdentity } from '../packages/workspace/workspace-recovery.mts';
 import { plaintextLocalBinaryCodec } from '../frontend/src/lib/browser-local-binaries.ts';
 import type { CaseAttachment } from '../packages/cases/case-attachment-model.mts';
 import { createCase } from '../packages/cases/case-model.mts';
@@ -20,6 +20,24 @@ async function fixture() {
   const second = { ...createCase({ domain: 'second.example' }, NOW), id: 'case-two', attachments: [{ ...attachment('other-provenance'), source: 'A separate observation' }] };
   return readWorkspaceArchive(await buildWorkspaceArchive({ cases: [first, second] }, { generatedAt: NOW }));
 }
+
+test('recovery source index groups exact package bytes without conflating selection with a verified write', () => {
+  const first: RecoveryPackageIdentity = Object.freeze({ digestSha256: `sha256:${'a'.repeat(64)}`, byteLength: 301,
+    manifestSchema: 'whoisleuth.investigation-manifest', manifestVersion: 4, encryptionVersion: null });
+  const second = Object.freeze({ ...first, digestSha256: `sha256:${'b'.repeat(64)}`, byteLength: 401, encryptionVersion: 1 });
+  const sources = new Map<string, RecoveryPackageIdentity | null>([['original-1', first], ['original-2', first], ['original-3', second], ['original-4', null]]);
+  const original = recoverySourceIndex(sources);
+  assert.deepEqual(original, { originalFiles: 1, packages: [{ ...first, matchedFiles: 2 }, { ...second, matchedFiles: 1 }] });
+  assert.ok(Object.isFrozen(original) && Object.isFrozen(original.packages) && original.packages.every(Object.isFrozen));
+  assert.equal(Object.hasOwn(first, 'matchedFiles'), false);
+  assert.doesNotMatch(JSON.stringify(original), /fileName|sourceIdentity|verified|written|downloaded/u);
+  sources.set('original-1', second); // A later package changes only this original's selected source.
+  sources.set('original-2', null); // Direct original bytes no longer require the first package.
+  assert.deepEqual(recoverySourceIndex(sources), { originalFiles: 2, packages: [{ ...second, matchedFiles: 2 }] });
+  assert.deepEqual(original.packages.map(item => item.matchedFiles), [2, 1]);
+  sources.clear();
+  assert.deepEqual(recoverySourceIndex(sources), { originalFiles: 0, packages: [] });
+});
 
 test('recovery checklist counts shared content once while retaining independent source references', async () => {
   const source = await fixture();

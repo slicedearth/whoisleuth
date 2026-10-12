@@ -2,11 +2,28 @@ import { MAX_CASES } from '../contracts/case-portability.mts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../contracts/selected-file-limits.mts';
 import { readCaseAttachments, type CaseAttachment } from '../cases/case-attachment-model.mts';
 import { sha256ArtifactBytes } from '../evidence/artifact-integrity.mts';
-import { retainedFileGroups, type RetainedFileInput } from '../evidence/retained-file.mts';
+import { retainedFileGroups, type RetainedFileInput, type RetainedFileReference } from '../evidence/retained-file.mts';
 import type { readWorkspaceArchive } from './workspace-archive.mts';
 import type { CaseRecord } from '../cases/case-record-contracts.mts';
 
 export type ReviewedWorkspaceArchive = Awaited<ReturnType<typeof readWorkspaceArchive>>;
+
+export type RecoveryPackageIdentity = RetainedFileReference & Readonly<{
+  manifestSchema: string; manifestVersion: number; encryptionVersion: number | null;
+}>;
+
+/** One latest matched source per original bounds this index by the reviewed archive. */
+export function recoverySourceIndex(sources: ReadonlyMap<string, RecoveryPackageIdentity | null>) {
+  const packages = new Map<string, RecoveryPackageIdentity & { matchedFiles: number }>();
+  let originalFiles = 0;
+  for (const source of sources.values()) {
+    if (!source) { originalFiles++; continue; }
+    const existing = packages.get(source.digestSha256);
+    if (existing) existing.matchedFiles++;
+    else packages.set(source.digestSha256, { ...source, matchedFiles: 1 });
+  }
+  return Object.freeze({ originalFiles, packages: Object.freeze([...packages.values()].map(item => Object.freeze(item))) });
+}
 
 export type RecoveryFile = Readonly<{
   digestSha256: string; byteLength: number;

@@ -1091,6 +1091,14 @@ separate workspace**. Create a destination, then restore the downloaded evidence
 packages or original files. The active workspace is not switched or modified.
 Section checksums and Case identities are compared with the selected backup;
 every referenced file must match before recovery is reported as verified.
+**Recovery set index** identifies the exact selected JSON or encrypted backup
+and matching evidence packages by full-file SHA-256, byte length and format.
+It stays in this review only, not in backups or exports. Each original uses its
+latest matching selection; supplying it directly or in another package updates
+the index without changing saved provenance. Failed reads or unmatched files do
+not join the set. Selection and matching do not prove a completed download or
+write: the separate recovery result reports the last completed destination
+verification. Keep the downloaded files themselves, not just their digests.
 The paged **Original-file recovery checklist** shows each missing or unverified
 exact SHA-256 and byte length, plus the independent Case provenance references
 for shared bytes. Filenames are locating hints only: renamed exact bytes match;

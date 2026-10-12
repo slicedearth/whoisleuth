@@ -24,6 +24,8 @@
   } from '#lib/workspace-archive.ts';
   import type { WorkspaceImportSummary } from '#lib/workspace-archive.ts';
   import { restoreLegacyBrowserData } from '#lib/browser-local-data-service.ts';
+  import { sha256ArtifactBytes } from '../../../../packages/evidence/artifact-integrity.mts';
+  import type { RetainedFileReference } from '../../../../packages/evidence/retained-file.mts';
 
   type ArchiveReview = Awaited<ReturnType<typeof prepareLocalWorkspaceArchive>>;
   type WorkspacePreview = Awaited<ReturnType<ArchiveReview['preview']>>;
@@ -31,6 +33,7 @@
   let { onimport, importOnly = false }:{onimport?:(message:string)=>void|Promise<void>;importOnly?:boolean}=$props();
   let archiveReview=$state.raw<ArchiveReview|null>(null);
   let encryptedSource=$state(false);
+  let archiveFile=$state.raw<RetainedFileReference|null>(null);
   let preparedBackup=$state.raw<Awaited<ReturnType<typeof createWorkspaceArchiveDownload>>['archive'] | null>(null);
   let preview=$state<WorkspacePreview|null>(null);
   let selectedIds=$state<string[]>([]);
@@ -105,11 +108,16 @@
 
   export async function reviewFile(file:Blob):Promise<void>{
     if(busy)throw new Error('Finish the current workspace operation before opening another file.');
-    archiveReview=null;preview=null;selectedIds=[];encryptedImportValue=null;importPassphrase='';message='';encryptedSource=false;
+    archiveReview=null;preview=null;selectedIds=[];encryptedImportValue=null;importPassphrase='';message='';encryptedSource=false;archiveFile=null;
     busy=true;
     try{
       if(file.size>MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES)throw new Error(`Encrypted workspace archive imports are limited to ${MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES} bytes.`);
-      const value=parseBoundedJson(await file.text(),{label:'Workspace archive',maximumBytes:MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,limits:boundedJsonLimitsForBytes(MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES)});
+      const bytes=new Uint8Array(await file.arrayBuffer());
+      let value:unknown;
+      try {
+        value=parseBoundedJson(new TextDecoder().decode(bytes),{label:'Workspace archive',maximumBytes:MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,limits:boundedJsonLimitsForBytes(MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES)});
+        archiveFile=Object.freeze({digestSha256:await sha256ArtifactBytes(bytes),byteLength:bytes.byteLength});
+      } finally { bytes.fill(0); }
       if(isEncryptedWorkspaceArchive(value)){
         encryptedSource=true;
         const inspected=inspectEncryptedWorkspaceArchive(value);
@@ -159,7 +167,7 @@
       );
       const pruning=result.results.filter(item=>item.pruned).map(item=>`${item.pruned} ${item.id==='relationshipObservations'?'relationship group':'evidence snapshot'}${item.pruned===1?'':'s'} pruned to fit`).join(', ');
       const resultMessage=`Added backup data from ${result.results.length} sections: ${totals.added} new, ${totals.updated} existing matches, ${totals.skipped} skipped${totals.brandProfileReferencesOmitted?`, ${totals.brandProfileReferencesOmitted} Brand Profile reference${totals.brandProfileReferencesOmitted===1?'':'s'} omitted beyond the retained bounds`:''}${totals.authoredHistoryOmitted?`, ${totals.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${totals.authoredHistoryOmitted===1?'':'s'} omitted`:''}${totals.evidenceHistoryOmitted?`, ${totals.evidenceHistoryOmitted} imported evidence snapshot${totals.evidenceHistoryOmitted===1?'':'s'} omitted to preserve local history`:''}${pruning?`, ${pruning}`:''}.`;
-      archiveReview=null;preview=null;selectedIds=[];
+      archiveReview=null;preview=null;selectedIds=[];archiveFile=null;
       message=resultMessage;
       try {
         await onimport?.(resultMessage);
@@ -230,7 +238,7 @@
       </label>
       <div class="encryption-actions">
         <button class="primary" type="submit" disabled={busy||!importPassphrase}>Unlock and review</button>
-        <button class="btn" type="button" onclick={()=>{encryptedImportValue=null;importPassphrase='';message='Encrypted backup review cancelled.';}} disabled={busy}>Cancel</button>
+        <button class="btn" type="button" onclick={()=>{encryptedImportValue=null;importPassphrase='';archiveFile=null;encryptedSource=false;message='Encrypted backup review cancelled.';}} disabled={busy}>Cancel</button>
       </div>
     </form>
   {/if}
@@ -269,11 +277,11 @@
       </ul>
       <div class="preview-actions">
         <button class="primary" type="button" onclick={apply} disabled={busy||!selectedIds.length}>Add selected data</button>
-        <button class="btn" type="button" onclick={()=>{archiveReview=null;preview=null;selectedIds=[];message='Preview cancelled.';}} disabled={busy}>Cancel</button>
+        <button class="btn" type="button" onclick={()=>{archiveReview=null;preview=null;selectedIds=[];archiveFile=null;message='Preview cancelled.';}} disabled={busy}>Cancel</button>
       </div>
       {#if localApplication}
         <details class="archive-details"><summary>Rehearse filesystem recovery</summary><p>Start a separate local application with a new empty folder and <code>--init --offline</code>. Review and import this backup there, then restore its original files or evidence package. Compare the restored records and file verification results before relying on the backup. Keep the original folder unchanged.</p><a href="/cli#local-application">Local recovery instructions</a></details>
-      {:else if archiveReview}{#key archiveReview}<WorkspaceRecovery readArchive={archiveReview.read} requireEncryption={encryptedSource || hasUnlockedBrowserWorkspace()} onbusy={value => { busy = value; }} />{/key}{/if}
+      {:else if archiveReview && archiveFile}{#key archiveReview}<WorkspaceRecovery readArchive={archiveReview.read} {archiveFile} archiveSchema={preview.schema} archiveVersion={preview.sourceVersion} {encryptedSource} requireEncryption={encryptedSource || hasUnlockedBrowserWorkspace()} onbusy={value => { busy = value; }} />{/key}{/if}
     </div>
   {/if}
 
