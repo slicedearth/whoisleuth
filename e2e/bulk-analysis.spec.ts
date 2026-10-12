@@ -110,7 +110,7 @@ test('single-row Monitor saves preserve another domain and its baseline when a n
   await name.fill('Shared review');
   await cockpit.getByRole('button', { name: 'Back to queue', exact: true }).click();
   const inspect = cockpit.getByRole('button', { name: 'Inspect retained first-review.example', exact: true });
-  await inspect.click();
+  await inspect.focus(); await inspect.press('p');
   await expect(name).toHaveValue('Shared review');
   await cockpit.getByRole('button', { name: 'Back to queue', exact: true }).click();
   await expect(inspect).toBeFocused();

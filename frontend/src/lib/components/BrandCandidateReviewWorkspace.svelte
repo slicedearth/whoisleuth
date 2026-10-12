@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import AnalystWorkbench from './AnalystWorkbench.svelte';
+  import { openRetainedPeek } from '#lib/controllers/retained-peek-key.ts';
   import BrandCandidateEvidence from './BrandCandidateEvidence.svelte';
   import BrandPatternGroup from './BrandPatternGroup.svelte';
   import Pagination from './Pagination.svelte';
@@ -360,7 +361,7 @@
           <article class:inspected={inspected === row.candidate.domain}>
             <label><input type="checkbox" checked={selected.has(row.candidate.domain)} onchange={(event) => toggle(row.candidate.domain, event.currentTarget.checked)} disabled={busy || disabled || !ready} /> <strong>{row.candidate.domain}</strong></label>
             <span>{row.status.replaceAll('_', ' ')}</span>
-            <button class="btn small" type="button" aria-label={`Inspect ${row.candidate.domain}`} aria-pressed={inspected === row.candidate.domain} aria-keyshortcuts="P" onclick={() => inspected = row.candidate.domain} onkeydown={(event) => { if (event.key.toLowerCase() === 'p' && !event.ctrlKey && !event.metaKey && !event.altKey) { event.preventDefault(); inspected = row.candidate.domain; } }}>Inspect</button>
+            <button class="btn small" type="button" aria-label={`Inspect ${row.candidate.domain}`} aria-pressed={inspected === row.candidate.domain} aria-keyshortcuts="P" title="Preview retained evidence: P while this button is focused" onclick={() => inspected = row.candidate.domain} onkeydown={event => openRetainedPeek(event, () => inspected = row.candidate.domain)}>Inspect</button>
           </article>
         {/each}
       </div>

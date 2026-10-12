@@ -14,6 +14,7 @@
   import CopyButton from './CopyButton.svelte';
   import { buildCaseDecisionOverview } from '../../../../packages/cases/case-decision-overview.mts';
   import { MAX_CASE_BATCH_MUTATIONS } from '../../../../packages/cases/case-batch-limits.mts';
+  import { openRetainedPeek } from '#lib/controllers/retained-peek-key.ts';
 
   let { records, selectCase, formatDate, currentPage, pageCount, setPage, calibrationMode = false, calibrationCaseIds, toggleCalibrationCase, tagMode = false, tagCaseIds = [], tagSelectionDisabled = false, toggleTagCase }: {
     records: CaseRecord[];
@@ -58,7 +59,7 @@
         <time class="updated" datetime={record.updatedAt}>{formatDate(record.updatedAt)}</time>
       </a>
       {#if caseTypeRecords(record).length || record.tags.length}<div class="tag-row">{#each caseTypeRecords(record) as type}<span class="tag">{type.label}</span>{/each}{#each record.tags as tag}<span class="tag">{tag}</span>{/each}</div>{/if}
-      <button class="btn peek" type="button" aria-label={`Inspect saved Case ${caseNumber(record.id)}`} aria-pressed={inspectedId === record.id} onclick={() => inspectedId = record.id}>Inspect retained evidence</button>
+      <button class="btn peek" type="button" aria-label={`Inspect saved Case ${caseNumber(record.id)}`} aria-pressed={inspectedId === record.id} aria-keyshortcuts="P" title="Preview retained evidence: P while this button is focused" onclick={() => inspectedId = record.id} onkeydown={event => openRetainedPeek(event, () => inspectedId = record.id)}>Inspect retained evidence</button>
     </article>
   {/each}
   {#if !records.length}<p class="count">No cases match the current filters.</p>{/if}

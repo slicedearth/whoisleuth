@@ -41,7 +41,12 @@ test('review navigation spans pages and an explicit checkpoint restores filters,
   await inbox.getByRole('combobox', { name: 'Source', exact: true }).selectOption('case');
   const items = inbox.locator('.items > li');
   await expect(items).toHaveCount(25);
-  await openInboxReview(inboxReviewControls(page).first());
+  await inbox.getByRole('button', { name: 'Back to queue', exact: true }).click();
+  const inspectFirst = inboxReviewControls(page).first();
+  await expect(inspectFirst).toHaveAttribute('aria-pressed', 'false');
+  await inspectFirst.focus(); await inspectFirst.press('p');
+  await expect(items.first().locator(':scope > details')).toHaveAttribute('open', '');
+  await expect(inbox.getByRole('heading', { name: 'Review detail', exact: true })).toBeFocused();
   await items.first().locator('details.lifecycle-controls > summary').click();
   await items.first().getByRole('combobox', { name: 'Review outcome', exact: true }).selectOption('open');
   await items.first().getByLabel('Rationale', { exact: true }).fill('Unfinished first review.\nKeep the contrary observation.');

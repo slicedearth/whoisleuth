@@ -32,7 +32,7 @@ test('retained Case inspection leaves the saved record and queue filters unchang
     await useTheme(page, theme);
     for (const width of [320, 390, 1280, 1920]) {
       await page.setViewportSize({ width, height: 844 });
-      await inspect.click();
+      await inspect.focus(); await inspect.press('p');
       await expect(workbench.getByRole('heading', { name: 'peek.example', exact: true })).toBeFocused();
       await expect(workbench.getByRole('button', { name: 'Copy Case number', exact: true })).toBeVisible();
       await expect(workbench.getByRole('complementary')).toContainText('0 retained pins');

@@ -3,6 +3,7 @@
   import type { CaseRecord } from '#lib/cases.ts';
   import { readRetainedCaseFiles } from '#lib/case-attachments.ts';
   import { runInvestigationPackageWorker } from '#lib/investigation-package-worker.ts';
+  import ComparisonFrame from './ComparisonFrame.svelte';
   import {
     TEXT_COMPARISON_BYTES,
     type TextPassageComparison,
@@ -134,6 +135,7 @@
     {/if}
     {#if error}<p role="alert">{error}</p>{/if}
     {#if result && reference && candidate}
+      {@const measured = result}
       <h4 bind:this={heading} tabindex="-1"
         >{result.totalPassages} shared {result.totalPassages === 1 ? 'passage' : 'passages'}</h4
       >
@@ -145,21 +147,22 @@
       >
       <details
         ><summary>Sources and comparison method</summary>
-        <dl
-          >{#each [{ label: 'Reference', attachment: reference, measured: result.reference }, { label: 'Candidate', attachment: candidate, measured: result.candidate }] as source}<div
-              ><dt>{source.label}: {source.attachment.fileName}</dt><dd
-                >{source.attachment.source ?? 'Source not declared'} · {source.attachment
-                  .observedAt ?? 'Observation time unknown'}<br /><code
-                  >{source.measured.digestSha256}</code
-                ></dd
-              ></div
-            >{/each}</dl
-        >
-        <ul
-          >{#each result.limitations as limitation}<li>{limitation}</li>{/each}<li
-            >Directional controls are shown as Unicode code points in the excerpts.</li
-          ></ul
-        >
+        <ComparisonFrame>
+          {#snippet header()}<h5>Verified text sources</h5>{/snippet}
+          {#snippet left()}
+            <section aria-label="Reference retained text source">
+              <dl><dt>Reference: {reference.fileName}</dt><dd>{reference.source ?? 'Source not declared'} · {reference.observedAt ?? 'Observation time unknown'}<br /><code>{measured.reference.digestSha256}</code></dd></dl>
+            </section>
+          {/snippet}
+          {#snippet right()}
+            <section aria-label="Candidate retained text source">
+              <dl><dt>Candidate: {candidate.fileName}</dt><dd>{candidate.source ?? 'Source not declared'} · {candidate.observedAt ?? 'Observation time unknown'}<br /><code>{measured.candidate.digestSha256}</code></dd></dl>
+            </section>
+          {/snippet}
+          {#snippet children()}
+            <ul>{#each measured.limitations as limitation}<li>{limitation}</li>{/each}<li>Directional controls are shown as Unicode code points in the excerpts.</li></ul>
+          {/snippet}
+        </ComparisonFrame>
       </details>
       <ol start={page * 8 + 1}
         >{#each result.passages.slice(page * 8, (page + 1) * 8) as passage}<li

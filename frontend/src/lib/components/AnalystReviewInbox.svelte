@@ -9,6 +9,7 @@
   import Pagination from './Pagination.svelte';
   import AnalystReviewInboxItem from './AnalystReviewInboxItem.svelte';
   import AnalystWorkbench from './AnalystWorkbench.svelte';
+  import { openRetainedPeek } from '#lib/controllers/retained-peek-key.ts';
   import ReviewSessionControl from './ReviewSessionControl.svelte';
   import type { ReviewFormDraft, ReviewSessionPosition } from '../../../../packages/contracts/review-session-contract.mts';
   import { describeReviewSessionResume, mergeReviewSessionDrafts } from '../../../../packages/workspace/review-session.mts';
@@ -302,7 +303,7 @@
               <strong>{item.title}</strong>
               <span>{item.evidenceFamily.replaceAll('_', ' ')} · {item.completeness}</span>
               <span>{item.lifecycle.state.replaceAll('_', ' ')} · {item.nextAction.replaceAll('_', ' ')}</span>
-              <button class="btn" type="button" aria-label={`Inspect review: ${item.title}`} aria-controls={`review-detail-${encodeURIComponent(item.id)}`} aria-pressed={expanded === item.id} onclick={() => expandedId = item.id}>Inspect</button>
+              <button class="btn" type="button" aria-label={`Inspect review: ${item.title}`} aria-controls={`review-detail-${encodeURIComponent(item.id)}`} aria-pressed={expanded === item.id} aria-keyshortcuts="P" title="Preview retained evidence: P while this button is focused" onclick={() => expandedId = item.id} onkeydown={event => openRetainedPeek(event, () => expandedId = item.id)}>Inspect</button>
             </li>
           {/each}
         </ol>

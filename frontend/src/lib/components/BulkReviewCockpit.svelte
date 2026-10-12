@@ -4,6 +4,7 @@
   import BulkRiskSummary from '#lib/components/BulkRiskSummary.svelte';
   import CasePicker from './CasePicker.svelte';
   import AnalystWorkbench from './AnalystWorkbench.svelte';
+  import { openRetainedPeek } from '#lib/controllers/retained-peek-key.ts';
   import Pagination from './Pagination.svelte';
   import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
   import type { CaseRecord } from '#lib/analysis/case-model.ts';
@@ -123,7 +124,7 @@
         {#each queueRows as row (row.resultIndex)}
           <li class:inspected={inspectionOpen && current?.resultIndex === row.resultIndex}>
             <strong>{row.domain}</strong><span>{row.availability} · {reviewAvailable ? row.reviewState : 'Review state unavailable'}</span>
-            <button class="btn" type="button" aria-label={`Inspect retained ${row.domain}`} aria-pressed={inspectionOpen && current?.resultIndex === row.resultIndex} onclick={() => { focusedDomain = row.domain; inspectionOpen = true; }}>Inspect</button>
+            <button class="btn" type="button" aria-label={`Inspect retained ${row.domain}`} aria-pressed={inspectionOpen && current?.resultIndex === row.resultIndex} aria-keyshortcuts="P" title="Preview retained evidence: P while this button is focused" onclick={() => { focusedDomain = row.domain; inspectionOpen = true; }} onkeydown={event => openRetainedPeek(event, () => { focusedDomain = row.domain; inspectionOpen = true; })}>Inspect</button>
           </li>
         {/each}
       </ol>
