@@ -5,7 +5,7 @@ import { expect, test } from './fixtures';
 import { caseRecord, createCase, openCasesView, openCaseResponseWorkspace, openSeededTimelineCase } from './case-test-fixtures';
 import { addFixtureCasePin, currentActionFixture } from './case-response-fixtures';
 import { openCaseSection } from './console-navigation';
-import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
+import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, failNextBrowserLocalManifestWrite, holdNextBrowserLocalCommitAcknowledgement, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { downloadWorkspaceArchive, workspaceArchiveRegion } from './workspace-backup';
 import { caseStoreAtCapacity } from '../test/workspace-backup-capacity-fixture.mts';
 import { beginBrowserInteractionReadiness, readBrowserInteractionReadiness } from './performance-sampling';
@@ -151,6 +151,90 @@ test('Case drafts recover after reload, stay out of backups and clear atomically
   expect(cases.records[0]?.value.evidencePins).toHaveLength(1);
 });
 
+test('draft inventory reads saved copies without restoring forms and recovers from an unavailable read', async ({ page }, testInfo) => {
+  await openCasesView(page); await createCase(page, 'inventory-draft.example');
+  let form = await pinForm(page);
+  await form.getByLabel('Label', { exact: true }).fill('Unsubmitted inventory example');
+  await form.getByLabel('Fact', { exact: true }).fill('Private unfinished values stay in this workspace.');
+  await expect(form.getByRole('status')).toContainText('Draft saved in this workspace');
+  const before = await readBrowserLocalCollection(page, 'case_drafts', { minimumRecords: 1 });
+  await page.reload();
+  const disclosure = page.locator('.draft-inventory-disclosure');
+  await expect(disclosure).toBeVisible();
+  await expect(disclosure).not.toHaveAttribute('open', '');
+  const toggle = disclosure.locator(':scope > summary');
+  await toggle.focus(); await page.keyboard.press('Enter');
+  const inventory = page.getByRole('region', { name: 'Draft inventory', exact: true });
+  await expect(inventory.getByRole('button', { name: 'Read saved drafts', exact: true })).toBeVisible();
+  await expect(inventory.locator('.draft-list')).toHaveCount(0);
+  await inventory.getByRole('button', { name: 'Read saved drafts', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(inventory.getByRole('status')).toContainText('1 saved draft · 0 with an unavailable Case reference');
+  await expect(inventory.locator('pre')).toHaveCount(0);
+  await inventory.getByRole('button', { name: 'View saved values', exact: true }).click();
+  await expect(inventory.locator('pre')).toContainText('Private unfinished values stay in this workspace.');
+  expect(await readBrowserLocalCollection(page, 'case_drafts')).toEqual(before);
+  for (const [width, height] of [[1280, 720], [2560, 1440], [390, 844], [320, 700]] as const) {
+    await page.setViewportSize({ width, height });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme); await expectNoHorizontalOverflow(page);
+      await expect(inventory.getByRole('link', { name: 'Open Case', exact: true })).toBeVisible();
+      if (width === 320 || width === 1280) {
+        expect((await new AxeBuilder({ page }).include('.draft-inventory-disclosure').analyze()).violations).toEqual([]);
+        if (captureVisualEvidenceEnabled()) await disclosure.screenshot({ path: testInfo.outputPath(`draft-inventory-${theme}-${width}.png`) });
+      }
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await failNextBrowserLocalCollectionRead(page, 'case_drafts');
+  await inventory.getByRole('button', { name: 'Refresh saved drafts', exact: true }).click();
+  await expect(inventory.getByRole('status')).toContainText('Saved drafts could not be read');
+  await expect(inventory.locator('.draft-list,pre')).toHaveCount(0);
+  await expect(inventory).not.toContainText('No saved recovery drafts were found');
+  await inventory.getByRole('button', { name: 'Refresh saved drafts', exact: true }).click();
+  await expect(inventory.getByRole('status')).toContainText('1 saved draft');
+  await inventory.getByRole('link', { name: 'Open Case', exact: true }).click();
+  form = await pinForm(page);
+  await expect(form.getByLabel('Label', { exact: true })).toHaveValue('');
+  await expect(form.getByText('1 saved draft for this form', { exact: true })).toBeVisible();
+  expect(await readBrowserLocalCollection(page, 'case_drafts')).toEqual(before);
+  await toggle.focus(); await page.keyboard.press('Enter');
+  await expect(inventory).toHaveCount(0);
+  await page.keyboard.press('Enter');
+  await expect(inventory.getByRole('button', { name: 'Read saved drafts', exact: true })).toBeVisible();
+  await expect(inventory.locator('pre')).toHaveCount(0);
+});
+
+test('draft inventory does not turn a readable copy into confirmation of an unknown write', async ({ page }) => {
+  await openCasesView(page); await createCase(page, 'uncertain-draft.example');
+  const form = await pinForm(page);
+  const acknowledgement = await holdNextBrowserLocalCommitAcknowledgement(page, 'case_drafts');
+  try {
+    await form.getByLabel('Label', { exact: true }).fill('An unconfirmed recovery write');
+    await form.getByLabel('Fact', { exact: true }).fill('The original in-memory reasoning');
+    await acknowledgement.wait();
+    // The real write has committed, but its acknowledgement is held. Refusing
+    // the reconciliation read leaves the provider unable to confirm its outcome.
+    await failNextBrowserLocalCollectionRead(page, 'case_drafts');
+    await expect(form.getByRole('status')).toContainText('The write may have succeeded');
+    await acknowledgement.release();
+    await page.locator('.draft-inventory-disclosure > summary').click();
+    const inventory = page.getByRole('region', { name: 'Draft inventory', exact: true });
+    await expect(inventory.getByRole('alert')).toContainText('Unconfirmed writes in open forms · 1');
+    await inventory.getByRole('button', { name: 'Read saved drafts', exact: true }).click();
+    await expect(inventory.getByRole('status')).toContainText('1 saved draft');
+    await expect(inventory.getByRole('alert')).toContainText('Unconfirmed writes in open forms · 1');
+    await form.getByLabel('Fact', { exact: true }).fill('Later edits must remain in the open form');
+    await form.getByRole('button', { name: 'Pin evidence', exact: true }).click();
+    await expect(form.getByRole('status')).toContainText('The write may have succeeded');
+    await expect(form.getByLabel('Fact', { exact: true })).toHaveValue('Later edits must remain in the open form');
+    expect((await readBrowserLocalCollection(page, 'cases')).records[0]?.value.evidencePins).toHaveLength(0);
+    await inventory.getByRole('button', { name: 'View saved values', exact: true }).click();
+    await expect(inventory.locator('pre')).toContainText('The original in-memory reasoning');
+    await expect(inventory.locator('pre')).not.toContainText('Later edits must remain');
+  } finally { await acknowledgement.release(); }
+});
+
 test('a failed recovery save protects navigation and can be retried without submitting evidence', async ({ page }) => {
   await openCasesView(page); await createCase(page, 'failed-draft.example');
   const form = await pinForm(page); const selected = page.url();
@@ -204,12 +288,18 @@ test('deleting a Case also removes its unsubmitted recovery copies', async ({ pa
   const form = await pinForm(page);
   await form.getByLabel('Label', { exact: true }).fill('Delete this recovery copy with its Case');
   await expect(form.getByRole('status')).toContainText('Draft saved in this workspace');
+  await page.locator('.draft-inventory-disclosure > summary').click();
+  const inventory = page.getByRole('region', { name: 'Draft inventory', exact: true });
+  await inventory.getByRole('button', { name: 'Read saved drafts', exact: true }).click();
+  await expect(inventory.getByRole('status')).toContainText('1 saved draft');
   await page.locator('.case-more > summary').click();
   page.once('dialog', dialog => { void dialog.accept(); });
   await page.getByRole('button', { name: 'Delete case', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
   expect((await readBrowserLocalCollection(page, 'cases')).records).toHaveLength(0);
   expect((await readBrowserLocalCollection(page, 'case_drafts')).records).toHaveLength(0);
+  await expect(inventory.getByRole('status')).toContainText('0 saved drafts');
+  await expect(inventory.locator('.draft-list')).toHaveCount(0);
 });
 
 test('action metadata and transition drafts keep independent targets through selection and recovery', async ({ page }) => {

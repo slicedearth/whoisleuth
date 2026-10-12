@@ -727,6 +727,14 @@ Case response forms save workspace-local recovery
 drafts. Their status distinguishes a recovery copy from a submitted Case
 record. After reopening a Case, restore a saved draft explicitly and review it
 before submitting. Copies from other tabs are not silently overwritten.
+Open **Draft inventory** in Cases, then **Read saved drafts** to inspect recovery
+copies across the current workspace. Saved values are shown only when selected;
+**Open Case** returns to the existing forms without restoring or submitting them.
+After the first read, the open inventory refreshes when Cases or drafts change.
+An unavailable Case reference remains explicit, including copies whose form
+version is no longer supported. Normal Case deletion still removes its drafts.
+Unconfirmed writes from open forms are listed separately: a readable recovery
+copy does not settle whether a submission succeeded. The inventory is read-only.
 If a write cannot be confirmed, the form stays open and further writes are
 blocked. Copy any later edits, then reload and inspect saved records before
 continuing; do not repeat a submission whose outcome is unknown.

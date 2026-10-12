@@ -2,7 +2,7 @@ import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-cont
 import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
-import { DEFAULT_DATABASE, directoryRows, indicator, namedDatabase, openArchive, openManager, SELECTION } from './browser-workspace-fixtures';
+import { DEFAULT_DATABASE, directoryRows, indicator, namedDatabase, openArchive, openManager, SELECTION, switchWorkspace } from './browser-workspace-fixtures';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, useTheme } from './helpers';
 import { downloadEncryptedWorkspaceArchive } from './workspace-backup';
 import { createCase } from '../packages/cases/case-record-operations.mts';
@@ -297,8 +297,17 @@ test('unfinished Case forms use the encrypted workspace and remain outside its p
   await details.getByLabel('Label', { exact: true }).fill('Protected unfinished fixture');
   await details.getByLabel('Fact', { exact: true }).fill('This recovery-only sentence must not enter a backup.');
   await expect(details.getByRole('status')).toContainText('Draft saved in this workspace');
+  await page.locator('.draft-inventory-disclosure > summary').click();
+  const inventory = page.getByRole('region', { name: 'Draft inventory', exact: true });
+  await inventory.getByRole('button', { name: 'Read saved drafts', exact: true }).click();
+  await inventory.getByRole('button', { name: 'View saved values', exact: true }).click();
+  await expect(inventory.locator('pre')).toContainText('This recovery-only sentence must not enter a backup.');
   expect(JSON.stringify(await storedBytes(page, namedDatabase(row.id)))).not.toContain('recovery-only sentence');
-  await page.reload(); await unlock(page, row.name);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: `Unlock ${row.name}`, exact: true })).toBeVisible();
+  await expect(inventory).toHaveCount(0);
+  await expect(page.getByText('This recovery-only sentence must not enter a backup.', { exact: false })).toHaveCount(0);
+  await unlock(page, row.name);
   await openCaseResponseWorkspace(page); await openCaseSection(page, 'Evidence');
   details = page.locator('details').filter({ has: page.getByText('Pin an observed fact', { exact: true }) });
   if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click();
@@ -308,6 +317,12 @@ test('unfinished Case forms use the encrypted workspace and remain outside its p
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true }).click();
   const { content } = await downloadEncryptedWorkspaceArchive(page, BACKUP_PASSWORD);
   expect(JSON.stringify(await decryptWorkspaceArchive(JSON.parse(content), BACKUP_PASSWORD))).not.toContain('recovery-only sentence');
+  await switchWorkspace(page, 'Default');
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
+  await page.locator('.draft-inventory-disclosure > summary').click();
+  await inventory.getByRole('button', { name: 'Read saved drafts', exact: true }).click();
+  await expect(inventory.getByRole('status')).toContainText('0 saved drafts');
+  await expect(inventory).not.toContainText('recovery-only sentence');
 });
 
 test('encrypted workspace stays locked across reloads and supports a separately encrypted backup round trip', { tag: ['@cross-browser-critical', '@timing-sensitive'] }, async ({ page, context }) => {

@@ -89,6 +89,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
   let tagExpected = $state<string[]>([]);
   let newDomain = $state('');
   let openingCase = $state(false);
+  let draftInventoryOpen = $state(false);
   let incidentDraftDirty = $state(false);
   trackTransientCaseDraft(() => incidentDraftDirty || Boolean(expandedId && (
     noteDraft.length || tagDraft !== tagExpected.join(', ')
@@ -644,6 +645,11 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
       cancel={cancelAssociationRetention} exportSnapshot={exportRetentionSnapshot} />
   {/if}
   {#if casesSourceState === 'ready'}
+    <details class="draft-inventory-disclosure" bind:open={draftInventoryOpen}>
+      <summary>Draft inventory</summary>
+      {#if draftInventoryOpen}<DeferredSurface load={() => import('#lib/components/CaseDraftInventory.svelte')} props={{}}
+        loadingLabel="Opening draft inventory…" unavailableLabel="The draft inventory could not be opened. Saved drafts have not changed." />{/if}
+    </details>
     {#if casesRefreshing}
       <p class="refresh-status" role="status" aria-live="polite">Refreshing Cases while the last readable snapshot remains available.</p>
     {/if}
@@ -721,5 +727,6 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
   .advanced-case-tools { margin: 16px 0; padding-block: 12px; border-block: 1px solid var(--border); }
   .advanced-case-tools summary { cursor: pointer; font: 650 var(--text-sm) var(--mono); }
   .advanced-case-tools > button { margin-top: 12px; }
+  .draft-inventory-disclosure{margin-block:12px;min-width:0}.draft-inventory-disclosure>summary{cursor:pointer;min-height:44px;display:list-item;align-content:center;font-weight:650}
   .message { color: var(--accent); font-size: var(--text-sm); overflow-wrap: anywhere; }
 </style>

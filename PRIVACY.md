@@ -190,6 +190,10 @@ drafts in the selected workspace. They remain separate from submitted Case
 records, use the workspace's encryption when enabled, and are excluded from
 portable backups, exports and legacy rollback copies. Drafts remain until
 submitted, explicitly discarded, or removed with their Case or workspace.
+The optional Case draft inventory reads existing copies and Case references after
+you select Read saved drafts, then refreshes when those collections change while
+the inventory is open. Unconfirmed-write notices use metadata from currently open
+forms in page memory, without persisting another copy or adding export data.
 Do not enter credentials into analyst forms. Storage health reads the browser's
 site-wide estimates; a persistence request happens only when selected and does
 not create a backup. Backup preparation is remembered only during that visit;

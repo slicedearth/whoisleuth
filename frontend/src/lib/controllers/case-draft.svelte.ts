@@ -38,8 +38,9 @@ export function createCaseDraft<T extends CaseDraftFields>(
   const transient = getContext<DraftStorage | undefined>(documentDraftStorage);
   const retention = transient ? 'document' as const : 'workspace' as const;
   const owner = {};
+  const recoveryCaseId = caseId();
   const recovery = createCaseDraftRecovery({
-    caseId: caseId(), form,
+    caseId: recoveryCaseId, form,
     readFields: () => $state.snapshot(value) as CaseDraftValues<T>,
     restoreFields: fields => { value = restoreCaseDraftFields(fields, defaults, objectLists); },
     resetFields: () => { value = structuredClone(defaults); },
@@ -54,7 +55,11 @@ export function createCaseDraft<T extends CaseDraftFields>(
         });
       },
     },
-    notify: (next, unsafe) => { state = next; setCaseDraftUnprotected(owner, unsafe && !transient); },
+    notify: (next, unsafe) => {
+      state = next;
+      setCaseDraftUnprotected(owner, unsafe && !transient,
+        next.status === 'unknown' ? { caseId: recoveryCaseId, form } : undefined);
+    },
   });
   onMount(() => {
     void recovery.refresh();
