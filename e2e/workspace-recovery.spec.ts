@@ -210,10 +210,45 @@ test('recovery package index keeps distinct matching groups separate from failed
     digestSha256: `sha256:${createHash('sha256').update(body).digest('hex')}` }));
   const packages = await Promise.all(bodies.map(content => buildInvestigationPackage({ workflow: 'Recovery fixture', configurationDigestSha256: null,
     artifacts: [{ content, mediaType: 'application/octet-stream' }] }, NOW, '2.6.0')));
-  await page.goto('/dashboard'); await review(page, await simpleBackup(references)); const recovery = await start(page);
+  await page.goto('/dashboard'); await review(page, await simpleBackup(references));
+  await page.evaluate(() => {
+    const original = crypto.subtle.digest.bind(crypto.subtle);
+    const scope = window as unknown as { recoveryDigestHeld: boolean; releaseRecoveryDigest: () => void };
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    scope.recoveryDigestHeld = false;
+    scope.releaseRecoveryDigest = () => { crypto.subtle.digest = original; release(); };
+    crypto.subtle.digest = async (algorithm, data) => {
+      if (new TextDecoder().decode(data).includes('"id":"recovery-case"')) {
+        crypto.subtle.digest = original;
+        scope.recoveryDigestHeld = true;
+        await held;
+      }
+      return original(algorithm, data);
+    };
+  });
+  const recovery = await start(page);
   await recovery.getByText('Recovery set index', { exact: true }).click();
   const index = recovery.getByRole('region', { name: 'Matching recovery sources', exact: true });
-  const add = (position: number) => recovery.getByLabel('Restore evidence package', { exact: true }).setInputFiles({ name: `renamed-${position}.zip`, mimeType: 'application/zip', buffer: Buffer.from(packages[position]!.bytes) });
+  const packageInput = recovery.getByLabel('Restore evidence package', { exact: true });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { recoveryDigestHeld: boolean }).recoveryDigestHeld)).toBe(true);
+  try {
+    await expect(packageInput).toBeDisabled();
+    // Negative control: the driver can bypass a disabled file picker, but the
+    // application must discard the selection while restoration owns the write.
+    await packageInput.setInputFiles({ name: 'premature.zip', mimeType: 'application/zip', buffer: Buffer.from(packages[0]!.bytes) });
+    expect(await packageInput.evaluate((input: HTMLInputElement) => input.files?.length)).toBe(0);
+    await expect(index.locator('ol > li')).toHaveCount(0);
+    await expect(recovery.locator('.result')).toHaveCount(0);
+  } finally {
+    await page.evaluate(() => (window as unknown as { releaseRecoveryDigest: () => void }).releaseRecoveryDigest());
+  }
+  const add = async (position: number) => {
+    // File injection does not wait for an enabled control. Initial restoration
+    // and each preceding package operation must relinquish it first.
+    await expect(packageInput).toBeEnabled();
+    await packageInput.setInputFiles({ name: `renamed-${position}.zip`, mimeType: 'application/zip', buffer: Buffer.from(packages[position]!.bytes) });
+  };
   await add(0);
   await expect(recovery.locator('.result')).toContainText('1 of 2 unique files verified · 1 missing');
   await expect(index.locator('ol > li')).toHaveCount(1);
