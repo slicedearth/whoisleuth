@@ -124,7 +124,7 @@ test('retained infrastructure exposes exact independent sources and keyboard ret
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [
     caseRecord('inventory-first', 'shared.example'),
     { ...caseRecord('inventory-second', 'shared.example'), updatedAt: '2026-07-20T00:00:00.000Z' },
-    ...Array.from({ length: MAX_INVESTIGATION_SEARCH_RESULTS + 5 }, (_, index) => caseRecord(`inventory-padding-${index}`, `zz-inventory-${index}.example`)),
+    ...Array.from({ length: MAX_INVESTIGATION_SEARCH_RESULTS }, (_, index) => caseRecord(`inventory-padding-${index}`, `zz-inventory-${index}.example`)),
   ] } });
   await openDashboardSecondaryWorkspaces(page);
   await page.getByText('Browse retained infrastructure', { exact: true }).click();
@@ -155,6 +155,16 @@ test('retained infrastructure exposes exact independent sources and keyboard ret
   }
   await detail.getByRole('button', { name: 'Return to inventory results', exact: true }).click();
   await expectFocusedResultsVisible(page, inspect, inspect);
+  const pagination = inventory.getByRole('navigation', { name: 'Retained infrastructure pages', exact: true });
+  const inventoryHeading = inventory.getByRole('heading', { name: 'Retained infrastructure inventory', exact: true });
+  await pagination.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(inventory.getByRole('spinbutton', { name: 'Retained infrastructure page number', exact: true })).toHaveValue('2');
+  await expectFocusedResultsVisible(page, inventoryHeading, inventoryHeading);
+  await expect(rows.getByRole('listitem')).toHaveCount(1);
+  await pagination.getByRole('button', { name: 'Previous', exact: true }).click();
+  await expect(inventory.getByRole('spinbutton', { name: 'Retained infrastructure page number', exact: true })).toHaveValue('1');
+  await expectFocusedResultsVisible(page, inventoryHeading, inventoryHeading);
+  await expect(rows.getByRole('listitem')).toHaveCount(MAX_INVESTIGATION_SEARCH_RESULTS);
   expect(requests).toEqual([]);
 });
 

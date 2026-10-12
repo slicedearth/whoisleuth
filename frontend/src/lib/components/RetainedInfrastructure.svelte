@@ -32,7 +32,7 @@
     void current.infrastructure(options).then(async value => {
       if (!active) return;
       completed = { session: current, response: value }; pending = false;
-      if (focusPage) { focusPage = false; await tick(); if (active) heading?.focus({ preventScroll: true }); }
+      if (focusPage) { focusPage = false; await tick(); if (active) revealFocus(heading, 'start'); }
     }).catch(cause => {
       if (!active) return;
       pending = false;
