@@ -4,6 +4,7 @@ import { readCaseAttachments, type CaseAttachment } from '../cases/case-attachme
 import { sha256ArtifactBytes } from '../evidence/artifact-integrity.mts';
 import { retainedFileGroups, type RetainedFileInput } from '../evidence/retained-file.mts';
 import type { readWorkspaceArchive } from './workspace-archive.mts';
+import type { CaseRecord } from '../cases/case-record-contracts.mts';
 
 export type ReviewedWorkspaceArchive = Awaited<ReturnType<typeof readWorkspaceArchive>>;
 
@@ -16,18 +17,28 @@ export type RecoveryFile = Readonly<{
 /** Inspect each bounded storage group; an unreadable group is not absence. */
 export async function inspectRecoveryFiles(archive: ReviewedWorkspaceArchive,
   read: (group: readonly CaseAttachment[]) => Promise<ReadonlyMap<string, Blob | null>>) {
-  const groups = workspaceAttachmentGroups(archive);
-  const rows = (archive.sections.find(item => item.id === 'cases')!.data as { cases: { id: string; attachments?: unknown }[] }).cases;
+  return inspectCaseOriginalFiles(archiveCaseRecords(archive), read);
+}
+
+/** A Case review and a recovery rehearsal inspect the same bounded file groups. */
+export async function inspectCaseOriginalFiles(rows: readonly Pick<CaseRecord, 'id' | 'attachments'>[],
+  read: (group: readonly CaseAttachment[]) => Promise<ReadonlyMap<string, Blob | null>>,
+  signal?: AbortSignal) {
+  if (!Array.isArray(rows) || rows.length > MAX_CASES) throw new Error('Case records cannot be inspected for required files.');
+  signal?.throwIfAborted();
   const references = new Map<string, { caseId: string; attachment: CaseAttachment }[]>();
   for (const row of rows) for (const attachment of readCaseAttachments(row.attachments) ?? []) {
     const existing = references.get(attachment.digestSha256) ?? [];
     existing.push({ caseId: row.id, attachment }); references.set(attachment.digestSha256, existing);
   }
+  const groups = retainedFileGroups([...references.values()].flatMap(items => items.map(item => item.attachment)));
   let verified = 0, missing = 0, unverified = 0, bytes = 0;
   const checklist: RecoveryFile[] = [];
   for (const group of groups) {
+    signal?.throwIfAborted();
     let files: ReadonlyMap<string, Blob | null> | null = null;
     try { files = await read(group); } catch { /* Keep failed reads distinct from missing bytes. */ }
+    signal?.throwIfAborted();
     for (const item of group) {
       if (files?.get(item.digestSha256)) { verified++; bytes += item.byteLength; continue; }
       const state = files === null ? 'unverified' as const : 'missing' as const;
@@ -42,11 +53,15 @@ export async function inspectRecoveryFiles(archive: ReviewedWorkspaceArchive,
 
 /** Partition content, not provenance: duplicate references remain in Case data. */
 export function workspaceAttachmentGroups(archive: ReviewedWorkspaceArchive): readonly (readonly CaseAttachment[])[] {
+  return retainedFileGroups(archiveCaseRecords(archive).flatMap(row => readCaseAttachments(row?.attachments) ?? []));
+}
+
+function archiveCaseRecords(archive: ReviewedWorkspaceArchive): Pick<CaseRecord, 'id' | 'attachments'>[] {
   const section = archive.sections.find(item => item.id === 'cases');
   if (!section || section.status !== 'ready') throw new Error('Required file coverage cannot be determined from an unsupported Case section.');
   const rows = (section.data as { cases?: unknown })?.cases;
   if (!Array.isArray(rows) || rows.length > MAX_CASES) throw new Error('Backup Case records cannot be inspected for required files.');
-  return retainedFileGroups(rows.flatMap(row => readCaseAttachments(row?.attachments) ?? []));
+  return rows;
 }
 
 /** Match complete selected bytes to the downloaded backup, never filenames. */

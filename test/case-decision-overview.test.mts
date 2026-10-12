@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildCaseDecisionOverview, caseQuestionNextActions } from '../packages/cases/case-decision-overview.mts';
+import { buildCaseCompletionReview, buildCaseDecisionOverview, caseQuestionNextActions } from '../packages/cases/case-decision-overview.mts';
 import { createCase } from '../packages/cases/case-model.mts';
 import { caseRecheckComparisonWarnings } from '../packages/cases/case-recheck-model.mts';
 import type { CaseEvidencePin, CaseDecisionRecord, CaseActionRecord } from '../packages/cases/case-response-records.mts';
@@ -115,4 +115,53 @@ test('an unlinked assessment receives a local review, not an invented source or 
   assert.deepEqual(next.actions.map(action => [action.id, action.section]), [['links', 'assessment']]);
   assert.match(next.actions[0]!.reason, /No evidence is linked/);
   assert.deepEqual(next.further, []);
+});
+
+test('completion review does not invent closure readiness, open objects or missing files for an empty Case', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  const before = structuredClone(record);
+  assert.deepEqual(buildCaseCompletionReview(record, NOW), {
+    openObjects: [], otherObjects: [], opposingClaims: [], reviews: [], requests: [],
+  });
+  assert.deepEqual(record, before);
+});
+
+test('completion review keeps current incident state distinct from resolved, historical and domain scopes', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  record.workflowMetadata = { types: [], investigationContext: null, incidentTargets: [
+    { id: 'open-link', url: 'https://review.example/open', state: 'open', createdAt: NOW, updatedAt: NOW },
+    { id: 'resolved-link', url: 'https://review.example/resolved', state: 'resolved', createdAt: NOW, updatedAt: NOW },
+  ] };
+  record.evidencePins = [
+    { ...pin, id: 'current', responseObject: { kind: 'page', identifier: 'https://review.example/open', incidentTargetId: 'open-link' } },
+    { ...pin, id: 'resolved', responseObject: { kind: 'page', identifier: 'https://review.example/resolved', incidentTargetId: 'resolved-link' } },
+    { ...pin, id: 'historical', responseObject: { kind: 'page', identifier: 'https://review.example/earlier', incidentTargetId: 'old-link' } },
+    { ...pin, id: 'domain', responseObject: { kind: 'domain', identifier: 'review.example', incidentTargetId: null } },
+  ];
+  record.status = 'resolved'; // Whole-Case status does not rewrite current object metadata.
+  const before = structuredClone(record);
+  const review = buildCaseCompletionReview(record, NOW);
+  assert.deepEqual(review.openObjects.map(row => [row.object.identifier, row.target.state]), [['https://review.example/open', 'open']]);
+  assert.deepEqual(review.otherObjects.map(row => [row.object.identifier, row.targetRetained]), [
+    ['https://review.example/earlier', false], ['review.example', false],
+  ]);
+  assert.deepEqual(record, before);
+});
+
+test('completion review preserves exact contrary and unavailable links without reopening resolved assessments', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  record.evidencePins = [pin];
+  const assertion = { id: 'open-question', kind: 'hypothesis' as const, statement: 'Which source describes the page?', rationale: null,
+    state: 'open' as const, evidencePinIds: ['pin-one', 'missing'], evidenceRelations: [
+      { evidencePinId: 'pin-one', stance: 'contradicts' as const }, { evidencePinId: 'missing', stance: 'unresolved' as const },
+    ], createdAt: NOW, updatedAt: NOW };
+  record.assertions = [assertion, { ...assertion, id: 'resolved-question', state: 'resolved' },
+    { ...assertion, id: 'supporting-question', evidencePinIds: ['pin-one'], evidenceRelations: [{ evidencePinId: 'pin-one', stance: 'supports' }] }];
+  const before = structuredClone(record);
+  const review = buildCaseCompletionReview(record, NOW);
+  assert.deepEqual(review.opposingClaims.map(claim => claim.assertion.id), ['open-question']);
+  assert.deepEqual(review.opposingClaims[0]!.references.map(reference => [reference.id, reference.stance, reference.pin?.source ?? null]), [
+    ['pin-one', 'contradicts', 'Retained HTTP observation'], ['missing', 'unresolved', null],
+  ]);
+  assert.deepEqual(record, before);
 });

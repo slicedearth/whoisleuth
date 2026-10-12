@@ -4,8 +4,26 @@ import type { CaseRecord } from '../../../packages/cases/case-record-contracts.m
 import { canonicalArtifactJsonV2 } from '../../../packages/evidence/artifact-integrity.mts';
 import { boundedJsonLimitsForBytes, parseBoundedJson } from '../../../packages/analysis/bounded-json.mts';
 import { readRetainedCaseFiles } from './case-attachments.ts';
-import { readBrowserLocalData } from './browser-local-data-service.ts';
+import { browserLocalDataCollection, browserLocalDataProvider, readBrowserLocalData } from './browser-local-data-service.ts';
 import type { BrowserInvestigationPackageReview, SelectedInvestigationFile } from './investigation-package-worker-model.ts';
+import { readCaseAttachments } from '../../../packages/cases/case-attachment-model.mts';
+import { inspectCaseOriginalFiles } from '../../../packages/workspace/workspace-recovery.mts';
+
+/** Deliberate local inspection only; no bytes or check result are retained. */
+export async function inspectRetainedCaseOriginals(record: CaseRecord, signal: AbortSignal) {
+  const expectedCase = canonicalArtifactJsonV2(record), id = record.id;
+  const attachments = readCaseAttachments(record.attachments) ?? [];
+  signal.throwIfAborted();
+  const [provider, definition] = await Promise.all([browserLocalDataProvider(), browserLocalDataCollection('cases')]);
+  signal.throwIfAborted();
+  const result = await inspectCaseOriginalFiles([{ id, attachments }], group => provider.readFiles(definition,
+    group.map(({ digestSha256, byteLength }) => ({ digestSha256, byteLength }))), signal);
+  signal.throwIfAborted();
+  await assertCaseCurrent(expectedCase, id, () => readBrowserLocalData('cases'),
+    'This Case changed while its files were being checked. Review its current contents and check again; no saved work changed.');
+  signal.throwIfAborted();
+  return result;
+}
 
 export async function prepareCaseReviewHandoff(record: CaseRecord, ids: readonly string[], signal: AbortSignal,
   readFiles: typeof readRetainedCaseFiles = readRetainedCaseFiles) {
@@ -28,8 +46,13 @@ export async function prepareCaseReviewHandoff(record: CaseRecord, ids: readonly
 
 export async function assertCaseReviewHandoffCurrent(expectedCase: string, id: string,
   readCases: () => Promise<CaseRecord[]> = () => readBrowserLocalData('cases')): Promise<void> {
+  await assertCaseCurrent(expectedCase, id, readCases,
+    'This Case changed after the handoff check. Check its current contents again; no package was downloaded.');
+}
+
+async function assertCaseCurrent(expectedCase: string, id: string, readCases: () => Promise<CaseRecord[]>, changedMessage: string) {
   const current = (await readCases()).find(record => record.id === id);
-  if (!current || canonicalArtifactJsonV2(current) !== expectedCase) throw new Error('This Case changed after the handoff check. Check its current contents again; no package was downloaded.');
+  if (!current || canonicalArtifactJsonV2(current) !== expectedCase) throw new Error(changedMessage);
 }
 
 /** Package identity has already been verified by the bounded worker. */

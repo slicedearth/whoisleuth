@@ -21,6 +21,7 @@
   import CaseWorkflowDetails from '#lib/components/CaseWorkflowDetails.svelte';
   import CaseTitleForm from '#lib/components/CaseTitleForm.svelte';
   import CaseDecisionOverview from '#lib/components/CaseDecisionOverview.svelte';
+  import CaseCompletionReview from '#lib/components/CaseCompletionReview.svelte';
   import CaseResponseQueue from '#lib/components/CaseResponseQueue.svelte';
   import CaseReviewReturn from '#lib/components/CaseReviewReturn.svelte';
   import type { CaseReviewReturn as ReviewReturn } from '../../../../packages/cases/case-review-return.mts';
@@ -254,6 +255,7 @@
     </dl>
   {/if}
   <CaseDecisionOverview {record} {selectSection} onrequest={openRequestedEvidence} />
+  <CaseCompletionReview {record} {selectSection} visible={activeSection === 'summary'} />
   {#if actionSummary.total}
     <div class="action-summary" role="group" aria-label="Case action outcome summary">
       <span><strong>{actionSummary.active}</strong> active</span>

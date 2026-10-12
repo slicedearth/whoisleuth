@@ -670,6 +670,17 @@ exports retain its revision origin, including after later explicit edits.
 The Summary's decision overview keeps the latest analyst conclusion, supporting
 and contrary observations, incomplete evidence and next scheduled review together.
 Evidence added later prompts another review; it does not change the conclusion.
+**Case completion review** in Summary brings together analyst-open incident
+objects, contrary or unresolved assessment links, and retained follow-up
+commitments. Domain and historical scopes without a current incident-link state
+stay separate. This advisory review neither closes the Case nor adds a required
+step. **Check referenced files** deliberately reads the current workspace's
+original and derived files in bounded groups: missing bytes and unreadable storage
+are distinct, and identical content is checked once while retaining each reference.
+The result stays in the open review and clears when the Case changes, the review
+closes or you leave Summary. Matching size and SHA-256 does not verify the declared
+source or the accuracy of the contents; ordinary JSON backups contain references,
+not those file bodies.
 **Evidence relationships and shared sources** records which retained pin derives
 from another, or shares its source, with an analyst-supplied basis. Shared source
 labels, collection checkpoints and imported-content identities are listed

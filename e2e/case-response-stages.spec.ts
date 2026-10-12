@@ -1,6 +1,7 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCasePacket, openCaseSection } from './console-navigation';
 import { readFile } from 'node:fs/promises';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, isLookupEndpointUrl } from './fixtures';
 import {
   expectNoHorizontalOverflow,
@@ -103,6 +104,15 @@ test('the decision overview retains opposing evidence and unknowns across respon
   await expect(overview.getByRole('region', { name: 'Contrary evidence' })).toContainText('Observation time unavailable');
   await expect(overview).toContainText('Further review needed');
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const completionToggle = page.locator('.completion-review > summary');
+  await completionToggle.focus(); await completionToggle.press('Enter');
+  const completion = page.getByRole('region', { name: 'Case completion review', exact: true });
+  await expect(completion.getByRole('region', { name: 'Contrary or unresolved evidence', exact: true })).toContainText('Separate observation');
+  await expect(completion).toContainText('No current incident links are recorded as open');
+  await expect(completion.getByRole('button', { name: 'Check referenced files', exact: true })).toBeDisabled();
+  await expect(completion.getByRole('status', { name: 'Case original-file check', exact: true })).toContainText('No file references are recorded');
+  await expect(completion.getByRole('button', { name: 'Close case with reason', exact: true })).toHaveCount(0);
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   const nextReviews = overview.getByRole('region', { name: 'Next reviews for the selected assessment' });
   await expect(nextReviews.getByRole('button', { name: 'Compare opposing or unresolved evidence', exact: true })).toBeVisible();
   await expect(nextReviews.getByRole('button', { name: 'Inspect observation gaps', exact: true })).toBeVisible();
@@ -115,6 +125,8 @@ test('the decision overview retains opposing evidence and unknowns across respon
   await page.keyboard.press('Enter');
   await expect(page.getByRole('navigation', { name: 'Case sections' }).getByRole('link', { name: 'Evidence', exact: true })).toHaveAttribute('aria-current', 'page');
   await openCaseSection(page, 'Summary');
+  await expect(completion).toHaveCount(0);
+  await completionToggle.click();
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   await overview.getByText('Incomplete or undated pinned evidence · 1', { exact: true }).click();
   await expect(overview).toContainText('Separate observation');
@@ -123,10 +135,13 @@ test('the decision overview retains opposing evidence and unknowns across respon
     for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720], [2560, 1440], [3840, 2160]] as const) {
       await page.setViewportSize({ width, height });
       await expectNoHorizontalOverflow(page);
+      if (width === 320) expect((await new AxeBuilder({ page }).include('.completion-review')
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
       await page.evaluate(() => window.scrollTo(0, 0));
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
       if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`decision-page-${theme}-${width}.png`), fullPage: true }); }
       if (captureVisualEvidenceEnabled()) { await overview.screenshot({ path: testInfo.outputPath(`decision-overview-${theme}-${width}.png`) }); }
+      if (captureVisualEvidenceEnabled() && [320, 1280].includes(width)) await completion.screenshot({ path: testInfo.outputPath(`completion-${theme}-${width}.png`) });
     }
   }
   await overview.getByRole('button', { name: 'Review assessment', exact: true }).focus();

@@ -3,6 +3,8 @@ import { latestObservationCohort } from '../evidence/latest-observations.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { caseFollowUpSources } from './case-follow-ups.mts';
 import { casePinHasCompleteObservation } from './case-evidence-quality.mts';
+import { caseIncidentObjects } from './case-object-coverage.mts';
+import { caseRequestedEvidenceQueue } from './case-response-queue.mts';
 
 /** Read-only projection of bounded Case records. A link is not an inferred verdict. */
 export function buildCaseDecisionOverview(record: CaseRecord, now: string) {
@@ -43,6 +45,21 @@ export function buildCaseDecisionOverview(record: CaseRecord, now: string) {
     evidenceGaps: record.evidencePins.filter(pin => !casePinHasCompleteObservation(pin)
       || !normalizeExplicitIsoTimestamp(pin.observedAt)),
     reviews,
+  };
+}
+
+/** Advisory only: recorded object state and remaining work do not decide closure. */
+export function buildCaseCompletionReview(record: CaseRecord, now: string) {
+  const overview = buildCaseDecisionOverview(record, now);
+  const objects = caseIncidentObjects(record);
+  return {
+    openObjects: objects.filter(row => row.targetRetained && row.target.state === 'open'),
+    otherObjects: objects.filter(row => !row.targetRetained),
+    opposingClaims: overview.claims.map(claim => ({ ...claim,
+      references: claim.references.filter(reference => reference.stance === 'contradicts' || reference.stance === 'unresolved'),
+    })).filter(claim => claim.references.length),
+    reviews: overview.reviews,
+    requests: caseRequestedEvidenceQueue(record, now).filter(item => item.editable && !item.deliveries.length),
   };
 }
 

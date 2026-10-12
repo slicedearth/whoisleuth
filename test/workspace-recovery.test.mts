@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { buildWorkspaceArchive, mergeReadyWorkspaceArchiveData, prepareWorkspaceArchive, readWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
-import { compareRecoveredWorkspace, inspectRecoveryFiles, matchRecoveryFiles, workspaceAttachmentGroups } from '../packages/workspace/workspace-recovery.mts';
+import { compareRecoveredWorkspace, inspectCaseOriginalFiles, inspectRecoveryFiles, matchRecoveryFiles, workspaceAttachmentGroups } from '../packages/workspace/workspace-recovery.mts';
 import { plaintextLocalBinaryCodec } from '../frontend/src/lib/browser-local-binaries.ts';
 import type { CaseAttachment } from '../packages/cases/case-attachment-model.mts';
 import { createCase } from '../packages/cases/case-model.mts';
@@ -33,6 +33,38 @@ test('recovery checklist counts shared content once while retaining independent 
   assert.deepEqual([unreadable.missing, unreadable.unverified], [0, 1]);
   assert.equal(unreadable.checklist[0]!.state, 'unverified');
   assert.ok(!JSON.stringify(unreadable).includes('Private storage detail'));
+});
+
+test('current Case original inspection captures references, distinguishes missing bytes and retains duplicate provenance', async () => {
+  const references = [attachment(), { ...attachment('separate-source'), source: 'Independent declared source' }, attachment('absent', `sha256:${'f'.repeat(64)}`)];
+  const rows = [{ id: 'selected-case', attachments: references }];
+  let release!: (files: ReadonlyMap<string, Blob | null>) => void;
+  const held = new Promise<ReadonlyMap<string, Blob | null>>(resolve => { release = resolve; });
+  const inspected: string[][] = [];
+  const operation = inspectCaseOriginalFiles(rows, group => { inspected.push(group.map(item => item.id)); return held; });
+  references[2]!.fileName = 'changed-after-start.bin';
+  release(new Map([[DIGEST, new Blob([BODY])]]));
+  const result = await operation;
+  assert.deepEqual(inspected, [['original-one', 'absent']]);
+  assert.deepEqual([result.expected, result.verified, result.missing, result.unverified], [2, 1, 1, 0]);
+  assert.deepEqual(result.checklist[0]!.references.map(item => [item.caseId, item.attachment.id]), [['selected-case', 'absent']]);
+  assert.equal(result.checklist[0]!.references[0]!.attachment.fileName, 'original.txt');
+  const missing = await inspectCaseOriginalFiles([{ id: 'selected-case', attachments: [attachment(), { ...attachment('separate-source'), source: 'Independent declared source' }] }], async () => new Map());
+  assert.deepEqual(missing.checklist[0]!.references.map(item => item.attachment.source), ['Analyst-retained source', 'Independent declared source']);
+  const unavailable = await inspectCaseOriginalFiles(rows, async () => { throw new Error('Private storage detail'); });
+  assert.deepEqual([unavailable.verified, unavailable.missing, unavailable.unverified], [0, 0, 2]);
+  assert.doesNotMatch(JSON.stringify(unavailable), /Private storage detail/u);
+});
+
+test('cancelled original inspection starts no read or further group and never reports cancellation as missing bytes', async () => {
+  const rows = [{ id: 'selected-case', attachments: [attachment('large', DIGEST, MAX_SELECTED_FILE_TOTAL_BYTES), attachment('next', `sha256:${'a'.repeat(64)}`, 1)] }];
+  for (const phase of ['before', 'during'] as const) {
+    const controller = new AbortController();
+    let reads = 0;
+    if (phase === 'before') controller.abort();
+    await assert.rejects(inspectCaseOriginalFiles(rows, async () => { reads++; controller.abort(); return new Map(); }, controller.signal), /abort/iu);
+    assert.equal(reads, phase === 'before' ? 0 : 1);
+  }
 });
 
 test('partial multi-group recovery completes only with exact bytes through the existing binary codec', async () => {

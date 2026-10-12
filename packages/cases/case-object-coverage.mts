@@ -8,7 +8,7 @@ import {
 } from './case-response-object.mts';
 import { correctionDelivery } from './case-packet-correction.mts';
 
-export function buildCaseIncidentCoverage(
+export function caseIncidentObjects(
   record: Pick<CaseRecord, 'workflowMetadata'> &
     Partial<
       Pick<
@@ -50,7 +50,11 @@ export function buildCaseIncidentCoverage(
           updatedAt: record.updatedAt ?? '',
         },
       });
-  return [...objects.values()].map(({ target, object, targetRetained }) => {
+  return [...objects.values()];
+}
+
+export function buildCaseIncidentCoverage(record: Parameters<typeof caseIncidentObjects>[0]) {
+  return caseIncidentObjects(record).map(({ target, object, targetRetained }) => {
     const contexts = (record.actions ?? [])
       .map((action) => ({
         action,

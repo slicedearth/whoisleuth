@@ -165,6 +165,17 @@ test('missing and damaged file bodies remain explicit without rewriting Case evi
     await expect(files.locator('pre')).toHaveCount(0);
     await expect(files.getByRole('status').filter({ hasText: 'Size and SHA-256 verified for this preview' })).toHaveCount(0);
     expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+    await openCaseSection(page, 'Summary');
+    await page.locator('.completion-review > summary').click();
+    const completion = page.getByRole('region', { name: 'Case completion review', exact: true });
+    const status = completion.getByRole('status', { name: 'Case original-file check', exact: true });
+    await expect(status).toContainText('availability has not been checked');
+    await completion.getByRole('button', { name: 'Check referenced files', exact: true }).click();
+    await expect(status).toContainText(mode === 'missing' ? '0 of 1 distinct files verified · 1 missing · 0 unverified' : '0 of 1 distinct files verified · 0 missing · 1 unverified');
+    await expect(completion).toContainText(FILE_NAME);
+    await completion.getByRole('button', { name: 'Review retained files', exact: true }).click();
+    files = await openRetainedFiles(page);
+    expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   }
   files = await selectOriginal(page, 'restored-original.json');
   await files.getByRole('button', { name: 'Retain selected files', exact: true }).click();
@@ -176,6 +187,61 @@ test('missing and damaged file bodies remain explicit without rewriting Case evi
   const restored = await readBrowserLocalCollection(page, 'cases');
   expect(restored.manifest.revision).toBe(before.manifest.revision + 1);
   expect(restored.records[0]!.value.attachments).toHaveLength(2);
+});
+
+test('a late original-file check cannot cross Case selection or close a Case', async ({ page }) => {
+  await openCasesView(page); await createCase(page, 'first-completion.example');
+  const files = await selectOriginal(page);
+  await files.getByRole('button', { name: 'Retain selected files', exact: true }).click();
+  await expect(files.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true })).toBeVisible();
+  await createCase(page, 'second-completion.example');
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+  await page.locator('.case-head', { hasText: 'first-completion.example' }).click();
+  await openCaseSection(page, 'Summary');
+  await page.locator('.completion-review > summary').click();
+  const completion = page.getByRole('region', { name: 'Case completion review', exact: true });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  const gate = await page.evaluateHandle(expected => {
+    const original = SubtleCrypto.prototype.digest;
+    let release!: () => void, reached!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const started = new Promise<void>(resolve => { reached = resolve; });
+    SubtleCrypto.prototype.digest = async function(algorithm, input) {
+      const bytes = ArrayBuffer.isView(input) ? new Uint8Array(input.buffer, input.byteOffset, input.byteLength) : new Uint8Array(input);
+      const matching = bytes.length === expected.length && bytes.every((value, index) => value === expected[index]);
+      if (matching) { SubtleCrypto.prototype.digest = original; reached(); }
+      const result = await original.call(this, algorithm, input);
+      if (matching) await held;
+      return result;
+    };
+    return { wait: () => started, release: () => { SubtleCrypto.prototype.digest = original; release(); } };
+  }, [...FILE_BYTES]);
+  try {
+    await completion.getByRole('button', { name: 'Check referenced files', exact: true }).click();
+    await gate.evaluate(control => control.wait());
+    await expect(completion.getByRole('status', { name: 'Case original-file check', exact: true })).toHaveAttribute('aria-busy', 'true');
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await page.locator('.case-head', { hasText: 'second-completion.example' }).click();
+    await openCaseSection(page, 'Summary');
+    await page.locator('.completion-review > summary').click();
+    await expect(completion.getByRole('status', { name: 'Case original-file check', exact: true })).toContainText('No file references are recorded');
+    await gate.evaluate(control => control.release());
+    expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+    await expect(completion.getByRole('button', { name: 'Check referenced files', exact: true })).toBeDisabled();
+    await expect(completion).not.toContainText(FILE_NAME);
+  } finally { await gate.evaluate(control => control.release()); await gate.dispose(); }
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+  await page.locator('.case-head', { hasText: 'first-completion.example' }).click();
+  await openCaseSection(page, 'Summary');
+  const toggle = page.locator('.completion-review > summary');
+  await toggle.click();
+  const status = completion.getByRole('status', { name: 'Case original-file check', exact: true });
+  await expect(status).toContainText('availability has not been checked');
+  await completion.getByRole('button', { name: 'Check referenced files', exact: true }).click();
+  await expect(status).toContainText('1 of 1 distinct files verified · 0 missing · 0 unverified');
+  await toggle.click(); await toggle.click();
+  await expect(status).toContainText('availability has not been checked');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
 });
 
 test('file retention from another tab cannot overwrite a concurrently changed Case', async ({ page, context }) => {
