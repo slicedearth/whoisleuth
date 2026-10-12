@@ -198,11 +198,12 @@ test('a Case response save preserves unrelated analyst drafts and keyboard focus
   await submit.click();
 
   await expect(workspace).toContainText('Draft-retention pin');
+  await expect(submit).toBeFocused();
+  await openCaseSection(page, 'Response');
   await expect(packet.getByLabel('Abuse category')).toHaveValue('Fixture abuse review');
   await expect(packet.getByLabel('Affected party')).toHaveValue('Fixture affected party');
   await expect(packet.getByLabel('Exact abusive HTTP(S) URLs')).toHaveValue('https://draft-retention.invalid/review');
   await expect(packet.getByLabel('Observed harm')).toHaveValue('A bounded draft that must survive an unrelated Case mutation.');
-  await expect(submit).toBeFocused();
 });
 
 test('Quick and Advanced Case Response presentations keep one record and focus the selected work', async ({ page }) => {
