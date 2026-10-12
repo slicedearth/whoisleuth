@@ -568,6 +568,12 @@ selected evidence exports, not complete workspace backups.
 
 ### Exporting a fixed workflow for review
 
+Terminal plans and recipe explanations distinguish networked steps, offline
+steps and declared reuse of earlier outputs. These are step and handoff counts,
+not request totals or confirmation that a saved file is available. The planner
+does not inspect files or caches; collection and evidence selection remain
+deliberate actions. JSON exports keep their existing versioned fields.
+
 Select one installed recipe and save its declared steps for review:
 
 ```sh

@@ -114,6 +114,7 @@ export function formatWorkflowRecipeCatalogue(
       `${recipe.id} — ${recipe.label}`,
       `  Subject: ${recipe.subjectRequirement.replaceAll('_', ' ')}`,
       `  Workflow run: ${recipe.runnableByWorkflowRun ? 'supported' : 'plan and explanation only'}`,
+      ...formatWorkflowEffort(recipe.id, recipe.steps).map((line) => `  ${line}`),
       `  ${recipe.objective}`,
       ...recipe.steps.map(
         (item, index) =>
@@ -125,6 +126,22 @@ export function formatWorkflowRecipeCatalogue(
     ...catalogue.limitations.map((item) => `Limitation: ${item}`),
     '',
   ].join('\n');
+}
+
+function formatWorkflowEffort(
+  recipeId: InvestigationPlanRecipe,
+  steps: readonly Pick<Step, 'mode'>[],
+): readonly string[] {
+  const counts: Record<Step['mode'], number> = { network: 0, offline: 0 };
+  for (const step of steps) counts[step.mode] += 1;
+  const reuse = workflowStandardInputs(recipeId).length;
+  return [
+    `Work planned: ${counts.network} networked step${counts.network === 1 ? '' : 's'}; ${counts.offline} offline step${counts.offline === 1 ? '' : 's'}.`,
+    reuse
+      ? `Evidence reuse: ${reuse} link${reuse === 1 ? '' : 's'} from earlier outputs to later steps.`
+      : 'Evidence reuse: no earlier-output links are declared.',
+    'Counts describe steps and reuse links, not requests. Saved files and cache state are not checked.',
+  ];
 }
 
 function validatedSteps(steps: readonly Step[]): readonly Step[] {
@@ -202,6 +219,7 @@ export function formatInvestigationPlan(plan: ReturnType<typeof buildInvestigati
     `Investigation plan: ${plan.recipe.label}`,
     `Subject  ${plan.subject}`,
     `Mode     ${plan.execution}`,
+    ...formatWorkflowEffort(plan.recipe.id, plan.steps),
     '',
     ...plan.steps.flatMap((item, index) => [
       `${index + 1}. ${item.label}`,

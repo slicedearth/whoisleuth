@@ -5,6 +5,8 @@ import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import {
   buildInvestigationPlan,
   buildWorkflowRecipeCatalogue,
+  formatInvestigationPlan,
+  formatWorkflowRecipeCatalogue,
   INVESTIGATION_PLAN_RECIPES,
   RUNNABLE_INVESTIGATION_PLAN_RECIPES,
 } from '../cli/investigation-plan.mts';
@@ -36,6 +38,21 @@ describe('fixed investigation plans', () => {
     assert.ok(plan.steps.some((step) => step.approval === 'analyst_selection'));
     assert.ok(plan.steps.some((step) => step.command === 'domain-control'));
     assert.match(plan.limitations.join(' '), /does not execute commands/iu);
+  });
+
+  test('counts collection and offline work independently of analyst selection', () => {
+    const triage = buildInvestigationPlan('domain-triage', 'example.test', NOW);
+    const text = formatInvestigationPlan(triage);
+    assert.match(text, /Work planned: 1 networked step; 2 offline steps\./u);
+    assert.match(text, /Evidence reuse: 2 links from earlier outputs to later steps\./u);
+    assert.match(text, /not requests.*Saved files and cache state are not checked/u);
+
+    const lookalike = formatWorkflowRecipeCatalogue(buildWorkflowRecipeCatalogue('lookalike-review'));
+    assert.match(lookalike, /Work planned: 2 networked steps; 1 offline step\./u,
+      'Selecting a candidate for Deep review does not turn its collection step into offline work.');
+    assert.match(lookalike, /Evidence reuse: no earlier-output links are declared\./u);
+    assert.deepEqual(Object.keys(triage).sort(), ['execution', 'generatedAt', 'limitations', 'recipe', 'schema', 'steps', 'subject', 'version']);
+    assert.deepEqual(Object.keys(buildWorkflowRecipeCatalogue()).sort(), ['limitations', 'recipes', 'schema', 'version']);
   });
 
   test('hands executable collection plans back to the browser Case and selected comparison workflows', () => {
