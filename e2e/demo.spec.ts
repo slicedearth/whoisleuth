@@ -772,6 +772,18 @@ test('completes the guided synthetic workflow without investigation requests or 
     if (captureVisualEvidenceEnabled()) await scope.screenshot({ path: testInfo.outputPath(`demo-scope-${theme}-${width}.png`) });
   }
 
+  await page.getByRole('button', { name: 'Expand details: Decision context' }).click();
+  const acquisition = page.locator('details.acquisition');
+  await acquisition.locator(':scope > summary').click();
+  const acquisitionContext = acquisition.getByLabel('Acquisition evidence context');
+  await expect(acquisitionContext).toContainText('exampleshop-login.example · Fictional example');
+  await expect(acquisitionContext).toContainText('Time unavailable');
+  await expect(acquisitionContext.locator('time')).toHaveCount(0);
+  await acquisition.locator('details.review-prompts > summary').click();
+  await acquisition.getByRole('button', { name: 'Mail dependencies unavailable Unavailable', exact: true }).click();
+  await expect(acquisition.getByRole('article', { name: 'Mail dependencies unavailable', exact: true })).toBeFocused();
+  await expect(acquisition.getByLabel('Current decision')).toHaveValue('unresolved');
+
   await monitorHandoff.click();
   await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeFocused();
   await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeVisible();

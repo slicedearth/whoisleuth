@@ -2,8 +2,10 @@
   import { onDestroy } from 'svelte';
   import { createAcquisitionReviewWorkspace } from '#lib/controllers/acquisition-review-workspace.ts';
   import { downloadLocalFile } from '#lib/download-local-file.ts';
+  import EvidenceTimestamp from '#lib/components/EvidenceTimestamp.svelte';
   import type {
     AcquisitionDueDiligence,
+    AcquisitionReviewItem,
     AcquisitionReviewState,
   } from '#lib/analysis/acquisition-due-diligence.ts';
   import {
@@ -19,6 +21,11 @@
     observedAt: string | null;
     synthetic?: boolean;
   } = $props();
+  const id = $props.id();
+  let acquisition: HTMLDetailsElement | undefined;
+  const reviewPrompts = $derived([
+    ...review.items, ...review.transitionDependencies, ...review.policyChecks,
+  ].filter(item => item.state === 'review' || item.state === 'unavailable'));
   let decision = $state<AcquisitionDecision>('unresolved');
   let rationale = $state('');
   let reviewedChecks = $state<AcquisitionManualCheck[]>([]);
@@ -49,6 +56,13 @@
       review: 'Review',
       unavailable: 'Unavailable',
     }[state];
+  }
+
+  function focusEvidence(item: AcquisitionReviewItem): void {
+    const card = acquisition?.querySelector<HTMLElement>(`[data-acquisition-item="${item.id}"]`);
+    if (!card) return;
+    card.scrollIntoView({ block: 'center' });
+    card.focus({ preventScroll: true });
   }
 
   function toggleCheck(check: AcquisitionManualCheck, selected: boolean): void {
@@ -87,7 +101,7 @@
   }
 </script>
 
-<details class="acquisition card">
+<details class="acquisition card" bind:this={acquisition}>
   <summary>
     <span>Acquisition due diligence</span>
     <span class:attention={review.items.some((item) => item.state === 'review' || item.state === 'unavailable')}>
@@ -96,48 +110,64 @@
   </summary>
   <div class="body">
     <p class="intro">Organise existing registration, lifecycle, service, and contact evidence before a manual acquisition decision. No additional lookup or valuation is performed.</p>
-    <div class="review-grid">
-      {#each review.items as item}
-        <article class:attention={item.state === 'review'} class:unavailable={item.state === 'unavailable'}>
-          <header><span>{item.label}</span><strong>{stateLabel(item.state)}</strong></header>
-          <p>{item.detail}</p>
-          <small>{item.provenance}</small>
-        </article>
-      {/each}
-    </div>
-    <section class="transition-section" aria-labelledby="acquisition-transition-title">
-      <h5 id="acquisition-transition-title">Transition dependency map</h5>
+    <dl class="observation-context" aria-label="Acquisition evidence context">
+      <div><dt>Target</dt><dd>{target}{synthetic ? ' · Fictional example' : ''}</dd></div>
+      <div><dt>Lookup observation</dt><dd><EvidenceTimestamp value={observedAt} label="Lookup observation time" /></dd></div>
+    </dl>
+    <details class="review-prompts">
+      <summary>Review prompts ({reviewPrompts.length})</summary>
+      <p>Missing evidence and manual policy checks from the sections below. Choose a prompt to read its source context.</p>
+      <ul>
+        {#each reviewPrompts as item}
+          <li><button type="button" onclick={() => focusEvidence(item)}><span>{item.label}</span><small>{stateLabel(item.state)}</small></button></li>
+        {/each}
+      </ul>
+    </details>
+    <section class="transition-section" aria-labelledby={`${id}-evidence-title`}>
+      <h5 id={`${id}-evidence-title`}>Registration and contact evidence</h5>
+      <div class="review-grid">
+        {#each review.items as item}
+          <article data-acquisition-item={item.id} tabindex="-1" aria-labelledby={`${id}-${item.id}`} class:attention={item.state === 'review'} class:unavailable={item.state === 'unavailable'}>
+            <header><span id={`${id}-${item.id}`}>{item.label}</span><strong>{stateLabel(item.state)}</strong></header>
+            <p>{item.detail}</p>
+            <small>{item.provenance}</small>
+          </article>
+        {/each}
+      </div>
+    </section>
+    <section class="transition-section" aria-labelledby={`${id}-transition-title`}>
+      <h5 id={`${id}-transition-title`}>Transition dependency map</h5>
       <p>Plan continuity from the services observed in this capture. Unavailable evidence remains an open question.</p>
       <div class="review-grid">
         {#each review.transitionDependencies as item}
-          <article class:attention={item.state === 'review'} class:unavailable={item.state === 'unavailable'}>
-            <header><span>{item.label}</span><strong>{stateLabel(item.state)}</strong></header>
+          <article data-acquisition-item={item.id} tabindex="-1" aria-labelledby={`${id}-${item.id}`} class:attention={item.state === 'review'} class:unavailable={item.state === 'unavailable'}>
+            <header><span id={`${id}-${item.id}`}>{item.label}</span><strong>{stateLabel(item.state)}</strong></header>
             <p>{item.detail}</p>
             <small>{item.provenance}</small>
           </article>
         {/each}
       </div>
     </section>
-    <section class="transition-section" aria-labelledby="acquisition-policy-title">
-      <h5 id="acquisition-policy-title">Registry and registrar policy checks</h5>
+    <section class="transition-section" aria-labelledby={`${id}-policy-title`}>
+      <h5 id={`${id}-policy-title`}>Registry and registrar policy checks</h5>
       <p>These are manual confirmation prompts, not policy claims derived by WHOISleuth.</p>
       <div class="review-grid">
         {#each review.policyChecks as item}
-          <article class:attention={item.state === 'review'} class:unavailable={item.state === 'unavailable'}>
-            <header><span>{item.label}</span><strong>{stateLabel(item.state)}</strong></header>
+          <article data-acquisition-item={item.id} tabindex="-1" aria-labelledby={`${id}-${item.id}`} class:attention={item.state === 'review'} class:unavailable={item.state === 'unavailable'}>
+            <header><span id={`${id}-${item.id}`}>{item.label}</span><strong>{stateLabel(item.state)}</strong></header>
             <p>{item.detail}</p>
             <small>{item.provenance}</small>
           </article>
         {/each}
       </div>
     </section>
-    <section class="next-steps" aria-labelledby="acquisition-next-steps-title">
-      <h5 id="acquisition-next-steps-title">Manual decision checklist</h5>
+    <section class="next-steps" aria-labelledby={`${id}-next-steps-title`}>
+      <h5 id={`${id}-next-steps-title`}>Manual decision checklist</h5>
       <ol>{#each review.nextSteps as step}<li>{step}</li>{/each}</ol>
     </section>
-    <section class="decision-workspace" aria-labelledby="acquisition-decision-title">
+    <section class="decision-workspace" aria-labelledby={`${id}-decision-title`}>
       <div>
-        <h5 id="acquisition-decision-title">Analyst decision workspace</h5>
+        <h5 id={`${id}-decision-title`}>Analyst decision workspace</h5>
         <p>Record a bounded local review artefact. This does not reserve, value, purchase, submit, or transfer the domain.{synthetic ? ' The download remains explicitly marked as synthetic.' : ''}</p>
       </div>
       <label class="field">Current decision
@@ -190,14 +220,24 @@
   .acquisition>summary:focus-visible,.limits>summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
   .acquisition>summary span:last-child{color:var(--muted);font-size:var(--text-2xs);text-align:right}
   .acquisition>summary span.attention{color:var(--amber)}
-  .body{display:grid;gap:11px;padding:0 var(--card-pad) var(--card-pad);border-top:1px solid var(--border)}
+  .body{display:grid;grid-template-columns:minmax(0,1fr);min-width:0;gap:11px;padding:0 var(--card-pad) var(--card-pad);border-top:1px solid var(--border)}
   .intro{max-width:820px;margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .observation-context{display:flex;flex-wrap:wrap;gap:10px 28px;margin:0;font-size:var(--text-xs)}
+  .observation-context>div{min-width:0}.observation-context dt{color:var(--muted)}
+  .observation-context dd{margin:3px 0 0;overflow-wrap:anywhere}
+  .review-prompts{min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm)}
+  .review-prompts>summary{font-weight:650;cursor:pointer}.review-prompts>summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+  .review-prompts>p{margin:8px 0;color:var(--muted);font-size:var(--text-xs)}
+  .review-prompts ul{display:grid;gap:4px;list-style:none;margin:0;padding:0}
+  .review-prompts button{display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;padding:8px;text-align:start;white-space:normal;font-size:var(--text-xs);color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer}
+  .review-prompts button span{min-width:0;overflow-wrap:anywhere}.review-prompts button small{flex-shrink:0;color:var(--muted)}
+  .review-prompts button:focus-visible,article:focus{outline:2px solid var(--focus);outline-offset:3px}
   .review-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   article{min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   article.attention{border-color:color-mix(in srgb,var(--amber) 38%,var(--border))}
   article.unavailable{border-style:dashed}
-  article header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
-  article header span{font-weight:700;font-size:var(--text-xs)}
+  article header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px}
+  article header span{min-width:0;overflow-wrap:anywhere;font-weight:700;font-size:var(--text-xs)}
   article header strong{flex:0 0 auto;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   article.attention header strong{color:var(--amber)}
   article p{margin:6px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
@@ -205,14 +245,15 @@
   .next-steps{padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .next-steps h5,.transition-section h5{margin:0;font:700 var(--text-xs) var(--mono)}
   .next-steps ol,.limits ul{margin:8px 0 0;padding-left:20px;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
-  .transition-section{display:grid;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .transition-section{display:grid;grid-template-columns:minmax(0,1fr);min-width:0;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .transition-section>p{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
-  .decision-workspace{display:grid;gap:10px;padding:11px;border:1px solid color-mix(in srgb,var(--accent2) 35%,var(--border));border-radius:var(--radius-sm);background:var(--panel)}
+  .decision-workspace{display:grid;grid-template-columns:minmax(0,1fr);min-width:0;gap:10px;padding:11px;border:1px solid color-mix(in srgb,var(--accent2) 35%,var(--border));border-radius:var(--radius-sm);background:var(--panel)}
   .decision-workspace h5{margin:0;font:700 var(--text-xs) var(--mono)}
   .decision-workspace>div>p,.export-status{margin:4px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .decision-workspace .field{display:grid;gap:5px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   .decision-workspace select,.decision-workspace textarea{width:100%}
-  .decision-workspace fieldset{display:grid;gap:7px;margin:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm)}
+  .decision-workspace input[type="file"]{display:block;max-width:100%;margin-top:5px}
+  .decision-workspace fieldset{display:grid;min-width:0;gap:7px;margin:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm)}
   .decision-workspace legend{padding:0 5px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   .check{display:flex;align-items:flex-start;gap:8px;color:var(--text);font-size:var(--text-xs);line-height:1.4}
   .check input{margin-top:2px}

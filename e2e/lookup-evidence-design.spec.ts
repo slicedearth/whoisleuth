@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures';
 import { boundingBox, expectNoHorizontalOverflow } from './helpers';
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
+import AxeBuilder from '@axe-core/playwright';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
 import { createHash } from 'node:crypto';
 import { canonicalArtifactJsonV2 } from '../packages/evidence/artifact-integrity.mts';
@@ -516,10 +517,67 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(acquisitionReview).toContainText('Transfer or update constraints observed');
   await expect(acquisitionReview).toContainText(/published escalation route/iu);
   await expect(acquisitionReview).toContainText('does not value a domain');
+  const acquisitionContext = acquisitionReview.getByLabel('Acquisition evidence context');
+  await expect(acquisitionContext).toContainText('sectioned-result.invalid');
+  await expect(acquisitionContext.locator('time')).toHaveAttribute('datetime', reviewedAt.toISOString());
   const acquisitionDecision = acquisitionReview.getByRole('region', { name: 'Analyst decision workspace' });
   await acquisitionDecision.getByLabel('Current decision').selectOption('continue_manual_review');
   await acquisitionDecision.getByLabel('Registry eligibility and current availability checked').check();
   await acquisitionDecision.getByLabel('Rationale or unresolved questions').fill('Continue manual checks with the current evidence limitations.');
+  const beforeAcquisitionNavigation = await page.evaluate(() => ({
+    hash: window.location.hash,
+    localStorage: Object.fromEntries(Object.entries(localStorage)),
+    sessionStorage: Object.fromEntries(Object.entries(sessionStorage)),
+  }));
+  const acquisitionPrompts = acquisitionReview.locator('details.review-prompts');
+  await expect(acquisitionPrompts).not.toHaveAttribute('open', '');
+  await acquisitionPrompts.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(acquisitionPrompts).toHaveAttribute('open', '');
+  const transferPrompt = acquisitionPrompts.getByRole('button', { name: 'Confirm observed transfer constraints Review', exact: true });
+  await transferPrompt.focus();
+  await page.keyboard.press('Enter');
+  await expect(acquisitionReview.getByRole('article', { name: 'Confirm observed transfer constraints', exact: true })).toBeFocused();
+  const promptLabels = await acquisitionPrompts.locator('button > span').allTextContents();
+  expect(promptLabels.length).toBeGreaterThan(0);
+  for (const label of promptLabels) {
+    await acquisitionPrompts.getByRole('button').filter({ has: page.getByText(label, { exact: true }) }).click();
+    await expect(acquisitionReview.getByRole('article', { name: label, exact: true })).toBeFocused();
+  }
+  await expect(acquisitionDecision.getByLabel('Current decision')).toHaveValue('continue_manual_review');
+  await expect(acquisitionDecision.getByLabel('Registry eligibility and current availability checked')).toBeChecked();
+  await expect(acquisitionDecision.getByLabel('Rationale or unresolved questions')).toHaveValue('Continue manual checks with the current evidence limitations.');
+  expect(await page.evaluate(() => ({
+    hash: window.location.hash,
+    localStorage: Object.fromEntries(Object.entries(localStorage)),
+    sessionStorage: Object.fromEntries(Object.entries(sessionStorage)),
+  }))).toEqual(beforeAcquisitionNavigation);
+  expect(lookupRequests).toHaveLength(1);
+  const acquisitionViewport = page.viewportSize();
+  const acquisitionTheme = await page.evaluate(() => document.documentElement.dataset.theme);
+  for (const theme of ['light', 'dark']) for (const width of [320, 390, 1280, 2560]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+    await expectNoHorizontalOverflow(page);
+    await acquisitionContext.scrollIntoViewIfNeeded();
+    if (captureVisualEvidenceEnabled() && [320, 1280].includes(width)) {
+      await page.screenshot({ path: testInfo.outputPath(`acquisition-${theme}-${width}.png`) });
+      if (width === 320) {
+        await acquisitionDecision.getByLabel('Reopen acquisition review (JSON, up to 15 MiB)').scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath(`acquisition-form-${theme}-${width}.png`) });
+      }
+    }
+    const acquisitionGeometry = await acquisitionReview.evaluate(element => ({ width: element.clientWidth, contentWidth: element.scrollWidth }));
+    expect(acquisitionGeometry.contentWidth, `${theme} acquisition panel at ${width}px`).toBeLessThanOrEqual(acquisitionGeometry.width + 1);
+  }
+  const acquisitionAccessibility = await new AxeBuilder({ page }).include('details.acquisition')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
+  expect(acquisitionAccessibility.violations).toEqual([]);
+  if (acquisitionViewport) await page.setViewportSize(acquisitionViewport);
+  await page.evaluate(theme => {
+    if (theme === undefined) delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = theme;
+  }, acquisitionTheme);
   const acquisitionDownload = page.waitForEvent('download');
   await acquisitionDecision.getByRole('button', { name: 'Download acquisition review' }).click();
   const originalDownload = await acquisitionDownload;

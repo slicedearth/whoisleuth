@@ -1199,6 +1199,16 @@ identity or target safety.
 
 ## Understanding evidence
 
+### Reviewing an acquisition
+
+**Acquisition due diligence** shows the target and the Lookup observation time
+alongside registration/contact evidence, transition dependencies and manual
+policy checks. Open **Review prompts** to jump to an area with missing evidence
+or a manual check; its full source context remains beside the observation.
+These shortcuts do not change your decision, complete a check or make a request.
+Use the decision workspace to record the checks you have performed and any
+remaining questions. The same presentation in the Demo stays fictional.
+
 ### Reopening an acquisition decision
 
 In Lookup's **Acquisition due diligence → Analyst decision workspace**, select
