@@ -241,6 +241,20 @@ test('domain-history declarations remain qualified and an empty Case does not cl
         await declarations.screenshot({ path: testInfo.outputPath(`retirement-declarations-${theme}-${width}.png`) });
       }
     }
+    // Re-enter the declaration using the keyboard before auditing its controls.
+    // Optional screenshots must not determine the accessibility scan position.
+    const removal = review.getByRole('button', { name: 'Remove dependency 1', exact: true });
+    await review.getByText('Declare a registration-lifecycle review boundary', { exact: true }).focus();
+    await page.keyboard.press('Shift+Tab');
+    await expect(removal).toBeFocused(); await expect(removal).toBeInViewport({ ratio: 1 });
+    const caseSections = page.getByRole('navigation', { name: 'Case sections', exact: true });
+    await expect(caseSections).toBeVisible();
+    await expect.poll(async () => {
+      const [control, navigation] = await Promise.all([removal.boundingBox(), caseSections.boundingBox()]);
+      if (!control || !navigation) throw new Error('Case control geometry is unavailable.');
+      return control.y - (navigation.y + navigation.height);
+    }).toBeGreaterThanOrEqual(0);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`retirement-focused-${theme}.png`) });
     expect((await new AxeBuilder({ page }).include('.context-entry').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
   }
 });
@@ -280,7 +294,8 @@ test('incident sequence keeps source provenance, unknown times and chosen order 
         await expect(control).toBeFocused();
         await expect.poll(async () => {
           const box = await control.boundingBox(), nav = await navigation.boundingBox();
-          return Boolean(box && nav && box.height >= 24 && box.y >= nav.y + nav.height && box.y + box.height <= 900);
+          // Native scrolling uses whole CSS pixels; layout edges can be fractional.
+          return Boolean(box && nav && box.height >= 24 && box.y >= nav.y + nav.height && Math.round(box.y + box.height) <= 900);
         }).toBe(true);
       }
     }
