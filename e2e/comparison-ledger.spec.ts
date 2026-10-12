@@ -4,7 +4,9 @@ import { test, expect } from './fixtures';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
+import { comparisonLedgerCasePairIndexId } from '../frontend/src/lib/analysis/comparison-ledger.ts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import type { CaseRecord } from '../packages/cases/case-record-contracts.mts';
 import type { WebsiteProfileSnapshot, WebsiteSnapshotTechnology } from '../packages/workspace/website-snapshot-model.mts';
 import {
   TECHNOLOGY_PROFILE_VERSION,
@@ -482,4 +484,75 @@ test('shows exact saved website observations and distinct clocks without recolle
   expect(retainedAfter.records).toEqual(retainedBefore.records);
   expect(retainedAfter.manifest.revision).toBe(retainedBefore.manifest.revision);
   expect(lookupRequests).toBe(1);
+});
+
+test('selects two or three exact Case checkpoints without saving a timeline or substituting endpoints', async ({ page }, testInfo) => {
+  const requests = unexpectedApiRequests(page);
+  const fixture = multiIntervalCaseFixture();
+  fixture['whois-rdap-cases-v1'].cases.push(caseRecord({ id: 'other-checkpoint-case', domain: 'other-checkpoint.example',
+    evidenceHistory: [snapshot({ id: 'other-a', capturedAt: EARLIER, registrar: 'Other A' }), snapshot({ id: 'other-b', capturedAt: LATER, registrar: 'Other B' })],
+  }));
+  const review = await openRetainedReview(page, fixture);
+  const retainedBefore = await readBrowserLocalCollection(page, 'cases');
+  const retainedHistory = retainedBefore.records.find(item => item.value.id === 'ledger-interval-case')!.value.evidenceHistory as CaseRecord['evidenceHistory'];
+  expect(retainedHistory).toHaveLength(3);
+  const earlierId = retainedHistory.find(item => item.capturedAt === EARLIER)!.id;
+  const middleId = retainedHistory.find(item => item.capturedAt === MIDDLE)!.id;
+  const laterId = retainedHistory.find(item => item.capturedAt === LATER)!.id;
+  expect(new Set([earlierId, middleId, laterId]).size).toBe(3);
+  await review.getByText('Choose Case checkpoints', { exact: true }).click();
+  const stage = review.getByRole('region', { name: 'Case checkpoint stage' });
+  await stage.getByLabel('Case for checkpoint review').selectOption('ledger-interval-case');
+  const first = stage.getByRole('checkbox', { name: new RegExp(earlierId, 'u') });
+  const middle = stage.getByRole('checkbox', { name: new RegExp(middleId, 'u') });
+  const last = stage.getByRole('checkbox', { name: new RegExp(laterId, 'u') });
+  await expect(first).toBeVisible();
+  await first.focus(); await first.press('Space'); await expect(first).toBeChecked();
+  await last.check();
+  const intervals = stage.getByLabel('Interval to inspect');
+  await expect(intervals.locator('option')).toHaveCount(2);
+  await intervals.selectOption(comparisonLedgerCasePairIndexId('ledger-interval-case', earlierId, laterId));
+  await expect(stage.getByRole('region', { name: 'Earlier selected checkpoint' })).toContainText(earlierId);
+  await expect(stage.getByRole('region', { name: 'Later selected checkpoint' })).toContainText(laterId);
+  const registrar = stage.locator('.ledger-table tbody', { hasText: 'Registrar' });
+  await registrar.getByRole('button', { name: /^Inspect exact values/u }).click();
+  await expect(registrar.getByText('Registrar A', { exact: true })).toBeVisible();
+  await expect(registrar.getByText('Registrar C', { exact: true })).toBeVisible();
+  await expect(registrar.getByText('Registrar B', { exact: true })).toHaveCount(0);
+  await middle.check();
+  await expect(stage.getByRole('heading', { name: 'Selected checkpoint interval' })).toHaveCount(0);
+  await expect(intervals.locator('option')).toHaveCount(4);
+  await intervals.focus(); await expect(intervals).toBeFocused();
+  await intervals.selectOption(comparisonLedgerCasePairIndexId('ledger-interval-case', middleId, laterId));
+  await expect(stage.getByRole('region', { name: 'Earlier selected checkpoint' })).toContainText(middleId);
+  await expect(stage.getByRole('region', { name: 'Later selected checkpoint' })).toContainText(laterId);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      await stage.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`checkpoint-stage-${theme}-${width}.png`) });
+    }
+  }
+  await stage.getByLabel('Case for checkpoint review').selectOption('other-checkpoint-case');
+  await expect(stage.getByRole('checkbox', { checked: true })).toHaveCount(0);
+  await expect(stage.getByLabel('Interval to inspect')).toHaveCount(0);
+  await expect(stage.getByRole('heading', { name: 'Selected checkpoint interval' })).toHaveCount(0);
+  await stage.getByRole('button', { name: 'Clear stage' }).click();
+  await expect(stage.getByLabel('Case for checkpoint review')).toHaveValue('');
+  const retainedAfter = await readBrowserLocalCollection(page, 'cases');
+  expect(retainedAfter.records).toEqual(retainedBefore.records);
+  expect(retainedAfter.manifest.revision).toBe(retainedBefore.manifest.revision);
+  await stage.getByLabel('Case for checkpoint review').selectOption('ledger-interval-case');
+  await first.check(); await last.check();
+  await intervals.selectOption(comparisonLedgerCasePairIndexId('ledger-interval-case', earlierId, laterId));
+  await expect(stage.getByRole('heading', { name: 'Selected checkpoint interval' })).toBeVisible();
+  await page.goto('/resources'); await page.goBack();
+  const disclosure = page.getByText('Choose Case checkpoints', { exact: true }).locator('..');
+  if (await disclosure.getAttribute('open') === null) await disclosure.locator(':scope > summary').click();
+  await expect(page.getByLabel('Case for checkpoint review')).toBeVisible();
+  await expect(page.getByLabel('Case for checkpoint review')).toHaveValue('');
+  expect(requests).toEqual([]);
 });

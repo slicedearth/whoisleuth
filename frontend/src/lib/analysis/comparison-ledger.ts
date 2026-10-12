@@ -50,6 +50,7 @@ export type {
   ExplicitBulkSessionPair,
 } from './comparison-ledger-contract.ts';
 export { comparisonLedgerBulkPairIndexId } from './comparison-ledger-bulk.ts';
+export { comparisonLedgerCasePairIndexId } from './comparison-ledger-case.ts';
 
 type CandidateBuild = Readonly<{
   candidates: readonly ComparisonLedgerCandidate[];
@@ -69,7 +70,7 @@ function candidateOrder(left: ComparisonLedgerCandidate, right: ComparisonLedger
 function buildCandidates(input: ComparisonLedgerInput): CandidateBuild {
   const counters = freshComparisonLedgerCounters();
   const candidates = [
-    ...buildCaseComparisonCandidates(input.cases, counters),
+    ...buildCaseComparisonCandidates(input.cases, counters, input.casePairs),
     ...buildWebsiteComparisonCandidates(input.websiteSnapshots, counters),
     ...buildWatchlistComparisonCandidates(input.watchlists, counters),
     ...buildBulkComparisonCandidates(input.bulkSessions, input.bulkPairs, counters),

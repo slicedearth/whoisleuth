@@ -643,6 +643,14 @@ across saved snapshots. Results are paginated, with a page-number control and
 all admitted domains retained in each group. Similarity uses complete,
 compatible saved fields; source limits remain separate from pagination.
 
+In **Timeline**, open **Choose Case checkpoints** in the retained change review
+to select two or three exact snapshots from one Case. Then choose the interval
+to inspect, including nonadjacent snapshots. Only the two selected endpoints
+are compared; no state or transition between them is inferred. Equal or unknown
+times cannot establish a chronological direction. Field-specific collection,
+hostname and model-version qualifications still apply. These selections are
+temporary, clear on leaving the page, and do not save or collect evidence.
+
 ### Cases and response preparation
 
 Open **Cases** from the Respond navigation. Older Monitor Case links still work.

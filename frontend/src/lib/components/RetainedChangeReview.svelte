@@ -2,6 +2,7 @@
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import ComparisonLedgerRows from '#lib/components/ComparisonLedgerRows.svelte';
   import ComparisonFrame from '#lib/components/ComparisonFrame.svelte';
+  import CaseCheckpointStage from '#lib/components/CaseCheckpointStage.svelte';
   import {
     buildComparisonLedgerDetails,
     buildComparisonLedgerIndex,
@@ -121,6 +122,9 @@
   <p>
     Compare adjacent case snapshots, website profiles, retained watchlist changes or one selected saved Bulk pair. Exact values load only for the selected record.
   </p>
+  {#if cases.some(record => record.evidenceHistory.length >= 2)}
+    <details class="checkpoint-disclosure"><summary>Choose Case checkpoints</summary><CaseCheckpointStage {cases} /></details>
+  {/if}
 
   {#if orderedBulkSessions.length >= 2}
     <fieldset class="bulk-pair-controls">
@@ -210,6 +214,7 @@
 
 <style>
   .change-review{margin-top:16px}
+  .checkpoint-disclosure{margin:14px 0}
   .section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .section-head h2,.selected-comparison h3{margin:2px 0 0}
   .bounded-count{flex:0 0 auto;padding:5px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:var(--text-xs)}
