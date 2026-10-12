@@ -600,6 +600,12 @@ Watchlists, Timeline, Certificates and Custom rules. Case reporting, decision
 summaries and the follow-up calendar are under **Case reports and follow-up
 tools** when Cases are retained.
 
+**Waiting on** shows current evidence requests, provider follow-ups, reviewed
+times and analyst decisions, with reasons and a link to the underlying record.
+It overlaps the action queues: waiting for evidence does not remove an item
+from **Needs action**. Only recorded deadlines are shown; preparing evidence is
+not delivery, and a provider reply is not an independent observation.
+
 Each view names the saved records it is opening. Counts remain unavailable until
 the required records are readable; an unsuccessful read is not an empty result.
 If a collection is unavailable, reload to retry the read. Other readable

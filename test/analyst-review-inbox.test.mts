@@ -3,6 +3,8 @@ import { describe, test } from 'node:test';
 import {
   analystReviewQueue,
   analystReviewQueueMembership,
+  analystReviewWaitingReasons,
+  analystReviewMatchesQueue,
   compareAnalystReviewAdmission,
   buildAnalystReviewInbox,
   filterAnalystReviewItems,
@@ -224,6 +226,85 @@ describe('analyst review inbox', () => {
       assert.match(membership.reason, entry.reason);
     }
     assert.equal(analystReviewQueueMembership({ ...item, dueAt: '2026-07-29T00:00:00.000Z' }, 'unavailable').queue, 'needs_action');
+  });
+
+  test('waiting dependencies overlap action queues without inventing a date or changing records', () => {
+    const record = caseRecord();
+    const action = record.actions[0]!;
+    action.dueAt = null;
+    action.followUpAt = null;
+    const before = structuredClone(record);
+    const inbox = buildAnalystReviewInbox({ cases: [record] }, NOW);
+    for (const item of inbox.items) {
+      assert.equal(analystReviewMatchesQueue(item, 'waiting', NOW), true);
+      assert.equal(analystReviewMatchesQueue(item, 'needs_action', NOW), true);
+      assert.deepEqual(analystReviewWaitingReasons(item, NOW).map(reason => reason.kind), ['analyst']);
+      assert.equal(item.dueAt, null);
+      assert.match(item.href, /^\/cases\?case=case-one&section=(assessment|response)$/u);
+    }
+    assert.deepEqual(record, before);
+    const item = inbox.items[0]!;
+    const resolved = { ...item, lifecycle: { ...item.lifecycle, state: 'resolved' as const } };
+    assert.deepEqual(analystReviewWaitingReasons(resolved, NOW), []);
+    assert.equal(analystReviewMatchesQueue(resolved, 'waiting', NOW), false);
+    const changed = { ...resolved, lifecycle: { ...resolved.lifecycle, invalidated: true, reason: 'The retained evidence changed.' } };
+    assert.equal(analystReviewMatchesQueue(changed, 'changed', NOW), true);
+    assert.ok(analystReviewWaitingReasons(changed, NOW).some(reason => reason.reason === 'The retained evidence changed.'));
+  });
+
+  test('waiting reasons distinguish provider review, missing evidence and prepared but undelivered branches', () => {
+    const record = caseRecord();
+    const action = record.actions[0]!;
+    action.state = 'acknowledged'; action.dueAt = null; action.followUpAt = null;
+    const item = () => buildAnalystReviewInbox({ cases: [record] }, NOW).items.find(value => value.kind === 'case_action')!;
+    for (const outcome of [null, 'accepted_for_review', 'no_response'] as const) {
+      action.providerOutcome = outcome;
+      assert.deepEqual(analystReviewWaitingReasons(item(), NOW).map(reason => reason.kind), ['provider']);
+    }
+    for (const outcome of ['more_information_requested', 'referred_elsewhere', 'rejected_outside_policy_scope', 'partially_remediated', 'provider_reports_resolved'] as const) {
+      action.providerOutcome = outcome;
+      assert.deepEqual(analystReviewWaitingReasons(item(), NOW).map(reason => reason.kind), ['analyst']);
+    }
+    action.providerOutcome = 'more_information_requested';
+    const request = { ...action.history[1]!, id: 'request', previousState: 'submitted' as const, nextState: 'acknowledged' as const,
+      sourceClass: 'provider' as const, providerOutcome: 'more_information_requested' as const,
+      evidenceRequest: { id: 'need-page', packetDigestSha256: 'a'.repeat(64), summary: 'Supply the retained page observation',
+        dueAt: null, state: 'requested' as const, evidencePinIds: [], rationale: '', previousEventIds: [] } };
+    action.history.push(request);
+    const pending = item();
+    assert.equal(pending.dueAt, null);
+    assert.deepEqual(pending.waitingOn, [{ kind: 'evidence', reason: 'Evidence requested: Supply the retained page observation' }]);
+    action.history.push({ ...request, id: 'prepared', sourceClass: 'analyst', evidenceRequest: {
+      ...request.evidenceRequest, state: 'prepared', evidencePinIds: ['retained-pin'], previousEventIds: ['request'],
+    } });
+    const prepared = item();
+    assert.match(prepared.waitingOn![0]!.reason, /^Prepared; delivery not recorded:/u);
+    assert.notEqual(prepared.materialFingerprint, pending.materialFingerprint);
+    action.history.push({ ...request, id: 'unavailable', sourceClass: 'analyst', evidenceRequest: {
+      ...request.evidenceRequest, state: 'unavailable', rationale: 'Original bytes unavailable', previousEventIds: ['request'],
+    } });
+    assert.equal(item().waitingOn!.length, 2, 'concurrent branches remain separate');
+    assert.ok(item().waitingOn!.every(reason => reason.reason.startsWith('Concurrent preparations need review:')));
+    action.history.push({ ...request, id: 'reconciled', sourceClass: 'analyst', evidenceRequest: {
+      ...request.evidenceRequest, state: 'unavailable', rationale: 'Original bytes unavailable', previousEventIds: ['prepared', 'unavailable'],
+    } });
+    assert.match(item().waitingOn![0]!.reason, /^Cannot provide; response needs review:/u);
+    action.state = 'terminal';
+    assert.equal(buildAnalystReviewInbox({ cases: [record] }, NOW).items.some(value => value.kind === 'case_action'), false);
+  });
+
+  test('waiting time uses the earliest recorded obligation and never hides an overdue action behind a future follow-up', () => {
+    const record = caseRecord();
+    record.actions[0]!.followUpAt = '2026-07-29T08:00:00.000Z';
+    const item = buildAnalystReviewInbox({ cases: [record] }, NOW).items.find(value => value.kind === 'case_action')!;
+    assert.equal(item.dueAt, '2026-07-27T08:00:00.000Z');
+    assert.equal(item.priority, 'urgent');
+    assert.equal(analystReviewMatchesQueue(item, 'needs_action', NOW), true);
+    assert.equal(analystReviewWaitingReasons(item, NOW).some(reason => reason.kind === 'time'), false);
+    const future = { ...item, dueAt: '2026-07-29T08:00:00.000Z' };
+    assert.equal(analystReviewWaitingReasons(future, NOW).some(reason => reason.kind === 'time'), true);
+    assert.equal(analystReviewWaitingReasons(future, 'unknown').some(reason => reason.kind === 'time'), false);
+    assert.equal(analystReviewWaitingReasons(future, future.dueAt).some(reason => reason.kind === 'time'), false);
   });
 
   test('links a watchlist change directly to one matching Case but not an ambiguous set', () => {

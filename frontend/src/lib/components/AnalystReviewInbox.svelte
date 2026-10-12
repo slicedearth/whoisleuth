@@ -17,7 +17,7 @@
     ANALYST_REVIEW_EVIDENCE_FAMILIES,
     ANALYST_REVIEW_KINDS,
     ANALYST_REVIEW_QUEUE_OPTIONS,
-    analystReviewQueue,
+    analystReviewMatchesQueue,
     filterAnalystReviewItems,
     type AnalystReviewAge,
     type AnalystReviewDismissalReason,
@@ -71,12 +71,12 @@
   const evidenceFamilyOptions = $derived([...new Set(inbox.items.map((item) => item.evidenceFamily))].sort());
   const queueCounts = $derived(Object.fromEntries(ANALYST_REVIEW_QUEUE_OPTIONS.map((option) => [
     option.value,
-    option.value === 'all' ? scopedItems.length : scopedItems.filter((item) => analystReviewQueue(item, now) === option.value).length,
+    scopedItems.filter((item) => analystReviewMatchesQueue(item, option.value, now)).length,
   ])) as Record<AnalystReviewQueue, number>);
   const filteredByQueue = $derived(scopedItems.filter((item) => {
     if (selectedSubjectKey) return item.subjectKey === selectedSubjectKey;
     if (attentionOnly) return analystReviewNeedsAttention(item.lifecycle);
-    if (queue !== 'all' && analystReviewQueue(item, now) !== queue) return false;
+    if (!analystReviewMatchesQueue(item, queue, now)) return false;
     return !kindFilter || item.kind === kindFilter;
   }));
   const filtered = $derived(selectedSubjectKey ? filteredByQueue : filterAnalystReviewItems(filteredByQueue, {
@@ -239,6 +239,9 @@
       </button>
     {/each}
   </div>
+  {#if queue === 'waiting' && !attentionOnly}
+    <p class="notice">Current evidence, provider, review-time and decision dependencies. Items can also appear in Needs action.</p>
+  {/if}
   <details class="advanced-filters">
     <summary>Advanced filters</summary>
     <div class="detail-filters responsive-grid" role="group" aria-label="Advanced review filters">

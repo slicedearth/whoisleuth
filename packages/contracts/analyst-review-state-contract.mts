@@ -72,7 +72,7 @@ export type AnalystReviewLifecycleState = typeof ANALYST_REVIEW_LIFECYCLE_STATES
 
 export const ANALYST_REVIEW_QUEUE_OPTIONS = [
   { value: 'needs_action', label: 'Needs action' },
-  { value: 'waiting', label: 'Waiting / follow-up' },
+  { value: 'waiting', label: 'Waiting on' },
   { value: 'changed', label: 'Changed since review' },
   { value: 'reviewed', label: 'Reviewed' },
   { value: 'all', label: 'Everything' },
@@ -110,6 +110,11 @@ export type AnalystReviewItem = Readonly<{
   caseId: string | null;
   campaignIds: readonly string[];
   dismissalTarget: string | null;
+  /** Current source-derived dependencies, never persisted as review decisions. */
+  waitingOn?: readonly Readonly<{
+    kind: 'evidence' | 'provider' | 'analyst';
+    reason: string;
+  }>[];
 }>;
 
 export type AnalystReviewDecisionSnapshot = Readonly<{
