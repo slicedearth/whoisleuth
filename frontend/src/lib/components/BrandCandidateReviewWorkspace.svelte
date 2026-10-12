@@ -372,7 +372,7 @@
           {#if allGroups.length > groups.length}<p>Showing the first {groups.length} groups. Narrow the candidate filters to review other groups; every candidate remains reachable in the queue.</p>{/if}
           {#each groups as key (JSON.stringify([active.id, key]))}
             {@const contributors = visible.filter(row => row.matches.some(match => match.ruleKey === key))}
-            <BrandPatternGroup members={contributors} reason={contributors[0]?.matches.find(match => match.ruleKey === key)?.reason ?? 'Retained matching rule'} {inspected} oninspect={domain => inspected = domain} />
+            <BrandPatternGroup members={contributors} ruleKey={key} reason={contributors[0]?.matches.find(match => match.ruleKey === key)?.reason ?? 'Retained matching rule'} {inspected} oninspect={domain => inspected = domain} />
           {/each}
         </details>
       {/if}

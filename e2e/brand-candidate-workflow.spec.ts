@@ -83,6 +83,7 @@ test('candidate inspection preserves queue state and keeps inspected and submitt
   const candidates = [candidate, ...Array.from({ length: 29 }, (_, index) => ({
     ...candidate,
     domain: `sample-${String(index).padStart(2, '0')}.example`,
+    matches: index === 0 ? [...candidate.matches, { ...candidate.matches[0]!, ruleKey: 'keyword:alternate', reason: 'Alternate imported keyword nomination' }] : candidate.matches,
     sources: [{ ...candidate.sources[0]!, observedHostname: `login.sample-${String(index).padStart(2, '0')}.example` }],
   }))];
   const groupedProfile = normalizeBrandProfile({ ...profile, candidateObservations: candidates,
@@ -123,11 +124,18 @@ test('candidate inspection preserves queue state and keeps inspected and submitt
   await expect(workspace.getByLabel('Candidate search')).toHaveValue('sample-');
   await expect(workspace.getByLabel('Candidate order')).toHaveValue('domain');
   await expect(workspace.getByRole('navigation', { name: 'Candidate pages' })).toContainText('Page 2 of 2');
-  await workspace.getByText('Explainable pattern groups (1)', { exact: true }).click();
+  await workspace.getByText('Explainable pattern groups (2)', { exact: true }).click();
   await workspace.getByText('29 contributing domains · Exact imported keyword nomination', { exact: true }).click();
-  const contributors = workspace.getByRole('region', { name: 'Pattern group contributors' });
+  const contributors = workspace.getByRole('region', { name: 'Pattern group contributors for keyword:example', exact: true });
+  await expect(contributors).toContainText('Group rule: keyword:example');
   await expect(contributors.getByRole('button', { name: /^Inspect grouped / })).toHaveCount(25);
-  await expect(contributors.locator('li').filter({ hasText: 'sample-00.example' })).toContainText('Exact rule exception · active: Only this exact retained rule was reviewed.');
+  await expect(contributors.locator('li').filter({ hasText: 'sample-00.example' })).toContainText('Exact rule exception for keyword:example · active: Only this exact retained rule was reviewed.');
+  await expect(contributors.locator('li').filter({ hasText: 'sample-00.example' })).toContainText('Review status: new');
+  await workspace.getByText('1 contributing domain · Alternate imported keyword nomination', { exact: true }).click();
+  const alternate = workspace.getByRole('region', { name: 'Pattern group contributors for keyword:alternate', exact: true });
+  await expect(alternate).toContainText('Group rule: keyword:alternate');
+  await expect(alternate).toContainText('Exact rule exception for keyword:example · active: Only this exact retained rule was reviewed.');
+  await expect(alternate).toContainText('Review status: new');
   await contributors.getByRole('navigation', { name: 'Pattern contributor pages' }).getByRole('button', { name: 'Next', exact: true }).click();
   await expect(contributors.getByRole('button', { name: /^Inspect grouped / })).toHaveCount(4);
   await expect(contributors.locator('li').filter({ hasText: 'sample-28.example' })).toContainText('Exact official-domain declaration; not a safety verdict.');

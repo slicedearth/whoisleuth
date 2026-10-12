@@ -3,8 +3,9 @@
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import Pagination from './Pagination.svelte';
   type Row = ReturnType<typeof projectBrandCandidateReview>[number];
-  let { members, reason, inspected, oninspect }: {
+  let { members, ruleKey, reason, inspected, oninspect }: {
     members: readonly Row[];
+    ruleKey: string;
     reason: string;
     inspected: string | null;
     oninspect: (domain: string) => void;
@@ -16,9 +17,10 @@
 </script>
 
 <details ontoggle={event => expanded = event.currentTarget.open}>
-  <summary>{members.length} contributing domains · {reason}</summary>
+  <summary>{members.length} contributing {members.length === 1 ? 'domain' : 'domains'} · {reason}</summary>
   {#if expanded}
-    <section aria-label="Pattern group contributors">
+    <section aria-label={`Pattern group contributors for ${ruleKey}`}>
+      <p>Group rule: <code>{ruleKey}</code></p>
       <p>Showing {(currentPage - 1) * 25 + 1}–{Math.min(currentPage * 25, members.length)} of {members.length} domains in this filtered retained group.</p>
       <ul>
         {#each pageMembers as row (row.candidate.domain)}
@@ -28,7 +30,7 @@
               <p>Review status: {row.status.replaceAll('_', ' ')} · {row.lifecycle.reason}</p>
               {#if row.declaration}<p>Scoped declaration: {row.declaration}; not a safety verdict.</p>{/if}
               {#each row.exceptionStates as exception}
-                <p>Exact rule exception · {exception.state}: {exception.exception.reason} · expires {formatEvidenceDate(exception.exception.expiresAt)}.</p>
+                <p>Exact rule exception for <code>{exception.exception.ruleKey}</code> · {exception.state}: {exception.exception.reason} · expires {formatEvidenceDate(exception.exception.expiresAt)}.</p>
               {/each}
             </div>
             <button class="btn small" type="button" aria-label={`Inspect grouped ${row.candidate.domain}`} aria-pressed={inspected === row.candidate.domain} onclick={() => oninspect(row.candidate.domain)}>Inspect</button>
