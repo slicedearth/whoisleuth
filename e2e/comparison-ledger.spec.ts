@@ -2,7 +2,8 @@ import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-cont
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { caseRecord, snapshot } from './case-test-fixtures';
-import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
+import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
+import { sectionedLookupFixture } from './lookup-design-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import type { WebsiteProfileSnapshot, WebsiteSnapshotTechnology } from '../packages/workspace/website-snapshot-model.mts';
 import {
@@ -237,6 +238,14 @@ test('reviews retained case, website and watchlist changes without turning incom
   const review = await openRetainedReview(page, retainedFixture());
 
   await selectRetainedComparison(review, 'case-change.reservation.invalid · adjacent case snapshots');
+  for (const side of ['Earlier', 'Later']) {
+    const source = review.getByRole('region', { name: `${side} comparison source` });
+    await expect(source).toBeVisible();
+    await expect(source.getByText('Observed', { exact: true })).toBeVisible();
+    await expect(source.getByText('Published', { exact: true })).toBeVisible();
+    await expect(source.getByText('Retained locally', { exact: true })).toBeVisible();
+    await expect(source.getByText('Not retained', { exact: true })).toHaveCount(2);
+  }
   const caseRow = review.locator('.ledger-table tbody', { hasText: 'Availability' });
   await expect(caseRow.locator('.state-label')).toHaveText('Incomplete comparison');
   expect(await caseRow.locator('.state-label').evaluate((element) => {
@@ -420,4 +429,57 @@ test('uses exact stacked cards without page overflow at narrow supported widths'
   await expect(expanded).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
   expect(requests).toEqual([]);
+});
+
+test('shows exact saved website observations and distinct clocks without recollecting or rewriting them', async ({ page }, testInfo) => {
+  const domain = 'comparison-profile.example';
+  const earlier = { ...websiteSnapshot('retained-earlier', domain, EARLIER), savedAt: MIDDLE };
+  const later = websiteSnapshot('retained-later', domain, LATER, { complete: false, technologies: [] });
+  const fixture = sectionedLookupFixture(domain);
+  const profile = { version: 1, status: 'success', observedAt: LATER, scanMode: 'deep', source: 'derived',
+    durationMs: null, complete: true, truncated: false, limitations: [], diagnostics: {}, findings: [] };
+  let lookupRequests = 0;
+  await page.route('**/api/lookup?*', async route => {
+    lookupRequests += 1;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...fixture,
+      availability: { ...fixture.availability,
+        technologyProfile: { ...profile, profileVersion: TECHNOLOGY_PROFILE_VERSION },
+        securityPosture: { ...profile, postureVersion: WEBSITE_SECURITY_POSTURE_VERSION,
+          summary: { observed: 0, potentialExposure: 0, observedAbsence: 0, unavailable: 0 } },
+      },
+    }) });
+  });
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', { snapshots: [earlier, later] }),
+  }, { clearStorage: true, destination: '/lookup' });
+  const retainedBefore = await readBrowserLocalCollection(page, 'website_snapshots');
+  await page.getByRole('radio', { name: /Deep/u }).check();
+  await page.locator('#query').fill(domain);
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expandLookupFamilies(page);
+  const manager = page.getByRole('region', { name: 'Website profile snapshots' });
+  await manager.getByLabel('Earlier snapshot').selectOption(earlier.id);
+  await manager.getByLabel('Later snapshot').selectOption(later.id);
+  const first = manager.getByRole('region', { name: 'Earlier website observation' });
+  const second = manager.getByRole('region', { name: 'Later website observation' });
+  await expect(first).toContainText(earlier.id);
+  await expect(second).toContainText(later.id);
+  await expect(first.locator('dt')).toHaveText(['Snapshot ID', 'Observed', 'Saved locally', 'Collection']);
+  expect(await first.locator('dd').nth(1).textContent()).not.toBe(await first.locator('dd').nth(2).textContent());
+  await expect(first.getByText('Complete', { exact: true })).toBeVisible();
+  await expect(second.getByText('Partial', { exact: true })).toBeVisible();
+  await expect(manager.getByText(/Apparent absences remain incomparable/u)).toBeVisible();
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      await first.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await manager.screenshot({ path: testInfo.outputPath(`website-comparison-${theme}-${width}.png`) });
+    }
+  }
+  const retainedAfter = await readBrowserLocalCollection(page, 'website_snapshots');
+  expect(retainedAfter.records).toEqual(retainedBefore.records);
+  expect(retainedAfter.manifest.revision).toBe(retainedBefore.manifest.revision);
+  expect(lookupRequests).toBe(1);
 });

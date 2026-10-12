@@ -1,6 +1,7 @@
 <script lang="ts">
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import ComparisonLedgerRows from '#lib/components/ComparisonLedgerRows.svelte';
+  import ComparisonFrame from '#lib/components/ComparisonFrame.svelte';
   import {
     buildComparisonLedgerDetails,
     buildComparisonLedgerIndex,
@@ -85,11 +86,6 @@
     return formatEvidenceDate(value, 'Not retained');
   }
 
-  function sideSummary(side: ComparisonLedgerIndexSide): string {
-    const time = side.observedAt ?? side.publishedAt ?? side.retainedAt;
-    return `${side.source} · ${side.sourceState} · ${when(time)}`;
-  }
-
   function comparisonTimeSummary(item: { earlier: ComparisonLedgerIndexSide; later: ComparisonLedgerIndexSide }): string {
     const earlier = item.earlier.observedAt ?? item.earlier.publishedAt ?? item.earlier.retainedAt;
     const later = item.later.observedAt ?? item.later.publishedAt ?? item.later.retainedAt;
@@ -166,12 +162,30 @@
 
   {#if selectedItem}
     <article class="selected-comparison" aria-labelledby="selected-comparison-title">
-      <header><div><p class="eyebrow">Selected retained comparison</p><h3 id="selected-comparison-title">{selectedItem.label}</h3></div><a class="owner-link" href={selectedItem.ownerHref}>Open owning record →</a></header>
+      <ComparisonFrame>
+      {#snippet header()}<div><p class="eyebrow">Selected retained comparison</p><h3 id="selected-comparison-title">{selectedItem.label}</h3></div><a class="owner-link" href={selectedItem.ownerHref}>Open owning record →</a>{/snippet}
+      {#snippet left()}
+        <section aria-label="Earlier comparison source"><h4>Earlier</h4><dl class="comparison-metadata">
+          <div><dt>Source</dt><dd>{selectedItem.earlier.source}</dd></div>
+          <div><dt>State</dt><dd>{selectedItem.earlier.sourceState}</dd></div>
+          <div><dt>Observed</dt><dd>{when(selectedItem.earlier.observedAt)}</dd></div>
+          <div><dt>Published</dt><dd>{when(selectedItem.earlier.publishedAt)}</dd></div>
+          <div><dt>Retained locally</dt><dd>{when(selectedItem.earlier.retainedAt)}</dd></div>
+        </dl></section>
+      {/snippet}
+      {#snippet right()}
+        <section aria-label="Later comparison source"><h4>Later</h4><dl class="comparison-metadata">
+          <div><dt>Source</dt><dd>{selectedItem.later.source}</dd></div>
+          <div><dt>State</dt><dd>{selectedItem.later.sourceState}</dd></div>
+          <div><dt>Observed</dt><dd>{when(selectedItem.later.observedAt)}</dd></div>
+          <div><dt>Published</dt><dd>{when(selectedItem.later.publishedAt)}</dd></div>
+          <div><dt>Retained locally</dt><dd>{when(selectedItem.later.retainedAt)}</dd></div>
+        </dl></section>
+      {/snippet}
+      {#snippet context()}
       <dl class="comparison-metadata">
         <div><dt>Mode</dt><dd>{MODE_LABELS[selectedItem.mode]}</dd></div>
         <div><dt>Completeness</dt><dd>{selectedItem.completeness.replaceAll('_', ' ')}</dd></div>
-        <div><dt>Earlier source, state and time</dt><dd>{sideSummary(selectedItem.earlier)}</dd></div>
-        <div><dt>Later source, state and time</dt><dd>{sideSummary(selectedItem.later)}</dd></div>
         <div><dt>Owner ID</dt><dd><code>{selectedItem.ownerId}</code></dd></div>
         <div><dt>Entity ID</dt><dd><code>{selectedItem.entityId}</code></dd></div>
         <div><dt>Source truncation</dt><dd>{selectedItem.truncated ? 'Yes; review omission counts' : 'No retained source truncation reported'}</dd></div>
@@ -181,6 +195,7 @@
         <ul>{#each selectedItem.limitations as limitation}<li>{limitation}</li>{/each}</ul>
         {#if selectedItem.omittedLimitations}<p>Omitted {selectedItem.omittedLimitations} additional bounded limitation{selectedItem.omittedLimitations === 1 ? '' : 's'}.</p>{/if}
       </section>
+      {/snippet}
       <ComparisonLedgerRows
         rows={details.rows}
         totalRows={details.totalRows}
@@ -188,13 +203,14 @@
         duplicateRows={details.omissions.duplicateDetailRows}
         sourceOmittedRows={details.omissions.sourceRows}
       />
+      </ComparisonFrame>
     </article>
   {/if}
 </section>
 
 <style>
   .change-review{margin-top:16px}
-  .section-head,.selected-comparison>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .section-head h2,.selected-comparison h3{margin:2px 0 0}
   .bounded-count{flex:0 0 auto;padding:5px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:var(--text-xs)}
   .bulk-pair-controls{min-width:0;margin:16px 0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md)}
@@ -225,7 +241,7 @@
     .pair-grid .btn{width:100%}
   }
   @media(max-width:520px){
-    .section-head,.selected-comparison>header{display:grid}
+    .section-head{display:grid}
     .bounded-count{width:max-content;max-width:100%}
   }
 </style>
