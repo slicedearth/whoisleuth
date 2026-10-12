@@ -85,7 +85,19 @@ test('candidate inspection preserves queue state and keeps inspected and submitt
     domain: `sample-${String(index).padStart(2, '0')}.example`,
     sources: [{ ...candidate.sources[0]!, observedHostname: `login.sample-${String(index).padStart(2, '0')}.example` }],
   }))];
-  const workspace = await seed(page, { 'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([{ ...profile, candidateObservations: candidates }]) });
+  const groupedProfile = normalizeBrandProfile({ ...profile, candidateObservations: candidates,
+    officialDomains: ['sample-28.example'] }, { nowIso: NOW })!;
+  const scopedException = reviseCandidateException(null, {
+    id: 'grouped-rule-exception', domain: candidates[1]!.domain, ruleKey: 'keyword:example',
+    purpose: 'irrelevant_match', reason: 'Only this exact retained rule was reviewed.',
+    reviewedAt: NOW, expiresAt: '2099-01-01T00:00:00.000Z', enabled: true,
+    reviewedFingerprint: candidateMaterialFingerprint(groupedProfile.candidateObservations.find(row => row.domain === 'sample-00.example')!, profile.id, 'keyword:example'),
+  }, null);
+  const workspace = await seed(page, { 'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([{
+    ...groupedProfile, candidateExceptions: [scopedException],
+  }]) });
+  const brandsBefore = await readBrowserLocalCollection(page, 'brand_profiles');
+  const reviewsBefore = await readBrowserLocalCollection(page, 'analyst_review_state');
   const requests: string[] = [];
   page.on('request', request => { if (request.url().includes('/api/')) requests.push(request.url()); });
   await workspace.getByRole('checkbox', { name: candidate.domain, exact: true }).check();
@@ -111,10 +123,33 @@ test('candidate inspection preserves queue state and keeps inspected and submitt
   await expect(workspace.getByLabel('Candidate search')).toHaveValue('sample-');
   await expect(workspace.getByLabel('Candidate order')).toHaveValue('domain');
   await expect(workspace.getByRole('navigation', { name: 'Candidate pages' })).toContainText('Page 2 of 2');
+  await workspace.getByText('Explainable pattern groups (1)', { exact: true }).click();
+  await workspace.getByText('29 contributing domains · Exact imported keyword nomination', { exact: true }).click();
+  const contributors = workspace.getByRole('region', { name: 'Pattern group contributors' });
+  await expect(contributors.getByRole('button', { name: /^Inspect grouped / })).toHaveCount(25);
+  await expect(contributors.locator('li').filter({ hasText: 'sample-00.example' })).toContainText('Exact rule exception · active: Only this exact retained rule was reviewed.');
+  await contributors.getByRole('navigation', { name: 'Pattern contributor pages' }).getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(contributors.getByRole('button', { name: /^Inspect grouped / })).toHaveCount(4);
+  await expect(contributors.locator('li').filter({ hasText: 'sample-28.example' })).toContainText('Exact official-domain declaration; not a safety verdict.');
+  const groupedInspect = contributors.getByRole('button', { name: 'Inspect grouped sample-28.example', exact: true });
+  await groupedInspect.focus();
+  await groupedInspect.press('Enter');
+  await expect(workspace.getByRole('heading', { name: 'sample-28.example', exact: true })).toBeFocused();
+  await expect(evidence).toContainText('login.sample-28.example');
+  await expect(preview).toContainText(candidate.domain);
+  await expect(preview).not.toContainText('sample-28.example');
+  await workspace.getByRole('button', { name: 'Back to queue', exact: true }).click();
+  await expect(groupedInspect).toBeFocused();
+  await expect(contributors.getByRole('navigation', { name: 'Pattern contributor pages' })).toContainText('Page 2 of 2');
+  await expect(workspace.getByRole('navigation', { name: 'Candidate pages' })).toContainText('Page 2 of 2');
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const width of [320, 390, 1280, 1920]) {
       await page.setViewportSize({ width, height: 844 });
+      if (captureVisualEvidenceEnabled() && (width === 320 || width === 1280)) {
+        await groupedInspect.scrollIntoViewIfNeeded();
+        await workspace.locator('.workbench-queue').screenshot({ path: test.info().outputPath(`candidate-group-${theme}-${width}.png`) });
+      }
       await inspect.click();
       await expect(workspace.getByRole('heading', { name: 'sample-25.example', exact: true })).toBeFocused();
       await expectNoHorizontalOverflow(page);
@@ -131,6 +166,9 @@ test('candidate inspection preserves queue state and keeps inspected and submitt
   }
   await workspace.getByLabel('Candidate search').fill('');
   await expect(workspace.getByRole('checkbox', { name: candidate.domain, exact: true })).toBeChecked();
+  expect(await readBrowserLocalCollection(page, 'brand_profiles')).toEqual(brandsBefore);
+  expect(await readBrowserLocalCollection(page, 'analyst_review_state')).toEqual(reviewsBefore);
+  expect((await readBrowserLocalCollection(page, 'watchlists')).records).toEqual([]);
   expect(requests).toEqual([]);
 });
 

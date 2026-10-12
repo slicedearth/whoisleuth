@@ -30,6 +30,12 @@ inspection control without clearing filters or checked candidates. Escape closes
 inspection when focus is outside an editing control. Where a separate evidence
 inspector is available, **Reading layout** adjusts its width without changing data.
 Inspection makes no request and does not select an item for a batch action.
+Brand candidate **Explainable pattern groups** shows the contributors to each
+retained matching rule, with individual review status, exact declarations and
+rule exceptions. Contributors are paged independently of the candidate queue;
+**Inspect** opens that domain's retained evidence and returns to the same group
+page. Groups reflect the current filters, may overlap and never select or admit
+their members to a watchlist. Every candidate remains reachable in the queue.
 Case inspection is a read-only preview; **Open Case workspace** opens its editor.
 Review Inbox forms retain their drafts while another item is inspected; use the
 existing explicit review checkpoint to retain them across a reload.

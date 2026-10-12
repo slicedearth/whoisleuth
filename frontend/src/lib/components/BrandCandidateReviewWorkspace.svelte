@@ -2,6 +2,7 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import AnalystWorkbench from './AnalystWorkbench.svelte';
   import BrandCandidateEvidence from './BrandCandidateEvidence.svelte';
+  import BrandPatternGroup from './BrandPatternGroup.svelte';
   import Pagination from './Pagination.svelte';
   import CopyButton from './CopyButton.svelte';
   import { createDraftRevision, restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
@@ -95,9 +96,8 @@
     reviewDueAt: reviewDate ? `${reviewDate}T00:00:00Z` : null,
     replaceExistingContext,
   });
-  const groups = $derived(
-    [...new Set(visible.flatMap((row) => row.matches.map((match) => match.ruleKey)))].slice(0, 200),
-  );
+  const allGroups = $derived([...new Set(visible.flatMap(row => row.matches.map(match => match.ruleKey)))]);
+  const groups = $derived(allGroups.slice(0, 200));
   async function refresh() {
     const current = ownsCompletion(), request = ++readGeneration;
     try {
@@ -366,6 +366,16 @@
       </div>
       {#if rows.length && !visible.length}<p>No retained candidate matches these filters.</p>{/if}
       <Pagination {currentPage} {pageCount} setPage={(value) => page = value} ariaLabel="Candidate pages" pageInputLabel="Candidate page" />
+      {#if groups.length}
+        <details>
+          <summary>Explainable pattern groups ({groups.length}{allGroups.length > groups.length ? ` of ${allGroups.length}` : ''})</summary>
+          {#if allGroups.length > groups.length}<p>Showing the first {groups.length} groups. Narrow the candidate filters to review other groups; every candidate remains reachable in the queue.</p>{/if}
+          {#each groups as key (JSON.stringify([active.id, key]))}
+            {@const contributors = visible.filter(row => row.matches.some(match => match.ruleKey === key))}
+            <BrandPatternGroup members={contributors} reason={contributors[0]?.matches.find(match => match.ruleKey === key)?.reason ?? 'Retained matching rule'} {inspected} oninspect={domain => inspected = domain} />
+          {/each}
+        </details>
+      {/if}
     {/snippet}
     {#snippet children()}
       {#if inspectedRow}
@@ -382,21 +392,6 @@
     {/snippet}
     {#snippet inspector()}{#if inspectedRow}<BrandCandidateEvidence row={inspectedRow} />{/if}{/snippet}
   </AnalystWorkbench>
-  {#if groups.length}<details
-      ><summary>Explainable pattern groups ({groups.length})</summary
-      >{#each groups as key}{@const contributors = visible.filter((row) =>
-          row.matches.some((match) => match.ruleKey === key),
-        )}<details
-          ><summary
-            >{contributors.length} contributing domains · {contributors[0]?.matches.find(
-              (match) => match.ruleKey === key,
-            )?.reason}</summary
-          ><ul
-            >{#each contributors as row}<li>{row.candidate.domain}</li>{/each}</ul
-          ><p>Select individual visible rows above; this disclosure grants no bulk decision.</p
-          ></details
-        >{/each}</details
-    >{/if}
   <fieldset disabled={busy || disabled || !ready}>
     <legend>Explicit selected-domain review</legend>
     <details>
