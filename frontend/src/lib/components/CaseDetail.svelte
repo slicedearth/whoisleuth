@@ -9,7 +9,7 @@
   import CaseReportExport from '#lib/components/CaseReportExport.svelte';
   import CaseResponseWorkspace from '#lib/components/CaseResponseWorkspace.svelte';
   import CaseBrandAssociations from '#lib/components/CaseBrandAssociations.svelte';
-  import { readCaseNavigationContext } from '#lib/console-workflow-state.ts';
+  import { readCaseNavigationContext, pinConsoleCaseCheckpoint } from '#lib/console-workflow-state.ts';
   import { loadReviewSession } from '#lib/review-session.ts';
   import { handlesLocalLink } from '#lib/link-activation.ts';
   import { keepFocusBelow } from '#lib/visible-focus.ts';
@@ -58,6 +58,13 @@
     brandProfilesUnavailable: boolean;
   } = $props();
   const activeSection = $derived(caseWorkspaceSection(new URL(page.url.href)));
+  function pinCheckpoint(snapshotId: string) {
+    const result = pinConsoleCaseCheckpoint({ caseId: record.id, snapshotId });
+    setMessage(result === 'added' ? 'Checkpoint pinned in this tab. Open Pinned checkpoints in the Console context.'
+      : result === 'already-pinned' ? 'This checkpoint is already pinned.'
+      : result === 'full' ? 'Four checkpoints are already pinned. Remove one before adding another.'
+      : 'The current workspace is unavailable. No reference was pinned.');
+  }
   const returnContext = $derived(readCaseNavigationContext(record.id));
   let hasSavedReviewReturn = $state(false);
   $effect(() => {
@@ -214,7 +221,7 @@
       </details>
     {/snippet}
     {#snippet evidence()}
-      <EvidenceTimeline {record} />
+      <EvidenceTimeline {record} onpincheckpoint={pinCheckpoint} />
       <CaseRelationships {record} records={allRecords} onselect={selectCase} />
     {/snippet}
     {#snippet history()}

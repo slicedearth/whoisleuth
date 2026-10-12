@@ -13,7 +13,7 @@
     snapshotFieldGroups
   } from '#lib/analysis/evidence-display.ts';
 
-  let { record }: { record: CaseRecord } = $props();
+  let { record, onpincheckpoint }: { record: CaseRecord; onpincheckpoint?: (snapshotId: string) => void } = $props();
   let timelineExpanded = $state(true);
   let changedOnly = $state(false);
   let expandedSnapshots = $state(new Set<string>());
@@ -94,6 +94,7 @@
               <span class="timeline-index">#{entry.displayIndex}</span>
               <time datetime={entry.snapshot.capturedAt}>{entry.hasRepeatedObservation?'Last observed ':'Captured '}{date(entry.snapshot.capturedAt)}</time>
             </button>
+            {#if onpincheckpoint}<button type="button" class="btn small" aria-label={`Pin checkpoint ${entry.snapshot.id} for comparison`} onclick={() => onpincheckpoint?.(entry.snapshot.id)}>Pin checkpoint</button>{/if}
             <span class="timeline-badges">
               {#if entry.hasRepeatedObservation}<span class="timeline-badge timeline-repeat">First observed {date(entry.snapshot.firstCapturedAt)}</span>{/if}
               <span class="timeline-badge">{evidenceSourceLabel(entry.snapshot.source)}</span>

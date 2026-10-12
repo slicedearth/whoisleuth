@@ -799,6 +799,8 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(changeReview).toContainText('matched this retained state');
   await expect(changeReview).toContainText('Material change');
   await expect(page.locator('.retained-case')).toContainText('History entries2');
+  await expect(page.getByRole('heading', { name: /^Evidence timeline.*2 snapshots$/u })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Pin checkpoint /u })).toHaveCount(0);
   await page.getByText('Explore the retained investigation timeline', { exact: true }).click();
   const retainedTimeline = page.getByRole('region', { name: 'Investigation timeline', exact: true });
   await expect(retainedTimeline.locator('a[href]')).toHaveCount(0);

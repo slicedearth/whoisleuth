@@ -2,9 +2,9 @@ import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-cont
 import { expect, test } from './fixtures';
 import { COMMAND_NAVIGATION_READINESS, openInboxReview, inboxReviewControls } from './console-navigation';
 import { beginBrowserInteractionReadiness, isBrowserInteractionReadinessMarked, readBrowserInteractionReadiness } from './performance-sampling';
-import { caseRecord, createCase, snapshot } from './case-test-fixtures';
+import { caseRecord, createCase, snapshot, openCaseResponseWorkspace } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
-import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, holdBrowserLocalTransaction, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, useTheme } from './helpers';
+import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, failNextBrowserLocalManifestWrite, holdBrowserLocalTransaction, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
 
 test('navigation readiness includes loaded, usable destinations rather than only the dialog shell', async ({ page }) => {
@@ -145,6 +145,87 @@ test('Dashboard opens its exact attention set and retains a direct recent Case d
   await expect(page).toHaveURL('/cases?case=navigation-case');
   await expect(page.locator('#case-head-navigation-case')).toBeVisible();
   expect(collectionRequests).toEqual([]);
+});
+
+test('pinned checkpoints and successful Case visits survive Console navigation without retaining new evidence', async ({ page }, testInfo) => {
+  const history = Array.from({ length: 5 }, (_, index) => snapshot({ id: `tray-snapshot-${index}`, capturedAt: `2000-01-0${index + 1}T00:00:00.000Z`, firstCapturedAt: `2000-01-0${index + 1}T00:00:00.000Z`, pageTitle: `Supplied observation ${index}` }));
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [
+    caseRecord({ id: 'tray-case', domain: 'tray.example', evidenceHistory: history }),
+    caseRecord({ id: 'other-tray-case', domain: 'other-tray.example', evidenceHistory: [snapshot({ id: 'other-snapshot' })] }),
+  ] } }, { clearStorage: true, destination: '/cases?case=tray-case&section=evidence' });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  const retained = [...before.records.find(item => item.value.id === 'tray-case')!.value.evidenceHistory]
+    .sort((left, right) => Date.parse(left.capturedAt) - Date.parse(right.capturedAt));
+  expect(retained.map(item => ({ at: item.capturedAt, title: item.pageTitle }))).toEqual(history.map(item => ({ at: item.capturedAt, title: item.pageTitle })));
+  const ids = retained.map(item => item.id); expect(new Set(ids).size).toBe(5);
+  const pin = (id: string) => page.getByRole('button', { name: `Pin checkpoint ${id} for comparison`, exact: true });
+  await expect(pin(ids[0]!)).toBeVisible(); await pin(ids[0]!).focus(); await page.keyboard.press('Enter');
+  for (const id of ids.slice(1, 4)) await pin(id).click();
+  await pin(ids[0]!).click(); await expect(page.getByRole('status').filter({ hasText: 'already pinned' })).toBeVisible();
+  await pin(ids[4]!).click(); await expect(page.getByRole('status').filter({ hasText: 'Four checkpoints are already pinned' })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Lookup', exact: true }).click();
+  const tray = page.locator('details').filter({ has: page.getByText('Pinned checkpoints · 4 of 4', { exact: true }) });
+  await tray.locator(':scope > summary').click();
+  const references = tray.getByRole('list', { name: 'Pinned Case checkpoint references', exact: true });
+  await expect(references.locator('li')).toHaveCount(4);
+  await expect(references).not.toContainText(ids[4]!);
+  const preferences = await page.evaluate(() => JSON.stringify({ session: { ...sessionStorage }, local: { ...localStorage } }));
+  for (const id of ids) expect(preferences).not.toContain(id);
+  for (const id of [ids[0]!, ids[2]!]) await references.locator('label').filter({ hasText: id }).getByRole('checkbox').check();
+  await tray.getByRole('button', { name: 'Review selected checkpoints', exact: true }).click();
+  const stage = tray.getByRole('region', { name: 'Case checkpoint stage', exact: true });
+  await expect(stage.getByRole('combobox', { name: 'Case for checkpoint review', exact: true })).toHaveValue('tray-case');
+  const interval = stage.getByRole('combobox', { name: 'Interval to inspect', exact: true });
+  await expect(interval).toBeVisible(); await interval.selectOption({ index: 1 });
+  await expect(stage.getByRole('heading', { name: 'Selected checkpoint interval', exact: true })).toBeVisible();
+  await expect(stage.getByRole('region', { name: 'Earlier selected checkpoint', exact: true })).toContainText(ids[0]!);
+  await expect(stage.getByRole('region', { name: 'Later selected checkpoint', exact: true })).toContainText(ids[2]!);
+  await stage.getByRole('button', { name: 'Clear stage', exact: true }).click();
+  await expect(stage.getByRole('combobox', { name: 'Case for checkpoint review', exact: true })).toHaveValue('');
+  await tray.getByRole('button', { name: 'Review selected checkpoints', exact: true }).click();
+  await expect(interval).toBeVisible(); await interval.selectOption({ index: 1 });
+  await expect(stage.getByRole('region', { name: 'Later selected checkpoint', exact: true })).toContainText(ids[2]!);
+  await stage.getByRole('combobox', { name: 'Case for checkpoint review', exact: true }).selectOption('');
+  await tray.getByRole('button', { name: 'Review selected checkpoints', exact: true }).click();
+  await expect(interval).toBeVisible(); await interval.selectOption({ index: 1 });
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 844 }); await expectNoHorizontalOverflow(page);
+      await references.getByRole('button', { name: `Remove pinned checkpoint tray-case ${ids[3]!}`, exact: true }).focus();
+      await expect(references.getByRole('button', { name: `Remove pinned checkpoint tray-case ${ids[3]!}`, exact: true })).toBeFocused();
+      if (captureVisualEvidenceEnabled()) await tray.screenshot({ path: testInfo.outputPath(`checkpoint-tray-${theme}-${width}.png`) });
+    }
+  }
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 })).manifest).toEqual(before.manifest);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const visits = page.locator('details').filter({ has: page.getByText('Visited Cases · 1', { exact: true }) });
+  await visits.locator(':scope > summary').click();
+  await visits.getByRole('link', { name: /Case tray-case · Evidence/u }).click();
+  await expect(page).toHaveURL('/cases?case=tray-case&section=evidence');
+  await expect(page.getByRole('heading', { name: 'tray.example', exact: true })).toBeVisible();
+  await openCaseResponseWorkspace(page);
+  const form = page.locator('details').filter({ has: page.getByText('Pin an observed fact', { exact: true }) });
+  await form.locator(':scope > summary').click();
+  await failNextBrowserLocalManifestWrite(page, 'case_drafts');
+  await form.getByLabel('Label', { exact: true }).fill('Unprotected navigation control');
+  await expect(form.getByRole('status')).toContainText('could not be saved for recovery');
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Lookup', exact: true }).click();
+  await expect(page).toHaveURL('/cases?case=tray-case&section=evidence');
+  await expect(page.getByText('Visited Cases · 1', { exact: true })).toBeVisible();
+  await form.getByRole('button', { name: 'Discard this draft', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Lookup', exact: true }).click();
+  if (await tray.getAttribute('open') === null) await tray.locator(':scope > summary').click();
+  await tray.getByRole('button', { name: 'Clear pinned checkpoints', exact: true }).click();
+  await expect(page.getByText(/Pinned checkpoints ·/u)).toHaveCount(0);
+  const publicLink = page.getByRole('link', { name: /^Privacy \(opens in a new tab\)$/u });
+  // Exercise same-tab Console departure instead of the footer's normal new tab.
+  await publicLink.evaluate(element => element.removeAttribute('target'));
+  await publicLink.click();
+  await expect(page).toHaveURL('/privacy');
+  await page.goBack();
+  await expect(page.getByText(/Visited Cases ·/u)).toHaveCount(0);
 });
 
 test('a selected Dashboard review opens Case assessment and returns to the same inbox item', async ({ page }) => {

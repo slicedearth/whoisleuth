@@ -190,6 +190,10 @@ the recipient projection; notes enter the internal side only when selected.
 The comparison is excluded from printing and every recipient export and is
 cleared on close, packet refresh, source/options changes, section changes or navigation.
 Recipient reading modes use only the actual packet and do not change its bytes.
+Pinned checkpoint references and the bounded visited-Case navigation trail
+remain in tab memory. They contain exact Case/checkpoint identifiers and section
+choices, not duplicate evidence. They clear on lock, sign-out, workspace
+replacement or leaving the Console and are not included in backups or exports.
 
 Unfinished Case response forms are saved automatically as bounded recovery
 drafts in the selected workspace. They remain separate from submitted Case

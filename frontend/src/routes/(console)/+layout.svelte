@@ -24,7 +24,7 @@
   import DeferredSurface from '#lib/components/DeferredSurface.svelte';
   import { reloadDeferredModulePage } from '#lib/deferred-module.ts';
   import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '#lib/browser-local-data-service.ts';
-  import { clearConsoleWorkflowState, subscribeSelectedConsoleCase } from '#lib/console-workflow-state.ts';
+  import { clearConsoleWorkflowState, subscribeSelectedConsoleCase, clearConsoleReferenceView, readConsoleReferenceView, subscribeConsoleReferenceView } from '#lib/console-workflow-state.ts';
   import { hasUnlockedBrowserWorkspace, lockBrowserWorkspace } from '#lib/browser-workspace-unlock.ts';
   import { isLocalApplication } from '#lib/local-application-context.ts';
   import { hasUnprotectedCaseDrafts } from '#lib/controllers/case-draft-state.ts';
@@ -53,6 +53,7 @@
   let investigationGuideRequested = $state(false);
   let revealInvestigationGuideOnMount = $state(false);
   let selectedCaseId = $state<string | null>(null);
+  let referenceViewPresent = $state(false);
   const showCaseContext = $derived(Boolean(selectedCaseId)
     && page.url.pathname !== '/cases'
     && !(page.url.pathname === '/monitor' && (page.url.searchParams.get('view') === 'cases' || page.url.searchParams.has('case'))));
@@ -72,6 +73,13 @@
     localApplication = isLocalApplication();
     const cancelNavigationPreload = preloadOnIdle(() => preloadBestEffort(() => import('#lib/console-command-navigation.ts')));
     const unsubscribeCase = subscribeSelectedConsoleCase((id) => { selectedCaseId = id; });
+    const refreshReferenceView = () => {
+      const view = readConsoleReferenceView();
+      referenceViewPresent = Boolean(view.checkpoints.length || view.visits.length);
+    };
+    const unsubscribeReferences = subscribeConsoleReferenceView(refreshReferenceView);
+    refreshReferenceView();
+    window.addEventListener('pagehide', clearConsoleReferenceView);
     void checkSession();
     if (hasStoredInvestigationGuide()) investigationGuideRequested = true;
     const showInvestigationGuide = () => {
@@ -88,6 +96,8 @@
       lockBrowserWorkspace();
       cancelNavigationPreload();
       unsubscribeCase();
+      unsubscribeReferences();
+      window.removeEventListener('pagehide', clearConsoleReferenceView);
       mobileNavigation.removeEventListener('change', closeAtDesktopWidth);
       window.removeEventListener(INVESTIGATION_GUIDE_EVENT, showInvestigationGuide);
     };
@@ -332,6 +342,7 @@
           <p>{capabilityStatusDetail()} This is the reported configuration, not a live source-health check.</p>
         </details>
         {#if showCaseContext && selectedCaseId}<DeferredSurface load={() => import('#lib/components/SelectedCaseContext.svelte')} props={{caseId:selectedCaseId,compact:true}} loadingLabel="Reading selected Case…" unavailableLabel="Selected Case context could not be loaded." />{/if}
+        {#if referenceViewPresent}<DeferredSurface load={() => import('#lib/components/ConsoleReferenceView.svelte')} props={{}} loadingLabel="Opening tab reference view…" unavailableLabel="Tab references could not be displayed. Saved evidence has not changed." />{/if}
       </section>
       {#if investigationGuideRequested}<DeferredSurface load={() => import('#lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}
       {@render children()}

@@ -219,6 +219,7 @@ for (const relock of ['manual', 'idle'] as const) test(`workspace lifecycle keep
   await page.goto('/dashboard'); const row = await createEncrypted(page, 'Cancellable lock'); await unlock(page, row.name);
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
   await createCaseThroughForm(page, 'cancel-lock.example'); const form = await recoveryPinForm(page), url = page.url();
+  await expect(page.getByText('Visited Cases · 1', { exact: true })).toBeVisible();
   await failNextBrowserLocalManifestWrite(page, 'case_drafts');
   await form.getByLabel('Label', { exact: true }).fill('Keep this draft after cancelling lock');
   await expect(form.getByRole('status')).toContainText('could not be saved for recovery');
@@ -226,6 +227,7 @@ for (const relock of ['manual', 'idle'] as const) test(`workspace lifecycle keep
   page.once('dialog', async dialog => { expect(dialog.type()).toBe('beforeunload'); await dialog.dismiss(); cancelled = true; });
   await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
   await expect.poll(() => cancelled).toBe(true); await expect(page).toHaveURL(url);
+  await expect(page.getByText('Visited Cases · 1', { exact: true })).toBeVisible();
   await expect(form.getByLabel('Label', { exact: true })).toHaveValue('Keep this draft after cancelling lock');
   await form.getByRole('button', { name: 'Retry recovery save', exact: true }).click();
   await expect(form.getByRole('status')).toContainText('Draft saved in this workspace');
@@ -235,6 +237,7 @@ for (const relock of ['manual', 'idle'] as const) test(`workspace lifecycle keep
     await page.clock.fastForward(300_000);
   } else await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
   await expect(page.getByRole('heading', { name: `Unlock ${row.name}`, exact: true })).toBeVisible();
+  await expect(page.getByText(/Visited Cases ·/u)).toHaveCount(0);
   await unlock(page, row.name); const restored = await recoveryPinForm(page);
   await restored.getByText('1 saved draft for this form', { exact: true }).click();
   await restored.getByRole('button', { name: 'Restore draft', exact: true }).click();

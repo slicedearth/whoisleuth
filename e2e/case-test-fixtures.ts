@@ -38,6 +38,8 @@ export interface SnapshotOverrides {
   httpSecurityHeaders?: string[] | null;
 }
 
+/** Import-shaped input: normalisation derives retained snapshot IDs. For an
+ * exact-reference browser action, resolve the admitted collection's IDs. */
 export function snapshot(overrides: SnapshotOverrides = {}) {
   const id = overrides.id ?? 'ev-abc';
   return {

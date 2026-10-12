@@ -94,6 +94,14 @@ printing and every recipient export. Notes enter the internal side only when
 explicitly selected. Closing it, refreshing the packet or changing source, options or section clears
 the comparison; different representations do not establish deletion or redaction.
 
+**Pin checkpoint** in a Case evidence timeline keeps up to four exact references
+in the current tab. **Pinned checkpoints** in the Console context can re-open
+their evidence and stage two same-Case checkpoints in the existing comparison.
+Unavailable references remain explicit; another checkpoint is never substituted.
+**Visited Cases** provides a bounded navigation trail, not an observed
+relationship or investigation log. These views store no duplicate evidence and
+clear on lock, sign-out, workspace replacement or leaving the Console.
+
 For related hosts, conflicting sources and provider-reported resolution, open
 **Find the weak inference** in **Record a conclusion**. Inspect the original
 supplied evidence, choose the statement that exceeds it and select **Explain

@@ -7,7 +7,11 @@
   import ComparisonFrame from './ComparisonFrame.svelte';
   import ComparisonLedgerRows from './ComparisonLedgerRows.svelte';
 
-  let { cases }: { cases: readonly CaseRecord[] } = $props();
+  let { cases, initialSelection = null }: {
+    cases: readonly CaseRecord[];
+    initialSelection?: Readonly<{ caseId: string; checkpointIds: readonly string[] }> | null;
+  } = $props();
+  const componentId = $props.id();
   let caseId = $state('');
   let checkpointIds = $state<string[]>([]);
   let pairId = $state('');
@@ -35,6 +39,14 @@
     else if (!checked) checkpointIds = checkpointIds.filter(value => value !== id);
     pairId = '';
   }
+  let appliedSelection: typeof initialSelection = null;
+  $effect(() => {
+    if (!initialSelection) return;
+    if (initialSelection === appliedSelection) return;
+    appliedSelection = initialSelection;
+    chooseCase(initialSelection.caseId);
+    for (const id of initialSelection.checkpointIds) chooseCheckpoint(id, true);
+  });
   $effect(() => {
     if (caseId && !record) { checkpointIds = []; pairId = ''; }
   });
@@ -44,8 +56,8 @@
   });
 </script>
 
-<section class="checkpoint-stage" aria-labelledby="checkpoint-stage-title">
-  <header><h3 id="checkpoint-stage-title">Case checkpoint stage</h3><button class="btn small" type="button" onclick={clear} disabled={!caseId}>Clear stage</button></header>
+<section class="checkpoint-stage" aria-labelledby={`checkpoint-stage-${componentId}`}>
+  <header><h3 id={`checkpoint-stage-${componentId}`}>Case checkpoint stage</h3><button class="btn small" type="button" onclick={clear} disabled={!caseId}>Clear stage</button></header>
   <p>Choose two or three retained checkpoints from one Case, then inspect an interval. Selections stay on this page; no evidence is saved or collected.</p>
   <label>Case for checkpoint review
     <select value={caseId} onchange={event => chooseCase(event.currentTarget.value)}>

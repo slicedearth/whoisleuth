@@ -10,9 +10,9 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
   import { CalibrationExportWorkspace } from '#lib/controllers/calibration-export-workspace.ts';
   import { hasUnprotectedCaseDrafts, trackTransientCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import { preloadBestEffort } from '#lib/idle-preload.ts';
-  import { readCaseNavigationContext, selectConsoleCase } from '#lib/console-workflow-state.ts';
+  import { readCaseNavigationContext, selectConsoleCase, recordVisitedConsoleCase } from '#lib/console-workflow-state.ts';
   import { monitorRouteKey, monitorRouteTarget } from '#lib/controllers/monitor-route-controller.ts';
-  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
+  import { caseWorkspaceHref, caseWorkspaceSection } from '#lib/analysis/case-response-stage.ts';
   import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
   import type { CaseIncidentInput } from '../analysis/case-model.ts';
   import { filterCaseList } from '../../../../packages/cases/case-list-view.mts';
@@ -600,7 +600,10 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
         caseMessage = 'That Case is not available in this workspace. Choose a retained Case or import its workspace archive.';
         return;
       }
-      if (expandedId === record.id) return;
+      if (expandedId === record.id) {
+        if (monitorRouteKey(new URL(page.url.href)) === routeKey) recordVisitedConsoleCase(record.id, caseWorkspaceSection(currentUrl));
+        return;
+      }
       selectConsoleCase(record.id);
       showCasePage(record);
       if (expandedId !== record.id) {
@@ -611,6 +614,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
       await tick();
       if (monitorRouteKey(new URL(page.url.href)) !== routeKey)
         return;
+      recordVisitedConsoleCase(record.id, caseWorkspaceSection(currentUrl));
       await focusCase(record);
       return;
     }
