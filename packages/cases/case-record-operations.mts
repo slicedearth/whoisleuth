@@ -43,6 +43,7 @@ import {
 } from './case-record-contracts.mts';
 import { MAX_CASE_OBJECTIVE_LENGTH, MAX_RESPONSE_VALUE_LENGTH } from '../contracts/case-portability.mts';
 import { caseRecordVersionInput } from './case-record-version-input.mts';
+import { readCaseCheckpointReceipts, mergeCaseCheckpointReceipts } from './case-checkpoint-receipts.mts';
 import { readCaseAttachments } from './case-attachment-model.mts';
 import { readCaseEvidenceLinks, appendCaseEvidenceLink, withdrawCaseEvidenceLink } from './case-evidence-links.mts';
 import { assertCurrentRecheckQuestion, assertRecheckNonReproduction, assertCaseObjectObservationOutcome, readCaseRecheckAnswerContext } from './case-recheck-model.mts';
@@ -156,6 +157,7 @@ export function normalizeCase(
   const createdAt = existing ? existing.createdAt : caseTimestampOrNull(record.createdAt, sourceVersion) || now;
   const updatedAt = caseTimestampOrNull(record.updatedAt, sourceVersion) || createdAt;
   const evidencePins = normalizeCaseEvidencePins(record.evidencePins, updatedAt, timestampOptions);
+  const checkpointCollectionReceipts = readCaseCheckpointReceipts(record.checkpointCollectionReceipts, evidencePins, sourceVersion);
   const pinIds = new Set(evidencePins.map((item) => item.id));
   const actions = normalizeCaseActions(record.actions, updatedAt, { ...timestampOptions, validEvidencePinIds: pinIds });
   for (const action of actions) for (const event of action.history) if (event.packetReceipt
@@ -198,6 +200,7 @@ export function normalizeCase(
     source: normalizeSource(record.source),
     evidenceHistory: normalizeCaseEvidence(record, domain, createdAt, updatedAt, now, sourceVersion),
     evidencePins,
+    ...(checkpointCollectionReceipts === undefined ? {} : { checkpointCollectionReceipts }),
     decisions: normalizeCaseDecisions(record.decisions, updatedAt, pinIds, timestampOptions),
     actions,
     assertions,
@@ -238,6 +241,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
   const actions = input.action !== undefined
     ? appendCaseAction([], input.action, now)
     : [];
+  const checkpointCollectionReceipts = readCaseCheckpointReceipts(input.checkpointCollectionReceipts, evidencePins);
   const assertions = input.assertion !== undefined
     ? appendCaseAssertion([], input.assertion, now)
     : [];
@@ -288,6 +292,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
       caseDomain: domain,
     }),
     evidencePins,
+    ...(checkpointCollectionReceipts === undefined ? {} : { checkpointCollectionReceipts }),
     decisions: input.decision !== undefined
       ? appendCaseDecision([], input.decision, now)
       : [],
@@ -428,6 +433,11 @@ export function updateCase(
   if (patch.evidencePin !== undefined) {
     evidencePins = appendCaseEvidencePin(evidencePins, patch.evidencePin, now);
   }
+  const previousPinIds = new Set(current.evidencePins.map(pin => pin.id));
+  const checkpointCollectionReceipts = mergeCaseCheckpointReceipts(current, {
+    evidencePins: evidencePins.filter(pin => !previousPinIds.has(pin.id)),
+    checkpointCollectionReceipts: patch.checkpointCollectionReceipts,
+  }, evidencePins);
   const pinIds = new Set(evidencePins.map((item) => item.id));
   const correctionInput = patch.action !== undefined ? objectRecord(patch.action) : patch.actionUpdate !== undefined
     ? { ...current.actions.find(action => action.id === objectRecord(patch.actionUpdate).id), ...objectRecord(patch.actionUpdate) } : null;
@@ -539,6 +549,7 @@ export function updateCase(
     source,
     evidenceHistory,
     evidencePins,
+    ...(checkpointCollectionReceipts === undefined ? {} : { checkpointCollectionReceipts }),
     ...((patch.evidenceLink !== undefined || patch.evidenceLinkWithdrawal !== undefined) ? {
       evidenceLinks: patch.evidenceLink !== undefined
         ? appendCaseEvidenceLink(current.evidenceLinks ?? [], patch.evidenceLink, evidencePins, now)
@@ -556,6 +567,7 @@ export function updateCase(
     updatedAt: now,
   };
   const next = [...cases];
+  if (checkpointCollectionReceipts === undefined) delete record.checkpointCollectionReceipts;
   next[index] = record;
   return { cases: next, record };
 }

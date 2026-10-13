@@ -2,6 +2,7 @@
   import type { CaseRecord } from '#lib/cases.ts';
   import { evidenceTime } from '#lib/analysis/evidence-time.ts';
   import { currentCaseEvidence } from '../../../../packages/cases/case-evidence-model.mts';
+  import CollectionReceiptReview from './CollectionReceiptReview.svelte';
   import {
     currentEvidenceSummary,
     deriveTimeline,
@@ -120,9 +121,11 @@
             </ul>
           {/if}
           {#if entry.hasIncomparableChange}<p class="timeline-incomparable-note">{entry.orderingLimitation ?? incomparableNote(entry.incomparableReasons)}</p>{/if}
+          {#if entry.collectionContextChanged}<p class="timeline-incomparable-note">Collection choices or execution context differ. This does not establish a change in the domain evidence.</p>{/if}
 
           {#if isExpanded}
             <div class="timeline-detail" id={bodyId} role="region" aria-labelledby={snapId}>
+              {#if entry.snapshot.collectionReceipt}<CollectionReceiptReview receipt={entry.snapshot.collectionReceipt} headingLevel={4} />{:else}<p>No original collection receipt is retained for this assessment.</p>{/if}
               {#each snapshotFieldGroups(entry.snapshot) as group}
                 <section class="timeline-group">
                   <h4>{group.name}</h4>

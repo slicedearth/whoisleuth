@@ -349,8 +349,8 @@ expiry and withdrawal records. Previewing or revising them makes no requests;
 only deliberate downloads create output files. STIX and MISP exports are not
 submitted or applied automatically. Content digests do not authenticate authors.
 
-Current Case schema 19 is written for new saves. Exact public v1 Case schema 12
-and earlier v2 schemas 13–18 remain readable and migrate directly; migrated
+Current Case schema 20 is written for new saves. Exact public v1 Case schema 12
+and earlier v2 schemas 13–19 remain readable and migrate directly; migrated
 fields can remain null, unknown or blank because WHOISleuth does not reconstruct
 them from weaker evidence.
 Case report v15 JSON and Markdown do not add the snapshot hostname.
@@ -831,10 +831,15 @@ A completed full Lookup also carries a small collection receipt containing
 submitted optional-source choices and closed states for admission, collector
 start, outcome, completeness and truncation. It contains no target value, URL,
 contact, raw error or response payload. It stays in the open browser result and
-can be retained in explicitly saved private CLI Lookup version 3 files. It is
-not added to Compact/Bulk results, Watchlist baselines or minimised Lookup
-evidence exports. Historical absence remains unknown; cancellation before a
-valid final result does not create a completed receipt.
+can be retained in explicitly saved private CLI Lookup version 3 files, Case
+assessments and selected Case checkpoints. A selected checkpoint retains one
+receipt for its pin group, not the other Lookup results or an extra assessment.
+Ordinary Case/workspace backups and internal Case packs preserve these receipts.
+Trusted/public Case packs, Case reports and response packets omit them; shared
+assessment identities are recomputed without receipt context. Receipts are not
+added to Compact/Bulk results, Watchlist baselines or minimised Lookup evidence
+exports. Historical absence remains unknown; cancellation before a valid final
+result does not create a completed receipt.
 
 Different exports have different sensitivity:
 

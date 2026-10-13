@@ -9,7 +9,7 @@
 // registry/web responses, contacts, cookies, screenshots, and authentication
 // data. Reports contain only the normalized case record.
 
-import { caseEvidenceTimeline, compareCaseEvidence, currentCaseEvidence, publishedCaseEvidenceTimelineForVerification } from './case-evidence-model.mts';
+import { caseEvidenceTimeline, caseEvidenceWithoutCollectionReceipts, compareCaseEvidence, currentCaseEvidence, publishedCaseEvidenceTimelineForVerification } from './case-evidence-model.mts';
 import type { CaseEvidenceSnapshot, CaseRecord, EvidenceFactor } from './case-model.mts';
 import { httpSecurityHeaderLabel } from './http-summary.mts';
 import { webCollectionScoreLimitation } from '../evidence/collection-quality.mts';
@@ -78,7 +78,7 @@ type ReportOptions = {
 };
 type ReportReason = 'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'collection-quality' | 'other';
 type ReportChange = ReturnType<typeof compareCaseEvidence>[number];
-type ReportSnapshot = Omit<CaseEvidenceSnapshot, 'inputHostname' | 'observationHostname'>;
+type ReportSnapshot = Omit<CaseEvidenceSnapshot, 'inputHostname' | 'observationHostname' | 'collectionReceipt'>;
 type ReportTimelineEntry = {
   snapshot: ReportSnapshot;
   isBaseline: boolean;
@@ -269,9 +269,10 @@ export function buildCaseReport(
 
   // --- Build JSON report ---
 
-  const timeline = caseEvidenceTimeline(caseRecord.evidenceHistory);
+  const sharedEvidence = { ...caseRecord, evidenceHistory: caseEvidenceWithoutCollectionReceipts(caseRecord) };
+  const timeline = caseEvidenceTimeline(sharedEvidence.evidenceHistory);
   const timelineEntries = projectReportTimeline(timeline);
-  const selection = currentCaseEvidence(caseRecord);
+  const selection = currentCaseEvidence(sharedEvidence);
   const latest = selection.snapshot;
   const currentAssessment = latest ? pickKnownSnapshotFields(latest) : null;
   const responseLifecycle = buildCaseResponseLifecycleSummary(caseRecord);

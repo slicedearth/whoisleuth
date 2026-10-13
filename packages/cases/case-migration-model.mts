@@ -20,6 +20,8 @@ import { normalizeCase } from './case-record-operations.mts';
 import { normalizeCaseObjective } from './case-incident-context.mts';
 import { normalizeDomain } from '../evidence/domain-name.mts';
 import { mergeImportedEvidenceHistory, normalizeEvidenceHistory } from './case-evidence-model.mts';
+import { assertCaseCollectionReceiptAudience } from './case-record-projection.mts';
+import { readCaseCheckpointReceipts, mergeCaseCheckpointReceipts, type CaseCheckpointCollectionReceipt } from './case-checkpoint-receipts.mts';
 import type {
   CaseDisposition,
   CaseEvidenceSnapshot,
@@ -110,6 +112,7 @@ type ImportPatch = {
   source: CaseSource | undefined;
   evidenceHistory: CaseEvidenceSnapshot[];
   evidencePins: CaseEvidencePin[];
+  checkpointCollectionReceipts: CaseCheckpointCollectionReceipt[] | undefined;
   decisions: CaseDecisionRecord[];
   actions: CaseActionRecord[];
   assertions: CaseAssertionRecord[];
@@ -361,6 +364,7 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
       caseDomain: domain,
     }),
     evidencePins,
+    checkpointCollectionReceipts: readCaseCheckpointReceipts(record.checkpointCollectionReceipts, evidencePins, importedVersion),
     decisions,
     actions,
     assertions,
@@ -421,6 +425,7 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     source: patch.source ?? DEFAULT_SOURCE,
     evidenceHistory: patch.evidenceHistory,
     evidencePins: patch.evidencePins,
+    ...(patch.checkpointCollectionReceipts === undefined ? {} : { checkpointCollectionReceipts: patch.checkpointCollectionReceipts }),
     decisions: patch.decisions,
     actions: patch.actions,
     assertions: patch.assertions,
@@ -455,6 +460,7 @@ function applyImportPatch(
   const historySelection = mergeImportedEvidenceHistory(local.evidenceHistory, patch.evidenceHistory, local.domain);
   const pinSelection = retainLocalAuthoredRecords(local.evidencePins, patch.evidencePins, MAX_CASE_EVIDENCE_PINS);
   const evidencePins = normalizeCaseEvidencePins(pinSelection.records, fallback);
+  const checkpointCollectionReceipts = mergeCaseCheckpointReceipts(local, patch, evidencePins);
   const pinIds = new Set(evidencePins.map((item) => item.id));
   const actions = mergeCaseActions(local.actions, patch.actions, fallback, pinIds);
   const assertionSelection = retainLocalAuthoredRecords(local.assertions, patch.assertions, MAX_CASE_ASSERTIONS);
@@ -492,8 +498,9 @@ function applyImportPatch(
     + assertionSelection.omitted
     + trailSelection.omitted
     + sightingSelection.omitted;
+  const { checkpointCollectionReceipts: _previousReceipts, ...localFields } = local;
   return { record: {
-    ...local,
+    ...localFields,
     title: patch.title !== undefined && importNewer ? patch.title : local.title ?? '',
     status: patch.status !== undefined && importNewer ? patch.status : local.status,
     disposition: patch.disposition !== undefined && importNewer ? patch.disposition : local.disposition,
@@ -502,6 +509,7 @@ function applyImportPatch(
     source: patch.source !== undefined && importNewer ? patch.source : local.source,
     evidenceHistory: historySelection.records,
     evidencePins,
+    ...(checkpointCollectionReceipts === undefined ? {} : { checkpointCollectionReceipts }),
     decisions,
     actions,
     assertions,
@@ -615,6 +623,7 @@ function caseCollectionImportEnvelope(importedRaw: unknown): Record<string, unkn
     || caseTimestampOrNull(root.exportedAt) !== root.exportedAt) {
     throw new Error('The WHOISleuth CLI Case-pack envelope is invalid.');
   }
+  assertCaseCollectionReceiptAudience(root, audience);
   for (const reportValue of reports) {
     const report = objectRecord(reportValue);
     assertOnlyEnvelopeKeys(

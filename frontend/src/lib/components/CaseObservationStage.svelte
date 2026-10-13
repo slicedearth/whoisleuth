@@ -11,6 +11,7 @@
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import type { CaseResponsePresentation, PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
+  import CollectionReceiptReview from './CollectionReceiptReview.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   import DocumentationSearch from './DocumentationSearch.svelte';
@@ -143,6 +144,18 @@
           </li>
         {/each}
       </ol>
+      {#if record.checkpointCollectionReceipts?.length}
+        <details>
+          <summary>Collection context for selected checkpoints</summary>
+          <p>These receipts describe the Lookup that supplied the selected pins. Other results from that Lookup were not saved with the checkpoint.</p>
+          {#each record.checkpointCollectionReceipts as context (context.checkpointId)}
+            <section aria-label="Selected checkpoint collection context">
+              <p>Selected facts: {record.evidencePins.filter(pin => pin.checkpointId === context.checkpointId).map(pin => pin.label).join('; ')}</p>
+              <CollectionReceiptReview receipt={context.collectionReceipt} headingLevel={4} />
+            </section>
+          {/each}
+        </details>
+      {/if}
     {/if}
   </details>
 

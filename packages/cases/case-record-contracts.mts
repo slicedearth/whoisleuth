@@ -11,6 +11,8 @@ import type {
 import type { CaseActionTransitionEvent, CaseObservedEffectReview, CaseClosureRecord } from './case-response-records.mts';
 import { ANALYST_REVIEW_REASONS } from '../analysis/analyst-taxonomy.mts';
 import type { WebCollectionQuality } from '../evidence/collection-quality.mts';
+import type { LookupCollectionReceipt } from '../evidence/lookup-collection-receipt.mts';
+import type { CaseCheckpointCollectionReceipt } from './case-checkpoint-receipts.mts';
 import {
   CASE_IMPORT_VERSIONS,
   CASE_SCHEMA_VERSION,
@@ -115,6 +117,7 @@ export type CaseEvidenceSnapshot = {
   webObservationMode?: 'selected_url';
   scanDepth: string;
   webCollectionQuality?: WebCollectionQuality;
+  collectionReceipt?: LookupCollectionReceipt;
   availability: string | null;
   confidence: string | null;
   riskModelVersion: number | null;
@@ -178,6 +181,7 @@ export type CaseRecord = {
   source: CaseSource;
   evidenceHistory: CaseEvidenceSnapshot[];
   evidencePins: CaseEvidencePin[];
+  checkpointCollectionReceipts?: CaseCheckpointCollectionReceipt[];
   evidenceLinks?: CaseEvidenceLink[];
   decisions: CaseDecisionRecord[];
   actions: CaseActionRecord[];
@@ -209,6 +213,7 @@ export type CaseInput = {
   evidence?: unknown;
   evidencePin?: unknown;
   evidencePins?: unknown;
+  checkpointCollectionReceipts?: unknown;
   evidenceLink?: unknown;
   evidenceLinkWithdrawal?: unknown;
   decision?: unknown;

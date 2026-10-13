@@ -6,7 +6,8 @@ import { normalizeOpportunityModelVersion } from '../analysis/opportunity-scorin
 import { normalizeRiskModelVersion } from '../analysis/risk-scoring.mts';
 import { latestObservationCohort } from '../evidence/latest-observations.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
-import { EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION, OBJECT_RESPONSE_CASE_SCHEMA_VERSION, PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { COLLECTION_RECEIPT_CASE_SCHEMA_VERSION, EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION, OBJECT_RESPONSE_CASE_SCHEMA_VERSION, PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { parseLookupCollectionReceipt, lookupCollectionReceiptIdentity } from '../evidence/lookup-collection-receipt.mts';
 import { validWebObservationMode } from '../evidence/lookup-target.mts';
 import { normalizeWebCollectionQuality, webCollectionAllowsComparison } from '../evidence/collection-quality.mts';
 import {
@@ -20,6 +21,7 @@ import {
   MAX_EVIDENCE_TITLE_LENGTH,
   type CaseEvidenceMaterial,
   type CaseEvidenceSnapshot,
+  type CaseRecord,
   type CompareFieldSpec,
   type EvidenceChange,
   type EvidenceFactor,
@@ -158,6 +160,7 @@ const MATERIAL_FIELD_ORDER: Array<keyof CaseEvidenceMaterial> = [
   'webObservationMode',
   'scanDepth',
   'webCollectionQuality',
+  'collectionReceipt',
   'availability', 'confidence', 'riskModelVersion', 'riskScore', 'opportunityModelVersion', 'opportunityScore',
   'riskFactors', 'opportunityFactors',
   'registrar', 'createdDate', 'expiryDate', 'nameservers',
@@ -211,7 +214,7 @@ function isEmptyMaterial(value: unknown): boolean {
 
 // Fields that describe the capture rather than assert evidence, so they never
 // on their own keep an otherwise-empty snapshot alive.
-const NON_EVIDENCE_MATERIAL = new Set(['inputHostname', 'observationHostname', 'webObservationMode', 'scanDepth', 'webCollectionQuality', 'confidence']);
+const NON_EVIDENCE_MATERIAL = new Set(['inputHostname', 'observationHostname', 'webObservationMode', 'scanDepth', 'webCollectionQuality', 'collectionReceipt', 'confidence']);
 
 // A snapshot with no material evidence (only timestamps/source/depth, or only a
 // bare confidence/unknown-availability) is dropped rather than added to a
@@ -231,7 +234,7 @@ function canonicalMaterialString(snapshot: CaseEvidenceMaterial, legacyOrder = f
     const value = materialValue(field, snapshot, legacyOrder);
     // Optional collection context does not alter historical fingerprints when
     // absent; recorded context separates otherwise-identical captures.
-    if ((field === 'inputHostname' || field === 'observationHostname' || field === 'webObservationMode' || field === 'webCollectionQuality' || field === 'hasExternalPasswordForm') && value === null) continue;
+    if ((field === 'inputHostname' || field === 'observationHostname' || field === 'webObservationMode' || field === 'webCollectionQuality' || field === 'collectionReceipt' || field === 'hasExternalPasswordForm') && value === null) continue;
     canonical[field] = value;
   }
   return JSON.stringify(canonical);
@@ -254,6 +257,22 @@ export function normalizeSnapshot(raw: unknown, options: SnapshotOptions = {}): 
   return built ? built.snapshot : null;
 }
 
+/** Shared artefacts use receipt-free identities, not hashes of private choices.
+ * Unchanged historical histories keep their exact identifiers. */
+export function caseEvidenceWithoutCollectionReceipts(record: Pick<CaseRecord, 'domain' | 'evidenceHistory'>): CaseEvidenceSnapshot[] {
+  if (!Array.isArray(record.evidenceHistory)) return [];
+  if (!record.evidenceHistory.some(snapshot => snapshot?.collectionReceipt !== undefined)) {
+    return structuredClone(record.evidenceHistory);
+  }
+  return normalizeEvidenceHistory(record.evidenceHistory.map(snapshot => {
+    if (!snapshot || typeof snapshot !== 'object') return snapshot;
+    const { collectionReceipt: _receipt, ...evidence } = snapshot;
+    return evidence;
+  }), {
+    fallback: null, caseDomain: record.domain,
+  });
+}
+
 /** @returns {{ snapshot: CaseEvidenceSnapshot, material: string } | null} */
 function buildSnapshot(
   raw: unknown,
@@ -269,6 +288,13 @@ function buildSnapshot(
   // captures declare code-unit ordering; the declaration survives every save.
   const legacyOrder = historicalSchema || (record.factorOrder === undefined && typeof record.fingerprint === 'string');
   const scanDepth = normalizeScanDepth(record.scanDepth);
+  const collectionReceipt = parseLookupCollectionReceipt(record.collectionReceipt);
+  if (collectionReceipt && options.sourceVersion != null && options.sourceVersion < COLLECTION_RECEIPT_CASE_SCHEMA_VERSION) {
+    throw new TypeError('Collection receipts require Case schema 20 or later; historical evidence was not reinterpreted.');
+  }
+  if (collectionReceipt && (collectionReceipt.targetClass !== 'domain' || collectionReceipt.requestedDepth !== scanDepth)) {
+    throw new TypeError('Collection receipt does not match the Case assessment.');
+  }
   const httpSummary = normalizeHttpSummary(record);
   const webCollectionQuality = normalizeWebCollectionQuality(record.webCollectionQuality, scanDepth);
   if (webCollectionQuality && options.sourceVersion != null && options.sourceVersion < EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION) {
@@ -290,6 +316,7 @@ function buildSnapshot(
     ...(acceptsObservationHostname && scanDepth !== 'fast' && record.webObservationMode === 'selected_url' ? { webObservationMode: record.webObservationMode } : {}),
     scanDepth,
     ...(webCollectionQuality ? { webCollectionQuality } : {}),
+    ...(collectionReceipt ? { collectionReceipt } : {}),
     availability: evidenceString(record.availability),
     confidence: evidenceString(record.confidence),
     riskModelVersion: normalizeRiskModelVersion(record.riskModelVersion),
@@ -573,8 +600,13 @@ function buildEvidenceTimeline(history: readonly CaseEvidenceSnapshot[] | null |
     const incomparableReasons: Array<ReturnType<typeof caseEvidenceIncomparableReasons>[number] | 'other'> = orderingLimitation
       ? ['other']
       : comparable ? incomparableReasonsForEvidence(previous.snapshot, snapshot, enforceCollectionQuality) : [];
-    if (comparable && !changes.length && !incomparableReasons.length
-      && canonicalMaterialString(previous.snapshot) !== canonicalMaterialString(snapshot)) incomparableReasons.push('other');
+    const collectionContextChanged = Boolean(comparable
+      && lookupCollectionReceiptIdentity(previous.snapshot.collectionReceipt) !== lookupCollectionReceiptIdentity(snapshot.collectionReceipt));
+    if (comparable && !changes.length && !incomparableReasons.length) {
+      const { collectionReceipt: _beforeReceipt, ...before } = previous.snapshot;
+      const { collectionReceipt: _afterReceipt, ...after } = snapshot;
+      if (canonicalMaterialString(before) !== canonicalMaterialString(after)) incomparableReasons.push('other');
+    }
     return {
       snapshot,
       isBaseline,
@@ -583,6 +615,7 @@ function buildEvidenceTimeline(history: readonly CaseEvidenceSnapshot[] | null |
       hasIncomparableChange: incomparableReasons.length > 0,
       incomparableReasons,
       orderingLimitation,
+      collectionContextChanged,
     };
   });
 }

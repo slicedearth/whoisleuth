@@ -1,12 +1,12 @@
 <script lang="ts">
   import { lookupCollectionReceiptReview } from '../../../../packages/evidence/lookup-collection-review.mts';
-  let { receipt }: { receipt: unknown } = $props();
+  let { receipt, headingLevel = 5 }: { receipt: unknown; headingLevel?: 4 | 5 } = $props();
   const review = $derived(lookupCollectionReceiptReview(receipt));
 </script>
 
 {#if review}
   <section class="receipt" aria-label="Collection receipt">
-    <h5>Original collection choices</h5>
+    <svelte:element this={`h${headingLevel}`}>Original collection choices</svelte:element>
     <p>{review.selection}. These choices were captured when this Lookup was submitted.</p>
     <ul aria-label="Optional source selections">
       {#each review.choices as choice}<li>{choice.label}: {choice.selected ? 'selected' : 'not selected'}</li>{/each}
@@ -23,7 +23,7 @@
 
 <style>
   .receipt{min-width:0;margin:1rem 0;padding:0 0 1rem;border-bottom:1px solid var(--border)}
-  h5{margin:0 0 .4rem;font-size:var(--text-sm)}
+  .receipt :global(:is(h4,h5)){margin:0 0 .4rem;font-size:var(--text-sm)}
   p,li,dt,dd{overflow-wrap:anywhere}
   dl{display:grid;gap:.75rem;margin:.75rem 0}
   dt{font-weight:600}dd{margin:.2rem 0 0;color:var(--muted);line-height:1.5}

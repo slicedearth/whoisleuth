@@ -20,7 +20,10 @@ async function start(page: Page, selected = false, includeReceipt = false) {
     Object.assign(fixture.rdap.parsed, { registrar: { name: 'Original registrar' } });
     Object.assign(fixture.availability, { applicable: true, observationHostname: DOMAIN });
     if (selected) Object.assign(fixture.availability, { webObservationMode: 'selected_url' });
-    if (includeReceipt) Object.assign(fixture, { collectionReceipt: JSON.parse(readFileSync(path.resolve(__dirname, '../test/fixtures/cli-lookup-v3.json'), 'utf8')).collectionReceipt });
+    if (includeReceipt) {
+      Object.assign(fixture, { collectionReceipt: JSON.parse(readFileSync(path.resolve(__dirname, '../test/fixtures/cli-lookup-v3.json'), 'utf8')).collectionReceipt });
+      Object.assign(fixture.availability.dns, {observedAt: EARLIER});
+    }
     await route.fulfill({ json: fixture });
   });
   await page.goto('/lookup');
@@ -64,6 +67,42 @@ test('completed source-plan review stays bound to its original target, mode and 
   await expect(review.locator('[data-planned-source="domain_evidence"]')).toBeVisible();
   await expect(review).not.toContainText('AS64496');
   await expect(page.locator('.source-refresh .refresh-results > li')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Expand details: Web and DNS evidence', exact: true }).click();
+  const checkpoint = page.locator('.source-checkpoint', { has: page.locator('summary', { hasText: 'Pin DNS facts to Case' }) });
+  await checkpoint.locator('summary').click();
+  await checkpoint.getByRole('button', { name: 'Save lookup to Case', exact: true }).click();
+  const saved = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
+  const originalReceipt = JSON.parse(readFileSync(path.resolve(__dirname, '../test/fixtures/cli-lookup-v3.json'), 'utf8')).collectionReceipt;
+  expect(saved.evidenceHistory).toEqual([expect.objectContaining({collectionReceipt: originalReceipt, scanDepth: 'deep'})]);
+  const nameservers = checkpoint.getByRole('checkbox', { name: /^Nameservers /u });
+  await expect(nameservers).toBeEnabled();
+  await nameservers.check();
+  await checkpoint.getByRole('button', { name: 'Save 1 checkpoint fact', exact: true }).click();
+  await expect(checkpoint.getByRole('status')).toContainText('Saved 1 analyst-selected checkpoint fact');
+  const retained = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
+  expect(retained.evidenceHistory).toEqual(saved.evidenceHistory);
+  expect(retained.evidencePins).toHaveLength(1);
+  expect(retained.checkpointCollectionReceipts).toEqual([{checkpointId: (retained.evidencePins as {checkpointId: string}[])[0]!.checkpointId, collectionReceipt: originalReceipt}]);
+  await page.goto(`/cases?case=${encodeURIComponent(String(retained.id))}&section=evidence`);
+  const observations = page.getByRole('region', { name: 'Case observations', exact: true });
+  const pinDisclosure = observations.getByText('Pin an observed fact', { exact: true });
+  if (await pinDisclosure.locator('..').getAttribute('open') === null) await pinDisclosure.click();
+  await observations.getByText('Collection context for selected checkpoints', {exact: true}).click();
+  const context = observations.getByRole('region', {name: 'Selected checkpoint collection context'});
+  await expect(context).toContainText('Nameservers');
+  await expect(context).toContainText('security.txt: not selected');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({width, height: 844});
+      await expectNoHorizontalOverflow(page);
+      await expect(context).toBeVisible();
+      if (captureVisualEvidenceEnabled()) {
+        await context.getByRole('heading', {name: 'Original collection choices'}).evaluate(element => element.scrollIntoView({block: 'center'}));
+        await page.screenshot({path: testInfo.outputPath(`checkpoint-receipt-${theme}-${width}.png`)});
+      }
+    }
+  }
 });
 
 test('refreshed facts survive section navigation and save through the existing Case checkpoint without replacing its observation', async ({ page }, testInfo) => {
@@ -76,7 +115,7 @@ test('refreshed facts survive section navigation and save through the existing C
       data: { rawContact: 'private-example-contact' },
     } });
   });
-  await start(page);
+  await start(page, false, true);
   const refresh = page.locator('.source-refresh');
   await refresh.getByRole('button', { name: 'Refresh Registry RDAP', exact: true }).click();
   await expect(refresh.locator('.refresh-results > li')).toHaveCount(1);
@@ -106,6 +145,7 @@ test('refreshed facts survive section navigation and save through the existing C
   await expect(pin.getByRole('status')).toContainText('Saved 1 analyst-selected checkpoint fact');
   const after = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
   expect(after.evidenceHistory).toEqual(before.evidenceHistory);
+  expect(after.checkpointCollectionReceipts).toBeUndefined();
   expect(after.evidencePins).toEqual([expect.objectContaining({ value: 'Updated registrar', source: 'Registry RDAP', observedAt: LATER })]);
   expect(JSON.stringify(after)).not.toContain('private-example-contact');
   const downloaded = page.waitForEvent('download');

@@ -14,6 +14,7 @@ import {
   CASE_AUDIENCE_SENSITIVE_FIELD_NAMES,
   caseAudienceExclusions,
   projectCaseForAudience,
+  assertCaseCollectionReceiptAudience,
 } from '../packages/cases/case-record-projection.mts';
 import { normalizeDomain } from '../packages/evidence/domain-name.mts';
 import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
@@ -137,6 +138,9 @@ function allowedSensitiveFieldPath(key: string, path: readonly (number | string)
   if (key === 'target') return listItemPath(path, 'manualTrail') || deliveryReceipt;
   if (key === 'correction') return listItemPath(path, 'actions');
   if (key === 'packetReceipt') return typeof path.at(-1) === 'number' && path.at(-2) === 'history' && listItemPath(path.slice(0, -2), 'actions');
+  if (key === 'checkpointCollectionReceipts') return topCasePath(path);
+  if (key === 'collectionReceipt') return path.length === 4 && path[0] === 'cases' && typeof path[1] === 'number'
+    && (path[2] === 'evidenceHistory' || path[2] === 'checkpointCollectionReceipts') && typeof path[3] === 'number';
   return true;
 }
 
@@ -446,6 +450,7 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
   assertClosedEnvelopes(root, packet, integrity, redactionManifest, packet.reports, root.version as number);
   assertSensitiveFieldPlacement(root, serialized.length);
   const audience = packet.audience as CasePackAudience;
+  assertCaseCollectionReceiptAudience(root, audience);
   if (!Number.isSafeInteger(redactionManifest.sourceCaseCount)
     || redactionManifest.sourceCaseCount !== root.cases.length
     || !stringListsMatch(redactionManifest.excluded, caseAudienceExclusions(audience, root.version as number))) {

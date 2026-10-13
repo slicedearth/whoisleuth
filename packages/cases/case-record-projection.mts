@@ -1,9 +1,24 @@
 import type { CaseRecord } from './case-record-contracts.mts';
-import { PUBLIC_CASE_SCHEMA_VERSION, INCIDENT_CASE_SCHEMA_VERSION, EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { COLLECTION_RECEIPT_CASE_SCHEMA_VERSION, PUBLIC_CASE_SCHEMA_VERSION, INCIDENT_CASE_SCHEMA_VERSION, EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION, MAX_CASE_IMPORT_BYTES } from '../contracts/case-portability.mts';
 import { caseStatusIsClosed } from './case-record-decisions.mts';
+import { caseEvidenceWithoutCollectionReceipts } from './case-evidence-model.mts';
+import { assertBoundedJsonStructure, boundedJsonLimitsForBytes, scanBoundedJson } from '../analysis/bounded-json.mts';
 
 export type CaseAudience = 'internal' | 'public' | 'trusted';
 export type CaseFieldTreatment = 'exclude' | 'preserve' | 'redact' | 'transform';
+
+/** Check the whole shared envelope, including otherwise unrecognised nesting.
+ * Writer projection alone cannot enforce the audience of an imported pack. */
+export function assertCaseCollectionReceiptAudience(root: unknown, audience: CaseAudience): void {
+  if (audience === 'internal') return;
+  const limits = boundedJsonLimitsForBytes(MAX_CASE_IMPORT_BYTES);
+  assertBoundedJsonStructure(root, 'Shared Case pack', limits);
+  scanBoundedJson(JSON.stringify(root), limits, entry => {
+    if (entry.kind === 'key' && (entry.value === 'collectionReceipt' || entry.value === 'checkpointCollectionReceipts')) {
+      throw new TypeError('Shared Case packs cannot contain private collection receipts.');
+    }
+  });
+}
 
 type CaseProjectionProfile = 'durable' | CaseAudience;
 type CompleteCaseRecord = Required<CaseRecord>;
@@ -149,12 +164,27 @@ const CASE_FIELD_RULES = Object.freeze({
     },
   }),
   source: preservedField('source'),
-  evidenceHistory: fieldRule('evidenceHistory', PRESERVE, (record) => structuredClone(record.evidenceHistory)),
+  evidenceHistory: fieldRule('evidenceHistory', SHARED_REDACT, (record, profile) => (
+    profile === 'trusted' || profile === 'public'
+      ? caseEvidenceWithoutCollectionReceipts(record) : structuredClone(record.evidenceHistory)
+  ), {
+    nestedSensitiveFields: ['collectionReceipt'],
+    audienceExclusions: {
+      trusted: { label: 'Private collection receipts', order: 4, sinceVersion: COLLECTION_RECEIPT_CASE_SCHEMA_VERSION },
+      public: { label: 'Private collection receipts', order: 4, sinceVersion: COLLECTION_RECEIPT_CASE_SCHEMA_VERSION },
+    },
+  }),
   evidencePins: fieldRule('evidencePins', PUBLIC_REDACT, (record, profile) => structuredClone(record.evidencePins).map(pin => {
     if (profile !== 'public') return pin;
     const { responseObject: _scope, infrastructureObservation: _infrastructure, ...publicPin } = pin;
     return publicPin;
   }), { nestedSensitiveFields: ['responseObject', 'infrastructureObservation'], audienceExclusions: { public: { label: 'Exact-object evidence scope and infrastructure observations', order: 4, sinceVersion: 18 } } }),
+  checkpointCollectionReceipts: fieldRule('checkpointCollectionReceipts', SHARED_EXCLUDE, (record, profile) => (
+    profile === 'trusted' || profile === 'public' ? undefined : structuredClone(record.checkpointCollectionReceipts)
+  ), { audienceExclusions: {
+    trusted: { label: 'Private collection receipts', order: 4, sinceVersion: COLLECTION_RECEIPT_CASE_SCHEMA_VERSION },
+    public: { label: 'Private collection receipts', order: 4, sinceVersion: COLLECTION_RECEIPT_CASE_SCHEMA_VERSION },
+  } }),
   evidenceLinks: fieldRule('evidenceLinks', PUBLIC_EXCLUDE, (record, profile) => (
     profile === 'public' ? undefined : structuredClone(record.evidenceLinks)
   ), { audienceExclusions: { public: { label: 'Analyst evidence relationships', order: 4, sinceVersion: EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION } } }),

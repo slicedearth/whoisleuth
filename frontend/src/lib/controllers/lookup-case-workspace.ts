@@ -6,6 +6,7 @@ import type { CheckpointFact } from '../analysis/case-evidence-checkpoint.ts';
 import { latestCaseEvidence } from '../../../../packages/cases/case-evidence-model.mts';
 import { compareLookupRecheck } from '../analysis/lookup-recheck-comparison.ts';
 import type { LookupOperation } from './lookup-request-controller.ts';
+import { parseLookupCollectionReceipt } from '../../../../packages/evidence/lookup-collection-receipt.mts';
 
 type LookupCaseState = Readonly<{
   record: CaseRecord | null;
@@ -245,8 +246,9 @@ export function lookupCaseActions(
     },
     saveCheckpoint(selectedFields: string[], transitionExpectations: Parameters<LookupCaseController['recordCheckpoint']>[3] = {}) {
       const { record } = workspace.state;
-      const { facts } = observation();
-      return workspace.perform(() => controller.recordCheckpoint(record, facts, [...selectedFields], { ...transitionExpectations }));
+      const { facts, evidence } = observation();
+      const receipt = parseLookupCollectionReceipt(evidence.collectionReceipt);
+      return workspace.perform(() => controller.recordCheckpoint(record, facts, [...selectedFields], { ...transitionExpectations }, ...(receipt ? [receipt] : [])));
     },
     saveRefreshedCheckpoint(facts: readonly CheckpointFact[], selectedFields: string[]) {
       const { record } = workspace.state;
