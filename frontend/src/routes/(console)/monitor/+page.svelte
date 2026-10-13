@@ -473,13 +473,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
 
 {#if view==='relationships'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-relationships">
-  {#if websiteSnapshotsSourceState==='ready'}
-    <DeferredSurface load={()=>import('#lib/components/WebsiteProfileClusters.svelte')} loadingLabel="Loading website-profile relationships…" unavailableLabel="Website-profile relationships could not be loaded." props={{summary:websiteProfileClusters,cases,onpin:casesSourceState==='ready'?recordWebsiteClusterLead:null}} placeholder="workspace" />
-  {:else}
-    <LocalCollectionState state={websiteSnapshotsSourceState}
-      loadingTitle="Opening website relationships" loadingDetail="Reading saved website snapshots for this review."
-      title="Website-profile relationships unavailable" detail="Saved website snapshots could not be read, so no missing cluster is inferred and review-lead recording from that source remains unavailable." />
-  {/if}
+  <DeferredSurface load={()=>import('#lib/components/RetainedEvidenceGallery.svelte')} loadingLabel="Loading retained evidence gallery…" unavailableLabel="The retained gallery could not be displayed. Saved evidence has not changed." props={{summary:websiteProfileClusters,cases,profilesState:websiteSnapshotsSourceState,casesState:casesSourceState,onpin:casesSourceState==='ready'?recordWebsiteClusterLead:null}} placeholder="workspace" />
   {#if relationshipsSourceState==='ready'}
     <DeferredSurface load={()=>import('#lib/components/RetainedRelationshipObservations.svelte')} loadingLabel="Loading retained relationship observations…" unavailableLabel="Retained relationship observations could not be loaded." props={{records:retainedRelationships,focusId:page.url.searchParams.get('observation')||'',ondelete:removeRetainedRelationship}} />
   {:else}

@@ -748,6 +748,13 @@ Capture attachment checks compare selected bytes with manifest declarations;
 matching bytes do not authenticate the capture. Review state is held in page
 memory and cleared when closed or when the page is left.
 
+The retained evidence gallery searches current Case-file metadata and saved
+website-profile contributions locally. Search reads no original file bodies.
+An explicit comparison opens only the selected pair, preserving each Case and
+file-source declaration. Prepared bytes and results stay in page memory, are
+excluded from printing and exports, and clear when the selection, source state,
+workspace or page changes. No content index, upload or collection is added.
+
 Imports and exports are deliberate local actions. Importers validate bounded
 envelopes before preview or merge; omission never deletes destination data.
 Imported evidence remains attributed to its file and declared source and is not

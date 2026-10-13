@@ -1,0 +1,147 @@
+<script lang="ts">
+  import { onDestroy, tick, untrack } from 'svelte';
+  import type { CaseRecord } from '#lib/cases.ts';
+  import type { WebsiteProfileCluster, WebsiteProfileClusterSummary } from '#lib/analysis/website-profile-clusters.ts';
+  import { filterGalleryFiles, galleryObservationContext, gallerySelectionSignature, retainedGalleryInventory,
+    resolveGalleryFile, type GalleryFile } from '#lib/analysis/retained-evidence-gallery.ts';
+  import { readRetainedCaseFiles } from '#lib/case-attachments.ts';
+  import { runInvestigationPackageWorker } from '#lib/investigation-package-worker.ts';
+  import { TEXT_COMPARISON_BYTES, type TextPassageComparison } from '../../../../packages/comparison/text-passages.mts';
+  import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES } from '../../../../packages/investigation/investigation-manifest.mts';
+  import WebsiteProfileClusters from './WebsiteProfileClusters.svelte';
+  import LocalCollectionState from './LocalCollectionState.svelte';
+  import Pagination from './Pagination.svelte';
+  import ComparisonFrame from './ComparisonFrame.svelte';
+  import DeferredSurface from './DeferredSurface.svelte';
+  import TextPassageResults from './TextPassageResults.svelte';
+
+  let { summary, cases, profilesState, casesState, onpin = null }: {
+    summary: WebsiteProfileClusterSummary; cases: readonly CaseRecord[];
+    profilesState: 'loading' | 'ready' | 'unavailable'; casesState: 'loading' | 'ready' | 'unavailable';
+    onpin?: ((cluster: WebsiteProfileCluster, domain: string, caseId?: string) => void | Promise<void>) | null;
+  } = $props();
+  let query = $state(''), facet = $state<'profiles' | 'png' | 'text'>('profiles'), page = $state(1);
+  let leftKey = $state(''), rightKey = $state(''), error = $state(''), busy = $state(false);
+  let prepared = $state.raw<{ left: GalleryFile; right: GalleryFile; files: readonly Blob[] } | null>(null);
+  let textResult = $state.raw<TextPassageComparison | null>(null);
+  let controller: AbortController | null = null;
+  let heading = $state<HTMLHeadingElement>(), results = $state<HTMLOListElement>(), trigger = $state<HTMLButtonElement>();
+  const inventory = $derived(retainedGalleryInventory(casesState === 'ready' ? cases : []));
+  const files = $derived(facet === 'profiles' ? [] : filterGalleryFiles(inventory.files, facet, query));
+  const pageCount = $derived(Math.max(1, Math.ceil(files.length / 20)));
+  const currentPage = $derived(Math.min(page, pageCount));
+  const left = $derived(files.find(file => file.key === leftKey));
+  const right = $derived(files.find(file => file.key === rightKey));
+  const visibleFiles = $derived(files.slice((currentPage - 1) * 20, currentPage * 20));
+  const choices = $derived([...new Map([...visibleFiles, ...(left ? [left] : []), ...(right ? [right] : [])].map(file => [file.key, file])).values()]);
+  const selectedSignature = $derived(left && right ? gallerySelectionSignature(cases, [left.reference, right.reference]) : null);
+  const eligiblePair = $derived(casesState === 'ready' && facet !== 'profiles' && left && right && left.key !== right.key && left.kind === facet && right.kind === facet);
+
+  function invalidate() { controller?.abort(); controller = null; prepared = null; textResult = null; error = ''; busy = false; }
+  $effect(() => { facet; untrack(() => { leftKey = ''; rightKey = ''; page = 1; invalidate(); }); });
+  $effect(() => { selectedSignature; casesState; query; untrack(() => { page = 1; invalidate(); }); });
+  onDestroy(invalidate);
+  async function setPage(next: number) { page = Math.max(1, Math.min(pageCount, next)); await tick(); results?.focus(); }
+  async function close() { invalidate(); await tick(); trigger?.focus(); }
+  async function openComparison() {
+    if (busy || !eligiblePair || !left || !right || !selectedSignature) return;
+    const selectedLeft = resolveGalleryFile(cases, left.reference), selectedRight = resolveGalleryFile(cases, right.reference);
+    if (!selectedLeft || !selectedRight) return;
+    const expected = { signature: selectedSignature, query, facet }, current = new AbortController();
+    controller = current; busy = true; error = ''; prepared = null; textResult = null;
+    const owns = () => controller === current && !current.signal.aborted && casesState === 'ready'
+      && selectedSignature === expected.signature && query === expected.query && facet === expected.facet;
+    try {
+      const ceiling = facet === 'text' ? TEXT_COMPARISON_BYTES : MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES;
+      if ([selectedLeft, selectedRight].some(file => file.attachment.byteLength > ceiling))
+        throw new Error(facet === 'text' ? 'Choose text files no larger than 1 MiB each. No original bytes were read.' : 'A selected PNG exceeds the evidence-file review bound. No original bytes were read.');
+      const selected = await readRetainedCaseFiles([selectedLeft.attachment, selectedRight.attachment]);
+      if (!owns()) return;
+      const bodies = selected.map(file => file.file);
+      if (facet === 'text') {
+        const next = await runInvestigationPackageWorker('textCompare', { left: bodies[0]!, right: bodies[1]! }, { signal: current.signal });
+        if (!owns()) return;
+        textResult = next;
+      }
+      prepared = { left: selectedLeft, right: selectedRight, files: bodies };
+      await tick(); if (owns()) heading?.focus();
+    } catch (cause) { if (owns()) error = cause instanceof Error ? cause.message : 'Selected retained files could not be opened. Saved evidence is unchanged.'; }
+    finally { if (controller === current) { controller = null; busy = false; } }
+  }
+</script>
+
+{#snippet selectedSource(file: GalleryFile, original: Blob, side: 'Reference' | 'Candidate')}
+  <section aria-label={`${side} gallery source`}>
+    <h4>{file.caseTitle} · {file.caseNumber}</h4>
+    <p>{file.attachment.fileName} · {file.attachment.source ?? 'Source not declared'}<br />
+      Observed: {file.attachment.observedAt ?? 'Unknown'}<br />Retained: {file.attachment.retainedAt}</p>
+    <code>{file.attachment.digestSha256}</code>
+    {#if file.attachment.derivation}<p>Derived image · declared immediate-parent digest <code>{file.attachment.derivation.source.digestSha256}</code></p>{/if}
+    {#if facet === 'png'}<DeferredSurface load={() => import('./ArtifactPreview.svelte')}
+      props={{ file: original, mediaType: 'image/png', label: `${side}: ${file.attachment.fileName}`, focusOnReady: false }}
+      loadingLabel="Preparing selected PNG view…" unavailableLabel="The local PNG viewer could not be loaded. The original is unchanged." />{/if}
+  </section>
+{/snippet}
+
+<section class="retained-gallery card" aria-labelledby="retained-gallery-title">
+  <h2 id="retained-gallery-title">Retained evidence gallery</h2>
+  <p>Search saved profile relationships or compare two deliberately selected files across Cases.</p>
+  <div class="filters">
+    <label>Evidence component<select bind:value={facet}><option value="profiles">Website profiles</option><option value="png">PNG images</option><option value="text">Text passages</option></select></label>
+    <label>Search retained metadata<input type="search" maxlength="200" bind:value={query} placeholder={facet === 'profiles' ? 'Domain, technology or evidence type' : 'Case, domain, filename or source'} /></label>
+  </div>
+  <details class="scope"><summary>Search scope and comparison methods</summary><p>Profile contributions use their own similarity model. Image and text search covers currently read Case metadata, not file contents; a filename does not establish valid text. Each comparison reads exactly two selected originals.</p></details>
+  {#if facet === 'profiles'}
+    {#if profilesState === 'ready'}<WebsiteProfileClusters {summary} {cases} {onpin} bind:query showSearch={false} embedded />
+    {:else}<LocalCollectionState state={profilesState} loadingTitle="Opening website relationships" loadingDetail="Reading saved website snapshots for this review." title="Website-profile relationships unavailable" detail="Saved profiles could not be read; no missing match is inferred." />{/if}
+  {:else if casesState !== 'ready'}
+    <LocalCollectionState state={casesState} loadingTitle="Opening retained file metadata" loadingDetail="Reading Case references without opening originals." title="Case references unavailable" detail="The collection could not be read. Missing files or matches are not inferred." />
+  {:else}
+    <p role="status">{files.length} matching {facet === 'png' ? 'PNG' : 'text'} references. {inventory.files.length} eligible file references across {cases.length} currently read Cases; showing page {currentPage} of {pageCount}.</p>
+    {#if inventory.ambiguous}<p>{inventory.ambiguous} ambiguous references are unavailable. Open the relevant Case to review those identities.</p>{/if}
+    <ol class="file-list" aria-label="Retained gallery file references" tabindex="-1" bind:this={results}>
+      {#each visibleFiles as file (file.key)}
+        <li><strong>{file.attachment.fileName}</strong><a href={`/cases?case=${encodeURIComponent(file.reference.caseId)}`}>{file.caseTitle} · {file.caseNumber}</a>
+          <small>Case domain: {file.caseDomain} · Declared source: {file.attachment.source ?? 'Not declared'}</small>
+          <small>Observed: {file.attachment.observedAt ?? 'Unknown'} · Retained: {file.attachment.retainedAt}</small>
+          <details><summary>Recorded file identity</summary><code>{file.reference.attachmentId}</code><br /><code>{file.attachment.digestSha256}</code><p>{file.attachment.byteLength} bytes. Listing this reference has not read or verified the original pixels or text.</p>{#if file.attachment.derivation}<p>Derived image; its edit declaration remains attached to this file. The enclosing Case domain is not an observed image hostname.</p>{/if}</details>
+        </li>
+      {:else}<li>No matching retained file reference is available in the currently read Case metadata.</li>{/each}
+    </ol>
+    <Pagination {currentPage} {pageCount} setPage={value => void setPage(value)} ariaLabel="Retained gallery pages" pageInputLabel="Retained gallery page" />
+    <div class="filters">
+      <label>Reference file<select bind:value={leftKey}><option value="">Choose a reference</option>{#each choices as file (file.key)}<option value={file.key}>{file.caseTitle} · {file.attachment.fileName} · {file.caseNumber}</option>{/each}</select></label>
+      <label>Candidate file<select bind:value={rightKey}><option value="">Choose a candidate</option>{#each choices as file (file.key)}<option value={file.key}>{file.caseTitle} · {file.attachment.fileName} · {file.caseNumber}</option>{/each}</select></label>
+    </div>
+    <p>Selectors show this page and already-selected references. Search or change page to find another file.</p>
+    <div class="actions"><button class="btn" bind:this={trigger} disabled={busy || !eligiblePair} onclick={() => void openComparison()}>{facet === 'text' ? 'Compare selected text' : 'Open selected PNGs'}</button>{#if busy}<button class="btn" onclick={close}>Cancel file review</button><span role="status">Reading the selected verified originals…</span>{/if}</div>
+    {#if error}<p role="alert">{error}</p>{/if}
+    {#if prepared}
+      {@const pair = prepared}
+      <div class="prepared" role="region" aria-label="Selected retained file comparison">
+        <h3 bind:this={heading} tabindex="-1">Two selected retained sources</h3>
+        <details><summary>Selected-pair scope</summary><p>Only this pair was examined. Shared passages or pixels do not establish identity, maliciousness, legitimacy or independent collection.</p></details>
+        <ComparisonFrame>
+          {#snippet header()}<h4>Selected file provenance</h4>{/snippet}
+          {#snippet children()}<p>Case identity and file-source declarations remain separate. Capture conditions are unknown unless recorded with the observation.</p>{/snippet}
+          {#snippet left()}{@render selectedSource(pair.left, pair.files[0]!, 'Reference')}{/snippet}
+          {#snippet right()}{@render selectedSource(pair.right, pair.files[1]!, 'Candidate')}{/snippet}
+        </ComparisonFrame>
+        {#if facet === 'png'}<DeferredSurface load={() => import('./ImageChangeReview.svelte')}
+          props={{ left: pair.files[0]!, right: pair.files[1]!, contexts: [galleryObservationContext(pair.left), galleryObservationContext(pair.right)] }}
+          loadingLabel="Opening selected image comparison…" unavailableLabel="The image comparison could not be loaded. Saved evidence is unchanged." />
+        {:else if textResult}<TextPassageResults result={textResult} reference={prepared.left.attachment} candidate={prepared.right.attachment} referenceScope={prepared.left.caseNumber} candidateScope={prepared.right.caseNumber} />{/if}
+        <button class="btn" onclick={close}>Close selected comparison</button>
+      </div>
+    {/if}
+  {/if}
+</section>
+
+<style>
+  .retained-gallery{padding:var(--card-pad);margin-bottom:16px;min-width:0}h2,h3,h4{margin:0;overflow-wrap:anywhere}p,small{color:var(--muted);font-size:var(--text-xs);line-height:1.6;overflow-wrap:anywhere}
+  .filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-block:12px}label{display:grid;gap:6px;font-size:var(--text-xs);min-width:0}input,select{width:100%;min-width:0}
+  .file-list{display:grid;gap:12px;padding-left:20px}.file-list li{min-width:0}.file-list strong,.file-list a,.file-list small{display:block;overflow-wrap:anywhere}
+  summary{min-height:44px;align-content:center;cursor:pointer;font-size:var(--text-xs)}code{overflow-wrap:anywhere;font-size:var(--text-2xs)}.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}button{white-space:normal;max-width:100%}
+  .prepared{display:grid;gap:12px;margin-top:16px;min-width:0}[role='alert']{color:var(--danger)}h3:focus,.file-list:focus{outline:2px solid var(--focus);outline-offset:3px}
+  @media(max-width:640px){.filters{grid-template-columns:minmax(0,1fr)}}@media print{.retained-gallery{display:none}}
+</style>
