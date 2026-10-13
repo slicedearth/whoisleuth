@@ -12,6 +12,62 @@ import { createCase as createCaseThroughForm, openCaseResponseWorkspace } from '
 import { openCaseSection, openInboxReview, inboxReviewControls } from './console-navigation';
 import { FILE_BYTES, FILE_NAME, openRetainedFiles, selectOriginal, storedFiles } from './case-attachment-fixtures';
 
+const cancelledLockDiagnostics = new WeakMap<Page, { events: unknown[]; omitted: number }>();
+test.afterEach(async ({ page }, testInfo) => {
+  const capture = cancelledLockDiagnostics.get(page);
+  if (capture) await testInfo.attach('cancelled-lock-interactions', { body: JSON.stringify(capture), contentType: 'application/json' });
+});
+
+/** Observe synthetic interaction metadata; never change recovery, storage or input behaviour. */
+async function observeCancelledLock(page: Page) {
+  const capture = { events: [] as unknown[], omitted: 0 };
+  cancelledLockDiagnostics.set(page, capture);
+  await page.exposeFunction('__recordCancelledLockInteraction', (event: unknown) => {
+    if (capture.events.length < 80) capture.events.push(event); else capture.omitted++;
+  });
+  await page.addInitScript(() => {
+    let active = false;
+    const rectangle = (element: Element | null) => {
+      if (!element) return null;
+      const box = element.getBoundingClientRect();
+      return { x: box.x, y: box.y, width: box.width, height: box.height };
+    };
+    const snapshot = () => {
+      const retries = [...document.querySelectorAll('.draft-recovery button')].filter(button => button.textContent?.trim() === 'Retry recovery save');
+      const states = { idle: 0, pending: 0, saved: 0, error: 0, unknown: 0 };
+      for (const element of document.querySelectorAll('[data-recovery-status]')) {
+        const state = element.getAttribute('data-recovery-status');
+        if (state && Object.hasOwn(states, state)) states[state as keyof typeof states]++;
+      }
+      return { notice: rectangle(document.querySelector('.workspace-lock [role="status"]')), retryCount: retries.length,
+        retry: rectangle(retries.length === 1 ? retries[0]! : null), states };
+    };
+    const emit = (phase: string, extra: Record<string, unknown> = {}) => {
+      const record = Reflect.get(window, '__recordCancelledLockInteraction');
+      if (typeof record === 'function') void Promise.resolve(record({ phase, time: performance.now(), ...snapshot(), ...extra })).catch(() => {});
+    };
+    Reflect.set(window, '__markCancelledLockInteraction', (phase: string) => { active = true; emit(phase); });
+    for (const phase of ['beforeunload', 'pagehide', 'pageshow'] as const) window.addEventListener(phase, () => emit(phase));
+    for (const phase of ['pointerdown', 'click'] as const) window.addEventListener(phase, event => {
+      if (!active) return;
+      const target = event.target instanceof Element ? event.target.closest('button') : null;
+      const retry = [...document.querySelectorAll('.draft-recovery button')].filter(button => button.textContent?.trim() === 'Retry recovery save');
+      const category = target && retry.length === 1 && target === retry[0] ? 'retry-save' : target?.textContent?.trim() === 'Lock workspace' ? 'lock-workspace' : 'other';
+      emit(phase, { target: category, point: { x: event.clientX, y: event.clientY }, trusted: event.isTrusted });
+    }, true);
+    let previous = '';
+    new MutationObserver(() => {
+      if (!active) return;
+      const current = JSON.stringify(snapshot());
+      if (current !== previous) { previous = current; emit('geometry-or-status-change'); }
+    }).observe(document, { childList: true, subtree: true, attributes: true });
+  });
+}
+
+async function markCancelledLock(page: Page, phase: string) {
+  await page.evaluate(value => { Reflect.get(window, '__markCancelledLockInteraction')(value); }, phase);
+}
+
 const WORKSPACE_PASSWORD = '<synthetic workspace fixture>';
 const BACKUP_PASSWORD = '<separate archive fixture>';
 const DOMAIN = 'private-investigation.example';
@@ -216,22 +272,27 @@ for (const encryptedSource of [false, true]) {
 }
 
 for (const relock of ['manual', 'idle'] as const) test(`workspace lifecycle keeps the active key usable after cancellation and completes a later ${relock} lock`, { tag: '@cross-browser-critical' }, async ({ page }) => {
+  await observeCancelledLock(page);
   await page.goto('/dashboard'); const row = await createEncrypted(page, 'Cancellable lock'); await unlock(page, row.name);
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
   await createCaseThroughForm(page, 'cancel-lock.example'); const form = await recoveryPinForm(page), url = page.url();
   await page.getByText('Tab references', { exact: true }).click();
   await expect(page.getByText('Visited Cases · 1', { exact: true })).toBeVisible();
   await failNextBrowserLocalManifestWrite(page, 'case_drafts');
+  await markCancelledLock(page, 'before-initial-draft-edit');
   await form.getByLabel('Label', { exact: true }).fill('Keep this draft after cancelling lock');
   await expect(form.getByRole('status')).toContainText('could not be saved for recovery');
+  await markCancelledLock(page, 'before-lock-approach');
   let cancelled = false;
   page.once('dialog', async dialog => { expect(dialog.type()).toBe('beforeunload'); await dialog.dismiss(); cancelled = true; });
   await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
   await expect.poll(() => cancelled).toBe(true); await expect(page).toHaveURL(url);
   await expect(page.getByText('Visited Cases · 1', { exact: true })).toBeVisible();
   await expect(form.getByLabel('Label', { exact: true })).toHaveValue('Keep this draft after cancelling lock');
+  await markCancelledLock(page, 'before-retry-approach');
   await form.getByRole('button', { name: 'Retry recovery save', exact: true }).click();
   await expect(form.getByRole('status')).toContainText('Draft saved in this workspace');
+  await markCancelledLock(page, 'after-confirmed-draft-status');
   if (relock === 'idle') {
     await page.clock.install();
     await page.getByRole('combobox', { name: 'Auto-lock', exact: true }).selectOption('5');
