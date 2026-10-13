@@ -728,14 +728,19 @@ PNG and UTF-8 text comparisons across Cases. Choose an evidence component and
 search Case titles, references, domains, filenames or declared sources; file
 contents are not indexed. Search covers the currently read Case metadata; rows
 are paged, and selectors show the current page plus already-selected references.
+Selector labels include both ends of the file hash. Open the selected file's
+details to check and copy its complete attachment ID, hash and exact stored
+timestamps before opening the originals. Readable timestamps use UTC; an unknown
+observation time stays unknown. These details describe retained metadata, not a
+new verification of the original bytes.
 The existing Case-store and attachment limits still apply, without a smaller
 gallery sample cap. Choosing two exact references opens only that pair, with separate
 Case identities, declared sources, observation times and original-file digests.
 Unknown capture conditions remain unknown, and missing original bytes stop the
 review rather than becoming an empty image or text result. PNG comparison does
 not resize images; text comparison keeps the existing 1-MiB and word bounds.
-Changing selection, search or source state clears the prepared review. Nothing
-is saved, exported, collected or classified by this gallery.
+Changing selection, search or source state clears the prepared review. Comparisons
+do not save records, create evidence packages, collect evidence or classify threats.
 
 In **Timeline**, open **Choose Case checkpoints** in the retained change review
 to select two or three exact snapshots from one Case. Then choose the interval

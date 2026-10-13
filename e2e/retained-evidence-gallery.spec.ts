@@ -13,6 +13,10 @@ async function retainPair(page: Page) {
   const missing = { ...caseRecord({ domain: 'missing-original.example' }, '2026-09-01T00:00:00.000Z'), attachments: [readCaseAttachment({
     id: 'missing-text', fileName: 'missing.txt', mediaType: 'application/octet-stream', source: 'Declared metadata only', observedAt: null,
     retainedAt: '2026-09-01T00:00:00.000Z', byteLength: 20, digestSha256: `sha256:${'f'.repeat(64)}`,
+  }), readCaseAttachment({
+    id: 'other-missing-text', fileName: 'missing.txt', mediaType: 'application/octet-stream', source: 'Second declared observation',
+    observedAt: '2026-09-01T10:20:30.456+10:00', retainedAt: '2026-09-02T05:06:07.890Z',
+    byteLength: 20, digestSha256: `sha256:${'f'.repeat(56)}${'e'.repeat(8)}`,
   })] };
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [missing] }) }, { clearStorage: true, destination: '/cases' });
   await openCasesView(page);
@@ -59,11 +63,51 @@ async function retainPair(page: Page) {
 }
 
 test('cross-Case gallery preserves exact originals, independent sources and temporary comparison scope', async ({ page }, testInfo) => {
+  let copied = '', denyCopy = false;
+  await page.exposeFunction('copyGalleryFixture', (value: string) => { if (denyCopy) throw new Error('Private clipboard failure'); copied = value; });
+  await page.addInitScript(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    writeText: (value: string) => (window as unknown as { copyGalleryFixture(value: string): Promise<void> }).copyGalleryFixture(value),
+  } }));
   const requests: string[] = [];
   page.on('request', request => { if (/\/api\/(?:lookup|bulk|discover|ct-search)/u.test(request.url())) requests.push(request.url()); });
   const { before, bytes, gallery, select, missing } = await retainPair(page);
   await page.screenshot({ path: testInfo.outputPath('gallery-default.png') });
+  await select('text', missing.id, 'missing.txt');
+  const candidateSelector = gallery.getByRole('combobox', { name: 'Candidate file', exact: true });
+  const sameNameLabels = await candidateSelector.locator('option').evaluateAll((options, prefix) => options
+    .filter(option => (option as HTMLOptionElement).value.startsWith(prefix))
+    .map(option => option.textContent), JSON.stringify([missing.id]).slice(0, -1));
+  expect(sameNameLabels).toHaveLength(2);
+  expect(new Set(sameNameLabels).size).toBe(2);
+  const selectedDetails = gallery.locator('details').filter({ has: page.getByText('Candidate file details', { exact: true }) });
+  await selectedDetails.locator('summary').click();
+  const copyHash = selectedDetails.getByRole('button', { name: 'Copy Candidate selected file SHA-256', exact: true });
+  await expect(selectedDetails.getByText('Unknown', { exact: true })).toBeVisible();
+  await copyHash.focus(); await copyHash.press('Enter');
+  await expect.poll(() => copied).toBe(missing.attachments[0]!.digestSha256);
+  await expect(copyHash).toBeFocused();
+  const other = missing.attachments[1]!;
+  await candidateSelector.selectOption(JSON.stringify([missing.id, other.id]));
+  await expect(copyHash).toHaveText('Copy hash');
+  await expect(selectedDetails.locator('code').filter({ hasText: other.digestSha256 })).toHaveText(other.digestSha256);
+  await copyHash.click(); await expect.poll(() => copied).toBe(other.digestSha256);
+  await selectedDetails.getByRole('button', { name: 'Copy Candidate selected file attachment ID', exact: true }).click();
+  await expect.poll(() => copied).toBe(other.id);
+  const observedTime = selectedDetails.getByRole('button', { name: /Copy exact Candidate selected file observation time:/u });
+  await expect(observedTime).toContainText('UTC');
+  await expect(observedTime.locator('time')).toHaveAttribute('datetime', '2026-09-01T00:20:30.456Z');
+  await observedTime.click(); await expect.poll(() => copied).toBe(other.observedAt);
+  await selectedDetails.getByRole('button', { name: /Copy exact Candidate selected file retention time:/u }).click();
+  await expect.poll(() => copied).toBe(other.retainedAt);
+  denyCopy = true; await copyHash.click();
+  await expect(selectedDetails.locator('.copy-fallback')).toHaveText(other.digestSha256);
+  await expect(selectedDetails).not.toContainText('Private clipboard failure');
+  denyCopy = false;
+  await expect(gallery.getByRole('region', { name: 'Selected retained file comparison', exact: true })).toHaveCount(0);
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  expect(await storedFiles(page)).toEqual(bytes);
   await select('text');
+  await selectedDetails.locator('summary').click();
   const originalSelection = [await gallery.getByRole('combobox', { name: 'Reference file', exact: true }).inputValue(), await gallery.getByRole('combobox', { name: 'Candidate file', exact: true }).inputValue()];
   const pages = gallery.getByRole('navigation', { name: 'Retained gallery pages', exact: true });
   await pages.getByRole('spinbutton', { name: 'Retained gallery page', exact: true }).fill('2');
@@ -78,7 +122,7 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   await expect(review.getByRole('heading', { name: 'Two selected retained sources', exact: true })).toBeFocused();
   await expect(review.getByRole('heading', { name: '1 shared passage', exact: true })).toBeVisible();
   await expect(review.getByRole('region', { name: 'Reference gallery source', exact: true })).toContainText('reference source declaration');
-  await expect(review.getByRole('region', { name: 'Candidate gallery source', exact: true })).toContainText('Observed: Unknown');
+  await expect(review.getByRole('region', { name: 'Candidate gallery source', exact: true }).getByText('Unknown', { exact: true })).toBeVisible();
   for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
     await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
     await review.getByRole('heading', { name: 'Two selected retained sources', exact: true }).scrollIntoViewIfNeeded();

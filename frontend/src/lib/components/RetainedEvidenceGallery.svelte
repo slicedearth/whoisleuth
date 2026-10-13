@@ -14,6 +14,8 @@
   import ComparisonFrame from './ComparisonFrame.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
   import TextPassageResults from './TextPassageResults.svelte';
+  import CopyButton from './CopyButton.svelte';
+  import EvidenceTimestamp from './EvidenceTimestamp.svelte';
 
   let { summary, cases, profilesState, casesState, onpin = null }: {
     summary: WebsiteProfileClusterSummary; cases: readonly CaseRecord[];
@@ -70,12 +72,20 @@
   }
 </script>
 
+{#snippet fileMetadata(file: GalleryFile, label: string)}
+  <dl class="file-metadata">
+    <div><dt>Attachment ID</dt><dd><code>{file.reference.attachmentId}</code><CopyButton value={file.reference.attachmentId} label="Copy ID" description={`Copy ${label} attachment ID`} /></dd></div>
+    <div><dt>SHA-256</dt><dd><code>{file.attachment.digestSha256}</code><CopyButton value={file.attachment.digestSha256} label="Copy hash" description={`Copy ${label} SHA-256`} /></dd></div>
+    <div><dt>Observed</dt><dd><EvidenceTimestamp value={file.attachment.observedAt} label={`${label} observation time`} unavailable="Unknown" /></dd></div>
+    <div><dt>Retained</dt><dd><EvidenceTimestamp value={file.attachment.retainedAt} label={`${label} retention time`} /></dd></div>
+  </dl>
+{/snippet}
+
 {#snippet selectedSource(file: GalleryFile, original: Blob, side: 'Reference' | 'Candidate')}
   <section aria-label={`${side} gallery source`}>
     <h4>{file.caseTitle} · {file.caseNumber}</h4>
-    <p>{file.attachment.fileName} · {file.attachment.source ?? 'Source not declared'}<br />
-      Observed: {file.attachment.observedAt ?? 'Unknown'}<br />Retained: {file.attachment.retainedAt}</p>
-    <code>{file.attachment.digestSha256}</code>
+    <p>{file.attachment.fileName} · {file.attachment.source ?? 'Source not declared'}</p>
+    {@render fileMetadata(file, `${side} comparison`)}
     {#if file.attachment.derivation}<p>Derived image · declared immediate-parent digest <code>{file.attachment.derivation.source.digestSha256}</code></p>{/if}
     {#if facet === 'png'}<DeferredSurface load={() => import('./ArtifactPreview.svelte')}
       props={{ file: original, mediaType: 'image/png', label: `${side}: ${file.attachment.fileName}`, focusOnReady: false }}
@@ -103,15 +113,21 @@
       {#each visibleFiles as file (file.key)}
         <li><strong>{file.attachment.fileName}</strong><a href={`/cases?case=${encodeURIComponent(file.reference.caseId)}`}>{file.caseTitle} · {file.caseNumber}</a>
           <small>Case domain: {file.caseDomain} · Declared source: {file.attachment.source ?? 'Not declared'}</small>
-          <small>Observed: {file.attachment.observedAt ?? 'Unknown'} · Retained: {file.attachment.retainedAt}</small>
-          <details><summary>Recorded file identity</summary><code>{file.reference.attachmentId}</code><br /><code>{file.attachment.digestSha256}</code><p>{file.attachment.byteLength} bytes. Listing this reference has not read or verified the original pixels or text.</p>{#if file.attachment.derivation}<p>Derived image; its edit declaration remains attached to this file. The enclosing Case domain is not an observed image hostname.</p>{/if}</details>
+          <small>Observed: <EvidenceTimestamp value={file.attachment.observedAt} unavailable="Unknown" copyable={false} /> · Retained: <EvidenceTimestamp value={file.attachment.retainedAt} copyable={false} /></small>
+          <details><summary>Recorded file identity</summary>{@render fileMetadata(file, `${file.caseNumber} ${file.reference.attachmentId}`)}<p>{file.attachment.byteLength} bytes. Listing this reference has not read or verified the original pixels or text.</p>{#if file.attachment.derivation}<p>Derived image; its edit declaration remains attached to this file. The enclosing Case domain is not an observed image hostname.</p>{/if}</details>
         </li>
       {:else}<li>No matching retained file reference is available in the currently read Case metadata.</li>{/each}
     </ol>
     <Pagination {currentPage} {pageCount} setPage={value => void setPage(value)} ariaLabel="Retained gallery pages" pageInputLabel="Retained gallery page" />
     <div class="filters">
-      <label>Reference file<select bind:value={leftKey}><option value="">Choose a reference</option>{#each choices as file (file.key)}<option value={file.key}>{file.caseTitle} · {file.attachment.fileName} · {file.caseNumber}</option>{/each}</select></label>
-      <label>Candidate file<select bind:value={rightKey}><option value="">Choose a candidate</option>{#each choices as file (file.key)}<option value={file.key}>{file.caseTitle} · {file.attachment.fileName} · {file.caseNumber}</option>{/each}</select></label>
+      <div class="selected-file">
+        <label>Reference file<select bind:value={leftKey}><option value="">Choose a reference</option>{#each choices as file (file.key)}<option value={file.key}>{file.caseTitle} · {file.attachment.fileName} · {file.caseNumber} · {file.attachment.digestSha256.slice(0, 19)}…{file.attachment.digestSha256.slice(-8)}</option>{/each}</select></label>
+        {#if left}<details><summary>Reference file details</summary>{@render fileMetadata(left, 'Reference selected file')}</details>{/if}
+      </div>
+      <div class="selected-file">
+        <label>Candidate file<select bind:value={rightKey}><option value="">Choose a candidate</option>{#each choices as file (file.key)}<option value={file.key}>{file.caseTitle} · {file.attachment.fileName} · {file.caseNumber} · {file.attachment.digestSha256.slice(0, 19)}…{file.attachment.digestSha256.slice(-8)}</option>{/each}</select></label>
+        {#if right}<details><summary>Candidate file details</summary>{@render fileMetadata(right, 'Candidate selected file')}</details>{/if}
+      </div>
     </div>
     <p>Selectors show this page and already-selected references. Search or change page to find another file.</p>
     <div class="actions"><button class="btn" bind:this={trigger} disabled={busy || !eligiblePair} onclick={() => void openComparison()}>{facet === 'text' ? 'Compare selected text' : 'Open selected PNGs'}</button>{#if busy}<button class="btn" onclick={close}>Cancel file review</button><span role="status">Reading the selected verified originals…</span>{/if}</div>
@@ -143,5 +159,6 @@
   .file-list{display:grid;gap:12px;padding-left:20px}.file-list li{min-width:0}.file-list strong,.file-list a,.file-list small{display:block;overflow-wrap:anywhere}
   summary{min-height:44px;align-content:center;cursor:pointer;font-size:var(--text-xs)}code{overflow-wrap:anywhere;font-size:var(--text-2xs)}.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}button{white-space:normal;max-width:100%}
   .prepared{display:grid;gap:12px;margin-top:16px;min-width:0}[role='alert']{color:var(--danger)}h3:focus,.file-list:focus{outline:2px solid var(--focus);outline-offset:3px}
+  .selected-file{min-width:0}.file-metadata{display:grid;gap:8px;margin:8px 0;font-size:var(--text-xs)}.file-metadata dt{color:var(--muted)}.file-metadata dd{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;min-width:0;margin:0}.file-metadata code{min-width:0;max-width:100%}
   @media(max-width:640px){.filters{grid-template-columns:minmax(0,1fr)}}@media print{.retained-gallery{display:none}}
 </style>
