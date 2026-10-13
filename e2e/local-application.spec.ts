@@ -196,6 +196,30 @@ for (const theme of ['light', 'dark'] as const) {
     const workspace = page.getByRole('region', { name: 'Filesystem workspace', exact: true });
     await expect(workspace).toContainText('Offline — network collection disabled');
     await expect(page.getByRole('button', { name: 'Create workspace', exact: true })).toHaveCount(0);
+    const operations: string[] = [];
+    const observe = (request: import('@playwright/test').Request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.startsWith('/api/local-workspace/')) operations.push(pathname);
+    };
+    page.on('request', observe);
+    const copied: string[] = [];
+    await page.exposeFunction('recordLocalExampleCopy', (value: string) => { copied.push(value); });
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: (value: string) =>
+        (window as unknown as { recordLocalExampleCopy(value: string): Promise<void> }).recordLocalExampleCopy(value) } });
+    });
+    const guide = workspace.getByText('Use another filesystem workspace', { exact: true }).and(workspace.locator('summary'));
+    await guide.focus(); await guide.press('Enter');
+    const commands = workspace.locator('.restart-guidance .copyable-command code');
+    await expect(commands).toHaveCount(2);
+    const examples = await commands.allTextContents();
+    expect(examples.every(value => value.includes('./review-workspace') && value.includes('--offline'))).toBe(true);
+    expect(examples[0]).not.toContain('--init'); expect(examples[1]).toContain('--init');
+    expect(examples.join('\n')).not.toContain(localApplication.instance.directory);
+    expect(examples.join('\n')).not.toContain(localApplication.instance.launchUrl);
+    await workspace.getByRole('button', { name: 'Copy existing filesystem workspace command', exact: true }).click();
+    await expect.poll(() => copied).toEqual([examples[0]]);
+    expect(operations).toEqual([]); page.off('request', observe);
     for (const viewport of viewports) {
       await page.setViewportSize(viewport); await expectNoHorizontalOverflow(page);
       await page.locator('#workspaces > summary').focus();
@@ -205,6 +229,7 @@ for (const theme of ['light', 'dark'] as const) {
       expect(header).not.toBeNull(); expect(heading).not.toBeNull();
       expect(heading!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
       if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`local-workspace-${theme}-${viewport.width}.png`) }); }
+      if (captureVisualEvidenceEnabled() && (viewport.width === 320 || viewport.width === 1280)) await workspace.locator('.restart-guidance').screenshot({ path: testInfo.outputPath(`local-restart-guide-${theme}-${viewport.width}.png`) });
       if (viewport.width === 320 || viewport.width === 1280) expect((await new AxeBuilder({ page }).include('.local-workspace').analyze()).violations).toEqual([]);
     }
     const link = workspace.getByRole('link', { name: 'Local application setup and recovery', exact: true });
