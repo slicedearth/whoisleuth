@@ -5,9 +5,9 @@ import { MAX_REVIEW_SESSION_BYTES, REVIEW_SESSION_SCHEMA, REVIEW_SESSION_VERSION
 
 export const REVIEW_SESSION_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.review-session', kind: 'browser_store', schema: REVIEW_SESSION_SCHEMA,
-  currentVersion: REVIEW_SESSION_VERSION, supportedVersions: [REVIEW_SESSION_VERSION],
+  currentVersion: REVIEW_SESSION_VERSION, supportedVersions: [1, REVIEW_SESSION_VERSION],
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write',
-  migration: 'exact_current_only', writeSemantics: 'optimistic_replace', byteBudget: MAX_REVIEW_SESSION_BYTES,
+  migration: 'normalize_to_current', writeSemantics: 'optimistic_replace', byteBudget: MAX_REVIEW_SESSION_BYTES,
   owner: 'packages/contracts/review-session.mts',
   note: 'Explicit workspace-local review position. Restoring it re-evaluates current evidence and never submits decisions, drafts or collection requests.',
 });
@@ -15,12 +15,16 @@ export const REVIEW_SESSION_LIFECYCLE_FAMILY = /* @__PURE__ */ defineSchemaLifec
   id: 'review-session', owner: 'packages/contracts/review-session.mts',
   serializerModule: 'packages/workspace/review-session.mts', serializerExportName: 'serializeReviewSessionStore',
   plane: 'browser', projection: 'browser_import', retention: 'browser_indexeddb', notePolicy: 'allowed_bounded',
-  includedCategories: ['review-filters', 'selected-review-reference', 'evidence-fingerprint', 'unfinished-review-forms', 'local-revision', 'save-time'],
+  includedCategories: ['review-filters', 'selected-review-reference', 'evidence-fingerprint', 'unfinished-review-forms', 'local-revision', 'save-time', 'private-review-question', 'admitted-view-baseline'],
   excludedCategories: ['collected-source-payloads', 'session-credentials', 'public-export'],
   formats: [{ descriptor: REVIEW_SESSION_COMPATIBILITY, lifecycleSchema: REVIEW_SESSION_SCHEMA,
     requiredKeys: ['schema', 'version', 'records'], optionalKeys: [],
     hook: { module: 'packages/workspace/review-session.mts', exportName: 'normalizeReviewSessionStore', role: 'normaliser', runtime: 'shared' },
-    fixtures: [{ id: 'review-session-v1', path: 'test/fixtures/extracted-domain-lifecycle/review-session-v1.json', version: 1,
-      bytes: 373, sha256: 'e4e6f048fb81218c369ec861e23a30b0b30b47ff0d45d1a3493d78237382bb6d' }],
+    fixtures: [
+      { id: 'review-session-v1', path: 'test/fixtures/extracted-domain-lifecycle/review-session-v1.json', version: 1,
+        bytes: 373, sha256: 'e4e6f048fb81218c369ec861e23a30b0b30b47ff0d45d1a3493d78237382bb6d' },
+      { id: 'review-session-v2', path: 'test/fixtures/extracted-domain-lifecycle/review-session-v2.json', version: 2,
+        bytes: 771, sha256: '357ccb1daa6585c2f3d4ae394dc60751b240e87c8661d416c61ace3be8694fbb' },
+    ],
   }],
 }));

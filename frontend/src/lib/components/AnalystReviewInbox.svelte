@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { tick, type ComponentProps } from 'svelte';
+  import { onDestroy, tick, type ComponentProps } from 'svelte';
+  import { currentBrowserWorkspaceId } from '#lib/browser-workspace-context.ts';
   import { restoreSubmittedFocus } from '../controllers/submitted-draft.ts';
   import { page as route } from '$app/state';
   import { goto } from '$app/navigation';
@@ -12,7 +13,7 @@
   import { openRetainedPeek } from '#lib/controllers/retained-peek-key.ts';
   import ReviewSessionControl from './ReviewSessionControl.svelte';
   import type { ReviewFormDraft, ReviewSessionPosition } from '../../../../packages/contracts/review-session-contract.mts';
-  import { describeReviewSessionResume, mergeReviewSessionDrafts } from '../../../../packages/workspace/review-session.mts';
+  import { createReviewSessionBaseline, describeReviewSessionResume, mergeReviewSessionDrafts } from '../../../../packages/workspace/review-session.mts';
   import { MAX_ANALYST_REVIEW_ITEMS } from '../../../../packages/contracts/analyst-review-state-contract.mts';
   import {
     ANALYST_REVIEW_EVIDENCE_FAMILIES,
@@ -37,12 +38,14 @@
 
   let {
     inbox,
+    sourcesAvailable = false,
     selectedSubjectKey = '',
     now = new Date().toISOString(),
     ondismiss,
     onreview,
   }: {
     inbox: AnalystReviewInbox;
+    sourcesAvailable?: boolean;
     selectedSubjectKey?: string;
     now?: string;
     ondismiss?: (item: AnalystReviewItem, reason: AnalystReviewDismissalReason) => void | Promise<void>;
@@ -97,7 +100,9 @@
     sourceFilter, ageFilter, caseFilter, priorityFilter, nextActionFilter, evidenceFamilyFilter, lifecycleFilter]));
   $effect(() => { filterKey; page = 1; expandedId = undefined; });
   const currentItem = $derived(filtered.find(item => item.id === expanded));
+  const currentBaseline = $derived(createReviewSessionBaseline(filtered, { sourcesAvailable, truncated: inbox.truncated }));
   const position = $derived<ReviewSessionPosition>({
+    question: null, baseline: currentBaseline,
     filters: { queue, attentionOnly, focusedCaseId, kind: kindFilter, source: sourceFilter, age: ageFilter, caseQuery: caseFilter,
       priority: priorityFilter, nextAction: nextActionFilter, evidenceFamily: evidenceFamilyFilter, lifecycle: lifecycleFilter },
     selected: currentItem ? { id: currentItem.id, subjectKey: currentItem.subjectKey, materialFingerprint: currentItem.materialFingerprint, caseId: currentItem.caseId } : null,
@@ -150,11 +155,12 @@
     itemsElement?.querySelectorAll<HTMLElement>(':scope > li > details > summary')[visibleIndex]?.focus();
   }
 
-  const resumeReview: ComponentProps<typeof ReviewSessionControl>['onresume'] = async saved => {
-    const retained = mergeReviewSessionDrafts(saved.drafts, reviewDrafts);
-    if (!retained) return { message: 'Saved and current forms exceed one admitted review queue. Finish or discard current drafts before resuming; no forms were removed.' };
-    reviewDrafts = retained.drafts;
-    restoreRevision += 1;
+  let resumeGeneration = 0, disposed = false;
+  onDestroy(() => { disposed = true; resumeGeneration++; });
+  const resumeReview: ComponentProps<typeof ReviewSessionControl>['onresume'] = async (saved, ownsRequest) => {
+    const generation = ++resumeGeneration, workspace = currentBrowserWorkspaceId();
+    const current = () => !disposed && generation === resumeGeneration && ownsRequest() && workspace === currentBrowserWorkspaceId();
+    if (!mergeReviewSessionDrafts(saved.drafts, reviewDrafts)) return { message: 'Saved and current forms exceed one admitted review queue. Finish or discard current drafts before resuming; no forms were removed.' };
     const url = new URL(route.url.href);
     url.searchParams.delete('review');
     url.searchParams.delete('resume');
@@ -164,11 +170,18 @@
     if (saved.filters.attentionOnly) url.searchParams.set('attention', '1');
     if (saved.filters.focusedCaseId) url.searchParams.set('case-review', saved.filters.focusedCaseId);
     await goto(`${url.pathname}${url.search}${url.hash}`, { reset: false });
+    if (!current()) return { message: 'Review context changed before resume completed. No saved form was replayed.' };
     kindFilter = saved.filters.kind; sourceFilter = saved.filters.source; ageFilter = saved.filters.age;
     caseFilter = saved.filters.caseQuery; priorityFilter = saved.filters.priority; nextActionFilter = saved.filters.nextAction;
     evidenceFamilyFilter = saved.filters.evidenceFamily; lifecycleFilter = saved.filters.lifecycle;
     await tick();
-    const briefing = describeReviewSessionResume(saved, filtered, retained);
+    if (!current()) return { message: 'Review context changed before resume completed. No saved form was replayed.' };
+    // Reconcile after asynchronous navigation so a newer open form always wins.
+    const retained = mergeReviewSessionDrafts(saved.drafts, reviewDrafts);
+    if (!retained) return { message: 'Saved and current forms exceed one admitted review queue. No forms were removed.' };
+    reviewDrafts = retained.drafts;
+    restoreRevision += 1;
+    const briefing = describeReviewSessionResume(saved, filtered, retained, currentBaseline);
     const selected = briefing.selected;
     if (selected.index >= 0) await focusReview(selected.index);
     else { page = 1; expandedId = null; }

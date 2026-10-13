@@ -221,12 +221,15 @@ site-wide estimates; a persistence request happens only when selected and does
 not create a backup. Backup preparation is remembered only during that visit;
 the app cannot confirm that a file was kept or restored.
 
-Saved review positions retain filters, search text, selected Review Item and
-Case references, evidence fingerprints, unfinished review forms and save time in the current workspace,
+Saved review positions retain an optional private question, filters, search text,
+selected Review Item and Case references, unfinished review forms and save time.
+A baseline retains subject identities, material fingerprints, source identities
+and completeness from the explicitly saved, admitted filtered view, not source payloads.
+These fields stay in the current workspace,
 using its encryption when enabled. Saving is explicit; later navigation does
 not update that checkpoint. Positions are excluded from backups, exports and
 legacy rollback copies. Resume re-evaluates current records without collection
-or submission. Discarding a position removes its saved review-form copies;
+or submission. Discarding a position removes its question, baseline and saved review-form copies;
 Cases and currently open forms are unchanged.
 
 Favourites in this tab retain only exact Case/section or canonical navigation

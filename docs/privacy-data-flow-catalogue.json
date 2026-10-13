@@ -8445,12 +8445,13 @@
       "schema": "whoisleuth.review-session",
       "lifecycleSchema": "whoisleuth.review-session",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "optimistic_replace",
       "byteBudget": 4194304,
       "storageClass": "browser_profile_storage",
@@ -11137,7 +11138,9 @@
         "evidence-fingerprint",
         "unfinished-review-forms",
         "local-revision",
-        "save-time"
+        "save-time",
+        "private-review-question",
+        "admitted-view-baseline"
       ],
       "excludedCategories": [
         "collected-source-payloads",
@@ -14490,7 +14493,8 @@
         {
           "schema": "whoisleuth.review-session",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -14498,7 +14502,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.review-session",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "review-session.privacy",

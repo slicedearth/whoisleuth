@@ -986,9 +986,14 @@ a checkpoint is saved and when. Later navigation and edits do not update it.
 drafts and flags changed or unavailable evidence. Its **Return-to-work briefing**
 shows the saved queue, the selection's current match, matching retained items,
 restored forms and any newer forms kept open. These are results at resume, not a
-count of new observations. The checkpoint compares the selected item's material
-fingerprint; it does not retain earlier evidence values or a written investigation
-question. An unavailable item may be filtered, outside the admitted results or
+count of new observations. Add an optional **Question for your next review** before
+saving. The checkpoint also keeps a small baseline of subject identities, material
+fingerprints, sources and completeness for the filtered view. Resume distinguishes
+unchanged, changed, newly matching, ambiguous and unavailable subjects. Newly
+matching means present in the current retained view, not newly collected. Incomplete
+views and changed source context qualify the comparison; an older checkpoint has
+no question or baseline, rather than an invented empty one. No earlier evidence
+values are copied. An unavailable item may be filtered, outside the admitted results or
 removed; no other item is substituted. Changed-evidence drafts require
 explicit review before submission. A draft with an uncertain write outcome stays
 blocked until the current decision is inspected and the draft is discarded.
