@@ -19,6 +19,7 @@
   import IntelligenceIcon from '#lib/components/IntelligenceIcon.svelte';
   import SiteFooter from '#lib/components/SiteFooter.svelte';
   import ThemeSelector from '#lib/components/ThemeSelector.svelte';
+  import { CONSOLE_PRESENTATION_CONTEXT, type ConsolePresentation, type ConsolePresentationContext } from '#lib/appearance.ts';
   import AnalystUndo from '#lib/components/AnalystUndo.svelte';
   import { keepFocusBelow } from '#lib/visible-focus.ts';
   import DeferredSurface from '#lib/components/DeferredSurface.svelte';
@@ -56,6 +57,8 @@
   let referenceViewPresent = $state(false);
   let tabReferencesOpen = $state(false);
   let favouritesOpen = $state(false);
+  let presentation = $state<ConsolePresentation>('desk');
+  setContext<ConsolePresentationContext>(CONSOLE_PRESENTATION_CONTEXT, { get current() { return presentation; } });
   const showCaseContext = $derived(Boolean(selectedCaseId)
     && page.url.pathname !== '/cases'
     && !(page.url.pathname === '/monitor' && (page.url.searchParams.get('view') === 'cases' || page.url.searchParams.has('case'))));
@@ -335,7 +338,7 @@
       <div class="session"><ThemeSelector /></div>
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
-    <main id="main-content" use:keepFocusBelow={() => consoleHeader} class:wide-workspace={wideWorkspace} tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>
+    <main id="main-content" data-presentation={presentation} use:keepFocusBelow={() => consoleHeader} class:wide-workspace={wideWorkspace} tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>
       <section class="console-context" aria-label="Current investigation context">
         <BrowserWorkspaceIndicator compact>
         {#snippet layout(identity, markerControls)}
@@ -343,6 +346,13 @@
           <p class="context-task" role="note" aria-label="Current task"><span>Task</span><strong>{currentTask}</strong></p>
           {@render identity()}
           <span class="context-backend" role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span>
+          <label class="presentation-choice">Presentation in this tab
+            <select bind:value={presentation} onchange={event => { if (event.currentTarget.value === 'bench') tabReferencesOpen = true; }}>
+              <option value="desk">Analyst Desk</option>
+              <option value="bench">Evidence Bench</option>
+              <option value="journal">Field Journal</option>
+            </select>
+          </label>
         </div>
         <div class="context-details">
           <details class="context-storage">
@@ -351,21 +361,27 @@
             <p>{localApplication ? 'Saved records and original files remain in the selected filesystem workspace. Encrypted backups are separate.' : 'Saved records remain in this browser’s selected workspace. Opening another workspace replaces this page; other tabs keep their own selection.'}</p>
             <p>{capabilityStatusDetail()} This is the reported configuration, not a live source-health check.</p>
           </details>
-          <details class="context-storage" bind:open={tabReferencesOpen}>
-            <summary>Tab references</summary>
-            {#if tabReferencesOpen}
-              {#if referenceViewPresent}
-                <DeferredSurface load={() => import('#lib/components/ConsoleReferenceView.svelte')} props={{}} loadingLabel="Opening tab reference view…" unavailableLabel="Tab references could not be displayed. Saved evidence has not changed." />
-              {:else}<p>No checkpoints or Case visits are retained in this tab.</p>{/if}
-            {/if}
-          </details>
         </div>
         {/snippet}
         </BrowserWorkspaceIndicator>
         {#if showCaseContext && selectedCaseId}<DeferredSurface load={() => import('#lib/components/SelectedCaseContext.svelte')} props={{caseId:selectedCaseId,compact:true}} loadingLabel="Reading selected Case…" unavailableLabel="Selected Case context could not be loaded." />{/if}
       </section>
-      {#if investigationGuideRequested}<DeferredSurface load={() => import('#lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}
-      {@render children()}
+      <div class="presentation-workspace" class:references-open={tabReferencesOpen}>
+        <aside class="tab-references" aria-label="Tab reference bench">
+          <details class="context-storage" bind:open={tabReferencesOpen}>
+            <summary>Tab references</summary>
+            {#if tabReferencesOpen}
+              {#if referenceViewPresent}
+                <DeferredSurface load={() => import('#lib/components/ConsoleReferenceView.svelte')} props={{}} loadingLabel="Opening tab reference view…" unavailableLabel="Tab references could not be displayed. Saved evidence has not changed." />
+              {:else}<p>No checkpoints or Case visits are retained in this tab. Use <strong>Pin checkpoint</strong> in a Case evidence timeline to keep an exact reference alongside your work.</p>{/if}
+            {/if}
+          </details>
+        </aside>
+        <div class="investigation-content">
+          {#if investigationGuideRequested}<DeferredSurface load={() => import('#lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}
+          {@render children()}
+        </div>
+      </div>
       <SiteFooter console />
     </main>
     <div inert={navOpen||commandOpen}><AnalystUndo /></div>
@@ -376,6 +392,19 @@
 {/if}
 
 <style>
+  .presentation-choice{display:grid;gap:4px;margin-inline-start:auto;max-width:100%;font-size:var(--text-xs);color:var(--muted)}
+  .presentation-choice select{min-height:44px;width:100%;min-width:0}
+  .presentation-workspace{display:grid;gap:16px;min-width:0}
+  .investigation-content,.tab-references{min-width:0}
+  .tab-references:has(details[open]){padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
+  @media(min-width:1600px){
+    main[data-presentation='bench'].wide-workspace{width:100%}
+    [data-presentation='bench'] .presentation-workspace.references-open{grid-template-columns:minmax(0,1fr) minmax(20rem,28rem);align-items:start}
+    [data-presentation='bench'] .presentation-workspace.references-open>.investigation-content{grid-column:1;grid-row:1}
+    [data-presentation='bench'] .presentation-workspace.references-open>.tab-references{grid-column:2;grid-row:1}
+  }
+  @media(max-width:480px){.presentation-choice{margin-inline-start:0;width:100%}}
+  @media print{.presentation-choice,.tab-references{display:none!important}.presentation-workspace{display:block!important}}
   .console-context{min-width:0;margin-bottom:18px;padding-bottom:8px;border-bottom:1px solid var(--border)}
   .context-bar{display:flex;align-items:center;gap:8px 20px;flex-wrap:wrap;min-width:0}
   .context-task{display:flex;align-items:baseline;gap:8px;margin:0;font-size:var(--text-xs)}

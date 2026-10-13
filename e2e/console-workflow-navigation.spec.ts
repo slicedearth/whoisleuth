@@ -304,6 +304,94 @@ test('pinned checkpoints and successful Case visits survive Console navigation w
   await expect(page.getByText(/Navigation trail ·/u)).toHaveCount(0);
 });
 
+test('Console presentation preserves drafts, selected checkpoints and timeline evidence', async ({ page }, testInfo) => {
+  const collectionRequests: string[] = [];
+  page.on('request', request => { if (/\/api\/(lookup|bulk|domain-feed|discover)(?:[/?]|$)/u.test(request.url())) collectionRequests.push(request.url()); });
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord({
+    id: 'presentation-case', domain: 'presentation.example', evidenceHistory: [
+      snapshot({ id: 'presentation-before', capturedAt: '2000-01-01T00:00:00.000Z', firstCapturedAt: '2000-01-01T00:00:00.000Z', pageTitle: 'Earlier supplied title' }),
+      snapshot({ id: 'presentation-after', capturedAt: '2000-01-02T00:00:00.000Z', firstCapturedAt: '2000-01-02T00:00:00.000Z', pageTitle: 'Later supplied title' }),
+    ],
+  })] } }, { clearStorage: true, destination: '/cases?case=presentation-case&section=evidence' });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const ids = before.records[0]!.value.evidenceHistory.map(item => item.id);
+  expect(ids).toHaveLength(2);
+  for (const id of ids) await page.getByRole('button', { name: `Pin checkpoint ${id} for comparison`, exact: true }).click();
+  const presentation = page.getByRole('combobox', { name: 'Presentation in this tab', exact: true });
+  await expect(presentation).toHaveValue('desk');
+  await presentation.selectOption('bench');
+  const tray = page.getByRole('complementary', { name: 'Tab reference bench', exact: true });
+  const references = tray.getByRole('list', { name: 'Pinned Case checkpoint references', exact: true });
+  await expect(references.getByRole('checkbox')).toHaveCount(2);
+  for (const checkbox of await references.getByRole('checkbox').all()) await checkbox.check();
+  await tray.getByRole('button', { name: 'Review selected checkpoints', exact: true }).click();
+  const stage = tray.getByRole('region', { name: 'Case checkpoint stage', exact: true });
+  const interval = stage.getByRole('combobox', { name: 'Interval to inspect', exact: true });
+  await interval.selectOption({ index: 1 });
+  const selectedInterval = await interval.inputValue();
+  await page.getByRole('navigation', { name: 'Case sections', exact: true }).locator('a[href$="section=history"]').click();
+  const note = page.getByRole('textbox', { name: 'Add note', exact: true });
+  await note.fill('Keep this unsaved note while changing presentation.');
+  const preferences = () => page.evaluate(() => {
+    const local = { ...localStorage }; delete local['whoisleuth:theme:v1'];
+    return { local, session: { ...sessionStorage } };
+  });
+  const preferencesBefore = await preferences();
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1280, 1920, 2560]) {
+      await page.setViewportSize({ width, height: width < 600 ? 844 : 900 });
+      for (const value of ['desk', 'journal', 'bench']) {
+        await presentation.selectOption(value);
+        await presentation.focus(); await expect(presentation).toBeFocused();
+        await expect(note).toHaveValue('Keep this unsaved note while changing presentation.');
+        await expect(interval).toHaveValue(selectedInterval);
+        for (const checkbox of await references.getByRole('checkbox').all()) await expect(checkbox).toBeChecked();
+        await expectNoHorizontalOverflow(page);
+      }
+      const referenceBox = await tray.boundingBox(), taskBox = await page.locator('.investigation-content').boundingBox();
+      expect(referenceBox).not.toBeNull(); expect(taskBox).not.toBeNull();
+      if (width >= 1920) expect(referenceBox!.x).toBeGreaterThanOrEqual(taskBox!.x + taskBox!.width);
+      else expect(taskBox!.y).toBeGreaterThanOrEqual(referenceBox!.y + referenceBox!.height);
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`presentation-bench-${theme}-${width}.png`) });
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await note.fill('');
+  await page.getByRole('navigation', { name: 'Case sections', exact: true }).locator('a[href$="section=evidence"]').click();
+  const caseTimeline = page.getByRole('region', { name: /Evidence timeline 2 snapshots/u });
+  const pinControls = caseTimeline.getByRole('button', { name: /^Pin checkpoint/u });
+  await expect(pinControls).toHaveCount(ids.length);
+  const checkpointLabels = () => pinControls.evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')));
+  const snapshots = await checkpointLabels();
+  for (const value of ['journal', 'desk']) {
+    await presentation.selectOption(value);
+    expect(await checkpointLabels()).toEqual(snapshots);
+    if (value === 'journal') await expect(caseTimeline).toHaveClass(/\bjournal\b/u);
+    else await expect(caseTimeline).not.toHaveClass(/\bjournal\b/u);
+    if (captureVisualEvidenceEnabled()) await caseTimeline.screenshot({ path: testInfo.outputPath(`presentation-case-${value}.png`) });
+  }
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Monitoring', exact: true }).click();
+  await page.getByRole('tab', { name: /^Timeline/u }).click();
+  const timeline = page.getByRole('region', { name: 'Investigation timeline', exact: true });
+  await expect(timeline.locator('.timeline-list > li').first()).toBeVisible();
+  await timeline.getByRole('searchbox', { name: 'Entity', exact: true }).fill('presentation.example');
+  const events = await timeline.locator('.timeline-list').innerText();
+  expect(events).toContain('presentation.example');
+  for (const value of ['journal', 'bench', 'desk']) {
+    await presentation.selectOption(value);
+    await expect(timeline.getByRole('searchbox', { name: 'Entity', exact: true })).toHaveValue('presentation.example');
+    await expect(timeline.locator('.timeline-list')).toHaveText(events, { useInnerText: true });
+    expect((await new AxeBuilder({ page }).include('#main-content').analyze()).violations).toEqual([]);
+  }
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  expect(await preferences()).toEqual(preferencesBefore);
+  expect(collectionRequests).toEqual([]);
+  await presentation.selectOption('journal');
+  await page.reload();
+  await expect(presentation).toHaveValue('desk');
+});
+
 test('tab favourites resolve exact retained Cases and canonical destinations without storing another entity', async ({ page }, testInfo) => {
   const requests: string[] = [];
   await page.route(/\/api\/(lookup|dns|tls|certificates?|certificate-transparency)(\/|\?|$)/u, async route => { requests.push(route.request().url()); await route.abort(); });

@@ -57,9 +57,24 @@ Brand candidates, the Review Inbox, Bulk's Review view and the saved Case list
 share an **Inspect** workflow. The queue stays beside the current item on wide
 screens; narrow screens show one pane at a time. **Back to queue** returns to the
 inspection control without clearing filters or checked candidates. Escape closes
-inspection when focus is outside an editing control. Where a separate evidence
-inspector is available, **Reading layout** adjusts its width without changing data.
+inspection when focus is outside an editing control.
 Inspection makes no request and does not select an item for a batch action.
+
+**Presentation in this tab** changes the reading arrangement across the Console:
+
+- **Analyst Desk** keeps the balanced queue and evidence layout.
+- **Evidence Bench** gives the evidence inspector more room and opens the existing
+  tab references. On wide screens the pinned checkpoint references sit beside the
+  current task; on smaller screens they remain above it in the same disclosure.
+- **Field Journal** stacks the inspector and gives Case and investigation timeline
+  entries a more spacious reading layout. Their order, filters and evidence remain
+  unchanged.
+
+The choice lasts while the Console is open in this tab. It does not save a
+preference, reset drafts, change themes or alter collection permissions. Select
+Analyst Desk to return to the default arrangement. The public demo retains its
+independent journal preview.
+
 Brand candidate **Explainable pattern groups** shows the contributors to each
 retained matching rule, with individual review status, exact declarations and
 rule exceptions. Contributors are paged independently of the candidate queue;

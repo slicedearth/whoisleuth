@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onDestroy, tick, type Snippet } from 'svelte';
+  import { getContext, onDestroy, tick, type Snippet } from 'svelte';
   import { restoreSubmittedFocus } from '../controllers/submitted-draft.ts';
+  import { CONSOLE_PRESENTATION_CONTEXT, type ConsolePresentationContext } from '../appearance.ts';
 
   let {
     label,
@@ -23,7 +24,7 @@
   let previous: string | null = null;
   let origin: HTMLElement | null = null;
   let disposed = false;
-  let width = $state('balanced');
+  const presentation = getContext<ConsolePresentationContext | undefined>(CONSOLE_PRESENTATION_CONTEXT);
   $effect.pre(() => {
     const current = selected;
     if (current === previous) return;
@@ -61,12 +62,11 @@
     <div class="workbench-queue" bind:this={queuePane} tabindex="-1" aria-label={`${label} queue`}>
       {@render queue()}
     </div>
-    <div class="workbench-reading" class:empty={selected === null} data-width={width} bind:this={readingPane}>
+    <div class="workbench-reading" class:empty={selected === null} data-presentation={presentation?.current ?? 'desk'} bind:this={readingPane}>
       {#if selected !== null}
         <header>
           <button class="btn" type="button" onclick={onclose} aria-keyshortcuts="Escape">Back to queue</button>
           <h3 bind:this={heading} tabindex="-1">{detailTitle}</h3>
-          {#if inspector}<label class="reading-width">Reading layout<select bind:value={width}><option value="balanced">Balanced</option><option value="evidence">Wider evidence</option><option value="stacked">Stacked</option></select></label>{/if}
         </header>
       {:else}
         <p>Choose <strong>Inspect</strong> beside an item to read its retained evidence.</p>
@@ -88,15 +88,12 @@
   header { display: flex; align-items: start; gap: .75rem; flex-wrap: wrap; margin-bottom: 1rem; grid-column: 1 / -1; }
   header h3 { flex: 1 1 15rem; margin: 0; font-size: var(--text-lg); overflow-wrap: anywhere; }
   header button { min-height: 44px; }
-  .reading-width { display: none; }
   aside { margin-top: 1.25rem; border-top: 1px solid var(--border); padding-top: 1rem; }
   @container workbench (min-width: 1100px) {
     .workbench-layout { grid-template-columns: minmax(15rem, 1fr) minmax(0, 3fr); }
     .workbench-reading:has(aside) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 1.5rem; }
-    .workbench-reading[data-width='evidence']:has(aside) { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
-    .workbench-reading[data-width='stacked']:has(aside) { grid-template-columns: minmax(0, 1fr); }
-    .reading-width { display: grid; gap: .25rem; color: var(--muted); font-size: var(--text-xs); }
-    .reading-width select { min-height: 44px; }
+    .workbench-reading[data-presentation='bench']:has(aside) { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+    .workbench-reading[data-presentation='journal']:has(aside) { grid-template-columns: minmax(0, 1fr); }
     aside { margin: 0; padding: 0; border: 0; }
   }
   @container workbench (max-width: 700px) {
@@ -105,5 +102,5 @@
     .workbench-queue { max-height: none; }
     .workbench-reading { border: 0; padding: 0; }
   }
-  @media print { header button, .reading-width { display: none; } .workbench-queue { max-height: none; } }
+  @media print { header button { display: none; } .workbench-queue { max-height: none; } }
 </style>

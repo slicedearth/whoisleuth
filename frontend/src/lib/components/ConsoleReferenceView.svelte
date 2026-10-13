@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { getContext, onMount, tick } from 'svelte';
+  import { CONSOLE_PRESENTATION_CONTEXT, type ConsolePresentationContext } from '../appearance.ts';
   import { loadCases, type CaseRecord } from '#lib/cases.ts';
   import { subscribeBrowserLocalData } from '#lib/browser-local-data-service.ts';
   import { readConsoleReferenceView, subscribeConsoleReferenceView, removeConsoleCaseCheckpoint, clearConsoleCaseCheckpoints, clearConsoleReferenceView,
@@ -13,6 +14,9 @@
   let selected = $state<string[]>([]);
   let staged = $state.raw<Readonly<{ caseId: string; checkpointIds: readonly string[] }> | null>(null);
   let message = $state('');
+  const presentation = getContext<ConsolePresentationContext | undefined>(CONSOLE_PRESENTATION_CONTEXT);
+  let checkpointsOpen = $state(false);
+  $effect(() => { if (presentation?.current === 'bench') checkpointsOpen = true; });
   let mounted = false, generation = 0;
   const key = (ref: PinnedCaseCheckpoint) => JSON.stringify([ref.caseId, ref.snapshotId]);
   const rows = $derived(view.checkpoints.map(ref => {
@@ -73,7 +77,7 @@
 
 <div class="reference-view">
   {#if view.checkpoints.length}
-    <details>
+    <details bind:open={checkpointsOpen}>
       <summary id="console-pinned-checkpoints">Pinned checkpoints · {view.checkpoints.length} of 4</summary>
       <p>Exact references in this tab, not duplicate evidence. They survive Console navigation and clear on lock, sign-out or leaving the Console.</p>
       {#if phase === 'loading'}<p role="status">Reading retained checkpoints…</p>{/if}

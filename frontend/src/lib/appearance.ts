@@ -1,6 +1,12 @@
 export const APPEARANCE_STORAGE_KEY = 'whoisleuth:appearance:v1';
 export const APPEARANCE_CHANGE_EVENT = 'whoisleuth:appearance-change';
 
+// The mounted Console owns this presentation choice. It is not persisted with
+// browser preferences or investigation data, and cannot change collection.
+export const CONSOLE_PRESENTATION_CONTEXT = Symbol('console-presentation');
+export type ConsolePresentation = 'desk' | 'bench' | 'journal';
+export interface ConsolePresentationContext { readonly current: ConsolePresentation }
+
 export interface AppearancePreference {
   density: 'comfortable' | 'compact';
   effects: 'full' | 'minimal';
