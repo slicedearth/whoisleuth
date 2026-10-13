@@ -9,6 +9,7 @@
   import CaseReportExport from '#lib/components/CaseReportExport.svelte';
   import CaseResponseWorkspace from '#lib/components/CaseResponseWorkspace.svelte';
   import CaseBrandAssociations from '#lib/components/CaseBrandAssociations.svelte';
+  import TemporaryCaseboard from '#lib/components/TemporaryCaseboard.svelte';
   import { readCaseNavigationContext, pinConsoleCaseCheckpoint } from '#lib/console-workflow-state.ts';
   import { loadReviewSession } from '#lib/review-session.ts';
   import { handlesLocalLink } from '#lib/link-activation.ts';
@@ -219,6 +220,7 @@
       </form>
       </div>
       </details>
+      <TemporaryCaseboard {record} />
     {/snippet}
     {#snippet evidence()}
       <EvidenceTimeline {record} onpincheckpoint={pinCheckpoint} />

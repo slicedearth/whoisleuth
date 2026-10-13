@@ -434,7 +434,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
   const reviewCalibrationDataset = () => calibrationWorkspace.review(calibrationCaseIds);
   const downloadCalibrationDataset = () => calibrationWorkspace.confirm();
   async function removeCase(record: CaseRecord) {
-    if (!confirm(`Delete the case for ${record.domain}? Its notes are removed unless you exported them.`))
+    if (!confirm(`Delete the case for ${record.domain}? Its saved records and unsaved temporary work will be removed. Export anything you need first.`))
       return;
     const previousIndex = pagedCases.findIndex(item => item.id === record.id);
     const previousPage = currentCasePage;

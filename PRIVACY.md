@@ -226,6 +226,11 @@ clear on document replacement, lock, sign-out or leaving the Console.
 Optional Case covers reuse retained titles, scope and review recording times
 without changing records. The workspace marker preview stays in document memory,
 clears on reload or workspace identity change, and conveys no protection or risk.
+The optional temporary Caseboard keeps ordered exact pin/assertion/note references,
+content fingerprints, authored text and reasoning links only in page memory.
+It resolves current retained content without keeping an earlier source copy.
+It uses the unsaved-work leave guard, not recovery storage; accepted closing,
+clearing or departure discards it. It is excluded from printing and all exports.
 
 Tab-scoped dictionaries, candidate handoffs, guided-investigation progress and
 similar transient state use bounded memory or `sessionStorage`. The one-use
