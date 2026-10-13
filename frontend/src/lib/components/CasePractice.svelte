@@ -1,16 +1,30 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { CASE_PRACTICE_SCENARIOS, type CasePracticeScenario } from '#lib/analysis/case-practice.ts';
   import CasePracticeSession from './CasePracticeSession.svelte';
   import PracticeCompanion from './PracticeCompanion.svelte';
-  let { onreset, visible = true }: { onreset: () => void; visible?: boolean } = $props();
-  let active = $state<CasePracticeScenario>('credential-form');
-  let selected = $state<CasePracticeScenario>('credential-form');
+  let { onreset, visible = true, requestedScenario = null }: {
+    onreset: (scenario: CasePracticeScenario) => void; visible?: boolean; requestedScenario?: string | null;
+  } = $props();
+  const knownScenario = (value: string | null) => CASE_PRACTICE_SCENARIOS.find(scenario => scenario.id === value)?.id;
+  const initialScenario = untrack(() => knownScenario(requestedScenario)) ?? 'credential-form';
+  let active = $state<CasePracticeScenario>(initialScenario);
+  let selected = $state<CasePracticeScenario>(initialScenario);
+  let previousRequest = untrack(() => requestedScenario);
+  const unavailableRequest = $derived(requestedScenario !== null && !knownScenario(requestedScenario));
+  $effect.pre(() => {
+    if (requestedScenario === previousRequest) return;
+    previousRequest = requestedScenario;
+    const next = knownScenario(requestedScenario);
+    // Later tour links propose a choice; only the existing confirmation replaces drafts.
+    if (next) selected = next;
+  });
   let presentation = $state(false), companion = $state(false);
   async function changeScenario() { active = selected; await tick(); document.getElementById('case-practice-title')?.focus(); }
 </script>
 
 <div class="practice-reading" class:presentation>
+{#if unavailableRequest}<p role="status">That fictional tour is not available in this build. Choose a practice scenario below; an open practice has not been replaced.</p>{/if}
 <div class="scenario-choice"><label>Practice scenario<select bind:value={selected}>{#each CASE_PRACTICE_SCENARIOS as scenario}<option value={scenario.id}>{scenario.title}</option>{/each}</select></label>
   {#if selected !== active}<div><p>Changing scenario discards this practice Case and its drafts.</p><button class="btn" type="button" onclick={() => void changeScenario()}>Discard practice and change scenario</button><button class="btn" type="button" onclick={() => selected = active}>Keep current practice</button></div>{/if}
 </div>
@@ -19,7 +33,7 @@
   <label><input type="checkbox" bind:checked={companion}> Show practice companion</label>
 </div>
 {#if companion}<PracticeCompanion />{/if}
-{#key active}<CasePracticeSession scenario={active} {onreset} {visible} />{/key}
+{#key active}<CasePracticeSession scenario={active} onreset={() => onreset(active)} {visible} />{/key}
 </div>
 
 <style>

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { downloadLocalFile } from '#lib/download-local-file.ts';
   import { onDestroy, onMount, tick } from 'svelte';
+  import { page } from '$app/state';
+  import type { CasePracticeScenario } from '#lib/analysis/case-practice.ts';
   import PublicConsoleCta from '#lib/components/PublicConsoleCta.svelte';
   import PublicSeo from '#lib/components/PublicSeo.svelte';
   import DeferredSurface from '#lib/components/DeferredSurface.svelte';
@@ -32,11 +34,13 @@
   let practiceOpen=$state(false);
   let practiceStarted=$state(false);
   let practiceGeneration=$state(0);
+  let practiceRequested=$state<string|null>(null);
   function preloadCasePractice(){preloadBestEffort(()=>import('#lib/components/CasePractice.svelte'));}
-  onMount(()=>{
-    const reveal=()=>{if(window.location.hash==='#case-practice'){practiceOpen=true;practiceStarted=true;}};
-    reveal();window.addEventListener('hashchange',reveal);
-    return ()=>window.removeEventListener('hashchange',reveal);
+  $effect(()=>{
+    if(page.url.hash==='#case-practice'){
+      practiceRequested=page.url.searchParams.get('practice')?.slice(0,65)??null;
+      practiceOpen=true;practiceStarted=true;
+    }
   });
   let candidateFilter=$state<CandidateFilter>('all');
   let relatedDomains=$state<string[]>([]);
@@ -363,7 +367,7 @@
 
 <details id="case-practice" class="case-practice-entry card" bind:open={practiceOpen} ontoggle={event=>{if(event.currentTarget.isConnected&&event.currentTarget.open)practiceStarted=true;}}>
   <summary onpointerenter={preloadCasePractice} onfocus={preloadCasePractice}>Practise with real Case forms</summary>
-  {#if practiceStarted}{#key practiceGeneration}<DeferredSurface load={()=>import('#lib/components/CasePractice.svelte')} props={{onreset:()=>{practiceGeneration+=1;},visible:practiceOpen}} onready={()=>{if(practiceGeneration>0)document.getElementById('case-practice-title')?.focus();}} loadingLabel="Opening the isolated Case practice." unavailableLabel="Case practice could not be loaded." />{/key}{/if}
+  {#if practiceStarted}{#key practiceGeneration}<DeferredSurface load={()=>import('#lib/components/CasePractice.svelte')} props={{onreset:(scenario:CasePracticeScenario)=>{practiceRequested=scenario;practiceGeneration+=1;},visible:practiceOpen,requestedScenario:practiceRequested}} onready={()=>{if(practiceGeneration>0||practiceRequested!==null)document.getElementById('case-practice-title')?.focus();}} loadingLabel="Opening the isolated Case practice." unavailableLabel="Case practice could not be loaded." />{/key}{/if}
 </details>
 
 <nav class="demo-steps card" bind:this={demoSteps} aria-label="Synthetic tool substeps">

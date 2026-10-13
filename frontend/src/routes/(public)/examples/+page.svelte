@@ -30,41 +30,42 @@
     <h2 id="worked-outcomes-title">Start with the investigation outcome</h2>
     <p>These fictional walkthroughs show what the evidence supports and what the analyst does next.</p>
     <div class="outcome-grid">
-      <article>
+      <article id="source-disagreement">
         <h3>Two sources disagree</h3>
         <p><strong>Outcome:</strong> Keep both accounts. A report of no form does not erase a capture showing one when the reviewed conditions are unknown.</p>
         <details><summary>Evidence and next step</summary>
           <p>A supplied capture shows a password form. A separate review reports none, but records neither its path nor viewport.</p>
           <p>Link both accounts to the conclusion and identify the missing comparison conditions. A later timeout does not settle their disagreement.</p>
           <a href="/methodology#method-example-conflicting-page-accounts">Inspect the two source accounts</a>
+          <a href="/demo?practice=contradictory-sources#case-practice">Try the conflicting-source practice</a>
         </details>
       </article>
-      <article>
+      <article id="separate-response-scopes">
         <h3>One page changes; the advertisement is unresolved</h3>
         <p><strong>Outcome:</strong> Close only the reviewed page action. The separate advertisement and the wider Case remain open.</p>
         <details><summary>Evidence and next step</summary>
           <p>A complete later review of the same page under comparable conditions no longer reproduces the credential form. The advertisement was not rechecked.</p>
           <p>Retain the exact page, observation time and comparison scope. This does not establish permanent removal, advertisement removal or general safety.</p>
           <p>In the default sign-in-page practice, record an evidence-linked conclusion, then use <strong>Rehearse separate response scopes</strong> to review the page and advertisement independently. Deliveries are simulated, not sent.</p>
-          <a href="/demo#case-practice">Try the page-and-advertisement walkthrough</a>
+          <a href="/demo?practice=credential-form#case-practice">Try the page-and-advertisement walkthrough</a>
         </details>
       </article>
-      <article>
+      <article id="related-hosts">
         <h3>Shared infrastructure is not shared control</h3>
         <p><strong>Outcome:</strong> Keep the two pages and affected identities distinct. Their shared parent and edge address provide a lead, not attribution.</p>
         <details><summary>Evidence and next step</summary>
           <p>Two supplied page captures make different identity claims. A failed recheck of one page says nothing about the later state of its sibling.</p>
-          <p>In Case practice, choose <strong>Related hosts with different affected identities</strong>. Review each source and try the optional inference exercise before deciding what the relationship supports.</p>
-          <a href="/demo#case-practice">Open the related-host practice</a>
+          <p>Review each source in <strong>Related hosts with different affected identities</strong> and try the optional inference exercise before deciding what the relationship supports.</p>
+          <a href="/demo?practice=related-hosts#case-practice">Open the related-host practice</a>
         </details>
       </article>
-      <article>
+      <article id="amended-handoff">
         <h3>Amend the handoff without replacing its history</h3>
         <p><strong>Outcome:</strong> Prepare a separate amendment linked to the original packet and request. The earlier delivery remains unchanged.</p>
         <details><summary>Evidence and next step</summary>
           <p>A recipient asks for dated exact-page evidence after a fictional delivery. The original packet digest and request remain recorded, while a later capture is unavailable.</p>
-          <p>In Case practice, choose <strong>A recipient asks for more evidence</strong>. Select retained evidence, explain the gap and create a drafting amendment. Preparing it is not delivery or recipient acceptance; the exercise does not rehearse sending.</p>
-          <a href="/demo#case-practice">Open the amendment practice</a>
+          <p>In <strong>A recipient asks for more evidence</strong>, select retained evidence, explain the gap and create a drafting amendment. Preparing it is not delivery or recipient acceptance; the exercise does not rehearse sending.</p>
+          <a href="/demo?practice=requested-amendment#case-practice">Open the amendment practice</a>
         </details>
       </article>
     </div>

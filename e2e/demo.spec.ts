@@ -8,18 +8,40 @@ import { holdPacketFileDigest } from './held-packet-digest';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test('practice scenarios require deliberate replacement and keep provider outcomes distinct', async ({ page }) => {
+test('practice scenarios require deliberate replacement and keep provider outcomes distinct', async ({ page }, testInfo) => {
   const verifyIsolation = await isolateCasePractice(page);
-  await page.goto('/demo#case-practice');
+  await page.goto('/examples');
+  await page.locator('#related-hosts summary').click();
+  await page.getByRole('link', { name: 'Open the related-host practice', exact: true }).click();
   const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
   const label = practice.locator('form[data-recovery-form="evidence-pin"]').getByLabel('Label', { exact: true });
-  await label.fill('Keep my practice draft');
   const scenario = page.getByRole('combobox', { name: 'Practice scenario', exact: true });
-  await scenario.selectOption('contradictory-sources');
+  const followTour = async (id: string) => {
+    // A real same-route link exercises client navigation without reloading the draft.
+    await page.evaluate(id => {
+      const link = document.createElement('a');
+      link.href = `/demo?practice=${encodeURIComponent(id)}#case-practice`;
+      link.textContent = 'Follow another fictional tour'; link.id = 'fixture-tour-link';
+      document.body.append(link);
+    }, id);
+    await page.locator('#fixture-tour-link').click();
+    await page.locator('#fixture-tour-link').evaluate(link => link.remove());
+  };
+  await expect(scenario).toHaveValue('related-hosts');
+  await expect(practice).toContainText('accounts.parent.example/service-a');
+  await label.fill('Keep my practice draft');
+  await followTour('contradictory-sources');
+  await expect(scenario).toHaveValue('contradictory-sources');
   await expect(label).toHaveValue('Keep my practice draft');
+  await expect(practice).toContainText('accounts.parent.example/service-a');
   await page.getByRole('button', { name: 'Keep current practice', exact: true }).click();
-  await expect(scenario).toHaveValue('credential-form');
-  await scenario.selectOption('contradictory-sources');
+  await expect(scenario).toHaveValue('related-hosts');
+  await followTour('not-a-scenario');
+  await expect(page.getByRole('status').filter({ hasText: 'That fictional tour is not available in this build.' })).toBeVisible();
+  await expect(label).toHaveValue('Keep my practice draft');
+  await expect(scenario).toHaveValue('related-hosts');
+  await followTour('contradictory-sources');
+  await expect(scenario).toHaveValue('contradictory-sources');
   await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
   await expect(label).toHaveValue('');
   await expect(practice.getByRole('heading', { name: 'Practise a Case review', exact: true })).toBeFocused();
@@ -29,6 +51,18 @@ test('practice scenarios require deliberate replacement and keep provider outcom
   await expect(practice).toContainText('Provider-reported outcome: provider reports resolved');
   await practice.getByText('Check your reasoning', { exact: true }).click();
   await expect(practice.getByRole('list', { name: 'Practice record checks' })).toContainText('Not yet recorded: The incomplete later capture is recorded as unavailable');
+  await practice.getByRole('button', { name: 'Discard practice and restart', exact: true }).click();
+  await expect(scenario).toHaveValue('provider-resolved');
+  await expect(practice).toContainText('Provider-reported outcome: provider reports resolved');
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+    await useTheme(page, theme); await page.setViewportSize({ width, height: 800 });
+    await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) {
+      await scenario.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath(`practice-tour-${theme}-${width}.png`) });
+    }
+  }
+  expect((await new AxeBuilder({ page }).include('.practice-reading').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
   await verifyIsolation();
 });
 
