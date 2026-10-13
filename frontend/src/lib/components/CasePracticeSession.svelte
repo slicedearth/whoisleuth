@@ -13,6 +13,7 @@
   import CaseAssessmentComparison from './CaseAssessmentComparison.svelte';
   import CaseIncidentCoverage from './CaseIncidentCoverage.svelte';
   import CasePracticeInference from './CasePracticeInference.svelte';
+  import CasePracticeWalkthrough from './CasePracticeWalkthrough.svelte';
   import CaptureConditionMatrix from './CaptureConditionMatrix.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
   import { casePracticeCaptureContexts } from '#lib/analysis/case-practice.ts';
@@ -113,6 +114,7 @@
 
 <section class="case-practice" aria-labelledby="case-practice-title">
   <header><div><h2 id="case-practice-title" tabindex="-1">Practise a Case review</h2><p>Use Case forms with supplied fictional evidence and simulated response steps. Practice stays on this page and disappears on restart, reload or navigation. Nothing is collected or submitted.</p></div><button class="btn" type="button" onclick={onreset} disabled={mutationBusy}>Discard practice and restart</button></header>
+  <CasePracticeWalkthrough evidence={suppliedEvidence} {visible} />
   <nav aria-label="Case practice steps">{#each steps as item, index}<button class="btn" type="button" aria-current={step === item.id ? 'step' : undefined} onclick={() => void select(item.id)}>{index + 1}. {item.label}</button>{/each}</nav>
   <p class="practice-status" role="status">{message}</p>
   <div hidden={step !== 'evidence'}>

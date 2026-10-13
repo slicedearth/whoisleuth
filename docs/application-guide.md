@@ -261,7 +261,13 @@ checks retained relationships and states, not the quality of free-text reasoning
 
 Optional **Larger practice reading** and **Show practice companion** choices are
 page-local presentation aids. They do not change the fictional records, grade
-decisions or appear in evidence exports. Source-reuse and campaign-authority
+decisions or appear in evidence exports. **Present selected fictional evidence**
+lets you choose and order original supplied observations, then read them one at a
+time with their sources, times and limitations. Earlier/later buttons change the
+walkthrough order, not the observations or their chronology. It is an unmasked
+fictional walkthrough, not an export or broadcast. Closing it, collapsing
+practice, restarting or changing scenario clears the selection without writing
+saved work. Source-reuse and campaign-authority
 exercises explain why repeated reports or an organisation directory entry do
 not establish independent observation or authority for a separate offer.
 The retained investigation timeline also offers a **Field journal reading
