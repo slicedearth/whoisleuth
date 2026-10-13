@@ -6,18 +6,21 @@ import { sectionedLookupFixture } from './lookup-design-fixtures';
 import { holdFixtureResponse } from './held-response';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, useTheme } from './helpers';
 import { formatEvidenceDate } from '../frontend/src/lib/analysis/evidence-time';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 const EARLIER = '2026-07-13T00:00:00.000Z';
 const LATER = '2026-07-14T00:00:00.000Z';
 const DOMAIN = 'source-review.test';
 
-async function start(page: Page, selected = false) {
+async function start(page: Page, selected = false, includeReceipt = false) {
   await page.route('**/api/lookup?*', async route => {
     const fixture = sectionedLookupFixture(DOMAIN);
     Object.assign(fixture.rdap, { fetchedAt: EARLIER });
     Object.assign(fixture.rdap.parsed, { registrar: { name: 'Original registrar' } });
     Object.assign(fixture.availability, { applicable: true, observationHostname: DOMAIN });
     if (selected) Object.assign(fixture.availability, { webObservationMode: 'selected_url' });
+    if (includeReceipt) Object.assign(fixture, { collectionReceipt: JSON.parse(readFileSync(path.resolve(__dirname, '../test/fixtures/cli-lookup-v3.json'), 'utf8')).collectionReceipt });
     await route.fulfill({ json: fixture });
   });
   await page.goto('/lookup');
@@ -29,10 +32,28 @@ async function start(page: Page, selected = false) {
   await expect(page.locator('.source-refresh')).toBeVisible();
 }
 
-test('completed source-plan review stays bound to its original target, mode and observations while the draft changes', async ({ page }) => {
-  await start(page);
+test('completed source-plan review stays bound to its original target, mode and observations while the draft changes', async ({ page }, testInfo) => {
+  await start(page, false, true);
   const review = page.locator('#evidence-quality .collection-outcomes');
-  await review.locator('summary').click();
+  await review.locator(':scope > summary').click();
+  const receipt = review.getByRole('region', { name: 'Collection receipt', exact: true });
+  await expect(receipt).toContainText('security.txt: not selected');
+  await receipt.locator('summary').click();
+  await expect(receipt.locator('dt')).toHaveCount(10);
+  await expect(receipt).toContainText('Collector started');
+  await expect(receipt).toContainText('Collector not started');
+  await expect(review).not.toContainText('original selection unknown');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) {
+        await receipt.locator('h5').evaluate(element => element.scrollIntoView({ block: 'center' }));
+        await page.screenshot({ path: testInfo.outputPath(`receipt-${theme}-${width}.png`) });
+      }
+    }
+  }
   await expect(review).toContainText(DOMAIN);
   const rdap = review.locator('[data-planned-source="rdap"]');
   await expect(rdap).toContainText(formatEvidenceDate(EARLIER));

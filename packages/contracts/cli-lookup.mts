@@ -3,9 +3,12 @@ import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 
 export const CLI_LOOKUP_SCHEMA = 'whoisleuth.cli.lookup';
 export const PUBLIC_CLI_LOOKUP_VERSION = 1;
-export const CLI_LOOKUP_VERSION = 2;
+export const HOMEPAGE_CLI_LOOKUP_VERSION = 2;
+export const COLLECTION_RECEIPT_CLI_LOOKUP_VERSION = 3;
+export const CLI_LOOKUP_VERSION = COLLECTION_RECEIPT_CLI_LOOKUP_VERSION;
 export const SUPPORTED_CLI_LOOKUP_VERSIONS = Object.freeze([
   PUBLIC_CLI_LOOKUP_VERSION,
+  HOMEPAGE_CLI_LOOKUP_VERSION,
   CLI_LOOKUP_VERSION,
 ] as const);
 export const MAX_CLI_LOOKUP_BYTES = 8 * 1024 * 1024;
@@ -45,6 +48,7 @@ export const CLI_LOOKUP_OPTIONAL_ROOT_KEYS = Object.freeze([
   'sslbl',
   'threatIntelligence',
   'collectionContext',
+  'collectionReceipt',
 ] as const);
 export const CLI_LOOKUP_DIAGNOSTIC_REQUIRED_KEYS = Object.freeze([
   'rdap',
@@ -63,7 +67,7 @@ export const CLI_LOOKUP_COMPATIBILITY = defineSchemaCompatibility({
   writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_CLI_LOOKUP_BYTES,
   owner: 'packages/contracts/cli-lookup.mts',
-  note: 'Saved Lookup documents preserve version 1 domain, IP and ASN compatibility while version 2 can additionally retain bounded Deep homepage metadata and optional official registrar-standing context.',
+  note: 'Saved Lookup documents preserve versions 1 and 2; version 3 may retain a bounded collection receipt for the completed operation. Homepage metadata and registrar-standing context remain supported from version 2.',
 });
 
 export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
@@ -91,11 +95,11 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
     {
       compatibilityId: CLI_LOOKUP_COMPATIBILITY.id,
       schema: CLI_LOOKUP_SCHEMA,
-      version: CLI_LOOKUP_VERSION,
+      version: HOMEPAGE_CLI_LOOKUP_VERSION,
       role: 'document',
-      lifecycle: 'current',
+      lifecycle: 'legacy',
       readable: true,
-      emitted: true,
+      emitted: false,
       exactKeys: false,
       extensionPolicy: 'preserve_bounded',
       futureVersionBehaviour: 'reject',
@@ -104,8 +108,29 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
       byteBudget: MAX_CLI_LOOKUP_BYTES,
       fixtureIds: ['cli-lookup-v2', 'cli-lookup-asn-v2'],
     },
+    {
+      compatibilityId: CLI_LOOKUP_COMPATIBILITY.id,
+      schema: CLI_LOOKUP_SCHEMA,
+      version: CLI_LOOKUP_VERSION,
+      role: 'document', lifecycle: 'current', readable: true, emitted: true,
+      exactKeys: false, extensionPolicy: 'preserve_bounded', futureVersionBehaviour: 'reject',
+      migrationTarget: null, canonicalisation: null, byteBudget: MAX_CLI_LOOKUP_BYTES,
+      fixtureIds: ['cli-lookup-v3', 'cli-lookup-asn-v3'],
+    },
   ],
   fixtures: [
+    {
+      id: 'cli-lookup-v3', path: 'test/fixtures/cli-lookup-v3.json',
+      bytes: 7151, sha256: 'ee06201deb99ef1cdc5e79dc026a733fb14494593ee7ffdff3035b1fbc19d61e', contentDigestSha256: null,
+      schema: CLI_LOOKUP_SCHEMA, version: CLI_LOOKUP_VERSION, role: 'current',
+      expectation: 'accepted_exact', expectedOutputFixtureId: null, scope: 'repository',
+    },
+    {
+      id: 'cli-lookup-asn-v3', path: 'test/fixtures/cli-lookup-asn-v3.json',
+      bytes: 3506, sha256: 'c0a3dfe9d9c13d3f03079c6c76b33b353a6029b9a9893cbdb743b3f4d864c74e', contentDigestSha256: null,
+      schema: CLI_LOOKUP_SCHEMA, version: CLI_LOOKUP_VERSION, role: 'current',
+      expectation: 'accepted_exact', expectedOutputFixtureId: null, scope: 'repository',
+    },
     {
       id: 'cli-lookup-v1',
       path: 'test/fixtures/cli-lookup-v1.json',
@@ -126,8 +151,8 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
       sha256: 'd98356ede18ddd12fde8cf10b0cfa43c42f6c9a09f1951e0605e1ec912892778',
       contentDigestSha256: null,
       schema: CLI_LOOKUP_SCHEMA,
-      version: CLI_LOOKUP_VERSION,
-      role: 'current',
+      version: HOMEPAGE_CLI_LOOKUP_VERSION,
+      role: 'historical',
       expectation: 'accepted_exact',
       expectedOutputFixtureId: null,
       scope: 'repository',
@@ -152,8 +177,8 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
       sha256: 'a3ee74df02050d6efd935784734c8c4cfd5fcb9833393de68935f5040faf2856',
       contentDigestSha256: null,
       schema: CLI_LOOKUP_SCHEMA,
-      version: CLI_LOOKUP_VERSION,
-      role: 'current',
+      version: HOMEPAGE_CLI_LOOKUP_VERSION,
+      role: 'historical',
       expectation: 'accepted_exact',
       expectedOutputFixtureId: null,
       scope: 'repository',
@@ -162,12 +187,12 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
   metadata: {
     enforcement: 'declarative_only',
     shapes: [
-      {
-        id: 'cli-lookup.document.v1',
+      ...SUPPORTED_CLI_LOOKUP_VERSIONS.map(version => ({
+        id: `cli-lookup.document.v${version}`,
         schema: CLI_LOOKUP_SCHEMA,
-        versions: [PUBLIC_CLI_LOOKUP_VERSION],
+        versions: [version],
         objects: [
-          { path: '$', requiredKeys: CLI_LOOKUP_REQUIRED_ROOT_KEYS, optionalKeys: CLI_LOOKUP_OPTIONAL_ROOT_KEYS, unknownKeys: 'preserve_bounded' },
+          { path: '$', requiredKeys: CLI_LOOKUP_REQUIRED_ROOT_KEYS, optionalKeys: CLI_LOOKUP_OPTIONAL_ROOT_KEYS.filter(key => version >= COLLECTION_RECEIPT_CLI_LOOKUP_VERSION || key !== 'collectionReceipt'), unknownKeys: 'preserve_bounded' },
           { path: '$.diagnostics', requiredKeys: CLI_LOOKUP_DIAGNOSTIC_REQUIRED_KEYS, optionalKeys: [], unknownKeys: 'preserve_bounded' },
           { path: '$.diagnostics.rdap', requiredKeys: ['status'], optionalKeys: [], unknownKeys: 'preserve_bounded' },
           { path: '$.diagnostics.whois', requiredKeys: ['status'], optionalKeys: [], unknownKeys: 'preserve_bounded' },
@@ -175,21 +200,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         fixedArrays: [],
         normalisation: 'preserve_bounded_document',
         target: null,
-      },
-      {
-        id: 'cli-lookup.document.v2',
-        schema: CLI_LOOKUP_SCHEMA,
-        versions: [CLI_LOOKUP_VERSION],
-        objects: [
-          { path: '$', requiredKeys: CLI_LOOKUP_REQUIRED_ROOT_KEYS, optionalKeys: CLI_LOOKUP_OPTIONAL_ROOT_KEYS, unknownKeys: 'preserve_bounded' },
-          { path: '$.diagnostics', requiredKeys: CLI_LOOKUP_DIAGNOSTIC_REQUIRED_KEYS, optionalKeys: [], unknownKeys: 'preserve_bounded' },
-          { path: '$.diagnostics.rdap', requiredKeys: ['status'], optionalKeys: [], unknownKeys: 'preserve_bounded' },
-          { path: '$.diagnostics.whois', requiredKeys: ['status'], optionalKeys: [], unknownKeys: 'preserve_bounded' },
-        ],
-        fixedArrays: [],
-        normalisation: 'preserve_bounded_document',
-        target: null,
-      },
+      } as const)),
     ],
     boundProfiles: [
       {
@@ -218,9 +229,9 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
     ],
     serialisationProfiles: [
       {
-        id: 'cli-lookup.json.v1-v2',
+        id: 'cli-lookup.json.v1-v3',
         schema: CLI_LOOKUP_SCHEMA,
-        versions: [PUBLIC_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION],
+        versions: SUPPORTED_CLI_LOOKUP_VERSIONS,
         mediaType: 'application/json',
         encoding: 'utf-8',
         bom: false,
@@ -238,7 +249,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'cli-lookup.sensitive-collection.v1',
         classification: 'analyst_authored_sensitive',
         projection: 'full_manifest',
-        includedCategories: ['target-identifiers', 'query-and-mode', 'raw-rdap-publications', 'raw-whois-responses', 'published-contacts', 'source-endpoints', 'source-timings', 'normalised-evidence', 'registrar-standing-official-projection', 'collection-context'],
+        includedCategories: ['target-identifiers', 'query-and-mode', 'raw-rdap-publications', 'raw-whois-responses', 'published-contacts', 'source-endpoints', 'source-timings', 'normalised-evidence', 'registrar-standing-official-projection', 'collection-context', 'collection-receipt'],
         excludedCategories: ['credentials', 'cookies', 'sessions', 'authorisation-material'],
         notePolicy: 'not_applicable',
         retention: 'operator_controlled_output',
@@ -249,7 +260,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'cli-lookup.sensitive-file.v1',
         classification: 'analyst_authored_sensitive',
         projection: 'full_manifest',
-        includedCategories: ['target-identifiers', 'query-and-mode', 'raw-rdap-publications', 'raw-whois-responses', 'published-contacts', 'source-endpoints', 'source-timings', 'normalised-evidence', 'registrar-standing-official-projection', 'collection-context'],
+        includedCategories: ['target-identifiers', 'query-and-mode', 'raw-rdap-publications', 'raw-whois-responses', 'published-contacts', 'source-endpoints', 'source-timings', 'normalised-evidence', 'registrar-standing-official-projection', 'collection-context', 'collection-receipt'],
         excludedCategories: ['credentials', 'cookies', 'sessions', 'authorisation-material'],
         notePolicy: 'not_applicable',
         retention: 'deliberate_local_file',
@@ -261,7 +272,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         classification: 'metadata_only',
         projection: 'metadata_only',
         includedCategories: ['schema-and-version', 'source-state-counts', 'bounded-timings', 'integrity-state'],
-        excludedCategories: ['target-identifiers', 'query-and-mode', 'raw-rdap-publications', 'raw-whois-responses', 'published-contacts', 'source-endpoints', 'normalised-evidence', 'collection-context'],
+        excludedCategories: ['target-identifiers', 'query-and-mode', 'raw-rdap-publications', 'raw-whois-responses', 'published-contacts', 'source-endpoints', 'normalised-evidence', 'collection-context', 'collection-receipt'],
         notePolicy: 'not_applicable',
         retention: 'transient_report',
         network: 'none',
@@ -272,7 +283,7 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         classification: 'metadata_only',
         projection: 'metadata_only',
         includedCategories: ['schema-and-version', 'source-state-counts', 'bounded-timings', 'truncation-and-rate-limit-counts', 'aggregate-lookup-mode-counts'],
-        excludedCategories: ['target-identifiers', 'query-values', 'per-document-linkage', 'raw-rdap-publications', 'raw-whois-responses', 'published-contacts', 'source-endpoints', 'normalised-evidence', 'collection-context'],
+        excludedCategories: ['target-identifiers', 'query-values', 'per-document-linkage', 'raw-rdap-publications', 'raw-whois-responses', 'published-contacts', 'source-endpoints', 'normalised-evidence', 'collection-context', 'collection-receipt'],
         notePolicy: 'not_applicable',
         retention: 'transient_report',
         network: 'none',
@@ -296,10 +307,10 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         operation: 'collect-and-serialise-fast-or-deep',
         acceptedContracts: [],
         emittedContract: { schema: CLI_LOOKUP_SCHEMA, version: CLI_LOOKUP_VERSION },
-        shapeIds: ['cli-lookup.document.v2'],
+        shapeIds: [`cli-lookup.document.v${CLI_LOOKUP_VERSION}`],
         boundProfileIds: ['cli-lookup.document-bounds.v1'],
         hookIds: ['cli-lookup.cli.build', 'cli-lookup.cli.serialise'],
-        serialisationProfileId: 'cli-lookup.json.v1-v2',
+        serialisationProfileId: 'cli-lookup.json.v1-v3',
         privacyProfileId: 'cli-lookup.sensitive-collection.v1',
         expiryPolicyId: 'cli-lookup.expiry.not-applicable.v1',
         requestMode: 'explicit_bounded_passive_fast_or_deep',
@@ -311,9 +322,9 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'cli-lookup.cli-read-all',
         plane: 'cli',
         operation: 'read-all-query-types',
-        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [PUBLIC_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct' }],
+        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: SUPPORTED_CLI_LOOKUP_VERSIONS, mode: 'direct' }],
         emittedContract: null,
-        shapeIds: ['cli-lookup.document.v1', 'cli-lookup.document.v2'],
+        shapeIds: SUPPORTED_CLI_LOOKUP_VERSIONS.map(version => `cli-lookup.document.v${version}`),
         boundProfileIds: ['cli-lookup.document-bounds.v1'],
         hookIds: ['cli-lookup.cli.parse-all'],
         serialisationProfileId: null,
@@ -328,9 +339,9 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'cli-lookup.cli-read-domain',
         plane: 'cli',
         operation: 'read-domain-only',
-        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [PUBLIC_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct', discriminator: { path: '$.type', values: ['domain'] } }],
+        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: SUPPORTED_CLI_LOOKUP_VERSIONS, mode: 'direct', discriminator: { path: '$.type', values: ['domain'] } }],
         emittedContract: null,
-        shapeIds: ['cli-lookup.document.v1', 'cli-lookup.document.v2'],
+        shapeIds: SUPPORTED_CLI_LOOKUP_VERSIONS.map(version => `cli-lookup.document.v${version}`),
         boundProfileIds: ['cli-lookup.document-bounds.v1'],
         hookIds: ['cli-lookup.cli.parse-domain'],
         serialisationProfileId: null,
@@ -345,9 +356,9 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'cli-lookup.cli-source-report',
         plane: 'cli',
         operation: 'build-source-reliability-report',
-        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [PUBLIC_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct' }],
+        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: SUPPORTED_CLI_LOOKUP_VERSIONS, mode: 'direct' }],
         emittedContract: null,
-        shapeIds: ['cli-lookup.document.v1', 'cli-lookup.document.v2'],
+        shapeIds: SUPPORTED_CLI_LOOKUP_VERSIONS.map(version => `cli-lookup.document.v${version}`),
         boundProfileIds: ['cli-lookup.document-bounds.v1'],
         hookIds: ['cli-lookup.cli.normalise', 'cli-lookup.cli.source-report'],
         serialisationProfileId: null,
@@ -362,9 +373,9 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'cli-lookup.cli-offline-verify',
         plane: 'cli',
         operation: 'verify-structure',
-        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [PUBLIC_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct' }],
+        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: SUPPORTED_CLI_LOOKUP_VERSIONS, mode: 'direct' }],
         emittedContract: null,
-        shapeIds: ['cli-lookup.document.v1', 'cli-lookup.document.v2'],
+        shapeIds: SUPPORTED_CLI_LOOKUP_VERSIONS.map(version => `cli-lookup.document.v${version}`),
         boundProfileIds: ['cli-lookup.document-bounds.v1'],
         hookIds: ['cli-lookup.cli.parse-all', 'cli-lookup.cli.offline-verify'],
         serialisationProfileId: null,
@@ -379,9 +390,9 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
         id: 'cli-lookup.cli-sharing-review',
         plane: 'cli',
         operation: 'build-redacted-sharing-review',
-        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: [PUBLIC_CLI_LOOKUP_VERSION, CLI_LOOKUP_VERSION], mode: 'direct' }],
+        acceptedContracts: [{ schema: CLI_LOOKUP_SCHEMA, versions: SUPPORTED_CLI_LOOKUP_VERSIONS, mode: 'direct' }],
         emittedContract: null,
-        shapeIds: ['cli-lookup.document.v1', 'cli-lookup.document.v2'],
+        shapeIds: SUPPORTED_CLI_LOOKUP_VERSIONS.map(version => `cli-lookup.document.v${version}`),
         boundProfileIds: ['cli-lookup.document-bounds.v1'],
         hookIds: ['cli-lookup.cli.parse-all', 'cli-lookup.cli.sharing-review'],
         serialisationProfileId: null,

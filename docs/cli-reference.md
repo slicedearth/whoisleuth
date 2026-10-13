@@ -147,14 +147,22 @@ an invalid import is not treated as an empty document.
 reports section metadata and digest-only search results unless `--reveal` is
 explicitly selected. It never searches notes, contacts or arbitrary raw fields.
 
-`export` reads supported saved Lookup v1 or v2 and writes current Lookup
-evidence schema 29. Published v2 schemas 27 and 28 and exact v1 schema 26 remain
-readable. Versions 27–29 exclude raw registration payloads, expanded
+`export` reads supported saved Lookup versions 1–3 and writes current Lookup
+evidence schema 30. Published v2 schemas 27–29 and exact v1 schema 26 remain
+readable. Versions 27–30 exclude raw registration payloads, expanded
 contacts, credentials, complete query-bearing URLs and provider payloads;
 schemas 28 and 29 also retain the bounded registrar-standing projection.
 Schema 29 identifies the hostname used for DNS, TLS and web observations,
 separately from the registrable domain used by registration sources. Older
 evidence retains its original collection scope.
+
+Saved Lookup version 3 can retain a bounded collection receipt: original
+optional selections, admitted source families, collector starts, outcomes and
+explicitly known completeness. `lookup --verbose` and `lookup --browse`
+show this account. Earlier files have no inferred receipt. The receipt contains
+no target values, URLs, contacts or raw errors and does not prove network
+delivery. It stays in full private Lookup JSON; the minimised `export` report
+does not include it. `--plan` remains offline and produces no completed receipt.
 
 `verify-artifact` checks a recognised structure and its applicable integrity
 contract. `interchange-report` describes retained and omitted fields.

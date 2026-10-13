@@ -1,0 +1,142 @@
+{
+  "rdap": {
+    "parsed": {
+      "handle": "AS64496",
+      "name": "Example Autonomous System",
+      "startAutnum": 64496,
+      "endAutnum": 64496,
+      "country": "AU",
+      "statuses": [
+        "active"
+      ]
+    }
+  },
+  "whois": {
+    "skipped": true,
+    "detail": "WHOIS is omitted for this saved example."
+  },
+  "availability": {
+    "applicable": false
+  },
+  "diagnostics": {
+    "rdap": {
+      "status": "success"
+    },
+    "whois": {
+      "status": "skipped"
+    },
+    "availability": {
+      "status": "not_applicable"
+    }
+  },
+  "collectionReceipt": {
+    "version": 1,
+    "requestedDepth": "fast",
+    "targetClass": "asn",
+    "webSelection": "not_applicable",
+    "originalChoices": {
+      "securityTxt": false,
+      "externalIntelligence": false,
+      "malwareHostIntelligence": false,
+      "malwareIocIntelligence": false
+    },
+    "sources": [
+      {
+        "source": "rdap",
+        "intent": "requested",
+        "admission": "admitted",
+        "attempt": "started",
+        "settlement": "success",
+        "complete": true,
+        "truncated": false
+      },
+      {
+        "source": "whois",
+        "intent": "not_requested",
+        "admission": "not_applicable",
+        "attempt": "not_started",
+        "settlement": "unknown",
+        "complete": null,
+        "truncated": null
+      },
+      {
+        "source": "domain_evidence",
+        "intent": "not_requested",
+        "admission": "not_applicable",
+        "attempt": "not_started",
+        "settlement": "unknown",
+        "complete": null,
+        "truncated": null
+      },
+      {
+        "source": "reverse_dns",
+        "intent": "not_requested",
+        "admission": "not_applicable",
+        "attempt": "not_started",
+        "settlement": "unknown",
+        "complete": null,
+        "truncated": null
+      },
+      {
+        "source": "registrar_rdap",
+        "intent": "not_requested",
+        "admission": "not_applicable",
+        "attempt": "not_started",
+        "settlement": "unknown",
+        "complete": null,
+        "truncated": null
+      },
+      {
+        "source": "network_context",
+        "intent": "not_requested",
+        "admission": "not_applicable",
+        "attempt": "not_started",
+        "settlement": "unknown",
+        "complete": null,
+        "truncated": null
+      },
+      {
+        "source": "security_txt",
+        "intent": "not_requested",
+        "admission": "not_applicable",
+        "attempt": "not_started",
+        "settlement": "unknown",
+        "complete": null,
+        "truncated": null
+      },
+      {
+        "source": "external_intelligence",
+        "intent": "not_requested",
+        "admission": "not_applicable",
+        "attempt": "not_started",
+        "settlement": "unknown",
+        "complete": null,
+        "truncated": null
+      },
+      {
+        "source": "malware_host_intelligence",
+        "intent": "not_requested",
+        "admission": "not_applicable",
+        "attempt": "not_started",
+        "settlement": "unknown",
+        "complete": null,
+        "truncated": null
+      },
+      {
+        "source": "malware_ioc_intelligence",
+        "intent": "not_requested",
+        "admission": "not_applicable",
+        "attempt": "not_started",
+        "settlement": "unknown",
+        "complete": null,
+        "truncated": null
+      }
+    ]
+  },
+  "schema": "whoisleuth.cli.lookup",
+  "version": 3,
+  "generatedAt": "2026-08-20T00:00:00.000Z",
+  "mode": "fast",
+  "query": "AS64496",
+  "type": "asn"
+}

@@ -3,6 +3,8 @@
 // the persistence boundary.
 
 import { scanBoundedJson, MAX_BOUNDED_JSON_DEPTH, MAX_BOUNDED_JSON_KEYS, MAX_BOUNDED_JSON_VALUES } from '../packages/analysis/bounded-json.mts';
+import { LOOKUP_SOURCE_IDS as SOURCE_IDS, LOOKUP_SOURCE_STATES } from '../packages/evidence/lookup-collection-receipt.mts';
+export { LOOKUP_SOURCE_STATES } from '../packages/evidence/lookup-collection-receipt.mts';
 
 export const LOOKUP_PROGRESS_SCHEMA = 'whoisleuth.lookup-progress';
 export const LOOKUP_PROGRESS_VERSION = 1;
@@ -12,18 +14,6 @@ export const MAX_LOOKUP_PROGRESS_FRAGMENT_BYTES = 256 * 1024;
 export const MAX_LOOKUP_PROGRESS_FINAL_BYTES = 8 * 1024 * 1024;
 export const MAX_LOOKUP_PROGRESS_STREAM_BYTES = 12 * 1024 * 1024;
 
-const SOURCE_IDS = Object.freeze([
-  'rdap',
-  'whois',
-  'domain_evidence',
-  'reverse_dns',
-  'registrar_rdap',
-  'network_context',
-  'security_txt',
-  'external_intelligence',
-  'malware_host_intelligence',
-  'malware_ioc_intelligence',
-] as const);
 const SOURCE_ID_SET = new Set<string>(SOURCE_IDS);
 const SOURCE_STATES = new Set([
   'success',
@@ -36,10 +26,6 @@ const SOURCE_STATES = new Set([
   'rate_limited',
 ]);
 // Final diagnostic states are distinct from the provisional progress subset.
-export const LOOKUP_SOURCE_STATES = Object.freeze([
-  'success', 'partial', 'not_found', 'skipped', 'error', 'unsupported',
-  'not_applicable', 'unavailable', 'rate_limited', 'complete', 'disabled', 'stale',
-] as const);
 const FINAL_SOURCE_STATES: ReadonlySet<string> = new Set(LOOKUP_SOURCE_STATES);
 
 export function lookupDiagnosticStates(value: unknown): Readonly<Record<string, typeof LOOKUP_SOURCE_STATES[number] | null>> {

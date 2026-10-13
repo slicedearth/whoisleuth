@@ -332,8 +332,15 @@ review path starts no request and does not change saved evidence.
 
 Under **Source quality**, expand **Compare the completed plan and source outcomes**
 for the finished target and mode, separately dated source records and diagnostic
-states. Original optional selections are not retained, so missing output does
+states. Older results have no original optional selections; missing output does
 not establish that a source was declined or had no findings.
+New completed Lookups include an **Original collection choices** receipt. It
+keeps the submitted optional selections separate from policy admission,
+collector starts and source outcomes. Changing a checkbox after submitting does
+not rewrite that receipt. Expand **Collector execution** for each source family;
+a started collector is not proof of network delivery, and incomplete child
+records remain incomplete. Cancelling before a valid final response leaves no
+completed receipt. Deliberate source refreshes remain separate observations.
 
 **What each source describes** separates the submitted hostname and registration
 request from the domains actually returned by registry, registrar and WHOIS

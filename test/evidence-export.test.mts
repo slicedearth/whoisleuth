@@ -382,6 +382,16 @@ function fixtureResponse(): Record<string, unknown> {
 }
 
 describe('lookup evidence export', () => {
+  test('minimised recipient evidence explicitly excludes collection receipts and selection metadata', () => {
+    const response = fixtureResponse();
+    response.collectionReceipt = JSON.parse(readFileSync(new URL('./fixtures/cli-lookup-v3.json', import.meta.url), 'utf8')).collectionReceipt;
+    const exported = evidence.buildLookupEvidence(response, { generatedAt: '2026-09-03T12:00:00.000Z' });
+    const serialized = JSON.stringify(exported);
+    assert.equal(serialized.includes('collectionReceipt'), false);
+    assert.equal(serialized.includes('originalChoices'), false);
+    assert.equal(serialized.includes('prerequisite_unavailable'), false);
+    assert.ok(response.collectionReceipt, 'The original private receipt is not removed.');
+  });
   test('preserves attributed form origins in the new epoch without admitting private controls or historical relabelling', () => {
     const response = fixtureResponse();
     const profile = analyzeCredentialSurfaceProfile({

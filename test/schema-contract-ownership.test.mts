@@ -91,8 +91,8 @@ describe('canonical schema contract ownership', () => {
     assert.equal(CLI_LOOKUP_VERSION, SAVED_LOOKUP_SCHEMA_VERSION);
     assert.equal(CLI_LOOKUP_VERSION, FORMATTER_LOOKUP_VERSION);
     assert.equal(MAX_CLI_LOOKUP_BYTES, MAX_SAVED_LOOKUP_INPUT_BYTES);
-    assert.deepEqual(SUPPORTED_CLI_LOOKUP_VERSIONS, [1, 2]);
-    assert.deepEqual(SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS, [1, 2]);
+    assert.deepEqual(SUPPORTED_CLI_LOOKUP_VERSIONS, [1, 2, 3]);
+    assert.deepEqual(SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS, [1, 2, 3]);
     assert.ok(Object.isFrozen(CLI_LOOKUP_COMPATIBILITY));
     assert.ok(Object.isFrozen(CLI_LOOKUP_SCHEMA_LIFECYCLE));
     assert.deepEqual(CLI_LOOKUP_QUERY_TYPES, ['domain', 'ipv4', 'ipv6', 'asn']);

@@ -5,6 +5,7 @@ import { parseLookupWebSelection } from './lookup-selected-request.mts';
 import { plannedLookupProgressSources } from './lookup-source-progress.mts';
 import { LOOKUP_PROGRESS_CONTENT_TYPE } from './lookup-progress-http.mts';
 import type { NetworkFeaturePolicy } from './feature-policy.mts';
+import type { LookupCollectionReceipt } from '../packages/evidence/lookup-collection-receipt.mts';
 
 export type LookupHttpDependencies = Readonly<{
   runUnifiedLookup: typeof runUnifiedLookup;
@@ -42,12 +43,19 @@ export function prepareLookupHttpOperation(request: Readonly<{
     ok: true as const, streaming, options,
     sources: plannedLookupProgressSources(classified, options),
     async run(dependencies: LookupHttpDependencies, signal: AbortSignal, onSourceSettled?: LookupOptions['onSourceSettled']) {
+      let collectionReceipt: LookupCollectionReceipt | undefined;
       const result = await dependencies.runUnifiedLookup(classified, {
         ...options, signal, waitForStartedCollectors: true,
+        ...(!options.compact ? { onCollectionReceipt: (value: LookupCollectionReceipt) => { collectionReceipt = value; } } : {}),
         ...(onSourceSettled ? { onSourceSettled } : {}),
         ...(selection.selectedUrl ? { selectedUrl: selection.selectedUrl } : {}),
       });
-      return dependencies.createLookupHttpResponse(selection.selectedUrl ? classified.inputHostname! : q, classified, result);
+      signal.throwIfAborted();
+      const evidence: Record<string, unknown> = { ...result };
+      delete evidence.collectionReceipt;
+      return dependencies.createLookupHttpResponse(selection.selectedUrl ? classified.inputHostname! : q, classified, {
+        ...evidence, ...(collectionReceipt ? { collectionReceipt } : {}),
+      });
     },
   };
 }

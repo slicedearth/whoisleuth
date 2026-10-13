@@ -23,6 +23,8 @@ import {
 } from './homepage-metadata-fixtures.mts';
 import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION, SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS, V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../packages/contracts/lookup-evidence.mts';
+import { createLookupCollectionReceiptTracker } from '../lib/lookup-collection-receipt.mts';
+import { parseCliLookupDocument } from '../cli/saved-lookup.mts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -553,6 +555,34 @@ describe('bounded CLI stdin', () => {
 });
 
 describe('CLI lookup runner', () => {
+  test('binds saved JSON and verbose inspection to the completed collector receipt; plans stay offline', async () => {
+    const query = classifiedDomain('example.test');
+    const tracker = createLookupCollectionReceiptTracker(query, { fast: true });
+    tracker.started('rdap'); tracker.settled('rdap', 'fulfilled', null);
+    const receipt = tracker.finish();
+    let calls = 0;
+    const run = async (args: string[]) => {
+      const stdout = capture(), stderr = capture();
+      const code = await runCli(['lookup', 'example.test', ...args], {
+        stdout: stdout.stream, stderr: stderr.stream, now: () => '2026-10-01T00:00:00.000Z',
+        runUnifiedLookup: async (_classified, options) => {
+          calls++; options?.onCollectionReceipt?.(receipt);
+          return { rdap: {}, whois: {}, availability: { applicable: true, domain: 'example.test', state: 'unknown' },
+            diagnostics: { rdap: { status: 'unsupported' }, whois: { status: 'skipped' } } };
+        },
+      });
+      assert.equal(code, EXIT_CODES.SUCCESS, stderr.value());
+      return stdout.value();
+    };
+    const json = await run(['--json']);
+    assert.deepEqual(parseCliLookupDocument(json).collectionReceipt, receipt);
+    const terminal = await run(['--verbose', '--no-color']);
+    assert.match(terminal, /Registry RDAP: Requested · Admitted · Collector started; Source result: unsupported/);
+    assert.match(terminal, /security.txt: not selected/);
+    const plan = await run(['--plan', '--json']);
+    assert.equal(JSON.parse(plan).collectionReceipt, undefined);
+    assert.equal(calls, 2);
+  });
   test('reuses classification and unified lookup with fast mode by default', async () => {
     const stdout = capture();
     const stderr = capture();
@@ -560,6 +590,7 @@ describe('CLI lookup runner', () => {
       fast?: boolean;
       compact?: boolean;
       onSourceSettled?: (settlement: LookupSourceSettlement) => void;
+      onCollectionReceipt?: unknown;
     } | undefined;
     const code = await runCli(['lookup', 'login.example.com', '--json'], {
       stdout: stdout.stream,
@@ -569,11 +600,12 @@ describe('CLI lookup runner', () => {
       runUnifiedLookup: async (_classified, received) => { options = received; return lookupResult(); },
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
-    assert.deepEqual(options, { fast: true, compact: false });
+    assert.equal(typeof options?.onCollectionReceipt, 'function');
+    assert.deepEqual({ ...options, onCollectionReceipt: undefined }, { fast: true, compact: false, onCollectionReceipt: undefined });
     assert.equal(stderr.value(), '');
     const output = JSON.parse(stdout.value());
     assert.equal(output.schema, 'whoisleuth.cli.lookup');
-    assert.equal(output.version, 2);
+    assert.equal(output.version, 3);
     assert.equal(output.mode, 'fast');
     assert.equal(output.inputHostname, 'login.example.com');
     assert.equal(output.registrableDomain, 'example.com');
@@ -737,7 +769,7 @@ test('machine document metadata cannot be replaced by upstream result fields', (
     '2026-07-14T00:00:00.000Z',
   );
   assert.equal(document.schema, 'whoisleuth.cli.lookup');
-  assert.equal(document.version, 2);
+  assert.equal(document.version, 3);
   assert.equal(document.generatedAt, '2026-07-14T00:00:00.000Z');
   assert.equal(document.query, 'example.test');
   assert.equal(document.type, 'domain');

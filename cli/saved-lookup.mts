@@ -18,10 +18,13 @@ import {
   validRegistrarStanding,
 } from '../lib/registrar-standing-contract.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { parseLookupCollectionReceipt, type LookupCollectionReceipt } from '../packages/evidence/lookup-collection-receipt.mts';
 import {
   CLI_LOOKUP_SCHEMA as SAVED_LOOKUP_SCHEMA,
   CLI_LOOKUP_VERSION as SAVED_LOOKUP_SCHEMA_VERSION,
   PUBLIC_CLI_LOOKUP_VERSION as PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION,
+  HOMEPAGE_CLI_LOOKUP_VERSION,
+  COLLECTION_RECEIPT_CLI_LOOKUP_VERSION,
   MAX_CLI_LOOKUP_BYTES as MAX_SAVED_LOOKUP_INPUT_BYTES,
   MAX_CLI_LOOKUP_JSON_CONTAINER_ITEMS as MAX_BOUNDED_JSON_CONTAINER_ITEMS,
   MAX_CLI_LOOKUP_JSON_DEPTH as MAX_BOUNDED_JSON_DEPTH,
@@ -44,7 +47,7 @@ type UnknownRecord = Record<string, unknown>;
 type CliLookupQueryType = 'domain' | 'ipv4' | 'ipv6' | 'asn';
 type CliLookupDocument = UnknownRecord & {
   schema: typeof SAVED_LOOKUP_SCHEMA;
-  version: typeof PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION | typeof SAVED_LOOKUP_SCHEMA_VERSION;
+  version: typeof SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS[number];
   type: CliLookupQueryType;
   mode: 'fast' | 'deep';
   query: string;
@@ -64,6 +67,7 @@ type SavedLookupDocument = CliLookupDocument & {
 type LookupCollectionContext = Readonly<{
   observerLabel?: string;
   vantageLabel?: string;
+  collectionReceipt?: LookupCollectionReceipt | undefined;
 }>;
 type SavedLookupReadOptions = { limit?: number; label?: string };
 type SavedLookupParseOptions = { label?: string };
@@ -389,11 +393,18 @@ function assertLookupEnvelope(document: UnknownRecord, label: string): string {
   const publicationMetadata = pageIdentity?.publicationMetadata;
   const deliveryMetadata = httpResponse?.deliveryMetadata;
   const registrarStanding = document.registrarStanding;
+  if (document.collectionReceipt !== undefined) {
+    if (Number(document.version) < COLLECTION_RECEIPT_CLI_LOOKUP_VERSION) throw new TypeError(`${label} collection receipt requires saved Lookup version ${COLLECTION_RECEIPT_CLI_LOOKUP_VERSION}.`);
+    const receipt = parseLookupCollectionReceipt(document.collectionReceipt)!;
+    if (receipt.targetClass !== document.type || receipt.requestedDepth !== document.mode) {
+      throw new TypeError(`${label} collection receipt does not match the Lookup.`);
+    }
+  }
   if (document.version === PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION
     && (publicationMetadata !== undefined || deliveryMetadata !== undefined || registrarStanding !== undefined)) {
-    throw new TypeError(`${label} version ${PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION} cannot contain version ${SAVED_LOOKUP_SCHEMA_VERSION} evidence fields.`);
+    throw new TypeError(`${label} version ${PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION} cannot contain version ${HOMEPAGE_CLI_LOOKUP_VERSION} evidence fields.`);
   }
-  if (document.version === SAVED_LOOKUP_SCHEMA_VERSION
+  if (document.version >= HOMEPAGE_CLI_LOOKUP_VERSION
     && (publicationMetadata !== undefined && (
       !['success', 'partial'].includes(String(pageIdentity?.status))
       || !validPagePublicationMetadata(publicationMetadata)
@@ -404,12 +415,12 @@ function assertLookupEnvelope(document: UnknownRecord, label: string): string {
       ))) {
     throw new TypeError(`${label} contains invalid homepage metadata.`);
   }
-  if (document.version === SAVED_LOOKUP_SCHEMA_VERSION
+  if (document.version >= HOMEPAGE_CLI_LOOKUP_VERSION
     && registrarStanding !== undefined
     && !validRegistrarStanding(registrarStanding)) {
     throw new TypeError(`${label} contains invalid registrar standing.`);
   }
-  if (document.version === SAVED_LOOKUP_SCHEMA_VERSION
+  if (document.version >= HOMEPAGE_CLI_LOOKUP_VERSION
     && registrarStanding !== undefined
     && !registrarStandingObservedBy(registrarStanding, generatedAt)) {
     throw new TypeError(`${label} registrar standing was observed after the saved Lookup time.`);
@@ -422,7 +433,7 @@ function assertLookupEnvelope(document: UnknownRecord, label: string): string {
   if ((whoisStatus === 'complete' || whoisStatus === 'partial') && !whoisParsed) {
     throw new TypeError('Successful WHOIS input is missing normalised parsed data.');
   }
-  if (document.version === SAVED_LOOKUP_SCHEMA_VERSION
+  if (document.version >= HOMEPAGE_CLI_LOOKUP_VERSION
     && validRegistrarStanding(registrarStanding)
     && registrarStanding.ianaId !== resolveRegistrarIanaId(rdapParsed, whoisParsed)) {
     throw new TypeError(`${label} registrar standing does not match its retained registration sources.`);
@@ -529,7 +540,7 @@ function buildCliLookupDocument(
   const contextSnapshot = snapshotKnownDataFields(
     collectionContext,
     'Lookup collection context',
-    new Set(['observerLabel', 'vantageLabel']),
+    new Set(['observerLabel', 'vantageLabel', 'collectionReceipt']),
   );
   const observerLabel = typeof contextSnapshot.observerLabel === 'string'
     ? contextSnapshot.observerLabel
@@ -539,6 +550,11 @@ function buildCliLookupDocument(
     : null;
   const resultSnapshot = snapshotLookupResultRoot(result);
   delete resultSnapshot.collectionContext;
+  if (Object.hasOwn(contextSnapshot, 'collectionReceipt')) {
+    delete resultSnapshot.collectionReceipt;
+    const receipt = parseLookupCollectionReceipt(contextSnapshot.collectionReceipt);
+    if (receipt) resultSnapshot.collectionReceipt = receipt;
+  }
   const classifiedType = classifiedSnapshot.type;
   if (typeof classifiedType !== 'string' || !QUERY_TYPES.has(classifiedType)) {
     throw new TypeError('Lookup classification has an unsupported query type.');

@@ -1,5 +1,6 @@
 import { registryAccessProfileLabel } from '../registry-access.mts';
 import { dnsAddressFamilyEvidence } from '../../packages/evidence/dns-query-outcome.mts';
+import { lookupCollectionReceiptReview } from '../../packages/evidence/lookup-collection-review.mts';
 import { appendTechnologyLines } from './terminal-technology.mts';
 import { appendDeliveryMetadataLines, appendPublicationMetadataLines } from './terminal-metadata.mts';
 import { securityPostureReview, summarizeSecurityPostureReview } from '../../lib/website-security-posture.mts';
@@ -682,6 +683,13 @@ function formatTerminalLookup(
   const collectionLines: string[] = [];
   if (detail === 'verbose') {
     collectionLines.push(`Generated      ${safeTerminalValue(document.generatedAt, 'unknown')}`);
+    const receipt = lookupCollectionReceiptReview(document.collectionReceipt);
+    if (receipt) {
+      collectionLines.push(`Original plan  ${receipt.selection}`);
+      for (const choice of receipt.choices) collectionLines.push(`${choice.label}: ${choice.selected ? 'selected' : 'not selected'}`);
+      for (const source of receipt.sources) collectionLines.push(`${source.label}: ${source.summary}; ${source.outcome}`);
+      collectionLines.push('Collector start is local execution provenance, not proof of network delivery or complete evidence.');
+    } else collectionLines.push('Original plan  Not retained; original optional choices and collector starts are unknown.');
     const timing = terminalRecord(document.timing);
     if (Number(timing.totalMs) >= 0) collectionLines.push(`Total time     ${safeTerminalValue(timing.totalMs)} ms`);
     const sources = Array.isArray(timing.sources) ? timing.sources.map(terminalRecord) : [];

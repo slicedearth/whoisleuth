@@ -3,6 +3,7 @@
 import { OPERATION_BUDGET_ERROR_CODE } from './operation-budget.mts';
 import { FEATURE_DISABLED_ERROR_CODE } from './feature-policy.mts';
 import { LOOKUP_SOURCE_STATES, lookupDiagnosticStates } from './lookup-progress.mts';
+import { LOOKUP_SOURCE_IDS } from '../packages/evidence/lookup-collection-receipt.mts';
 
 const LOOKUP_DIAGNOSTICS_VERSION = 8;
 const LOOKUP_LEGACY_DIAGNOSTICS_VERSION = 7;
@@ -10,18 +11,7 @@ type LookupSourceState = typeof LOOKUP_SOURCE_STATES[number];
 
 const LOOKUP_TIMING_VERSION = 1;
 const MAX_LOOKUP_TIMING_MS = 120_000;
-const LOOKUP_TIMING_SOURCE_ORDER = Object.freeze([
-  'rdap',
-  'whois',
-  'domain_evidence',
-  'reverse_dns',
-  'registrar_rdap',
-  'network_context',
-  'security_txt',
-  'external_intelligence',
-  'malware_host_intelligence',
-  'malware_ioc_intelligence',
-] as const);
+const LOOKUP_TIMING_SOURCE_ORDER = LOOKUP_SOURCE_IDS;
 type LookupTimingSource = typeof LOOKUP_TIMING_SOURCE_ORDER[number];
 type LookupTimingOutcome = 'fulfilled' | 'rejected';
 type LookupTimingEntry = {

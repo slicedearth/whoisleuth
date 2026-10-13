@@ -827,6 +827,15 @@ Case details or original contents. Digests can correlate private files; review
 before sharing. It includes no destination-verification result and does not
 establish download completion, delivery or complete recovery.
 
+A completed full Lookup also carries a small collection receipt containing
+submitted optional-source choices and closed states for admission, collector
+start, outcome, completeness and truncation. It contains no target value, URL,
+contact, raw error or response payload. It stays in the open browser result and
+can be retained in explicitly saved private CLI Lookup version 3 files. It is
+not added to Compact/Bulk results, Watchlist baselines or minimised Lookup
+evidence exports. Historical absence remains unknown; cancellation before a
+valid final result does not create a completed receipt.
+
 Different exports have different sensitivity:
 
 - a full saved Lookup can contain targets, bounded source endpoints and timings,

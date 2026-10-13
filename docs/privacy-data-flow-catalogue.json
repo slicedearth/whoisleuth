@@ -8718,10 +8718,11 @@
       "schema": "whoisleuth.cli.lookup",
       "lifecycleSchema": "whoisleuth.cli.lookup",
       "coverageClass": "registered_schema",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
         1,
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -10224,7 +10225,8 @@
         "published-contacts",
         "source-endpoints",
         "normalised-evidence",
-        "collection-context"
+        "collection-context",
+        "collection-receipt"
       ],
       "notePolicy": "not_applicable",
       "retention": "transient_report",
@@ -10250,7 +10252,8 @@
         "source-timings",
         "normalised-evidence",
         "registrar-standing-official-projection",
-        "collection-context"
+        "collection-context",
+        "collection-receipt"
       ],
       "excludedCategories": [
         "credentials",
@@ -10281,7 +10284,8 @@
         "source-timings",
         "normalised-evidence",
         "registrar-standing-official-projection",
-        "collection-context"
+        "collection-context",
+        "collection-receipt"
       ],
       "excludedCategories": [
         "credentials",
@@ -10319,7 +10323,8 @@
         "published-contacts",
         "source-endpoints",
         "normalised-evidence",
-        "collection-context"
+        "collection-context",
+        "collection-receipt"
       ],
       "notePolicy": "not_applicable",
       "retention": "transient_report",
@@ -12455,7 +12460,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.cli.lookup",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "cli-lookup.sensitive-collection.v1",
@@ -12478,7 +12483,8 @@
           "schema": "whoisleuth.cli.lookup",
           "versions": [
             1,
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -12504,7 +12510,8 @@
           "schema": "whoisleuth.cli.lookup",
           "versions": [
             1,
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -12530,7 +12537,8 @@
           "schema": "whoisleuth.cli.lookup",
           "versions": [
             1,
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": {
@@ -12561,7 +12569,8 @@
           "schema": "whoisleuth.cli.lookup",
           "versions": [
             1,
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -12587,7 +12596,8 @@
           "schema": "whoisleuth.cli.lookup",
           "versions": [
             1,
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null

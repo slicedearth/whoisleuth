@@ -237,7 +237,7 @@ describe('completed Lookup recipe and source outcomes', () => {
       ['availability', 'not_observed_in_bounded_evidence', '2026-08-20T00:00:00.000Z'],
       ['tls', 'not_collected', '2026-08-19T00:00:00.000Z'],
     ]);
-    assert.equal(review.groups.find(group => group.id === 'security_txt')?.expectation, 'selection_unknown');
+    assert.equal(review.groups.find(group => group.id === 'security_txt')?.expectation, 'optional');
     assert.equal(review.groups.find(group => group.id === 'registrar_rdap')?.diagnosticState, 'disabled');
     const fast = buildLookupCollectionOutcomeReview(original(), 'fast', records);
     assert.deepEqual(fast.groups.find(group => group.id === 'domain_evidence')?.records.map(entry => entry.id), ['availability']);
@@ -254,7 +254,7 @@ describe('completed Lookup recipe and source outcomes', () => {
     const review = buildLookupCollectionOutcomeReview(response, 'deep', [record]);
     assert.equal(review.groups.at(-1)?.records[0]?.sourceState, 'rate_limited');
     assert.equal(review.groups.at(-1)?.records[0]?.evidenceState, 'partial');
-    assert.equal(review.groups.at(-1)?.expectation, 'selection_unknown');
+    assert.equal(review.groups.at(-1)?.expectation, 'optional');
     const localComparison = { ...record, id: 'sslbl-certificate' };
     assert.deepEqual(buildLookupCollectionOutcomeReview(response, 'deep', [localComparison]).groups.at(-1)?.records, [],
       'The automatic local certificate-list comparison must not be presented as optional provider consent.');
