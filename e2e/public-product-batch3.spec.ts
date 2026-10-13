@@ -775,15 +775,16 @@ test('opens, filters and downloads a large synthetic example without workspace a
     }
   }
   await page.setViewportSize({ width: 1280, height: 720 });
-  await accounts.getByRole('link').click();
+  await accounts.getByRole('link', { name: 'Inspect the two source accounts', exact: true }).click();
   await expect(page).toHaveURL(/\/methodology#method-example-conflicting-page-accounts$/u);
   await expect(page.locator('#method-example-conflicting-page-accounts')).toHaveAttribute('open', '');
   await page.goto('/examples');
   const amendment = outcomes.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Amend the handoff without replacing its history', exact: true }) });
   await amendment.locator('summary').click();
-  await amendment.getByRole('link').click();
-  await expect(page).toHaveURL(/\/demo#case-practice$/u);
+  await amendment.getByRole('link', { name: 'Open the amendment practice', exact: true }).click();
+  await expect(page).toHaveURL('/demo?practice=requested-amendment#case-practice');
   await expect(page.getByRole('combobox', { name: 'Practice scenario', exact: true })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Practice scenario', exact: true })).toHaveValue('requested-amendment');
   expect(investigationRequests).toEqual([]);
 });
 
