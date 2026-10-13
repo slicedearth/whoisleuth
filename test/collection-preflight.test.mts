@@ -101,6 +101,20 @@ test('IP and ASN disclosure does not invent a domain or a DNS question', () => {
   }
 });
 
+test('domain network-context disclosure follows the observed IP rather than the submitted domain', () => {
+  const plan = buildLookupCollectionPreflight({ mode: 'deep', targetCount: 1, targetType: 'domain' });
+  const network = plan.sources.find(source => source.id === 'network_context');
+  assert.ok(network);
+  assert.deepEqual(network.inspection.data, ['Observed public IP address', 'Registry query: Observed public IP address']);
+  assert.doesNotMatch(network.inspection.data.join(' '), /Registrable domain|Registry query:.*domain/u);
+  for (const id of ['rdap', 'whois']) {
+    const registration = plan.sources.find(source => source.id === id);
+    assert.ok(registration);
+    assert.match(registration.inspection.data.join(' '), /Registrable domain; subdomain labels, URL path and query excluded/u);
+    assert.doesNotMatch(registration.inspection.data.join(' '), /Observed public IP address/u);
+  }
+});
+
 test('optional, disabled and unresolved capability states remain unrequested in disclosure', () => {
   const base = { mode: 'deep' as const, targetCount: 1 };
   for (const input of [base, { ...base, disabledSourceIds: ['external_intelligence'] }, { ...base, capabilities: null }]) {

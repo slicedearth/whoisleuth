@@ -36,6 +36,10 @@ test('selected URL collection is deliberate and retains scope without its path o
   await disclosure.getByText('Website: data and recipients', { exact: true }).click();
   await expect(disclosure).toContainText('Homepage on the exact hostname; entered URL path and query are not selected');
   await expect(disclosure).toContainText('current application server');
+  const networkDisclosure = page.locator('.collection-preflight [data-source="network_context"] .collection-disclosure');
+  await networkDisclosure.locator(':scope > summary').click();
+  await expect(networkDisclosure.getByText('Registry query: Observed public IP address', { exact: true })).toBeVisible();
+  await expect(networkDisclosure).not.toContainText('Registrable domain');
   expect(requests, 'Opening the disclosure must not collect.').toEqual([]);
   await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
   await expect(page.locator('.result-head')).toContainText(hostname);

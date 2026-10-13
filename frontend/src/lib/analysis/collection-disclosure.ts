@@ -62,7 +62,12 @@ export function describeCollectionDisclosure(sourceId: string, options: {
       ? 'Registrable domain' : 'Normalised hostname; the collector determines derived names'
     : options.targetType === 'asn' ? 'Normalised ASN'
     : options.targetType === 'ipv4' || options.targetType === 'ipv6' ? 'Normalised IP address' : DATA_LABELS.normalised_target;
-  const registration = options.targetType === 'domain' ? 'Registrable domain; subdomain labels, URL path and query excluded'
+  // A derived-address source does not reuse the submitted Lookup target.
+  const observedAddressQuery = definition.disclosedData.includes('public_ip_address')
+    && !definition.disclosedData.includes('normalised_target')
+    && !definition.disclosedData.includes('normalised_registrable_domain');
+  const registration = observedAddressQuery ? DATA_LABELS.public_ip_address
+    : options.targetType === 'domain' ? 'Registrable domain; subdomain labels, URL path and query excluded'
     : options.targetType === 'asn' ? 'Normalised ASN' : options.targetType === 'ipv4' || options.targetType === 'ipv6' ? 'Normalised IP address' : null;
   const data = definition.disclosedData
     .filter(value => value !== 'selected_url_request' || options.selectedUrl === true)
