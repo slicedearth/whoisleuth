@@ -4548,7 +4548,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:\u003cdigest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads exact Case schemas 15 or 16 or 17 or 18 or 19. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 19."
+        "scope": "Reads exact Case schemas 15 or 16 or 17 or 18 or 19 or 20. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 20."
       },
       "inputs": [
         {
@@ -4606,7 +4606,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-export"
       ],
       "inputLimits": [
-        "Reads exact Case schemas 15 or 16 or 17 or 18 or 19. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 19.",
+        "Reads exact Case schemas 15 or 16 or 17 or 18 or 19 or 20. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 20.",
         "operation: 1-1 enum value",
         "source: 0-1 file value"
       ],
@@ -4742,7 +4742,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "case-pack",
       "summary": "Build a reviewed case package",
-      "description": "Package browser-created Case records from schemas 15 or 16 or 17 or 18 or 19 as a reviewed, audience-specific Case-pack v2 with current schema 19.",
+      "description": "Package browser-created Case records from schemas 15 or 16 or 17 or 18 or 19 or 20 as a reviewed, audience-specific Case-pack v2 with current schema 20.",
       "group": "respond",
       "common": true,
       "usage": "whoisleuth case-pack [\u003csource>] --audience \u003cinternal|trusted|public> --reviewed [--json] [--quiet] [--no-color]",
@@ -4750,7 +4750,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "The command creates a separate offline package without changing the source or durable Cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, Case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 or 19 and writes a separate audience-specific Case-pack v2."
+        "scope": "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 or 19 or 20 and writes a separate audience-specific Case-pack v2."
       },
       "inputs": [
         {
@@ -4781,7 +4781,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-report"
       ],
       "inputLimits": [
-        "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 or 19 and writes a separate audience-specific Case-pack v2.",
+        "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 or 19 or 20 and writes a separate audience-specific Case-pack v2.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
