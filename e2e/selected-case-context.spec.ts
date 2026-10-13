@@ -41,7 +41,7 @@ test('selected Case context follows tool navigation without changing saved evide
   await expect(shellContext.getByRole('note', { name: 'Current task', exact: true })).toContainText('Bulk');
   const storage = shellContext.getByText('Browser-local storage', { exact: true }).and(shellContext.locator('summary')).locator('..');
   await expect(storage).not.toHaveAttribute('open');
-  await storage.locator('summary').focus(); await page.keyboard.press('Enter');
+  await storage.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
   await expect(storage).toHaveAttribute('open', '');
   await expect(storage).toContainText('not a live source-health check');
   await page.keyboard.press('Enter');
