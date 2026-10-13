@@ -4,7 +4,7 @@ import type { LookupHttpResponse } from './analysis/lookup-response.ts';
 import type { LookupRequestDraft } from './analysis/lookup-presentation.ts';
 import type { BulkProfileContextProvenance } from './analysis/bulk-session-model.ts';
 import { normalizeOpaqueReferenceId } from '../../../packages/cases/opaque-reference-id.mts';
-import { consoleNavigation, referenceNavigation, publicReferenceSectionNavigation, protectedReturnTarget, type NavigationItem } from './workspaces.ts';
+import { consoleNavigation, monitorNavigation, monitorViewNavigation, referenceNavigation, publicReferenceSectionNavigation, protectedReturnTarget, type NavigationItem } from './workspaces.ts';
 import { currentBrowserWorkspaceId } from './browser-workspace-context.ts';
 import { CASE_WORKSPACE_SECTIONS, type CaseWorkspaceSection } from './analysis/case-response-stage.ts';
 import type { InfrastructureEntityType } from './analysis/investigation-infrastructure.ts';
@@ -74,7 +74,13 @@ export function initialInfrastructureNavigationState(): InfrastructureNavigation
 export type ConsoleFavourite = Readonly<{ kind: 'case'; caseId: string; section: CaseWorkspaceSection } | { kind: 'destination'; href: string }>;
 export const MAX_CONSOLE_FAVOURITES = 8;
 export function consoleFavouriteDestinations(): readonly NavigationItem[] {
-  return [...new Map([...consoleNavigation, ...referenceNavigation, ...publicReferenceSectionNavigation].map(item => [item.href, item])).values()];
+  const monitorViews: NavigationItem[] = monitorViewNavigation.flatMap(({ views }) => views.map(({ view, label, detail }) => ({
+    href: view === 'inbox' ? monitorNavigation.href : `${monitorNavigation.href}?view=${view}`,
+    label: view === 'inbox' ? monitorNavigation.label : label,
+    detail, icon: 'watchlist', keywords: [view],
+    activeQuery: { name: 'view', values: [view], ...(view === 'inbox' ? { defaultValue: view } : {}) },
+  })));
+  return [...new Map([...consoleNavigation, ...monitorViews, ...referenceNavigation, ...publicReferenceSectionNavigation].map(item => [item.href, item])).values()];
 }
 export type ConsoleReferenceView = Readonly<{
   workspaceId: string | null;

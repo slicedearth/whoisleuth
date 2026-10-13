@@ -98,7 +98,7 @@
     </ul></nav>
     <button class="btn small" type="button" onclick={() => void remove()}>Clear favourites</button>
   {/if}
-  <label>Tool or reference<select bind:value={destination}>{#each destinations as item}<option value={item.href}>{item.label}</option>{/each}</select></label>
+  <label>Tool, view or reference<select bind:value={destination}>{#each destinations as item}<option value={item.href}>{item.label}</option>{/each}</select></label>
   <button class="btn small" type="button" disabled={!destination} onclick={() => add({ kind: 'destination', href: destination })}>Add destination favourite</button>
   <label>Case section<select bind:value={section}>{#each CASE_WORKSPACE_SECTIONS as item}<option value={item.id}>{item.label}</option>{/each}</select></label>
   <button class="btn small" type="button" disabled={phase !== 'ready' || active.length !== 1 || !selectedCase} onclick={() => { if (selectedCase && active.length === 1) add({ kind: 'case', caseId: selectedCase, section }); }}>Add selected Case favourite</button>

@@ -32,6 +32,7 @@ import {
 } from '../frontend/src/lib/console-workflow-state.ts';
 import { bulkReviewView, createBulkViewState } from '../frontend/src/lib/controllers/bulk-view-state.ts';
 import { lockBrowserWorkspace } from '../frontend/src/lib/browser-workspace-unlock.ts';
+import { isNavigationItemActive, monitorViewNavigation } from '../frontend/src/lib/workspaces.ts';
 
 const lookupState = Object.freeze({
   query: 'example.test', completedTarget: '', completedLookupDepth: null, lookupMode: 'deep', includeExternalIntelligence: false,
@@ -103,7 +104,19 @@ test('tab favourites copy exact pointers, derive destinations and clear without 
     assert.ok(destinations.some(item => item.href === '/cli'));
     assert.ok(destinations.some(item => item.href === '/monitor?view=watchlists'));
     assert.equal(new Set(destinations.map(item => item.href)).size, destinations.length);
-    for (const href of ['https://external.example', '/lookup?q=private.example', '/cases?case=unreviewed'])
+    for (const { views } of monitorViewNavigation) for (const { view } of views) {
+      const href = view === 'inbox' ? '/monitor' : `/monitor?view=${view}`;
+      const destination = destinations.find(item => item.href === href);
+      assert.ok(destination, 'Every declared Monitor view is discovered without another registration');
+      assert.ok(isNavigationItemActive(destination, new URL(`/monitor?view=${view}`, 'https://console.example')));
+      assert.equal(isNavigationItemActive(destination, new URL(`/monitor?view=${view === 'inbox' ? 'timeline' : 'inbox'}`, 'https://console.example')), false);
+    }
+    const timeline = destinations.find(item => item.href === '/monitor?view=timeline')!;
+    assert.equal(timeline.label, 'Timeline');
+    assert.equal(isNavigationItemActive(timeline, new URL('https://console.example/monitor?view=watchlists')), false);
+    assert.equal(isNavigationItemActive(timeline, new URL('https://console.example/monitor?view=timeline&watchlist=private')), true);
+    for (const href of ['https://external.example', '/lookup?q=private.example', '/cases?case=unreviewed',
+      '/monitor?view=timeline&watchlist=private', '/monitor?view=unknown', '/monitor?view=timeline#private', '/monitor?view=timeline&view=rules'])
       assert.throws(() => addConsoleFavourite({ kind: 'destination', href }), RangeError);
     assert.throws(() => addConsoleFavourite({ kind: 'case', caseId: '../private', section: 'evidence' }), RangeError);
     for (const invalid of [null, { kind: 'case', caseId: null, section: 'evidence' }, { kind: 'other', href: '/cli' }])
@@ -116,6 +129,8 @@ test('tab favourites copy exact pointers, derive destinations and clear without 
     assert.equal(readConsoleReferenceView(), full);
     removeConsoleFavourite({ kind: 'case', caseId: 'case-one', section: 'summary' });
     assert.ok(readConsoleReferenceView().favourites.some(item => item.kind === 'case' && item.section === 'evidence'));
+    assert.equal(addConsoleFavourite({ kind: 'destination', href: '/monitor?view=timeline' }), 'added');
+    assert.equal(addConsoleFavourite({ kind: 'destination', href: '/monitor?view=timeline' }), 'already-added');
     pinConsoleCaseCheckpoint({ caseId: 'case-one', snapshotId: 'checkpoint-one' });
     clearConsoleFavourites();
     assert.equal(readConsoleReferenceView().favourites.length, 0); assert.equal(readConsoleReferenceView().checkpoints.length, 1);

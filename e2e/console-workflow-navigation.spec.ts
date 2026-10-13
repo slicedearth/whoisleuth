@@ -337,9 +337,9 @@ test('tab favourites resolve exact retained Cases and canonical destinations wit
   favourites = await open();
   await expect(favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true })).toBeEnabled();
   await favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true }).click();
-  await favourites.getByRole('combobox', { name: 'Tool or reference', exact: true }).selectOption('/lookup');
+  await favourites.getByRole('combobox', { name: 'Tool, view or reference', exact: true }).selectOption('/lookup');
   await favourites.getByRole('button', { name: 'Add destination favourite', exact: true }).click();
-  await favourites.getByRole('combobox', { name: 'Tool or reference', exact: true }).selectOption('/cli');
+  await favourites.getByRole('combobox', { name: 'Tool, view or reference', exact: true }).selectOption('/cli');
   await favourites.getByRole('button', { name: 'Add destination favourite', exact: true }).click();
   const links = favourites.getByRole('navigation', { name: 'Favourite destinations', exact: true });
   await expect(links.getByRole('link')).toHaveCount(4);
@@ -365,6 +365,24 @@ test('tab favourites resolve exact retained Cases and canonical destinations wit
   await expect(otherLink).not.toHaveAttribute('aria-current', 'page');
   await legacy.evaluate(link => link.remove());
   await expect(links.locator('a[href="/cli"]')).toHaveAttribute('target', '_blank');
+  for (const view of ['timeline', 'campaigns']) {
+    await favourites.getByRole('combobox', { name: 'Tool, view or reference', exact: true }).selectOption(`/monitor?view=${view}`);
+    await favourites.getByRole('button', { name: 'Add destination favourite', exact: true }).click();
+  }
+  const timelineLink = links.getByRole('link', { name: 'Timeline', exact: true });
+  const campaignsLink = links.getByRole('link', { name: 'Campaigns', exact: true });
+  await timelineLink.focus(); await page.keyboard.press('Enter');
+  await expect(page).toHaveURL('/monitor?view=timeline');
+  await expect(page.getByRole('tab', { name: /^Timeline/ })).toHaveAttribute('aria-selected', 'true');
+  favourites = await open();
+  await expect(timelineLink).toHaveAttribute('aria-current', 'page');
+  await expect(campaignsLink).not.toHaveAttribute('aria-current', 'page');
+  await campaignsLink.click();
+  await expect(page).toHaveURL('/monitor?view=campaigns');
+  await expect(page.getByRole('tab', { name: /^Campaigns/ })).toHaveAttribute('aria-selected', 'true');
+  favourites = await open();
+  await expect(campaignsLink).toHaveAttribute('aria-current', 'page');
+  await expect(timelineLink).not.toHaveAttribute('aria-current', 'page');
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);

@@ -118,6 +118,13 @@ missing identities and expired tab references remain unavailable. The trail is
 navigation, not an observed relationship or investigation log. These views store no duplicate evidence and
 clear on lock, sign-out, workspace replacement or leaving the Console.
 
+**Favourites in this tab** keeps up to eight exact links to Case sections,
+Monitor views, tools and reference pages. Choose a destination in the Console
+sidebar and add it explicitly. A view favourite opens that view with current
+records; it does not save its filters, copy evidence or start collection. These
+links also clear when the tab reloads. A deleted Case remains labelled unavailable
+until its reference is removed.
+
 Review Inbox forms retain their drafts while another item is inspected; use the
 existing explicit review checkpoint to retain them across a reload.
 
