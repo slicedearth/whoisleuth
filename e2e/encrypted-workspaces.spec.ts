@@ -299,7 +299,12 @@ for (const relock of ['manual', 'idle'] as const) test(`workspace lifecycle keep
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
   await createCaseThroughForm(page, 'cancel-lock.example'); const form = await recoveryPinForm(page), url = page.url();
   await page.getByText('Tab references', { exact: true }).click();
-  await expect(page.getByText('Visited Cases · 1', { exact: true })).toBeVisible();
+  await page.getByText('Navigation trail · 1', { exact: true }).click();
+  const visits = page.getByRole('navigation', { name: 'Visited Console contexts', exact: true });
+  await expect(visits.getByRole('link')).toHaveCount(1);
+  await expect(visits.getByRole('link')).toBeVisible();
+  const caseId = new URL(url).searchParams.get('case'); expect(caseId).toBeTruthy();
+  expect(new URL((await visits.getByRole('link').getAttribute('href'))!, url).searchParams.get('case')).toBe(caseId);
   await failNextBrowserLocalManifestWrite(page, 'case_drafts');
   await markCancelledLock(page, 'before-initial-draft-edit');
   await form.getByLabel('Label', { exact: true }).fill('Keep this draft after cancelling lock');
@@ -309,7 +314,7 @@ for (const relock of ['manual', 'idle'] as const) test(`workspace lifecycle keep
   page.once('dialog', async dialog => { expect(dialog.type()).toBe('beforeunload'); await dialog.dismiss(); cancelled = true; });
   await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
   await expect.poll(() => cancelled).toBe(true); await expect(page).toHaveURL(url);
-  await expect(page.getByText('Visited Cases · 1', { exact: true })).toBeVisible();
+  await expect(visits.getByRole('link')).toBeVisible();
   await expect(form.getByLabel('Label', { exact: true })).toHaveValue('Keep this draft after cancelling lock');
   await markCancelledLock(page, 'before-retry-approach');
   await form.getByRole('button', { name: 'Retry recovery save', exact: true }).click();
@@ -321,7 +326,7 @@ for (const relock of ['manual', 'idle'] as const) test(`workspace lifecycle keep
     await page.clock.fastForward(300_000);
   } else await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
   await expect(page.getByRole('heading', { name: `Unlock ${row.name}`, exact: true })).toBeVisible();
-  await expect(page.getByText(/Visited Cases ·/u)).toHaveCount(0);
+  await expect(visits).toHaveCount(0);
   await unlock(page, row.name); const restored = await recoveryPinForm(page);
   await restored.getByText('1 saved draft for this form', { exact: true }).click();
   await restored.getByRole('button', { name: 'Restore draft', exact: true }).click();
