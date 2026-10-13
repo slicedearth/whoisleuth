@@ -363,7 +363,7 @@ test('Case readiness cannot complete while its selected workspace is held', asyn
 
 test('a pending protected module reaches a terminal reload state and ignores late completion', async ({ page }) => {
   test.slow();
-  const chunkPath = productionChunkPath('src/lib/components/WebsiteProfileClusters.svelte');
+  const chunkPath = productionChunkPath('src/lib/components/RetainedEvidenceGallery.svelte');
   let releaseChunk = () => {};
   let markRequested = () => {};
   const requested = new Promise<void>((resolve) => { markRequested = resolve; });
@@ -396,7 +396,7 @@ test('a pending protected module reaches a terminal reload state and ignores lat
   expect((await placeholder.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(220);
 
   const unavailable = page.getByRole('alert').filter({
-    hasText: 'Website-profile relationships could not be loaded.',
+    hasText: 'The retained gallery could not be displayed. Saved evidence has not changed.',
   });
   await expect(unavailable).toBeVisible({ timeout: 7_000 });
   const surface = unavailable.locator('..');

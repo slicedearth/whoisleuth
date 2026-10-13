@@ -1085,9 +1085,9 @@ test('saved website profiles form searchable cross-domain pivots without another
   });
   await expect(workspace.getByText('30/100 across 2 contributing fields', { exact: true })).toBeVisible();
   await expect(workspace.getByText('50/100 across 3 contributing fields', { exact: true })).toHaveCount(0);
-  await workspace.getByLabel('Search saved profiles').fill('DOM structure');
+  await page.getByRole('region', { name: 'Retained evidence gallery', exact: true }).getByLabel('Search retained metadata').fill('DOM structure');
   await expect(workspace.getByText('No saved website-profile cluster matches these filters.')).toBeVisible();
-  await workspace.getByLabel('Search saved profiles').fill('second.invalid');
+  await page.getByRole('region', { name: 'Retained evidence gallery', exact: true }).getByLabel('Search retained metadata').fill('second.invalid');
   await expect(workspace.getByText('Example commerce', { exact: true })).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });

@@ -128,14 +128,14 @@ test('saved website relationships retain complete membership and reach the last 
     await expect(cluster.getByRole('link', { name: 'target-59.example', exact: true })).toBeVisible();
 
     await workspace.getByRole('combobox', { name: 'Relationship type' }).selectOption('similarity');
-    await workspace.getByRole('searchbox', { name: 'Search saved profiles' }).fill('target-59.example');
+    await page.getByRole('region', { name: 'Retained evidence gallery', exact: true }).getByRole('searchbox', { name: 'Search retained metadata' }).fill('target-59.example');
     await expect(workspace.getByRole('status').first()).toHaveText('Showing 1–20 of 59 matching relationships · similarity model 4');
     await pagination.getByRole('spinbutton', { name: 'Website relationship page' }).fill('3');
     await pagination.getByRole('spinbutton', { name: 'Website relationship page' }).press('Enter');
     await expect(results.locator(':scope > li')).toHaveCount(19);
     await expect(results.getByRole('link', { name: 'target-58.example', exact: true })).toBeVisible();
     await expectFocusedResultsVisible(page, results);
-    await workspace.getByRole('searchbox', { name: 'Search saved profiles' }).fill('asset-29.example');
+    await page.getByRole('region', { name: 'Retained evidence gallery', exact: true }).getByRole('searchbox', { name: 'Search retained metadata' }).fill('asset-29.example');
     await expect(workspace.getByRole('status').first()).toHaveText('Showing 1–20 of 1770 matching relationships · similarity model 4');
     await expect(page).toHaveURL('/monitor?view=relationships');
     expect(await readBrowserLocalCollection(page, 'website_snapshots')).toEqual(retained);
