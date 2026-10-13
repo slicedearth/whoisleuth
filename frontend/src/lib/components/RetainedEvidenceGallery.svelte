@@ -121,11 +121,11 @@
     <Pagination {currentPage} {pageCount} setPage={value => void setPage(value)} ariaLabel="Retained gallery pages" pageInputLabel="Retained gallery page" />
     <div class="filters">
       <div class="selected-file">
-        <label>Reference file<select bind:value={leftKey}><option value="">Choose a reference</option>{#each choices as file (file.key)}<option value={file.key}>{file.caseTitle} · {file.attachment.fileName} · {file.caseNumber} · {file.attachment.digestSha256.slice(0, 19)}…{file.attachment.digestSha256.slice(-8)}</option>{/each}</select></label>
+        <label>Reference file<select bind:value={leftKey}><option value="">Choose a reference</option>{#each choices as file (file.key)}<option value={file.key}>{file.caseTitle} · {file.attachment.fileName} · {file.caseNumber} · Attachment {file.reference.attachmentId}</option>{/each}</select></label>
         {#if left}<details><summary>Reference file details</summary>{@render fileMetadata(left, 'Reference selected file')}</details>{/if}
       </div>
       <div class="selected-file">
-        <label>Candidate file<select bind:value={rightKey}><option value="">Choose a candidate</option>{#each choices as file (file.key)}<option value={file.key}>{file.caseTitle} · {file.attachment.fileName} · {file.caseNumber} · {file.attachment.digestSha256.slice(0, 19)}…{file.attachment.digestSha256.slice(-8)}</option>{/each}</select></label>
+        <label>Candidate file<select bind:value={rightKey}><option value="">Choose a candidate</option>{#each choices as file (file.key)}<option value={file.key}>{file.caseTitle} · {file.attachment.fileName} · {file.caseNumber} · Attachment {file.reference.attachmentId}</option>{/each}</select></label>
         {#if right}<details><summary>Candidate file details</summary>{@render fileMetadata(right, 'Candidate selected file')}</details>{/if}
       </div>
     </div>

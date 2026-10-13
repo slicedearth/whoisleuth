@@ -15,8 +15,12 @@ async function retainPair(page: Page) {
     retainedAt: '2026-09-01T00:00:00.000Z', byteLength: 20, digestSha256: `sha256:${'f'.repeat(64)}`,
   }), readCaseAttachment({
     id: 'other-missing-text', fileName: 'missing.txt', mediaType: 'application/octet-stream', source: 'Second declared observation',
-    observedAt: '2026-09-01T10:20:30.456+10:00', retainedAt: '2026-09-02T05:06:07.890Z',
+    observedAt: '2026-09-01T00:20:30.456Z', retainedAt: '2026-09-02T05:06:07.890Z',
     byteLength: 20, digestSha256: `sha256:${'f'.repeat(56)}${'e'.repeat(8)}`,
+  }), readCaseAttachment({
+    id: 'repeated-missing-text', fileName: 'missing.txt', mediaType: 'application/octet-stream', source: 'Separate observation of the same content',
+    observedAt: '2026-09-03T00:20:30.456Z', retainedAt: '2026-09-04T05:06:07.890Z',
+    byteLength: 20, digestSha256: `sha256:${'f'.repeat(64)}`,
   })] };
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [missing] }) }, { clearStorage: true, destination: '/cases' });
   await openCasesView(page);
@@ -73,12 +77,15 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   const { before, bytes, gallery, select, missing } = await retainPair(page);
   await page.screenshot({ path: testInfo.outputPath('gallery-default.png') });
   await select('text', missing.id, 'missing.txt');
+  const pages = gallery.getByRole('navigation', { name: 'Retained gallery pages', exact: true });
+  await pages.getByRole('spinbutton', { name: 'Retained gallery page', exact: true }).fill('2');
+  await pages.getByRole('button', { name: 'Go', exact: true }).click();
   const candidateSelector = gallery.getByRole('combobox', { name: 'Candidate file', exact: true });
   const sameNameLabels = await candidateSelector.locator('option').evaluateAll((options, prefix) => options
     .filter(option => (option as HTMLOptionElement).value.startsWith(prefix))
     .map(option => option.textContent), JSON.stringify([missing.id]).slice(0, -1));
-  expect(sameNameLabels).toHaveLength(2);
-  expect(new Set(sameNameLabels).size).toBe(2);
+  expect(sameNameLabels).toHaveLength(3);
+  expect(new Set(sameNameLabels).size).toBe(3);
   const selectedDetails = gallery.locator('details').filter({ has: page.getByText('Candidate file details', { exact: true }) });
   await selectedDetails.locator('summary').click();
   const copyHash = selectedDetails.getByRole('button', { name: 'Copy Candidate selected file SHA-256', exact: true });
@@ -99,8 +106,16 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   await observedTime.click(); await expect.poll(() => copied).toBe(other.observedAt);
   await selectedDetails.getByRole('button', { name: /Copy exact Candidate selected file retention time:/u }).click();
   await expect.poll(() => copied).toBe(other.retainedAt);
+  const repeated = missing.attachments[2]!;
+  await pages.getByRole('spinbutton', { name: 'Retained gallery page', exact: true }).fill('2');
+  await pages.getByRole('button', { name: 'Go', exact: true }).click();
+  await candidateSelector.selectOption(JSON.stringify([missing.id, repeated.id]));
+  await selectedDetails.getByRole('button', { name: 'Copy Candidate selected file attachment ID', exact: true }).click();
+  await expect.poll(() => copied).toBe(repeated.id);
+  await observedTime.click(); await expect.poll(() => copied).toBe(repeated.observedAt);
+  await copyHash.click(); await expect.poll(() => copied).toBe(missing.attachments[0]!.digestSha256);
   denyCopy = true; await copyHash.click();
-  await expect(selectedDetails.locator('.copy-fallback')).toHaveText(other.digestSha256);
+  await expect(selectedDetails.locator('.copy-fallback')).toHaveText(repeated.digestSha256);
   await expect(selectedDetails).not.toContainText('Private clipboard failure');
   denyCopy = false;
   await expect(gallery.getByRole('region', { name: 'Selected retained file comparison', exact: true })).toHaveCount(0);
@@ -109,7 +124,6 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   await select('text');
   await selectedDetails.locator('summary').click();
   const originalSelection = [await gallery.getByRole('combobox', { name: 'Reference file', exact: true }).inputValue(), await gallery.getByRole('combobox', { name: 'Candidate file', exact: true }).inputValue()];
-  const pages = gallery.getByRole('navigation', { name: 'Retained gallery pages', exact: true });
   await pages.getByRole('spinbutton', { name: 'Retained gallery page', exact: true }).fill('2');
   await pages.getByRole('button', { name: 'Go', exact: true }).click();
   await expect(pages.getByRole('spinbutton', { name: 'Retained gallery page', exact: true })).toHaveValue('2');

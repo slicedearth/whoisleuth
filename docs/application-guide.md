@@ -728,7 +728,8 @@ PNG and UTF-8 text comparisons across Cases. Choose an evidence component and
 search Case titles, references, domains, filenames or declared sources; file
 contents are not indexed. Search covers the currently read Case metadata; rows
 are paged, and selectors show the current page plus already-selected references.
-Selector labels include both ends of the file hash. Open the selected file's
+Selector labels identify the Case and exact attachment reference, including
+separate observations with the same filename and content hash. Open the selected file's
 details to check and copy its complete attachment ID, hash and exact stored
 timestamps before opening the originals. Readable timestamps use UTC; an unknown
 observation time stays unknown. These details describe retained metadata, not a
