@@ -13,12 +13,14 @@
     omittedRows = 0,
     duplicateRows = 0,
     sourceOmittedRows = 0,
+    selection,
   }: {
     rows: readonly ComparisonLedgerRow[];
     totalRows: number;
     omittedRows?: number;
     duplicateRows?: number;
     sourceOmittedRows?: number;
+    selection?: Readonly<{ rowIds: readonly string[]; toggle: (rowId: string, checked: boolean) => void }>;
   } = $props();
   const id = $props.id();
   let expanded = $state<string[]>([]);
@@ -62,6 +64,17 @@
     return STATE_LABELS[value];
   }
 </script>
+
+{#snippet RowSelection(row: ComparisonLedgerRow)}
+  {#if selection}
+    <label class="report-choice">
+      <input type="checkbox" checked={selection.rowIds.includes(row.id)}
+        aria-label={`Select ${row.entityId}, ${row.field} for text report`}
+        onchange={event => selection?.toggle(row.id, event.currentTarget.checked)} />
+      <span>Select for report</span>
+    </label>
+  {/if}
+{/snippet}
 
 {#snippet SideMetadata(label: string, side: ComparisonLedgerSide)}
   <section class="side-metadata" aria-label={`${label} source metadata`}>
@@ -127,7 +140,7 @@
         <tbody>
           <tr data-ledger-state={row.state}>
             <td><span class="state-label">{stateLabel(row.state)}</span></td>
-            <td><strong>{row.entityId}</strong><small>{row.family} · {row.field}</small></td>
+            <td><strong>{row.entityId}</strong><small>{row.family} · {row.field}</small>{@render RowSelection(row)}</td>
             <td>{MODE_LABELS[row.mode]}</td>
             <td>{row.completeness.replaceAll('_', ' ')}{row.truncated ? ' · truncated' : ''}</td>
             <td>
@@ -151,6 +164,7 @@
       <article data-ledger-state={row.state}>
         <header><div><span class="state-label">{stateLabel(row.state)}</span><h3>{row.field}</h3></div><small>{row.entityId}</small></header>
         <p>{MODE_LABELS[row.mode]} · {row.family} · {row.completeness.replaceAll('_', ' ')}{row.truncated ? ' · truncated' : ''}</p>
+        {@render RowSelection(row)}
         <details open={expanded.includes(row.id)} ontoggle={(event) => { if (event.currentTarget.open !== expanded.includes(row.id)) toggle(row.id); }}>
           <summary aria-label={`Inspect exact values for ${row.entityId}, ${row.field}`}>Inspect exact values</summary>
           {@render ExactDetails(row)}
@@ -182,6 +196,8 @@
   td .btn{max-width:100%;white-space:normal;text-align:left;min-height:44px;padding-block:7px}
   td strong,td small{display:block;overflow-wrap:anywhere}
   td small{margin-top:3px;color:var(--muted)}
+  .report-choice{display:flex;align-items:center;gap:8px;min-height:44px;margin-top:6px;font-size:var(--text-sm);cursor:pointer;overflow-wrap:anywhere}
+  .report-choice input{flex:0 0 auto;width:20px;height:20px;margin:0}
   details{min-width:0}
   summary{width:max-content;max-width:100%;cursor:pointer;color:var(--accent);font-weight:700;outline-offset:3px}
   summary:focus-visible{outline:2px solid var(--accent)}

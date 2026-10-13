@@ -140,6 +140,7 @@ function render(projection: Projection): string {
   };
   const item = projection.comparison;
   add('Selected comparison rows');
+  add('These rows come from the displayed retained comparison, not a fresh collection or a check of the latest saved state. Reload the source page before exporting to include changes made elsewhere.');
   add('Bounded normalized comparison values, not full original evidence or a self-contained re-verifiable package.');
   add('Only the explicitly selected rows are included. Selection is not an assessment of safety, ownership or resolution.');
   add('Local identifiers are navigation references, not cryptographic integrity or provenance proof.');

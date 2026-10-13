@@ -93,6 +93,19 @@ The retained investigation timeline also offers a **Field journal reading
 layout**, using the same entries, filters, pagination and separately labelled
 clocks. It does not reconstruct missing observations or change the theme.
 
+In **Retained change review**, choose one retained comparison, then select the
+individual rows to include in **Download selected rows**. Nothing is selected
+automatically. The plain-text file contains the selected normalised values,
+source states, separate observation/publication/retention times, limitations and
+omission counts. It excludes unselected values, Case notes and owning records,
+but selected values and labels may still be private. Missing endpoint or algorithm
+references remain unavailable; this readable report is not an original-evidence
+package or another portable import format. Selection stays in page memory and
+clears when the displayed comparison changes or the page is left. The download
+rechecks the current displayed details and makes no collection or upload request.
+It does not reread the latest saved state. Reload the page to include
+changes made elsewhere.
+
 In a prepared response packet, **Recipient reading view** offers the full report,
 brief emphasis, selected evidence and its contained timeline. These views contain
 only the packet's existing projection; printing still uses its full report and

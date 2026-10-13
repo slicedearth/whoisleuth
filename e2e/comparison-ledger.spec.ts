@@ -1,4 +1,6 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
+import { readFile } from 'node:fs/promises';
+import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { caseRecord, snapshot } from './case-test-fixtures';
@@ -234,6 +236,90 @@ async function selectRetainedComparison(review: Locator, text: string) {
   expect(value).toBeTruthy();
   await select.selectOption(value ?? '');
 }
+
+test('downloads only deliberately selected current comparison rows without collecting or retaining a selection', async ({ page }, testInfo) => {
+  const requests = unexpectedApiRequests(page);
+  const entries = retainedFixture();
+  entries['whois-rdap-cases-v1'].cases[0]!.notes = [{ body: 'PRIVATE_NOTE_NOT_SELECTED', createdAt: LATER }];
+  const review = await openRetainedReview(page, entries);
+  const storedBefore = await readBrowserLocalCollection(page, 'cases');
+  expect(storedBefore.records[0]!.value.notes.some(note => note.body === 'PRIVATE_NOTE_NOT_SELECTED')).toBe(true);
+  expect(storedBefore.records[0]!.value.evidenceHistory.map(snapshot => snapshot.registrar)).toEqual(['Earlier Registrar', 'Later Registrar']);
+  const ownerLabel = 'case-change.reservation.invalid · adjacent case snapshots';
+  const downloadButton = review.getByRole('button', { name: /^Download selected rows \(/u });
+
+  for (const width of [1280, 320]) for (const theme of ['dark', 'light'] as const) {
+    await page.setViewportSize({ width, height: 844 });
+    await useTheme(page, theme);
+    await selectRetainedComparison(review, ownerLabel);
+    await expect(downloadButton).toBeDisabled();
+    const selected = review.getByRole('checkbox', { name: 'Select case-change.reservation.invalid, Availability for text report', exact: true });
+    await expect(review.getByRole('checkbox', { name: 'Select case-change.reservation.invalid, Registrar for text report', exact: true })).not.toBeChecked();
+    await expect(selected).not.toBeChecked();
+    await selected.focus();
+    await expect(selected).toBeFocused();
+    await selected.press('Space');
+    await expect(selected).toBeChecked();
+    await expect(downloadButton).toHaveText('Download selected rows (1)');
+    await expect(review.getByRole('region', { name: 'Selected-row text report' })).toContainText('which may be private');
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('#retained-change-review')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await review.screenshot({ path: testInfo.outputPath(`selected-report-${width}-${theme}.png`) });
+
+    const pending = page.waitForEvent('download');
+    await downloadButton.click();
+    const download = await pending;
+    expect(download.suggestedFilename()).toBe('whoisleuth-comparison.txt');
+    const path = await download.path();
+    expect(path).not.toBeNull();
+    const content = await readFile(path!, 'utf8');
+    expect(content).toContain('Selected rows: 1');
+    expect(content).toContain('Field: "Availability"');
+    expect(content).toContain('Comparison state: "incomplete"');
+    expect(content).toContain('"registered"');
+    expect(content).toContain('"unknown"');
+    expect(content).toContain(EARLIER);
+    expect(content).toContain(LATER);
+    expect(content).toContain('Published: Not retained in this projection');
+    expect(content).toContain('Retained locally: Not retained in this projection');
+    expect(content).toContain('Available rows not selected:');
+    for (const excluded of ['Earlier Registrar', 'Later Registrar', 'PRIVATE_NOTE_NOT_SELECTED', 'complete-profile.reservation.invalid']) {
+      expect(content).not.toContain(excluded);
+    }
+    await selectRetainedComparison(review, 'partial-profile.reservation.invalid · adjacent website profiles');
+    await expect(downloadButton).toBeDisabled();
+    await expect(review.getByRole('checkbox', { name: /for text report/u }).first()).not.toBeChecked();
+    await expect(review.getByRole('region', { name: 'Selected-row text report' })).toContainText('displayed comparison changed');
+  }
+  expect((await readBrowserLocalCollection(page, 'cases')).manifest.revision).toBe(storedBefore.manifest.revision);
+  expect((await readBrowserLocalCollection(page, 'cases')).records).toEqual(storedBefore.records);
+  await selectRetainedComparison(review, ownerLabel);
+  await review.getByRole('checkbox', { name: 'Select case-change.reservation.invalid, Availability for text report', exact: true }).check();
+  await expect(downloadButton).toBeEnabled();
+
+  // A newly read source starts with no inherited selection, even for the same
+  // Case and field. This owner intentionally does not poll peer-tab storage.
+  const changed = retainedFixture();
+  changed['whois-rdap-cases-v1'].cases[0]!.evidenceHistory[1]!.availability = 'available';
+  await openRetainedReview(page, changed);
+  await selectRetainedComparison(review, ownerLabel);
+  await expect(downloadButton).toBeDisabled();
+  const fresh = review.getByRole('checkbox', { name: 'Select case-change.reservation.invalid, Availability for text report', exact: true });
+  await expect(fresh).not.toBeChecked();
+  await fresh.check();
+  const pending = page.waitForEvent('download');
+  await downloadButton.click();
+  const download = await pending;
+  const downloadedPath = await download.path();
+  expect(downloadedPath).not.toBeNull();
+  const current = await readFile(downloadedPath!, 'utf8');
+  expect(current).toContain('"available"');
+  expect(current).not.toContain('Normalized value: "unknown"');
+  await review.getByRole('button', { name: 'Clear row selection' }).click();
+  await expect(downloadButton).toBeDisabled();
+  expect(requests).toEqual([]);
+});
 
 test('reviews retained case, website and watchlist changes without turning incomplete evidence into removal', async ({ page }) => {
   const requests = unexpectedApiRequests(page);

@@ -294,6 +294,17 @@ posture comparisons, evidence-gap queues and response preflight from retained
 records without another request. Derived views do not create evidence, prove a
 target state or silently mark an item reviewed.
 
+Retained change review can deliberately download selected rows from one displayed
+comparison as plain text. Selected normalised values and labels may be private;
+the file also includes source states, separate clocks, limitations and omission
+counts, not unselected values or owning records. Missing endpoint and algorithm
+references remain unavailable. Selection is held only in page memory, cleared
+when the displayed comparison changes or the page is left, and revalidated
+against current displayed details before download. No collection, upload or new
+saved evidence is created; the file is not an original-evidence package.
+Downloading does not reread the latest saved state. Reload the page
+to include changes made elsewhere.
+
 Creating or refreshing a Case is deliberate. A Case can retain
 the exact normalised submitted hostname and the DNS, TLS and web observation
 hostname on a new evidence snapshot, analyst
