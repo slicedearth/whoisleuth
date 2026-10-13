@@ -133,8 +133,11 @@ test('UTF-8 byte limits reject an oversized assembled report instead of returnin
 
 test('real Case projections disclose selected differences without private notes or unrelated fields', () => {
   const opened = openOrCreateCase([], { domain: 'example.test', source: 'lookup', evidence: { registrar: 'Earlier registrar', pageTitle: 'private-title-before' } }, EARLIER);
-  const updated = updateCase(opened.cases, opened.record.id, { evidence: { registrar: 'Later registrar', pageTitle: 'private-title-after' } }, LATER);
-  const input = { cases: [{ ...updated.record, title: 'private-case-title', notes: [{ text: 'private-note-marker' }] }] };
+  const updated = updateCase(opened.cases, opened.record.id, { note: 'private-note-marker', tags: ['private-tag-marker'],
+    evidence: { registrar: 'Later registrar', pageTitle: 'private-title-after' } }, LATER);
+  assert.equal(updated.record.notes[0]?.body, 'private-note-marker');
+  assert.ok(updated.record.tags.includes('private-tag-marker'));
+  const input = { cases: [updated.record] };
   const item = buildComparisonLedgerIndex(input).items[0];
   assert.ok(item);
   const details = buildComparisonLedgerDetails(input, { itemIds: [item.id] });
@@ -143,7 +146,7 @@ test('real Case projections disclose selected differences without private notes 
   assert.ok(details.rows.length > 1, 'negative control: other differences really exist');
   const output = selectComparisonReportRows(details, [registrar.id]).render(details);
   assert.ok(output.includes('Earlier registrar')); assert.ok(output.includes('Later registrar'));
-  for (const hidden of ['private-title-before', 'private-title-after', 'private-case-title', 'private-note-marker']) {
+  for (const hidden of ['private-title-before', 'private-title-after', 'private-tag-marker', 'private-note-marker']) {
     assert.equal(output.includes(hidden), false, hidden);
   }
   assert.ok(output.includes('registrar change is not evidence of new ownership'));
