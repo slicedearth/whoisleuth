@@ -3,7 +3,12 @@ import AxeBuilder from '@axe-core/playwright';
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openInboxReview, inboxReviewControls } from './console-navigation';
 import { expect, test } from './fixtures';
-import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalManifestWrite, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, openBrandProfileList, openBrandWorkbench, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalManifestWrite, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, openBrandProfileList, openBrandWorkbench, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
+import { createCase as makeCase } from '../packages/cases/case-record-operations.mts';
+import { readCaseAttachment } from '../packages/cases/case-attachment-model.mts';
+import { createPageBaseline } from '../packages/workspace/page-baseline.mts';
+import { openRetainedFiles, storedFiles } from './case-attachment-fixtures';
+import { sourceImage } from './case-image-fixtures';
 import {
   buildDomainControlManifest,
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
@@ -45,6 +50,84 @@ function profileFixture() {
     updatedAt: ISO,
   };
 }
+
+test('temporary Brand references preserve original attribution and clear across source and view changes', async ({ page }, testInfo) => {
+  const linked = { ...makeCase({ domain: 'reference.example' }, ISO), brandProfileIds: ['profile-1'] };
+  const unrelated = { ...makeCase({ domain: 'reference.example' }, ISO), attachments: [readCaseAttachment({
+    id: 'unrelated', fileName: 'unlinked.png', mediaType: 'image/png', source: null, observedAt: null,
+    retainedAt: ISO, byteLength: 12, digestSha256: `sha256:${'c'.repeat(64)}`,
+  })] };
+  const missing = { ...makeCase({ domain: 'missing.example' }, ISO), brandProfileIds: ['profile-1'], attachments: [readCaseAttachment({
+    ...unrelated.attachments[0], id: 'missing', fileName: 'missing.png', digestSha256: `sha256:${'f'.repeat(64)}`,
+  })] };
+  const baseline = createPageBaseline('example.com', availabilityFixture()); expect(baseline).not.toBeNull();
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([
+      { ...profileFixture(), officialDomains: ['example.com'], pageBaseline: baseline },
+      { ...profileFixture(), id: 'profile-2', name: 'Other Brand' },
+    ]), [ACTIVE_KEY]: 'profile-1', 'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [linked, unrelated, missing] }),
+  }, { destination: `/cases?case=${encodeURIComponent(linked.id)}` });
+  const retained = await openRetainedFiles(page);
+  await retained.getByLabel('Choose original files', { exact: true }).setInputFiles({ name: 'reference.png', mimeType: 'image/png', buffer: sourceImage() });
+  await retained.getByLabel('Source', { exact: true }).fill('Reviewed campaign reference');
+  await retained.getByRole('button', { name: 'Retain selected files', exact: true }).click();
+  await expect(retained.getByRole('button', { name: 'Download original reference.png', exact: true })).toBeVisible();
+  const before = await readBrowserLocalCollection(page, 'cases'), brandsBefore = await readBrowserLocalCollection(page, 'brand_profiles'), bytes = await storedFiles(page);
+  const requests: string[] = [];
+  page.on('request', request => { if (/\/api\/(?:lookup|bulk|discover|domain-posture|ct-search)/u.test(request.url())) requests.push(request.url()); });
+  await page.goto('/brands');
+  const panel = page.locator('.brand-reference-review'), summary = panel.locator(':scope > summary');
+  await expect(panel).not.toHaveAttribute('open');
+  await summary.focus(); await summary.press('Enter');
+  await panel.getByRole('checkbox', { name: 'Use the saved page baseline', exact: true }).check();
+  await panel.getByRole('combobox', { name: 'Baseline context for this review', exact: true }).selectOption('Desktop');
+  const picker = panel.getByRole('combobox', { name: 'Reference on this page', exact: true });
+  await expect(picker).not.toContainText('unlinked.png');
+  async function selectFile(name: string) {
+    const option = picker.locator('option').filter({ hasText: name });
+    await expect(option).toHaveCount(1);
+    await picker.selectOption((await option.getAttribute('value'))!);
+    await panel.getByRole('button', { name: 'Add review reference', exact: true }).click();
+  }
+  await selectFile('reference.png');
+  await panel.getByRole('combobox', { name: 'Context for reference 1: reference.png', exact: true }).selectOption('Campaign');
+  await expect(panel).toContainText('Observed: Unknown');
+  await expect(panel).toContainText('Declared source: Reviewed campaign reference');
+  const preview = panel.getByRole('button', { name: 'Preview reference 1: reference.png', exact: true });
+  await preview.focus(); await preview.press('Enter');
+  const opened = panel.getByRole('region', { name: 'Selected Brand original', exact: true });
+  await expect(opened.getByRole('heading', { name: 'reference.png', exact: true })).toBeFocused();
+  await expect(opened.getByRole('img', { name: 'Selected screenshot reference.png, 640 by 360 pixels', exact: true })).toBeVisible();
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    await opened.getByRole('heading', { name: 'reference.png', exact: true }).scrollIntoViewIfNeeded();
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('.brand-reference-review').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await panel.screenshot({ path: testInfo.outputPath(`brand-references-${width}-${theme}.png`) });
+  }
+  await panel.getByRole('button', { name: 'Close preview', exact: true }).click(); await expect(preview).toBeFocused();
+  await selectFile('missing.png'); await panel.getByRole('button', { name: 'Preview reference 2: missing.png', exact: true }).click();
+  await expect(panel.getByRole('alert')).toContainText('original could not be read and verified'); await expect(opened).toHaveCount(0);
+  const release = await holdBrowserLocalTransaction(page);
+  try {
+    await preview.click(); await expect(panel.getByRole('button', { name: 'Cancel preview', exact: true })).toBeVisible();
+    await summary.click(); await expect(panel).not.toHaveAttribute('open');
+  } finally { await release(); }
+  await summary.click(); await expect(panel.getByRole('list', { name: 'Selected Brand references', exact: true }).getByRole('listitem')).toHaveCount(0);
+  await expect(opened).toHaveCount(0); await expect(panel.getByRole('checkbox')).not.toBeChecked();
+  await selectFile('reference.png');
+  await openBrandProfileList(page); await page.getByRole('radio', { name: 'Set Other Brand active', exact: true }).check();
+  await expect(panel).toContainText('for Other Brand'); await expect(picker.locator('option')).toHaveCount(1);
+  await expect(panel.getByRole('list', { name: 'Selected Brand references', exact: true }).getByRole('listitem')).toHaveCount(0);
+  await page.getByRole('radio', { name: 'Set Stored Brand active', exact: true }).check(); await selectFile('reference.png');
+  await page.getByRole('tab', { name: 'Tools', exact: true }).click(); await expect(panel).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click(); await expect(panel).not.toHaveAttribute('open');
+  await summary.click(); await expect(panel.getByRole('list', { name: 'Selected Brand references', exact: true }).getByRole('listitem')).toHaveCount(0);
+  await page.emulateMedia({ media: 'print' }); await expect(panel).not.toBeVisible(); await page.emulateMedia({ media: null });
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await readBrowserLocalCollection(page, 'brand_profiles')).toEqual(brandsBefore);
+  expect(await storedFiles(page)).toEqual(bytes); expect(requests).toEqual([]);
+});
 
 test('expected-setting domain switches require an explicit decision before discarding a draft', async ({ page }) => {
   await page.goto('/brands');

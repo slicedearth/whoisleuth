@@ -9,6 +9,7 @@
   import BrandAllowlistManager from '#lib/components/BrandAllowlistManager.svelte';
   import BrandReviewInbox from '#lib/components/BrandReviewInbox.svelte';
   import BrandAssetRegisterSummary from '#lib/components/BrandAssetRegisterSummary.svelte';
+  import BrandReferenceReview from '#lib/components/BrandReferenceReview.svelte';
   import DeferredSurface from '#lib/components/DeferredSurface.svelte';
   import {
     activeProfileId,
@@ -1167,6 +1168,7 @@
     <BrandReviewInbox inbox={brandReviewInbox} />
     {#if candidateReviewProfile}<DeferredSurface load={()=>import('#lib/components/BrandCandidateReviewWorkspace.svelte')} props={{active:candidateReviewProfile,onrefresh:refreshProfiles,disabled:profileWriteDisabled||active?.id!==candidateReviewProfile.id||activePreferenceSourceState!=='ready'}} loadingLabel="Loading retained candidate review…" unavailableLabel="Retained candidate review could not be loaded. No candidate state was changed." placeholder="workspace" />{/if}
     <BrandAssetRegisterSummary projection={brandAssetRegister} />
+    {#if brandsView === 'overview' && active}<BrandReferenceReview profile={active} {cases} casesState={caseSourceState} />{/if}
     </div>
   </div>
   {#if brandsView==='assets'}

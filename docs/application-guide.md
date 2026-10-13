@@ -568,6 +568,16 @@ Overview contains the allowlist and review summary; Assets lists the profile's
 domain relationships; Tools opens domain, mail, certificate and account-control
 reviews. The Brand profiles disclosure switches the explicitly active profile.
 
+**Choose Brand review references** optionally selects the saved compact page
+baseline and PNG files from explicitly associated Cases. Up to four references
+can be labelled Desktop, Mobile, Regional, Campaign or Login for the current
+review. Those labels do not verify capture conditions or legitimacy. Source,
+observation time, retention time and missing context remain separate; an
+original is read and verified only when you choose its preview. Closing the
+panel, refreshing its Brand or Case sources, switching views or leaving the page
+clears the choices. This does not create a durable variation library or change
+saved evidence, exports or Brand matching.
+
 **Review domain feed candidates** matches a local plain-domain file against
 selected terms or exact hostnames. Choose which results to retain before
 preparing a Watchlist handoff. The [candidate-review guide](brand-candidate-review.md)

@@ -755,6 +755,12 @@ Capture attachment checks compare selected bytes with manifest declarations;
 matching bytes do not authenticate the capture. Review state is held in page
 memory and cleared when closed or when the page is left.
 
+Temporary Brand review references select an existing compact page baseline and
+PNG references from explicitly associated Cases. Context labels and choices
+stay in page memory; only a deliberately previewed original is read. Panel
+closure, Brand or Case source refresh, navigation and reload discard the review.
+It is excluded from printing and exports and does not change saved evidence.
+
 The retained evidence gallery searches current Case-file metadata and saved
 website-profile contributions locally. Search reads no original file bodies.
 An explicit comparison opens only the selected pair, preserving each Case and
