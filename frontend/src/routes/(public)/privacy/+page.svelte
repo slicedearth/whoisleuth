@@ -28,7 +28,7 @@
 
   <article class="policy card" aria-labelledby="privacy-title">
     <h2 id="privacy-introduction">1. Introduction</h2>
-    <p id="privacy-title"><strong>Last updated: 4 October 2026.</strong></p>
+    <p id="privacy-title"><strong>Last updated: 13 October 2026.</strong></p>
     <p>WHOISleuth is local-first. Ordinary investigation state stays in this browser profile, and the service has no general user, Case, or workspace database. Network collection, local retention, export, and active review are separate deliberate actions.</p>
     <p>Only a deliberately started network-capable operation sends its declared bounded target or evidence fields. WHOISleuth does not automatically submit reports, contact recipients, acquire domains, apply defensive controls, or change external infrastructure. Missing, blocked, stale, malformed, partial, unavailable, or unsupported evidence never becomes absence, safety, ownership, control, intent, or remediation.</p>
     <p>This policy describes the public deployment. A self-hosted operator must adapt it when hosting, authentication, enabled providers, retention, or contact routes differ.</p>
@@ -46,6 +46,7 @@
 
     <h2 id="privacy-local-application">Standalone local application</h2>
     <p>The optional local application stores saved collections, recovery drafts and retained original files in the explicitly selected filesystem workspace, not IndexedDB. The workspace is plaintext at rest; protect it with operating-system access controls and disk encryption. Encrypted portable backups remain separate. The browser exchanges saved data only with its authenticated loopback process. The selected folder is displayed locally and is not included in exports.</p>
+    <p>An optional temporary restart shortlist holds only explicitly added folder references in page memory. Supplied paths stay hidden until revealed, are not inserted into commands, and are excluded from print and exports. The shortlist does not scan, inspect, open or switch folders. Removing an entry discards that reference only. Clear, opt-out, panel closure, navigation and reload discard all entries and unfinished inputs; inactive-folder format and lock state remain unverified.</p>
     <p>Appearance preferences and tab state remain browser-local. Clearing site data or signing out does not delete the filesystem workspace. Stop every application instance using the folder before copying, moving or deleting it. Unsupported future workspace formats are preserved without writing. Browser-workspace switching, browser-quota controls and in-place workspace encryption are not available in this mode.</p>
     <p>The private launch link grants a local session; do not share it. Starting the application makes no collection request. Explicit collection runs from this machine under the existing request policy; <code>--offline</code> disables collection.</p>
 

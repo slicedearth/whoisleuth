@@ -1,7 +1,8 @@
 import { parseArgs } from 'node:util';
+import { LOCAL_WORKSPACE_MAX_DIRECTORY_CHARACTERS } from '../contracts/local-application.mts';
 
 export function parseLocalApplicationArguments(args: readonly string[]) {
-  if (args.length > 12 || args.some(value => value.length > 4_096 || /[\u0000-\u001f\u007f]/u.test(value))) throw new TypeError('Local application arguments exceed their bounds.');
+  if (args.length > 12 || args.some(value => value.length > LOCAL_WORKSPACE_MAX_DIRECTORY_CHARACTERS || /[\u0000-\u001f\u007f]/u.test(value))) throw new TypeError('Local application arguments exceed their bounds.');
   if (!args.length || args.length === 1 && ['--help', '-h'].includes(args[0]!)) return { operation: 'help' as const };
   if (args.length === 1 && args[0] === '--version') return { operation: 'version' as const };
   const parsed = parseArgs({ args: [...args], strict: true, allowPositionals: false, tokens: true, options: {

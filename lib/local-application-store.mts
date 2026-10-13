@@ -15,7 +15,7 @@ import {
 import { localDataManifestMatches, type LocalDataCapture, type LocalDataManifest, type LocalDataStorageCommit, type LocalDataStoredBinary } from '../packages/workspace/local-data-storage.mts';
 import { boundedJsonLimitsForBytes, parseBoundedJson } from '../packages/analysis/bounded-json.mts';
 import { LocalWorkspaceError } from './local-application-errors.mts';
-import { LOCAL_WORKSPACE_FILE, LOCAL_WORKSPACE_FORMAT_VERSION, LOCAL_WORKSPACE_APPLICATION_ID as APPLICATION_ID, LOCAL_WORKSPACE_MAX_DATABASE_BYTES as MAX_DATABASE_BYTES } from '../packages/contracts/local-application.mts';
+import { LOCAL_WORKSPACE_FILE, LOCAL_WORKSPACE_FORMAT_VERSION, LOCAL_WORKSPACE_APPLICATION_ID as APPLICATION_ID, LOCAL_WORKSPACE_MAX_DATABASE_BYTES as MAX_DATABASE_BYTES, LOCAL_WORKSPACE_MAX_DIRECTORY_CHARACTERS } from '../packages/contracts/local-application.mts';
 export { LocalWorkspaceError } from './local-application-errors.mts';
 export { LOCAL_WORKSPACE_FILE, LOCAL_WORKSPACE_FORMAT_VERSION } from '../packages/contracts/local-application.mts';
 
@@ -79,7 +79,7 @@ export class LocalApplicationStore {
   }
 
   static async open(selected: string, options: Readonly<{ create?: boolean }> = {}): Promise<LocalApplicationStore> {
-    if (typeof selected !== 'string' || !selected.trim() || selected.length > 4_096 || /[\u0000-\u001f\u007f]/u.test(selected)) throw new LocalWorkspaceError('INVALID_LOCAL_DATA_PATH', 'Choose a valid workspace directory explicitly.');
+    if (typeof selected !== 'string' || !selected.trim() || selected.length > LOCAL_WORKSPACE_MAX_DIRECTORY_CHARACTERS || /[\u0000-\u001f\u007f]/u.test(selected)) throw new LocalWorkspaceError('INVALID_LOCAL_DATA_PATH', 'Choose a valid workspace directory explicitly.');
     const requested = path.resolve(selected);
     const parent = await realpath(path.dirname(requested)), directory = path.join(parent, path.basename(requested));
     if (options.create) {

@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 4 October 2026.
+Last updated: 13 October 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -85,6 +85,13 @@ IndexedDB. The workspace is plaintext at rest; protect it with operating-system
 access controls and disk encryption. Encrypted portable backups remain separate.
 The browser exchanges saved data only with its authenticated loopback process.
 The selected folder is displayed locally and is not included in exports.
+An optional temporary restart shortlist holds only explicitly added folder
+references in page memory. Supplied paths remain hidden until revealed, are not
+inserted into commands, and are excluded from print and exports. No folder is
+scanned, inspected, opened or switched by the shortlist. Removing an entry
+discards that reference only. Clear, opt-out, panel closure, navigation and reload
+discard all entries and unfinished inputs; inactive-folder format and lock state
+remain unverified.
 
 Appearance preferences and tab state remain browser-local. Clearing site data
 or signing out does not delete the filesystem workspace. Stop every application

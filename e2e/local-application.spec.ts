@@ -238,6 +238,76 @@ for (const theme of ['light', 'dark'] as const) {
   });
 }
 
+test('temporary restart references stay private, nonexecuting and clear with the workspace panel', async ({ page, localApplication }, testInfo) => {
+  await openLocalApplication(page, localApplication);
+  await page.locator('#workspaces > summary').click();
+  const workspace = page.getByRole('region', { name: 'Filesystem workspace', exact: true });
+  await expect(workspace).toContainText(localApplication.instance.directory);
+  const shortlist = workspace.locator('.temporary-workspace-shortlist');
+  await shortlist.locator(':scope > summary').focus(); await shortlist.locator(':scope > summary').press('Enter');
+  const enabled = shortlist.getByRole('checkbox', { name: 'Use temporary folder references', exact: true });
+  await expect(enabled).not.toBeChecked();
+  const operations: string[] = [];
+  const observe = (request: import('@playwright/test').Request) => { if (new URL(request.url()).pathname.startsWith('/api/local-workspace/')) operations.push(new URL(request.url()).pathname); };
+  page.on('request', observe);
+  await enabled.check();
+  await shortlist.getByRole('button', { name: 'Add displayed launch folder', exact: true }).click();
+  await shortlist.getByRole('textbox', { name: 'Reference label', exact: true }).fill('Separate review');
+  await shortlist.getByRole('textbox', { name: 'Supplied folder reference', exact: true }).fill('./operator-selected review');
+  await shortlist.getByRole('button', { name: 'Add supplied reference', exact: true }).click();
+  await expect(shortlist.locator('ol > li')).toHaveCount(2);
+  const declared = shortlist.locator('ol > li').first();
+  await expect(declared).toContainText('Format/version: Not checked · Lock state: Not checked');
+  await expect(declared.locator('code')).not.toBeVisible();
+  await declared.getByText('Reveal supplied path', { exact: true }).click();
+  await expect(declared.locator('code')).toHaveText('./operator-selected review');
+  expect(await declared.getByRole('button').getAttribute('aria-label')).not.toContain('operator-selected');
+  await page.emulateMedia({ media: 'print' }); await expect(shortlist).not.toBeVisible(); await page.emulateMedia({ media: null });
+  await declared.getByRole('button', { name: 'Remove reference: Separate review', exact: true }).click();
+  await expect(shortlist.getByRole('heading', { name: 'Restart references in this page', exact: true })).toBeFocused();
+  await expect(shortlist.locator('ol > li')).toHaveCount(1);
+  await shortlist.getByRole('button', { name: 'Clear shortlist', exact: true }).click();
+  await expect(shortlist.locator('ol > li')).toHaveCount(0);
+  await shortlist.getByRole('button', { name: 'Add displayed launch folder', exact: true }).click();
+  await enabled.uncheck(); await enabled.check(); await expect(shortlist.locator('ol > li')).toHaveCount(0);
+  await shortlist.getByRole('button', { name: 'Add displayed launch folder', exact: true }).click();
+  await shortlist.getByRole('textbox', { name: 'Supplied folder reference', exact: true }).fill('./unfinished');
+  await page.locator('#workspaces > summary').click(); await page.locator('#workspaces > summary').click();
+  await expect(enabled).not.toBeChecked(); await enabled.check();
+  await expect(shortlist.locator('ol > li')).toHaveCount(0);
+  await expect(shortlist.getByRole('textbox', { name: 'Supplied folder reference', exact: true })).toHaveValue('');
+  await shortlist.getByRole('button', { name: 'Add displayed launch folder', exact: true }).click();
+  const longPath = `./${'segment/'.repeat(480)}selected`;
+  for (let index = 1; index <= 4; index++) {
+    await shortlist.getByRole('textbox', { name: 'Reference label', exact: true }).fill(index === 4 ? `Long ${'reference'.repeat(10)}` : `Review ${index}`);
+    await shortlist.getByRole('textbox', { name: 'Supplied folder reference', exact: true }).fill(index === 4 ? longPath : `./review-${index}`);
+    await shortlist.getByRole('button', { name: 'Add supplied reference', exact: true }).click();
+  }
+  await expect(shortlist.locator('ol > li')).toHaveCount(5);
+  await shortlist.locator('ol > li').first().getByText('Reveal supplied path', { exact: true }).click();
+  await expect(shortlist.locator('ol > li').first().locator('code')).toHaveText(longPath);
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    await shortlist.locator(':scope > summary').scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('.temporary-workspace-shortlist').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath(`temporary-workspace-${theme}-${width}.png`) });
+  }
+  expect(operations).toEqual([]); page.off('request', observe);
+  expect(await page.evaluate(() => (window as unknown as { __unexpectedBrowserDatabaseCalls: number }).__unexpectedBrowserDatabaseCalls)).toBe(0);
+  await shortlist.locator(':scope > summary').click(); await shortlist.locator(':scope > summary').click();
+  await expect(enabled).not.toBeChecked(); await enabled.check(); await expect(shortlist.locator('ol > li')).toHaveCount(0);
+  await shortlist.getByRole('button', { name: 'Add displayed launch folder', exact: true }).click();
+  await page.goto(`${localApplication.instance.origin}/lookup`); await page.goBack();
+  if (!(await page.locator('#workspaces').evaluate(element => (element as HTMLDetailsElement).open))) await page.locator('#workspaces > summary').click();
+  if (!(await shortlist.evaluate(element => (element as HTMLDetailsElement).open))) await shortlist.locator(':scope > summary').click();
+  await expect(enabled).not.toBeChecked();
+  await enabled.check(); await expect(shortlist.locator('ol > li')).toHaveCount(0);
+  await shortlist.getByRole('button', { name: 'Add displayed launch folder', exact: true }).click();
+  await localApplication.restart(true); await openLocalApplication(page, localApplication);
+  await page.locator('#workspaces > summary').click(); await shortlist.locator(':scope > summary').click();
+  await expect(enabled).not.toBeChecked(); await enabled.check(); await expect(shortlist.locator('ol > li')).toHaveCount(0);
+});
+
 test('a maximum Case collection and retained file reach the filesystem Console without pruning', async ({ page, localApplication }, testInfo) => {
   test.slow();
   await openLocalApplication(page, localApplication);

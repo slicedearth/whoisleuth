@@ -112,6 +112,17 @@ compatible application or rehearse restoration from a supported portable
 backup into a separate new workspace. A successful launch alone is not a
 complete recovery or downgrade check.
 
+## Temporary folder references
+
+In Dashboard's **Workspace details**, the optional **Temporary restart shortlist**
+can hold the folder shown by the current launch or labelled references you supply.
+It is a page-local selection aid, not a verified launch history or folder picker.
+Paths are revealed deliberately and never inserted into executable commands.
+Version and lock state of other folders are not checked. Remove and clear affect
+references only; closing the panel, leaving or reloading clears the shortlist.
+Stop the process and choose the other folder explicitly using the existing
+reopen instructions. The application does not switch or scan folders.
+
 ## Development
 
 From a checked-out repository with dependencies installed:

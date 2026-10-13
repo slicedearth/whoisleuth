@@ -3,6 +3,7 @@
   import { localApplicationInfo, type LocalApplicationInfo } from '#lib/local-application-storage.ts';
   import { PUBLIC_CLI_GUIDANCE } from '#lib/generated/public-cli-guidance.ts';
   import CopyableCommand from './CopyableCommand.svelte';
+  import TemporaryWorkspaceShortlist from './TemporaryWorkspaceShortlist.svelte';
   let info = $state<LocalApplicationInfo | null>(null);
   let error = $state('');
   onMount(() => {
@@ -38,6 +39,7 @@
       <p>Use <code>--init</code> only when deliberately creating a workspace.</p>
       <CopyableCommand command={PUBLIC_CLI_GUIDANCE.localArchive.initialize} label="new filesystem workspace command" />
     </details>
+    <TemporaryWorkspaceShortlist workspaceId={info.workspaceId} directory={info.directory} />
     <a href="/cli#local-application">Local application setup and recovery</a>
   {:else if error}<p role="alert">{error}</p>
   {:else}<p role="status">Reading filesystem workspace information…</p>{/if}

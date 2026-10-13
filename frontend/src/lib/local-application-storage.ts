@@ -10,6 +10,7 @@ import {
 } from '../../../packages/workspace/local-application-protocol.mts';
 import type { LocalDataStorage } from '../../../packages/workspace/local-data-storage.mts';
 import { array, exact } from '../../../packages/evidence/artifact-structure.mts';
+import { LOCAL_WORKSPACE_MAX_DIRECTORY_CHARACTERS } from '../../../packages/contracts/local-application.mts';
 
 export type LocalApplicationInfo = Readonly<{
   version: number; workspaceId: string; directory: string; storage: 'filesystem'; encryptedAtRest: false; offline: boolean;
@@ -57,7 +58,7 @@ export async function localApplicationInfo(): Promise<LocalApplicationInfo> {
       ['version', 'workspaceId', 'directory', 'storage', 'encryptedAtRest', 'offline'], 'Local workspace information');
     if (value.version !== LOCAL_APPLICATION_PROTOCOL_VERSION || value.storage !== 'filesystem' || value.encryptedAtRest !== false
       || typeof value.offline !== 'boolean' || localApplicationOperationId(value.workspaceId) !== localApplicationWorkspaceId()
-      || typeof value.directory !== 'string' || !value.directory || value.directory.length > 4_096 || /[\u0000-\u001f\u007f]/u.test(value.directory)) {
+      || typeof value.directory !== 'string' || !value.directory || value.directory.length > LOCAL_WORKSPACE_MAX_DIRECTORY_CHARACTERS || /[\u0000-\u001f\u007f]/u.test(value.directory)) {
       throw new BrowserLocalDataError('LOCAL_DATA_WORKSPACE_CHANGED', 'The local workspace does not match this page. Reload before continuing.');
     }
     return value as LocalApplicationInfo;
