@@ -5,6 +5,7 @@
   let localApplication = $state(false);
   onMount(() => { localApplication = isLocalApplication(); });
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import IntelligenceIcon from '#lib/components/IntelligenceIcon.svelte';
   import PageHeading from '#lib/components/PageHeading.svelte';
   import DashboardAttentionSummary from '#lib/components/DashboardAttentionSummary.svelte';
@@ -43,6 +44,9 @@
   let summaryRecovery = $state<'read' | 'reload'>('read');
   let secondaryOpen = $state(false);
   let firstUseTool = $state<'guide' | 'import' | ''>('');
+  $effect(() => {
+    if (page.url.searchParams.has('infrastructure') || page.url.hash === '#retained-infrastructure') { firstUseTool = ''; secondaryOpen = true; }
+  });
   let workspaceState = $state<DashboardWorkspaceState>('loading');
   let attentionSummary = $state<DashboardAttentionSummaryModel | null>(null);
   let attentionUnavailable = $state(false);

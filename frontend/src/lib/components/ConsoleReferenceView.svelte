@@ -3,7 +3,7 @@
   import { loadCases, type CaseRecord } from '#lib/cases.ts';
   import { subscribeBrowserLocalData } from '#lib/browser-local-data-service.ts';
   import { readConsoleReferenceView, subscribeConsoleReferenceView, removeConsoleCaseCheckpoint, clearConsoleCaseCheckpoints, clearConsoleReferenceView,
-    type ConsoleReferenceView, type PinnedCaseCheckpoint } from '#lib/console-workflow-state.ts';
+    consoleInfrastructureHref, type ConsoleReferenceView, type PinnedCaseCheckpoint } from '#lib/console-workflow-state.ts';
   import { CASE_WORKSPACE_SECTIONS, caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import DeferredSurface from './DeferredSurface.svelte';
@@ -98,9 +98,12 @@
   {/if}
   {#if view.visits.length}
     <details>
-      <summary>Visited Cases · {view.visits.length}</summary>
-      <p>Successful Case navigation in this tab, not an observed relationship or investigation history.</p>
-      <nav aria-label="Visited Case contexts"><ol>{#each view.visits as visit, index}<li><a href={caseWorkspaceHref(visit.caseId, visit.section)}>{index + 1}. Case <code>{visit.caseId}</code> · {CASE_WORKSPACE_SECTIONS.find(section => section.id === visit.section)?.label}</a></li>{/each}</ol></nav>
+      <summary>Navigation trail · {view.visits.length}</summary>
+      <p>Successful navigation in this tab, not observed relationships. Infrastructure links restore the query, filters and view position, then read current retained sources.</p>
+      <nav aria-label="Visited Console contexts"><ol>{#each view.visits as visit, index}<li>
+        {#if visit.kind === 'case'}<a href={caseWorkspaceHref(visit.caseId, visit.section)}>{index + 1}. Case <code>{visit.caseId}</code> · {CASE_WORKSPACE_SECTIONS.find(section => section.id === visit.section)?.label}</a>
+        {:else}<a href={consoleInfrastructureHref(visit.id)}>{index + 1}. Retained identity <code>{visit.label}</code><small>{visit.view.query ? `Query: ${visit.view.query} · ` : ''}Inventory page {visit.view.page} · history page {visit.view.historyPage} · source page {visit.view.relationshipPage}</small></a>{/if}
+      </li>{/each}</ol></nav>
       <button type="button" class="btn small" onclick={() => void clear()}>Clear all tab references, visits and favourites</button>
     </details>
   {/if}

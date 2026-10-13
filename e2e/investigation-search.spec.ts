@@ -114,6 +114,84 @@ test('multi-host snapshot review exposes exact outcomes, wildcards and history w
   expect(requests).toEqual([]);
 });
 
+test('retained identity navigation restores the exact query and source view after visiting a supporting Case', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('request', request => { const path = new URL(request.url()).pathname; if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) requests.push(path); });
+  const snapshot = parseInfrastructureObservation(await readFile('test/fixtures/infrastructure-observations/infrastructure-observation-v1.json', 'utf8'));
+  const imported = convertInfrastructureObservation(snapshot);
+  const pin = { ...externalFindingCaseProjection(imported.findings[0]!, imported.source).evidencePin, id: 'navigation-snapshot' };
+  await page.goto('/dashboard');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [
+    { ...caseRecord('navigation-case', 'example.test'), evidencePins: [pin] },
+    ...Array.from({ length: MAX_INVESTIGATION_SEARCH_RESULTS }, (_, index) => caseRecord(`navigation-padding-${index}`, `a${index}.example.test`)),
+  ] } });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 51 });
+  const navigationStorage = () => page.evaluate(() => ({
+    local: Object.fromEntries(Object.entries(localStorage).filter(([key]) => key !== 'whoisleuth:theme:v1')),
+    session: { ...sessionStorage },
+  }));
+  const storageBefore = await navigationStorage();
+  await openDashboardSecondaryWorkspaces(page);
+  await page.getByText('Browse retained infrastructure', { exact: true }).click();
+  const inventory = page.getByRole('region', { name: 'Retained infrastructure inventory', exact: true });
+  await inventory.getByRole('searchbox', { name: 'Search retained infrastructure', exact: true }).fill('example.test');
+  await inventory.getByRole('combobox', { name: 'Infrastructure type', exact: true }).selectOption('domain');
+  await inventory.getByRole('combobox', { name: 'Retained source', exact: true }).selectOption('cases');
+  await inventory.getByLabel('Observed on or after (UTC)', { exact: true }).fill('2026-07-01');
+  await expect(inventory).toHaveAttribute('aria-busy', 'false');
+  await inventory.getByRole('navigation', { name: 'Retained infrastructure pages', exact: true }).getByRole('button', { name: 'Next', exact: true }).click();
+  await inventory.getByRole('button', { name: 'Inspect retained evidence for www.example.test', exact: true }).click();
+  const detail = inventory.getByRole('region', { name: 'Selected retained infrastructure evidence', exact: true });
+  const relationships = detail.getByRole('region', { name: 'Directly supported retained relationships', exact: true });
+  await relationships.getByRole('button', { name: 'Topology and list', exact: true }).click();
+  const digest = snapshot.certificates[0]!.fingerprintSha256;
+  await relationships.getByRole('searchbox', { name: 'Search complete retained topology', exact: true }).fill(digest);
+  const options = await relationships.getByRole('combobox', { name: 'Focus diagram identity', exact: true }).locator('option').allTextContents();
+  const certificate = options.find(value => value.includes(`${digest} · certificate`));
+  expect(certificate).toBeDefined();
+  await relationships.getByRole('combobox', { name: 'Focus diagram identity', exact: true }).selectOption({ label: certificate! });
+  await relationships.getByRole('button', { name: `Inspect retained evidence for ${digest}`, exact: true }).first().click();
+  await expect(detail.getByRole('heading', { name: `Retained evidence for ${digest}`, exact: true })).toBeFocused();
+  const history = detail.getByRole('region', { name: 'Retained observation history', exact: true });
+  await history.getByRole('link', { name: 'Open source case', exact: true }).first().click();
+  await expect(page).toHaveURL(/\/cases\?case=navigation-case/u);
+  await page.getByRole('link', { name: 'Return to retained infrastructure', exact: true }).click();
+  await expect(detail.getByRole('heading', { name: `Retained evidence for ${digest}`, exact: true })).toBeFocused();
+  await expect(history.getByRole('link', { name: 'Open source case', exact: true }).first()).toBeVisible();
+  await page.getByText('Tab references', { exact: true }).click();
+  await page.getByText(/^Navigation trail ·/u).and(page.locator('summary')).click();
+  const trail = page.getByRole('navigation', { name: 'Visited Console contexts', exact: true });
+  await expect(trail.getByRole('link')).toHaveCount(3);
+  await trail.getByRole('link', { name: /Retained identity www\.example\.test/u }).click();
+  await expect(detail.getByRole('heading', { name: 'Retained evidence for www.example.test', exact: true })).toBeFocused();
+  await expect(inventory.getByRole('searchbox', { name: 'Search retained infrastructure', exact: true })).toHaveValue('example.test');
+  await expect(inventory.getByRole('combobox', { name: 'Infrastructure type', exact: true })).toHaveValue('domain');
+  await expect(inventory.getByRole('combobox', { name: 'Retained source', exact: true })).toHaveValue('cases');
+  await expect(inventory.getByLabel('Observed on or after (UTC)', { exact: true })).toHaveValue('2026-07-01');
+  await expect(inventory.getByRole('spinbutton', { name: 'Retained infrastructure page number', exact: true })).toHaveValue('2');
+  await expect(relationships.getByRole('button', { name: 'Topology and list', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(relationships.getByRole('searchbox', { name: 'Search complete retained topology', exact: true })).toHaveValue(digest);
+  await expect(relationships.getByRole('combobox', { name: 'Focus diagram identity', exact: true })).toHaveValue(await relationships.getByRole('combobox', { name: 'Focus diagram identity', exact: true }).locator('option').filter({ hasText: digest }).getAttribute('value') ?? 'missing');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [1280, 320]) {
+      await page.setViewportSize({ width, height: 844 }); await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) {
+        await trail.evaluate(element => window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - 100, behavior: 'instant' }));
+        await page.screenshot({ path: test.info().outputPath(`navigation-trail-${theme}-${width}.png`) });
+      }
+    }
+  }
+  // The retained source intentionally contains the certificate digest. Navigation must add
+  // no browser-storage state, rather than making that existing evidence disappear.
+  expect(await navigationStorage()).toEqual(storageBefore);
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 51 })).toEqual(before);
+  await page.getByRole('button', { name: 'Clear all tab references, visits and favourites', exact: true }).click();
+  await expect(page.getByText('This tab navigation reference is no longer available. Clear the return link to browse current saved work.', { exact: true })).toBeVisible();
+  await expect(detail).toHaveCount(0);
+  expect(requests).toEqual([]);
+});
+
 test('retained infrastructure exposes exact independent sources and keyboard return without collection', async ({ page }) => {
   const requests: string[] = [];
   page.on('request', request => {

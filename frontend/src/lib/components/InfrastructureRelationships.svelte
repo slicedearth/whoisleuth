@@ -1,25 +1,26 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import type { InvestigationInfrastructureRelationships } from '#lib/analysis/investigation-infrastructure.ts';
   import type { InvestigationSearchSession } from '#lib/investigation-search-session.ts';
   import Pagination from './Pagination.svelte';
   import BoundedRelationshipMap from './BoundedRelationshipMap.svelte';
   import { INFRASTRUCTURE_RELATIONSHIP_LABELS as labels, projectInfrastructureTopology } from '#lib/analysis/infrastructure-topology.ts';
-  let { session, entityId, onopen, onselect }: {
+  let { session, entityId, onopen, onselect, page = $bindable(1), view = $bindable<'list' | 'topology'>('list'),
+    query = $bindable(''), focusedEntityId = $bindable(''), highlightedEntityId = $bindable('') }: {
     session: InvestigationSearchSession;
     entityId: string;
     onopen: (event: MouseEvent, href: string) => void;
     onselect: (id: string, label: string) => void;
+    page?: number; view?: 'list' | 'topology'; query?: string; focusedEntityId?: string; highlightedEntityId?: string;
   } = $props();
-  let page = $state(1), pending = $state(false), error = $state('');
+  let pending = $state(false), error = $state('');
   let response = $state.raw<InvestigationInfrastructureRelationships | null>(null);
   let heading = $state<HTMLHeadingElement>();
   let sourceList = $state<HTMLOListElement>();
-  let view = $state<'list' | 'topology'>('list'), query = $state(''), focusedEntityId = $state(''), highlightedEntityId = $state('');
   const topology = $derived(response ? projectInfrastructureTopology(response, query, focusedEntityId) : null);
   let focusPage = false;
-  let lastEntity = '';
+  let lastEntity = untrack(() => entityId);
   $effect(() => {
     const current = session, selected = entityId, requestedPage = page;
     let active = true;

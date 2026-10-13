@@ -275,7 +275,7 @@ test('pinned checkpoints and successful Case visits survive Console navigation w
   }
   expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 })).manifest).toEqual(before.manifest);
   await page.setViewportSize({ width: 1280, height: 720 });
-  const visits = page.getByText('Visited Cases · 1', { exact: true }).and(page.locator('summary')).locator('..');
+  const visits = page.getByText('Navigation trail · 1', { exact: true }).and(page.locator('summary')).locator('..');
   await visits.locator(':scope > summary').click();
   await visits.getByRole('link', { name: /Case tray-case · Evidence/u }).click();
   await expect(page).toHaveURL('/cases?case=tray-case&section=evidence');
@@ -289,7 +289,7 @@ test('pinned checkpoints and successful Case visits survive Console navigation w
   page.once('dialog', dialog => dialog.dismiss());
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Lookup', exact: true }).click();
   await expect(page).toHaveURL('/cases?case=tray-case&section=evidence');
-  await expect(page.getByText('Visited Cases · 1', { exact: true })).toBeVisible();
+  await expect(page.getByText('Navigation trail · 1', { exact: true })).toBeVisible();
   await form.getByRole('button', { name: 'Discard this draft', exact: true }).click();
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Lookup', exact: true }).click();
   if (await tray.getAttribute('open') === null) await tray.locator(':scope > summary').click();
@@ -301,7 +301,7 @@ test('pinned checkpoints and successful Case visits survive Console navigation w
   await publicLink.click();
   await expect(page).toHaveURL('/privacy');
   await page.goBack();
-  await expect(page.getByText(/Visited Cases ·/u)).toHaveCount(0);
+  await expect(page.getByText(/Navigation trail ·/u)).toHaveCount(0);
 });
 
 test('tab favourites resolve exact retained Cases and canonical destinations without storing another entity', async ({ page }, testInfo) => {

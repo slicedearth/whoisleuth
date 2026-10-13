@@ -24,6 +24,11 @@ import {
   clearConsoleFavourites,
   consoleFavouriteDestinations,
   MAX_CONSOLE_FAVOURITES,
+  initialInfrastructureNavigationState,
+  recordVisitedConsoleInfrastructure,
+  updateVisitedConsoleInfrastructure,
+  captureConsoleReferenceScope,
+  consoleInfrastructureHref,
 } from '../frontend/src/lib/console-workflow-state.ts';
 import { bulkReviewView, createBulkViewState } from '../frontend/src/lib/controllers/bulk-view-state.ts';
 import { lockBrowserWorkspace } from '../frontend/src/lib/browser-workspace-unlock.ts';
@@ -189,12 +194,62 @@ test('visited Case context is bounded navigation state, not selection intent or 
     assert.deepEqual(readConsoleReferenceView().visits, []);
     recordVisitedConsoleCase('case-one', 'evidence'); recordVisitedConsoleCase('case-one', 'evidence');
     recordVisitedConsoleCase('case-one', 'response');
-    assert.deepEqual(readConsoleReferenceView().visits, [{ caseId: 'case-one', section: 'response' }]);
+    assert.deepEqual(readConsoleReferenceView().visits, [{ kind: 'case', caseId: 'case-one', section: 'response' }]);
     assert.throws(() => recordVisitedConsoleCase(' invalid ', 'summary'), RangeError);
     assert.throws(() => recordVisitedConsoleCase('case-one', 'unsupported' as 'summary'), RangeError);
     for (let index = 0; index < 10; index++) recordVisitedConsoleCase(`visited-${index}`, 'summary');
-    assert.deepEqual(readConsoleReferenceView().visits.map(visit => visit.caseId), Array.from({ length: 8 }, (_, index) => `visited-${index + 2}`));
+    assert.deepEqual(readConsoleReferenceView().visits.map(visit => visit.kind === 'case' ? visit.caseId : null), Array.from({ length: 8 }, (_, index) => `visited-${index + 2}`));
     clearConsoleReferenceView(); assert.deepEqual(readConsoleReferenceView().visits, []);
+  } finally {
+    clearConsoleWorkflowState();
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow); else removeWindow();
+    if (previousStorage) Object.defineProperty(globalThis, 'sessionStorage', previousStorage); else Reflect.deleteProperty(globalThis, 'sessionStorage');
+  }
+});
+
+test('cross-family navigation copies view context, bounds the shared trail and rejects stale completions after clear or lock', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const previousStorage = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
+  setWindow({}); Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: {
+    getItem: () => null, setItem: () => assert.fail('Navigation must not be persisted'), removeItem: () => assert.fail('Navigation must not write storage'),
+  } });
+  try {
+    clearConsoleReferenceView();
+    const scope = captureConsoleReferenceScope();
+    const supplied = { ...initialInfrastructureNavigationState(), query: 'example.test', type: 'domain' as const, store: 'cases' as const,
+      since: '2026-07-01', page: 2, historyPage: 3, relationshipPage: 4, relationshipView: 'topology' as const,
+      relationshipQuery: 'certificate', focusedEntityId: 'certificate:exact', highlightedEntityId: 'certificate:exact', evidence: 'PRIVATE-IGNORED' };
+    const domain = recordVisitedConsoleInfrastructure('domain:exact', 'example.test', supplied, scope)!;
+    supplied.query = 'changed';
+    const certificate = recordVisitedConsoleInfrastructure('certificate:exact', 'a'.repeat(64), initialInfrastructureNavigationState(), scope)!;
+    recordVisitedConsoleCase('case-one', 'evidence');
+    const visits = readConsoleReferenceView().visits;
+    assert.deepEqual(visits.map(visit => visit.kind), ['infrastructure', 'infrastructure', 'case']);
+    assert.ok(visits[0]?.kind === 'infrastructure');
+    assert.equal(visits[0].view.query, 'example.test'); assert.equal(visits[0].view.page, 2);
+    assert.equal(visits[0].view.historyPage, 3); assert.equal(visits[0].view.relationshipPage, 4);
+    assert.equal(visits[0].view.relationshipQuery, 'certificate'); assert.equal(visits[0].view.focusedEntityId, 'certificate:exact');
+    assert.ok(Object.isFrozen(visits[0].view)); assert.ok(Object.isFrozen(visits[0]));
+    assert.doesNotMatch(JSON.stringify(visits), /PRIVATE-IGNORED/u);
+    assert.equal(consoleInfrastructureHref(domain), `/dashboard?infrastructure=${domain}#retained-infrastructure`);
+    assert.ok(!consoleInfrastructureHref(domain).includes('example.test'));
+    updateVisitedConsoleInfrastructure(certificate, { ...initialInfrastructureNavigationState(), historyPage: 2 });
+    assert.equal(readConsoleReferenceView().visits.length, 3);
+    assert.equal(readConsoleReferenceView().visits[0], visits[0], 'another identity cannot replace the earlier query');
+    assert.throws(() => recordVisitedConsoleInfrastructure('domain:bad', 'x', { ...supplied, page: 0 }, scope), RangeError);
+    assert.throws(() => recordVisitedConsoleInfrastructure('domain:bad', 'x', { ...supplied, query: 'x'.repeat(2001) }, scope), RangeError);
+    for (let index = 0; index < 8; index++) recordVisitedConsoleCase(`later-${index}`, 'summary');
+    assert.equal(readConsoleReferenceView().visits.length, 8);
+    updateVisitedConsoleInfrastructure(domain, supplied); assert.equal(readConsoleReferenceView().visits.length, 8);
+    clearConsoleReferenceView();
+    assert.equal(recordVisitedConsoleInfrastructure('domain:late', 'late.example', supplied, scope), null);
+    updateVisitedConsoleInfrastructure(certificate, supplied); assert.deepEqual(readConsoleReferenceView().visits, []);
+    const fresh = captureConsoleReferenceScope();
+    assert.notEqual(recordVisitedConsoleInfrastructure('domain:new', 'new.example', supplied, fresh), null);
+    lockBrowserWorkspace();
+    assert.equal(recordVisitedConsoleInfrastructure('domain:late', 'late.example', supplied, fresh), null);
+    assert.deepEqual(readConsoleReferenceView().visits, []);
+    removeWindow(); assert.equal(recordVisitedConsoleInfrastructure('domain:server', 'server.example', supplied, fresh), null);
   } finally {
     clearConsoleWorkflowState();
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow); else removeWindow();

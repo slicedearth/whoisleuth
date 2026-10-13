@@ -524,6 +524,7 @@
       />{/if}
       {#if lookupFamily==='relationships'}
       <div class="family-details card">
+      <p class="family-intro">In the Console, Tab references → Navigation trail keeps your place when following retained identities into their source Cases. It restores filters and view positions without adding an evidence relationship. This synthetic demo does not open your saved work.</p>
       <div class="demo-visual-switcher card" role="tablist" aria-label="Synthetic relationship and history view">
         <button id="demo-visual-tab-evidence" type="button" role="tab" aria-selected={demoVisualView==='evidence'} aria-controls="demo-visual-panel" tabindex={demoVisualView==='evidence'?0:-1} class:active={demoVisualView==='evidence'} onclick={()=>demoVisualView='evidence'} onkeydown={demoVisualTabKeydown}>Evidence <span>{lookupTopologyNodes.length}</span></button>
         <button id="demo-visual-tab-relationships" type="button" role="tab" aria-selected={demoVisualView==='relationships'} aria-controls="demo-visual-panel" tabindex={demoVisualView==='relationships'?0:-1} class:active={demoVisualView==='relationships'} onclick={()=>demoVisualView='relationships'} onkeydown={demoVisualTabKeydown}>Relationships <span>{selected.relationship?1:0}</span></button>

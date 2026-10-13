@@ -1,22 +1,28 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { INFRASTRUCTURE_ENTITY_TYPES, type InfrastructureEntityType, type InvestigationInfrastructure } from '#lib/analysis/investigation-infrastructure.ts';
   import { MAX_INVESTIGATION_SEARCH_QUERY_LENGTH } from '#lib/analysis/investigation-search.ts';
   import type { InvestigationStoreName } from '#lib/analysis/investigation-projection.ts';
   import type { InvestigationSearchSession } from '#lib/investigation-search-session.ts';
+  import type { InvestigationHistory as RetainedHistory } from '#lib/analysis/investigation-search.ts';
+  import { initialInfrastructureNavigationState, recordVisitedConsoleInfrastructure, updateVisitedConsoleInfrastructure,
+    consoleInfrastructureHref, setCaseNavigationContext, captureConsoleReferenceScope, readConsoleReferenceView,
+    type VisitedConsoleInfrastructure } from '#lib/console-workflow-state.ts';
   import Pagination from './Pagination.svelte';
   import InvestigationHistory from './InvestigationHistory.svelte';
   import InfrastructureRelationships from './InfrastructureRelationships.svelte';
   import InfrastructureSnapshotReview from './InfrastructureSnapshotReview.svelte';
-  let { session, onopen }: { session: InvestigationSearchSession; onopen?: (href: string) => void | Promise<void> } = $props();
-  let query = $state(''), type = $state<InfrastructureEntityType | ''>(''), store = $state<InvestigationStoreName | ''>(''), since = $state(''), page = $state(1);
+  let { session, onopen, initialVisit }: { session: InvestigationSearchSession; onopen?: (href: string) => void | Promise<void>; initialVisit?: VisitedConsoleInfrastructure } = $props();
+  let navigation = $state(untrack(() => initialVisit ? { ...initialVisit.view } : initialInfrastructureNavigationState()));
+  let visitId = $state<number | null>(untrack(() => initialVisit?.id ?? null));
+  let selectionScope = untrack(captureConsoleReferenceScope);
   let pending = $state(false), error = $state('');
   let completed = $state.raw<{ session: InvestigationSearchSession; response: InvestigationInfrastructure } | null>(null);
-  let selected = $state<{ id: string; label: string } | null>(null);
+  let selected = $state<{ id: string; label: string } | null>(untrack(() => initialVisit ? { id: initialVisit.entityId, label: initialVisit.label } : null));
   let historySettled = $state(false);
   let heading = $state<HTMLHeadingElement>(), detailHeading = $state<HTMLHeadingElement>();
-  let returnFocus: HTMLElement | undefined, focusPage = false;
+  let returnFocus: HTMLElement | undefined, focusPage = false, restoreFocus = untrack(() => Boolean(initialVisit));
   const instanceId = $props.id();
   const response = $derived(completed?.session === session ? completed.response : null);
   const typeLabels: Record<InfrastructureEntityType, string> = { domain: 'Domain / hostname', ip_address: 'IP address', certificate: 'Certificate', nameserver_set: 'Nameserver set', http_origin: 'HTTP origin', certificate_pattern: 'Certificate wildcard pattern', provider: 'Source-qualified provider role', routing_asn: 'Independently sourced routing ASN' };
@@ -26,6 +32,7 @@
   };
   const storeLabels: Record<InvestigationStoreName, string> = { cases: 'Cases', campaigns: 'Campaigns', brandProfiles: 'Brand profiles', relationshipRows: 'Scan relationship evidence', relationshipObservations: 'Retained relationship observations' };
   $effect(() => {
+    const { query, page, type, store, since } = navigation;
     const current = session, options = { query, page, ...(type ? { type } : {}), ...(store ? { store } : {}), ...(since ? { observedSince: `${since}T00:00:00.000Z` } : {}) };
     let active = true;
     pending = true; completed = null; error = '';
@@ -42,26 +49,48 @@
     });
     return () => { active = false; };
   });
-  function changed() { page = 1; selected = null; focusPage = false; }
+  $effect(() => {
+    const id = visitId, state = { ...navigation };
+    if (id !== null) untrack(() => updateVisitedConsoleInfrastructure(id, state));
+  });
+  function changed() { navigation.page = 1; selected = null; visitId = null; focusPage = false; }
   function revealFocus(target: HTMLElement | undefined, block: ScrollLogicalPosition = 'nearest') {
     target?.scrollIntoView({ block, behavior: 'instant' });
     target?.focus({ preventScroll: true });
   }
   async function inspect(id: string, label: string, origin?: HTMLElement) {
     if (origin) returnFocus = origin;
-    if (selected?.id !== id) historySettled = false;
+    if (selected?.id !== id) {
+      historySettled = false; visitId = null;
+      selectionScope = captureConsoleReferenceScope();
+      navigation.historyPage = 1; navigation.relationshipPage = 1; navigation.relationshipView = 'list';
+      navigation.relationshipQuery = ''; navigation.focusedEntityId = ''; navigation.highlightedEntityId = '';
+    }
     selected = { id, label };
     await tick();
     revealFocus(detailHeading, 'start');
   }
   async function closeDetail() {
-    selected = null;
+    selected = null; visitId = null;
     await tick();
     revealFocus(returnFocus?.isConnected ? returnFocus : heading);
   }
   function openSource(event: MouseEvent, href: string) {
-    if (!onopen || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault(); void onopen(href);
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const destination = new URL(href, 'https://console.invalid');
+    const caseId = destination.searchParams.get('case');
+    if (visitId !== null && readConsoleReferenceView().visits.some(visit => visit.kind === 'infrastructure' && visit.id === visitId)
+      && destination.origin === 'https://console.invalid' && ['/cases', '/monitor'].includes(destination.pathname) && caseId)
+      setCaseNavigationContext(caseId, consoleInfrastructureHref(visitId), 'retained infrastructure');
+    if (onopen) { event.preventDefault(); void onopen(href); }
+  }
+  async function historyReady(value: RetainedHistory | null) {
+    historySettled = true;
+    if (value?.state === 'ready' && selected?.id === value.entityId) {
+      if (visitId === null) visitId = recordVisitedConsoleInfrastructure(value.entityId, value.label, { ...navigation }, selectionScope);
+      selected.label = value.label;
+    }
+    if (restoreFocus) { restoreFocus = false; await tick(); revealFocus(detailHeading, 'start'); }
   }
 </script>
 
@@ -69,10 +98,10 @@
   <h3 id={`${instanceId}-title`} bind:this={heading} tabindex="-1">Retained infrastructure inventory</h3>
   <p>Browse retained identities, dated sources and one-hop relationships without collecting new evidence.</p>
   <div class="filters">
-    <label>Search retained infrastructure<input type="search" bind:value={query} oninput={changed} maxlength={MAX_INVESTIGATION_SEARCH_QUERY_LENGTH} autocomplete="off" autocapitalize="none" spellcheck="false"></label>
-    <label>Infrastructure type<select bind:value={type} onchange={changed}><option value="">All infrastructure types</option>{#each INFRASTRUCTURE_ENTITY_TYPES as value}<option value={value}>{typeLabels[value]}</option>{/each}</select></label>
-    <label>Retained source<select bind:value={store} onchange={changed}><option value="">All retained sources</option>{#each Object.entries(storeLabels) as [value, label]}<option value={value}>{label}</option>{/each}</select></label>
-    <label>Observed on or after (UTC)<input type="date" bind:value={since} onchange={changed}></label>
+    <label>Search retained infrastructure<input type="search" bind:value={navigation.query} oninput={changed} maxlength={MAX_INVESTIGATION_SEARCH_QUERY_LENGTH} autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+    <label>Infrastructure type<select bind:value={navigation.type} onchange={changed}><option value="">All infrastructure types</option>{#each INFRASTRUCTURE_ENTITY_TYPES as value}<option value={value}>{typeLabels[value]}</option>{/each}</select></label>
+    <label>Retained source<select bind:value={navigation.store} onchange={changed}><option value="">All retained sources</option>{#each Object.entries(storeLabels) as [value, label]}<option value={value}>{label}</option>{/each}</select></label>
+    <label>Observed on or after (UTC)<input type="date" bind:value={navigation.since} onchange={changed}></label>
   </div>
   {#if error}<p role="alert">{error}</p>
   {:else if pending}<p role="status">Reading retained infrastructure…</p>
@@ -99,7 +128,7 @@
           </li>
         {/each}
       </ol>
-      <Pagination currentPage={response.page} pageCount={response.pageCount} setPage={value => { if (!pending) { page = value; selected = null; focusPage = true; } }} ariaLabel="Retained infrastructure pages" pageInputLabel="Retained infrastructure page number" />
+      <Pagination currentPage={response.page} pageCount={response.pageCount} setPage={value => { if (!pending) { navigation.page = value; selected = null; visitId = null; focusPage = true; } }} ariaLabel="Retained infrastructure pages" pageInputLabel="Retained infrastructure page number" />
       <details><summary>Inventory scope and missing evidence</summary><ul>{#each response.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>
     {/if}
   {/if}
@@ -109,9 +138,12 @@
       <h3 bind:this={detailHeading} tabindex="-1">Retained evidence for {selected.label}</h3>
       <p>Inspect this identity's own retained sources. Related rows remain separately attributed.</p>
       {#key `${selected.id}:${session.summary.entityCount}`}
-        <InvestigationHistory {session} entityId={selected.id} onopen={openSource} onsettled={() => { historySettled = true; }} />
+        <InvestigationHistory {session} entityId={selected.id} bind:page={navigation.historyPage} onopen={openSource} onsettled={historyReady} />
         {#if historySettled}
-          <InfrastructureRelationships {session} entityId={selected.id} onopen={openSource} onselect={(id, label) => void inspect(id, label)} />
+          <InfrastructureRelationships {session} entityId={selected.id} bind:page={navigation.relationshipPage}
+            bind:view={navigation.relationshipView} bind:query={navigation.relationshipQuery}
+            bind:focusedEntityId={navigation.focusedEntityId} bind:highlightedEntityId={navigation.highlightedEntityId}
+            onopen={openSource} onselect={(id, label) => void inspect(id, label)} />
         {/if}
       {/key}
     </section>

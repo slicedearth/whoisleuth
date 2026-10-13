@@ -7,6 +7,8 @@ import { normalizeOpaqueReferenceId } from '../../../packages/cases/opaque-refer
 import { consoleNavigation, referenceNavigation, publicReferenceSectionNavigation, protectedReturnTarget, type NavigationItem } from './workspaces.ts';
 import { currentBrowserWorkspaceId } from './browser-workspace-context.ts';
 import { CASE_WORKSPACE_SECTIONS, type CaseWorkspaceSection } from './analysis/case-response-stage.ts';
+import type { InfrastructureEntityType } from './analysis/investigation-infrastructure.ts';
+import type { InvestigationStoreName } from './analysis/investigation-projection.ts';
 
 export type LookupMode = 'fast' | 'deep';
 
@@ -55,7 +57,20 @@ let caseNavigationContext: CaseNavigationContext | null = null;
 const caseSelectionListeners = new Set<(id: string | null) => void>();
 
 export type PinnedCaseCheckpoint = Readonly<{ caseId: string; snapshotId: string }>;
-export type VisitedConsoleCase = Readonly<{ caseId: string; section: CaseWorkspaceSection }>;
+export type VisitedConsoleCase = Readonly<{ kind: 'case'; caseId: string; section: CaseWorkspaceSection }>;
+export type InfrastructureNavigationState = {
+  query: string; type: InfrastructureEntityType | ''; store: InvestigationStoreName | ''; since: string; page: number;
+  historyPage: number; relationshipPage: number; relationshipView: 'list' | 'topology'; relationshipQuery: string;
+  focusedEntityId: string; highlightedEntityId: string;
+};
+export type VisitedConsoleInfrastructure = Readonly<{
+  kind: 'infrastructure'; id: number; entityId: string; label: string; view: Readonly<InfrastructureNavigationState>;
+}>;
+export type VisitedConsoleContext = VisitedConsoleCase | VisitedConsoleInfrastructure;
+export function initialInfrastructureNavigationState(): InfrastructureNavigationState {
+  return { query: '', type: '', store: '', since: '', page: 1, historyPage: 1, relationshipPage: 1,
+    relationshipView: 'list', relationshipQuery: '', focusedEntityId: '', highlightedEntityId: '' };
+}
 export type ConsoleFavourite = Readonly<{ kind: 'case'; caseId: string; section: CaseWorkspaceSection } | { kind: 'destination'; href: string }>;
 export const MAX_CONSOLE_FAVOURITES = 8;
 export function consoleFavouriteDestinations(): readonly NavigationItem[] {
@@ -65,10 +80,12 @@ export type ConsoleReferenceView = Readonly<{
   workspaceId: string | null;
   revision: number;
   checkpoints: readonly PinnedCaseCheckpoint[];
-  visits: readonly VisitedConsoleCase[];
+  visits: readonly VisitedConsoleContext[];
   favourites: readonly ConsoleFavourite[];
 }>;
 let referenceView: ConsoleReferenceView = Object.freeze({ workspaceId: null, revision: 0, checkpoints: Object.freeze([]), visits: Object.freeze([]), favourites: Object.freeze([]) });
+let referenceGeneration = 0;
+export type ConsoleReferenceScope = Readonly<{ workspaceId: string | null; generation: number }>;
 const referenceListeners = new Set<() => void>();
 function publishReferenceView(checkpoints = referenceView.checkpoints, visits = referenceView.visits, workspaceId = referenceView.workspaceId, favourites = referenceView.favourites) {
   referenceView = Object.freeze({ workspaceId, revision: referenceView.revision + 1, checkpoints, visits, favourites });
@@ -77,6 +94,7 @@ function publishReferenceView(checkpoints = referenceView.checkpoints, visits = 
   }
 }
 export function clearConsoleReferenceView(): void {
+  referenceGeneration++;
   if (referenceView.workspaceId !== null || referenceView.checkpoints.length || referenceView.visits.length || referenceView.favourites.length)
     publishReferenceView(Object.freeze([]), Object.freeze([]), null, Object.freeze([]));
 }
@@ -91,6 +109,9 @@ function referenceWorkspace(): boolean {
 }
 export function readConsoleReferenceView(): ConsoleReferenceView {
   return referenceWorkspace() ? referenceView : Object.freeze({ workspaceId: null, revision: 0, checkpoints: Object.freeze([]), visits: Object.freeze([]), favourites: Object.freeze([]) });
+}
+export function captureConsoleReferenceScope(): ConsoleReferenceScope {
+  return Object.freeze({ workspaceId: readConsoleReferenceView().workspaceId, generation: referenceGeneration });
 }
 export function subscribeConsoleReferenceView(listener: () => void): () => void {
   if (!inBrowser()) return () => {};
@@ -153,11 +174,52 @@ export function recordVisitedConsoleCase(caseId: string, section: CaseWorkspaceS
   if (normalizeOpaqueReferenceId(caseId) !== caseId || !CASE_WORKSPACE_SECTIONS.some(item => item.id === section))
     throw new RangeError('A retained Case and supported section are required.');
   const latest = referenceView.visits.at(-1);
-  if (latest?.caseId === caseId && latest.section === section) return;
-  const visited = Object.freeze({ caseId, section });
+  if (latest?.kind === 'case' && latest.caseId === caseId && latest.section === section) return;
+  const visited = Object.freeze({ kind: 'case' as const, caseId, section });
   publishReferenceView(referenceView.checkpoints, Object.freeze([
-    ...(latest?.caseId === caseId ? referenceView.visits.slice(0, -1) : referenceView.visits).slice(-7), visited,
+    ...(latest?.kind === 'case' && latest.caseId === caseId ? referenceView.visits.slice(0, -1) : referenceView.visits).slice(-7), visited,
   ]));
+}
+
+function navigationText(value: string): string {
+  // Navigation retains bounded display/query text, never source records or arbitrary properties.
+  if (typeof value !== 'string' || value.length > 2_000 || /[\x00-\x1f\x7f]/u.test(value))
+    throw new RangeError('The navigation text is invalid.');
+  return value;
+}
+function checkedInfrastructureView(value: InfrastructureNavigationState): Readonly<InfrastructureNavigationState> {
+  const positivePage = (page: number) => {
+    if (!Number.isSafeInteger(page) || page < 1) throw new RangeError('The navigation page is invalid.');
+    return page;
+  };
+  if (value.relationshipView !== 'list' && value.relationshipView !== 'topology') throw new RangeError('The relationship view is invalid.');
+  return Object.freeze({ query: navigationText(value.query), type: navigationText(value.type) as InfrastructureNavigationState['type'],
+    store: navigationText(value.store) as InfrastructureNavigationState['store'], since: navigationText(value.since),
+    page: positivePage(value.page), historyPage: positivePage(value.historyPage), relationshipPage: positivePage(value.relationshipPage),
+    relationshipView: value.relationshipView, relationshipQuery: navigationText(value.relationshipQuery),
+    focusedEntityId: navigationText(value.focusedEntityId), highlightedEntityId: navigationText(value.highlightedEntityId) });
+}
+export function consoleInfrastructureHref(id: number): string {
+  return `/dashboard?infrastructure=${id}#retained-infrastructure`;
+}
+/** Called only after the exact retained identity has successfully resolved. */
+export function recordVisitedConsoleInfrastructure(entityId: string, label: string, view: InfrastructureNavigationState, scope: ConsoleReferenceScope): number | null {
+  if (!referenceWorkspace()) return null;
+  if (scope.workspaceId !== referenceView.workspaceId || scope.generation !== referenceGeneration) return null;
+  if (!entityId) throw new RangeError('An exact retained identity is required.');
+  const visit: VisitedConsoleInfrastructure = Object.freeze({ kind: 'infrastructure', id: referenceView.revision + 1,
+    entityId: navigationText(entityId), label: navigationText(label), view: checkedInfrastructureView(view) });
+  publishReferenceView(undefined, Object.freeze([...referenceView.visits.slice(-7), visit]));
+  return visit.id;
+}
+/** Updates the visited view, not its source identity; evicted/cleared references cannot be resurrected. */
+export function updateVisitedConsoleInfrastructure(id: number, view: InfrastructureNavigationState): void {
+  if (!referenceWorkspace()) return;
+  const visit = referenceView.visits.find((item): item is VisitedConsoleInfrastructure => item.kind === 'infrastructure' && item.id === id);
+  if (!visit) return;
+  const checked = checkedInfrastructureView(view);
+  if (JSON.stringify(visit.view) === JSON.stringify(checked)) return;
+  publishReferenceView(undefined, Object.freeze(referenceView.visits.map(item => item === visit ? Object.freeze({ ...visit, view: checked }) : item)));
 }
 
 function inBrowser(): boolean {

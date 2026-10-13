@@ -43,6 +43,15 @@ Topology search applies to the complete admitted one-hop relationship set, not
 the current source page. Its diagram has a 50-relationship budget; the paginated
 source list and exact snapshot review retain access to evidence beyond the diagram.
 
+Follow a retained domain to an address or certificate, then open its supporting
+Case. **Return to retained infrastructure** restores the exact query, filters,
+page positions and selected identity. **Tab references → Navigation trail** also
+lets you return to earlier successful pivots. This trail lives only in the
+current tab and workspace; it creates no observed relationships. Sources are
+read again rather than copied into navigation state. A removed identity stays
+unavailable, and clearing references or locking the workspace expires the links.
+Certificate identities here are leaf-certificate SHA-256, not SPKI digests.
+
 Lookup links fill the selected target for review without submitting it. Explicitly
 selected hostnames can be prepared in existing Bulk. That handoff does not scan,
 recursively expand targets, change a watchlist or enrol a host in monitoring.

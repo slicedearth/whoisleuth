@@ -121,8 +121,11 @@ in the current tab. Open **Tab references** in the Console context, then
 **Pinned checkpoints** to re-open
 their evidence and stage two same-Case checkpoints in the existing comparison.
 Unavailable references remain explicit; another checkpoint is never substituted.
-**Visited Cases** provides a bounded navigation trail, not an observed
-relationship or investigation log. These views store no duplicate evidence and
+**Navigation trail** lists up to eight successful Case or retained-infrastructure
+visits. Return to an infrastructure identity with its exact search, filters,
+inventory/history/source pages and topology view. Sources are read again;
+missing identities and expired tab references remain unavailable. The trail is
+navigation, not an observed relationship or investigation log. These views store no duplicate evidence and
 clear on lock, sign-out, workspace replacement or leaving the Console.
 
 For related hosts, conflicting sources and provider-reported resolution, open

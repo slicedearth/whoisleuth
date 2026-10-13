@@ -306,6 +306,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
       Object.freeze({ title: 'Start from an observed address', body: 'Deep Lookup selects one bounded public endpoint address from collected DNS or TLS evidence and performs one logical IP RDAP enrichment.' }),
       Object.freeze({ title: 'Read the network registration', body: 'Review the holder label, handle, prefixes, country, network type and database freshness as registration context, not hosting attribution.' }),
       Object.freeze({ title: 'Use controlled pivots', body: 'Open a reviewed prefix or ASN in external routing tools only when useful. WHOISleuth does not prefetch those destinations or retain their response.' }),
+      Object.freeze({ title: 'Keep your place in saved evidence', body: 'In Dashboard saved-work tools, follow a retained domain, address or certificate to its source Case. Return to retained infrastructure or use Tab references → Navigation trail to restore the query, filters and view position. Navigation adds no observed relationship.' }),
     ]),
     evidence: Object.freeze([
       Object.freeze({ source: 'DNS and TLS address observation', usefulFor: 'Identifying the public endpoint used by the bounded collection.', limitation: 'The address can differ by location, time, resolver or edge network.' }),
