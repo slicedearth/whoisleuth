@@ -62,7 +62,9 @@ test('pasted text uses existing prose cleanup, Unicode admission and bounded out
   assert.equal(result.state, 'reviewed');
   if (result.state !== 'reviewed') return;
   assert.deepEqual(result.intake.targets.map(target => target.exactUrl), ['https://example.com/path', 'https://xn--bcher-kva.example/']);
-  assert.doesNotMatch(JSON.stringify(result.intake.links), /<script>|private-marker/u);
+  const retainedLinks = JSON.stringify(result.intake.links);
+  assert.equal(retainedLinks.includes('<script>'), false);
+  assert.equal(retainedLinks.includes('private-marker'), false);
   const bounded = inspectPublicLinks('text', Array.from({ length: MAX_INTAKE_LINKS + 1 }, (_, index) => `https://link-${index}.example/`).join('\n'));
   assert.equal(bounded.state, 'reviewed');
   if (bounded.state !== 'reviewed') return;
