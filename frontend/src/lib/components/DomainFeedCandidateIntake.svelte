@@ -9,6 +9,8 @@
   import { attributeKeywordCampaignCandidate, brandKeywordCampaignState, keywordCampaignFeedSelection } from '../../../../packages/workspace/brand-keyword-campaign.mts';
   import { failedLocalMutationOutcome } from '#lib/local-mutation-outcome.ts';
   import DomainFeedHistoryReview from './DomainFeedHistoryReview.svelte';
+  import CollectionDisclosure from './CollectionDisclosure.svelte';
+  import { describeCollectionDisclosure, describeLocalFeedDisclosure } from '#lib/analysis/collection-disclosure.ts';
   import type { BrandKeywordCampaign } from '../../../../packages/workspace/brand-keyword-campaign.mts';
 
   let { active, disabled = false, onrefresh }: { active: BrandProfile; disabled?: boolean; onrefresh: () => Promise<unknown> } = $props();
@@ -28,6 +30,9 @@
   const matches = $derived(reviews.flatMap((review) => review.candidates));
   const chosen = $derived(matches.filter((match) => selected.has(match.domain)));
   const cached = $derived(status?.feeds.find((feed) => feed.feedId === feedId));
+  const serviceDisclosure = $derived(describeCollectionDisclosure('domain_feed_search', {
+    state: status?.enabled && cached?.cached ? 'included' : status?.enabled === false ? 'disabled' : 'unavailable',
+  }));
   const context = () => JSON.stringify([active.id, feedId, terms, negativeTerms, hosts, campaignId, campaign?.revision]);
   const historyContext = () => JSON.stringify([context(), intakeGeneration]);
 
@@ -183,10 +188,12 @@
     <label>Local domain-only feed file<input type="file" accept=".txt,text/plain" onchange={chooseFile} /></label>
     {#if file}<p>{file.size.toLocaleString()} bytes selected for local scanning.</p>{/if}
     <p class="muted">The file stays on this device. Only candidates you choose to retain are saved.</p>
+    <CollectionDisclosure disclosure={describeLocalFeedDisclosure()} label="Local file: data and recipients" />
     <button class="btn" onclick={() => void scan()} disabled={!file || busy || Boolean(campaign && campaignState !== 'active')}>Scan local file</button>
     <details class="optional-service" ontoggle={(event) => void openService(event)}>
       <summary>Optional hosted feed cache</summary>
       <p>Querying shares only the selected positive and negative literals and exact hostnames with this application’s configured feed service. It does not send the Brand Profile, campaign identity or review window, and does not contact candidate targets.</p>
+      <CollectionDisclosure disclosure={serviceDisclosure} label="Feed query: data and recipients" />
       {#if serviceBusy}<p role="status">Reading operator configuration…</p>
       {:else if serviceMessage}<p role="status">{serviceMessage}</p>
       {:else if status?.enabled === false}<p>Not enabled by the operator. Manual local import remains available.</p>

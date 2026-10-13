@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { CollectionPreflight } from '#lib/analysis/collection-preflight.ts';
+  import CollectionDisclosure from './CollectionDisclosure.svelte';
 
   let {
     preflight,
@@ -23,6 +24,7 @@
           <li data-source={source.id} data-state={source.state} class:optional={source.state === 'optional'} class:disabled={source.state === 'disabled' || source.state === 'unavailable'}>
             <span><strong>{source.label}</strong><small>{source.state}</small></span>
             <p>{source.disclosure}</p>
+            <CollectionDisclosure disclosure={source.inspection} label={`${source.label}: data and recipients`} />
           </li>
         {/each}
       </ul>
@@ -42,7 +44,7 @@
   summary small{color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   .preflight-body{display:grid;gap:10px;padding:0 12px 12px;border-top:1px solid var(--border)}
   .preflight-body>p{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
-  .source-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0;padding:0;list-style:none}
+  .source-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:7px;margin:0;padding:0;list-style:none}
   .source-list li{min-width:0;padding:8px 9px;border:1px solid rgb(var(--accent-rgb) / .28);border-radius:var(--radius-sm);background:rgb(var(--accent-rgb) / .04)}
   .source-list li.optional{border-color:var(--border);background:var(--surface)}
   .source-list li.disabled{opacity:.72;border-style:dashed}

@@ -277,6 +277,15 @@ or ASN and the current deployment configuration. Optional providers are listed
 separately. Deep Lookup reports source states as they arrive; connections that
 buffer responses show them together. A finished source can still be partial,
 failed or unsupported.
+Within **Collection preflight**, each source's **Data and recipients** disclosure
+distinguishes the registrable-domain query, DNS owner and record type, and any
+explicitly selected URL path and query. It describes the browser-to-application
+boundary separately from downstream recipient classes. Optional, disabled and
+unavailable sources do not become selected by opening this view. Exact services,
+referrals and redirects are not resolved by this offline plan. The same disclosure
+in Brand feed review distinguishes device-local file matching from a deliberate
+query that sends the selected feed, hostnames and literal terms to the configured
+service. It does not expose entered URLs or search terms in another preview.
 Only the final validated result can be saved. Cancelling discards the incomplete
 response; already-admitted requests may finish within their existing bounds.
 
