@@ -4,6 +4,7 @@ import { performance } from 'node:perf_hooks';
 import { test } from 'node:test';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../packages/contracts/selected-file-limits.mts';
 import { BROWSER_LOCAL_COLLECTION_MANIFEST } from '../packages/contracts/browser-local-collection-manifest.mts';
+import { LOCAL_DATA_WORKER_MINIMUM_BYTES } from '../frontend/src/lib/browser-local-data-content.ts';
 
 import {
   BrowserLocalDataError,
@@ -580,7 +581,7 @@ test('awaited updates retain concurrent records and commit only against the curr
   } finally { harness.acknowledge(); await provider.close(); restoreKeyRange(); }
 });
 
-test('background preparation is opt-in and cancellation or failure before commit leaves records unchanged', async () => {
+test('explicit background preparation preserves cancellation and failure before commit', async () => {
   const restoreKeyRange = installKeyRangeStub();
   const harness = delayedWriteFactory('committed');
   let preparations = 0;
@@ -599,7 +600,7 @@ test('background preparation is opt-in and cancellation or failure before commit
   try {
     await provider.initialize([WRITE_DEFINITION]);
     assert.equal(await provider.update(WRITE_DEFINITION, (current) => ({ document: current, result: 'unchanged' })), 'unchanged');
-    assert.equal(preparations, 0, 'Ordinary mutations do not start background preparation.');
+    assert.equal(preparations, 0, 'An unchanged small collection does not start background preparation.');
     await assert.rejects(provider.update(WRITE_DEFINITION, async () => ({ document: ['import'], result: 'saved' }), { preparation: 'background' }), /Worker unavailable/u);
     mode = 'abort';
     await assert.rejects(provider.update(WRITE_DEFINITION, async () => ({ document: ['import'], result: 'saved' }), { preparation: 'background', signal: controller.signal }), { name: 'AbortError' });
@@ -610,6 +611,106 @@ test('background preparation is opt-in and cancellation or failure before commit
     assert.equal(harness.state.writeTransactions, 0);
     assert.deepEqual(await provider.read(WRITE_DEFINITION), []);
   } finally { await provider.close(); restoreKeyRange(); }
+});
+
+test('large verified plaintext collections prepare in the background without changing no-op or keyed-codec behaviour', async () => {
+  const restoreKeyRange = installKeyRangeStub();
+  const definition = { ...WRITE_DEFINITION, maximumBytes: 1024 * 1024 };
+  try {
+    for (const [label, size, customCodec] of [
+      ['small', 32, false], ['large', LOCAL_DATA_WORKER_MINIMUM_BYTES, false], ['keyed', LOCAL_DATA_WORKER_MINIMUM_BYTES, true],
+    ] as const) {
+      const harness = delayedWriteFactory('committed', () => setTimeout(() => harness.acknowledge(), 0));
+      const retained = ['x'.repeat(size)];
+      const codec = customCodec ? { ...plaintextJsonCodec,
+        digestCollection: async (input: { content: string }) => createHash('sha256').update(input.content).digest('base64url'),
+      } : plaintextJsonCodec;
+      const content = await prepareLocalDataContent(definition, retained, codec);
+      harness.state.records = content.records;
+      harness.state.manifest = { ...harness.state.manifest, recordCount: 1, serializedBytes: content.serializedBytes, digest: content.digest };
+      let preparations = 0;
+      const provider = new BrowserLocalDataProvider({ indexedDB: harness.factory, storage: NULL_STORAGE, codec,
+        prepareInBackground: async (...args) => { preparations++; return prepareLocalDataContent(...args); },
+      });
+      try {
+        await provider.initialize([definition]);
+        assert.equal(await provider.update(definition, document => ({ document, result: 'unchanged' })), 'unchanged');
+        assert.equal(preparations, 0, label); assert.equal(harness.state.writeTransactions, 0, label);
+        await provider.update(definition, document => ({ document: [...document, 'single'], result: 'saved' }));
+        await provider.updateMany([definition], documents => ({
+          documents: new Map([[definition.id, [...documents.get(definition.id) as string[], 'batch']]]), result: 'saved',
+        }));
+        assert.deepEqual(await provider.read(definition), [...retained, 'single', 'batch'], label);
+        assert.equal(preparations, label === 'large' ? 2 : 0, label);
+        assert.equal(harness.state.writeTransactions, 2, label);
+      } finally { harness.acknowledge(); await provider.close(); }
+    }
+  } finally { restoreKeyRange(); }
+});
+
+test('automatic large-collection preparation fails or cancels before any write', async () => {
+  const restoreKeyRange = installKeyRangeStub();
+  const definition = { ...WRITE_DEFINITION, maximumBytes: 1024 * 1024 };
+  const retained = ['x'.repeat(LOCAL_DATA_WORKER_MINIMUM_BYTES)];
+  try {
+    for (const mode of ['reject', 'abort'] as const) {
+      const harness = delayedWriteFactory('committed');
+      const content = await prepareLocalDataContent(definition, retained, plaintextJsonCodec);
+      harness.state.records = content.records;
+      harness.state.manifest = { ...harness.state.manifest, recordCount: 1, serializedBytes: content.serializedBytes, digest: content.digest };
+      const controller = new AbortController(); let preparations = 0;
+      const provider = new BrowserLocalDataProvider({ indexedDB: harness.factory, storage: NULL_STORAGE,
+        prepareInBackground: async (...args) => {
+          preparations++;
+          if (mode === 'reject') throw new BrowserLocalDataError('LOCAL_DATA_PREPARATION_FAILED', 'Worker unavailable.');
+          const prepared = await prepareLocalDataContent(...args); controller.abort(); return prepared;
+        },
+      });
+      try {
+        await provider.initialize([definition]);
+        await assert.rejects(provider.update(definition, document => ({ document: [...document, 'later'], result: 'saved' }), { signal: controller.signal }),
+          mode === 'abort' ? { name: 'AbortError' } : /Worker unavailable/u);
+        assert.equal(preparations, 1); assert.equal(harness.state.writeTransactions, 0);
+        assert.deepEqual(await provider.read(definition), retained);
+      } finally { await provider.close(); }
+    }
+  } finally { restoreKeyRange(); }
+});
+
+test('a concurrent edit during large-collection preparation is retained after the revision retry', { timeout: 3_000 }, async () => {
+  const restoreKeyRange = installKeyRangeStub();
+  const definition = { ...WRITE_DEFINITION, maximumBytes: 1024 * 1024 };
+  const retained = ['x'.repeat(LOCAL_DATA_WORKER_MINIMUM_BYTES)];
+  const initial = await prepareLocalDataContent(definition, retained, plaintextJsonCodec);
+  let wrote!: () => void;
+  const writing = new Promise<void>(resolve => { wrote = resolve; });
+  const harness = delayedWriteFactory('committed', wrote);
+  harness.state.records = initial.records;
+  harness.state.manifest = { ...harness.state.manifest, recordCount: 1, serializedBytes: initial.serializedBytes, digest: initial.digest };
+  let release!: () => void, prepared!: () => void;
+  const hold = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { prepared = resolve; });
+  let preparations = 0;
+  const provider = new BrowserLocalDataProvider({ indexedDB: harness.factory, storage: NULL_STORAGE,
+    prepareInBackground: async (...args) => {
+      const content = await prepareLocalDataContent(...args);
+      if (++preparations === 1) { prepared(); await hold; }
+      return content;
+    },
+  });
+  try {
+    await provider.initialize([definition]);
+    const pending = provider.update(definition, document => ({ document: [...document, 'selected'], result: 'saved' }));
+    await started; assert.equal(harness.state.writeTransactions, 0);
+    const concurrent = await prepareLocalDataContent(definition, [...retained, 'peer'], plaintextJsonCodec);
+    harness.state.records = concurrent.records;
+    harness.state.manifest = { ...harness.state.manifest, revision: harness.state.manifest.revision + 1,
+      serializedBytes: concurrent.serializedBytes, recordCount: concurrent.records.length, digest: concurrent.digest, source: 'application' };
+    release(); await writing; harness.acknowledge();
+    assert.equal(await pending, 'saved');
+    assert.equal(preparations, 2); assert.equal(harness.state.writeTransactions, 2);
+    assert.deepEqual(await provider.read(definition), [...retained, 'peer', 'selected']);
+  } finally { release(); harness.acknowledge(); await provider.close(); restoreKeyRange(); }
 });
 
 test('cancellation after a commit begins cannot relabel the committed write as a failed import', { timeout: 3_000 }, async () => {

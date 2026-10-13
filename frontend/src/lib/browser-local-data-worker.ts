@@ -2,6 +2,7 @@ import { runBrowserWorkerOperation } from './browser-worker-operation.ts';
 import { DEFERRED_MODULE_RECOVERY_DETAIL, loadDeferredModule } from './deferred-module.ts';
 import {
   BrowserLocalDataError,
+  LOCAL_DATA_WORKER_MINIMUM_BYTES,
   decodeLocalDataSnapshots,
   plaintextJsonCodec,
   type BrowserLocalDataCodec,
@@ -10,9 +11,6 @@ import {
 } from './browser-local-data-content.ts';
 import type { LocalDataDecodeResponse, LocalDataWorkerRequest } from './browser-local-data-worker-model.ts';
 
-// Scheduling hint, not an admission or timing bound. Smaller payloads avoid
-// worker startup; both paths run the same complete integrity checks.
-const WORKER_MINIMUM_PAYLOAD_BYTES = 256 * 1024;
 type LocalWorkerOptions = Readonly<{ createWorker?: () => Worker; signal?: AbortSignal }>;
 
 export async function loadBrowserLocalDataPreparation(options: Readonly<{ signal?: AbortSignal }> = {}) {
@@ -32,7 +30,7 @@ export async function decodeBrowserLocalDataSnapshots<T>(
   if (options.signal?.aborted) throw new DOMException('Browser-local verification was cancelled.', 'AbortError');
   // Small collections and custom codecs/definitions use the same local decoder.
   if ((!options.createWorker && typeof Worker === 'undefined') || codec !== plaintextJsonCodec
-    || captured.reduce((bytes, entry) => bytes + entry.records.reduce((total, record) => total + record.payloadBytes, 0), 0) < WORKER_MINIMUM_PAYLOAD_BYTES) {
+    || captured.reduce((bytes, entry) => bytes + entry.records.reduce((total, record) => total + record.payloadBytes, 0), 0) < LOCAL_DATA_WORKER_MINIMUM_BYTES) {
     return decodeLocalDataSnapshots(definitions, captured, codec);
   }
   const { BROWSER_LOCAL_COLLECTIONS } = await import('./browser-local-data-definitions.ts');

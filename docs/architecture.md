@@ -365,8 +365,12 @@ prepared result, rechecks the collection revision and owns the transaction and
 commit recovery. Cancellation before committing leaves the saved collection
 unchanged; cancellation after committing starts cannot turn a successful write
 into a failed-save retry. Workers do not access storage or make collection
-requests. Ordinary edits keep local preparation; background processing is
-explicit per operation.
+requests. Updates to larger verified plaintext collections use the same worker
+for preparation, including atomic multi-collection updates. Smaller updates stay
+local; imports can request background preparation explicitly. Scheduling uses the
+retained snapshot's verified size, not a new admission limit. Updated documents
+still pass all normalisation, byte, record and integrity checks. Custom and
+encrypted codecs remain local, and encryption keys are never sent to a worker.
 
 Dashboard and Lookup search use a disposable same-origin browser worker. The
 worker builds the shared investigation projection and search index, matches
