@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, isLookupEndpointUrl } from './fixtures';
 import {
+  expectFocusedResultsVisible,
   expectNoHorizontalOverflow,
   failNextBrowserLocalCollectionReadAfterWrite,
   failNextBrowserLocalManifestWrite,
@@ -444,6 +445,13 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
     writeText: (text: string) => (window as typeof window & { retainFixtureClipboard: (value: string) => Promise<void> }).retainFixtureClipboard(text),
   } }));
+  const otherFormats = packet.getByText('Other export formats', { exact: true });
+  const secondaryActions = otherFormats.locator('..').locator('button');
+  await expect(secondaryActions).toHaveCount(3);
+  for (const button of await secondaryActions.all()) await expect(button).toBeHidden();
+  await otherFormats.focus(); await otherFormats.press('Enter');
+  await expect(otherFormats).toBeFocused();
+  for (const button of await secondaryActions.all()) await expect(button).toBeVisible();
   await packet.getByRole('button', { name: 'Copy email draft', exact: true }).click();
   await expect.poll(() => clipboard.text).toBe(exactEmail);
   for (const format of ['email draft', 'JSON draft or authorised packet']) {
@@ -464,6 +472,9 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
       await preview.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
       if (captureVisualEvidenceEnabled()) { await testInfo.attach(`quick-packet-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
+      await otherFormats.focus();
+      await expectFocusedResultsVisible(page, otherFormats, otherFormats);
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`packet-handoff-${width}-${theme}.png`) });
     }
   }
   expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.actions[0]!.state).toBe('authorised');
@@ -562,6 +573,7 @@ test('Quick recipient refresh invalidates approval and stale manual previews can
     writeText: () => (window as typeof window & { countFixtureClipboard: () => Promise<void> }).countFixtureClipboard(),
   } }));
   await page.clock.setFixedTime('2026-09-10T13:00:00.457Z');
+  await packet.getByText('Other export formats', { exact: true }).click();
   await packet.getByRole('button', { name: 'Copy email draft', exact: true }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('freshness changed after the preview');
   await expect(packet.getByRole('textbox', { name: /^Exact manual complaint/ })).toHaveCount(0);
@@ -580,6 +592,7 @@ test('Quick recipient refresh invalidates approval and stale manual previews can
   expect(retained).toMatchObject({ state: 'drafting', routeObservedAt: '2026-09-10T13:00:00.457Z', routeReviewAfter: '2026-09-12T13:00:00.789Z', followUpAt: '2026-10-01T00:00:00.000Z' });
   expect(retained.history.at(-1)).toMatchObject({ previousState: 'authorised', nextState: 'drafting', provenance: 'material_action_change' });
   await openCasePacket(page);
+  await expect(packet.getByText('Other export formats', { exact: true }).locator('..')).toHaveAttribute('open');
   await packet.getByRole('button', { name: 'Copy email draft', exact: true }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('preview is out of date');
   expect(copies).toBe(0);

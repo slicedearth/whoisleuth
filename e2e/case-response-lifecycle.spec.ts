@@ -106,6 +106,7 @@ test('packet handoffs reject inputs changed during hashing and a stale delivery 
   } }));
   for (const [index, button] of [exportButton, packet.getByRole('button', { name: 'Copy email draft', exact: true }), packet.getByRole('button', { name: 'Preview manual complaint', exact: true }), packet.getByRole('button', { name: 'Preview printable report', exact: true })].entries()) {
     await openPacketWizardStep(packet, 'Export and record');
+    if (index === 1) await packet.getByText('Other export formats', { exact: true }).click();
     await page.evaluate(() => {
       const target = window as typeof window & { heldDigest?: boolean; releaseDigest?: () => void };
       target.heldDigest = false;
@@ -128,6 +129,7 @@ test('packet handoffs reject inputs changed during hashing and a stale delivery 
     await expect(exportButton).toBeHidden();
     await expect(caseWorkspaceActionStatus(page)).toContainText('Nothing was downloaded or copied');
     await openPacketWizardStep(packet, 'Export and record');
+    if (index === 1) await packet.getByText('Other export formats', { exact: true }).click();
     await expect(button).toBeEnabled();
     expect(downloads).toBe(0);
     expect(copies).toBe(0);

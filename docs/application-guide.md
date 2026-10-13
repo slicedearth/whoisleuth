@@ -1203,6 +1203,9 @@ privacy, redactions, analyst authority, freshness and contradictions. Drafts
 remain available with cautions. Reviewed authorisation is bound to the exact
 canonical inputs and is invalidated by material change. Packet generation is a
 local export; WHOISleuth does not send it or promise a provider outcome.
+In **Local handoff**, JSON export is the primary action. **Other export formats**
+contains Markdown, email download and email copy; all use the same packet review
+and freshness checks.
 **Preview manual complaint** shows the exact text used by Copy and the email
 download. JSON and Markdown describe the same prepared packet. Changed inputs
 or freshness require a new preview; receipt recording remains a separate action.
