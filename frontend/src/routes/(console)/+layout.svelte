@@ -337,14 +337,17 @@
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
     <main id="main-content" use:keepFocusBelow={() => consoleHeader} class:wide-workspace={wideWorkspace} tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>
       <section class="console-context" aria-label="Current investigation context">
+        <BrowserWorkspaceIndicator compact>
+        {#snippet layout(identity, markerControls)}
         <div class="context-bar">
           <p class="context-task" role="note" aria-label="Current task"><span>Task</span><strong>{currentTask}</strong></p>
-          <BrowserWorkspaceIndicator compact />
+          {@render identity()}
           <span class="context-backend" role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span>
         </div>
         <div class="context-details">
           <details class="context-storage">
             <summary>{localApplication ? 'Filesystem storage · plaintext' : 'Browser-local storage'}</summary>
+            {@render markerControls()}
             <p>{localApplication ? 'Saved records and original files remain in the selected filesystem workspace. Encrypted backups are separate.' : 'Saved records remain in this browser’s selected workspace. Opening another workspace replaces this page; other tabs keep their own selection.'}</p>
             <p>{capabilityStatusDetail()} This is the reported configuration, not a live source-health check.</p>
           </details>
@@ -357,6 +360,8 @@
             {/if}
           </details>
         </div>
+        {/snippet}
+        </BrowserWorkspaceIndicator>
         {#if showCaseContext && selectedCaseId}<DeferredSurface load={() => import('#lib/components/SelectedCaseContext.svelte')} props={{caseId:selectedCaseId,compact:true}} loadingLabel="Reading selected Case…" unavailableLabel="Selected Case context could not be loaded." />{/if}
       </section>
       {#if investigationGuideRequested}<DeferredSurface load={() => import('#lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}

@@ -1,9 +1,13 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, type Snippet } from 'svelte';
   import { BROWSER_WORKSPACE_DIRECTORY_EVENT, currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE, DEFAULT_BROWSER_WORKSPACE_NAME } from '#lib/browser-workspace-context.ts';
   import BrowserWorkspaceLock from './BrowserWorkspaceLock.svelte';
   import { isLocalApplication } from '#lib/local-application-context.ts';
-  let { destination = false, compact = false }: { destination?: boolean; compact?: boolean } = $props();
+  let { destination = false, compact = false, layout }: {
+    destination?: boolean;
+    compact?: boolean;
+    layout?: Snippet<[identity: Snippet, markerControls: Snippet]>;
+  } = $props();
   let name = $state('Loading…');
   let encrypted = $state(false);
   let selectedId = $state<string | null>(null);
@@ -45,6 +49,7 @@
   });
 </script>
 
+{#snippet identityView()}
 <div class="workspace-scope" class:compact role={compact ? 'note' : undefined} aria-label={compact ? 'Active workspace' : undefined}>
   {destination ? 'Backup and import workspace:' : 'Workspace:'}
   {#if !destination && marker !== 'none'}<span class="workspace-marker" class:blue={marker === 'blue'} class:violet={marker === 'violet'} class:amber={marker === 'amber'} aria-hidden="true"></span>{/if}
@@ -52,13 +57,21 @@
   {#if !destination}
     {#if encrypted && selectedId}<BrowserWorkspaceLock id={selectedId} />{/if}
     <a href="/dashboard#workspaces">{localApplication ? 'Workspace details' : 'Manage workspaces'}</a>
+  {/if}
+</div>
+{/snippet}
+
+{#snippet markerControls()}
+  {#if !destination}
     <details class="marker-preview">
       <summary>Workspace marker</summary>
       <label>Temporary marker <select bind:value={marker} disabled={name === 'Loading…' || name === 'Unavailable'}><option value="none">None</option><option value="blue">Blue</option><option value="violet">Violet</option><option value="amber">Amber</option></select></label>
       <p>Reload clears this preview. Colour does not indicate protection, permission or risk.</p>
     </details>
   {/if}
-</div>
+{/snippet}
+
+{#if layout}{@render layout(identityView, markerControls)}{:else}{@render identityView()}{/if}
 
 <style>
   .workspace-scope{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 8px;margin:0 0 12px;font-size:var(--text-xs);color:var(--muted);overflow-wrap:anywhere;min-width:0}.workspace-scope strong{color:var(--text);min-width:0}.workspace-scope a{margin-left:auto;color:var(--accent);text-underline-offset:3px}

@@ -33,8 +33,13 @@ test('optional Case covers and workspace markers stay temporary and retain exact
   await expect(cover.locator('time.updated')).toHaveAttribute('datetime', '2026-09-20T00:00:00.000Z');
   await expect(header).toHaveAttribute('href', href!);
   const workspace = page.getByRole('note', { name: 'Active workspace', exact: true });
-  await workspace.getByText('Workspace marker', { exact: true }).click();
-  const marker = workspace.getByRole('combobox', { name: 'Temporary marker', exact: true });
+  const storage = page.locator('.console-context details.context-storage').filter({ has: page.getByText('Browser-local storage', { exact: true }) });
+  await expect(storage).toHaveJSProperty('open', false);
+  await expect(storage.getByText('Workspace marker', { exact: true })).not.toBeVisible();
+  await storage.locator(':scope > summary').focus();
+  await storage.locator(':scope > summary').press('Enter');
+  await storage.getByText('Workspace marker', { exact: true }).click();
+  const marker = storage.getByRole('combobox', { name: 'Temporary marker', exact: true });
   await expect(marker).toHaveValue('none');
   await marker.selectOption('violet');
   await expect(workspace.locator('.workspace-marker.violet')).toHaveCount(1);
@@ -45,7 +50,7 @@ test('optional Case covers and workspace markers stay temporary and retain exact
   for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
     await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
     await covers.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
-    expect((await new AxeBuilder({ page }).include('.case-list').include('.workspace-scope').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
+    expect((await new AxeBuilder({ page }).include('.case-list').include('.console-context').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
     if (captureVisualEvidenceEnabled()) {
       await page.screenshot({ path: testInfo.outputPath(`optional-covers-${width}-${theme}.png`) });
       await workspace.screenshot({ path: testInfo.outputPath(`optional-marker-${width}-${theme}.png`) });
@@ -53,12 +58,14 @@ test('optional Case covers and workspace markers stay temporary and retain exact
   }
   await page.reload();
   await expect(covers).not.toBeChecked();
-  await workspace.getByText('Workspace marker', { exact: true }).click();
+  await storage.locator(':scope > summary').click();
+  await storage.getByText('Workspace marker', { exact: true }).click();
   await expect(marker).toHaveValue('none');
   await page.goto('/dashboard#workspaces');
   const created = await createWorkspace(page, 'Temporary marker check');
   await switchWorkspace(page, created.name);
-  await workspace.getByText('Workspace marker', { exact: true }).click();
+  await storage.locator(':scope > summary').click();
+  await storage.getByText('Workspace marker', { exact: true }).click();
   await expect(marker).toHaveValue('none');
   const archive = await openArchive(page, true);
   await expect(archive.locator('.workspace-scope').getByRole('combobox')).toHaveCount(0);
