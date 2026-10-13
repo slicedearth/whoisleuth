@@ -1,11 +1,13 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
+import AxeBuilder from '@axe-core/playwright';
 import { COMMAND_NAVIGATION_READINESS, openInboxReview, inboxReviewControls } from './console-navigation';
 import { beginBrowserInteractionReadiness, isBrowserInteractionReadinessMarked, readBrowserInteractionReadiness } from './performance-sampling';
 import { caseRecord, createCase, snapshot, openCaseResponseWorkspace } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, failNextBrowserLocalManifestWrite, holdBrowserLocalTransaction, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
+import { caseNumber } from '../packages/cases/case-workflow-metadata.mts';
 
 test('navigation readiness includes loaded, usable destinations rather than only the dialog shell', async ({ page }) => {
   const chunk = productionChunkPath('src/lib/console-command-navigation.ts');
@@ -227,6 +229,126 @@ test('pinned checkpoints and successful Case visits survive Console navigation w
   await expect(page).toHaveURL('/privacy');
   await page.goBack();
   await expect(page.getByText(/Visited Cases ·/u)).toHaveCount(0);
+});
+
+test('tab favourites resolve exact retained Cases and canonical destinations without storing another entity', async ({ page }, testInfo) => {
+  const requests: string[] = [];
+  await page.route(/\/api\/(lookup|dns|tls|certificates?|certificate-transparency)(\/|\?|$)/u, async route => { requests.push(route.request().url()); await route.abort(); });
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [
+    caseRecord({ id: 'favourite-case', domain: 'favourite.example' }),
+    caseRecord({ id: 'other-favourite-case', domain: 'favourite.example' }),
+  ] } }, { clearStorage: true, destination: '/cases?case=favourite-case&section=evidence' });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  const preferencesSnapshot = () => page.evaluate(() => {
+    const local = { ...localStorage };
+    delete local['whoisleuth:theme:v1']; // The rendered theme matrix deliberately changes this existing preference.
+    return { local, session: { ...sessionStorage } };
+  });
+  const preferencesBefore = await preferencesSnapshot();
+  const sidebar = page.locator('#console-navigation');
+  const open = async () => {
+    const toggle = page.getByRole('button', { name: 'Toggle navigation', exact: true });
+    if (await toggle.isVisible() && await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+    const summary = sidebar.getByText('Favourites in this tab', { exact: true });
+    if (await summary.locator('..').getAttribute('open') === null) await summary.click();
+    const favourites = sidebar.getByRole('region', { name: 'Favourites in this tab', exact: true });
+    await expect(favourites.getByRole('button', { name: 'Add destination favourite', exact: true })).toBeEnabled();
+    return favourites;
+  };
+  let favourites = await open();
+  await expect(favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true })).toBeEnabled();
+  await favourites.getByRole('combobox', { name: 'Case section', exact: true }).selectOption('evidence');
+  await favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true }).click();
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+  await page.getByRole('link').and(page.locator('a[href="/cases?case=other-favourite-case"]')).click();
+  favourites = await open();
+  await expect(favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true })).toBeEnabled();
+  await favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true }).click();
+  await favourites.getByRole('combobox', { name: 'Tool or reference', exact: true }).selectOption('/lookup');
+  await favourites.getByRole('button', { name: 'Add destination favourite', exact: true }).click();
+  await favourites.getByRole('combobox', { name: 'Tool or reference', exact: true }).selectOption('/cli');
+  await favourites.getByRole('button', { name: 'Add destination favourite', exact: true }).click();
+  const links = favourites.getByRole('navigation', { name: 'Favourite destinations', exact: true });
+  await expect(links.getByRole('link')).toHaveCount(4);
+  const caseLink = links.getByRole('link', { name: `favourite.example · Evidence ${caseNumber('favourite-case')}`, exact: true });
+  const otherLink = links.getByRole('link', { name: `favourite.example · Evidence ${caseNumber('other-favourite-case')}`, exact: true });
+  await expect(caseLink).toHaveAttribute('href', '/cases?case=favourite-case&section=evidence');
+  await expect(otherLink).toHaveAttribute('href', '/cases?case=other-favourite-case&section=evidence');
+  await otherLink.click();
+  favourites = await open();
+  await expect(otherLink).toHaveAttribute('aria-current', 'page');
+  await favourites.getByRole('combobox', { name: 'Case section', exact: true }).selectOption('response');
+  await favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true }).click();
+  const responseLink = links.getByRole('link', { name: `favourite.example · Response ${caseNumber('other-favourite-case')}`, exact: true });
+  // Exercise a supported retained URL through ordinary same-document link navigation.
+  await page.evaluate(() => {
+    const link = document.createElement('a');
+    link.href = '/cases?case=other-favourite-case&response=1'; link.textContent = 'Open retained response fixture';
+    document.getElementById('main-content')!.append(link);
+  });
+  const legacy = page.getByRole('link', { name: 'Open retained response fixture', exact: true });
+  await legacy.click();
+  await expect(responseLink).toHaveAttribute('aria-current', 'page');
+  await expect(otherLink).not.toHaveAttribute('aria-current', 'page');
+  await legacy.evaluate(link => link.remove());
+  await expect(links.locator('a[href="/cli"]')).toHaveAttribute('target', '_blank');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1280, 2560]) {
+      await page.setViewportSize({ width, height: 844 }); favourites = await open();
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await favourites.screenshot({ path: testInfo.outputPath(`favourites-${theme}-${width}.png`) });
+    }
+    expect((await new AxeBuilder({ page }).include('.sidebar-favourites').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+  }
+  await links.getByRole('link', { name: 'Lookup', exact: true }).click();
+  await expect(page).toHaveURL(/\/lookup$/u); favourites = await open();
+  await caseLink.click(); await expect(page).toHaveURL(/\/cases\?case=favourite-case&section=evidence$/u);
+  await expect(page.locator('#case-head-favourite-case').getByRole('heading', { name: 'favourite.example', exact: true })).toBeVisible();
+  await expect(favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true })).toBeEnabled();
+  const favouritesSummary = sidebar.getByText('Favourites in this tab', { exact: true });
+  await favouritesSummary.click();
+  const heldRead = await page.evaluateHandle(() => {
+    const original = SubtleCrypto.prototype.digest;
+    let reached!: () => void, release!: () => void;
+    const started = new Promise<void>(resolve => { reached = resolve; });
+    const held = new Promise<void>(resolve => { release = resolve; });
+    SubtleCrypto.prototype.digest = async function(algorithm, input) {
+      const bytes = ArrayBuffer.isView(input) ? new Uint8Array(input.buffer, input.byteOffset, input.byteLength) : new Uint8Array(input);
+      if (!new TextDecoder().decode(bytes).includes('favourite-case')) return original.call(this, algorithm, input);
+      SubtleCrypto.prototype.digest = original;
+      await original.call(this, algorithm, input);
+      reached(); await held;
+      throw new Error('Synthetic superseded retained read');
+    };
+    return { wait: () => started, release: () => { SubtleCrypto.prototype.digest = original; release(); } };
+  });
+  try {
+    favourites = await open(); await heldRead.evaluate(control => control.wait());
+    await expect(favourites.getByRole('status').filter({ hasText: 'Reading retained Case references' })).toBeVisible();
+    await favourites.getByRole('button', { name: 'Clear favourites', exact: true }).click();
+    await expect(favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true })).toBeEnabled();
+    await heldRead.evaluate(control => control.release());
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    await expect(favourites.getByRole('alert')).toHaveCount(0);
+    await expect(favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true })).toBeEnabled();
+    await expect(links).toHaveCount(0);
+  } finally { await heldRead.evaluate(control => control.release()); await heldRead.dispose(); }
+  await favourites.getByRole('combobox', { name: 'Case section', exact: true }).selectOption('evidence');
+  await favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true }).click();
+  const caseOptions = page.getByText('Case options', { exact: true }).and(page.locator('summary'));
+  if (await caseOptions.locator('..').getAttribute('open') === null) await caseOptions.click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Delete case', exact: true }).click();
+  favourites = await open(); await expect(favourites).toContainText('no longer retained');
+  await expect(caseLink).toHaveCount(0);
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records.map(item => item.value.id)).toEqual(['other-favourite-case']);
+  expect(await preferencesSnapshot()).toEqual(preferencesBefore);
+  await favourites.getByRole('button', { name: 'Clear favourites', exact: true }).click();
+  await expect(links).toHaveCount(0);
+  await expect(favourites.getByRole('status').filter({ hasText: 'Favourites cleared' })).toBeFocused();
+  expect(requests).toEqual([]);
 });
 
 test('a selected Dashboard review opens Case assessment and returns to the same inbox item', async ({ page }) => {

@@ -55,6 +55,7 @@
   let selectedCaseId = $state<string | null>(null);
   let referenceViewPresent = $state(false);
   let tabReferencesOpen = $state(false);
+  let favouritesOpen = $state(false);
   const showCaseContext = $derived(Boolean(selectedCaseId)
     && page.url.pathname !== '/cases'
     && !(page.url.pathname === '/monitor' && (page.url.searchParams.get('view') === 'cases' || page.url.searchParams.has('case'))));
@@ -326,6 +327,10 @@
           </div>
         {/each}
       </nav>
+      <details class="sidebar-favourites" bind:open={favouritesOpen}>
+        <summary>Favourites in this tab</summary>
+        {#if favouritesOpen}<DeferredSurface load={() => import('#lib/components/ConsoleFavourites.svelte')} props={{ onnavigate: () => navOpen = false }} loadingLabel="Opening tab favourites…" unavailableLabel="Favourites could not be displayed. Saved evidence has not changed." />{/if}
+      </details>
       <nav class="reference-nav" aria-label="Reference"><p class="eyebrow">Reference</p>{#each referenceNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} title={item.detail} target={item.opensInNewTab?'_blank':undefined} rel={item.opensInNewTab?'noopener noreferrer':undefined} aria-label={item.opensInNewTab?`${item.label}. Opens in a new tab.`:undefined} onclick={()=>navOpen=false}><IntelligenceIcon name={item.icon} size={18} /><strong>{item.label}</strong></a>{/each}</nav>
       <div class="session"><ThemeSelector /></div>
     </aside>
@@ -383,6 +388,7 @@
   .login-links{display:flex;justify-content:center;gap:8px;margin:18px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .login-links a{color:var(--accent)}
   .reference-nav{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+  .sidebar-favourites{margin-top:18px;min-width:0}.sidebar-favourites>summary{min-height:44px;align-content:center;cursor:pointer;overflow-wrap:anywhere;font-size:var(--text-xs)}
   .sign-out-control{position:relative;display:inline-flex}
   .sign-out-error{position:absolute;z-index:20;top:calc(100% + 8px);right:0;width:min(300px,calc(100vw - 32px));padding:9px 11px;border:1px solid var(--danger);border-radius:var(--radius-sm);background:var(--panel);box-shadow:0 8px 24px rgb(var(--shadow-rgb) / .28);color:var(--danger);font-size:var(--text-2xs);line-height:1.4}
   .console-nav-group+.console-nav-group{margin-top:14px;padding-top:0}

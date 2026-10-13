@@ -39,7 +39,7 @@ export const CASE_STAGE_SECTION: Readonly<Record<CaseResponseStageId, CaseWorksp
   outcome_tracking: 'response',
 };
 
-export function caseWorkspaceSection(url: URL): CaseWorkspaceSection {
+export function caseWorkspaceSection(url: Readonly<Pick<URL, 'hash'>> & { searchParams: Pick<URLSearchParams, 'get'> }): CaseWorkspaceSection {
   const section = url.searchParams.get('section');
   const recognised = CASE_WORKSPACE_SECTIONS.find((item) => item.id === section);
   if (recognised) return recognised.id;

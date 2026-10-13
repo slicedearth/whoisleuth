@@ -4,7 +4,7 @@ import type { LookupHttpResponse } from './analysis/lookup-response.ts';
 import type { LookupRequestDraft } from './analysis/lookup-presentation.ts';
 import type { BulkProfileContextProvenance } from './analysis/bulk-session-model.ts';
 import { normalizeOpaqueReferenceId } from '../../../packages/cases/opaque-reference-id.mts';
-import { protectedReturnTarget } from './workspaces.ts';
+import { consoleNavigation, referenceNavigation, publicReferenceSectionNavigation, protectedReturnTarget, type NavigationItem } from './workspaces.ts';
 import { currentBrowserWorkspaceId } from './browser-workspace-context.ts';
 import { CASE_WORKSPACE_SECTIONS, type CaseWorkspaceSection } from './analysis/case-response-stage.ts';
 
@@ -56,23 +56,29 @@ const caseSelectionListeners = new Set<(id: string | null) => void>();
 
 export type PinnedCaseCheckpoint = Readonly<{ caseId: string; snapshotId: string }>;
 export type VisitedConsoleCase = Readonly<{ caseId: string; section: CaseWorkspaceSection }>;
+export type ConsoleFavourite = Readonly<{ kind: 'case'; caseId: string; section: CaseWorkspaceSection } | { kind: 'destination'; href: string }>;
+export const MAX_CONSOLE_FAVOURITES = 8;
+export function consoleFavouriteDestinations(): readonly NavigationItem[] {
+  return [...new Map([...consoleNavigation, ...referenceNavigation, ...publicReferenceSectionNavigation].map(item => [item.href, item])).values()];
+}
 export type ConsoleReferenceView = Readonly<{
   workspaceId: string | null;
   revision: number;
   checkpoints: readonly PinnedCaseCheckpoint[];
   visits: readonly VisitedConsoleCase[];
+  favourites: readonly ConsoleFavourite[];
 }>;
-let referenceView: ConsoleReferenceView = Object.freeze({ workspaceId: null, revision: 0, checkpoints: Object.freeze([]), visits: Object.freeze([]) });
+let referenceView: ConsoleReferenceView = Object.freeze({ workspaceId: null, revision: 0, checkpoints: Object.freeze([]), visits: Object.freeze([]), favourites: Object.freeze([]) });
 const referenceListeners = new Set<() => void>();
-function publishReferenceView(checkpoints = referenceView.checkpoints, visits = referenceView.visits, workspaceId = referenceView.workspaceId) {
-  referenceView = Object.freeze({ workspaceId, revision: referenceView.revision + 1, checkpoints, visits });
+function publishReferenceView(checkpoints = referenceView.checkpoints, visits = referenceView.visits, workspaceId = referenceView.workspaceId, favourites = referenceView.favourites) {
+  referenceView = Object.freeze({ workspaceId, revision: referenceView.revision + 1, checkpoints, visits, favourites });
   for (const listener of [...referenceListeners]) {
     try { void Promise.resolve(listener()).catch(() => {}); } catch { /* View observers cannot change reference ownership. */ }
   }
 }
 export function clearConsoleReferenceView(): void {
-  if (referenceView.workspaceId !== null || referenceView.checkpoints.length || referenceView.visits.length)
-    publishReferenceView(Object.freeze([]), Object.freeze([]), null);
+  if (referenceView.workspaceId !== null || referenceView.checkpoints.length || referenceView.visits.length || referenceView.favourites.length)
+    publishReferenceView(Object.freeze([]), Object.freeze([]), null, Object.freeze([]));
 }
 function referenceWorkspace(): boolean {
   if (!inBrowser()) return false;
@@ -84,7 +90,7 @@ function referenceWorkspace(): boolean {
   return true;
 }
 export function readConsoleReferenceView(): ConsoleReferenceView {
-  return referenceWorkspace() ? referenceView : Object.freeze({ workspaceId: null, revision: 0, checkpoints: Object.freeze([]), visits: Object.freeze([]) });
+  return referenceWorkspace() ? referenceView : Object.freeze({ workspaceId: null, revision: 0, checkpoints: Object.freeze([]), visits: Object.freeze([]), favourites: Object.freeze([]) });
 }
 export function subscribeConsoleReferenceView(listener: () => void): () => void {
   if (!inBrowser()) return () => {};
@@ -92,7 +98,8 @@ export function subscribeConsoleReferenceView(listener: () => void): () => void 
   return () => { referenceListeners.delete(listener); };
 }
 function checkedCheckpoint(value: PinnedCaseCheckpoint): PinnedCaseCheckpoint {
-  if (!value || normalizeOpaqueReferenceId(value.caseId) !== value.caseId || normalizeOpaqueReferenceId(value.snapshotId) !== value.snapshotId)
+  if (!value || typeof value.caseId !== 'string' || typeof value.snapshotId !== 'string'
+    || normalizeOpaqueReferenceId(value.caseId) !== value.caseId || normalizeOpaqueReferenceId(value.snapshotId) !== value.snapshotId)
     throw new RangeError('An exact Case and checkpoint reference is required.');
   return Object.freeze({ caseId: value.caseId, snapshotId: value.snapshotId });
 }
@@ -112,6 +119,33 @@ export function removeConsoleCaseCheckpoint(value: PinnedCaseCheckpoint): void {
 }
 export function clearConsoleCaseCheckpoints(): void {
   if (referenceWorkspace() && referenceView.checkpoints.length) publishReferenceView(Object.freeze([]));
+}
+function checkedFavourite(value: ConsoleFavourite): ConsoleFavourite {
+  if (value?.kind === 'case' && typeof value.caseId === 'string' && normalizeOpaqueReferenceId(value.caseId) === value.caseId && CASE_WORKSPACE_SECTIONS.some(item => item.id === value.section))
+    return Object.freeze({ kind: 'case', caseId: value.caseId, section: value.section });
+  if (value?.kind === 'destination' && consoleFavouriteDestinations().some(item => item.href === value.href))
+    return Object.freeze({ kind: 'destination', href: value.href });
+  throw new RangeError('Choose an exact Case section or an existing navigation destination.');
+}
+export function consoleFavouriteKey(value: ConsoleFavourite): string {
+  return value.kind === 'case' ? JSON.stringify([value.kind, value.caseId, value.section]) : JSON.stringify([value.kind, value.href]);
+}
+export function addConsoleFavourite(value: ConsoleFavourite): 'added' | 'already-added' | 'full' | 'unavailable' {
+  if (!referenceWorkspace()) return 'unavailable';
+  const checked = checkedFavourite(value), key = consoleFavouriteKey(checked);
+  if (referenceView.favourites.some(item => consoleFavouriteKey(item) === key)) return 'already-added';
+  if (referenceView.favourites.length >= MAX_CONSOLE_FAVOURITES) return 'full';
+  publishReferenceView(undefined, undefined, undefined, Object.freeze([...referenceView.favourites, checked]));
+  return 'added';
+}
+export function removeConsoleFavourite(value: ConsoleFavourite): void {
+  if (!referenceWorkspace()) return;
+  const key = consoleFavouriteKey(checkedFavourite(value));
+  const remaining = referenceView.favourites.filter(item => consoleFavouriteKey(item) !== key);
+  if (remaining.length !== referenceView.favourites.length) publishReferenceView(undefined, undefined, undefined, Object.freeze(remaining));
+}
+export function clearConsoleFavourites(): void {
+  if (referenceWorkspace() && referenceView.favourites.length) publishReferenceView(undefined, undefined, undefined, Object.freeze([]));
 }
 /** Successfully resolved navigation only; this never creates an evidence relationship. */
 export function recordVisitedConsoleCase(caseId: string, section: CaseWorkspaceSection): void {

@@ -217,6 +217,10 @@ legacy rollback copies. Resume re-evaluates current records without collection
 or submission. Discarding a position removes its saved review-form copies;
 Cases and currently open forms are unchanged.
 
+Favourites in this tab retain only exact Case/section or canonical navigation
+references in document memory. They are not stored, uploaded or exported and
+clear on document replacement, lock, sign-out or leaving the Console.
+
 Tab-scoped dictionaries, candidate handoffs, guided-investigation progress and
 similar transient state use bounded memory or `sessionStorage`. The one-use
 candidate handoff uses a random token and is removed when accepted. Appearance

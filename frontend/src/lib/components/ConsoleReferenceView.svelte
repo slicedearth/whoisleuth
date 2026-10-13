@@ -101,7 +101,7 @@
       <summary>Visited Cases · {view.visits.length}</summary>
       <p>Successful Case navigation in this tab, not an observed relationship or investigation history.</p>
       <nav aria-label="Visited Case contexts"><ol>{#each view.visits as visit, index}<li><a href={caseWorkspaceHref(visit.caseId, visit.section)}>{index + 1}. Case <code>{visit.caseId}</code> · {CASE_WORKSPACE_SECTIONS.find(section => section.id === visit.section)?.label}</a></li>{/each}</ol></nav>
-      <button type="button" class="btn small" onclick={() => void clear()}>Clear tab references and visits</button>
+      <button type="button" class="btn small" onclick={() => void clear()}>Clear all tab references, visits and favourites</button>
     </details>
   {/if}
 </div>

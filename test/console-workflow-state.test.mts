@@ -19,6 +19,11 @@ import {
   clearConsoleReferenceView,
   recordVisitedConsoleCase,
   subscribeConsoleReferenceView,
+  addConsoleFavourite,
+  removeConsoleFavourite,
+  clearConsoleFavourites,
+  consoleFavouriteDestinations,
+  MAX_CONSOLE_FAVOURITES,
 } from '../frontend/src/lib/console-workflow-state.ts';
 import { bulkReviewView, createBulkViewState } from '../frontend/src/lib/controllers/bulk-view-state.ts';
 import { lockBrowserWorkspace } from '../frontend/src/lib/browser-workspace-unlock.ts';
@@ -73,6 +78,52 @@ function setWindow(value: unknown): void {
 function removeWindow(): void {
   Reflect.deleteProperty(globalThis, 'window');
 }
+
+test('tab favourites copy exact pointers, derive destinations and clear without retaining evidence', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const previousStorage = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
+  setWindow({});
+  Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: {
+    getItem: () => null, setItem: () => assert.fail('Favourites must not be persisted'), removeItem: () => assert.fail('Favourites must not change storage'),
+  } });
+  try {
+    clearConsoleReferenceView();
+    const supplied = { kind: 'case' as const, caseId: 'case-one', section: 'evidence' as const, privateLabel: 'PRIVATE-IGNORED' };
+    assert.equal(addConsoleFavourite(supplied), 'added');
+    supplied.caseId = 'changed-after-add';
+    assert.deepEqual(readConsoleReferenceView().favourites, [{ kind: 'case', caseId: 'case-one', section: 'evidence' }]);
+    assert.equal(addConsoleFavourite({ kind: 'case', caseId: 'case-one', section: 'evidence' }), 'already-added');
+    assert.equal(addConsoleFavourite({ kind: 'case', caseId: 'case-one', section: 'summary' }), 'added');
+    const destinations = consoleFavouriteDestinations();
+    assert.ok(destinations.some(item => item.href === '/cli'));
+    assert.ok(destinations.some(item => item.href === '/monitor?view=watchlists'));
+    assert.equal(new Set(destinations.map(item => item.href)).size, destinations.length);
+    for (const href of ['https://external.example', '/lookup?q=private.example', '/cases?case=unreviewed'])
+      assert.throws(() => addConsoleFavourite({ kind: 'destination', href }), RangeError);
+    assert.throws(() => addConsoleFavourite({ kind: 'case', caseId: '../private', section: 'evidence' }), RangeError);
+    for (const invalid of [null, { kind: 'case', caseId: null, section: 'evidence' }, { kind: 'other', href: '/cli' }])
+      assert.throws(() => addConsoleFavourite(invalid as unknown as Parameters<typeof addConsoleFavourite>[0]), RangeError);
+    assert.throws(() => pinConsoleCaseCheckpoint({ caseId: null, snapshotId: null } as unknown as Parameters<typeof pinConsoleCaseCheckpoint>[0]), RangeError);
+    for (const item of destinations.slice(0, MAX_CONSOLE_FAVOURITES - 2)) assert.equal(addConsoleFavourite({ kind: 'destination', href: item.href }), 'added');
+    const full = readConsoleReferenceView();
+    assert.ok(Object.isFrozen(full.favourites)); assert.ok(full.favourites.every(Object.isFrozen));
+    assert.equal(addConsoleFavourite({ kind: 'case', caseId: 'other', section: 'summary' }), 'full');
+    assert.equal(readConsoleReferenceView(), full);
+    removeConsoleFavourite({ kind: 'case', caseId: 'case-one', section: 'summary' });
+    assert.ok(readConsoleReferenceView().favourites.some(item => item.kind === 'case' && item.section === 'evidence'));
+    pinConsoleCaseCheckpoint({ caseId: 'case-one', snapshotId: 'checkpoint-one' });
+    clearConsoleFavourites();
+    assert.equal(readConsoleReferenceView().favourites.length, 0); assert.equal(readConsoleReferenceView().checkpoints.length, 1);
+    addConsoleFavourite({ kind: 'destination', href: '/cli' }); lockBrowserWorkspace();
+    assert.deepEqual(readConsoleReferenceView().favourites, []);
+    assert.doesNotMatch(JSON.stringify(readConsoleReferenceView()), /PRIVATE-IGNORED/u);
+    removeWindow(); assert.equal(addConsoleFavourite({ kind: 'destination', href: '/cli' }), 'unavailable');
+  } finally {
+    clearConsoleReferenceView();
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow); else removeWindow();
+    if (previousStorage) Object.defineProperty(globalThis, 'sessionStorage', previousStorage); else Reflect.deleteProperty(globalThis, 'sessionStorage');
+  }
+});
 
 test('tab references retain exact bounded identifiers without writing storage or evicting another pin', () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
