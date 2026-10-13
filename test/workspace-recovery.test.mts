@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { buildWorkspaceArchive, mergeReadyWorkspaceArchiveData, prepareWorkspaceArchive, readWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
-import { compareRecoveredWorkspace, inspectCaseOriginalFiles, inspectRecoveryFiles, matchRecoveryFiles, recoverySourceIndex, workspaceAttachmentGroups, type RecoveryPackageIdentity } from '../packages/workspace/workspace-recovery.mts';
+import { compareRecoveredWorkspace, formatRecoverySetInventory, inspectCaseOriginalFiles, inspectRecoveryFiles, matchRecoveryFiles, recoverySourceIndex, workspaceAttachmentGroups, type RecoveryPackageIdentity } from '../packages/workspace/workspace-recovery.mts';
+import { MAX_CASES } from '../packages/contracts/case-portability.mts';
 import { plaintextLocalBinaryCodec } from '../frontend/src/lib/browser-local-binaries.ts';
 import type { CaseAttachment } from '../packages/cases/case-attachment-model.mts';
 import { createCase } from '../packages/cases/case-model.mts';
@@ -37,6 +38,62 @@ test('recovery source index groups exact package bytes without conflating select
   assert.deepEqual(original.packages.map(item => item.matchedFiles), [2, 1]);
   sources.clear();
   assert.deepEqual(recoverySourceIndex(sources), { originalFiles: 0, packages: [] });
+});
+
+test('readable recovery inventory preserves exact selected identities and omits unrelated private data and verification', () => {
+  const backup = { schema: 'whoisleuth.workspace-archive', version: 10, encrypted: true, digestSha256: `sha256:${'a'.repeat(64)}`, byteLength: 481,
+    fileName: 'private-backup.json', path: '/private/fixture', caseId: 'private-case', target: 'private.example', passphrase: 'private-secret', content: 'private-original' };
+  const first = { manifestSchema: 'whoisleuth.investigation-manifest', manifestVersion: 4, encryptionVersion: null,
+    digestSha256: `sha256:${'b'.repeat(64)}`, byteLength: 913, matchedFiles: 2, ...{ fileName: 'private-files.zip', source: 'private-source' } };
+  const second = { ...first, encryptionVersion: 1, digestSha256: `sha256:${'c'.repeat(64)}`, byteLength: 1007, matchedFiles: 1 };
+  const index = { originalFiles: 1, packages: [first, second], report: { verified: true, detail: 'private-verification-result' } };
+  const original = structuredClone({ backup, index });
+  const text = formatRecoverySetInventory(backup, index);
+  assert.ok(text.includes(`Format: whoisleuth.workspace-archive v10\nContainer: whoisleuth.encrypted-workspace-archive v1\nFull selected-file SHA-256: ${backup.digestSha256}\nBytes: 481`));
+  assert.ok(text.includes(`Package 1\nFormat: whoisleuth.investigation-manifest v4\nContainer: ZIP\nFull selected-file SHA-256: ${first.digestSha256}\nBytes: 913\nMatched originals: 2`));
+  assert.ok(text.includes(`Container: Encrypted package v1\nFull selected-file SHA-256: ${second.digestSha256}\nBytes: 1007\nMatched originals: 1`));
+  assert.match(text, /Matching packages: 2\nOriginal files supplied directly: 1/u);
+  assert.match(text, /not download completion, destination writes, delivery or complete recovery/u);
+  assert.match(text, /Expected package groups: unknown/u);
+  assert.match(text, /Unmatched or unreadable selections are not listed/u);
+  assert.match(text, /Destination verification is not included/u);
+  assert.doesNotMatch(text, /private-backup|private-files|\/private\/fixture|private-case|private\.example|private-secret|private-original|private-source|private-verification-result|verified: true/u);
+  assert.deepEqual({ backup, index }, original);
+});
+
+test('readable recovery inventory reflects replacements and clearing without claiming complete backup coverage', () => {
+  const backup = { schema: 'whoisleuth.workspace-archive', version: 10, encrypted: false, digestSha256: DIGEST, byteLength: BODY.byteLength };
+  const selected: RecoveryPackageIdentity = { digestSha256: `sha256:${'e'.repeat(64)}`, byteLength: 90,
+    manifestSchema: 'whoisleuth.investigation-manifest', manifestVersion: 3, encryptionVersion: null };
+  const sources = new Map<string, RecoveryPackageIdentity | null>([['original', selected]]);
+  const previous = formatRecoverySetInventory(backup, recoverySourceIndex(sources));
+  assert.ok(previous.includes(selected.digestSha256));
+  sources.set('original', null);
+  const direct = formatRecoverySetInventory(backup, recoverySourceIndex(sources));
+  assert.ok(!direct.includes(selected.digestSha256));
+  assert.match(direct, /Container: JSON/u);
+  assert.match(direct, /Matching packages: 0\nOriginal files supplied directly: 1/u);
+  sources.clear();
+  const cleared = formatRecoverySetInventory(backup, recoverySourceIndex(sources));
+  assert.match(cleared, /Matching packages: 0\nOriginal files supplied directly: 0/u);
+  assert.match(cleared, /Expected package groups: unknown/u);
+  assert.ok(previous.includes(selected.digestSha256));
+});
+
+test('readable recovery inventory rejects malformed declarations and derives its bound from workspace originals', () => {
+  const backup = { schema: 'whoisleuth.workspace-archive', version: 10, encrypted: false, digestSha256: DIGEST, byteLength: BODY.byteLength };
+  const empty = { originalFiles: 0, packages: [] };
+  for (const change of [{ schema: 'private.example' }, { digestSha256: `${DIGEST}\nprivate-detail` }, { byteLength: -1 }, { version: NaN }]) {
+    assert.throws(() => formatRecoverySetInventory({ ...backup, ...change }, empty));
+  }
+  const maximum = MAX_CASES * MAX_SELECTED_FILES;
+  assert.throws(() => formatRecoverySetInventory(backup, { ...empty, originalFiles: maximum + 1 }));
+  assert.throws(() => formatRecoverySetInventory(backup, { ...empty, packages: new Array(maximum + 1) }), /workspace file allowance/u);
+  const item = { digestSha256: DIGEST, byteLength: 100, manifestSchema: 'whoisleuth.investigation-manifest', manifestVersion: 4, encryptionVersion: null, matchedFiles: 1 };
+  for (const change of [{ manifestSchema: 'private.example' }, { encryptionVersion: NaN }, { digestSha256: 'private-detail' }, { matchedFiles: 0 }, { byteLength: Infinity }]) {
+    assert.throws(() => formatRecoverySetInventory(backup, { originalFiles: 0, packages: [{ ...item, ...change }] }));
+  }
+  assert.throws(() => formatRecoverySetInventory(backup, { originalFiles: maximum, packages: [item] }), /Matched original total/u);
 });
 
 test('recovery checklist counts shared content once while retaining independent source references', async () => {

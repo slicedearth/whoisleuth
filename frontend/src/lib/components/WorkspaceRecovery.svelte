@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import type { ReviewedWorkspaceArchive } from '../../../../packages/workspace/workspace-recovery.mts';
+  import { formatRecoverySetInventory, type ReviewedWorkspaceArchive } from '../../../../packages/workspace/workspace-recovery.mts';
   import type { RetainedFileReference } from '../../../../packages/evidence/retained-file.mts';
   import { ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA, ENCRYPTED_WORKSPACE_ARCHIVE_VERSION } from '../../../../packages/contracts/case-portability.mts';
   import type { WorkspaceRecovery, WorkspaceRecoveryReport } from '#lib/workspace-recovery.ts';
   import { MAX_BROWSER_WORKSPACE_NAME } from '#lib/browser-workspace-directory.ts';
   import { MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS, MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES } from '#lib/browser-workspace-encryption-model.ts';
   import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../../packages/contracts/selected-file-limits.mts';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
   import EvidencePackageInput from './EvidencePackageInput.svelte';
   import RecoveryFileChecklist from './RecoveryFileChecklist.svelte';
   import CopyButton from './CopyButton.svelte';
@@ -22,12 +23,14 @@
   let status = $state<HTMLParagraphElement>();
   let errorStatus = $state<HTMLParagraphElement>();
   let disposed = false;
+  let inventoryClosed = $state(false);
+  let root = $state<HTMLDetailsElement>(), inventory = $state<HTMLDetailsElement>();
   let sourceIndex = $state.raw<WorkspaceRecovery['sourceIndex']>({ originalFiles: 0, packages: [] });
   let sourcePage = $state(1);
   const SOURCE_PAGE_SIZE = 20;
   const sourcePages = $derived(Math.max(1, Math.ceil(sourceIndex.packages.length / SOURCE_PAGE_SIZE)));
   onMount(() => {
-    const close = () => { void recovery?.close(); };
+    const close = () => { inventoryClosed = true; void recovery?.close(); };
     window.addEventListener('pagehide', close);
     return () => window.removeEventListener('pagehide', close);
   });
@@ -77,14 +80,24 @@
     if (!recovery || !files.length) return;
     await operation(async () => { showReport(await recovery!.addFiles(files, kind)); });
   }
+  function downloadInventory() {
+    if (busy || disposed || inventoryClosed || !root?.open || !inventory?.open || !inventory.isConnected) return;
+    try {
+      const content = formatRecoverySetInventory({ ...archiveFile, schema: archiveSchema, version: archiveVersion, encrypted: encryptedSource }, sourceIndex);
+      downloadLocalFile(new Blob([content], { type: 'text/plain;charset=utf-8' }), 'whoisleuth-recovery-set.txt');
+      message = 'Prepared the recovery set inventory. Check the downloaded file before sharing; recovery verification is separate.';
+    } catch { error = 'The recovery set inventory could not be prepared. No saved data was changed.'; }
+  }
 </script>
 
-<details class="recovery">
+<details class="recovery" bind:this={root}>
   <summary>Rehearse recovery in a separate workspace</summary>
   <p>Restore this reviewed backup without switching workspaces. Section checksums cover saved records and their links; original file bytes must be supplied separately. Preferences are validated in the backup review, not applied to this tab.</p>
-  <details class="set-index">
+  <details class="set-index" bind:this={inventory}>
     <summary>Recovery set index</summary>
-    <p>This index stays in this review only. It identifies selected bytes, not completed downloads or writes. Use the recovery result below to check the destination.</p>
+    <p>This index identifies selected bytes, not completed downloads or writes. Use the recovery result below to check the destination.</p>
+    <p>Download an unencrypted plain-text copy to keep with your backup. Digests can correlate private files; review before sharing. No filenames, paths, Case details or original contents are included.</p>
+    <button class="btn" type="button" disabled={busy || inventoryClosed} onclick={downloadInventory}>Download recovery set inventory</button>
     <section aria-label="Selected workspace backup">
       <h4>Selected workspace backup</h4>
       <p><code>{archiveSchema}</code> v{archiveVersion}{#if encryptedSource} inside <code>{ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA}</code> v{ENCRYPTED_WORKSPACE_ARCHIVE_VERSION}{/if}</p>

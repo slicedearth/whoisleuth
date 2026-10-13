@@ -815,6 +815,12 @@ not establish a match. Rehearsal checks restored data and referenced files, but
 does not apply preferences to the active tab. Its data remains until deliberately
 deleted, including after leaving the page. File-backup groups have their own
 optional package encryption; encrypting the JSON does not encrypt those groups.
+The recovery set index stays in review memory unless deliberately downloaded as
+a plain-text inventory. That unencrypted inventory lists selected backup and
+matched package digests, byte lengths, formats and counts, not filenames, paths,
+Case details or original contents. Digests can correlate private files; review
+before sharing. It includes no destination-verification result and does not
+establish download completion, delivery or complete recovery.
 
 Different exports have different sensitivity:
 

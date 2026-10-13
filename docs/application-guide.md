@@ -1236,7 +1236,12 @@ Section checksums and Case identities are compared with the selected backup;
 every referenced file must match before recovery is reported as verified.
 **Recovery set index** identifies the exact selected JSON or encrypted backup
 and matching evidence packages by full-file SHA-256, byte length and format.
-It stays in this review only, not in backups or exports. Each original uses its
+It stays in this review unless you choose **Download recovery set inventory**
+to keep an unencrypted plain-text copy. Digests can correlate private files;
+review before sharing. The copy contains no filenames, paths, Case details,
+original contents or destination-verification result. It is not an importable
+backup. Expected package groups remain unknown because the backup records
+original-file references, not package membership. Each original uses its
 latest matching selection; supplying it directly or in another package updates
 the index without changing saved provenance. Failed reads or unmatched files do
 not join the set. Selection and matching do not prove a completed download or

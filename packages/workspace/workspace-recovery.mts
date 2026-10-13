@@ -1,8 +1,11 @@
-import { MAX_CASES } from '../contracts/case-portability.mts';
+import { ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA, ENCRYPTED_WORKSPACE_ARCHIVE_VERSION, MAX_CASES, MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES, MAX_WORKSPACE_ARCHIVE_BYTES, WORKSPACE_ARCHIVE_SCHEMA } from '../contracts/case-portability.mts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../contracts/selected-file-limits.mts';
+import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../contracts/investigation-package-limits.mts';
 import { readCaseAttachments, type CaseAttachment } from '../cases/case-attachment-model.mts';
 import { sha256ArtifactBytes } from '../evidence/artifact-integrity.mts';
+import { digest, integer } from '../evidence/artifact-structure.mts';
 import { retainedFileGroups, type RetainedFileInput, type RetainedFileReference } from '../evidence/retained-file.mts';
+import { INVESTIGATION_MANIFEST_SCHEMA } from '../investigation/investigation-manifest.mts';
 import type { readWorkspaceArchive } from './workspace-archive.mts';
 import type { CaseRecord } from '../cases/case-record-contracts.mts';
 
@@ -23,6 +26,52 @@ export function recoverySourceIndex(sources: ReadonlyMap<string, RecoveryPackage
     else packages.set(source.digestSha256, { ...source, matchedFiles: 1 });
   }
   return Object.freeze({ originalFiles, packages: Object.freeze([...packages.values()].map(item => Object.freeze(item))) });
+}
+
+/** Readable selection inventory only, not a portable format or a recovery result. */
+export function formatRecoverySetInventory(backup: RetainedFileReference & Readonly<{
+  schema: string; version: number; encrypted: boolean;
+}>, index: ReturnType<typeof recoverySourceIndex>): string {
+  const maximumOriginals = MAX_CASES * MAX_SELECTED_FILES;
+  if (backup.schema !== WORKSPACE_ARCHIVE_SCHEMA || typeof backup.encrypted !== 'boolean') throw new TypeError('Recovery backup format is unavailable.');
+  digest(backup.digestSha256, 'Recovery backup digest');
+  integer(backup.byteLength, 'Recovery backup bytes', 1, backup.encrypted ? MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES : MAX_WORKSPACE_ARCHIVE_BYTES);
+  integer(backup.version, 'Recovery backup version', 1);
+  integer(index.originalFiles, 'Direct original count', 0, maximumOriginals);
+  if (!Array.isArray(index.packages) || index.packages.length > maximumOriginals) throw new TypeError('Recovery package index exceeds the workspace file allowance.');
+  let matchedOriginals = index.originalFiles;
+  const packages = index.packages.flatMap((item, position) => {
+    if (item.manifestSchema !== INVESTIGATION_MANIFEST_SCHEMA) throw new TypeError('Recovery package format is unavailable.');
+    if (item.encryptionVersion !== null) integer(item.encryptionVersion, 'Recovery encryption version', 1);
+    digest(item.digestSha256, 'Recovery package digest');
+    integer(item.byteLength, 'Recovery package bytes', 1, MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES);
+    integer(item.manifestVersion, 'Recovery manifest version', 1);
+    matchedOriginals += integer(item.matchedFiles, 'Matched original count', 1, maximumOriginals);
+    integer(matchedOriginals, 'Matched original total', 0, maximumOriginals);
+    return [
+      '', `Package ${position + 1}`, `Format: ${item.manifestSchema} v${item.manifestVersion}`,
+      `Container: ${item.encryptionVersion === null ? 'ZIP' : `Encrypted package v${item.encryptionVersion}`}`,
+      `Full selected-file SHA-256: ${item.digestSha256}`, `Bytes: ${item.byteLength}`,
+      `Matched originals: ${item.matchedFiles}`,
+    ];
+  });
+  return [
+    'WHOISleuth recovery set inventory',
+    'Unencrypted local text export. Digests can correlate private files; review before sharing.',
+    'This records selected/matched bytes, not download completion, destination writes, delivery or complete recovery.',
+    '', 'Selected workspace backup', `Format: ${backup.schema} v${backup.version}`,
+    `Container: ${backup.encrypted ? `${ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA} v${ENCRYPTED_WORKSPACE_ARCHIVE_VERSION}` : 'JSON'}`,
+    `Full selected-file SHA-256: ${backup.digestSha256}`, `Bytes: ${backup.byteLength}`,
+    '', `Matching packages: ${index.packages.length}`, `Original files supplied directly: ${index.originalFiles}`,
+    ...packages,
+    '', 'Coverage and verification',
+    'Each original uses its latest matching selection. Re-selecting it can replace a package in this inventory without changing saved provenance.',
+    'Unmatched or unreadable selections are not listed; their identities and counts are not retained.',
+    'Expected package groups: unknown. The backup records original-file references, not package membership.',
+    'Destination verification is not included. Review the separately labelled last result; it does not verify later selections.',
+    'Keep the actual backup and original-file packages. This readable inventory cannot restore data or authenticate sources.',
+    '',
+  ].join('\n');
 }
 
 export type RecoveryFile = Readonly<{

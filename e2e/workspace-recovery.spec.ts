@@ -203,14 +203,15 @@ test('encrypted backup cannot create a plaintext rehearsal and leaving does not 
   expect(await page.evaluate(id => navigator.locks.request(`whoisleuth-workspace:whoisleuth-workspace-${id}-v1`, { mode: 'shared', ifAvailable: true }, lock => Boolean(lock)), row!.id)).toBe(true);
 });
 
-test('recovery package index keeps distinct matching groups separate from failed destination verification', async ({ page }) => {
+test('recovery package index keeps distinct matching groups separate from failed destination verification', async ({ page }, testInfo) => {
   const bodies = [Buffer.from('First recovery group'), Buffer.from('Second recovery group')];
   const references: CaseAttachment[] = bodies.map((body, index) => ({ id: `group-${index}`, fileName: `private-group-${index}.txt`,
     mediaType: 'application/octet-stream', source: null, observedAt: null, retainedAt: NOW, byteLength: body.length,
     digestSha256: `sha256:${createHash('sha256').update(body).digest('hex')}` }));
   const packages = await Promise.all(bodies.map(content => buildInvestigationPackage({ workflow: 'Recovery fixture', configurationDigestSha256: null,
     artifacts: [{ content, mediaType: 'application/octet-stream' }] }, NOW, '2.6.0')));
-  await page.goto('/dashboard'); await review(page, await simpleBackup(references));
+  const backup = await simpleBackup(references);
+  await page.goto('/dashboard'); await review(page, backup);
   await page.evaluate(() => {
     const original = crypto.subtle.digest.bind(crypto.subtle);
     const scope = window as unknown as { recoveryDigestHeld: boolean; releaseRecoveryDigest: () => void };
@@ -231,9 +232,18 @@ test('recovery package index keeps distinct matching groups separate from failed
   await recovery.getByText('Recovery set index', { exact: true }).click();
   const index = recovery.getByRole('region', { name: 'Matching recovery sources', exact: true });
   const packageInput = recovery.getByLabel('Restore evidence package', { exact: true });
+  const inventoryButton = recovery.getByRole('button', { name: 'Download recovery set inventory', exact: true });
+  const downloadInventory = async () => {
+    const pending = page.waitForEvent('download');
+    await inventoryButton.focus(); await page.keyboard.press('Enter');
+    const downloaded = await pending;
+    expect(downloaded.suggestedFilename()).toBe('whoisleuth-recovery-set.txt');
+    return readFile((await downloaded.path())!, 'utf8');
+  };
   await expect.poll(() => page.evaluate(() => (window as unknown as { recoveryDigestHeld: boolean }).recoveryDigestHeld)).toBe(true);
   try {
     await expect(packageInput).toBeDisabled();
+    await expect(inventoryButton).toBeDisabled();
     // Negative control: the driver can bypass a disabled file picker, but the
     // application must discard the selection while restoration owns the write.
     await packageInput.setInputFiles({ name: 'premature.zip', mimeType: 'application/zip', buffer: Buffer.from(packages[0]!.bytes) });
@@ -274,12 +284,48 @@ test('recovery package index keeps distinct matching groups separate from failed
   await expect(index).not.toContainText('renamed-');
   await expect(recovery.locator('.result')).toContainText('Last completed verification:');
   await expect(recovery.locator('.result')).toContainText('1 of 2 unique files verified');
+  const inventory = await downloadInventory();
+  expect(inventory).toContain(`Full selected-file SHA-256: sha256:${createHash('sha256').update(backup).digest('hex')}\nBytes: ${Buffer.byteLength(backup)}`);
+  for (const item of packages) expect(inventory).toContain(`Full selected-file SHA-256: sha256:${createHash('sha256').update(item.bytes).digest('hex')}\nBytes: ${item.bytes.length}`);
+  expect(inventory).toContain('Matching packages: 2');
+  expect(inventory).toContain('Expected package groups: unknown');
+  expect(inventory).toContain('Unmatched or unreadable selections are not listed');
+  expect(inventory).toContain('Destination verification is not included');
+  expect(inventory).not.toMatch(/private-group-|renamed-|recovery-case|recovery\.example|First recovery group|Second recovery group|1 of 2|Recovery verified/u);
+  await recovery.getByLabel('Restore original files', { exact: true }).setInputFiles({ name: 'unmatched-private.txt', mimeType: 'text/plain', buffer: Buffer.from('Unmatched private content') });
+  await expect(recovery.getByRole('alert')).toContainText('does not match any file reference');
+  expect(await downloadInventory()).toBe(inventory);
   await recovery.getByRole('button', { name: 'Verify restored data', exact: true }).click();
   await expect(recovery.getByRole('status')).toContainText('Recovery verified');
   await expect(recovery.locator('.result')).toContainText('2 of 2 unique files verified');
   await add(0);
   await expect(index.locator('ol > li')).toHaveCount(2);
+  expect((await new AxeBuilder({ page }).include('details.recovery').analyze()).violations).toEqual([]);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await inventoryButton.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+      await expect(inventoryButton).toBeInViewport();
+      if (captureVisualEvidenceEnabled()) {
+        await page.screenshot({ path: testInfo.outputPath(`recovery-inventory-${theme}-${width}.png`) });
+        await recovery.locator('details.set-index').screenshot({ path: testInfo.outputPath(`recovery-inventory-content-${theme}-${width}.png`) });
+      }
+    }
+  }
   await deleteRehearsal(page);
+  const cleared = await downloadInventory();
+  expect(cleared).toContain('Matching packages: 0');
+  for (const item of packages) expect(cleared).not.toContain(createHash('sha256').update(item.bytes).digest('hex'));
+  const replacement = `${backup}\n`;
+  await review(page, replacement);
+  await recovery.getByText('Recovery set index', { exact: true }).click();
+  const replaced = await downloadInventory();
+  expect(replaced).toContain(createHash('sha256').update(replacement).digest('hex'));
+  expect(replaced).not.toContain(createHash('sha256').update(backup).digest('hex'));
+  expect(replaced).toContain('Matching packages: 0');
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
+  await expect(inventoryButton).toBeDisabled();
 });
 
 test('a committed restore followed by failed reconciliation offers verification, not a second restore', { tag: '@cross-browser-critical' }, async ({ page }) => {
