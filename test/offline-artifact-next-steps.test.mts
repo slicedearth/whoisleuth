@@ -37,17 +37,24 @@ function suggestions(output: string): string[][] {
 const fixtures = [
   ['cli-lookup-v1.json', 'source-report'],
   ['cli-lookup-v2.json', 'source-report'],
+  ['cli-lookup-v3.json', 'source-report'],
   ['cli-lookup-asn-v1.json', 'source-report'],
   ['cli-lookup-asn-v2.json', 'source-report'],
   ['case-lifecycle/case-export-v15.json', 'case'],
   ['case-lifecycle/case-export-v19.json', 'case'],
+  ['case-lifecycle/case-export-v20.json', 'case'],
   ['case-lifecycle/workspace-archive-v5-public.json', 'inspect-archive'],
   ['case-lifecycle/workspace-archive-v10-empty-current.json', 'inspect-archive'],
+  ['case-lifecycle/workspace-archive-v10-case-v20-empty-current.json', 'inspect-archive'],
   ['lookup-evidence-v26.json', 'interchange-report'],
   ['lookup-evidence-v27.json', 'interchange-report'],
   ['case-lifecycle/cli-case-pack-v2-case-v12-public.json', 'interchange-report'],
   ['case-lifecycle/cli-case-pack-v2-case-v19-current.json', 'interchange-report'],
+  ['case-lifecycle/cli-case-pack-v2-case-v20-current.json', 'interchange-report'],
   ['extracted-domain-lifecycle/managed-indicator-set-v1.json', 'indicator-set'],
+  ['domain-control-manifest-v2.json', 'interchange-report'],
+  ['domain-control-manifest-v3.json', 'interchange-report'],
+  ['investigation-portability/lookup-claim-passport-v1.json', 'interchange-report'],
 ] as const;
 
 for (const [fixture, expectedCommand] of fixtures) {

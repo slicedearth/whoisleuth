@@ -780,6 +780,9 @@ function offlineArtifactNextSteps(report: OfflineArtifactVerificationReport): re
     case 'cli_case_pack':
       return ['Review the Case-pack compatibility and field exclusions:', '  whoisleuth interchange-report -- ./case-pack.json'];
     case 'signed_review_artifact':
+      if (report.artifact.schema === DOMAIN_CONTROL_MANIFEST_SCHEMA || report.artifact.schema === LOOKUP_CLAIM_PASSPORT_SCHEMA) {
+        return ['Review the passport compatibility and retained field groups:', '  whoisleuth interchange-report -- ./passport.json'];
+      }
       return report.artifact.schema === MANAGED_INDICATOR_SET_SCHEMA
         && report.summary.inputBytes <= MAX_MANAGED_INDICATOR_SET_BYTES
         ? ['Read the retained indicator identities and review windows:', '  whoisleuth indicator-set inspect -- ./indicators.json']

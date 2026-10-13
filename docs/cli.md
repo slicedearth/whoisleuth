@@ -754,7 +754,15 @@ options override profile defaults.
 
 `source-report` summarises collector-owned health envelopes in saved Lookup
 and Bulk output. Raw publications and extension fields are not interpreted as
-diagnostics, and missing health metadata remains unmeasured.
+diagnostics, and missing health metadata remains unmeasured. Its text view groups
+collection states, sample counts and durations under each source. Observation
+durations and Lookup timings stay separate; merged-report distributions describe
+retained report statistics, not a new measurement of individual requests.
+
+After verifying a domain-control or Lookup-claim passport, `verify-artifact`
+suggests the compatible offline `interchange-report` command. Suggestions use
+example filenames and never run automatically. Other artefact families receive
+guidance only when the suggested reader supports that format.
 
 The text output of `brief` groups selected facts in an indented source tree.
 Each source keeps its collection state and observation time, including sources
