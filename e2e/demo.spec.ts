@@ -1083,10 +1083,15 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
 });
 
 test('recovers safely from malformed and future tab state', async ({ page }) => {
+  // Seed before application scripts run. The prerendered heading does not prove
+  // onMount has finished reading (and removing) invalid tab state.
+  await page.addInitScript(() => {
+    const seeded = 'test:demo-invalid-state-seeded';
+    if (sessionStorage.getItem(seeded)) return;
+    sessionStorage.setItem('whoisleuth:synthetic-demo:v1', '{malformed');
+    sessionStorage.setItem(seeded, '1');
+  });
   await page.goto('/demo');
-  await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeVisible();
-  await page.evaluate(() => sessionStorage.setItem('whoisleuth:synthetic-demo:v1', '{malformed'));
-  await page.reload();
   await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeVisible();
   await expect(page.getByRole('status')).toHaveText('Stored demo progress was invalid or unsupported and has been reset.');
   expect(await page.evaluate(() => sessionStorage.getItem('whoisleuth:synthetic-demo:v1'))).toBeNull();
