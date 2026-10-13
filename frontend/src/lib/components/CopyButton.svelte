@@ -23,8 +23,8 @@
 </span>
 
 <style>
-  .copy-control{display:inline-grid;min-width:0;max-width:100%;align-items:stretch;vertical-align:middle}
-  button{min-height:44px;padding:7px 11px;font:600 var(--text-xs)/1.4 var(--font-sans);white-space:normal}
+  .copy-control{display:inline-grid;min-width:0;max-width:100%;justify-self:start;justify-items:start;vertical-align:middle}
+  button{min-height:44px;max-width:100%;padding:7px 6px;border-color:transparent;background:transparent;color:var(--accent);font:600 var(--text-xs)/1.4 var(--font-sans);white-space:normal;overflow-wrap:anywhere}
   .copy-fallback{display:block;min-width:0;max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap;user-select:all;font-size:var(--text-xs)}
   .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
   @media print{.copy-control{display:none}}

@@ -347,11 +347,8 @@ test('decorative chrome follows the theme accent independently of navigation sel
     expect(roles.headingRule).toContain(roles.interfaceAccent);
     expect(roles.headingRule).toContain(roles.accent);
 
-    if (theme === 'Dark') {
-      expect(roles.interfaceAccent).toBe(roles.accent2);
-    } else {
-      expect(roles.interfaceAccent).toBe(roles.accent);
-    }
+    expect(roles.interfaceAccent).toBe(roles.accent);
+    expect(roles.interfaceAccent).not.toBe(roles.accent2);
   }
 });
 

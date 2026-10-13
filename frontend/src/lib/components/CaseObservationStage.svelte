@@ -127,12 +127,12 @@
         </label>
       </div>
       <label class="field">Fact
-        <textarea bind:value={pinDraft.value.pinValue} maxlength="1000" rows="2" required></textarea>
+        <textarea bind:value={pinDraft.value.pinValue} maxlength="1000" rows="5" required></textarea>
       </label>
       <label class="field">Limitations <small>one per line</small>
-        <textarea bind:value={pinDraft.value.pinLimitations} maxlength="2000" rows="2"></textarea>
+        <textarea bind:value={pinDraft.value.pinLimitations} maxlength="2000" rows="3"></textarea>
       </label>
-      <button class="btn" type="submit" disabled={pinDraft.state.busy || mutationBusy}>Pin evidence</button>
+      <button class="primary" type="submit" disabled={pinDraft.state.busy || mutationBusy}>Pin evidence</button>
       <CaseDraftRecovery draft={pinDraft} />
     </form>
     {#if record.evidencePins.length}

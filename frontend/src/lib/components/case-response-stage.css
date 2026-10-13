@@ -7,13 +7,13 @@
 
 .case-response-stage details {
   min-width: 0;
-  border-block: 1px solid var(--border);
+  border-top: 1px solid var(--border);
 }
 
 .case-response-stage summary {
   padding: 12px 4px;
   cursor: pointer;
-  font: 650 var(--text-sm) var(--mono);
+  font: 600 var(--text-sm) var(--font-sans);
   overflow-wrap: anywhere;
 }
 
