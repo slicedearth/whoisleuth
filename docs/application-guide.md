@@ -1523,6 +1523,14 @@ quota, recovery and deletion details.
 
 ## Reports, imports and exports
 
+In the external-findings preview, **Explain a field** compares the accepted
+hostname, observation time, evidence value or source label with the exact
+proposed Case field. Copy either value without saving. This uses the existing
+Case projection, including its shortening rules. The preview does not retain
+the original file's spelling, timestamp notation or input locations; those
+remain in the selected file. The import content digest covers the complete
+accepted finding and declared source fields, not the original file bytes.
+
 Exports are deliberate local actions. Review them before sharing:
 
 - a full saved Lookup can include target, endpoints, raw RDAP publications,

@@ -111,10 +111,40 @@ test('new files and cancellation reset review selection without writing Cases', 
   const review = importer.getByRole('region', { name: 'Validated import review' });
   await review.getByRole('button', { name: 'Clear selection' }).click();
   await review.getByRole('navigation', { name: 'Import preview pages' }).getByRole('button', { name: 'Next' }).click();
-  await fileInput.setInputFiles(pagedFindingFile(1));
+  const source = pagedFindingFile(1, true);
+  await fileInput.setInputFiles(source);
   await expect(review).toContainText('1 of 1 finding selected');
   await expect(review.getByRole('checkbox', { name: 'Include finding 1: review-0.invalid' })).toBeChecked();
   await expect(review.getByRole('navigation', { name: 'Import preview pages' })).toHaveCount(0);
+  const before = await readBrowserLocalCollection(page, 'cases');
+  const copies: string[] = [];
+  let rejectCopy = false;
+  await page.exposeFunction('recordImportedFieldCopy', (value: string) => {
+    if (rejectCopy) throw new Error('private clipboard failure');
+    copies.push(value);
+  });
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    writeText: (value: string) => (window as unknown as { recordImportedFieldCopy(value: string): Promise<void> }).recordImportedFieldCopy(value),
+  } }));
+  const explanation = review.getByText('Explain a field for finding 1', { exact: true }).locator('..');
+  await explanation.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  await expect(explanation).toContainText('Original spelling, time-zone notation and input locations are not retained');
+  await explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true }).selectOption('value');
+  const copy = explanation.getByRole('button', { name: 'Copy finding 1 accepted finding.summary', exact: true });
+  await copy.focus(); await page.keyboard.press('Enter');
+  const suppliedSummary = `1: ${'v'.repeat(880)}`;
+  await expect.poll(() => copies).toEqual([suppliedSummary]);
+  await expect(copy).toBeFocused();
+  rejectCopy = true;
+  await explanation.getByRole('button', { name: 'Copy finding 1 proposed evidencePin.value', exact: true }).click();
+  await expect(explanation.locator('.copy-fallback')).toHaveText(`${suppliedSummary} Reference: ${'x'.repeat(480)}-1`.slice(0, 1000));
+  await expect(explanation).not.toContainText('private clipboard failure');
+  await fileInput.setInputFiles(pagedFindingFile(1));
+  await expect(explanation).not.toHaveAttribute('open');
+  await explanation.locator(':scope > summary').click();
+  await expect(explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true })).toHaveValue('hostname');
+  await expect(explanation.locator('.copy-fallback')).toHaveCount(0);
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   await review.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(review).toHaveCount(0);
   await expect(fileInput).toBeFocused();
@@ -195,6 +225,12 @@ for (const width of [320, 390, 1024, 1280, 1920, 3840]) {
       expect(await region.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
       await page.keyboard.press('PageDown');
       await expect.poll(() => region.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+      await summary.click();
+      const explanation = review.getByText('Explain a field for finding 1', { exact: true }).locator('..');
+      await explanation.locator(':scope > summary').click();
+      await explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true }).selectOption('value');
+      await expect(explanation.getByRole('button', { name: 'Copy finding 1 accepted finding.summary', exact: true })).toBeVisible();
+      await expect(explanation.getByRole('button', { name: 'Copy finding 1 proposed evidencePin.value', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
       if (captureVisualEvidenceEnabled()) { await testInfo.attach(`import-review-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     });

@@ -9,6 +9,7 @@
 
 <script lang="ts">
   import Pagination from './Pagination.svelte';
+  import ImportedFindingExplanation from './ImportedFindingExplanation.svelte';
   import { externalFindingCaseProjection } from '#lib/analysis/external-findings-import.ts';
   import { externalIntelligenceAssertionContent } from '#lib/analysis/external-intelligence-import.ts';
   import type { ExternalFindingConversionReport } from '#lib/analysis/external-findings-converters.ts';
@@ -114,6 +115,7 @@
           <p class="metadata">Retained observation hostname: {projection.evidencePin.observationHostname ?? 'Unknown'} · Retained completeness: {projection.evidencePin.completeness} · Storage truncation: {projection.evidencePin.truncated === true ? 'yes' : projection.evidencePin.truncated === false ? 'no' : 'unknown'}</p>
           {#if projection.evidencePin.limitations.length}<details><summary>Retained caveats for finding {index + 1}</summary><ul class="limitations">{#each projection.evidencePin.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>{/if}
           {#if projection.shortenedFields.length || projection.omittedLimitations}<p class="warning">{projection.shortenedFields.length ? `Shortened Case fields: ${projection.shortenedFields.join(', ')}. ` : ''}{projection.omittedLimitations ? `${projection.omittedLimitations} supplied limitations are omitted with a retained notice. ` : ''}Review the retained fields.</p>{/if}
+          <ImportedFindingExplanation {finding} source={findings.source} {projection} number={index + 1} />
           <details>
             <summary>Retained fields for finding {index + 1}</summary>
             <!-- svelte-ignore a11y_no_noninteractive_tabindex -- the named scroll region provides keyboard access to every retained field -->
