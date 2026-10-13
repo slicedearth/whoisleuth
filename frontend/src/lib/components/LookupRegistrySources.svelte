@@ -1,6 +1,8 @@
 <script lang="ts">
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import RdapDomainSource from '#lib/components/RdapDomainSource.svelte';
+  import RegistryDateExplanation from './RegistryDateExplanation.svelte';
+  import type { RegistrationTraceState } from '#lib/analysis/lookup-registry-display.ts';
   import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
   import {
     projectEvidenceMatrix,
@@ -69,6 +71,7 @@
     rdapPartialDetail,
     rdapRows,
     whoisError,
+    whoisParsed = {},
     whoisRows,
     whoisContactRoles,
     whoisTruncatedFields,
@@ -86,6 +89,7 @@
     rdapPartialDetail: string;
     rdapRows: DisplayRow[];
     whoisError: string;
+    whoisParsed?: JsonRecord;
     whoisRows: DisplayRow[];
     whoisContactRoles: ContactRole[];
     whoisTruncatedFields: string[];
@@ -101,6 +105,7 @@
       error: boolean;
       success: boolean;
       parsed: JsonRecord;
+      traceState?: RegistrationTraceState;
       comparisonSummary?: string;
       comparisonRows?: PublicationComparisonRow[];
     };
@@ -135,13 +140,13 @@
   let showRegistrarReversePreview = $state(false);
   const abuseRouting = $derived(asRecords(insights.abuseRouting, 8));
   const registryTraceState = $derived<TraceState>(registrationTrace.registry ?? (rdapError ? 'error' : rdapPartialDetail ? 'partial' : 'unavailable'));
-  const registrarTraceState = $derived<TraceState>(!registrar.visible
+  const registrarTraceState = $derived<TraceState>(registrar.traceState ?? (!registrar.visible
     ? 'not_collected'
     : registrar.success
       ? 'complete'
       : registrar.error
         ? 'unavailable'
-        : 'partial');
+        : 'partial'));
   const whoisTraceState = $derived<TraceState>(registrationTrace.whois ?? (whoisError ? 'error' : 'unavailable'));
   const comparisonLanes = $derived.by((): MatrixInput[] => {
     return [
@@ -526,6 +531,12 @@
     <summary>{comparisonSummary}</summary>
     <div class="table-wrap"><table><thead><tr><th>Field</th><th>RDAP</th><th>WHOIS</th><th>Assessment</th></tr></thead><tbody>{#each comparisonRows as row}<tr class:conflict={row.status === 'conflict'}><th scope="row" data-label="Field">{row.label}</th><td data-label="Registry RDAP">{row.rdapValue}</td><td data-label="WHOIS">{row.whoisValue}</td><td data-label="Assessment"><span class={`chip ${row.tone}`}>{row.assessment}</span></td></tr>{/each}</tbody></table></div>
   </details>
+{/if}
+
+{#if resultType === 'domain'}
+  <RegistryDateExplanation registry={{ parsed: rdapParsed, state: registryTraceState }}
+    whois={{ parsed: whoisParsed, state: whoisTraceState }}
+    registrar={{ parsed: registrar.parsed, state: registrar.visible ? registrarTraceState : 'not_collected' }} />
 {/if}
 
 <div class="sources">

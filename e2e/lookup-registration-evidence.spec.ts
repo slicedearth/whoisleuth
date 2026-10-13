@@ -115,6 +115,72 @@ test('long registration comparisons retain complete source values and a usable r
   expect(requests).toBe(1);
 });
 
+test('lifecycle explanations preserve supplied values and missing provenance across lookup replacement', async ({ page }, testInfo) => {
+  const requests: string[] = [];
+  const parsed = parseRdap('domain', { objectClassName: 'domain', ldhName: 'example.test',
+    events: [{ eventAction: 'registration', eventDate: '2024-03-14T01:00:00+10:00' }] });
+  await page.route('**/api/lookup?*', async route => {
+    const domain = new URL(route.request().url()).searchParams.get('q')!;
+    requests.push(domain);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      query: domain, type: 'domain', registrableDomain: domain,
+      rdap: { parsed: domain === 'example.test' ? parsed : {} },
+      whois: { parsed: domain === 'example.test' ? { createdDate: '03.04.2024', domainName: domain } : {}, chain: [] },
+      availability: { state: 'registered', domain },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: domain === 'example.test' ? 'partial' : 'disabled' }, availability: { status: 'complete' } },
+    }) });
+  });
+  const copies: string[] = [];
+  let rejectCopy = false;
+  await page.exposeFunction('recordDateCopy', (value: string) => {
+    if (rejectCopy) throw new Error('private clipboard failure');
+    copies.push(value);
+  });
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    writeText: (value: string) => (window as unknown as { recordDateCopy(value: string): Promise<void> }).recordDateCopy(value),
+  } }));
+  const casesBefore = await readBrowserLocalCollection(page, 'cases');
+  await page.locator('#query').fill('example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  const explanation = page.locator('.date-explanation');
+  await explanation.locator(':scope > summary').focus(); await explanation.locator(':scope > summary').press('Enter');
+  const registry = explanation.getByRole('region', { name: 'Registry RDAP date explanation', exact: true });
+  const whois = explanation.getByRole('region', { name: 'WHOIS date explanation', exact: true });
+  await expect(registry).toContainText('The current parser reproduces the supplied ISO companion.');
+  await expect(whois).toContainText('No usable ISO companion was supplied');
+  await expect(whois).toContainText('2024-04-03T00:00:00.000Z');
+  await expect(explanation.getByRole('region', { name: 'Registrar RDAP date explanation', exact: true })).toContainText('Publication: not collected');
+  const sourceCopy = registry.getByRole('button', { name: 'Copy Registry RDAP parsed.lifecycle.createdDate source text', exact: true });
+  await sourceCopy.focus(); await sourceCopy.press('Enter');
+  await expect.poll(() => copies).toEqual(['2024-03-14T01:00:00+10:00']);
+  await expect(sourceCopy).toBeFocused();
+  rejectCopy = true;
+  await registry.getByRole('button', { name: 'Copy Registry RDAP parsed.lifecycle.createdDate ISO companion', exact: true }).click();
+  await expect(registry.locator('.copy-fallback')).toHaveText('2024-03-13T15:00:00.000Z');
+  await expect(explanation).not.toContainText('private clipboard failure');
+  await whois.getByText('Selection and provenance', { exact: true }).click();
+  await expect(whois).toContainText('does not identify the selected WHOIS hop or line');
+  await expect(whois).toContainText('Publication state: partial');
+  await expect(explanation).toContainText('date-only value becomes midnight for comparison');
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    await sourceCopy.focus(); await expect(sourceCopy).toBeInViewport(); await expectNoHorizontalOverflow(page);
+    await explanation.getByRole('combobox', { name: 'Lifecycle date' }).evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
+    expect((await new AxeBuilder({ page }).include('.date-explanation').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`registry-date-${width}-${theme}.png`) });
+  }
+  expect(requests).toEqual(['example.test']);
+  await page.locator('#query').fill('replacement.test'); await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  if (!(await explanation.evaluate(element => (element as HTMLDetailsElement).open))) await explanation.locator(':scope > summary').click();
+  await expect(explanation).not.toContainText('2024-03-14T01:00:00+10:00');
+  await expect(whois).toContainText('Publication: disabled');
+  await expect(explanation.getByRole('button')).toHaveCount(0);
+  expect(requests).toEqual(['example.test', 'replacement.test']);
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(casesBefore);
+});
+
 test('registry interpretation retains late lifecycle evidence and role-scoped disclosure', async ({ page }, testInfo) => {
   const parsed = parseRdap('domain', {
     objectClassName: 'domain', ldhName: 'example.test',

@@ -333,6 +333,10 @@ export function buildLookupRegistryDisplay(input: {
     })),
     registrarRdap: {
       visible: Boolean(registrarRdap.status),
+      traceState: registrationTraceState(registrarRdap.status, {
+        hasPublication: Object.keys(registrarRdapParsed).length > 0,
+        partial: registrarRdapParsed.serverTruncated === true || registrarRdapParsed.eventsTruncated === true,
+      }),
       label: diagnosticLabel(registrarRdap),
       endpoint: boundedTechnologyText(registrarRdap.endpoint, 2_048),
       detail: [

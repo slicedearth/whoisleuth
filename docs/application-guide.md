@@ -1344,6 +1344,14 @@ Registry authority decides domain registration availability. Registrar RDAP,
 WHOIS, DNS, HTTP, certificate, page, provider and analyst evidence can explain
 or challenge a review but cannot declare a domain available on their own.
 
+In Lookup's Registration section, **Explain a lifecycle date** shows the
+parser-selected text, its supplied ISO companion and a current conversion
+check for Created, Expires or Last updated. Each publication remains separate.
+Copy controls preserve the exact retained strings. Open **Selection and
+provenance** for parser rules, incomplete-source details and unavailable
+original field locations. A calculated value does not fill a missing retained
+companion, and a date-only midnight is not an observed event time.
+
 For IP addresses and ASNs, registration and routing evidence use their own
 normalised contracts; domain availability language does not apply.
 

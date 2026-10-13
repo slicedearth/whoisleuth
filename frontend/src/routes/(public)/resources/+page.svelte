@@ -146,7 +146,7 @@
     <h3 id="result-layout-title">Find your way around a Lookup result</h3>
     <p>Start with At a glance, then open the evidence relevant to your question.</p>
     <ol>
-      <li><strong>Registration</strong><span>Compare registry, registrar RDAP and WHOIS without merging their authority.</span></li>
+      <li><strong>Registration</strong><span>Compare registry, registrar RDAP and WHOIS. Use Explain a lifecycle date to inspect and copy the retained date values and their conversion.</span></li>
       <li><strong>Web and DNS</strong><span>Review point-in-time DNS, HTTP, TLS, page, technology and posture evidence.</span></li>
       <li><strong>Relationships and history</strong><span>Switch between source coverage, exact relationships and dated lifecycle events.</span></li>
       <li><strong>Source quality</strong><span>Check completeness, freshness, timing, provenance and request diagnostics.</span></li>

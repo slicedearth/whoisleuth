@@ -61,6 +61,7 @@
     rdapPartialDetail: registryDisplay.rdapPartialDetail,
     rdapRows: registryDisplay.rdapRows,
     whoisError: boundedTechnologyText(whois.error, 240),
+    whoisParsed,
     whoisRows: registryDisplay.whoisRows,
     whoisContactRoles: registryDisplay.whoisContactRoles,
     whoisTruncatedFields: stringList(whoisParsed.fieldsTruncated, 64, 80),
