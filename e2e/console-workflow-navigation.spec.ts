@@ -8,6 +8,7 @@ import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts'
 import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, failNextBrowserLocalManifestWrite, holdBrowserLocalTransaction, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
 import { caseNumber } from '../packages/cases/case-workflow-metadata.mts';
+import { createWorkspace, indicator, namedDatabase, switchWorkspace } from './browser-workspace-fixtures';
 
 test('navigation readiness includes loaded, usable destinations rather than only the dialog shell', async ({ page }) => {
   const chunk = productionChunkPath('src/lib/console-command-navigation.ts');
@@ -147,6 +148,78 @@ test('Dashboard opens its exact attention set and retains a direct recent Case d
   await expect(page).toHaveURL('/cases?case=navigation-case');
   await expect(page.locator('#case-head-navigation-case')).toBeVisible();
   expect(collectionRequests).toEqual([]);
+});
+
+test('held checkpoint reads cannot restore cleared references or cross an actual workspace switch', async ({ page }) => {
+  const caseId = 'held-checkpoint-case';
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [
+    caseRecord({ id: caseId, domain: 'retained-checkpoint.example', notes: [{ createdAt: '2026-06-01T00:00:00.000Z', body: 'Private checkpoint note' }], evidenceHistory: [snapshot({ pageTitle: 'Private observation title' })] }),
+  ] } }, { clearStorage: true, destination: '/dashboard' });
+  const replacement = await createWorkspace(page, 'Separate checkpoint review');
+  const original = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const retainedCase = original.records.find(row => row.value.id === caseId)!.value;
+  expect(retainedCase.notes[0]!.body).toBe('Private checkpoint note');
+  expect(retainedCase.evidenceHistory[0]!.pageTitle).toBe('Private observation title');
+  const checkpoint = retainedCase.evidenceHistory[0]!.id;
+  const collections: string[] = [];
+  page.on('request', request => { if (/\/api\/(lookup|bulk|domain-feed|discover)(?:[/?]|$)/u.test(request.url())) collections.push(request.url()); });
+
+  for (const action of ['clear', 'replace'] as const) {
+    await page.goto(`/cases?case=${caseId}&section=evidence`);
+    await page.getByRole('button', { name: `Pin checkpoint ${checkpoint} for comparison`, exact: true }).click();
+    await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true }).click();
+    await expect(indicator(page)).toHaveText('Default');
+    await expect(page.locator('.recent-cases')).toContainText('retained-checkpoint.example');
+    let entered!: () => void, release!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const binding = `holdPinnedCheckpointRead_${action}`;
+    await page.exposeFunction(binding, async () => { entered(); await held; });
+    await page.evaluate(({ id, binding }) => {
+      const originalDigest = SubtleCrypto.prototype.digest;
+      SubtleCrypto.prototype.digest = async function(algorithm, input) {
+        const bytes = ArrayBuffer.isView(input) ? new Uint8Array(input.buffer, input.byteOffset, input.byteLength) : new Uint8Array(input);
+        if (!new TextDecoder().decode(bytes).includes(id)) return originalDigest.call(this, algorithm, input);
+        SubtleCrypto.prototype.digest = originalDigest;
+        const digest = await originalDigest.call(this, algorithm, input);
+        await (window as unknown as Record<string, () => Promise<void>>)[binding]!();
+        (window as unknown as Record<string, boolean>)[`${binding}Completed`] = true;
+        return digest;
+      };
+    }, { id: caseId, binding });
+    try {
+      await page.getByText('Tab references', { exact: true }).click();
+      const tray = page.getByText('Pinned checkpoints · 1 of 4', { exact: true }).and(page.locator('summary')).locator('..');
+      await tray.locator(':scope > summary').click();
+      await started;
+      await expect(tray.getByRole('status')).toHaveText('Reading retained checkpoints…');
+      await expect(tray.getByRole('checkbox')).toBeDisabled();
+      if (action === 'clear') {
+        await tray.getByRole('button', { name: 'Clear pinned checkpoints', exact: true }).click();
+        await expect(tray).toHaveCount(0);
+      } else {
+        await switchWorkspace(page, replacement.name);
+        await expect(indicator(page)).toHaveText(replacement.name);
+      }
+      release();
+      // On clear, prove the held native operation returned before inspecting
+      // its UI consequences. A workspace switch instead destroys that realm.
+      if (action === 'clear') await page.waitForFunction(key => (window as unknown as Record<string, boolean>)[key] === true, `${binding}Completed`);
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      await expect(page.getByRole('list', { name: 'Pinned Case checkpoint references', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('region', { name: 'Case checkpoint stage', exact: true })).toHaveCount(0);
+      await expect(page.locator('body')).not.toContainText('Private checkpoint note');
+      await expect(page.locator('body')).not.toContainText('Private observation title');
+      await expect(page.locator('body')).not.toContainText(checkpoint);
+      await expect(page.getByRole('alert').filter({ hasText: 'retained Cases could not be read' })).toHaveCount(0);
+      expect(await readBrowserLocalCollection(page, 'cases')).toEqual(original);
+      if (action === 'replace') {
+        await expect(page.locator('body')).not.toContainText('retained-checkpoint.example');
+        expect((await readBrowserLocalCollection(page, 'cases', { databaseName: namedDatabase(replacement.id) })).records).toEqual([]);
+      }
+    } finally { release(); }
+  }
+  expect(collections).toEqual([]);
 });
 
 test('pinned checkpoints and successful Case visits survive Console navigation without retaining new evidence', async ({ page }, testInfo) => {
