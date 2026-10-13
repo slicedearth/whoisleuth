@@ -3,7 +3,8 @@ import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/obs
 import { latestObservationCohort } from '../../../../packages/evidence/latest-observations.mts';
 import { caseFollowUpSources } from '../../../../packages/cases/case-follow-ups.mts';
 import { sha256IdentityHex } from '../../../../packages/evidence/record-identity.mts';
-import { caseNumber, caseTypeSummary } from '../../../../packages/cases/case-workflow-metadata.mts';
+import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
+import { caseTypeSummary } from '../../../../packages/cases/case-type-presentation.mts';
 import {
   MAX_CASES, MAX_CASE_ACTIONS, MAX_CASE_OBSERVED_EFFECT_REVIEWS,
   MAX_CASE_EVIDENCE_PINS, MAX_EVIDENCE_SNAPSHOTS_PER_CASE,

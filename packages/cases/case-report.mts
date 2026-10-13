@@ -15,7 +15,7 @@ import { httpSecurityHeaderLabel } from './http-summary.mts';
 import { webCollectionScoreLimitation } from '../evidence/collection-quality.mts';
 import { analystInteroperabilityTags } from '../analysis/analyst-taxonomy.mts';
 import { caseEvidenceLinkIssues } from './case-evidence-links.mts';
-import { caseTypeSummary } from './case-workflow-metadata.mts';
+import { caseTypeSummary } from './case-type-presentation.mts';
 import { caseClosureHistoryQualification } from './case-response-outcomes.mts';
 import {
   buildPortableGeneratorMetadata,

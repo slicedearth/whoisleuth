@@ -125,6 +125,9 @@ The Case response workspace coordinates response writes, reconciliation and focu
 Observation, assessment, action and outcome components own their forms and
 temporary drafts; Quick and Advanced use the same form definitions. The
 domain model owns validation, and the browser-store adapter owns persistence.
+Case type summaries live in `case-type-presentation.mts`; reports, calendars
+and response controls import that display owner directly. Typed metadata
+admission and mutations remain in `case-workflow-metadata.mts`.
 Within `packages/cases/`, response records define the vocabulary and types;
 response actions own transitions and history reconciliation; response outcomes
 own independent reviews and linked closures. The original response-model entry

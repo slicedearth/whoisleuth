@@ -103,7 +103,6 @@ export {
   caseResponseIncidentUrls,
   caseTypeIds,
   caseTypeRecords,
-  caseTypeSummary,
   formattedCaseNumber,
   MAX_CASE_INCIDENT_TARGETS,
 } from '../../../packages/cases/case-workflow-metadata.mts';

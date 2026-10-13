@@ -10,7 +10,8 @@
   import { deliveryReceiptForPacket, type CaseDeliveryPacketReceipt } from '../../../../packages/cases/case-packet-correction.mts';
   import { caseEvidenceChoiceName } from '#lib/analysis/case-evidence-presentation.ts';
   import { caseInvestigationContext } from '../../../../packages/cases/case-incident-context.mts';
-  import { caseResponseIncidentUrls, caseTypeSummary } from '../../../../packages/cases/case-workflow-metadata.mts';
+  import { caseResponseIncidentUrls } from '../../../../packages/cases/case-workflow-metadata.mts';
+  import { caseTypeSummary } from '../../../../packages/cases/case-type-presentation.mts';
   import type { CaseRecord } from '../cases.ts';
   import {
     buildCaseResponsePacket,
