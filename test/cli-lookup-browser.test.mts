@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 
 import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
 import type { LookupSourceSettlement } from '../lib/lookup-source-progress.mts';
+import type { LookupOptions } from '../lib/lookup.mts';
 import {
   MAX_LOOKUP_BROWSER_SEARCH_BYTES,
   MAX_LOOKUP_BROWSER_SEARCH_SCALARS,
@@ -764,37 +765,45 @@ describe('lookup browse CLI contract', () => {
         source: 'rdap', state: 'success', complete: true, truncated: false,
         fragment: { status: 'success' },
       };
-      let calls = 0, displayed = 0;
+      let calls = 0;
+      let collectedOptions: LookupOptions | undefined;
+      const displayed: LookupSourceSettlement[] = [];
+      const errors = capture();
       const code = await runCli([
         'lookup', mode === 'selected-url' ? 'https://example.test/review' : 'example.test',
         ...(mode === 'fast' ? [] : ['--deep']),
         ...(mode === 'selected-url' ? ['--exact-url'] : []),
         ...(browse ? ['--browse'] : ['--json']),
       ], {
-        stdout: capture().stream, stderr: capture().stream,
+        stdout: capture().stream, stderr: errors.stream,
         signal: outer.signal,
         canBrowseLookup: () => true,
         browseLookupOperation: async options => options.collect!({
           signal: interactive.signal,
-          onSourceSettled: value => { assert.equal(value, settlement); displayed++; },
+          onSourceSettled: value => { displayed.push(value); },
         }),
         runUnifiedLookup: async (_classified, options) => {
           calls++;
-          assert.ok(options);
-          const { onSourceSettled, ...scope } = options;
-          assert.deepEqual(scope, {
-            fast: mode === 'fast', compact: false,
-            signal: browse ? interactive.signal : outer.signal,
-            ...(mode === 'selected-url' ? { selectedUrl: 'https://example.test/review' } : {}),
-          });
-          assert.equal(typeof onSourceSettled, mode === 'fast' ? 'undefined' : 'function');
-          onSourceSettled?.(settlement);
+          collectedOptions = options;
+          options?.onSourceSettled?.(settlement);
           return lookupDocument();
         },
       });
-      assert.equal(code, EXIT_CODES.SUCCESS);
+      assert.equal(code, EXIT_CODES.SUCCESS, errors.value());
       assert.equal(calls, 1);
-      assert.equal(displayed, browse && mode !== 'fast' ? 1 : 0);
+      // Assertions belong outside the CLI's production error boundary, so a
+      // contract mismatch is reported directly rather than as a lookup error.
+      assert.ok(collectedOptions);
+      const { onSourceSettled, onCollectionReceipt, ...scope } = collectedOptions;
+      assert.deepEqual(scope, {
+        fast: mode === 'fast', compact: false,
+        signal: browse ? interactive.signal : outer.signal,
+        ...(mode === 'selected-url' ? { selectedUrl: 'https://example.test/review' } : {}),
+      });
+      assert.equal(typeof onCollectionReceipt, 'function');
+      assert.equal(typeof onSourceSettled, mode === 'fast' ? 'undefined' : 'function');
+      assert.equal(displayed.length, browse && mode !== 'fast' ? 1 : 0);
+      for (const value of displayed) assert.equal(value, settlement);
     });
   }
 

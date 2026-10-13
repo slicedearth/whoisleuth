@@ -22,6 +22,7 @@ import { buildCliCompareDocument } from '../cli/formatters/json.mts';
 import { formatTerminalCompare } from '../cli/formatters/terminal.mts';
 import { runCli } from '../cli/runner.mts';
 import { arrayValue, recordValue } from './value-assertions.mts';
+import { CLI_LOOKUP_VERSION } from '../packages/contracts/cli-lookup.mts';
 
 type RegistryAccessFixture = Record<string, unknown> & {
   suffix: string;
@@ -298,8 +299,10 @@ describe('comparison input boundary', () => {
   test('rejects malformed JSON, arrays, and unsupported schemas or lookup types', () => {
     assert.throws(() => parseCliLookupDocument('{'), /valid JSON/);
     assert.throws(() => parseCliLookupDocument('[]'), /one JSON object/);
-    assert.throws(() => parseCliLookupDocument(JSON.stringify(lookupDocument({ schema: 'other' }))), /whoisleuth\.cli\.lookup version 1 or 2/);
-    assert.throws(() => parseCliLookupDocument(JSON.stringify(lookupDocument({ version: 3 }))), /version 1 or 2/);
+    assert.throws(() => parseCliLookupDocument(JSON.stringify(lookupDocument({ schema: 'other' }))), /must use whoisleuth\.cli\.lookup version/u);
+    for (const version of [0, CLI_LOOKUP_VERSION + 1]) {
+      assert.throws(() => parseCliLookupDocument(JSON.stringify(lookupDocument({ version }))), /must use whoisleuth\.cli\.lookup version/u);
+    }
     assert.throws(() => parseCliLookupDocument(JSON.stringify(lookupDocument({ type: 'ip' }))), /unsupported lookup type/);
     assert.throws(() => parseCliLookupDocument(JSON.stringify(lookupDocument({ mode: 'custom' }))), /lookup mode/);
   });

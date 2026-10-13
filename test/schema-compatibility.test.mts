@@ -416,7 +416,7 @@ describe('schema compatibility inventory', () => {
     assert.deepEqual(byId(inventory, 'cli.bulk').supportedVersions, [3]);
     assert.deepEqual(byId(inventory, 'cli.bulk-item').supportedVersions, [3]);
     assert.deepEqual(byId(inventory, 'cli.bulk-checkpoint').supportedVersions, [2]);
-    assert.deepEqual(byId(inventory, 'cli.lookup').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'cli.lookup').supportedVersions, [1, 2, 3]);
     assert.equal(byId(inventory, 'cli.lookup').migration, 'read_only');
     assert.deepEqual(byId(inventory, 'cli.http').supportedVersions, [3]);
     assert.equal(byId(inventory, 'cli.discovery-scan').schema, CLI_DISCOVERY_SCAN_SCHEMA);
