@@ -75,6 +75,14 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   const requests: string[] = [];
   page.on('request', request => { if (/\/api\/(?:lookup|bulk|discover|ct-search)/u.test(request.url())) requests.push(request.url()); });
   const { before, bytes, gallery, select, missing } = await retainPair(page);
+  await page.evaluate(() => {
+    const original = IDBObjectStore.prototype.get;
+    Reflect.set(window, 'galleryOriginalReads', 0);
+    IDBObjectStore.prototype.get = function(key) {
+      if (this.name === 'files') Reflect.set(window, 'galleryOriginalReads', Number(Reflect.get(window, 'galleryOriginalReads')) + 1);
+      return original.call(this, key);
+    };
+  });
   await page.screenshot({ path: testInfo.outputPath('gallery-default.png') });
   await select('text', missing.id, 'missing.txt');
   const pages = gallery.getByRole('navigation', { name: 'Retained gallery pages', exact: true });
@@ -95,6 +103,7 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   await expect(copyHash).toBeFocused();
   const other = missing.attachments[1]!;
   await candidateSelector.selectOption(JSON.stringify([missing.id, other.id]));
+  await expect(pages.getByRole('spinbutton', { name: 'Retained gallery page', exact: true })).toHaveValue('2');
   await expect(copyHash).toHaveText('Copy hash');
   await expect(selectedDetails.locator('code').filter({ hasText: other.digestSha256 })).toHaveText(other.digestSha256);
   await copyHash.click(); await expect.poll(() => copied).toBe(other.digestSha256);
@@ -107,9 +116,24 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   await selectedDetails.getByRole('button', { name: /Copy exact Candidate selected file retention time:/u }).click();
   await expect.poll(() => copied).toBe(other.retainedAt);
   const repeated = missing.attachments[2]!;
-  await pages.getByRole('spinbutton', { name: 'Retained gallery page', exact: true }).fill('2');
-  await pages.getByRole('button', { name: 'Go', exact: true }).click();
-  await candidateSelector.selectOption(JSON.stringify([missing.id, repeated.id]));
+  const rowCandidate = gallery.getByRole('button', { name: /Use as candidate:.*repeated-missing-text$/u });
+  await rowCandidate.focus(); await rowCandidate.press('Enter');
+  await expect(rowCandidate).toBeFocused(); await expect(rowCandidate).toHaveAttribute('aria-pressed', 'true');
+  await expect(candidateSelector).toHaveValue(JSON.stringify([missing.id, repeated.id]));
+  await expect(pages.getByRole('spinbutton', { name: 'Retained gallery page', exact: true })).toHaveValue('2');
+  const rowReference = gallery.getByRole('button', { name: /Use as reference:.* · missing-text$/u });
+  await rowReference.focus(); await rowReference.press('Enter');
+  await expect(rowReference).toBeFocused(); await expect(rowReference).toHaveAttribute('aria-pressed', 'true');
+  await expect(gallery.getByRole('combobox', { name: 'Reference file', exact: true })).toHaveValue(JSON.stringify([missing.id, missing.attachments[0]!.id]));
+  await expect(gallery.getByRole('button', { name: 'Compare selected text', exact: true })).toBeEnabled();
+  expect(repeated.digestSha256).toBe(missing.attachments[0]!.digestSha256);
+  expect(await page.evaluate(() => Reflect.get(window, 'galleryOriginalReads'))).toBe(0);
+  await rowReference.press('Enter');
+  await expect(rowReference).toBeFocused(); await expect(rowReference).toHaveAttribute('aria-pressed', 'false');
+  await expect(gallery.getByRole('combobox', { name: 'Reference file', exact: true })).toHaveValue('');
+  await expect(gallery.getByRole('button', { name: 'Compare selected text', exact: true })).toBeDisabled();
+  await rowReference.press('Enter');
+  await expect(rowReference).toHaveAttribute('aria-pressed', 'true');
   await selectedDetails.getByRole('button', { name: 'Copy Candidate selected file attachment ID', exact: true }).click();
   await expect.poll(() => copied).toBe(repeated.id);
   await observedTime.click(); await expect.poll(() => copied).toBe(repeated.observedAt);
@@ -137,8 +161,19 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   await expect(review.getByRole('heading', { name: '1 shared passage', exact: true })).toBeVisible();
   await expect(review.getByRole('region', { name: 'Reference gallery source', exact: true })).toContainText('reference source declaration');
   await expect(review.getByRole('region', { name: 'Candidate gallery source', exact: true }).getByText('Unknown', { exact: true })).toBeVisible();
+  await rowCandidate.focus(); await rowCandidate.press('Enter');
+  await expect(rowCandidate).toBeFocused();
+  await expect(pages.getByRole('spinbutton', { name: 'Retained gallery page', exact: true })).toHaveValue('2');
+  await expect(review).toHaveCount(0);
+  await select('text');
+  await pages.getByRole('spinbutton', { name: 'Retained gallery page', exact: true }).fill('2');
+  await pages.getByRole('button', { name: 'Go', exact: true }).click();
+  await compare.click();
+  await expect(review.getByRole('heading', { name: '1 shared passage', exact: true })).toBeVisible();
   for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
     await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    await rowReference.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`gallery-rows-${theme}-${width}.png`) });
     await review.getByRole('heading', { name: 'Two selected retained sources', exact: true }).scrollIntoViewIfNeeded();
     await expectNoHorizontalOverflow(page);
     expect((await new AxeBuilder({ page }).include('.retained-gallery').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
@@ -165,17 +200,27 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   await page.reload(); await expect(gallery.getByRole('combobox', { name: 'Evidence component', exact: true })).toHaveValue('profiles');
 });
 
-test('changing gallery component cancels a held text worker without publishing a late result', async ({ page }) => {
+for (const change of ['component', 'pair'] as const) test(`changing gallery ${change} cancels a held text worker without publishing a late result`, async ({ page }) => {
   const { before, bytes, gallery, select } = await retainPair(page);
   const path = productionChunkPath('src/lib/workers/investigation-package.worker.ts');
   let release = () => {}, arrived = () => {};
   const held = new Promise<void>(resolve => { release = resolve; }), received = new Promise<void>(resolve => { arrived = resolve; });
   await page.route(`**${path}`, async route => { arrived(); await held; try { await route.fallback(); } catch (cause) { if (!route.request().failure()) throw cause; } });
   try {
-    await select('text'); await gallery.getByRole('button', { name: 'Compare selected text', exact: true }).click(); await received;
-    await gallery.getByRole('combobox', { name: 'Evidence component', exact: true }).selectOption('png');
+    await select('text');
+    const pages = gallery.getByRole('navigation', { name: 'Retained gallery pages', exact: true });
+    await pages.getByRole('spinbutton', { name: 'Retained gallery page', exact: true }).fill('2');
+    await pages.getByRole('button', { name: 'Go', exact: true }).click();
+    await gallery.getByRole('button', { name: 'Compare selected text', exact: true }).click(); await received;
+    if (change === 'component') await gallery.getByRole('combobox', { name: 'Evidence component', exact: true }).selectOption('png');
+    else {
+      const action = gallery.getByRole('button', { name: /Use as candidate:.*repeated-missing-text$/u });
+      await action.focus(); await action.press('Enter'); await expect(action).toBeFocused();
+      await expect(pages.getByRole('spinbutton', { name: 'Retained gallery page', exact: true })).toHaveValue('2');
+      await expect(gallery.getByRole('button', { name: 'Compare selected text', exact: true })).toBeEnabled();
+    }
     release();
-    await expect(gallery.getByRole('button', { name: 'Open selected PNGs', exact: true })).toBeDisabled();
+    if (change === 'component') await expect(gallery.getByRole('button', { name: 'Open selected PNGs', exact: true })).toBeDisabled();
     await expect(gallery.getByRole('region', { name: 'Selected retained file comparison', exact: true })).toHaveCount(0);
     await expect(gallery.getByRole('heading', { name: '1 shared passage', exact: true })).toHaveCount(0);
     expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await storedFiles(page)).toEqual(bytes);

@@ -41,7 +41,9 @@
 
   function invalidate() { controller?.abort(); controller = null; prepared = null; textResult = null; error = ''; busy = false; }
   $effect(() => { facet; untrack(() => { leftKey = ''; rightKey = ''; page = 1; invalidate(); }); });
-  $effect(() => { selectedSignature; casesState; query; untrack(() => { page = 1; invalidate(); }); });
+  $effect(() => { query; untrack(() => { page = 1; invalidate(); }); });
+  $effect(() => { selectedSignature; casesState; untrack(invalidate); });
+  $effect(() => { const lastPage = pageCount; untrack(() => { page = Math.min(page, lastPage); }); });
   onDestroy(invalidate);
   async function setPage(next: number) { page = Math.max(1, Math.min(pageCount, next)); await tick(); results?.focus(); }
   async function close() { invalidate(); await tick(); trigger?.focus(); }
@@ -114,6 +116,10 @@
         <li><strong>{file.attachment.fileName}</strong><a href={`/cases?case=${encodeURIComponent(file.reference.caseId)}`}>{file.caseTitle} · {file.caseNumber}</a>
           <small>Case domain: {file.caseDomain} · Declared source: {file.attachment.source ?? 'Not declared'}</small>
           <small>Observed: <EvidenceTimestamp value={file.attachment.observedAt} unavailable="Unknown" copyable={false} /> · Retained: <EvidenceTimestamp value={file.attachment.retainedAt} copyable={false} /></small>
+          <div class="actions">
+            <button class="btn small" type="button" aria-label={`Use as reference: ${file.attachment.fileName} · ${file.caseNumber} · ${file.reference.attachmentId}`} aria-pressed={leftKey === file.key} onclick={() => { leftKey = leftKey === file.key ? '' : file.key; }}>Use as reference</button>
+            <button class="btn small" type="button" aria-label={`Use as candidate: ${file.attachment.fileName} · ${file.caseNumber} · ${file.reference.attachmentId}`} aria-pressed={rightKey === file.key} onclick={() => { rightKey = rightKey === file.key ? '' : file.key; }}>Use as candidate</button>
+          </div>
           <details><summary>Recorded file identity</summary>{@render fileMetadata(file, `${file.caseNumber} ${file.reference.attachmentId}`)}<p>{file.attachment.byteLength} bytes. Listing this reference has not read or verified the original pixels or text.</p>{#if file.attachment.derivation}<p>Derived image; its edit declaration remains attached to this file. The enclosing Case domain is not an observed image hostname.</p>{/if}</details>
         </li>
       {:else}<li>No matching retained file reference is available in the currently read Case metadata.</li>{/each}
@@ -129,7 +135,7 @@
         {#if right}<details><summary>Candidate file details</summary>{@render fileMetadata(right, 'Candidate selected file')}</details>{/if}
       </div>
     </div>
-    <p>Selectors show this page and already-selected references. Search or change page to find another file.</p>
+    <p>Choose a reference and candidate from their rows or the selectors. Selectors show this page and already-selected references. Selecting a file does not open its original; start the comparison when ready.</p>
     <div class="actions"><button class="btn" bind:this={trigger} disabled={busy || !eligiblePair} onclick={() => void openComparison()}>{facet === 'text' ? 'Compare selected text' : 'Open selected PNGs'}</button>{#if busy}<button class="btn" onclick={close}>Cancel file review</button><span role="status">Reading the selected verified originals…</span>{/if}</div>
     {#if error}<p role="alert">{error}</p>{/if}
     {#if prepared}

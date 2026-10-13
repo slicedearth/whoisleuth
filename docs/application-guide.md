@@ -731,6 +731,9 @@ PNG and UTF-8 text comparisons across Cases. Choose an evidence component and
 search Case titles, references, domains, filenames or declared sources; file
 contents are not indexed. Search covers the currently read Case metadata; rows
 are paged, and selectors show the current page plus already-selected references.
+Use **Use as reference** and **Use as candidate** on a row, or choose from the
+selectors. Selecting a file leaves the current page in place and does not read
+its original. Select the same row action again to clear that side of the pair.
 Selector labels identify the Case and exact attachment reference, including
 separate observations with the same filename and content hash. Open the selected file's
 details to check and copy its complete attachment ID, hash and exact stored
@@ -738,7 +741,8 @@ timestamps before opening the originals. Readable timestamps use UTC; an unknown
 observation time stays unknown. These details describe retained metadata, not a
 new verification of the original bytes.
 The existing Case-store and attachment limits still apply, without a smaller
-gallery sample cap. Choosing two exact references opens only that pair, with separate
+gallery sample cap. **Compare selected text** or **Open selected PNGs** reads only
+the selected pair, with separate
 Case identities, declared sources, observation times and original-file digests.
 Unknown capture conditions remain unknown, and missing original bytes stop the
 review rather than becoming an empty image or text result. PNG comparison does
