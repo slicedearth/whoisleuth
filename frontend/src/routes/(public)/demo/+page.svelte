@@ -58,6 +58,8 @@
   let BrandProfileListView=$state<BrandsStageModule['BrandProfileList']|null>(null);
   let BulkRelationshipsView=$state<BulkStageModule['BulkRelationships']|null>(null);
   let EvidenceTopologyView=$state<LookupStageModule['EvidenceTopology']|null>(null);
+  let topologyGeometry=$state<LookupStageModule['projectEvidenceTopology']|null>(null);
+  let coverGeometry=$state<{width:number;height:number;target:{x:number;y:number};sources:Array<{x:number;y:number}>}|null>(null);
   let EvidenceTimelineView=$state<MonitorStageModule['EvidenceTimeline']|null>(null);
   let RetainedEvidenceTimelineView=$state<MonitorStageModule['RetainedEvidenceTimeline']|null>(null);
   let buildRetainedTimeline=$state<MonitorStageModule['buildRetainedEvidenceTimeline']|null>(null);
@@ -120,6 +122,14 @@
     {id:'assessment',label:'Assessment',detail:selectedRiskBand,status:'warning',href:'#demo-assessment',side:'right' as const,glyph:'A',provenance:'derived' as const},
   ]:[]);
   const lookupEvidenceCheckNodes=$derived(lookupTopologyNodes.filter((node)=>node.id!=='assessment'));
+  $effect(()=>{if(view!=='lookup'||lookupFamily!=='relationships'||demoVisualView!=='evidence')coverGeometry=null;});
+  function previewSourceCover(){
+    if(!selected||!topologyGeometry)return;
+    const geometry=topologyGeometry({label:selected.domain},lookupEvidenceCheckNodes);
+    coverGeometry={width:geometry.width,height:geometry.height,
+      target:{x:geometry.target.x+geometry.target.width/2,y:geometry.target.y+geometry.target.height/2},
+      sources:geometry.nodes.map(node=>({x:node.x+node.width/2,y:node.y+node.height/2}))};
+  }
   const lookupCompleteEvidenceCount=$derived(lookupEvidenceCheckNodes.filter((node)=>String(node.status).toLowerCase()==='success').length);
   const lookupLimitedEvidenceCount=$derived(lookupEvidenceCheckNodes.length-lookupCompleteEvidenceCount);
   const lookupLifecycleEvents=$derived(selected?[
@@ -156,6 +166,7 @@
     if(target==='lookup'){
       const module=await loadDeferredModule(()=>import('#lib/components/demo-stages/lookup.ts'),{signal:moduleController.signal});
       EvidenceTopologyView=module.EvidenceTopology;
+      topologyGeometry=module.projectEvidenceTopology;
       LookupLifecycleView=module.LookupLifecycle;
       LookupAcquisitionReviewView=module.LookupAcquisitionReview;
       LookupAssessmentView=module.LookupAssessment;
@@ -247,6 +258,7 @@
   }
   async function goToStage(target:View){
     if(!available(target)||stageTransitioning)return;
+    if(target!==view)coverGeometry=null;
     clearWorkspaceRelease();
     stageTransitioning=true;
     heldWorkspaceHeight=Math.ceil(demoWorkspace?.getBoundingClientRect().height??0);
@@ -274,6 +286,7 @@
     if(reducedMotion||!needsScroll)releaseWorkspaceHeight();
   }
   function start(scenario:SyntheticDemoScenario){
+    coverGeometry=null;
     const next=startSyntheticDemoScenario(scenario);
     save({...next},'Synthetic scenario started.');
     discoverPreviewReady=false;candidateFilter='all';relatedDomains=[];demoVisualView='evidence';lookupFamily=null;
@@ -282,7 +295,7 @@
   function loadProfile(){save({profileReady:true},'Synthetic profile loaded.');void goToStage('discover');}
   function generate(){discoverPreviewReady=true;message='Loaded three synthetic candidates.';}
   function handoffCandidates(){save({candidatesReady:true},'Handed three reviewed synthetic candidates to Bulk triage.');void goToStage('bulk');}
-  function inspect(id:string){save({selectedCandidateId:id,caseReady:false,caseStatus:'new',note:'',followUpReady:false},'Opened bounded fixture evidence.');demoVisualView='evidence';lookupFamily=null;void goToStage('lookup');}
+  function inspect(id:string){coverGeometry=null;save({selectedCandidateId:id,caseReady:false,caseStatus:'new',note:'',followUpReady:false},'Opened bounded fixture evidence.');demoVisualView='evidence';lookupFamily=null;void goToStage('lookup');}
   function openCase(){save({caseReady:true},'Created a tab-scoped synthetic case.');void goToStage('monitor');}
   function loadFollowUp(){save({followUpReady:true,caseStatus:'monitoring'},'Loaded a later synthetic observation.');}
   function loadRelated(domains:string[]){relatedDomains=[...domains];candidateFilter='related';message=`Focused ${domains.length} synthetic related domains.`;}
@@ -304,7 +317,7 @@
     if(typeof value==='object')return 'Structured evidence changed';
     return String(value).replaceAll('_',' ').slice(0,300);
   }
-  function reset(){clearWorkspaceRelease();stageTransitioning=false;demoState=createSyntheticDemoState();discoverPreviewReady=false;candidateFilter='all';relatedDomains=[];demoVisualView='evidence';lookupFamily=null;try{sessionStorage.removeItem(SYNTHETIC_DEMO_STORAGE_KEY);message='Synthetic demo reset.';}catch{message='Demo reset in memory, but tab storage could not be cleared. Closing this tab will remove its demo state.';}void goToStage('dashboard');}
+  function reset(){coverGeometry=null;clearWorkspaceRelease();stageTransitioning=false;demoState=createSyntheticDemoState();discoverPreviewReady=false;candidateFilter='all';relatedDomains=[];demoVisualView='evidence';lookupFamily=null;try{sessionStorage.removeItem(SYNTHETIC_DEMO_STORAGE_KEY);message='Synthetic demo reset.';}catch{message='Demo reset in memory, but tab storage could not be cleared. Closing this tab will remove its demo state.';}void goToStage('dashboard');}
   function showLookupFamily(family:Exclude<LookupFamily,null>){lookupFamily=family;}
   function hideLookupFamily(family:Exclude<LookupFamily,null>){if(lookupFamily===family)lookupFamily=null;}
   async function navigateLookupEvidence(href:string){
@@ -515,6 +528,16 @@
       <div id="demo-visual-panel" class="demo-visual-panel" role="tabpanel" aria-labelledby={'demo-visual-tab-'+demoVisualView}>
         {#if demoVisualView==='evidence'}
           {#if EvidenceTopologyView}<div class="shared-evidence visual-summary"><EvidenceTopologyView id="demo-evidence-topology" title="Where this result came from" description="Open a separately attributed fixture family. Missing or inconclusive sources remain explicit." target={{label:selected.domain,detail:'Synthetic domain lookup',status:selected.availability}} nodes={lookupTopologyNodes} onnavigate={navigateLookupEvidence} /></div>{/if}
+          {#if topologyGeometry}<div class="source-cover-controls"><button class="btn" type="button" onclick={previewSourceCover}>Preview decorative source-map cover</button>{#if coverGeometry}<button class="btn" type="button" onclick={()=>coverGeometry=null}>Clear decorative cover</button>{/if}</div>{/if}
+          {#if coverGeometry}
+            <section class="source-cover" aria-label="Decorative fictional source-map cover">
+              <p>Decorative fictional source-map cover—not an evidence graph or anonymisation.</p>
+              <svg aria-hidden="true" viewBox={`0 0 ${coverGeometry.width} ${coverGeometry.height}`}>
+                {#each coverGeometry.sources as point}<line x1={coverGeometry.target.x} y1={coverGeometry.target.y} x2={point.x} y2={point.y} /><circle cx={point.x} cy={point.y} r="5" />{/each}
+                <circle cx={coverGeometry.target.x} cy={coverGeometry.target.y} r="9" />
+              </svg>
+            </section>
+          {/if}
         {:else if demoVisualView==='relationships'}
           {#if selected.relationship}<div class="limitation info"><strong>Relationship lead</strong><p>{selected.relationship.label} <code>{selected.relationship.value}</code> appears in {selected.relationship.relatedCandidates} synthetic candidates. Verify shared infrastructure independently.</p></div>{:else}<div class="limitation info"><strong>No relationship lead in this fixture</strong><p>No exact shared value appears in the fixed dataset.</p></div>{/if}
         {:else}
@@ -589,6 +612,13 @@
 <section class="demo-footer"><div><p>Ready for live investigation?</p><PublicConsoleCta /></div><p><a href="/">Return to the public overview</a></p></section>
 
 <style>
+  .source-cover-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 12px; }
+  .source-cover { border: 1px solid var(--border); border-radius: 12px; background: var(--panel-raised); padding: 16px; }
+  .source-cover p { color: var(--muted); font-size: var(--text-xs); }
+  .source-cover svg { display: block; width: 100%; height: auto; max-height: 280px; color: var(--muted); }
+  .source-cover line { stroke: currentColor; stroke-width: 1; }
+  .source-cover circle { fill: currentColor; }
+  @media print { .source-cover, .source-cover-controls { display: none; } }
   .case-practice-entry{padding:16px 22px;margin-bottom:24px;min-width:0}.case-practice-entry>summary{min-height:44px;align-content:center;font-weight:650}.case-practice-entry[open]>summary{margin-bottom:18px}
   .scenario-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:22px;margin-top:24px}
   .scenario-grid article{min-width:0;padding-top:16px;border-top:1px solid var(--border)}

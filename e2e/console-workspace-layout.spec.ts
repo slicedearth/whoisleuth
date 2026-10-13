@@ -1,7 +1,11 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
+import AxeBuilder from '@axe-core/playwright';
 import { normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
-import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData, openBrandProfileList, runBulkScan, selectBulkResultView, useTheme } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openBrandProfileList, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
+import { createCase } from '../packages/cases/case-record-operations.mts';
+import { createWorkspace, openArchive, switchWorkspace } from './browser-workspace-fixtures';
+import { caseNumber } from '../packages/cases/case-workflow-metadata.mts';
 
 const viewports = [
   { width: 320, height: 700 }, { width: 390, height: 844 },
@@ -9,6 +13,56 @@ const viewports = [
   { width: 1920, height: 1080 }, { width: 2560, height: 1440 },
   { width: 3840, height: 2160 },
 ] as const;
+
+test('optional Case covers and workspace markers stay temporary and retain exact identities and review clocks', async ({ page }, testInfo) => {
+  const record = createCase({ domain: 'cover.example' }, '2026-09-01T00:00:00.000Z');
+  record.updatedAt = '2026-09-20T00:00:00.000Z';
+  record.decisions = [{ id: 'cover-review', summary: 'More evidence is needed', rationale: 'Separate evidence remains incomplete',
+    confidence: 'low', confidenceBasis: 'Recorded scope', evidencePinIds: [], createdAt: '2026-09-05T00:00:00.000Z' }];
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [record] }) }, { clearStorage: true, destination: '/cases' });
+  const retained = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const covers = page.getByRole('checkbox', { name: 'Preview Case covers', exact: true });
+  await expect(covers).not.toBeChecked();
+  const header = page.locator(`#case-head-${record.id}`);
+  const href = await header.getAttribute('href');
+  const before = await page.evaluate(() => ({ local: Object.entries(localStorage).sort(), session: Object.entries(sessionStorage).sort() }));
+  await covers.focus(); await covers.press('Space');
+  const cover = page.locator('.case.cover');
+  await expect(cover).toContainText(caseNumber(record.id));
+  await expect(cover.locator('.cover-context time')).toHaveAttribute('datetime', '2026-09-05T00:00:00.000Z');
+  await expect(cover.locator('time.updated')).toHaveAttribute('datetime', '2026-09-20T00:00:00.000Z');
+  await expect(header).toHaveAttribute('href', href!);
+  const workspace = page.getByRole('note', { name: 'Active workspace', exact: true });
+  await workspace.getByText('Workspace marker', { exact: true }).click();
+  const marker = workspace.getByRole('combobox', { name: 'Temporary marker', exact: true });
+  await expect(marker).toHaveValue('none');
+  await marker.selectOption('violet');
+  await expect(workspace.locator('.workspace-marker.violet')).toHaveCount(1);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(marker).toHaveValue('violet');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(retained);
+  expect(await page.evaluate(() => ({ local: Object.entries(localStorage).sort(), session: Object.entries(sessionStorage).sort() }))).toEqual(before);
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    await covers.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('.case-list').include('.workspace-scope').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) {
+      await page.screenshot({ path: testInfo.outputPath(`optional-covers-${width}-${theme}.png`) });
+      await workspace.screenshot({ path: testInfo.outputPath(`optional-marker-${width}-${theme}.png`) });
+    }
+  }
+  await page.reload();
+  await expect(covers).not.toBeChecked();
+  await workspace.getByText('Workspace marker', { exact: true }).click();
+  await expect(marker).toHaveValue('none');
+  await page.goto('/dashboard#workspaces');
+  const created = await createWorkspace(page, 'Temporary marker check');
+  await switchWorkspace(page, created.name);
+  await workspace.getByText('Workspace marker', { exact: true }).click();
+  await expect(marker).toHaveValue('none');
+  const archive = await openArchive(page, true);
+  await expect(archive.locator('.workspace-scope').getByRole('combobox')).toHaveCount(0);
+});
 
 test('overflowing review tabs expose scroll controls without changing the selected view', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });

@@ -73,6 +73,9 @@ Its optional draft comparison generates and validates two fictional packets in
 memory, without authorising, downloading, delivering or importing them. Closing
 or clearing the comparison or leaving its practice step discards the pair;
 ordinary practice edits remain separate.
+The optional decorative source-map cover reduces only the selected fictional
+map to numeric geometry in page memory. It has no labels, export or saved state
+and clears on replacement, stage change or reset. It is not anonymisation.
 
 ## Standalone local application
 
@@ -220,6 +223,9 @@ Cases and currently open forms are unchanged.
 Favourites in this tab retain only exact Case/section or canonical navigation
 references in document memory. They are not stored, uploaded or exported and
 clear on document replacement, lock, sign-out or leaving the Console.
+Optional Case covers reuse retained titles, scope and review recording times
+without changing records. The workspace marker preview stays in document memory,
+clears on reload or workspace identity change, and conveys no protection or risk.
 
 Tab-scoped dictionaries, candidate handoffs, guided-investigation progress and
 similar transient state use bounded memory or `sessionStorage`. The one-use

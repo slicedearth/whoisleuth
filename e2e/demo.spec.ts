@@ -605,6 +605,30 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
   await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   const evidence = page.getByRole('region', { name: 'Where this result came from', exact: true });
   await expect(evidence).toBeVisible();
+  const decorative = page.getByRole('region', { name: 'Decorative fictional source-map cover', exact: true });
+  await expect(decorative).toHaveCount(0);
+  const stored = await page.evaluate(() => ({ local: Object.entries(localStorage).sort(), session: Object.entries(sessionStorage).sort() }));
+  const preview = page.getByRole('button', { name: 'Preview decorative source-map cover', exact: true });
+  await preview.focus(); await preview.press('Enter');
+  await expect(decorative).toBeVisible();
+  await expect(decorative).not.toContainText('exampleshop');
+  const geometry = await decorative.locator('svg').evaluate(svg => ({
+    viewBox: svg.getAttribute('viewBox'),
+    elements: [...svg.children].map(element => ({ tag: element.tagName, attrs: [...element.attributes].map(attribute => [attribute.name, attribute.value]) })),
+  }));
+  expect(geometry.elements.length).toBeGreaterThan(1);
+  for (const element of geometry.elements) {
+    expect(['line','circle']).toContain(element.tag);
+    for (const [name, value] of element.attrs) {
+      if (name === 'class') { expect(value).toMatch(/^svelte-[a-z0-9]+$/u); continue; }
+      expect(['x1','x2','y1','y2','cx','cy','r']).toContain(name); expect(Number.isFinite(Number(value))).toBe(true);
+    }
+  }
+  await page.getByRole('button', { name: 'Clear decorative cover', exact: true }).click();
+  await expect(decorative).toHaveCount(0);
+  await preview.click();
+  expect(await decorative.locator('svg').evaluate(svg => ({ viewBox: svg.getAttribute('viewBox'), elements: [...svg.children].map(element => ({ tag: element.tagName, attrs: [...element.attributes].map(attribute => [attribute.name, attribute.value]) })) }))).toEqual(geometry);
+  expect(await page.evaluate(() => ({ local: Object.entries(localStorage).sort(), session: Object.entries(sessionStorage).sort() }))).toEqual(stored);
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const width of [390, 1920]) {
@@ -612,9 +636,11 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
       await evidence.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
       if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`scenario-evidence-${theme}-${width}.png`) }); }
+      if (captureVisualEvidenceEnabled()) { await decorative.screenshot({ path: testInfo.outputPath(`decorative-cover-${theme}-${width}.png`) }); }
     }
   }
   await page.getByRole('button', { name: 'Reset demo' }).click();
+  await expect(decorative).toHaveCount(0);
   await page.getByRole('button', { name: 'Compare a reported change' }).click();
   await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeFocused();
   await page.getByRole('button', { name: 'Load later synthetic observation' }).click();

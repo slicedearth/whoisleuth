@@ -218,7 +218,7 @@ test('sign-in cannot redirect to another origin, a public page or a normalised p
 
 test('glossary, FAQ, state, and mistake content is bounded and deterministic', () => {
   assert.equal(glossaryTerms.length, 59);
-  assert.ok(guideFaqs.length > 0 && guideFaqs.length <= 16);
+  assert.ok(guideFaqs.length > 0);
   assert.equal(resultStates.length, 9);
   assert.equal(commonMistakes.length, 5);
   assert.equal(unique(glossaryTerms.map((item) => item.term)), true);

@@ -7,6 +7,20 @@ import { caseIncidentObjects } from './case-object-coverage.mts';
 import { caseRequestedEvidenceQueue } from './case-response-queue.mts';
 import { caseAssertionEvidenceReferences, caseEvidenceReferenceResolver } from './case-evidence-references.mts';
 
+/** Recording clocks only; an observation, edit or scheduled follow-up is not a review. */
+export function latestRetainedCaseReview(record: Pick<CaseRecord, 'decisions' | 'observedEffects'>) {
+  const cohort = latestObservationCohort([
+    ...record.decisions.map(decision => decision.createdAt),
+    ...record.observedEffects.reviews.map(review => review.createdAt),
+  ], value => value);
+  return {
+    recordedAt: cohort.observedAt,
+    tiedRecords: cohort.latest.length,
+    undatedRecords: cohort.undated.length,
+    historyLimited: record.observedEffects.omitted > 0 || record.observedEffects.preV13HistoryUnavailable,
+  };
+}
+
 /** Read-only projection of bounded Case records. A link is not an inferred verdict. */
 export function buildCaseDecisionOverview(record: CaseRecord, now: string) {
   const references = caseEvidenceReferenceResolver(record.evidencePins);

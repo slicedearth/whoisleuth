@@ -12,7 +12,8 @@
   import AnalystWorkbench from './AnalystWorkbench.svelte';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CopyButton from './CopyButton.svelte';
-  import { buildCaseDecisionOverview } from '../../../../packages/cases/case-decision-overview.mts';
+  import { buildCaseDecisionOverview, latestRetainedCaseReview } from '../../../../packages/cases/case-decision-overview.mts';
+  import IntelligenceIcon from './IntelligenceIcon.svelte';
   import { MAX_CASE_BATCH_MUTATIONS } from '../../../../packages/cases/case-batch-limits.mts';
   import { openRetainedPeek } from '#lib/controllers/retained-peek-key.ts';
 
@@ -30,6 +31,7 @@
     toggleTagCase?: (record: CaseRecord, selected: boolean) => void;
   } = $props();
   let inspectedId = $state<string | null>(null);
+  let covers = $state(false);
   const inspected = $derived(records.find(record => record.id === inspectedId) ?? null);
   const overview = $derived(inspected ? buildCaseDecisionOverview(inspected, new Date().toISOString()) : null);
   $effect(() => { if (inspectedId && !inspected) inspectedId = null; });
@@ -38,8 +40,9 @@
 <AnalystWorkbench label="Saved Case review" selected={inspected?.id ?? null} detailTitle={inspected?.title || inspected?.domain || ''} onclose={() => inspectedId = null}>
 {#snippet queue()}
 <section class="case-list" aria-label="Saved Cases">
+  <label class="cover-choice"><input type="checkbox" bind:checked={covers}>Preview Case covers</label>
   {#each records as record (record.id)}
-    <article class="case card">
+    <article class="case card" class:cover={covers}>
       {#if tagMode && toggleTagCase}
         <label class="calibration-select"><input type="checkbox" aria-label={`Select Case ${caseNumber(record.id)} for tag changes`}
           checked={tagCaseIds.includes(record.id)} disabled={tagSelectionDisabled || (tagCaseIds.length >= MAX_CASE_BATCH_MUTATIONS && !tagCaseIds.includes(record.id))}
@@ -54,10 +57,21 @@
       <a id={`case-head-${record.id}`} class="case-head" href={caseWorkspaceHref(record.id)} onclick={(event) => {
         if (handlesLocalLink(event)) { event.preventDefault(); selectCase(record); }
       }}>
+        {#if covers}<span class="cover-icon" aria-hidden="true"><IntelligenceIcon name="case" size={28} /></span>{/if}
         <span class="case-domain"><strong>{record.title || record.domain}</strong>{#if record.title}<small>{record.domain}</small>{/if}<small title={`Complete Case number: ${caseNumber(record.id)}`}>Case …{caseNumber(record.id).slice(-8)}{record.notes.length ? ` · ${record.notes.length} note${record.notes.length === 1 ? '' : 's'}` : ''}</small></span>
         <span class="badges"><span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span><span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span></span>
         <time class="updated" datetime={record.updatedAt}>{formatDate(record.updatedAt)}</time>
       </a>
+      {#if covers}
+        {@const review = latestRetainedCaseReview(record)}
+        <div class="cover-context">
+          <code>{caseNumber(record.id)}</code>
+          <p>Retained domain: <span>{record.domain}</span></p>
+          <p>Latest retained review record: {#if review.recordedAt}<time datetime={review.recordedAt}>{formatDate(review.recordedAt)}</time>{:else}No dated review record{/if}{#if review.tiedRecords > 1} · {review.tiedRecords} equally dated records{/if}</p>
+          <small>Recorded conclusions and independent outcome reviews.{#if review.undatedRecords} {review.undatedRecords} undated record{review.undatedRecords === 1 ? '' : 's'}; the latest review is unknown.{/if}{#if review.historyLimited} Retained review history is incomplete.{/if}</small>
+          {#if record.observedEffects.limitations.length}<details class="cover-limitations"><summary>Retained review context</summary><ul>{#each record.observedEffects.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>{/if}
+        </div>
+      {/if}
       {#if caseTypeRecords(record).length || record.tags.length}<div class="tag-row">{#each caseTypeRecords(record) as type}<span class="tag">{type.label}</span>{/each}{#each record.tags as tag}<span class="tag">{tag}</span>{/each}</div>{/if}
       <button class="btn peek" type="button" aria-label={`Inspect saved Case ${caseNumber(record.id)}`} aria-pressed={inspectedId === record.id} aria-keyshortcuts="P" title="Preview retained evidence: P while this button is focused" onclick={() => inspectedId = record.id} onkeydown={event => openRetainedPeek(event, () => inspectedId = record.id)}>Inspect retained evidence</button>
     </article>
@@ -88,6 +102,16 @@
 
 <style>
   .case-list { container: case-list / inline-size; display: grid; gap: 8px; }
+  .cover-choice { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: var(--text-xs); }
+  .cover-choice input { width: 18px; height: 18px; }
+  .cover .case-head { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .cover-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 12px; background: var(--panel-raised); }
+  .cover-context { padding: 0 16px 16px; overflow-wrap: anywhere; }
+  .cover-context p { margin: 8px 0; font-size: var(--text-xs); }
+  .cover-context small { color: var(--muted); }
+  .cover-limitations { font-size: var(--text-xs); color: var(--muted); }
+  .cover-limitations summary { min-height: 44px; align-content: center; cursor: pointer; }
+  .cover-limitations ul { padding-inline-start: 20px; }
   .case { min-width: 0; padding: 0; }
   .peek { margin: 0 1rem 1rem; }
   .peek-pin { padding-block: .75rem; border-bottom: 1px solid var(--border); }
@@ -102,6 +126,6 @@
   .tag { padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
   .calibration-select { display: flex; align-items: center; gap: 8px; padding: 12px 16px 0; color: var(--muted); font-size: var(--text-xs); }
   .calibration-select input { width: 18px; height: 18px; }
-  @container case-list (max-width: 900px) { .case-head { grid-template-columns: minmax(0,1fr) auto; } .updated { grid-column: 1/-1; } }
+  @container case-list (max-width: 900px) { .case-head { grid-template-columns: minmax(0,1fr) auto; } .cover .case-head { grid-template-columns: auto minmax(0,1fr); } .updated, .cover .badges { grid-column: 1/-1; } }
   @container case-list (max-width: 540px) { .case-head { grid-template-columns: minmax(0,1fr); gap: 10px; } }
 </style>

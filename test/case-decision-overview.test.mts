@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildCaseCompletionReview, buildCaseDecisionOverview, caseQuestionNextActions } from '../packages/cases/case-decision-overview.mts';
+import { buildCaseCompletionReview, buildCaseDecisionOverview, caseQuestionNextActions, latestRetainedCaseReview } from '../packages/cases/case-decision-overview.mts';
 import { createCase } from '../packages/cases/case-model.mts';
 import { caseRecheckComparisonWarnings } from '../packages/cases/case-recheck-model.mts';
 import type { CaseEvidencePin, CaseDecisionRecord, CaseActionRecord } from '../packages/cases/case-response-records.mts';
@@ -11,6 +11,41 @@ const pin: CaseEvidencePin = { id: 'pin-one', checkpointId: null, field: 'http.s
   collectionDepth: 'deep', completeness: 'complete', truncated: false, transitionExpectation: null, limitations: [], createdAt: NOW };
 const decision: CaseDecisionRecord = { id: 'decision-one', summary: 'Continue review', rationale: 'Conflicting observations',
   confidence: 'low', confidenceBasis: 'Limited independent evidence', evidencePinIds: ['pin-one', 'missing'], createdAt: NOW };
+
+test('Case cover review clocks ignore edits, source observations and scheduled follow-ups', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  record.updatedAt = '2026-09-30T00:00:00.000Z';
+  record.decisions = [decision];
+  record.observedEffects.reviews = [{ id: 'review', state: 'unavailable', sourceClass: 'analyst', source: 'Separate review',
+    observedAt: '2026-09-25T00:00:00.000Z', createdAt: '2026-09-11T00:00:00.000Z', completeness: 'partial',
+    limitations: [], evidencePinId: null, sightingId: null, followUpAt: '2026-10-01T00:00:00.000Z' }];
+  const before = structuredClone(record);
+  assert.deepEqual(latestRetainedCaseReview(record), { recordedAt: '2026-09-11T00:00:00.000Z', tiedRecords: 1, undatedRecords: 0, historyLimited: false });
+  assert.deepEqual(record, before);
+});
+
+test('Case cover dates preserve ties, undated records and incomplete retained history', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  assert.ok(record.observedEffects.limitations.length > 0, 'The ordinary canonical independence qualification remains present.');
+  assert.deepEqual(latestRetainedCaseReview(record), { recordedAt: null, tiedRecords: 0, undatedRecords: 0, historyLimited: false });
+  record.decisions = [decision, { ...decision, id: 'undated', createdAt: 'invalid' }];
+  record.observedEffects.reviews = [{ id: 'tied', state: 'still_observed', sourceClass: 'analyst', source: 'Independent review',
+    observedAt: '2026-09-01T00:00:00.000Z', createdAt: NOW, completeness: 'complete', limitations: [],
+    evidencePinId: null, sightingId: null, followUpAt: null }];
+  assert.deepEqual(latestRetainedCaseReview(record), { recordedAt: NOW, tiedRecords: 2, undatedRecords: 1, historyLimited: false });
+  for (const history of [
+    { omitted: 1, preV13HistoryUnavailable: false, limitations: [] },
+    { omitted: 0, preV13HistoryUnavailable: true, limitations: [] },
+  ]) {
+    record.observedEffects = { ...record.observedEffects, ...history };
+    assert.equal(latestRetainedCaseReview(record).historyLimited, true);
+  }
+  record.observedEffects = { ...record.observedEffects, omitted: 0, preV13HistoryUnavailable: false, limitations: ['Independent point-in-time evidence does not prove removal'] };
+  assert.equal(latestRetainedCaseReview(record).historyLimited, false, 'A general qualification is not missing history.');
+  record.decisions = [{ ...decision, createdAt: '' }]; record.observedEffects.reviews = [];
+  assert.equal(latestRetainedCaseReview(record).recordedAt, null);
+  assert.equal(latestRetainedCaseReview(record).undatedRecords, 1);
+});
 
 test('empty overview neither invents a question, judgement nor a scheduled review', () => {
   const record = createCase({ domain: 'review.example' }, NOW);

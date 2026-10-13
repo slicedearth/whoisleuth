@@ -1,4 +1,5 @@
 export { default as EvidenceTopology } from '#lib/components/EvidenceTopology.svelte';
+export { projectEvidenceTopology } from '#lib/analysis/evidence-topology.ts';
 export { default as LookupLifecycle } from '#lib/components/LookupLifecycle.svelte';
 export { default as LookupAcquisitionReview } from '#lib/components/DemoLookupAcquisitionReview.svelte';
 export { default as LookupAssessment } from '#lib/components/LookupAssessment.svelte';
