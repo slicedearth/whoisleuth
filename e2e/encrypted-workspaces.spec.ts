@@ -27,6 +27,8 @@ async function observeCancelledLock(page: Page) {
   });
   await page.addInitScript(() => {
     let active = false;
+    let remaining = 64;
+    let observer: MutationObserver | null = null;
     const rectangle = (element: Element | null) => {
       if (!element) return null;
       const box = element.getBoundingClientRect();
@@ -42,25 +44,45 @@ async function observeCancelledLock(page: Page) {
       return { notice: rectangle(document.querySelector('.workspace-lock [role="status"]')), retryCount: retries.length,
         retry: rectangle(retries.length === 1 ? retries[0]! : null), states };
     };
+    const measure = () => {
+      if (remaining === 0) return null;
+      remaining--;
+      const current = snapshot();
+      if (remaining === 0) {
+        observer?.disconnect();
+        const record = Reflect.get(window, '__recordCancelledLockInteraction');
+        if (typeof record === 'function') void Promise.resolve(record({ phase: 'diagnostic-limit-reached', time: performance.now(), limit: 64 })).catch(() => {});
+      }
+      return current;
+    };
     const emit = (phase: string, extra: Record<string, unknown> = {}) => {
+      const current = measure();
+      if (!current) return;
       const record = Reflect.get(window, '__recordCancelledLockInteraction');
-      if (typeof record === 'function') void Promise.resolve(record({ phase, time: performance.now(), ...snapshot(), ...extra })).catch(() => {});
+      if (typeof record === 'function') void Promise.resolve(record({ phase, time: performance.now(), ...current, ...extra })).catch(() => {});
     };
     Reflect.set(window, '__markCancelledLockInteraction', (phase: string) => { active = true; emit(phase); });
     for (const phase of ['beforeunload', 'pagehide', 'pageshow'] as const) window.addEventListener(phase, () => emit(phase));
     for (const phase of ['pointerdown', 'click'] as const) window.addEventListener(phase, event => {
-      if (!active) return;
+      if (!active || remaining === 0) return;
       const target = event.target instanceof Element ? event.target.closest('button') : null;
       const retry = [...document.querySelectorAll('.draft-recovery button')].filter(button => button.textContent?.trim() === 'Retry recovery save');
       const category = target && retry.length === 1 && target === retry[0] ? 'retry-save' : target?.textContent?.trim() === 'Lock workspace' ? 'lock-workspace' : 'other';
       emit(phase, { target: category, point: { x: event.clientX, y: event.clientY }, trusted: event.isTrusted });
     }, true);
     let previous = '';
-    new MutationObserver(() => {
-      if (!active) return;
-      const current = JSON.stringify(snapshot());
-      if (current !== previous) { previous = current; emit('geometry-or-status-change'); }
-    }).observe(document, { childList: true, subtree: true, attributes: true });
+    observer = new MutationObserver(() => {
+      if (!active || remaining === 0) return;
+      const current = measure();
+      if (!current) return;
+      const key = JSON.stringify(current);
+      if (key !== previous) {
+        previous = key;
+        const record = Reflect.get(window, '__recordCancelledLockInteraction');
+        if (typeof record === 'function') void Promise.resolve(record({ phase: 'geometry-or-status-change', time: performance.now(), ...current })).catch(() => {});
+      }
+    });
+    observer.observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-recovery-status'] });
   });
 }
 
