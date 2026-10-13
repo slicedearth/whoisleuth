@@ -845,7 +845,13 @@ select the required originals. **Check handoff contents** verifies those bytes
 and the complete Case, identifies missing selections, and enables an encrypted
 package download. The full Case includes notes, incident links, filenames and
 response records; unfinished forms are excluded. A changed Case requires a new
-check. Send the passphrase separately.
+check. The checked view separates original-byte presence and digest matches
+from format compatibility, source declarations and recipient access. It names
+the current Case, manifest and encrypted-envelope versions; the recipient’s
+software still needs to support them. File integrity does not authenticate
+source claims, and a download proves neither delivery nor recovery. Open
+**Recipient verification steps** for the receiving-side checks. Send the
+passphrase separately.
 
 The reviewer unlocks the package in Dashboard’s saved-work tools and checks the
 original-file matches. **Open temporary Case review** reads the Case and matched
