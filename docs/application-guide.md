@@ -10,42 +10,17 @@ Network collection and external actions remain explicit. The generated
 [privacy/data-flow catalogue](privacy-data-flow-catalogue.md) lists request,
 recipient, retention and export boundaries.
 
-Choose **Explore an example investigation** on the public homepage to enter the
-demo. Its adjacent note identifies fictional evidence and no live collection.
-The demo uses fixed fictional evidence and does not write protected workspace
-data. Its HTTP examples retain an origin when available, but not full
-requested or final URLs. Those URL rows therefore say **Not retained**; an origin
-does not identify the page path, and an inconclusive example has no observed
-response or final origin.
-The demo's **Source quality** view uses the same source-scope display as Lookup;
-missing query outcomes, connection hostnames and source times stay unknown.
-In its Case step, **Explore the retained investigation timeline** groups the
-existing fictional observations by evidence family without opening saved Cases.
-Combined snapshots do not supply separate clocks for each family.
+- [Start work](#start-work): choose a tool and reading setup.
+- [Review and compare](#review-and-compare): inspect queues and retained evidence.
+- [Prepare a handoff](#prepare-a-handoff): check the recipient's actual view.
+- [Resume and recover](#resume-and-recover): return to a context or saved checkpoint.
 
-Brand candidates, the Review Inbox, Bulk's Review view and the saved Case list
-share an **Inspect** workflow. The queue stays beside the current item on wide
-screens; narrow screens show one pane at a time. **Back to queue** returns to the
-inspection control without clearing filters or checked candidates. Escape closes
-inspection when focus is outside an editing control. Where a separate evidence
-inspector is available, **Reading layout** adjusts its width without changing data.
-Inspection makes no request and does not select an item for a batch action.
-Brand candidate **Explainable pattern groups** shows the contributors to each
-retained matching rule, with individual review status, exact declarations and
-rule exceptions. Contributors are paged independently of the candidate queue;
-**Inspect** opens that domain's retained evidence and returns to the same group
-page. Groups reflect the current filters, may overlap and never select or admit
-their members to a watchlist. Every candidate remains reachable in the queue.
-Case inspection is a read-only preview; **Open Case workspace** opens its editor.
-In the Case list, **Organise Case tags** enables a separate checked selection
-across pages and filters. Preview the exact add/remove result, then apply it once.
-Inspection and calibration selection do not change these targets. Conflicting or
-missing records, excessive tags and storage changes that would prune evidence
-block the whole batch. Tags organise records; they do not change conclusions.
-The draft stays on this page until saved or discarded. After an unknown write
-outcome, reload and inspect saved tags before attempting another batch.
-Review Inbox forms retain their drafts while another item is inspected; use the
-existing explicit review checkpoint to retain them across a reload.
+## Start work
+
+Open [Dashboard](#dashboard) for saved work and first actions, [Lookup](#lookup)
+for a single target, or [Bulk](#bulk) for a selected list. [Brands](#brands)
+organises candidate review. [Workspaces and encryption](#workspaces-and-encryption)
+explains where saved work lives and how to protect it.
 
 Appearance controls offer comfortable or compact reading density. Compact uses
 the full available width for console workspaces; public prose remains constrained.
@@ -73,25 +48,32 @@ comparison and handoff reference. Select **Print field cards only**, then use
 Leave the option clear to print the full guide. The reference identifies the
 application version and contains no saved investigation data.
 
-Use **Practise with real Case forms** in the demo to choose a supplied incident,
-conflicting-source or provider-response scenario. Pin an observation,
-record an evidence-linked conclusion and review an incomplete later capture.
-The forms and validation match the Console, but the practice Case and drafts
-remain only on that page. Restarting, reloading or leaving discards them. The
-exercise makes no collection, submission or export. The credential-page exercise
-rehearses separate recipient reviews, simulated deliveries and page-only closure;
-the requested-evidence exercise prepares a drafting amendment. Changing scenario
-requires confirming that its Case and drafts should be discarded. Feedback
-checks retained relationships and states, not the quality of free-text reasoning.
+[Practise with fictional evidence](#practise-with-fictional-evidence) before
+working with your own records.
 
-Optional **Larger practice reading** and **Show practice companion** choices are
-page-local presentation aids. They do not change the fictional records, grade
-decisions or appear in evidence exports. Source-reuse and campaign-authority
-exercises explain why repeated reports or an organisation directory entry do
-not establish independent observation or authority for a separate offer.
-The retained investigation timeline also offers a **Field journal reading
-layout**, using the same entries, filters, pagination and separately labelled
-clocks. It does not reconstruct missing observations or change the theme.
+## Review and compare
+
+Brand candidates, the Review Inbox, Bulk's Review view and the saved Case list
+share an **Inspect** workflow. The queue stays beside the current item on wide
+screens; narrow screens show one pane at a time. **Back to queue** returns to the
+inspection control without clearing filters or checked candidates. Escape closes
+inspection when focus is outside an editing control. Where a separate evidence
+inspector is available, **Reading layout** adjusts its width without changing data.
+Inspection makes no request and does not select an item for a batch action.
+Brand candidate **Explainable pattern groups** shows the contributors to each
+retained matching rule, with individual review status, exact declarations and
+rule exceptions. Contributors are paged independently of the candidate queue;
+**Inspect** opens that domain's retained evidence and returns to the same group
+page. Groups reflect the current filters, may overlap and never select or admit
+their members to a watchlist. Every candidate remains reachable in the queue.
+Case inspection is a read-only preview; **Open Case workspace** opens its editor.
+In the Case list, **Organise Case tags** enables a separate checked selection
+across pages and filters. Preview the exact add/remove result, then apply it once.
+Inspection and calibration selection do not change these targets. Conflicting or
+missing records, excessive tags and storage changes that would prune evidence
+block the whole batch. Tags organise records; they do not change conclusions.
+The draft stays on this page until saved or discarded. After an unknown write
+outcome, reload and inspect saved tags before attempting another batch.
 
 In **Retained change review**, choose one retained comparison, then select the
 individual rows to include in **Download selected rows**. Nothing is selected
@@ -106,6 +88,8 @@ rechecks the current displayed details and makes no collection or upload request
 It does not reread the latest saved state. Reload the page to include
 changes made elsewhere.
 
+## Prepare a handoff
+
 In a prepared response packet, **Recipient reading view** offers the full report,
 brief emphasis, selected evidence and its contained timeline. These views contain
 only the packet's existing projection; printing still uses its full report and
@@ -115,6 +99,12 @@ time. It can reveal private fields absent from the packet, so it is excluded fro
 printing and every recipient export. Notes enter the internal side only when
 explicitly selected. Closing it, refreshing the packet or changing source, options or section clears
 the comparison; different representations do not establish deletion or redaction.
+
+See [Cases and response preparation](#cases-and-response-preparation) for the
+response workflow and [Reports, imports and exports](#reports-imports-and-exports)
+for portable files and their disclosure boundaries.
+
+## Resume and recover
 
 **Pin checkpoint** in a Case evidence timeline keeps up to four exact references
 in the current tab. Open **Tab references** in the Console context, then
@@ -128,44 +118,11 @@ missing identities and expired tab references remain unavailable. The trail is
 navigation, not an observed relationship or investigation log. These views store no duplicate evidence and
 clear on lock, sign-out, workspace replacement or leaving the Console.
 
-For related hosts, conflicting sources and provider-reported resolution, open
-**Find the weak inference** in **Record a conclusion**. Inspect the original
-supplied evidence, choose the statement that exceeds it and select **Explain
-this choice**. The explanation distinguishes the observation from the unsupported
-conclusion; it does not score you or record a Case decision. Closing the exercise,
-changing steps or collapsing practice clears the choice without changing your drafts.
+Review Inbox forms retain their drafts while another item is inspected; use the
+existing explicit review checkpoint to retain them across a reload.
 
-In the source-reuse exercise, record a conclusion citing the provider's reused
-report, then select that conclusion under **Trace sources for** in **Evidence
-relationships and shared sources**. Follow its declared derivation without
-counting repeated material as independent support. The credential-page exercise
-also uses **Exact incident-object coverage**: inspect each recipient's drafting,
-simulated delivery and response history, then the independently reviewed page.
-The advertisement stays unresolved. Packet identity remains unknown for those
-simulated deliveries; no prepared packet is attached to their history.
-
-**Compare fictional response drafts** is a separate, optional exercise. Choose
-**Compare supplied fictional drafts** to inspect two in-memory draft packets
-from a fresh copy of the supplied Case. They change recipient, exact page or
-advertisement scope, and selected evidence. Open a difference to inspect both
-complete values. A pin absent from one packet is still retained in the source
-Case. The normal packet writer, validation and comparison are used, but neither
-draft is authorised, downloaded, delivered or imported. Your practice edits and
-simulated delivery history are unchanged. Clearing or closing the comparison,
-closing practice, changing steps or scenario, restarting or leaving discards
-the temporary pair.
-
-Choose a compromised-page or shared-form scenario to practise exact object scope;
-the related-host scenario keeps different affected identities and observations
-separate. The changing landing-page exercise leaves the ad and replacement URL
-open to review. Conditional captures retain their different paths and conditions.
-Their **Compare capture conditions** view compares declared fictional viewport
-and browser context, including an incomplete later attempt with unknown settings.
-The exercise includes no image bytes or page-comparison inputs.
-Other examples distinguish reported account actions, an organisation's existence
-from its claimed campaign endorsement, insufficient logo/edge evidence, and a
-later provider result that reuses a submitted report. Inspect the evidence and
-its qualifications before recording a conclusion.
+Use [Browser-local storage and archives](#browser-local-storage-and-archives)
+for backup, restore and original-file recovery.
 
 ## Dashboard
 
@@ -268,6 +225,80 @@ approve collection or mark it complete.
 Unconfirmed outcome notes remain separate for each step while the guide is
 open. Collapsing it or changing steps preserves those drafts; reloading the
 page discards them. Confirmed progress stays in the current tab.
+
+#### Practise with fictional evidence
+
+Choose **Explore an example investigation** on the public homepage to enter the
+demo. Its adjacent note identifies fictional evidence and no live collection.
+The demo uses fixed fictional evidence and does not write protected workspace
+data. Its HTTP examples retain an origin when available, but not full
+requested or final URLs. Those URL rows therefore say **Not retained**; an origin
+does not identify the page path, and an inconclusive example has no observed
+response or final origin.
+The demo's **Source quality** view uses the same source-scope display as Lookup;
+missing query outcomes, connection hostnames and source times stay unknown.
+In its Case step, **Explore the retained investigation timeline** groups the
+existing fictional observations by evidence family without opening saved Cases.
+Combined snapshots do not supply separate clocks for each family.
+
+Use **Practise with real Case forms** in the demo to choose a supplied incident,
+conflicting-source or provider-response scenario. Pin an observation,
+record an evidence-linked conclusion and review an incomplete later capture.
+The forms and validation match the Console, but the practice Case and drafts
+remain only on that page. Restarting, reloading or leaving discards them. The
+exercise makes no collection, submission or export. The credential-page exercise
+rehearses separate recipient reviews, simulated deliveries and page-only closure;
+the requested-evidence exercise prepares a drafting amendment. Changing scenario
+requires confirming that its Case and drafts should be discarded. Feedback
+checks retained relationships and states, not the quality of free-text reasoning.
+
+Optional **Larger practice reading** and **Show practice companion** choices are
+page-local presentation aids. They do not change the fictional records, grade
+decisions or appear in evidence exports. Source-reuse and campaign-authority
+exercises explain why repeated reports or an organisation directory entry do
+not establish independent observation or authority for a separate offer.
+The retained investigation timeline also offers a **Field journal reading
+layout**, using the same entries, filters, pagination and separately labelled
+clocks. It does not reconstruct missing observations or change the theme.
+
+For related hosts, conflicting sources and provider-reported resolution, open
+**Find the weak inference** in **Record a conclusion**. Inspect the original
+supplied evidence, choose the statement that exceeds it and select **Explain
+this choice**. The explanation distinguishes the observation from the unsupported
+conclusion; it does not score you or record a Case decision. Closing the exercise,
+changing steps or collapsing practice clears the choice without changing your drafts.
+
+In the source-reuse exercise, record a conclusion citing the provider's reused
+report, then select that conclusion under **Trace sources for** in **Evidence
+relationships and shared sources**. Follow its declared derivation without
+counting repeated material as independent support. The credential-page exercise
+also uses **Exact incident-object coverage**: inspect each recipient's drafting,
+simulated delivery and response history, then the independently reviewed page.
+The advertisement stays unresolved. Packet identity remains unknown for those
+simulated deliveries; no prepared packet is attached to their history.
+
+**Compare fictional response drafts** is a separate, optional exercise. Choose
+**Compare supplied fictional drafts** to inspect two in-memory draft packets
+from a fresh copy of the supplied Case. They change recipient, exact page or
+advertisement scope, and selected evidence. Open a difference to inspect both
+complete values. A pin absent from one packet is still retained in the source
+Case. The normal packet writer, validation and comparison are used, but neither
+draft is authorised, downloaded, delivered or imported. Your practice edits and
+simulated delivery history are unchanged. Clearing or closing the comparison,
+closing practice, changing steps or scenario, restarting or leaving discards
+the temporary pair.
+
+Choose a compromised-page or shared-form scenario to practise exact object scope;
+the related-host scenario keeps different affected identities and observations
+separate. The changing landing-page exercise leaves the ad and replacement URL
+open to review. Conditional captures retain their different paths and conditions.
+Their **Compare capture conditions** view compares declared fictional viewport
+and browser context, including an incomplete later attempt with unknown settings.
+The exercise includes no image bytes or page-comparison inputs.
+Other examples distinguish reported account actions, an organisation's existence
+from its claimed campaign endorsement, insufficient logo/edge evidence, and a
+later provider result that reuses a submitted report. Inspect the evidence and
+its qualifications before recording a conclusion.
 
 ## Lookup
 
