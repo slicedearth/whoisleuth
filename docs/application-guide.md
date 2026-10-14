@@ -1228,6 +1228,9 @@ and freshness checks.
 **Preview manual complaint** shows the exact text used by Copy and the email
 download. JSON and Markdown describe the same prepared packet. Changed inputs
 or freshness require a new preview; receipt recording remains a separate action.
+Closing the packet or leaving its phase or Case section cancels preparation that
+has not yet started a download or clipboard request. Reopen the review to try again.
+A download or clipboard request already handed to the browser cannot be recalled.
 **Preview printable report** presents the same audience-filtered packet with
 incident context, source references, UTC times, readiness and response state.
 Print or save it as PDF through the browser, optionally including the exact JSON

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { downloadLocalFile } from '#lib/download-local-file.ts';
-  import { onDestroy, tick } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
+  import { beforeNavigate } from '$app/navigation';
+  import { captureConsoleReferenceScope, subscribeConsoleReferenceView, type ConsoleReferenceScope } from '#lib/console-workflow-state.ts';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CasePacketPrintPreview from './CasePacketPrintPreview.svelte';
   import CasePacketDisclosure from './CasePacketDisclosure.svelte';
@@ -94,8 +96,12 @@
     'Export and record',
   ] as const);
   let packetWizardStep = $state(1);
-  let packetBusy = $state(false);
   let packetOpen = $state(false);
+  let packetElement = $state<HTMLDetailsElement>();
+  type PacketOperation = Readonly<{ generation: number; caseId: string; phase: number; scope: ConsoleReferenceScope }> & { outputStarted: boolean };
+  let operationGeneration = 0;
+  let activeOperation = $state.raw<PacketOperation | null>(null);
+  const packetBusy = $derived(activeOperation !== null);
   let defaultsAppliedRecordId = $state('');
   let packetCategoryEdited = $state(false);
   let packetUrlsEdited = $state(false);
@@ -129,7 +135,52 @@
     if (manualPreview !== prepared) clearDisclosures();
     manualPreview = prepared;
   }
-  onDestroy(() => { disposed = true; clearDisclosures(); });
+  function sameScope(left: ConsoleReferenceScope, right: ConsoleReferenceScope) {
+    return left.workspaceId !== null && left.workspaceId === right.workspaceId && left.generation === right.generation;
+  }
+  function packetIsOpen() { return !disposed && visible && packetOpen && Boolean(packetElement?.isConnected && packetElement.open); }
+  function operationIsCurrent(operation: PacketOperation) {
+    return activeOperation === operation && operation.generation === operationGeneration && packetIsOpen()
+      && operation.caseId === record.id && operation.phase === packetWizardStep
+      && sameScope(operation.scope, captureConsoleReferenceScope());
+  }
+  function beginPacketOperation(): PacketOperation | null {
+    if (packetBusy || !packetIsOpen()) return null;
+    const scope = captureConsoleReferenceScope();
+    if (scope.workspaceId === null) return null;
+    return activeOperation = { generation: ++operationGeneration, caseId: record.id, phase: packetWizardStep, scope, outputStarted: false };
+  }
+  function finishPacketOperation(operation: PacketOperation) {
+    if (activeOperation === operation) activeOperation = null;
+  }
+  function invalidatePacketWork(announce = false) {
+    const cancelled = activeOperation;
+    operationGeneration++;
+    activeOperation = null;
+    printPreview = null;
+    clearDisclosures();
+    if (announce && cancelled && !cancelled.outputStarted && !disposed)
+      onmessage('Packet preparation cancelled. Nothing was downloaded or copied.');
+  }
+  // Console scope changes cover the existing workspace/session clearing paths.
+  // They are independent of harmless changes to pinned reference contents.
+  onMount(() => {
+    let scope = captureConsoleReferenceScope();
+    return subscribeConsoleReferenceView(() => {
+      const next = captureConsoleReferenceScope();
+      if (!sameScope(scope, next)) {
+        invalidatePacketWork();
+        manualPreview = null; lastPacketExport = null;
+      }
+      scope = next;
+    });
+  });
+  beforeNavigate(() => invalidatePacketWork());
+  onDestroy(() => { disposed = true; invalidatePacketWork(); });
+  $effect(() => {
+    const operation = activeOperation;
+    if (operation && (!visible || !packetOpen || operation.caseId !== record.id || operation.phase !== packetWizardStep)) invalidatePacketWork();
+  });
   $effect(() => {
     const context = disclosureContext();
     if (previousDisclosureContext !== null && context !== previousDisclosureContext) clearDisclosures();
@@ -183,7 +234,7 @@
 
   $effect(() => onstagechange(stage));
   $effect(() => {
-    if (printPreview && (!visible || printPreview.signature !== packetHandoffSignature() || previewFreshnessChanged)) {
+    if (printPreview && (!visible || !packetOpen || packetWizardStep !== 3 || printPreview.signature !== packetHandoffSignature() || previewFreshnessChanged)) {
       void closePrintablePacket();
       onmessage('The prepared report is no longer current. Review the packet inputs and prepare it again.');
     }
@@ -265,11 +316,11 @@
   }
 
   async function reviewPacketInputs() {
-    if (packetBusy) return;
-    packetBusy = true;
+    const operation = beginPacketOperation(); if (!operation) return;
     try {
       const signature = packetMaterialSignature();
       const digest = await buildCaseResponseReviewDigest(record, packetInput(false), new Date().toISOString());
+      if (!operationIsCurrent(operation)) return;
       if (signature !== packetMaterialSignature()) {
         packetAuthorisationConfirmedAt = '';
         onmessage('The local packet inputs changed while the review digest was being prepared. Review and bind the current inputs again.');
@@ -286,11 +337,12 @@
       };
       packetAuthorisationConfirmedAt = '';
       onmessage('Bound the current local draft inputs to a review digest. Confirm each authorisation statement after completing the review.');
+      finishPacketOperation(operation);
       await setPacketWizardStep(2);
     } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Could not bind the current packet inputs for review.');
+      if (operationIsCurrent(operation)) onmessage(cause instanceof Error ? cause.message : 'Could not bind the current packet inputs for review.');
     } finally {
-      packetBusy = false;
+      finishPacketOperation(operation);
     }
   }
 
@@ -301,10 +353,11 @@
 
   async function authorisePacketInputs() {
     if (!packetReviewIsCurrent || !packetConfirmationsComplete || !packetAuthorisationReadinessComplete || packetBusy) return;
-    packetBusy = true;
+    const operation = beginPacketOperation(); if (!operation) return;
     try {
       const signature = packetMaterialSignature();
       const currentDigest = await buildCaseResponseReviewDigest(record, packetInput(false), new Date().toISOString());
+      if (!operationIsCurrent(operation)) return;
       if (signature !== packetMaterialSignature() || signature !== packetReviewSignature || currentDigest !== packetReviewDigest) {
         packetAuthorisationConfirmedAt = '';
         onmessage('The reviewed inputs or their freshness state changed. Review and bind the current packet again before authorisation.');
@@ -312,22 +365,26 @@
       }
       packetAuthorisationConfirmedAt = utcInputFromIso(new Date().toISOString());
       onmessage('Authorised the exact saved inputs bound to the retained review digest. Nothing was submitted.');
+      finishPacketOperation(operation);
       await setPacketWizardStep(3);
     } catch (cause) {
-      packetAuthorisationConfirmedAt = '';
-      onmessage(cause instanceof Error ? cause.message : 'Could not verify the exact packet review before authorisation.');
+      if (operationIsCurrent(operation)) {
+        packetAuthorisationConfirmedAt = '';
+        onmessage(cause instanceof Error ? cause.message : 'Could not verify the exact packet review before authorisation.');
+      }
     } finally {
-      packetBusy = false;
+      finishPacketOperation(operation);
     }
   }
 
-  async function prepareManualPacket(usePreview: boolean): Promise<PreparedPacket> {
+  async function prepareManualPacket(usePreview: boolean, operation: PacketOperation): Promise<PreparedPacket | null> {
     const signature = packetHandoffSignature();
     const generatedAt = new Date().toISOString();
     if (usePreview && manualPreview) {
       const preview = manualPreview;
       if (previewFreshnessChanged || preview.signature !== signature) throw new Error('The manual complaint preview is out of date. Refresh it before copying or exporting.');
       const digest = await buildCaseResponseReviewDigest(record, packetInput(false), generatedAt);
+      if (!operationIsCurrent(operation)) return null;
       if (signature !== packetHandoffSignature()) throw new Error('The packet inputs changed while the handoff was being prepared. Nothing was downloaded or copied.');
       if (Date.parse(generatedAt) < Date.parse(preview.generatedAt)
         || digest !== preview.built.json.authorisation.reviewedInputDigestSha256) {
@@ -339,36 +396,38 @@
     const action = record.actions.find((item) => item.id === packetActionId);
     const context = { caseId: record.id, domain: record.domain, actionId: action?.id ?? null, actionSignature: JSON.stringify(action) ?? '', responseContext: JSON.stringify(record) };
     const built = await buildCaseResponsePacket(record, packetInput(), generatedAt);
+    if (!operationIsCurrent(operation)) return null;
     if (signature !== packetHandoffSignature()) throw new Error('The packet inputs changed while the handoff was being prepared. Nothing was downloaded or copied.');
     return { built, signature, generatedAt, ...context };
   }
 
   async function previewManualComplaint() {
-    if (packetBusy) return;
-    packetBusy = true;
+    const operation = beginPacketOperation(); if (!operation) return;
     try {
-      const prepared = await prepareManualPacket(false);
+      const prepared = await prepareManualPacket(false, operation);
+      if (!prepared || !operationIsCurrent(operation)) return;
       replaceManualPreview(prepared);
       previewFreshnessChanged = false;
       onmessage(`Prepared the exact ${prepared.built.json.authorisation.status} manual complaint preview. Nothing was copied, downloaded or submitted.`);
       await tick();
-      document.getElementById(`manual-complaint-${record.id}`)?.focus({ preventScroll: true });
+      if (operationIsCurrent(operation)) document.getElementById(`manual-complaint-${operation.caseId}`)?.focus({ preventScroll: true });
     } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Could not prepare the manual complaint preview.');
+      if (operationIsCurrent(operation)) onmessage(cause instanceof Error ? cause.message : 'Could not prepare the manual complaint preview.');
     } finally {
-      packetBusy = false;
+      finishPacketOperation(operation);
     }
   }
 
   async function comparePreparedDisclosures() {
     if (packetBusy || !visible || !packetOpen || packetWizardStep !== 3 || !disclosureOpen) return;
+    const operation = beginPacketOperation(); if (!operation) return;
     const context = disclosureContext(); previousDisclosureContext = context;
     const request = ++disclosureGeneration, signature = packetHandoffSignature(), notes = disclosureNotes;
     const detached = structuredClone(record), sourceIdentity = JSON.stringify(detached);
-    packetBusy = true; disclosurePair = null;
+    disclosurePair = null;
     try {
-      const prepared = await prepareManualPacket(true);
-      if (disposed || request !== disclosureGeneration || !visible || !disclosureOpen
+      const prepared = await prepareManualPacket(true, operation);
+      if (!prepared || !operationIsCurrent(operation) || request !== disclosureGeneration || !disclosureOpen
         || context !== disclosureContext()
         || notes !== disclosureNotes || signature !== packetHandoffSignature()
         || prepared.responseContext !== sourceIdentity) return;
@@ -377,25 +436,28 @@
       replaceManualPreview(prepared); disclosurePair = { internal, recipient: prepared, notes };
       onmessage('Prepared an analyst-only disclosure comparison. Recipient packet bytes and selections are unchanged.');
     } catch (cause) {
-      if (!disposed && request === disclosureGeneration) onmessage(cause instanceof Error ? cause.message : 'The disclosure comparison could not be prepared.');
-    } finally { if (!disposed) packetBusy = false; }
+      if (operationIsCurrent(operation) && request === disclosureGeneration) onmessage(cause instanceof Error ? cause.message : 'The disclosure comparison could not be prepared.');
+    } finally { finishPacketOperation(operation); }
   }
 
   async function downloadPacket(format: 'json' | 'md' | 'txt') {
-    if (packetBusy) return;
-    packetBusy = true;
+    const operation = beginPacketOperation(); if (!operation) return;
     lastPacketExport = null;
     try {
-      const prepared = await prepareManualPacket(true);
+      const prepared = await prepareManualPacket(true, operation);
+      if (!prepared || !operationIsCurrent(operation)) return;
       const { built, caseId, domain, actionId, actionSignature, generatedAt } = prepared;
       const content = format === 'json'
         ? JSON.stringify(built.json, null, 2)
         : format === 'md'
           ? built.markdown
           : built.email;
+      if (!operationIsCurrent(operation)) return;
+      operation.outputStarted = true;
       downloadLocalFile(new Blob([content], {
         type: format === 'json' ? 'application/json' : format === 'md' ? 'text/markdown' : 'text/plain',
       }), caseResponsePacketFilename(domain, format, generatedAt));
+      if (!operationIsCurrent(operation)) return;
       lastPacketExport = actionId && actionSignature ? {
         caseId,
         actionId,
@@ -409,56 +471,71 @@
       } : null;
       onmessage(`Exported a ${built.json.authorisation.status} ${format === 'txt' ? 'plain-text email draft' : format.toUpperCase()} response packet. Nothing was submitted.`);
     } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Could not prepare the response packet.');
+      if (operationIsCurrent(operation)) onmessage(cause instanceof Error ? cause.message : 'Could not prepare the response packet.');
     } finally {
-      packetBusy = false;
+      finishPacketOperation(operation);
     }
   }
 
   async function previewPrintablePacket() {
-    if (packetBusy) return;
-    packetBusy = true;
+    const operation = beginPacketOperation(); if (!operation) return;
     try {
-      const prepared = await prepareManualPacket(true);
+      const prepared = await prepareManualPacket(true, operation);
+      if (!prepared || !operationIsCurrent(operation)) return;
       replaceManualPreview(prepared);
       printPreview = prepared;
     } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Could not prepare the printable packet.');
+      if (operationIsCurrent(operation)) onmessage(cause instanceof Error ? cause.message : 'Could not prepare the printable packet.');
     } finally {
-      packetBusy = false;
+      finishPacketOperation(operation);
     }
   }
 
   async function validatePrintablePacket(prepared: PreparedPacket) {
-    const current = await prepareManualPacket(true);
-    if (current !== prepared || printPreview !== prepared) throw new Error('The prepared report changed. Open the current report before printing.');
+    const operation = beginPacketOperation();
+    if (!operation) throw new Error('Open the current packet review before printing.');
+    try {
+      const current = await prepareManualPacket(true, operation);
+      if (!operationIsCurrent(operation) || current !== prepared || printPreview !== prepared) throw new Error('The prepared report changed. Open the current report before printing.');
+    } finally { finishPacketOperation(operation); }
   }
 
-  async function closePrintablePacket() {
+  async function closePrintablePacket(prepared = printPreview) {
+    if (printPreview !== prepared) return;
+    if (activeOperation) invalidatePacketWork();
     printPreview = null;
+    const generation = operationGeneration, caseId = record.id;
     await tick();
-    if (!printPreview && visible && packetWizardStep === 3 && printTrigger?.isConnected) printTrigger.focus();
+    if (generation === operationGeneration && record.id === caseId && !printPreview && packetIsOpen() && packetWizardStep === 3 && printTrigger?.isConnected) printTrigger.focus();
+  }
+
+  function printablePacketHandlers(prepared: PreparedPacket) {
+    // Native close can arrive after the rendered branch has been removed.
+    // Capture the value, rather than reading a disposed template derivation.
+    return { onvalidate: () => validatePrintablePacket(prepared), onclose: () => void closePrintablePacket(prepared) };
   }
 
   async function copyEmail() {
-    if (packetBusy) return;
-    packetBusy = true;
+    const operation = beginPacketOperation(); if (!operation) return;
     try {
-      const prepared = await prepareManualPacket(true);
+      const prepared = await prepareManualPacket(true, operation);
+      if (!prepared || !operationIsCurrent(operation)) return;
       const { built } = prepared;
+      operation.outputStarted = true;
       await navigator.clipboard.writeText(built.email);
+      if (!operationIsCurrent(operation)) return;
       onmessage(prepared.signature === packetHandoffSignature()
         ? `Copied the ${built.json.authorisation.status} response email draft. Nothing was submitted.`
         : 'Copied the prepared response draft, but the inputs changed while clipboard access completed. Review the current inputs before using that earlier copy. Nothing was submitted.');
     } catch (cause) {
-      onmessage(cause instanceof Error ? cause.message : 'Clipboard access was unavailable.');
+      if (operationIsCurrent(operation)) onmessage(cause instanceof Error ? cause.message : 'Clipboard access was unavailable.');
     } finally {
-      packetBusy = false;
+      finishPacketOperation(operation);
     }
   }
 
   async function continueToDeliveryRecord() {
-    if (!lastPacketExport) return;
+    if (!lastPacketExport || packetBusy || !packetIsOpen()) return;
     if (lastPacketExport.materialSignature !== packetHandoffSignature()) {
       lastPacketExport = null;
       onmessage('The Case or packet inputs changed after export. Review and export the current packet before using its digest in a delivery record.');
@@ -468,15 +545,20 @@
   }
 
   async function setPacketWizardStep(value: number) {
-    packetWizardStep = Math.max(1, Math.min(packetWizardSteps.length, Math.trunc(value)));
+    const phase = Math.max(1, Math.min(packetWizardSteps.length, Math.trunc(value)));
+    if (phase !== packetWizardStep) invalidatePacketWork(true);
+    packetWizardStep = phase;
+    const generation = operationGeneration, caseId = record.id;
     await tick();
-    const phaseTarget = [1, 4, 8][packetWizardStep - 1];
-    document.getElementById(`packet-wizard-step-${record.id}-${phaseTarget}`)?.focus({ preventScroll: true });
+    if (generation !== operationGeneration || record.id !== caseId || !packetIsOpen() || packetWizardStep !== phase) return;
+    const phaseTarget = [1, 4, 8][phase - 1];
+    document.getElementById(`packet-wizard-step-${caseId}-${phaseTarget}`)?.focus({ preventScroll: true });
   }
 </script>
 
 {#if visible}
-  <details id={`case-response-preflight-${record.id}`} bind:open={packetOpen}>
+  <details id={`case-response-preflight-${record.id}`} bind:this={packetElement} bind:open={packetOpen}
+    ontoggle={event => { if (!event.currentTarget.open) invalidatePacketWork(true); }}>
     <summary>Prepare a reviewed abuse evidence packet</summary>
     <form class="response-form packet-form" onsubmit={(event) => event.preventDefault()}>
       <p class="notice">Date and time fields use UTC.</p>
@@ -593,7 +675,7 @@
           {#if lastPacketExport}
             <div class="delivery-handoff">
               <p>The exported packet digest can be carried into the selected Case action. This prepares a record only; append a submitted event after actual delivery.</p>
-              <button class="btn" type="button" onclick={() => void continueToDeliveryRecord()}>Continue to record delivery</button>
+              <button class="btn" type="button" onclick={() => void continueToDeliveryRecord()} disabled={packetBusy}>Continue to record delivery</button>
             </div>
           {/if}
           <p class="wizard-status">{packetAuthorisationConfirmedAt && packetReviewIsCurrent ? 'The current exact inputs are authorised for deliberate local export.' : 'The current packet remains a draft. Draft export retains that status explicitly.'}</p>
@@ -606,7 +688,7 @@
 {/if}
 
 {#if printPreview}
-  <CasePacketPrintPreview packet={printPreview.built.json} onvalidate={() => validatePrintablePacket(printPreview!)} onclose={() => void closePrintablePacket()} />
+  <CasePacketPrintPreview packet={printPreview.built.json} {...printablePacketHandlers(printPreview)} />
 {/if}
 
 <style>

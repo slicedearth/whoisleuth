@@ -136,6 +136,10 @@ validation are separate modules, sharing vocabulary but not field projections.
 The packet component owns one transient manual-handoff preview. Its generator
 supplies text and structured output; input identity and the existing
 freshness-bound review digest govern reuse. No preview is stored in the Case.
+The same component owns pending packet operations by generation, Case, phase
+and Console workspace/session scope. Leaving that review invalidates pending
+results; only the current operation can initiate output or update its status.
+Completed downloads and clipboard requests are outside that cancellation boundary.
 
 Lookup's request operation token remains
 current through result publication, storage reconciliation and reveal. Request and

@@ -34,6 +34,8 @@
 
   onMount(() => {
     mounted = true;
+    const handleClose = onclose;
+    dialog.addEventListener('close', handleClose);
     dialog.showModal();
     heading.focus({ preventScroll: true });
     const afterPrint = () => { printing = false; };
@@ -41,6 +43,7 @@
     return () => {
       mounted = false;
       window.removeEventListener('afterprint', afterPrint);
+      dialog.removeEventListener('close', handleClose);
       dialog.close();
     };
   });
@@ -69,7 +72,7 @@
   {#if value}<time datetime={value}>{value.replace('T', ' ').replace(/Z$/u, ' UTC')}</time>{:else}<span>Time unavailable</span>{/if}
 {/snippet}
 
-<dialog class="packet-print" data-print-surface class:print-approved={printing} bind:this={dialog} aria-labelledby="packet-report-title" onclose={onclose}>
+<dialog class="packet-print" data-print-surface class:print-approved={printing} bind:this={dialog} aria-labelledby="packet-report-title">
   <div class="print-controls">
     <div><button type="button" class="btn" onclick={() => void printReport()} disabled={busy || printing}>{busy ? 'Checking packet…' : 'Print or save PDF'}</button><button type="button" class="btn" onclick={() => dialog.close()}>Close report</button></div>
     <label><input type="checkbox" bind:checked={includeAppendix} disabled={printing}> Include exact packet JSON as a technical appendix</label>
