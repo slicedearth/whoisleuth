@@ -767,6 +767,9 @@ filenames and edit coordinates are not added by this declaration. The parent
 may itself be edited. Fingerprints can correlate matching files across exports;
 they are not anonymisation or proof of the edits or complete redaction. Missing
 declarations leave editing history unknown.
+The local image-history review follows only already-loaded attachment metadata
+within the selected Case. It does not read ancestor files or search other Cases;
+its derived multi-hop review is not saved or included in selected-file exports.
 Explicit inline review shows paged JSON text or locally decoded PNG pixels,
 without running document scripts, following links or making page requests.
 Capture attachment checks compare selected bytes with manifest declarations;

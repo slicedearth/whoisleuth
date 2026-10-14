@@ -1,10 +1,65 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { readBrowserLocalCollection, expectNoHorizontalOverflow, useTheme, openDashboardSecondaryWorkspaces } from './helpers';
+import { readBrowserLocalCollection, expectNoHorizontalOverflow, useTheme, openDashboardSecondaryWorkspaces, currentBrowserLocalDocument, migrateLegacyBrowserData } from './helpers';
 import { IMAGE_NAME, openImageReview, addImageRegion, expectEditedPixels } from './case-image-fixtures';
+import { caseRecord } from './case-test-fixtures';
+import { openRetainedFiles } from './case-attachment-fixtures';
+import { readCaseAttachment } from '../packages/cases/case-attachment-model.mts';
 import { inspectInvestigationPackage } from '../packages/investigation/investigation-package.mts';
 import { verifyOfflineInvestigationPackage } from '../cli/investigation-package-review.mts';
+
+test('selected image history follows only this Case metadata without reading ancestors or resolving another Case', async ({ page }) => {
+  const source = readCaseAttachment({ id: 'source-image', fileName: 'source.png', mediaType: 'image/png', source: null, observedAt: null,
+    retainedAt: '2026-09-01T00:00:00.000Z', digestSha256: `sha256:${'a'.repeat(64)}`, byteLength: 100 });
+  const first = readCaseAttachment({ ...source, id: 'redacted-image', fileName: 'redacted.png', digestSha256: `sha256:${'b'.repeat(64)}`, byteLength: 110,
+    derivation: { method: 'png-regions-v1', sourceAttachmentId: source.id, source: { digestSha256: source.digestSha256, byteLength: source.byteLength },
+      plan: { width: 20, height: 20, regions: [{ kind: 'redact', x: 2, y: 3, width: 5, height: 6 }] } } });
+  const second = readCaseAttachment({ ...first, id: 'outlined-image', fileName: 'outlined.png', digestSha256: `sha256:${'c'.repeat(64)}`, byteLength: 120,
+    derivation: { ...first.derivation!, sourceAttachmentId: first.id, source: { digestSha256: first.digestSha256, byteLength: first.byteLength },
+      plan: { width: 20, height: 20, regions: [{ kind: 'outline', x: 1, y: 1, width: 10, height: 10 }] } } });
+  await page.goto('/cases');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [
+      { ...caseRecord({ id: 'image-chain', domain: 'image-chain.example' }), attachments: [first, second] },
+      { ...caseRecord({ id: 'other-case', domain: 'other.example' }), attachments: [source] },
+    ] }),
+  }, { destination: '/cases?case=image-chain' });
+  const files = await openRetainedFiles(page);
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  await page.evaluate(() => {
+    const accesses: string[] = [];
+    Object.defineProperty(window, '__lineageFileAccess', { value: accesses });
+    const original = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function(stores, mode, options) {
+      if ((typeof stores === 'string' ? [stores] : Array.from(stores)).includes('files')) {
+        accesses.push(String(mode)); throw new Error('Metadata lineage must not access file bytes.');
+      }
+      return original.call(this, stores, mode, options);
+    };
+  });
+  await files.locator('.file-export-selection > summary').click();
+  const selection = files.locator('.file-export-selection');
+  await selection.getByRole('checkbox', { name: 'outlined.png', exact: false }).check();
+  const sheet = selection.locator('.selected-image-review');
+  await sheet.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  await expect(sheet).toContainText('Stopped at a parent reference not retained in this Case');
+  const summary = sheet.getByText('Inspect declared links (2)', { exact: true });
+  await summary.focus(); await summary.press('Enter');
+  const links = sheet.getByRole('list', { name: 'Declared image links', exact: true }).getByRole('listitem');
+  await expect(links).toHaveCount(2);
+  await expect(links.nth(0)).toContainText(first.digestSha256);
+  await expect(links.nth(0)).toContainText('parent reference matches');
+  await expect(links.nth(1)).toContainText(source.digestSha256);
+  await expect(links.nth(1)).toContainText('parent reference is not retained in this Case');
+  await expect(sheet).not.toContainText('other.example');
+  await expect(sheet).toContainText('only each selected image\'s immediate-parent fingerprint');
+  expect(await page.evaluate(() => (window as unknown as { __lineageFileAccess: string[] }).__lineageFileAccess)).toEqual([]);
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 })).toEqual(before);
+  await summary.press('Enter');
+  await expect(links).toHaveCount(0);
+  await expect(summary).toBeFocused();
+});
 
 test('selected retained files export exact bytes and source declarations without becoming a whole-workspace backup', async ({ page }, testInfo) => {
   const { files, bytes } = await openImageReview(page, 2);
@@ -63,10 +118,11 @@ test('selected redacted images carry minimal parent declarations through browser
   const sheet = selection.locator('.selected-image-review');
   await sheet.locator(':scope > summary').click();
   await expect(sheet.getByRole('heading', { name: derivative.fileName, exact: true })).toBeVisible();
+  await sheet.getByText('Inspect declared links (1)', { exact: true }).click();
   await expect(sheet).toContainText('Declared edits: redaction, outline');
   await expect(sheet).toContainText(parent.digestSha256);
   await expect(sheet).toContainText('parent reference matches the recorded fingerprint and size');
-  await expect(sheet).toContainText('bytes have not been checked by this review');
+  await expect(sheet).toContainText('File bytes have not been checked by this review');
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
     await useTheme(page, theme); await page.setViewportSize({ width, height: 844 });

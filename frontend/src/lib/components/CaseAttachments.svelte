@@ -11,6 +11,7 @@
   import { trackTransientCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import ArtifactPreview from './ArtifactPreview.svelte';
   import CaseImageReview from './CaseImageReview.svelte';
+  import CaseImageLineage from './CaseImageLineage.svelte';
   import CaseTextComparison from './CaseTextComparison.svelte';
   import EvidenceFileExport from './EvidenceFileExport.svelte';
 
@@ -34,7 +35,7 @@
   const exportReferences = $derived((record.attachments ?? []).filter(item => exportIds.includes(item.id)));
   const selectedImageEdits = $derived(exportReferences.flatMap(attachment => {
     const review = reviewCaseImageDerivation(attachment, record.attachments ?? []);
-    return review ? [{ attachment, ...review }] : [];
+    return review ? [{ attachment, review }] : [];
   }));
   let generation = 0;
   let activeCaseId: string | undefined;
@@ -144,18 +145,14 @@
         {#if exportReferences.some(item => item.mediaType.startsWith('image/'))}
           <details class="selected-image-review">
             <summary>Review edited images ({selectedImageEdits.length})</summary>
-            <p>This reviews saved declarations, not file bytes or proof of editing. Only the immediate parent is declared; earlier generations are not resolved here. An image without an edit declaration is not necessarily an unedited original.</p>
-            <ul>{#each selectedImageEdits as { attachment, declaration, parentReference, parentHasDeclaredEdits } (attachment.id)}
+            <p>Follow declared parent links in this Case's loaded metadata, starting with each selected image. This does not read ancestor files or other Cases, or authenticate the edits. An image without an edit declaration is not necessarily an unedited original.</p>
+            <ul>{#each selectedImageEdits as { attachment, review } (attachment.id)}
               <li>
                 <h4>{attachment.fileName}</h4>
-                <p>Declared edits: {declaration.operations.map(kind => kind === 'redact' ? 'redaction' : 'outline').join(', ')} · {declaration.method}</p>
-                <p>Declared parent: <code>{declaration.source.digestSha256}</code> · {declaration.source.byteLength.toLocaleString('en-AU')} bytes</p>
-                {#if parentReference === 'missing'}<p>The declared parent reference is not retained in this Case. Its earlier editing history is unresolved.</p>
-                {:else if parentReference === 'conflicting'}<p>The retained parent reference conflicts with this declaration. Its editing history cannot be resolved from that reference.</p>
-                {:else}<p>The parent reference matches the recorded fingerprint and size; its bytes have not been checked by this review. {parentHasDeclaredEdits ? 'The parent also declares edits; this export does not resolve the earlier generations.' : 'The parent has no recorded edit declaration; this does not prove it is an unedited original.'}</p>{/if}
+                <CaseImageLineage {review} />
               </li>
             {/each}</ul>
-            <p>For images with declared edits, the package carries the parent fingerprint and edit types, not this review sheet, filenames or edit coordinates. Parent pixels are included only if separately selected.</p>
+            <p>The package carries only each selected image's immediate-parent fingerprint and edit types, not these earlier links, this review sheet, filenames or edit coordinates. Parent pixels are included only if separately selected.</p>
           </details>
         {/if}
         <EvidenceFileExport workflow="Selected Case files" getFiles={exportFiles} disabled={!exportReferences.length || mutationBusy || preparing || Boolean(loading) || imageBusy || exporting}
@@ -205,6 +202,6 @@
   .file-preview{display:grid;gap:14px;min-width:0;border-top:1px solid var(--border);padding-top:14px}.file-preview>button{justify-self:start}.derivation{min-width:0}.derivation summary{padding:8px 0}.derivation p,.derivation li{font-size:var(--text-xs);overflow-wrap:anywhere}.derivation ol{padding-left:1.5em}
   .integrity-explainer{min-width:0}.integrity-explainer>summary{padding:8px 0}.integrity-explainer p{margin-top:8px}
   .file-export-selection{min-width:0}.file-export-selection>summary{padding:8px 0}.file-export-selection>p{margin:10px 0}.export-selection{display:grid;gap:4px}.export-selection label{display:flex;align-items:center;gap:8px;min-width:0;min-height:44px;font-size:var(--text-xs);overflow-wrap:anywhere}.export-selection input{flex:none}
-  .selected-image-review{min-width:0;margin:12px 0}.selected-image-review>summary{padding:8px 0}.selected-image-review ul{list-style:none;padding:0;margin:12px 0;display:grid;gap:12px}.selected-image-review li{display:grid;gap:6px;min-width:0}.selected-image-review code{overflow-wrap:anywhere;font-size:var(--text-2xs)}
+  .selected-image-review{min-width:0;margin:12px 0}.selected-image-review>summary{padding:8px 0}.selected-image-review ul{list-style:none;padding:0;margin:12px 0;display:grid;gap:12px}.selected-image-review li{display:grid;gap:6px;min-width:0}
   @media(max-width:600px){.source-fields{grid-template-columns:minmax(0,1fr)}.files-body{padding:12px}.file-actions{align-items:stretch}.file-actions button{flex:1 1 100%}}
 </style>

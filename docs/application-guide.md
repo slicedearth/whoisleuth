@@ -323,6 +323,10 @@ open to review. Conditional captures retain their different paths and conditions
 Their **Compare capture conditions** view compares declared fictional viewport
 and browser context, including an incomplete later attempt with unknown settings.
 The exercise includes no image bytes or page-comparison inputs.
+In the requested-evidence scenario, **Review fictional image history** follows
+an outline's declared parent to a redacted image and then a parent with no edit
+declaration. The shared review uses supplied metadata only, not saved work or
+image bytes. Following those links does not authenticate their creation history.
 Other examples distinguish reported account actions, an organisation's existence
 from its claimed campaign endorsement, insufficient logo/edge evidence, and a
 later provider result that reuses a submitted report. Inspect the evidence and
@@ -1351,11 +1355,14 @@ stop the export. Edited images declare their immediate parent fingerprint,
 editing method and operation kinds. The parent may itself be edited and need
 not be selected. These declarations do not prove the edits; missing declarations
 leave editing history unknown. **Review edited images** lists the declarations
-for the current selection, including whether each exact parent reference is
-retained, missing or conflicting. This metadata review does not read file bytes.
-A parent may also declare edits; earlier generations remain unresolved, and a
-missing edit declaration does not establish an unedited original. The review
-sheet is not included in the package. The ZIP uses generated entry names; Case records,
+for the current selection. **Inspect declared links** follows each exact parent
+reference, fingerprint and size within this Case's already-loaded metadata.
+It stops at a missing or conflicting parent, a repeated reference (cycle), or
+the existing Case attachment limit. It does not read ancestor bytes or search
+other Cases. A parent without an edit declaration does not establish an unedited
+original, and even a matching chain does not authenticate how it was created.
+Earlier links and the review sheet are not included in the package; each selected
+image still exports only its immediate-parent declaration. The ZIP uses generated entry names; Case records,
 filenames and edit coordinates stay in the separate JSON backup. Where supported,
 **Write new evidence folder** creates and verifies a new child inside the
 folder you choose. Otherwise, extract the ZIP locally. Neither option is a

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createCasePracticeRecord, createCasePracticeSession, CASE_PRACTICE_LATER_AT, CASE_PRACTICE_SCENARIOS, reviewCasePracticeInput, previewCasePracticeContainment, previewCasePracticePackets, casePracticeFeedback, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeRoutes } from '../frontend/src/lib/analysis/case-practice.ts';
+import { createCasePracticeRecord, createCasePracticeSession, CASE_PRACTICE_LATER_AT, CASE_PRACTICE_SCENARIOS, reviewCasePracticeInput, previewCasePracticeContainment, previewCasePracticePackets, casePracticeFeedback, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeRoutes, casePracticeImageLineage } from '../frontend/src/lib/analysis/case-practice.ts';
 import { compareCaseHandoffCopies } from '../packages/cases/case-handoff-comparison.mts';
 import { validateCaseResponsePacket } from '../packages/cases/case-response-packet-validation.mts';
 import { normalizeCase } from '../packages/cases/case-record-operations.mts';
@@ -9,6 +9,18 @@ import { caseRecheckAnswerContext } from '../packages/cases/case-recheck-model.m
 import { createCaseDraftRecovery, type CaseDraftRecoveryState } from '../frontend/src/lib/controllers/case-draft-recovery.ts';
 import { caseIncidentTargets, buildCaseIncidentCoverage } from '../packages/cases/case-workflow-metadata.mts';
 import { latestEvidenceRequests, submittedPacketReceipts } from '../packages/cases/case-requested-evidence.mts';
+
+test('fictional image history preserves separately declared operations without adding practice attachments', () => {
+  const record = createCasePracticeRecord('requested-amendment'), before = structuredClone(record);
+  const reviewed = casePracticeImageLineage();
+  assert.equal(reviewed.termination, 'no_further_declaration');
+  assert.deepEqual(reviewed.steps.map(step => [step.declaration.operations, step.declaration.source.digestSha256, step.parentHasDeclaredEdits]), [
+    [['outline'], `sha256:${'b'.repeat(64)}`, true], [['redact'], `sha256:${'a'.repeat(64)}`, false],
+  ]);
+  assert.deepEqual(casePracticeImageLineage(), reviewed);
+  assert.deepEqual(record, before);
+  assert.equal(record.attachments?.length ?? 0, 0);
+});
 
 test('practice starts from fictional, separately attributed complete and unavailable observations', () => {
   const record = createCasePracticeRecord();

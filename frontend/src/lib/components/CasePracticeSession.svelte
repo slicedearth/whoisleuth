@@ -15,13 +15,15 @@
   import CasePracticeInference from './CasePracticeInference.svelte';
   import CasePracticeWalkthrough from './CasePracticeWalkthrough.svelte';
   import CaptureConditionMatrix from './CaptureConditionMatrix.svelte';
+  import CaseImageLineage from './CaseImageLineage.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
-  import { casePracticeCaptureContexts } from '#lib/analysis/case-practice.ts';
+  import { casePracticeCaptureContexts, casePracticeImageLineage } from '#lib/analysis/case-practice.ts';
   import '#lib/components/case-response-stage.css';
 
   let { onreset, scenario, visible = true }: { onreset: () => void; scenario: CasePracticeScenario; visible?: boolean } = $props();
   const session = createCasePracticeSession(untrack(() => scenario));
   const captureContexts = casePracticeCaptureContexts(untrack(() => scenario));
+  const imageLineage = untrack(() => scenario) === 'requested-amendment' ? casePracticeImageLineage() : null;
   const definition = $derived(casePracticeDefinition(scenario));
   const routes = $derived(casePracticeRoutes(scenario));
   const suppliedEvidence = session.read().evidencePins;
@@ -125,6 +127,11 @@
       <p>Two fictional manifest summaries describe the mobile capture, the different desktop capture and the incomplete later attempt. The first two explicitly declare example browser settings, viewports and location labels. The later attempt has no recorded conditions. No image bytes or comparable page observations are included.</p>
       <CaptureConditionMatrix {...captureContexts} firstPage="" secondPage="" choosePage={() => {}} />
     </section>{/if}
+    {#if imageLineage}<details class="practice-local"><summary>Review fictional image history</summary>
+      <p>These supplied metadata records declare an outline over a redacted image, then a parent with no edit declaration. No image bytes are supplied, read or saved. The chain is a declaration, not proof of how the images were created.</p>
+      <CaseImageLineage review={imageLineage} />
+      <p>In a selected-file export, only the selected image's immediate-parent declaration is included; this local review does not add earlier links or parent pixels.</p>
+    </details>{/if}
     {#if identityReview}<details class="practice-local"><summary>Review the supplied action mechanisms</summary>
       <p>{identityReview.review.summary} This uses the existing incident-sequence review. The selected order is not proof of causation, and reported actions are not verified account effects.</p>
       <ol aria-label="Supplied identity action mechanisms">{#each identityReview.stages as stage}<li><strong>{stage.id.replaceAll('-', ' ')} · {stage.basis.replaceAll('_', ' ')}</strong><p>{stage.description}</p><p>{stage.source} · occurrence time {stage.occurredAt ?? 'unknown'}</p></li>{/each}</ol>

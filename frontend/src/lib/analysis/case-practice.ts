@@ -13,6 +13,7 @@ import { PLATFORM_REPORTING_ROUTES } from '../../../../packages/cases/platform-r
 import { readIncidentStages, reviewIncidentSequence } from '../../../../packages/investigation/incident-sequence-review.mts';
 import type { CaptureManifestContext } from '../../../../packages/interchange/web-capture-import.mts';
 import type { CaseHandoffCopy } from '../../../../packages/cases/case-handoff-comparison.mts';
+import { readCaseAttachment, reviewCaseImageDerivation } from '../../../../packages/cases/case-attachment-model.mts';
 
 export const CASE_PRACTICE_OBSERVED_AT = '2026-09-01T12:00:00.000Z';
 export const CASE_PRACTICE_LATER_AT = '2026-09-02T12:00:00.000Z';
@@ -305,6 +306,19 @@ export const CASE_PRACTICE_SCENARIOS = [
     ] } satisfies CasePracticeInference },
 ] as const;
 export type CasePracticeScenario = typeof CASE_PRACTICE_SCENARIOS[number]['id'];
+
+/** Fictional metadata only, deliberately separate from the practice Case and original-file store. */
+export function casePracticeImageLineage() {
+  const base = readCaseAttachment({ id: 'fictional-image-base', fileName: 'fictional-base.png', mediaType: 'image/png',
+    source: null, observedAt: null, retainedAt: CASE_PRACTICE_OBSERVED_AT, digestSha256: `sha256:${'a'.repeat(64)}`, byteLength: 100 });
+  const redacted = readCaseAttachment({ ...base, id: 'fictional-image-redacted', fileName: 'fictional-redacted.png', digestSha256: `sha256:${'b'.repeat(64)}`, byteLength: 110,
+    derivation: { method: 'png-regions-v1', sourceAttachmentId: base.id, source: { digestSha256: base.digestSha256, byteLength: base.byteLength },
+      plan: { width: 20, height: 20, regions: [{ kind: 'redact', x: 2, y: 3, width: 5, height: 6 }] } } });
+  const outlined = readCaseAttachment({ ...redacted, id: 'fictional-image-outlined', fileName: 'fictional-outlined.png', digestSha256: `sha256:${'c'.repeat(64)}`, byteLength: 120,
+    derivation: { ...redacted.derivation!, sourceAttachmentId: redacted.id, source: { digestSha256: redacted.digestSha256, byteLength: redacted.byteLength },
+      plan: { width: 20, height: 20, regions: [{ kind: 'outline', x: 1, y: 1, width: 10, height: 10 }] } } });
+  return reviewCaseImageDerivation(outlined, [base, redacted, outlined])!;
+}
 
 /** Declared fictional capture context; no image bytes or page observations are supplied. */
 export function casePracticeCaptureContexts(scenario: CasePracticeScenario): { first: CaptureManifestContext[]; second: CaptureManifestContext[] } | null {

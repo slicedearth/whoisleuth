@@ -536,12 +536,26 @@ test('fictional packet comparison discards held completions without overwriting 
   await verifyIsolation(); expect(downloads).toBe(0);
 });
 
-test('requested-evidence practice creates only a drafting amendment without saved-work access', async ({ page }) => {
+test('requested-evidence practice reviews declared image history and creates only a drafting amendment without saved-work access', async ({ page }, testInfo) => {
   const verifyIsolation = await isolateCasePractice(page);
   await page.goto('/demo#case-practice');
   await page.getByRole('combobox', { name: 'Practice scenario', exact: true }).selectOption('requested-amendment');
   await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
   const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const history = practice.getByText('Review fictional image history', { exact: true }).locator('..');
+  await history.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  const links = history.getByText('Inspect declared links (2)', { exact: true });
+  await links.focus(); await links.press('Enter');
+  const declarations = history.getByRole('list', { name: 'Declared image links', exact: true }).getByRole('listitem');
+  await expect(declarations).toHaveCount(2);
+  await expect(declarations.nth(0)).toContainText('Declared edits: outline');
+  await expect(declarations.nth(1)).toContainText('Declared edits: redaction');
+  await expect(history).toContainText('does not prove it is an unedited original');
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+    await useTheme(page, theme); await page.setViewportSize({ width, height: 844 });
+    await history.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`fictional-image-history-${theme}-${width}.png`) });
+  }
   await practice.getByRole('button', { name: '4. Prepare requested evidence', exact: true }).click();
   const requested = practice.locator('.requested-evidence');
   await requested.locator(':scope > summary').click();

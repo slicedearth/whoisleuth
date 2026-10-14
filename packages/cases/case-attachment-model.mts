@@ -1,7 +1,7 @@
 import { MAX_SELECTED_FILES, SELECTED_FILE_MEDIA_TYPES, type SelectedFileMediaType } from '../contracts/selected-file-limits.mts';
 import { array, enumeration, exactOptional, iso, text } from '../evidence/artifact-structure.mts';
 import { readRetainedFileReference, type RetainedFileReference } from '../evidence/retained-file.mts';
-import { declareImageDerivation, readImageDerivation, type ImageDerivation } from '../evidence/image-regions.mts';
+import { declareImageDerivation, readImageDerivation, type ImageDerivation, type ImageDerivationDeclaration } from '../evidence/image-regions.mts';
 import type { CaseRecord } from './case-record-contracts.mts';
 
 export type CaseAttachment = RetainedFileReference & Readonly<{
@@ -58,21 +58,40 @@ export function caseAttachmentReferences(cases: readonly CaseRecord[]): Retained
   return cases.flatMap(record => (record.attachments ?? []).map(({ digestSha256, byteLength }) => ({ digestSha256, byteLength })));
 }
 
-/** Review one declared parent using saved metadata, without resolving earlier edits or reading bytes. */
+type ImageDerivationReviewStep = Readonly<{
+  declaration: ImageDerivationDeclaration;
+  parentReference: 'missing' | 'matching' | 'conflicting';
+  parentHasDeclaredEdits: boolean | null;
+}>;
+type ImageDerivationReviewStop = 'no_further_declaration' | 'missing_parent' | 'conflicting_parent' | 'cycle' | 'limit';
+
+/** Follow declared parents in one admitted Case's metadata; never resolve files or other Cases. */
 export function reviewCaseImageDerivation(attachment: CaseAttachment, retained: readonly CaseAttachment[]) {
-  const derivation = attachment.derivation;
-  if (!derivation) return null;
-  const declaration = declareImageDerivation(derivation);
-  const parents = retained.filter(item => item.id === derivation.sourceAttachmentId);
-  const parent = parents.length === 1 ? parents[0] : undefined;
-  const matches = parent?.mediaType === 'image/png'
-    && parent.digestSha256 === declaration.source.digestSha256
-    && parent.byteLength === declaration.source.byteLength;
-  return {
-    declaration,
-    parentReference: !parents.length ? 'missing' as const : matches ? 'matching' as const : 'conflicting' as const,
-    parentHasDeclaredEdits: matches ? Boolean(parent.derivation) : null,
-  };
+  if (!attachment.derivation) return null;
+  if (!Array.isArray(retained) || retained.length > MAX_SELECTED_FILES) throw new TypeError('Image history exceeds the Case attachment bound.');
+  const references = new Map<string, CaseAttachment | null>();
+  for (const item of retained) references.set(item.id, references.has(item.id) ? null : item);
+  const steps: ImageDerivationReviewStep[] = [];
+  const finish = (termination: ImageDerivationReviewStop) => Object.freeze({ steps: Object.freeze(steps), termination });
+  const visited = new Set([attachment.id]);
+  let current = attachment;
+  for (let depth = 0; depth < MAX_SELECTED_FILES; depth++) {
+    const derivation = current.derivation!;
+    const declaration = declareImageDerivation(derivation);
+    const parent = references.get(derivation.sourceAttachmentId);
+    const matches = parent?.mediaType === 'image/png'
+      && parent.digestSha256 === declaration.source.digestSha256
+      && parent.byteLength === declaration.source.byteLength;
+    const parentReference = parent === undefined ? 'missing' : matches ? 'matching' : 'conflicting';
+    steps.push(Object.freeze({ declaration, parentReference, parentHasDeclaredEdits: matches ? Boolean(parent?.derivation) : null }));
+    if (parentReference === 'missing') return finish('missing_parent');
+    if (!matches || !parent) return finish('conflicting_parent');
+    if (visited.has(parent.id)) return finish('cycle');
+    if (!parent.derivation) return finish('no_further_declaration');
+    visited.add(parent.id);
+    current = parent;
+  }
+  return finish('limit');
 }
 
 export function addCaseAttachments(record: CaseRecord, attachments: readonly CaseAttachment[], updatedAt: string): CaseRecord {
