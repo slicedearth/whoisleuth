@@ -1,5 +1,6 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
-import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, lookupDomainIdentity, openLookupOptionalSources, readBrowserLocalCollection } from './helpers';
+import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, lookupDomainIdentity, openLookupOptionalSources, readBrowserLocalCollection, useTheme } from './helpers';
 import { TEST_SITE_PASSWORD } from './constants.ts';
 import { readFile } from 'node:fs/promises';
 import { buildLookupEvidence } from '../frontend/src/lib/analysis/evidence-export';
@@ -432,7 +433,7 @@ test('raw RDAP depth is omitted while the projected result remains portable', as
   await expectNoHorizontalOverflow(page);
 });
 
-test('an over-structured response fails visibly beside the mobile lookup action', async ({ page }) => {
+test('an over-structured response fails visibly beside the mobile lookup action', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 320, height: 720 });
   let nested: unknown = 'leaf';
   for (let index = 0; index <= 48; index += 1) nested = { value: nested };
@@ -461,6 +462,12 @@ test('an over-structured response fails visibly beside the mobile lookup action'
     return Boolean(box && box.y >= 0 && box.y + box.height <= 720);
   }).toBe(true);
   await expectNoHorizontalOverflow(page);
+  if (captureVisualEvidenceEnabled()) {
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await page.screenshot({ path: testInfo.outputPath(`mobile-lookup-error-${theme}.png`) });
+    }
+  }
 });
 
 test('an analyst can cancel a pending lookup without retaining a partial result', async ({ page }) => {

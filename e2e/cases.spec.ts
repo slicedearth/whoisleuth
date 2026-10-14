@@ -1125,15 +1125,17 @@ test('custom detection rules evaluate existing cases without rewriting built-in 
   });
   await openConsoleView(page, 'rules');
 
-  await page.getByLabel('Name', { exact: true }).fill('Password page above threshold');
-  await page.getByLabel('Custom contribution').fill('15');
-  await page.getByLabel('Suggested tag').fill('manual-review');
-  await page.getByLabel('Field').selectOption('hasPasswordField');
-  await page.getByRole('button', { name: 'Add condition' }).click();
-  await page.getByLabel('Field').nth(1).selectOption('riskScore');
-  await page.getByLabel('Comparison').nth(1).selectOption('at_least');
-  await page.getByLabel('Value').nth(1).fill('60');
-  await page.getByRole('button', { name: 'Create custom rule' }).click();
+  const conditions = page.getByRole('group', { name: 'Conditions', exact: true });
+  const editor = page.locator('form').filter({ has: conditions });
+  await editor.getByLabel('Name', { exact: true }).fill('Password page above threshold');
+  await editor.getByLabel('Custom contribution').fill('15');
+  await editor.getByLabel('Suggested tag').fill('manual-review');
+  await conditions.getByLabel('Field').selectOption('hasPasswordField');
+  await conditions.getByRole('button', { name: 'Add condition' }).click();
+  await conditions.getByLabel('Field').nth(1).selectOption('riskScore');
+  await conditions.getByLabel('Comparison').nth(1).selectOption('at_least');
+  await conditions.getByLabel('Value').nth(1).fill('60');
+  await editor.getByRole('button', { name: 'Create custom rule' }).click();
 
   const result = page.locator('.test-results li', { hasText: 'rule-match.invalid' });
   await expect(result).toContainText('Built-in 65');

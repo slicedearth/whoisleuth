@@ -70,6 +70,7 @@
   let inboxElement = $state<HTMLElement>();
   let draftsSummary = $state<HTMLElement>();
   const focusedCaseId = $derived(route.url.searchParams.get('case-review') ?? '');
+  const emptyInbox = $derived(!inbox.items.length && !inbox.truncated);
   const scopedItems = $derived(focusedCaseId ? inbox.items.filter(item => item.caseId === focusedCaseId) : inbox.items);
   const sourceOptions = $derived([...new Set(inbox.items.flatMap((item) => item.sourceIds))].sort());
   const evidenceFamilyOptions = $derived([...new Set(inbox.items.map((item) => item.evidenceFamily))].sort());
@@ -210,6 +211,12 @@
 </script>
 
 <section class="review-inbox card" aria-label="Review inbox" bind:this={inboxElement}>
+  {#if emptyInbox}
+    <div class="empty-start">
+      <h2 id="review-inbox-title" tabindex="-1">No retained review items</h2>
+      <div class="toolbar"><a class="primary" href="/lookup">Investigate a domain</a><a class="btn" href="/cases">Open Cases</a></div>
+    </div>
+  {/if}
   {#if !selectedSubjectKey}<ReviewSessionControl {position} onresume={resumeReview} resumeRequested={route.url.searchParams.get('resume') === '1'} />{/if}
   {#if reviewDrafts.length}
     <details class="current-drafts" bind:open={showDrafts}>
@@ -343,13 +350,7 @@
     </ol>
       {/snippet}
     </AnalystWorkbench>
-  {:else if !inbox.items.length && !inbox.truncated}
-    <div class="empty-start">
-      <h2 id="review-inbox-title" tabindex="-1">No retained review items</h2>
-      <p>Investigate a domain or open saved Cases.</p>
-      <div class="toolbar"><a class="primary" href="/lookup">Investigate a domain</a><a class="btn" href="/cases">Open Cases</a></div>
-    </div>
-  {:else}
+  {:else if !emptyInbox}
     <p class="empty">No retained items match this review filter.</p>
   {/if}
 
@@ -375,9 +376,8 @@
 <style>
   .review-inbox{padding:var(--card-pad)}
   .current-drafts{margin-block:12px}.current-drafts li{overflow-wrap:anywhere;margin-block:12px}.current-drafts p{white-space:pre-wrap}
-  .empty-start{max-width:70ch;margin:20px 0}
+  .empty-start{max-width:70ch;margin:0 0 20px}
   .empty-start h2{font-size:var(--text-lg)}
-  .empty-start p{color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .review-scope{margin-top:16px;padding-top:10px;border-top:1px solid var(--border)}
   .review-scope summary{cursor:pointer;font-size:var(--text-sm)}
   .inbox-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}

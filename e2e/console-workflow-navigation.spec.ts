@@ -317,6 +317,9 @@ test('Console presentation preserves drafts, selected checkpoints and timeline e
   const ids = before.records[0]!.value.evidenceHistory.map(item => item.id);
   expect(ids).toHaveLength(2);
   for (const id of ids) await page.getByRole('button', { name: `Pin checkpoint ${id} for comparison`, exact: true }).click();
+  const presentationOptions = page.getByRole('region', { name: 'Current investigation context', exact: true }).getByText('Presentation', { exact: true });
+  await expect(presentationOptions.locator('..')).toHaveJSProperty('open', false);
+  await presentationOptions.focus(); await presentationOptions.press('Enter');
   const presentation = page.getByRole('combobox', { name: 'Presentation in this tab', exact: true });
   await expect(presentation).toHaveValue('desk');
   await presentation.selectOption('bench');
@@ -389,6 +392,8 @@ test('Console presentation preserves drafts, selected checkpoints and timeline e
   expect(collectionRequests).toEqual([]);
   await presentation.selectOption('journal');
   await page.reload();
+  await expect(presentationOptions.locator('..')).toHaveJSProperty('open', false);
+  await presentationOptions.focus(); await presentationOptions.press('Enter');
   await expect(presentation).toHaveValue('desk');
 });
 

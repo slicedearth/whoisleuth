@@ -144,6 +144,8 @@
       {loading ? 'Looking up…' : entryCount > 1 ? `Open ${Math.min(entryCount, entryLimit)} in Bulk` : 'Run lookup'}
     </button>
   </div>
+  {#if inputTooLarge}<p class="error" role="alert">The pasted domain list exceeds the 2 MiB or bounded row and cell limit. Reduce it before continuing.</p>{/if}
+  {#if error}<p class="error" role="alert">{error}</p>{/if}
   <p class="input-help">
     {entryCount > 1
       ? `${entryCount} unique entries detected. Multiple entries continue in Bulk${duplicateCount ? `; ${duplicateCount} duplicate${duplicateCount === 1 ? '' : 's'} removed` : ''}.`
@@ -153,9 +155,6 @@
   {#if task === 'incident'}
     <p class="incident-input-note">By default, only the URL's hostname is sent into Lookup. The original URL stays in this tab unless you retain it in a Case or explicitly select URL collection below.</p>
   {/if}
-  {#if inputTooLarge}<p class="error" role="alert">The pasted domain list exceeds the 2 MiB or bounded row and cell limit. Reduce it before continuing.</p>{/if}
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
-
   {@render guidance?.()}
 
   <fieldset class="lookup-mode" disabled={loading}>

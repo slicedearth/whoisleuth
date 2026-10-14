@@ -344,15 +344,8 @@
         {#snippet layout(identity, markerControls)}
         <div class="context-bar">
           <p class="context-task" role="note" aria-label="Current task"><span>Task</span><strong>{currentTask}</strong></p>
-          {@render identity()}
           <span class="context-backend" role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span>
-          <label class="presentation-choice">Presentation in this tab
-            <select bind:value={presentation} onchange={event => { if (event.currentTarget.value === 'bench') tabReferencesOpen = true; }}>
-              <option value="desk">Analyst Desk</option>
-              <option value="bench">Evidence Bench</option>
-              <option value="journal">Field Journal</option>
-            </select>
-          </label>
+          {@render identity()}
         </div>
         <div class="context-details">
           <details class="context-storage">
@@ -360,6 +353,16 @@
             {@render markerControls()}
             <p>{localApplication ? 'Saved records and original files remain in the selected filesystem workspace. Encrypted backups are separate.' : 'Saved records remain in this browser’s selected workspace. Opening another workspace replaces this page; other tabs keep their own selection.'}</p>
             <p>{capabilityStatusDetail()} This is the reported configuration, not a live source-health check.</p>
+          </details>
+          <details class="context-storage presentation-options">
+            <summary>Presentation</summary>
+            <label class="presentation-choice">Presentation in this tab
+              <select bind:value={presentation} onchange={event => { if (event.currentTarget.value === 'bench') tabReferencesOpen = true; }}>
+                <option value="desk">Analyst Desk</option>
+                <option value="bench">Evidence Bench</option>
+                <option value="journal">Field Journal</option>
+              </select>
+            </label>
           </details>
         </div>
         {/snippet}
@@ -392,7 +395,7 @@
 {/if}
 
 <style>
-  .presentation-choice{display:grid;gap:4px;margin-inline-start:auto;max-width:100%;font-size:var(--text-xs);color:var(--muted)}
+  .presentation-choice{display:grid;gap:4px;width:min(100%,24rem);margin-block:4px 12px;font-size:var(--text-xs);color:var(--muted)}
   .presentation-choice select{min-height:44px;width:100%;min-width:0}
   .presentation-workspace{display:grid;gap:16px;min-width:0}
   .investigation-content,.tab-references{min-width:0}
@@ -403,8 +406,7 @@
     [data-presentation='bench'] .presentation-workspace.references-open>.investigation-content{grid-column:1;grid-row:1}
     [data-presentation='bench'] .presentation-workspace.references-open>.tab-references{grid-column:2;grid-row:1}
   }
-  @media(max-width:480px){.presentation-choice{margin-inline-start:0;width:100%}}
-  @media print{.presentation-choice,.tab-references{display:none!important}.presentation-workspace{display:block!important}}
+  @media print{.presentation-options,.tab-references{display:none!important}.presentation-workspace{display:block!important}}
   .console-context{min-width:0;margin-bottom:18px;padding-bottom:8px;border-bottom:1px solid var(--border)}
   .context-bar{display:flex;align-items:center;gap:8px 20px;flex-wrap:wrap;min-width:0}
   .context-task{display:flex;align-items:baseline;gap:8px;margin:0;font-size:var(--text-xs)}

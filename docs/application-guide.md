@@ -60,7 +60,7 @@ inspection control without clearing filters or checked candidates. Escape closes
 inspection when focus is outside an editing control.
 Inspection makes no request and does not select an item for a batch action.
 
-**Presentation in this tab** changes the reading arrangement across the Console:
+Open **Presentation** in the Console context to change **Presentation in this tab**:
 
 - **Analyst Desk** keeps the balanced queue and evidence layout.
 - **Evidence Bench** gives the evidence inspector more room and opens the existing
