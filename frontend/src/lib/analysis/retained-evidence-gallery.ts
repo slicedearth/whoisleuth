@@ -4,6 +4,8 @@ import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mt
 import type { ObservationContext } from '../../../../packages/comparison/capture-context.mts';
 import { MAX_CASES } from '../../../../packages/contracts/case-portability.mts';
 import { MAX_SELECTED_FILES } from '../../../../packages/contracts/selected-file-limits.mts';
+import { TEXT_COMPARISON_BYTES } from '../../../../packages/comparison/text-passages.mts';
+import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES } from '../../../../packages/investigation/investigation-manifest.mts';
 
 export type GalleryFileKind = 'png' | 'text';
 export type GalleryFileReference = Readonly<{ caseId: string; attachmentId: string }>;
@@ -16,6 +18,19 @@ export type GalleryFile = Readonly<{
 export function galleryFileKind(file: CaseAttachment): GalleryFileKind | null {
   if (file.mediaType === 'image/png') return 'png';
   return file.mediaType === 'application/octet-stream' && /\.(?:txt|text)$/iu.test(file.fileName) ? 'text' : null;
+}
+
+/** Metadata eligibility only; reading still verifies original bytes and format. */
+export function galleryComparisonUnavailableReason(kind: GalleryFileKind, left?: GalleryFile, right?: GalleryFile): string | null {
+  if (!left && !right) return 'Choose a reference file and a candidate file.';
+  if (!left) return 'Choose a reference file.';
+  if (!right) return 'Choose a candidate file.';
+  if (left.key === right.key) return 'Choose two different attachment references.';
+  if (left.kind !== kind || right.kind !== kind) return `Choose two ${kind === 'png' ? 'PNG' : 'text'} references.`;
+  const ceiling = kind === 'text' ? TEXT_COMPARISON_BYTES : MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES;
+  if ([left, right].some(file => file.attachment.byteLength > ceiling))
+    return `This comparison accepts originals up to ${(ceiling / 1024 / 1024).toLocaleString('en-AU')} MiB each. Choose smaller files without changing the retained originals.`;
+  return null;
 }
 
 export function resolveGalleryFile(records: readonly CaseRecord[], reference: GalleryFileReference) {

@@ -827,6 +827,11 @@ details to check and copy its complete attachment ID, hash and exact stored
 timestamps before opening the originals. Readable timestamps use UTC; an unknown
 observation time stays unknown. These details describe retained metadata, not a
 new verification of the original bytes.
+The comparison control explains missing selections, identical attachment references
+and files above the existing comparison byte bounds before opening any original.
+Two distinct references may still contain identical bytes. If opening fails, use
+**Reference Case files** or **Candidate Case files** to inspect the source Case or
+recover originals from a backup; use the recorded hashes, not filenames alone.
 The existing Case-store and attachment limits still apply, without a smaller
 gallery sample cap. **Compare selected text** or **Open selected PNGs** reads only
 the selected pair, with separate

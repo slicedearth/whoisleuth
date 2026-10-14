@@ -3,12 +3,12 @@
   import type { CaseRecord } from '#lib/cases.ts';
   import type { WebsiteProfileCluster, WebsiteProfileClusterSummary } from '#lib/analysis/website-profile-clusters.ts';
   import { filterGalleryFiles, galleryObservationContext, gallerySelectionSignature, retainedGalleryInventory,
-    resolveGalleryFile, type GalleryFile } from '#lib/analysis/retained-evidence-gallery.ts';
+    resolveGalleryFile, galleryComparisonUnavailableReason, type GalleryFile } from '#lib/analysis/retained-evidence-gallery.ts';
   import { readRetainedCaseFiles } from '#lib/case-attachments.ts';
+  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
   import { captureConsoleReferenceScope, subscribeConsoleReferenceView } from '#lib/console-workflow-state.ts';
   import { runInvestigationPackageWorker } from '#lib/investigation-package-worker.ts';
-  import { TEXT_COMPARISON_BYTES, type TextPassageComparison } from '../../../../packages/comparison/text-passages.mts';
-  import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES } from '../../../../packages/investigation/investigation-manifest.mts';
+  import type { TextPassageComparison } from '../../../../packages/comparison/text-passages.mts';
   import WebsiteProfileClusters from './WebsiteProfileClusters.svelte';
   import LocalCollectionState from './LocalCollectionState.svelte';
   import Pagination from './Pagination.svelte';
@@ -29,6 +29,7 @@
   let textResult = $state.raw<TextPassageComparison | null>(null);
   let controller: AbortController | null = null;
   let heading = $state<HTMLHeadingElement>(), results = $state<HTMLOListElement>(), trigger = $state<HTMLButtonElement>();
+  const comparisonHelpId = $props.id();
   const inventory = $derived(retainedGalleryInventory(casesState === 'ready' ? cases : []));
   const files = $derived(facet === 'profiles' ? [] : filterGalleryFiles(inventory.files, facet, query));
   const pageCount = $derived(Math.max(1, Math.ceil(files.length / 20)));
@@ -38,7 +39,8 @@
   const visibleFiles = $derived(files.slice((currentPage - 1) * 20, currentPage * 20));
   const choices = $derived([...new Map([...visibleFiles, ...(left ? [left] : []), ...(right ? [right] : [])].map(file => [file.key, file])).values()]);
   const selectedSignature = $derived(left && right ? gallerySelectionSignature(cases, [left.reference, right.reference]) : null);
-  const eligiblePair = $derived(casesState === 'ready' && facet !== 'profiles' && left && right && left.key !== right.key && left.kind === facet && right.kind === facet);
+  const pairIssue = $derived(facet === 'profiles' ? null : galleryComparisonUnavailableReason(facet, left, right));
+  const eligiblePair = $derived(casesState === 'ready' && facet !== 'profiles' && pairIssue === null);
   const comparison = $derived(prepared && prepared.signature === selectedSignature && left && right
     ? { left, right, files: prepared.files } : null);
 
@@ -75,9 +77,8 @@
         && scope.workspaceId === expected.scope.workspaceId && scope.generation === expected.scope.generation;
     };
     try {
-      const ceiling = facet === 'text' ? TEXT_COMPARISON_BYTES : MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES;
-      if ([selectedLeft, selectedRight].some(file => file.attachment.byteLength > ceiling))
-        throw new Error(facet === 'text' ? 'Choose text files no larger than 1 MiB each. No original bytes were read.' : 'A selected PNG exceeds the evidence-file review bound. No original bytes were read.');
+      const unavailable = galleryComparisonUnavailableReason(facet === 'text' ? 'text' : 'png', selectedLeft, selectedRight);
+      if (unavailable) throw new Error(unavailable);
       const selected = await readRetainedCaseFiles([selectedLeft.attachment, selectedRight.attachment]);
       if (!owns()) return;
       const bodies = selected.map(file => file.file);
@@ -152,8 +153,14 @@
         </div>
       </div>
       <p>Search for each side separately. Selected files stay here across searches and pages; originals open only when you start the comparison.</p>
-      <div class="actions"><button class="btn" bind:this={trigger} disabled={busy || !eligiblePair} onclick={() => void openComparison()}>{facet === 'text' ? 'Compare selected text' : 'Open selected PNGs'}</button><button class="btn small" type="button" disabled={!left || !right || left.key === right.key} onclick={swap}>Swap reference and candidate</button>{#if busy}<button class="btn" onclick={close}>Cancel file review</button><span role="status">Reading the selected verified originals…</span>{/if}</div>
-      {#if error}<p role="alert">{error}</p>{/if}
+      <p id={comparisonHelpId}>{pairIssue ?? 'Two references selected. Availability, integrity and format are checked when you start.'}</p>
+      <div class="actions"><button class="btn" bind:this={trigger} aria-describedby={comparisonHelpId} disabled={busy || !eligiblePair} onclick={() => void openComparison()}>{facet === 'text' ? 'Compare selected text' : 'Open selected PNGs'}</button><button class="btn small" type="button" disabled={!left || !right || left.key === right.key} onclick={swap}>Swap reference and candidate</button>{#if busy}<button class="btn" onclick={close}>Cancel file review</button><span role="status">Reading the selected verified originals…</span>{/if}</div>
+      {#if error}<p role="alert">{error}</p>
+        {#if left && right}<div class="recovery">
+          <p>Check the source Cases for retained originals or recover them from a backup. Use the recorded hashes; a matching filename alone cannot restore missing evidence.</p>
+          <div class="actions"><a class="btn small" href={caseWorkspaceHref(left.reference.caseId, 'evidence')}>Reference Case files</a><a class="btn small" href={caseWorkspaceHref(right.reference.caseId, 'evidence')}>Candidate Case files</a></div>
+        </div>{/if}
+      {/if}
     </section>
     <p role="status">{files.length} matching {facet === 'png' ? 'PNG' : 'text'} references. {inventory.files.length} eligible file references across {cases.length} currently read Cases; showing page {currentPage} of {pageCount}.</p>
     {#if inventory.ambiguous}<p>{inventory.ambiguous} ambiguous references are unavailable. Open the relevant Case to review those identities.</p>{/if}

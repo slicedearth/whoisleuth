@@ -8,6 +8,7 @@ import { createCase as caseRecord } from '../packages/cases/case-record-operatio
 import { readCaseAttachment } from '../packages/cases/case-attachment-model.mts';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 
 async function retainPair(page: Page) {
   const missing = { ...caseRecord({ domain: 'missing-original.example' }, '2026-09-01T00:00:00.000Z'), attachments: [readCaseAttachment({
@@ -126,6 +127,11 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   await expect(rowReference).toBeFocused(); await expect(rowReference).toHaveAttribute('aria-pressed', 'true');
   await expect(gallery.getByRole('combobox', { name: 'Reference file', exact: true })).toHaveValue(JSON.stringify([missing.id, missing.attachments[0]!.id]));
   await expect(gallery.getByRole('button', { name: 'Compare selected text', exact: true })).toBeEnabled();
+  await candidateSelector.selectOption(JSON.stringify([missing.id, missing.attachments[0]!.id]));
+  await expect(gallery.getByRole('button', { name: 'Compare selected text', exact: true })).toBeDisabled();
+  await expect(gallery.getByText('Choose two different attachment references.', { exact: true })).toBeVisible();
+  await candidateSelector.selectOption(JSON.stringify([missing.id, repeated.id]));
+  await expect(gallery.getByRole('button', { name: 'Compare selected text', exact: true })).toBeEnabled();
   expect(repeated.digestSha256).toBe(missing.attachments[0]!.digestSha256);
   expect(await page.evaluate(() => Reflect.get(window, 'galleryOriginalReads'))).toBe(0);
   await rowReference.press('Enter');
@@ -186,8 +192,29 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   await gallery.getByRole('searchbox', { name: 'Search retained metadata', exact: true }).fill('');
   await select('text', missing.id, 'missing.txt'); await compare.click();
   await expect(gallery.getByRole('alert')).toContainText('original bytes are missing');
+  await expect(gallery.getByRole('link', { name: 'Candidate Case files', exact: true })).toHaveAttribute('href', `/cases?case=${encodeURIComponent(missing.id)}&section=evidence`);
+  await expect(gallery.getByRole('link', { name: 'Reference Case files', exact: true })).toHaveAttribute('href', /^\/cases\?case=.+&section=evidence$/u);
+  if (captureVisualEvidenceEnabled()) {
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 1280]) {
+        await page.setViewportSize({ width, height: 844 });
+        await gallery.getByRole('region', { name: 'Selected comparison files', exact: true }).screenshot({ path: testInfo.outputPath(`gallery-recovery-${theme}-${width}.png`) });
+      }
+    }
+  }
+  await gallery.getByRole('link', { name: 'Candidate Case files', exact: true }).focus();
+  await expect(gallery.getByRole('link', { name: 'Candidate Case files', exact: true })).toBeFocused();
   await expect(review).toHaveCount(0);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(new RegExp(`/cases\\?case=${missing.id}&section=evidence$`, 'u'));
+  const sourceFiles = await openRetainedFiles(page);
+  await expect(sourceFiles).toContainText('missing.txt');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  expect(await storedFiles(page)).toEqual(bytes);
+  await page.goto('/monitor?view=relationships');
   await select('png'); await gallery.getByRole('button', { name: 'Open selected PNGs', exact: true }).click();
+  await expect(gallery.getByRole('link', { name: 'Candidate Case files', exact: true })).toHaveCount(0);
   await expect(review.locator('canvas')).toHaveCount(2);
   await review.getByText('Compare image regions', { exact: true }).click();
   await review.getByRole('button', { name: 'Calculate image changes', exact: true }).click();

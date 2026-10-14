@@ -3,11 +3,32 @@ import assert from 'node:assert/strict';
 import { createCase } from '../packages/cases/case-record-operations.mts';
 import { readCaseAttachment } from '../packages/cases/case-attachment-model.mts';
 import { retainedGalleryInventory, resolveGalleryFile, filterGalleryFiles,
-  gallerySelectionSignature, galleryObservationContext } from '../frontend/src/lib/analysis/retained-evidence-gallery.ts';
+  gallerySelectionSignature, galleryObservationContext, galleryComparisonUnavailableReason } from '../frontend/src/lib/analysis/retained-evidence-gallery.ts';
+import { TEXT_COMPARISON_BYTES } from '../packages/comparison/text-passages.mts';
+import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES } from '../packages/investigation/investigation-manifest.mts';
 
 const attachment = (id: string, source: string | null = null) => readCaseAttachment({ id, fileName: `${id}.png`, mediaType: 'image/png',
   source, observedAt: null, retainedAt: '2026-09-01T00:00:00.000Z', byteLength: 12, digestSha256: `sha256:${'a'.repeat(64)}` });
 const record = () => createCase({ domain: 'incident.example' }, '2026-09-01T00:00:00.000Z');
+
+test('comparison eligibility explains selection and existing byte bounds without treating equal hashes as duplicate references', () => {
+  const [left, right] = retainedGalleryInventory([{ ...record(), attachments: [attachment('one'), attachment('two')] }]).files;
+  assert.match(galleryComparisonUnavailableReason('png')!, /reference file and a candidate file/u);
+  assert.equal(galleryComparisonUnavailableReason('png', left), 'Choose a candidate file.');
+  assert.equal(galleryComparisonUnavailableReason('png', undefined, right), 'Choose a reference file.');
+  assert.equal(galleryComparisonUnavailableReason('png', left, left), 'Choose two different attachment references.');
+  assert.equal(galleryComparisonUnavailableReason('text', left, right), 'Choose two text references.');
+  assert.equal(left!.attachment.digestSha256, right!.attachment.digestSha256);
+  assert.equal(galleryComparisonUnavailableReason('png', left, right), null);
+  for (const [kind, ceiling] of [['text', TEXT_COMPARISON_BYTES], ['png', MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES]] as const) {
+    const reference = { ...left!, kind, attachment: { ...left!.attachment, byteLength: ceiling } };
+    const candidate = { ...right!, kind, attachment: { ...right!.attachment, byteLength: ceiling } };
+    assert.equal(galleryComparisonUnavailableReason(kind, reference, candidate), null);
+    for (const pair of [[{ ...reference, attachment: { ...reference.attachment, byteLength: ceiling + 1 } }, candidate],
+      [reference, { ...candidate, attachment: { ...candidate.attachment, byteLength: ceiling + 1 } }]] as const)
+      assert.match(galleryComparisonUnavailableReason(kind, ...pair)!, /Choose smaller files without changing the retained originals\.$/u);
+  }
+});
 
 test('gallery resolves exact Case and file identities independently of shared pixels or titles', () => {
   const left = { ...record(), title: 'Same title', attachments: [attachment('selected', 'First declaration')] };
