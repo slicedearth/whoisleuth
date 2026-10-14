@@ -124,6 +124,13 @@ test('refreshed facts survive section navigation and save through the existing C
   await expect(comparison).toContainText('Original registrar');
   await expect(comparison).toContainText('Updated registrar');
   await expect(comparison).toContainText(LATER);
+  const overview = refresh.getByRole('region', { name: 'Original and refreshed observations', exact: true });
+  const registryTimes = overview.getByRole('listitem', { name: 'Registry RDAP', exact: true });
+  await expect(registryTimes.locator('time')).toHaveCount(3);
+  await expect(registryTimes.locator('time').nth(0)).toHaveAttribute('datetime', EARLIER);
+  await expect(registryTimes.locator('time').nth(1)).toHaveAttribute('datetime', LATER);
+  expect(await registryTimes.locator('time').nth(2).getAttribute('datetime')).not.toBe(LATER);
+  await expect(overview.getByRole('listitem', { name: 'WHOIS', exact: true })).toContainText('Not requested');
   await page.getByRole('button', { name: 'Collapse details: Source quality evidence', exact: true }).click();
   await page.getByRole('button', { name: 'Expand details: Source quality evidence', exact: true }).click();
   await page.locator('#source-quality .records-disclosure > summary').click();
@@ -163,7 +170,10 @@ test('refreshed facts survive section navigation and save through the existing C
       await page.setViewportSize({ width, height: 900 });
       await refresh.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`source-refresh-${theme}-${width}.png`) }); }
+      if (captureVisualEvidenceEnabled()) {
+        await page.screenshot({ path: testInfo.outputPath(`source-refresh-${theme}-${width}.png`) });
+        await overview.screenshot({ path: testInfo.outputPath(`observation-overview-${theme}-${width}.png`) });
+      }
     }
   }
   await refresh.getByRole('button', { name: 'Refresh Registry RDAP', exact: true }).click();
@@ -174,6 +184,14 @@ test('refreshed facts survive section navigation and save through the existing C
   await expect(later).toContainText('Compared with refresh 1.');
   await expect(later.locator('article', { has: page.locator('strong', { hasText: /^Registrar$/u }) })).toContainText('equal');
   expect(requests).toBe(2);
+  // A non-admitted response retains an unavailable attempt, never the prior
+  // observation as the latest result. HTTP failure paths are covered in the model.
+  await page.route('**/api/rdap?*', route => route.fulfill({ json: { error: 'Fixture unavailable' } }));
+  await refresh.getByRole('button', { name: 'Refresh Registry RDAP', exact: true }).click();
+  await expect(refresh.locator('.refresh-results > li')).toHaveCount(3);
+  await expect(registryTimes).toContainText('No observation retained by this request');
+  await expect(registryTimes.locator('time').first()).toHaveAttribute('datetime', EARLIER);
+  await expect(later).toContainText('Updated registrar');
 });
 
 test('cancelling a held source response does not retain late evidence', async ({ page }) => {

@@ -556,6 +556,10 @@ retry; a new Lookup clears it.
 In **Source quality**, open the source-record review to refresh a source and
 compare its normalised facts with the original Lookup or its previous refresh.
 Source timestamps remain distinct from request times, including cached results.
+**Original and refreshed observations** summarises the original fact times beside
+the latest deliberately requested refresh for each source. Mixed times and undated
+facts stay explicit. An unsuccessful latest request does not replace the original
+or promote an earlier refresh to the latest observation; earlier entries remain below.
 The review survives collapsing sections, but not leaving or reloading Lookup.
 Retain selected dated facts in a Case or download a readable review before
 leaving. A selected URL must be selected again in a new Deep lookup; refreshing
@@ -909,6 +913,12 @@ Context groups remain separate and are not traversed as declarations. Related
 withdrawn links can be included as history, but do not extend the trace. This
 read-only view changes neither the claim nor its evidence; a record without
 linked pins cannot establish source independence.
+Expand **Observation and reference trail** for each exact pin's observation and
+saving times, checkpoint or imported-finding identity where retained, and unresolved
+references. The list follows the declared relationships, not chronology. A
+relationship's recording time is not an observation time, and copying or deriving
+a fact does not make it independently collected. The fictional source-reuse
+practice uses this same reader without touching saved Cases.
 If a later flag reuses your submitted report, record that known relationship.
 If its method is unknown, keep independence unknown rather than inferring either
 corroboration or dependence. Separately documented new observations retain their

@@ -361,6 +361,11 @@ test('bounded practice examples preserve scope, reported mechanisms and source-r
   await sourceFocus.selectOption({ label: 'The provider result reuses the original report' });
   const trace = practice.getByRole('region', { name: 'Selected evidence source trace', exact: true });
   await expect(trace.getByRole('status')).toContainText('Active relationships in trace: 1');
+  await trace.getByText('Observation and reference trail · 2', { exact: true }).click();
+  const observationTrail = trace.getByRole('list', { name: 'Traced observation references', exact: true });
+  await expect(observationTrail.getByRole('listitem')).toHaveCount(2);
+  await expect(observationTrail).toContainText('Original supplied report');
+  await expect(observationTrail).not.toContainText('Separately documented page observation');
   const relationships = practice.getByRole('list', { name: 'Analyst-declared evidence relationships', exact: true });
   await expect(relationships).toContainText('Original supplied report');
   await expect(relationships).not.toContainText('Separately documented page observation');

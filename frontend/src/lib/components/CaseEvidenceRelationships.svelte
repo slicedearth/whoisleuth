@@ -3,11 +3,13 @@
   import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
   import { createCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import { caseEvidenceLinkIssues, caseEvidenceSharedContext, traceCaseEvidenceSources, type CaseEvidenceLink } from '../../../../packages/cases/case-evidence-links.mts';
+  import { caseEvidenceReferences } from '#lib/analysis/case-evidence-presentation.ts';
   import { MAX_RESPONSE_RATIONALE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   import Pagination from './Pagination.svelte';
+  import EvidenceTimestamp from './EvidenceTimestamp.svelte';
 
   let { record, persist, mutationBusy }: { record: CaseRecord; persist: PersistCaseResponse; mutationBusy: boolean } = $props();
   const id = $props.id();
@@ -22,9 +24,10 @@
     ...record.evidencePins.map((item, index) => ({ id: `pin:${item.id}`, group: 'Evidence pins', label: `${index + 1} · ${item.label}`,
       detail: 'Retained evidence pin', pinIds: [item.id], relations: [] })),
   ]);
-  let focus = $state(''), relationshipPage = $state(1), activeCaseId = $state('');
+  let focus = $state(''), relationshipPage = $state(1), trailPage = $state(1), activeCaseId = $state('');
   const selected = $derived(choices.find(choice => choice.id === focus));
   const trace = $derived(selected ? traceCaseEvidenceSources(record.evidenceLinks ?? [], selected.pinIds) : null);
+  const trail = $derived(trace ? caseEvidenceReferences(record.evidencePins, trace.pinIds) : []);
   const shared = $derived(caseEvidenceSharedContext(record.evidencePins).filter(group => !trace || group.pinIds.some(id => trace.pinIds.includes(id))));
   const missing = $derived(trace?.pinIds.filter(id => !record.evidencePins.some(pin => pin.id === id)) ?? []);
   let showHistory = $state(false);
@@ -34,6 +37,7 @@
   $effect(() => { if (activeCaseId !== record.id) { activeCaseId = record.id; focus = ''; showHistory = false; } });
   $effect(() => { if (focus && !choices.some(choice => choice.id === focus)) focus = ''; });
   $effect(() => { displayed; relationshipPage = 1; });
+  $effect(() => { trail; trailPage = 1; });
   async function save() {
     const unchanged = draft.capture();
     if (await draft.persist(persist, { evidenceLink: { ...draft.value } }, 'Recorded the analyst-declared evidence relationship.') && unchanged()) {
@@ -69,6 +73,27 @@
       {#if displayed.some(row => row.cyclic)}<p>Active derivations contain a cycle. No source order is inferred from those conflicting links.</p>{/if}
       {#if !trace.linkIds.length}<p>No active source relationships are retained for this selection. This does not establish independence.</p>{/if}
       <p role="status">Active relationships in trace: {trace.linkIds.length} · Related withdrawn relationships: {trace.withdrawnLinkIds.length}</p>
+      {#if trail.length}
+        <details class="observation-trail"><summary>Observation and reference trail · {trail.length}</summary>
+          <p>References are listed in tracing order, not date order. Observation time, saving time and relationship recording time remain distinct. A copied or derived reference is not a new independent observation.</p>
+          <ol aria-label="Traced observation references" start={(trailPage - 1) * 12 + 1}>
+            {#each trail.slice((trailPage - 1) * 12, trailPage * 12) as item (item.id)}
+              <li>
+                <strong>{item.pin?.label ?? 'Referenced evidence not retained'}</strong><code>Pin {item.id}</code>
+                <p>{trace.rootPinIds.includes(item.id) ? 'Cited by this selection' : 'Reached through a retained source relationship'}</p>
+                {#if item.pin}
+                  <dl><div><dt>Declared source</dt><dd>{item.pin.source}</dd></div>
+                    <div><dt>Observed</dt><dd><EvidenceTimestamp value={item.pin.observedAt} unavailable="Unknown" copyable={false} /></dd></div>
+                    <div><dt>Saved to Case</dt><dd><EvidenceTimestamp value={item.pin.createdAt} copyable={false} /></dd></div></dl>
+                  {#if item.pin.checkpointId}<p>Selected checkpoint fact · <code>{item.pin.checkpointId}</code></p>{/if}
+                  {#if item.pin.importContentSha256}<p>Imported finding identity · <code>{item.pin.importContentSha256}</code></p>{/if}
+                {:else}<p>Its source, content and observation time are unknown here; no replacement was selected.</p>{/if}
+              </li>
+            {/each}
+          </ol>
+          <Pagination currentPage={trailPage} pageCount={Math.ceil(trail.length / 12)} setPage={next => trailPage = next} ariaLabel="Traced observations" />
+        </details>
+      {/if}
     </section>
   {/if}
   {#if shared.length}
@@ -122,4 +147,5 @@
   .relationships{padding:0;list-style:none;display:grid;gap:12px}.relationships li{padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);min-width:0}
   .history-toggle{display:flex;align-items:center;gap:8px;padding:12px 0}.relationships p{margin:8px 0}
   .source-focus{max-width:760px;margin:16px 0}.source-trace{min-width:0;margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm)}.source-trace h4{margin:0}.source-trace p{margin:8px 0}
+  .observation-trail ol{display:grid;gap:12px;padding-left:20px}.observation-trail li{min-width:0}.observation-trail code{display:block;overflow-wrap:anywhere;font-size:var(--text-2xs)}.observation-trail dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;font-size:var(--text-xs)}.observation-trail dt{color:var(--muted)}.observation-trail dd{margin:4px 0 0}.observation-trail p{font-size:var(--text-xs)}@media(max-width:640px){.observation-trail dl{grid-template-columns:minmax(0,1fr)}}
 </style>

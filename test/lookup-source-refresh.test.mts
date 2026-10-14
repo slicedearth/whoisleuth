@@ -7,6 +7,7 @@ import {
   buildLookupFreshnessPolicy,
   mergeLookupSourceRefreshLedger,
   requestLookupSourceRefresh,
+  sourceRefreshObservationTimes,
   MAX_LOOKUP_SOURCE_REFRESH_HISTORY,
   type LookupSourceRefreshId,
   type LookupSourceRefreshPlanItem,
@@ -98,6 +99,26 @@ async function refresh(id: LookupSourceRefreshId, body: unknown, input = origina
     now: () => NOW, fetchImpl: async () => Response.json(body),
   });
 }
+
+test('observation overview preserves mixed and unknown fact clocks independently of refresh attempts', () => {
+  const fact = originalSourceRefreshFacts('rdap', original(), 'deep', NOW).find(item => item.value !== null)!;
+  const facts = [
+    { ...fact, observedAt: EARLIER }, { ...fact, observedAt: NOW },
+    { ...fact, observedAt: null }, { ...fact, observedAt: 'invalid' },
+    { ...fact, observedAt: '2030-01-01T00:00:00.000Z' }, { ...fact, value: null, observedAt: NOW },
+  ];
+  const before = structuredClone(facts);
+  assert.deepEqual(sourceRefreshObservationTimes(facts, NOW), {
+    factCount: 5, unknownCount: 3, distinctTimes: 2, earliest: EARLIER, latest: NOW,
+  });
+  assert.deepEqual(sourceRefreshObservationTimes([{ ...fact, observedAt: '2026-07-29T10:00:00+10:00' }, fact], NOW), {
+    factCount: 2, unknownCount: 0, distinctTimes: 1, earliest: EARLIER, latest: EARLIER,
+  });
+  assert.deepEqual(sourceRefreshObservationTimes([], NOW), {
+    factCount: 0, unknownCount: 0, distinctTimes: 0, earliest: null, latest: null,
+  });
+  assert.deepEqual(facts, before);
+});
 
 test('retains validated registration facts and their actual clock without mutating the original or retaining contacts', async () => {
   const input = original(), before = structuredClone(input);
