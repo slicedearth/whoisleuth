@@ -543,7 +543,6 @@
     border-bottom: 1px solid var(--border);
     padding: .75rem .5rem;
   }
-  .candidate-queue article.inspected { background: var(--panel-raised); box-shadow: inset 3px 0 var(--interface-accent); }
   .candidate-queue article label { grid-column: 1 / -1; }
   .candidate-queue article span { color: var(--muted); font-size: var(--text-xs); align-self: center; }
   .candidate-queue button { min-height: 44px; }
@@ -551,9 +550,12 @@
     min-width: 0;
     display: grid;
     gap: 12px;
-    border: 1px solid var(--border);
-    padding: 12px;
+    margin: 0;
+    border: 0;
+    padding: 0;
   }
+  .candidate-review > fieldset { border-block-start: 1px solid var(--border); padding-block-start: 16px; }
+  .candidate-review legend { max-width: 100%; padding-inline: 0 8px; font-weight: 650; overflow-wrap: anywhere; }
   .candidate-review input:not([type='checkbox']),
   .candidate-review textarea,
   .candidate-review select {

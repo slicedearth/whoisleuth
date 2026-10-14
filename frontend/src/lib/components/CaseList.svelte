@@ -42,7 +42,7 @@
 <section class="case-list" aria-label="Saved Cases">
   <label class="cover-choice"><input type="checkbox" bind:checked={covers}>Preview Case covers</label>
   {#each records as record (record.id)}
-    <article class="case card" class:cover={covers}>
+    <article class="case card" class:cover={covers} class:inspected={inspectedId === record.id}>
       {#if tagMode && toggleTagCase}
         <label class="calibration-select"><input type="checkbox" aria-label={`Select Case ${caseNumber(record.id)} for tag changes`}
           checked={tagCaseIds.includes(record.id)} disabled={tagSelectionDisabled || (tagCaseIds.length >= MAX_CASE_BATCH_MUTATIONS && !tagCaseIds.includes(record.id))}

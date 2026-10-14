@@ -233,7 +233,6 @@
   .cockpit{margin:16px 0;padding:var(--card-pad)}
   .result-queue { list-style: none; margin: 0; padding: 0; }
   .result-queue li { display: grid; gap: .5rem; padding: .75rem; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
-  .result-queue li.inspected { background: var(--panel-raised); box-shadow: inset 3px 0 var(--interface-accent); }
   .result-queue span { color: var(--muted); font-size: var(--text-xs); }
   .result-queue button { justify-self: start; min-height: 44px; }
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}

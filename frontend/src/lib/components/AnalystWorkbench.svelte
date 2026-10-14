@@ -83,6 +83,8 @@
   .workbench-layout:not(.inspecting) { grid-template-columns: minmax(0, 1fr); }
   .workbench-queue, .workbench-reading, .workbench-detail, aside { min-width: 0; overflow-wrap: anywhere; }
   .workbench-queue { max-height: 42rem; overflow: auto; scrollbar-gutter: stable; }
+  .workbench-queue :global(.inspected) { background: var(--panel-raised); box-shadow: inset 3px 0 var(--text); }
+  .workbench-queue :global(.inspected .btn[aria-pressed='true']) { color: var(--text); border-color: var(--border-strong); background: var(--panel-raised); }
   .workbench-reading { border-inline-start: 1px solid var(--border); padding-inline-start: 1.25rem; }
   .workbench-reading.empty { color: var(--muted); border: 0; padding: 0; }
   header { display: flex; align-items: start; gap: .75rem; flex-wrap: wrap; margin-bottom: 1rem; grid-column: 1 / -1; }
@@ -103,4 +105,5 @@
     .workbench-reading { border: 0; padding: 0; }
   }
   @media print { header button { display: none; } .workbench-queue { max-height: none; } }
+  @media (forced-colors: active) { .workbench-queue :global(.inspected) { outline: 1px solid CanvasText; outline-offset: -1px; } }
 </style>

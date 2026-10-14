@@ -400,7 +400,6 @@
   .items>li{min-width:0}
   .review-queue { display: grid; list-style: none; margin: 0; padding: 0; }
   .review-queue li { display: grid; gap: .5rem; padding: .75rem; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
-  .review-queue li.inspected { background: var(--panel-raised); box-shadow: inset 3px 0 var(--interface-accent); }
   .review-queue span { color: var(--muted); font-size: var(--text-xs); }
   .review-queue button { justify-self: start; min-height: 44px; }
   .selected-review{margin:14px 0;color:var(--muted);font-size:var(--text-sm);line-height:1.5;overflow-wrap:anywhere}
