@@ -299,7 +299,7 @@ describe('CLI argument parsing', () => {
 
     const exportStdout = capture();
     assert.equal(await runCli(['export', '--help'], { stdout: exportStdout.stream, stderr: stderr.stream }), EXIT_CODES.SUCCESS);
-    assert.match(exportStdout.value(), /Saved Lookup versions 1 and 2/u);
+    assert.match(exportStdout.value(), /Supported saved Lookups are capped at 8 MiB/u);
     assert.ok(exportStdout.value().includes(`Current schema-${LOOKUP_EVIDENCE_SCHEMA_VERSION} exports`));
     const historicalV2Versions = SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS
       .filter(version => version > V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION && version !== LOOKUP_EVIDENCE_SCHEMA_VERSION);

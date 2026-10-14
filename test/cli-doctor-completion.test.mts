@@ -73,7 +73,7 @@ describe('CLI static completion and manual', () => {
     assert.match(stdout.value(), /palette auto, light, or dark/u);
     assert.match(stdout.value(), /save\\-lookup/u);
     assert.match(stdout.value(), /selected response, excludes raw header values/u);
-    assert.match(stdout.value(), /Saved Lookup versions 1 and 2/u);
+    assert.match(stdout.value(), /Supported saved Lookups are capped at 8 MiB/u);
     assert.equal(stderr.value(), '');
   });
 });
