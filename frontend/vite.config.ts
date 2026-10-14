@@ -108,6 +108,9 @@ export default defineConfig(async () => {
       }),
     ],
     worker: { plugins: workerBuild.workerPlugins },
+    // Resolve the framework's cookie parser at its importer. Externalising it
+    // would let prerendered output pick up the API server's incompatible major.
+    ssr: { noExternal: ['cookie'] },
     server: {
       proxy: { '/api': LOCAL_API_PROXY },
     },
