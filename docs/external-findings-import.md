@@ -18,6 +18,17 @@ limitations remain attached to a separately labelled evidence pin. WHOISleuth do
 change the case's analyst status or disposition, fetch a reference, execute
 content, contact a provider, or submit a report.
 
+In the preview, **Explain a field** separates accepted values from the proposed
+Case projection. For a directly selected findings JSON document,
+**Show in selected original** also shows the exact JSON string token, decoded
+value, path and UTF-16 location. A separate SHA-256 identifies the selected file
+bytes; it is not the retained finding-content digest or proof of source accuracy.
+Duplicate normalised findings have ambiguous original locations, and unsupported
+conversions do not invent one. Original text and file identity stay in temporary
+preview memory, not Cases, reports or exports. Closing or replacing the preview,
+cancelling, navigating away or completing import clears that context. Copying is
+deliberate and leaves the selected value on the device clipboard.
+
 ## Current and historical schemas
 
 The current writer emits version 5. The reader supports versions 4 and 5.

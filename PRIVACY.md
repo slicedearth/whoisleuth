@@ -800,6 +800,17 @@ finding-content digest distinguishes reimports from changed evidence; it is an
 identity aid, not anonymisation or proof that the source is authentic. Full Case
 exports and reports retain it; recipient response packets omit it.
 
+For a directly selected findings JSON file, the import preview can show an exact
+original string, its decoded value and parser-owned location beside the accepted
+and proposed values. The selected UTF-8 text and byte digest stay only in preview
+memory. Replacement, cancellation, closing the importer, navigation, page exit
+or successful import clears that context. Original locations and this file digest
+are not added to Cases, reports, exports or printing. Ambiguous duplicate origins
+and unsupported conversions do not reconstruct a source location. Deliberate copy
+can put original text or values on the device clipboard; clearing the preview does
+not clear that clipboard. Digests can correlate selected files and do not verify
+their source or accuracy.
+
 Saved Case views retain names, search text, status, disposition and sort choices
 within the current workspace. Workspace backups include them; response packets
 do not. Applying a view filters retained Cases without making network requests.

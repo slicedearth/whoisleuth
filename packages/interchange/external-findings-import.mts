@@ -279,7 +279,10 @@ function findingKey(finding: ExternalFinding, sourceName: string): string {
   return canonicalArtifactJsonV2({ sourceName, finding });
 }
 
-export function parseExternalFindingsDocument(value: unknown): ExternalFindingsDocument {
+export function parseExternalFindingsDocument(
+  value: unknown,
+  observeOrigin?: (accepted: ExternalFinding, originalIndex: number) => void,
+): ExternalFindingsDocument {
   const root = record(value);
   if (!root || !hasOnlyKeys(root, ROOT_KEYS)) {
     throw new Error('External findings must use the documented object shape without additional top-level fields.');
@@ -305,7 +308,7 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
 
   const normalized: ExternalFinding[] = [];
   let retainedBytes = new TextEncoder().encode(JSON.stringify({ schema: root.schema, schemaVersion: root.schemaVersion, source, findings: [] })).byteLength + 1;
-  const seen = new Set<string>();
+  const seen = new Map<string, ExternalFinding>();
   const domainCounts = new Map<string, number>();
   for (const [index, raw] of root.findings.entries()) {
     const item = record(raw);
@@ -348,8 +351,9 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
       if (retainedBytes > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) throw new TypeError('External findings exceed the retained aggregate byte bound.');
     }
     const key = findingKey(finding, source.name);
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const previous = seen.get(key);
+    if (previous) { observeOrigin?.(previous, index); continue; }
+    seen.set(key, finding);
     const count = (domainCounts.get(domain) ?? 0) + 1;
     if (count > MAX_EXTERNAL_FINDINGS_PER_DOMAIN) {
       throw new Error(`External findings exceed the ${MAX_EXTERNAL_FINDINGS_PER_DOMAIN}-finding per-domain limit.`);
@@ -359,6 +363,7 @@ export function parseExternalFindingsDocument(value: unknown): ExternalFindingsD
       throw new Error(`External findings exceed the ${MAX_EXTERNAL_FINDING_DOMAINS}-domain limit.`);
     }
     normalized.push(finding);
+    observeOrigin?.(finding, index);
   }
   if (!normalized.length) throw new Error('External findings did not contain a unique valid finding.');
 

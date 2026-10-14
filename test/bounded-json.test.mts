@@ -44,6 +44,28 @@ function partitionedKeys(total: number, width = MAX_BOUNDED_JSON_CONTAINER_ITEMS
 }
 
 describe('bounded parsed JSON structure', () => {
+  test('optional string locations follow exact decoded paths and UTF-16 ranges without changing the legacy observer', () => {
+    const raw = '{"a":[{"x":"same"},{"x":"same"}],"b":"\\u0061\\\"🙂"}';
+    const locations: unknown[] = [], legacy: unknown[] = [];
+    scanBoundedJson(raw, {}, entry => legacy.push(entry), entry => locations.push(entry));
+    assert.deepEqual(locations, [
+      { path: ['a', 0, 'x'], value: 'same', offset: 11, end: 17 },
+      { path: ['a', 1, 'x'], value: 'same', offset: 24, end: 30 },
+      { path: ['b'], value: 'a"🙂', offset: 37, end: 49 },
+    ]);
+    assert.deepEqual(legacy[1], { value: 'x', offset: 7, kind: 'key' });
+    assert.deepEqual(legacy[2], { value: 'same', offset: 11, kind: 'value', propertyKey: 'x' });
+    const root: unknown[] = [];
+    assert.equal(parseBoundedJson('"root"', { maximumBytes: 6, observeStringLocation: entry => root.push(entry) }), 'root');
+    assert.deepEqual(root, [{ path: [], value: 'root', offset: 0, end: 6 }]);
+    const escaped: unknown[] = [];
+    parseBoundedJson('{"na\\u006de":{"a.b":["x"]}}', { maximumBytes: 128, observeStringLocation: entry => escaped.push(entry.path) });
+    assert.deepEqual(escaped, [['name', 'a.b', 0]]);
+    for (const raw of ['{"x":"a","x":"b"}', '{"x":[[["a"]]]}', '{"x":"too long"}']) {
+      assert.throws(() => parseBoundedJson(raw, { maximumBytes: 128, limits: { maximumDepth: 2, maximumStringCodeUnits: 4 }, observeStringLocation: () => {} }));
+    }
+  });
+
   test('accepts only the four JSON whitespace characters at every token boundary', () => {
     for (const space of [' ', '\t', '\n', '\r', ' \t\n\r'.repeat(4_096)]) {
       const raw = `${space}{${space}"rows"${space}:${space}[${space}1${space},${space}true${space}]${space}}${space}`;

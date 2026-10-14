@@ -3,7 +3,7 @@ import { openCaseMetadata, openCaseSection, openConsoleView } from './console-na
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, runBulkScan, useTheme } from './helpers';
+import { expectFocusedResultsVisible, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, runBulkScan, useTheme } from './helpers';
 import { createCase, openCaseResponseWorkspace, openCasesView } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { EXTERNAL_FINDINGS_VERSION } from '../packages/interchange/external-findings-import.mts';
@@ -102,7 +102,7 @@ test('every accepted finding is reachable and the final deselection stays empty 
   await expect(response).not.toContainText('Independent observation 99');
 });
 
-test('new files and cancellation reset review selection without writing Cases', async ({ page }) => {
+test('new files and cancellation reset review selection without writing Cases', async ({ page }, testInfo) => {
   await openCasesView(page);
   const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
   await importer.getByText('Import bounded external findings', { exact: true }).click();
@@ -128,13 +128,31 @@ test('new files and cancellation reset review selection without writing Cases', 
   } }));
   const explanation = review.getByText('Explain a field for finding 1', { exact: true }).locator('..');
   await explanation.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
-  await expect(explanation).toContainText('Original spelling, time-zone notation and input locations are not retained');
+  await expect(explanation).toContainText('Original locations are available for supported fields');
+  await expect(explanation.locator('pre')).toHaveCount(0);
   await explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true }).selectOption('value');
   const copy = explanation.getByRole('button', { name: 'Copy finding 1 accepted finding.summary', exact: true });
   await copy.focus(); await page.keyboard.press('Enter');
   const suppliedSummary = `1: ${'v'.repeat(880)}`;
   await expect.poll(() => copies).toEqual([suppliedSummary]);
   await expect(copy).toBeFocused();
+  const original = explanation.getByText('Show in selected original: finding.summary', { exact: true }).locator('..');
+  await original.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  await expect(original.locator('pre')).toHaveText(JSON.stringify(suppliedSummary));
+  const originalDigest = createHash('sha256').update(source.buffer).digest('hex');
+  await expect(original).toContainText(originalDigest);
+  await expect(original).toContainText('$.findings[0].summary');
+  await original.getByRole('button', { name: 'Copy finding 1 original value finding.summary', exact: true }).click();
+  await expect.poll(() => copies.at(-1)).toBe(suppliedSummary);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    const trigger = original.locator(':scope > summary'); await trigger.focus();
+    await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+    await expectFocusedResultsVisible(page, trigger, trigger); await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`selected-original-${theme}-${width}.png`) });
+  }
+  await page.emulateMedia({ media: 'print' }); await expect(original).not.toBeVisible(); await page.emulateMedia({ media: null });
   rejectCopy = true;
   await explanation.getByRole('button', { name: 'Copy finding 1 proposed evidencePin.value', exact: true }).click();
   await expect(explanation.locator('.copy-fallback')).toHaveText(`${suppliedSummary} Reference: ${'x'.repeat(480)}-1`.slice(0, 1000));
@@ -144,12 +162,65 @@ test('new files and cancellation reset review selection without writing Cases', 
   await explanation.locator(':scope > summary').click();
   await expect(explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true })).toHaveValue('hostname');
   await expect(explanation.locator('.copy-fallback')).toHaveCount(0);
+  await expect(explanation.locator('pre')).toHaveCount(0);
+  await expect(explanation).not.toContainText(originalDigest);
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   await review.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(review).toHaveCount(0);
   await expect(fileInput).toBeFocused();
   await expect(page.locator('.case-head')).toHaveCount(0);
 });
+
+for (const phase of ['file', 'digest'] as const) for (const exit of ['replace', 'navigate'] as const) {
+  test(`selected original ${phase} completion cannot survive ${exit}`, async ({ page }) => {
+    await openCasesView(page);
+    const before = await readBrowserLocalCollection(page, 'cases');
+    const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
+    const toggle = importer.getByText('Import bounded external findings', { exact: true });
+    await toggle.click();
+    await page.evaluate(phase => {
+      const scope = window as unknown as { originalImportHeld: boolean; releaseOriginalImport(): Promise<void> };
+      scope.originalImportHeld = false;
+      let release!: () => void, finished!: () => void;
+      const held = new Promise<void>(resolve => { release = resolve; }), done = new Promise<void>(resolve => { finished = resolve; });
+      scope.releaseOriginalImport = async () => { release(); await done; await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); };
+      if (phase === 'file') {
+        const original = File.prototype.arrayBuffer;
+        File.prototype.arrayBuffer = async function() {
+          if (this.name !== 'held-original.json') return original.call(this);
+          File.prototype.arrayBuffer = original; scope.originalImportHeld = true;
+          await held;
+          try { return await original.call(this); } finally { finished(); }
+        };
+      } else {
+        const original = crypto.subtle.digest.bind(crypto.subtle);
+        crypto.subtle.digest = async (algorithm, data) => {
+          if (!new TextDecoder().decode(data as ArrayBuffer).includes('Held source')) return original(algorithm, data);
+          crypto.subtle.digest = original; scope.originalImportHeld = true;
+          await held;
+          try { return await original(algorithm, data); } finally { finished(); }
+        };
+      }
+    }, phase);
+    const file = pagedFindingFile(1);
+    await importer.locator('input[type="file"]').setInputFiles({ ...file, name: 'held-original.json', buffer: Buffer.from(file.buffer.toString().replace('Paged source review', 'Held source')) });
+    await expect.poll(() => page.evaluate(() => Reflect.get(window, 'originalImportHeld'))).toBe(true);
+    if (exit === 'replace') {
+      await toggle.click(); await expect(importer).not.toHaveAttribute('open');
+      await expect(importer.locator('input[type="file"]')).toBeEnabled(); await toggle.click();
+      await importer.locator('input[type="file"]').setInputFiles(file);
+      await expect(importer.getByRole('region', { name: 'Validated import review' })).toContainText('Paged source review');
+    } else {
+      await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Lookup', exact: true }).click();
+      await expect(page).toHaveURL(/\/lookup$/u);
+    }
+    await page.evaluate(() => (window as unknown as { releaseOriginalImport(): Promise<void> }).releaseOriginalImport());
+    await expect(page.getByText('Held source', { exact: true })).toHaveCount(0);
+    if (exit === 'replace') await expect(importer.getByRole('region', { name: 'Validated import review' })).toContainText('Paged source review');
+    else await expect(page.getByRole('region', { name: 'Validated import review' })).toHaveCount(0);
+    expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  });
+}
 
 for (const outcome of ['write-failure', 'refresh-failure'] as const) {
   test(`import selection preserves the correct retry boundary after ${outcome}`, async ({ page }) => {
