@@ -219,6 +219,7 @@ test('printable packets preserve the exact audience projection, isolate print co
   const nextControl = browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab';
   for (let index = 0; index < 8; index++) {
     await page.keyboard.press(nextControl);
+    if (index === 0) await expect(dialog.getByRole('button', { name: 'Print or save PDF', exact: true })).toBeFocused();
     const focus = await dialog.evaluate(element => ({
       inside: element.contains(document.activeElement),
       browserControls: !document.hasFocus() && document.activeElement === document.body,
@@ -229,6 +230,12 @@ test('printable packets preserve the exact audience projection, isolate print co
     if (focus.inside && focus.control) focusedControls.add(focus.control);
   }
   expect(focusedControls).toEqual(new Set(['Print or save PDF', 'Close report', 'appendix']));
+  await dialog.getByRole('checkbox', { name: 'Include exact packet JSON as a technical appendix', exact: true }).focus();
+  const previousControl = nextControl === 'Alt+Tab' ? 'Alt+Shift+Tab' : 'Shift+Tab';
+  await page.keyboard.press(previousControl);
+  await expect(dialog.getByRole('button', { name: 'Close report', exact: true })).toBeFocused();
+  await page.keyboard.press(previousControl);
+  await expect(dialog.getByRole('button', { name: 'Print or save PDF', exact: true })).toBeFocused();
   await openReport.evaluate(element => element.focus());
   await expect(openReport).not.toBeFocused();
   await page.keyboard.press('Escape');
