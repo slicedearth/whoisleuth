@@ -66,7 +66,7 @@ import {
 } from './lib/operation-budget.mts';
 import { featureDisabledError, networkFeaturePolicy } from './lib/feature-policy.mts';
 import type { NetworkFeatureId, NetworkFeaturePolicy } from './lib/feature-policy.mts';
-import { MAX_API_JSON_BODY_BYTES, apiErrorResponseFor, apiUnexpectedErrorResponse, readRequestTextCapped } from './lib/http.mts';
+import { MAX_API_JSON_BODY_BYTES, apiErrorResponseFor, apiUnexpectedErrorResponse, httpResponseInterruptedError, readRequestTextCapped } from './lib/http.mts';
 import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from './lib/security-headers.mts';
 import {
   MAX_CONTACT_ROUTE_BODY_BYTES,
@@ -658,7 +658,7 @@ registerNetworkApiRoutes(app);
 // responses. Body-parser errors otherwise reach Express's HTML error page and
 // may expose stack traces and filesystem paths outside production mode.
 function apiErrorHandler(error: unknown, _req: RequestLike, res: ResponseLike, next: ErrorNext) {
-  if (res.headersSent) return next(error);
+  if (res.headersSent) return next(httpResponseInterruptedError());
   const response = apiErrorResponseFor(error);
   return res.status(response.statusCode).json(response.body);
 }
@@ -684,7 +684,7 @@ app.use(prerenderedHtmlRateLimit, notFoundPageHandler(path.join(svelteBuildDir, 
 // Static-file and non-API errors must not fall through to the environment-
 // dependent development renderer, which includes internal stack traces.
 function pageErrorHandler(error: unknown, _req: Request, res: Response, next: ErrorNext) {
-  if (res.headersSent) return next(error);
+  if (res.headersSent) return next(httpResponseInterruptedError());
   const candidate = recordValue(error, 'statusCode') ?? recordValue(error, 'status');
   const status = typeof candidate === 'number' && Number.isInteger(candidate) && candidate >= 400 && candidate <= 599 ? candidate : 500;
   if (status === 416) {
