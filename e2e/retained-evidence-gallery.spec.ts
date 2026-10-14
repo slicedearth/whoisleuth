@@ -180,8 +180,9 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
     await page.screenshot({ path: testInfo.outputPath(`gallery-${theme}-${width}.png`) });
   }
   await gallery.getByRole('searchbox', { name: 'Search retained metadata', exact: true }).fill('not in metadata');
-  await expect(review).toHaveCount(0);
-  await expect(compare).toBeDisabled();
+  await expect(review.getByRole('heading', { name: '1 shared passage', exact: true })).toBeVisible();
+  await expect(compare).toBeEnabled();
+  await expect(gallery.getByText('Outside the current filter · still selected', { exact: true })).toHaveCount(2);
   await gallery.getByRole('searchbox', { name: 'Search retained metadata', exact: true }).fill('');
   await select('text', missing.id, 'missing.txt'); await compare.click();
   await expect(gallery.getByRole('alert')).toContainText('original bytes are missing');
@@ -200,7 +201,7 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   await page.reload(); await expect(gallery.getByRole('combobox', { name: 'Evidence component', exact: true })).toHaveValue('profiles');
 });
 
-for (const change of ['component', 'pair'] as const) test(`changing gallery ${change} cancels a held text worker without publishing a late result`, async ({ page }) => {
+for (const change of ['component', 'pair', 'Console scope'] as const) test(`changing gallery ${change} cancels a held text worker without publishing a late result`, async ({ page }) => {
   const { before, bytes, gallery, select } = await retainPair(page);
   const path = productionChunkPath('src/lib/workers/investigation-package.worker.ts');
   let release = () => {}, arrived = () => {};
@@ -213,16 +214,72 @@ for (const change of ['component', 'pair'] as const) test(`changing gallery ${ch
     await pages.getByRole('button', { name: 'Go', exact: true }).click();
     await gallery.getByRole('button', { name: 'Compare selected text', exact: true }).click(); await received;
     if (change === 'component') await gallery.getByRole('combobox', { name: 'Evidence component', exact: true }).selectOption('png');
-    else {
+    else if (change === 'pair') {
       const action = gallery.getByRole('button', { name: /Use as candidate:.*repeated-missing-text$/u });
       await action.focus(); await action.press('Enter'); await expect(action).toBeFocused();
       await expect(pages.getByRole('spinbutton', { name: 'Retained gallery page', exact: true })).toHaveValue('2');
       await expect(gallery.getByRole('button', { name: 'Compare selected text', exact: true })).toBeEnabled();
-    }
+    } else await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
     release();
     if (change === 'component') await expect(gallery.getByRole('button', { name: 'Open selected PNGs', exact: true })).toBeDisabled();
+    if (change === 'Console scope') await expect(gallery.getByRole('button', { name: 'Compare selected text', exact: true })).toBeDisabled();
     await expect(gallery.getByRole('region', { name: 'Selected retained file comparison', exact: true })).toHaveCount(0);
     await expect(gallery.getByRole('heading', { name: '1 shared passage', exact: true })).toHaveCount(0);
+    expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await storedFiles(page)).toEqual(bytes);
+  } finally { release(); }
+});
+
+test('gallery selections and a held comparison survive cross-search while explicit role changes invalidate it', async ({ page }, testInfo) => {
+  const { before, bytes, gallery } = await retainPair(page);
+  const path = productionChunkPath('src/lib/workers/investigation-package.worker.ts');
+  let release = () => {}, arrived = () => {};
+  const held = new Promise<void>(resolve => { release = resolve; }), received = new Promise<void>(resolve => { arrived = resolve; });
+  await page.route(`**${path}`, async route => { arrived(); await held; await route.fallback(); });
+  try {
+    await gallery.getByRole('combobox', { name: 'Evidence component', exact: true }).selectOption('text');
+    const query = gallery.getByRole('searchbox', { name: 'Search retained metadata', exact: true });
+    const shelf = gallery.getByRole('region', { name: 'Selected comparison files', exact: true });
+    const reference = shelf.getByRole('combobox', { name: 'Reference file', exact: true });
+    const candidate = shelf.getByRole('combobox', { name: 'Candidate file', exact: true });
+    await query.fill('reference.example');
+    await gallery.getByRole('button', { name: /^Use as reference: reference\.txt ·/u }).click();
+    const referenceKey = await reference.inputValue();
+    expect(referenceKey).not.toBe('');
+    await query.fill('candidate.example');
+    await expect(reference).toHaveValue(referenceKey);
+    await expect(shelf.getByText('Outside the current filter · still selected', { exact: true })).toHaveCount(1);
+    await gallery.getByRole('button', { name: /^Use as candidate: candidate\.txt ·/u }).click();
+    const candidateKey = await candidate.inputValue();
+    expect(candidateKey).not.toBe(referenceKey); expect(candidateKey).not.toBe('');
+    const compare = shelf.getByRole('button', { name: 'Compare selected text', exact: true });
+    await compare.click(); await received;
+    await query.fill('no matching label');
+    await expect(reference).toHaveValue(referenceKey); await expect(candidate).toHaveValue(candidateKey);
+    await expect(shelf.getByText('Outside the current filter · still selected', { exact: true })).toHaveCount(2);
+    await expect(shelf.getByRole('button', { name: 'Cancel file review', exact: true })).toBeVisible();
+    release();
+    const review = gallery.getByRole('region', { name: 'Selected retained file comparison', exact: true });
+    await expect(review.getByRole('heading', { name: '1 shared passage', exact: true })).toBeVisible();
+    for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+      await shelf.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      expect((await new AxeBuilder({ page }).include('.selection-shelf').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
+      await shelf.screenshot({ path: testInfo.outputPath(`gallery-shelf-${theme}-${width}.png`) });
+    }
+    const swap = shelf.getByRole('button', { name: 'Swap reference and candidate', exact: true });
+    await swap.focus(); await swap.press('Enter');
+    await expect(swap).toBeFocused();
+    await expect(reference).toHaveValue(candidateKey); await expect(candidate).toHaveValue(referenceKey);
+    await expect(review).toHaveCount(0);
+    await compare.click();
+    await expect(review.getByRole('region', { name: 'Reference gallery source', exact: true })).toContainText('candidate source declaration');
+    await expect(review.getByRole('region', { name: 'Candidate gallery source', exact: true })).toContainText('reference source declaration');
+    await shelf.getByRole('button', { name: 'Clear reference', exact: true }).click();
+    await expect(reference).toHaveValue(''); await expect(candidate).toHaveValue(referenceKey);
+    await expect(review).toHaveCount(0); await expect(compare).toBeDisabled();
+    await shelf.getByRole('button', { name: 'Clear candidate', exact: true }).click();
+    await expect(candidate).toHaveValue('');
     expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await storedFiles(page)).toEqual(bytes);
   } finally { release(); }
 });

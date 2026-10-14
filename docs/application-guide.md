@@ -802,8 +802,12 @@ search Case titles, references, domains, filenames or declared sources; file
 contents are not indexed. Search covers the currently read Case metadata; rows
 are paged, and selectors show the current page plus already-selected references.
 Use **Use as reference** and **Use as candidate** on a row, or choose from the
-selectors. Selecting a file leaves the current page in place and does not read
-its original. Select the same row action again to clear that side of the pair.
+selectors. The **Comparison pair** keeps both selections above the results,
+including files outside the current search or results page. Search for one side,
+select it, then search for the other; search and pagination do not close a prepared
+comparison. Selecting a file leaves the current page in place and does not read
+its original. Use **Swap reference and candidate** to reverse the pair, or clear
+either side independently. Selecting the same row action again also clears that side.
 Selector labels identify the Case and exact attachment reference, including
 separate observations with the same filename and content hash. Open the selected file's
 details to check and copy its complete attachment ID, hash and exact stored
@@ -817,7 +821,11 @@ Case identities, declared sources, observation times and original-file digests.
 Unknown capture conditions remain unknown, and missing original bytes stop the
 review rather than becoming an empty image or text result. PNG comparison does
 not resize images; text comparison keeps the existing 1-MiB and word bounds.
-Changing selection, search or source state clears the prepared review. Comparisons
+Changing the pair, evidence component, workspace, selected file content or declared
+provenance clears the prepared review. Missing or ambiguous exact references cannot
+be replaced by a same-named file. Unrelated Case notes, tags and display-title edits
+do not invalidate the comparison; displayed labels follow the currently read metadata.
+Comparisons
 do not save records, create evidence packages, collect evidence or classify threats.
 
 In **Timeline**, open **Choose Case checkpoints** in the retained change review

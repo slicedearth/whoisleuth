@@ -62,7 +62,13 @@ export function filterGalleryFiles(files: readonly GalleryFile[], kind: GalleryF
 export function gallerySelectionSignature(records: readonly CaseRecord[], references: readonly GalleryFileReference[]) {
   const resolved = references.map(reference => resolveGalleryFile(records, reference));
   if (resolved.some(file => !file)) return null;
-  return JSON.stringify(resolved.map(file => ({ ...file, updatedAt: records.find(record => record.id === file!.reference.caseId)!.updatedAt })));
+  // Comparison identity follows the selected content and its declared provenance,
+  // not search text, display labels or unrelated edits to the enclosing Case.
+  return JSON.stringify(resolved.map(file => {
+    const { digestSha256, byteLength, mediaType, source, observedAt, retainedAt, derivation } = file!.attachment;
+    return { reference: file!.reference, kind: file!.kind, digestSha256, byteLength, mediaType,
+      source, observedAt, retainedAt, derivation: derivation ?? null };
+  }));
 }
 
 export function galleryObservationContext(file: GalleryFile): ObservationContext {

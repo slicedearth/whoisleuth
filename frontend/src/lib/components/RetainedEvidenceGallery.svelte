@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { onDestroy, tick, untrack } from 'svelte';
+  import { onDestroy, onMount, tick, untrack } from 'svelte';
   import type { CaseRecord } from '#lib/cases.ts';
   import type { WebsiteProfileCluster, WebsiteProfileClusterSummary } from '#lib/analysis/website-profile-clusters.ts';
   import { filterGalleryFiles, galleryObservationContext, gallerySelectionSignature, retainedGalleryInventory,
     resolveGalleryFile, type GalleryFile } from '#lib/analysis/retained-evidence-gallery.ts';
   import { readRetainedCaseFiles } from '#lib/case-attachments.ts';
+  import { captureConsoleReferenceScope, subscribeConsoleReferenceView } from '#lib/console-workflow-state.ts';
   import { runInvestigationPackageWorker } from '#lib/investigation-package-worker.ts';
   import { TEXT_COMPARISON_BYTES, type TextPassageComparison } from '../../../../packages/comparison/text-passages.mts';
   import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES } from '../../../../packages/investigation/investigation-manifest.mts';
@@ -24,7 +25,7 @@
   } = $props();
   let query = $state(''), facet = $state<'profiles' | 'png' | 'text'>('profiles'), page = $state(1);
   let leftKey = $state(''), rightKey = $state(''), error = $state(''), busy = $state(false);
-  let prepared = $state.raw<{ left: GalleryFile; right: GalleryFile; files: readonly Blob[] } | null>(null);
+  let prepared = $state.raw<{ signature: string; files: readonly Blob[] } | null>(null);
   let textResult = $state.raw<TextPassageComparison | null>(null);
   let controller: AbortController | null = null;
   let heading = $state<HTMLHeadingElement>(), results = $state<HTMLOListElement>(), trigger = $state<HTMLButtonElement>();
@@ -32,29 +33,47 @@
   const files = $derived(facet === 'profiles' ? [] : filterGalleryFiles(inventory.files, facet, query));
   const pageCount = $derived(Math.max(1, Math.ceil(files.length / 20)));
   const currentPage = $derived(Math.min(page, pageCount));
-  const left = $derived(files.find(file => file.key === leftKey));
-  const right = $derived(files.find(file => file.key === rightKey));
+  const left = $derived(inventory.files.find(file => file.key === leftKey));
+  const right = $derived(inventory.files.find(file => file.key === rightKey));
   const visibleFiles = $derived(files.slice((currentPage - 1) * 20, currentPage * 20));
   const choices = $derived([...new Map([...visibleFiles, ...(left ? [left] : []), ...(right ? [right] : [])].map(file => [file.key, file])).values()]);
   const selectedSignature = $derived(left && right ? gallerySelectionSignature(cases, [left.reference, right.reference]) : null);
   const eligiblePair = $derived(casesState === 'ready' && facet !== 'profiles' && left && right && left.key !== right.key && left.kind === facet && right.kind === facet);
+  const comparison = $derived(prepared && prepared.signature === selectedSignature && left && right
+    ? { left, right, files: prepared.files } : null);
 
   function invalidate() { controller?.abort(); controller = null; prepared = null; textResult = null; error = ''; busy = false; }
   $effect(() => { facet; untrack(() => { leftKey = ''; rightKey = ''; page = 1; invalidate(); }); });
-  $effect(() => { query; untrack(() => { page = 1; invalidate(); }); });
+  $effect(() => { query; untrack(() => { page = 1; }); });
   $effect(() => { selectedSignature; casesState; untrack(invalidate); });
   $effect(() => { const lastPage = pageCount; untrack(() => { page = Math.min(page, lastPage); }); });
   onDestroy(invalidate);
+  onMount(() => {
+    let scope = captureConsoleReferenceScope();
+    return subscribeConsoleReferenceView(() => {
+      const next = captureConsoleReferenceScope();
+      if (next.workspaceId !== scope.workspaceId || next.generation !== scope.generation) {
+        leftKey = ''; rightKey = ''; invalidate();
+      }
+      scope = next;
+    });
+  });
+  function swap() { [leftKey, rightKey] = [rightKey, leftKey]; }
   async function setPage(next: number) { page = Math.max(1, Math.min(pageCount, next)); await tick(); results?.focus(); }
   async function close() { invalidate(); await tick(); trigger?.focus(); }
   async function openComparison() {
     if (busy || !eligiblePair || !left || !right || !selectedSignature) return;
     const selectedLeft = resolveGalleryFile(cases, left.reference), selectedRight = resolveGalleryFile(cases, right.reference);
     if (!selectedLeft || !selectedRight) return;
-    const expected = { signature: selectedSignature, query, facet }, current = new AbortController();
+    const expected = { signature: selectedSignature, facet, scope: captureConsoleReferenceScope() }, current = new AbortController();
+    if (expected.scope.workspaceId === null) return;
     controller = current; busy = true; error = ''; prepared = null; textResult = null;
-    const owns = () => controller === current && !current.signal.aborted && casesState === 'ready'
-      && selectedSignature === expected.signature && query === expected.query && facet === expected.facet;
+    const owns = () => {
+      const scope = captureConsoleReferenceScope();
+      return controller === current && !current.signal.aborted && casesState === 'ready'
+        && selectedSignature === expected.signature && facet === expected.facet
+        && scope.workspaceId === expected.scope.workspaceId && scope.generation === expected.scope.generation;
+    };
     try {
       const ceiling = facet === 'text' ? TEXT_COMPARISON_BYTES : MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES;
       if ([selectedLeft, selectedRight].some(file => file.attachment.byteLength > ceiling))
@@ -67,7 +86,7 @@
         if (!owns()) return;
         textResult = next;
       }
-      prepared = { left: selectedLeft, right: selectedRight, files: bodies };
+      prepared = { signature: expected.signature, files: bodies };
       await tick(); if (owns()) heading?.focus();
     } catch (cause) { if (owns()) error = cause instanceof Error ? cause.message : 'Selected retained files could not be opened. Saved evidence is unchanged.'; }
     finally { if (controller === current) { controller = null; busy = false; } }
@@ -95,6 +114,15 @@
   </section>
 {/snippet}
 
+{#snippet selectionDetails(file: GalleryFile | undefined, key: string, side: 'Reference' | 'Candidate')}
+  {#if file}
+    <p class="selected-label"><strong>{file.attachment.fileName}</strong><span>{file.caseTitle} · {file.caseNumber}</span></p>
+    {#if !files.some(item => item.key === key)}<p class="selection-location">Outside the current filter · still selected</p>
+    {:else if !visibleFiles.some(item => item.key === key)}<p class="selection-location">On another results page · still selected</p>{/if}
+    <details><summary>{side} file details</summary>{@render fileMetadata(file, `${side} selected file`)}</details>
+  {:else if key}<p role="status">The selected {side.toLowerCase()} reference is no longer available. Choose a current file or clear this selection.</p>{/if}
+{/snippet}
+
 <section class="retained-gallery card" aria-labelledby="retained-gallery-title">
   <h2 id="retained-gallery-title">Retained evidence gallery</h2>
   <p>Search saved profile relationships or compare two deliberately selected files across Cases.</p>
@@ -109,6 +137,24 @@
   {:else if casesState !== 'ready'}
     <LocalCollectionState state={casesState} loadingTitle="Opening retained file metadata" loadingDetail="Reading Case references without opening originals." title="Case references unavailable" detail="The collection could not be read. Missing files or matches are not inferred." />
   {:else}
+    <section class="selection-shelf" aria-label="Selected comparison files">
+      <h3>Comparison pair</h3>
+      <div class="filters">
+        <div class="selected-file">
+          <label>Reference file<select bind:value={leftKey}><option value="">Choose a reference</option>{#if leftKey && !left}<option value={leftKey} disabled>Selected reference unavailable</option>{/if}{#each choices as file (file.key)}<option value={file.key}>{file.caseTitle} · {file.attachment.fileName} · {file.caseNumber} · Attachment {file.reference.attachmentId}</option>{/each}</select></label>
+          {@render selectionDetails(left, leftKey, 'Reference')}
+          <button class="btn small" type="button" disabled={!leftKey} onclick={() => { leftKey = ''; }}>Clear reference</button>
+        </div>
+        <div class="selected-file">
+          <label>Candidate file<select bind:value={rightKey}><option value="">Choose a candidate</option>{#if rightKey && !right}<option value={rightKey} disabled>Selected candidate unavailable</option>{/if}{#each choices as file (file.key)}<option value={file.key}>{file.caseTitle} · {file.attachment.fileName} · {file.caseNumber} · Attachment {file.reference.attachmentId}</option>{/each}</select></label>
+          {@render selectionDetails(right, rightKey, 'Candidate')}
+          <button class="btn small" type="button" disabled={!rightKey} onclick={() => { rightKey = ''; }}>Clear candidate</button>
+        </div>
+      </div>
+      <p>Search for each side separately. Selected files stay here across searches and pages; originals open only when you start the comparison.</p>
+      <div class="actions"><button class="btn" bind:this={trigger} disabled={busy || !eligiblePair} onclick={() => void openComparison()}>{facet === 'text' ? 'Compare selected text' : 'Open selected PNGs'}</button><button class="btn small" type="button" disabled={!left || !right || left.key === right.key} onclick={swap}>Swap reference and candidate</button>{#if busy}<button class="btn" onclick={close}>Cancel file review</button><span role="status">Reading the selected verified originals…</span>{/if}</div>
+      {#if error}<p role="alert">{error}</p>{/if}
+    </section>
     <p role="status">{files.length} matching {facet === 'png' ? 'PNG' : 'text'} references. {inventory.files.length} eligible file references across {cases.length} currently read Cases; showing page {currentPage} of {pageCount}.</p>
     {#if inventory.ambiguous}<p>{inventory.ambiguous} ambiguous references are unavailable. Open the relevant Case to review those identities.</p>{/if}
     <ol class="file-list" aria-label="Retained gallery file references" tabindex="-1" bind:this={results}>
@@ -125,21 +171,8 @@
       {:else}<li>No matching retained file reference is available in the currently read Case metadata.</li>{/each}
     </ol>
     <Pagination {currentPage} {pageCount} setPage={value => void setPage(value)} ariaLabel="Retained gallery pages" pageInputLabel="Retained gallery page" />
-    <div class="filters">
-      <div class="selected-file">
-        <label>Reference file<select bind:value={leftKey}><option value="">Choose a reference</option>{#each choices as file (file.key)}<option value={file.key}>{file.caseTitle} · {file.attachment.fileName} · {file.caseNumber} · Attachment {file.reference.attachmentId}</option>{/each}</select></label>
-        {#if left}<details><summary>Reference file details</summary>{@render fileMetadata(left, 'Reference selected file')}</details>{/if}
-      </div>
-      <div class="selected-file">
-        <label>Candidate file<select bind:value={rightKey}><option value="">Choose a candidate</option>{#each choices as file (file.key)}<option value={file.key}>{file.caseTitle} · {file.attachment.fileName} · {file.caseNumber} · Attachment {file.reference.attachmentId}</option>{/each}</select></label>
-        {#if right}<details><summary>Candidate file details</summary>{@render fileMetadata(right, 'Candidate selected file')}</details>{/if}
-      </div>
-    </div>
-    <p>Choose a reference and candidate from their rows or the selectors. Selectors show this page and already-selected references. Selecting a file does not open its original; start the comparison when ready.</p>
-    <div class="actions"><button class="btn" bind:this={trigger} disabled={busy || !eligiblePair} onclick={() => void openComparison()}>{facet === 'text' ? 'Compare selected text' : 'Open selected PNGs'}</button>{#if busy}<button class="btn" onclick={close}>Cancel file review</button><span role="status">Reading the selected verified originals…</span>{/if}</div>
-    {#if error}<p role="alert">{error}</p>{/if}
-    {#if prepared}
-      {@const pair = prepared}
+    {#if comparison}
+      {@const pair = comparison}
       <div class="prepared" role="region" aria-label="Selected retained file comparison">
         <h3 bind:this={heading} tabindex="-1">Two selected retained sources</h3>
         <details><summary>Selected-pair scope</summary><p>Only this pair was examined. Shared passages or pixels do not establish identity, maliciousness, legitimacy or independent collection.</p></details>
@@ -152,7 +185,7 @@
         {#if facet === 'png'}<DeferredSurface load={() => import('./ImageChangeReview.svelte')}
           props={{ left: pair.files[0]!, right: pair.files[1]!, contexts: [galleryObservationContext(pair.left), galleryObservationContext(pair.right)] }}
           loadingLabel="Opening selected image comparison…" unavailableLabel="The image comparison could not be loaded. Saved evidence is unchanged." />
-        {:else if textResult}<TextPassageResults result={textResult} reference={prepared.left.attachment} candidate={prepared.right.attachment} referenceScope={prepared.left.caseNumber} candidateScope={prepared.right.caseNumber} />{/if}
+        {:else if textResult}<TextPassageResults result={textResult} reference={pair.left.attachment} candidate={pair.right.attachment} referenceScope={pair.left.caseNumber} candidateScope={pair.right.caseNumber} />{/if}
         <button class="btn" onclick={close}>Close selected comparison</button>
       </div>
     {/if}
@@ -165,6 +198,6 @@
   .file-list{display:grid;gap:12px;padding-left:20px}.file-list li{min-width:0}.file-list strong,.file-list a,.file-list small{display:block;overflow-wrap:anywhere}
   summary{min-height:44px;align-content:center;cursor:pointer;font-size:var(--text-xs)}code{overflow-wrap:anywhere;font-size:var(--text-2xs)}.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}button{white-space:normal;max-width:100%}
   .prepared{display:grid;gap:12px;margin-top:16px;min-width:0}[role='alert']{color:var(--danger)}h3:focus,.file-list:focus{outline:2px solid var(--focus);outline-offset:3px}
-  .selected-file{min-width:0}.file-metadata{display:grid;gap:8px;margin:8px 0;font-size:var(--text-xs)}.file-metadata dt{color:var(--muted)}.file-metadata dd{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;min-width:0;margin:0}.file-metadata code{min-width:0;max-width:100%}
+  .selection-shelf{border-block:1px solid var(--border);padding-block:12px;margin-block:16px;min-width:0}.selected-file{min-width:0;align-self:start}.selected-label{display:grid;gap:4px}.selected-label strong{color:var(--text)}.selection-location{font-style:italic}.file-metadata{display:grid;gap:8px;margin:8px 0;font-size:var(--text-xs)}.file-metadata dt{color:var(--muted)}.file-metadata dd{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;min-width:0;margin:0}.file-metadata code{min-width:0;max-width:100%}
   @media(max-width:640px){.filters{grid-template-columns:minmax(0,1fr)}}@media print{.retained-gallery{display:none}}
 </style>

@@ -46,14 +46,47 @@ test('metadata search separates PNG and text hints without inferring UTF-8 valid
   assert.equal(filterGalleryFiles(files, 'text', 'private body not indexed').length, 0);
 });
 
-test('prepared selection signatures invalidate on source, clock, file or Case revision changes', () => {
+test('prepared selection signatures invalidate on exact content and provenance changes', () => {
   const original = { ...record(), attachments: [attachment('one')] }, refs = [{ caseId: original.id, attachmentId: 'one' }];
   const first = gallerySelectionSignature([original], refs);
   assert.ok(first);
-  for (const changed of [{ ...original, updatedAt: '2026-09-02T00:00:00.000Z' },
-    { ...original, attachments: [attachment('one', 'Replacement provenance')] },
-    { ...original, attachments: [readCaseAttachment({ ...attachment('one'), observedAt: '2026-09-02T00:00:00.000Z' })] }]) {
+  for (const patch of [
+    { source: 'Replacement provenance' },
+    { observedAt: '2026-09-02T00:00:00.000Z' },
+    { retainedAt: '2026-09-03T00:00:00.000Z' },
+    { digestSha256: `sha256:${'b'.repeat(64)}` },
+    { byteLength: 13 },
+    { mediaType: 'application/octet-stream', fileName: 'one.txt' },
+    { derivation: { method: 'png-regions-v1', sourceAttachmentId: 'parent',
+      source: { digestSha256: `sha256:${'c'.repeat(64)}`, byteLength: 16 },
+      plan: { width: 10, height: 10, regions: [{ x: 0, y: 0, width: 1, height: 1, kind: 'redact' }] } } },
+  ]) {
+    const changed = { ...original, attachments: [readCaseAttachment({ ...attachment('one'), ...patch })] };
     assert.notEqual(gallerySelectionSignature([changed], refs), first);
   }
   assert.equal(gallerySelectionSignature([{ ...original, attachments: [] }], refs), null);
+  assert.equal(gallerySelectionSignature([{ ...original, attachments: [attachment('replacement')] }], refs), null);
+  assert.equal(gallerySelectionSignature([original, original], refs), null);
+});
+
+test('display edits do not invalidate comparison inputs while current metadata remains readable', () => {
+  const original = { ...record(), attachments: [attachment('one')] }, refs = [{ caseId: original.id, attachmentId: 'one' }];
+  const updated = { ...original, title: 'Updated title', tags: ['reviewed'],
+    notes: [{ id: 'note-one', createdAt: '2026-09-02T00:00:00.000Z', body: 'An unrelated note' }], updatedAt: '2026-09-02T00:00:00.000Z',
+    attachments: [readCaseAttachment({ ...attachment('one'), fileName: 'renamed.png' })] };
+  assert.equal(gallerySelectionSignature([updated], refs), gallerySelectionSignature([original], refs));
+  assert.equal(resolveGalleryFile([updated], refs[0]!)!.caseTitle, 'Updated title');
+  assert.equal(resolveGalleryFile([updated], refs[0]!)!.attachment.fileName, 'renamed.png');
+  const noLongerText = { ...original, attachments: [readCaseAttachment({ ...attachment('one'), mediaType: 'application/octet-stream', fileName: 'one.bin' })] };
+  assert.equal(gallerySelectionSignature([noLongerText], refs), null);
+});
+
+test('search is a view over inventory and reversing roles changes the ordered comparison identity', () => {
+  const original = { ...record(), attachments: [attachment('one'), attachment('two')] };
+  const refs = original.attachments.map(file => ({ caseId: original.id, attachmentId: file.id }));
+  const inventory = retainedGalleryInventory([original]), first = gallerySelectionSignature([original], refs);
+  assert.equal(filterGalleryFiles(inventory.files, 'png', 'no matching label').length, 0);
+  assert.equal(resolveGalleryFile([original], refs[0]!)!.attachment.id, 'one');
+  assert.equal(gallerySelectionSignature([original], refs), first);
+  assert.notEqual(gallerySelectionSignature([original], [...refs].reverse()), first);
 });
