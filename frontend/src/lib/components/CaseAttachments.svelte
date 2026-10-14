@@ -2,10 +2,9 @@
   import { onDestroy, tick } from 'svelte';
   import type { CaseRecord } from '#lib/cases.ts';
   import { reviewCaseImageDerivation, type CaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
-  import { declareImageDerivation } from '../../../../packages/evidence/image-regions.mts';
   import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import { isoFromUtcInput, utcDateTimeInputAttributes } from '#lib/analysis/case-response-form-values.ts';
-  import { prepareCaseAttachmentFiles, readRetainedCaseFile, readRetainedCaseFiles, removeRetainedCaseAttachment, retainCaseAttachments, type SelectedCaseAttachment } from '#lib/case-attachments.ts';
+  import { prepareCaseAttachmentFiles, prepareCaseAttachmentExport, readRetainedCaseFile, removeRetainedCaseAttachment, retainCaseAttachments, type SelectedCaseAttachment } from '#lib/case-attachments.ts';
   import { downloadLocalFile } from '#lib/download-local-file.ts';
   import { supportsArtifactPreview } from '#lib/artifact-preview.ts';
   import { trackTransientCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
@@ -104,13 +103,7 @@
     }
   }
   async function exportFiles(signal: AbortSignal) {
-    const selected = exportReferences;
-    signal.throwIfAborted();
-    const files = await readRetainedCaseFiles(selected);
-    signal.throwIfAborted();
-    return files.map(({ attachment, file }) => ({ file, mediaType: attachment.mediaType,
-      source: { identity: attachment.source, observedAt: attachment.observedAt },
-      imageDerivation: attachment.derivation ? declareImageDerivation(attachment.derivation) : null }));
+    return prepareCaseAttachmentExport(exportReferences, signal);
   }
 </script>
 

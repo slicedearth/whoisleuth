@@ -6,6 +6,8 @@ import { localCaseReviewPin, type LocalCaseReviewSummary } from '../../../packag
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../packages/contracts/selected-file-limits.mts';
 import { captureRetainedFiles } from '../../../packages/evidence/retained-file.mts';
 import { sha256ArtifactBytes } from '../../../packages/evidence/artifact-integrity.mts';
+import { declareImageDerivation } from '../../../packages/evidence/image-regions.mts';
+import type { SelectedInvestigationFile } from './investigation-package-worker-model.ts';
 import { investigationFileMediaType } from '../../../packages/investigation/investigation-manifest.mts';
 import { mergeExternalFindingsIntoCase, parseExternalFindingsDocument, type ExternalFindingsDocument } from '../../../packages/interchange/external-findings-import.mts';
 import { browserLocalDataCollection, browserLocalDataProvider, updateBrowserLocalData } from './browser-local-data-service.ts';
@@ -85,6 +87,17 @@ export async function removeRetainedCaseAttachment(caseId: string, expected: Cas
 
 export async function readRetainedCaseFile(attachment: CaseAttachment): Promise<Blob> {
   return (await readRetainedCaseFiles([attachment]))[0]!.file;
+}
+
+/** Re-read selected bytes for each export; keep each reference's own provenance. */
+export async function prepareCaseAttachmentExport(attachments: readonly CaseAttachment[], signal: AbortSignal,
+  readFiles: typeof readRetainedCaseFiles = readRetainedCaseFiles): Promise<readonly SelectedInvestigationFile[]> {
+  signal.throwIfAborted();
+  const files = await readFiles(attachments);
+  signal.throwIfAborted();
+  return files.map(({ attachment, file }) => ({ file, mediaType: attachment.mediaType,
+    source: { identity: attachment.source, observedAt: attachment.observedAt },
+    imageDerivation: attachment.derivation ? declareImageDerivation(attachment.derivation) : null }));
 }
 
 export async function readRetainedCaseFiles(attachments: readonly CaseAttachment[]): Promise<readonly SelectedCaseAttachment[]> {

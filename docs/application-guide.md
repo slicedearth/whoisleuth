@@ -1240,6 +1240,16 @@ privacy, redactions, analyst authority, freshness and contradictions. Drafts
 remain available with cautions. Reviewed authorisation is bound to the exact
 canonical inputs and is invalidated by material change. Packet generation is a
 local export; WHOISleuth does not send it or promise a provider outcome.
+In the packet's **Review** phase, **Prepare original files separately** checks
+retained files against their recorded size and SHA-256 before you select any.
+Missing or unverified files remain visible but cannot be selected. A packet
+capture reference matches only an equal digest and byte length, not a filename.
+The separate package contains only the files you select with their existing
+source and image-derivation declarations, not the full Case backup. Packet
+redaction rules do not change those file contents; review them for the recipient.
+Changing packet inputs or leaving or closing this review clears the temporary
+check and selection. Export rechecks the bytes and current Case, without changing
+the packet, authorising delivery or recording a submission.
 In **Local handoff**, JSON export is the primary action. **Other export formats**
 contains Markdown, email download and email copy; all use the same packet review
 and freshness checks.

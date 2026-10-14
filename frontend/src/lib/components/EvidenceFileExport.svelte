@@ -17,10 +17,11 @@
   let format = $state<'evidence' | 'bagit'>('evidence');
   let encryptionOptions = $state<{ takePassphrase(): string | undefined }>();
   let controller: AbortController | null = null;
+  let disposed = false;
   let downloadButton = $state<HTMLButtonElement>();
   let folderButton = $state<HTMLButtonElement>();
   onMount(() => { folderSupported = supportsEvidenceFolderWrite(); });
-  onDestroy(() => { controller?.abort(); onbusy(false); });
+  onDestroy(() => { disposed = true; controller?.abort(); controller = null; onbusy(false); });
 
   async function exportFiles(kind: 'build' | 'folder') {
     if (busy || disabled) return;
@@ -87,10 +88,10 @@
       else error = cause instanceof Error ? cause.message : 'Evidence export failed. No browser records were changed.';
     } finally {
       submittedPassphrase = undefined;
-      if (message) onmessage?.(message);
+      if (!disposed && message) onmessage?.(message);
       if (controller === current) { controller = null; busy = false; stopping = false; onbusy(false); }
       await tick();
-      if (document.activeElement === origin || document.activeElement === document.body) trigger?.focus();
+      if (!disposed && (document.activeElement === origin || document.activeElement === document.body)) trigger?.focus();
     }
   }
 </script>
