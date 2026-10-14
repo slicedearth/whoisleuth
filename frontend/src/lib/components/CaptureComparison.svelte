@@ -11,7 +11,8 @@
   import ComparisonFrame from './ComparisonFrame.svelte';
   import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
 
-  let { left, caseDomain, persist, mutationBusy }: { left: BrowserCaptureAttachmentReview; caseDomain: string; persist: PersistCaseResponse; mutationBusy: boolean } = $props();
+  let { left, caseDomain, persist, mutationBusy, active = true }: { left: BrowserCaptureAttachmentReview; caseDomain: string; persist: PersistCaseResponse; mutationBusy: boolean; active?: boolean } = $props();
+  let open = $state(false);
   let right = $state.raw<BrowserCaptureAttachmentReview | null>(null), manifest = $state.raw<Blob | null>(null);
   let busy = $state(false), error = $state(''), leftKey = $state(''), rightKey = $state('');
   let leftObservation = $state(''), rightObservation = $state('');
@@ -52,7 +53,7 @@
   }
 </script>
 
-<details class="capture-comparison">
+<details class="capture-comparison" bind:open>
   <summary>Compare another capture</summary>
   <div class="body">
     <p>Choose a second manifest to compare dependencies. Add matching PNG files for an image comparison. The other capture is not imported automatically.</p>
@@ -61,7 +62,7 @@
     {#if busy}<p role="status">Checking comparison capture…</p><button class="btn" type="button" onclick={cancel}>Cancel comparison capture</button>{/if}
     {#if error}<p role="alert">{error}</p>{/if}
     {#if right}
-      <CaptureConditionMatrix first={left.captures} second={right.captures} firstPage={leftObservation} secondPage={rightObservation}
+      <CaptureConditionMatrix active={active && open} first={left.captures} second={right.captures} firstPage={leftObservation} secondPage={rightObservation}
         choosePage={(side, index) => { if (side === 'first') leftObservation = String(index); else rightObservation = String(index); }} />
       <div class="choices"><label>First page observation<select bind:value={leftObservation}><option value="">Select observation</option>{#each left.captures as item, index}<option value={String(index)} disabled={!item.pageBehaviour}>{item.domain} · {item.observedAt ?? 'time unknown'} · {index + 1}{item.pageBehaviour ? '' : ' · Page observations not retained'}</option>{/each}</select></label>
         <label>Second page observation<select bind:value={rightObservation}><option value="">Select observation</option>{#each right.captures as item, index}<option value={String(index)} disabled={!item.pageBehaviour}>{item.domain} · {item.observedAt ?? 'time unknown'} · {index + 1}{item.pageBehaviour ? '' : ' · Page observations not retained'}</option>{/each}</select></label></div>

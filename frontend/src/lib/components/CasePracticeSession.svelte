@@ -125,7 +125,7 @@
     {#each record.evidencePins.filter((_, index) => index !== 1) as pin}<CaseEvidenceFact {pin} />{/each}
     {#if captureContexts}<section aria-label="Fictional capture conditions">
       <p>Two fictional manifest summaries describe the mobile capture, the different desktop capture and the incomplete later attempt. The first two explicitly declare example browser settings, viewports and location labels. The later attempt has no recorded conditions. No image bytes or comparable page observations are included.</p>
-      <CaptureConditionMatrix {...captureContexts} firstPage="" secondPage="" choosePage={() => {}} />
+      <CaptureConditionMatrix {...captureContexts} active={visible && step === 'evidence'} firstPage="" secondPage="" choosePage={() => {}} />
     </section>{/if}
     {#if imageLineage}<details class="practice-local"><summary>Review fictional image history</summary>
       <p>These supplied metadata records declare an outline over a redacted image, then a parent with no edit declaration. No image bytes are supplied, read or saved. The chain is a declaration, not proof of how the images were created.</p>

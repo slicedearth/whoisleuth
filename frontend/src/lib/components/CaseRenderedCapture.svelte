@@ -28,6 +28,7 @@
     persist,
     mutationBusy,
     onmessage,
+    visible = true,
   }: {
     record: CaseRecord;
     exactIncidentUrl: string | null;
@@ -35,9 +36,11 @@
     persist: PersistCaseResponse;
     mutationBusy: boolean;
     onmessage: (message: string) => void;
+    visible?: boolean;
   } = $props();
 
   let preview = $state<ExternalFindingsDocument | null>(null);
+  let open = $state(false);
   let previewTargets = $state<readonly string[]>([]);
   let parsing = $state(false);
   let importing = $state(false);
@@ -181,7 +184,7 @@
   }
 </script>
 
-<details class="capture-workspace">
+<details class="capture-workspace" bind:open>
   <summary>Rendered capture and attachment review</summary>
   <div class="capture-body">
     {#if handoff}
@@ -237,7 +240,7 @@
               {/each}</ol>
               {#if attachments.unusedIds.length}<p>{attachments.unusedIds.length} selected file{attachments.unusedIds.length === 1 ? '' : 's'} did not match a declared attachment.</p>{/if}
             </section>
-            <CaptureComparison left={attachments} caseDomain={record.domain} {persist} {mutationBusy} />
+            <CaptureComparison active={visible && open} left={attachments} caseDomain={record.domain} {persist} {mutationBusy} />
           {/if}
           <label class="retain-files"><input type="checkbox" bind:checked={retainMatching} disabled={importing || checking || mutationBusy}> Retain this manifest and verified matching files in this workspace</label>
           <p>{retainMatching ? 'The selected originals are stored unchanged using this workspace’s storage and encryption. Unmatched files are not included; you can retain them separately under Retained files.' : 'Only summaries and declared digests enter the Case. Retain the manifest to preserve its full page-observation set; otherwise originals stay in page memory.'} Matching bytes do not authenticate the capture or establish its accuracy.</p>

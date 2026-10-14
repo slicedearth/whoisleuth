@@ -930,6 +930,19 @@ An explicit retention option saves the manifest and matching original files
 with the Case in one transaction. Unmatched files are excluded from that action.
 A portable evidence package can preserve explicitly selected files separately.
 
+Optional session declarations in the capture-condition comparison contain only a
+closed analyst-selected value (signed in, signed out or explicitly unknown) and
+the annotation time. No declaration is recorded by default. They do not identify
+an account or authenticate the analyst, and are separate from capture observation
+times and manifest conditions. They remain in page memory, bound to the exact
+loaded inputs and selected capture ordinals. Replacing either input, closing or
+leaving the review, changing Case or workspace, locking, navigation or reloading
+clears them; deselecting a capture removes its declaration. They are excluded from
+browser storage, autosave, printing, application copy actions, downloads, Case
+reports and selected-file exports. They add no requests and do not change original
+manifest bytes, verification or comparison results. Fictional practice uses the
+same temporary controls.
+
 ## Retention and deletion
 
 | Data | Retention and deletion |

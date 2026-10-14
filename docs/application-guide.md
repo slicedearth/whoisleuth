@@ -1291,12 +1291,24 @@ declared observers, vantages, browser versions, viewports, scale, locale, timezo
 and colour scheme side by side, then deliberately choose the first and second
 page observations. Entries without retained page observations remain available for
 condition review, not page comparison. Condition selections do not select image
-files or import evidence. Exact capture URLs and login/session state remain
-unavailable here; image dimensions do not establish a viewport. Missing
+files or import evidence. Exact capture URLs and observed login/session state are
+not retained in these manifests; image dimensions do not establish a viewport. Missing
 observations remain qualified, and historical manifests have no page-observation
 data. For a page you own or are authorised to review, **Record an expected
 change** adds your reason and a digest of the selected observations to the Case
 assessment. It does not approve future changes automatically.
+
+**Temporary analyst session declarations** lets you mark each selected capture as
+signed out, signed in or explicitly unknown. Leaving **No declaration** selected
+records nothing. Your statement and annotation time are separate from the capture's
+declared conditions and observation time: matching statements do not prove actual
+authentication, equal privileges or equivalent environments, and never change
+comparison eligibility or results. No account details are collected. Declarations
+stay in page memory and are not saved, printed, included in application copy actions,
+downloads or reports. Deselecting a capture removes its declaration. Closing or
+leaving the review, replacing either input (even with the same file), changing Case
+or workspace, locking, navigation and reloading clear them all. The fictional
+capture-condition exercise offers the same temporary controls without saving work.
 
 **Specialist evidence reviews** in the same Evidence section lets you arrange source-qualified
 incident stages without treating a reported action as an observed event. Compare retained domain

@@ -298,6 +298,16 @@ test('bounded practice examples preserve scope, reported mechanisms and source-r
       await choices.nth(2).check();
       await expect(matrix.getByRole('row', { name: /^Declared viewport/ })).toContainText('Not fully declared');
       await expect(capture.getByRole('button', { name: /Use as .* page/ })).toHaveCount(0);
+      const declarations = capture.locator('.session-annotations');
+      await declarations.locator(':scope > summary').click();
+      const sessionChoice = declarations.getByRole('combobox').first();
+      await sessionChoice.selectOption('signed_in');
+      await expect(declarations.getByRole('status')).toContainText('2 without a declaration; 0 explicitly unknown');
+      await practice.getByRole('button', { name: '2. Record a conclusion', exact: true }).click();
+      await practice.getByRole('button', { name: '1. Pin a fact', exact: true }).click();
+      await expect(sessionChoice).toHaveValue('');
+      await sessionChoice.selectOption('unknown');
+      await expect(declarations.getByRole('status')).toContainText('2 without a declaration; 1 explicitly unknown');
       for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
         await page.setViewportSize({ width, height: width === 320 ? 700 : 720 });
         await useTheme(page, theme); await expectNoHorizontalOverflow(page);
@@ -310,6 +320,9 @@ test('bounded practice examples preserve scope, reported mechanisms and source-r
         }
         if (captureVisualEvidenceEnabled()) await matrix.screenshot({ path: testInfo.outputPath(`demo-conditions-${theme}-${width}.png`) });
       }
+      await page.getByText('Practise with real Case forms', { exact: true }).click();
+      await page.getByText('Practise with real Case forms', { exact: true }).click();
+      await expect(sessionChoice).toHaveValue('');
     }
   }
   await select('conditional-presentation');

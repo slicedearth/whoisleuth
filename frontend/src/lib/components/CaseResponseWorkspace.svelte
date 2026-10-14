@@ -309,6 +309,7 @@
       <CaseContextReviewEntry {record} {mutationBusy} {persistOperation} />
       <CaseRenderedCapture
         {record}
+        visible={activeSection === 'evidence'}
         {persist}
         exactIncidentUrl={investigationContext?.urlRetention === 'exact' ? investigationContext.incidentUrl : null}
         {persistOperation}
