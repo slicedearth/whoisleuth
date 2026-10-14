@@ -1628,14 +1628,19 @@ quota, recovery and deletion details.
 In the external-findings preview, **Explain a field** compares the accepted
 hostname, observation time, evidence value or source label with the exact
 proposed Case field. Copy either value without saving. This uses the existing
-Case projection, including its shortening rules. For a directly selected findings
-JSON file, **Show in selected original** reveals the exact string token, decoded
-value, path and UTF-16 location, bound to the selected file's byte digest.
+Case projection, including its shortening rules. For directly selected findings
+JSON or fixed-column CSV, **Show in selected original** reveals the exact string
+token or cell, decoded value and parser-owned location, bound to the selected
+file's byte digest. WACZ provides **Show selected archive provenance** instead:
+package and verified member identities, plus record byte ranges in the expanded
+member. These are not ZIP offsets or a verbatim location of the derived summary.
 Duplicate source rows remain ambiguous; converted formats without a supported
-location do not reconstruct one. Original text and this file digest stay temporary,
-are excluded from printing and Case exports, and clear when the preview closes,
-changes, is cancelled or imported, or the page is left. Copy is deliberate and does
-not clear the device clipboard when the preview closes.
+location do not reconstruct one. Original text, locations, member paths/digests
+and JSON/CSV file digests stay temporary, are excluded from printing and Case
+exports, and clear when the preview closes, changes, is cancelled or imported,
+or the page is left. WACZ retains its existing package-digest source reference
+when findings are imported. Copy is deliberate and does not clear the device
+clipboard when the preview closes.
 The separate import content digest covers the complete
 accepted finding, source name and source reference, not the original file bytes.
 

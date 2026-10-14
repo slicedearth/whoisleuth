@@ -15,7 +15,9 @@
   let open = $state(false);
   let selected = $state<ImportedFieldExplanation['id']>('hostname');
   let originalPath = $state('');
+  let archiveOpen = $state(false);
   $effect(() => { selected; finding; selectedOriginal; open; originalPath = ''; });
+  $effect(() => { finding; selectedOriginal; open; archiveOpen = false; });
   const fields = $derived(open ? explainImportedFindingFields(finding, source, projection) : []);
   const field = $derived(fields.find(item => item.id === selected));
 </script>
@@ -25,7 +27,27 @@
   {#if open}
     <div class="explanation">
       <label>Field for finding {number}<select bind:value={selected}>{#each fields as item}<option value={item.id}>{item.label}</option>{/each}</select></label>
-      <p>Accepted values and the proposed Case fields are separate from the selected file. Original locations are available for supported fields in a directly selected findings JSON document; converted fields without a location stay unavailable.</p>
+      <p>Accepted values and the proposed Case fields are separate from the selected file. Supported findings JSON fields and fixed-column CSV cells have original locations; other converted fields stay unavailable.</p>
+      {#if selectedOriginal?.archive}
+        <details class="selected-original" bind:open={archiveOpen}><summary>Show selected archive provenance for finding {number}</summary>
+          {#if archiveOpen}
+            {@const archive = selectedOriginal.archive(document, finding)}
+            {#if archive}
+              <p>Selected WACZ · {archive.byteLength} bytes · SHA-256 <code>{archive.digestSha256}</code>. Manifest digest: {archive.manifestDigest === 'verified' ? 'verified' : 'not supplied'}.</p>
+              {#if archive.origins.length > 1}<p>Several source records normalise to this accepted finding. All recorded origins are listed; no single origin is selected.</p>{/if}
+              <ul>{#each archive.origins as origin}
+                <li><p>Record {origin.record} in the combined WARC stream.</p>
+                  {#if origin.state === 'available'}
+                    <p>Verified resource {origin.resource.ordinal}: <code>{origin.resource.path}</code> · {origin.resource.bytes} stored bytes · {origin.resource.compression === 'gzip' ? 'GZIP' : 'uncompressed'} · SHA-256 <code>{origin.resource.digestSha256}</code>.</p>
+                    <p>Record byte range [{origin.offset}, {origin.end}) within the {origin.resource.expandedBytes}-byte expanded resource. These are not ZIP offsets or locations of an individual field.</p>
+                  {:else}<p>This record spans resource boundaries. No single member or member-relative location is assigned.</p>{/if}
+                </li>
+              {/each}</ul>
+              <p>Digests identify selected bytes, not source accuracy or authorship. Member paths, member digests and record locations stay in preview memory, outside Cases, reports, exports and printing. The existing package digest is retained as a source reference on import. Raw URLs, headers and bodies remain excluded.</p>
+            {:else}<p>The selected archive no longer belongs to this preview.</p>{/if}
+          {/if}
+        </details>
+      {/if}
       {#if field}
         <dl>
           {#each field.accepted as accepted (accepted.path)}
@@ -39,8 +61,8 @@
                   {#if originalPath === accepted.path}
                   {@const location = selectedOriginal?.locate(document, finding, accepted.path)}
                   {#if location?.state === 'available'}
-                    <p>Original JSON string at <code>{location.path}</code> · line {location.line}, column {location.column}.</p>
-                    <pre dir="ltr">{location.lexical}</pre><CopyButton value={location.lexical} description={`Copy finding ${number} original JSON token ${accepted.path}`} />
+                    <p>Original {location.format === 'json' ? 'JSON string' : 'CSV cell'} at <code>{location.path}</code> · line {location.line}, column {location.column}.</p>
+                    <pre dir="ltr">{location.lexical || '(empty cell)'}</pre><CopyButton value={location.lexical} description={`Copy finding ${number} original ${location.format === 'json' ? 'JSON token' : 'CSV cell'} ${accepted.path}`} />
                     <p>Decoded source value</p><code dir="ltr">{location.value}</code><CopyButton value={location.value} description={`Copy finding ${number} original value ${accepted.path}`} />
                     <p>UTF-16 range [{location.offset}, {location.end}) in the decoded selected file; offsets are not byte positions. {location.byteOrderMark ? 'A leading UTF-8 byte-order mark is included in these positions.' : 'No leading byte-order mark.'}</p>
                     <p>Selected file · {location.byteLength} bytes · SHA-256 <code>{location.digestSha256}</code></p>

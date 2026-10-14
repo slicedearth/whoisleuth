@@ -5,6 +5,7 @@ import {
   MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
   MAX_EXTERNAL_FINDING_DOMAINS,
   parseExternalFindingsDocument,
+  type ExternalFinding,
   type ExternalFindingCategory,
   type ExternalFindingsDocument,
 } from './external-findings-import.mts';
@@ -86,7 +87,7 @@ function sourceName(value: unknown, fallback: string): string {
   return candidate || fallback.replace(/\s+/g, ' ').trim().slice(0, 80) || 'External findings';
 }
 
-function rowsDocument(rows: readonly unknown[], source: string): ExternalFindingsDocument {
+function rowsDocument(rows: readonly unknown[], source: string, observeOrigin?: (finding: ExternalFinding, index: number) => void): ExternalFindingsDocument {
   if (!rows.length || rows.length > MAX_EXTERNAL_FINDINGS) {
     throw new Error(`Converted findings must contain between 1 and ${MAX_EXTERNAL_FINDINGS} rows.`);
   }
@@ -115,7 +116,7 @@ function rowsDocument(rows: readonly unknown[], source: string): ExternalFinding
     schemaVersion: EXTERNAL_FINDINGS_VERSION,
     source: { name: source, reference: null, collectedAt: null },
     findings,
-  });
+  }, observeOrigin);
 }
 
 export function convertExternalFindingRows(value: unknown, fallbackSource = 'External findings'): ExternalFindingsDocument {
@@ -314,24 +315,45 @@ export function convertSupportedExternalFindings(
   };
 }
 
-function parseCsvRows(value: string): string[][] {
+export type ExternalFindingCsvCell = Readonly<{
+  rowIndex: number; record: number; column: number; offset: number; end: number; value: string;
+}>;
+
+export type ExternalFindingCsvObserver = Readonly<{
+  cell: (location: ExternalFindingCsvCell) => void;
+  finding: (finding: ExternalFinding, dataRowIndex: number) => void;
+}>;
+
+function parseCsvRows(value: string, observeCell?: ExternalFindingCsvObserver['cell']): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';
   let quoted = false;
   let closedQuote = false;
-  function finishRow() {
+  let fieldStart = 0;
+  let recordNumber = 1;
+  let cells: Array<Omit<ExternalFindingCsvCell, 'rowIndex'>> = [];
+  function finishField(end: number) {
+    if (observeCell) cells.push({ record: recordNumber, column: row.length + 1, offset: fieldStart, end, value: field });
     row.push(field);
+    field = '';
+    closedQuote = false;
+  }
+  function finishRow(end: number) {
+    finishField(end);
     if (row.some(item => item.trim())) {
       if (row.length !== MAX_CSV_COLUMNS) throw new Error(rows.length === 0
         ? `CSV header must be: ${EXTERNAL_FINDING_CSV_COLUMNS.join(',')}.`
         : `CSV rows must contain exactly ${MAX_CSV_COLUMNS} columns.`);
       rows.push(row);
       if (rows.length > MAX_EXTERNAL_FINDINGS + 1) throw new Error(`CSV imports are limited to ${MAX_EXTERNAL_FINDINGS} findings.`);
+      if (observeCell) for (const cell of cells) observeCell({ ...cell, rowIndex: rows.length - 1 });
     }
     row = [];
     field = '';
     closedQuote = false;
+    cells = [];
+    recordNumber += 1;
   }
   for (let index = 0; index < value.length; index += 1) {
     const character = value[index] ?? '';
@@ -349,27 +371,27 @@ function parseCsvRows(value: string): string[][] {
       if (field) throw new Error('CSV quotes must begin at the start of a field.');
       quoted = true;
     } else if (character === ',') {
-      row.push(field);
-      field = '';
-      closedQuote = false;
+      finishField(index);
+      fieldStart = index + 1;
       if (row.length >= MAX_CSV_COLUMNS) throw new Error('CSV rows have too many columns.');
     } else if (newline) {
-      finishRow();
+      finishRow(index);
       if (character === '\r' && value[index + 1] === '\n') index += 1;
+      fieldStart = index + 1;
     } else {
       field += character;
     }
   }
   if (quoted) throw new Error('CSV contains an unterminated quoted field.');
-  if (field || row.length || closedQuote) finishRow();
+  if (field || row.length || closedQuote) finishRow(value.length);
   return rows;
 }
 
-export function convertExternalFindingsCsv(value: string, fallbackSource = 'External CSV findings'): ExternalFindingsDocument {
+export function convertExternalFindingsCsv(value: string, fallbackSource = 'External CSV findings', observer?: ExternalFindingCsvObserver): ExternalFindingsDocument {
   if (CONTROL_RE.test(value.replace(/[\r\n\t]/g, ''))) {
     throw new Error('CSV contains unsupported control characters.');
   }
-  const rows = parseCsvRows(value);
+  const rows = parseCsvRows(value, observer?.cell);
   const headers = rows.shift()?.map((item) => item.trim().toLowerCase()) ?? [];
   if (
     headers.length !== EXTERNAL_FINDING_CSV_COLUMNS.length
@@ -378,7 +400,7 @@ export function convertExternalFindingsCsv(value: string, fallbackSource = 'Exte
     throw new Error(`CSV header must be: ${EXTERNAL_FINDING_CSV_COLUMNS.join(',')}.`);
   }
   const objects = rows.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ''])));
-  return rowsDocument(objects, sourceName(null, fallbackSource));
+  return rowsDocument(objects, sourceName(null, fallbackSource), observer?.finding);
 }
 
 export type { ExternalFindingCategory };

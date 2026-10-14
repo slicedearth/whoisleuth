@@ -3,7 +3,8 @@
   import { beforeNavigate } from '$app/navigation';
   import { casePruningNotice } from '#lib/analysis/case-mutation-feedback.ts';
   import ExternalImportReview, { type ExternalImportPreview } from './ExternalImportReview.svelte';
-  import { parseSelectedFindingJson, type SelectedFindingOriginal } from '#lib/analysis/selected-finding-original.ts';
+  import { parseSelectedFindingJson, parseSelectedFindingCsv, type SelectedFindingOriginal } from '#lib/analysis/selected-finding-original.ts';
+  import { parseSelectedWacz } from '#lib/analysis/selected-wacz-original.ts';
   import {
     EXTERNAL_FINDINGS_SCHEMA,
     MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
@@ -26,7 +27,6 @@
     DNS_OBSERVATION_ROWS_SCHEMA,
     DOMAIN_OBSERVATION_ROWS_SCHEMA,
     convertExternalFindingRows,
-    convertExternalFindingsCsv,
     convertSupportedExternalFindings,
     type ExternalFindingConversionReport,
   } from '#lib/analysis/external-findings-converters.ts';
@@ -42,7 +42,6 @@
   } from '#lib/analysis/warc-evidence-import.ts';
   import {
     MAX_WACZ_IMPORT_BYTES,
-    parseWaczEvidenceArchive,
   } from '#lib/analysis/wacz-evidence-import.ts';
 
   let {
@@ -115,8 +114,10 @@
         if (file.size > MAX_WACZ_IMPORT_BYTES) {
           throw new Error('Portable WACZ imports are limited to 8 MiB.');
         }
-        const report = await parseWaczEvidenceArchive(await file.arrayBuffer(), file.name);
-        if (!owns()) return;
+        const parsed = await parseSelectedWacz(await file.arrayBuffer(), file.name);
+        if (!owns()) { parsed.original.dispose(); return; }
+        const { report } = parsed;
+        selectedOriginal = parsed.original;
         preview = { kind: 'findings', document: report.document };
         onmessage(`Validated ${report.accepted} portable WACZ finding${report.accepted === 1 ? '' : 's'} from ${report.warcResources} verified WARC resource${report.warcResources === 1 ? '' : 's'} and ${report.records} bounded record${report.records === 1 ? '' : 's'}; ${report.excluded} excluded. The package stayed local and only normalized page evidence is available for deliberate import.`);
         return;
@@ -138,7 +139,6 @@
       const bytes = await file.arrayBuffer();
       if (!owns()) return;
       const csv = file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
-      const decoded = csv ? new TextDecoder('utf-8', { fatal: true }).decode(bytes) : '';
       let value: unknown = null;
       let directDocument = null;
       if (!csv) {
@@ -194,9 +194,12 @@
         if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
           throw new Error('Converted finding imports are limited to 384 KiB.');
         }
-        const document = csv
-          ? convertExternalFindingsCsv(decoded)
-          : convertExternalFindingRows(value);
+        let document;
+        if (csv) {
+          const parsed = await parseSelectedFindingCsv(bytes);
+          if (!owns()) { parsed.original.dispose(); return; }
+          document = parsed.document; selectedOriginal = parsed.original;
+        } else document = convertExternalFindingRows(value);
         preview = { kind: 'findings', document };
         const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
         onmessage(`Converted and validated ${document.findings.length} finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the normalized preview before importing.`);

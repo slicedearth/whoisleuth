@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
-import { parseSelectedFindingJson } from '../frontend/src/lib/analysis/selected-finding-original.ts';
+import { parseSelectedFindingJson, parseSelectedFindingCsv } from '../frontend/src/lib/analysis/selected-finding-original.ts';
 import { externalFindingCaseProjection, MAX_EXTERNAL_FINDINGS_IMPORT_BYTES } from '../packages/interchange/external-findings-import.mts';
 
 const finding = { domain: 'Login.Example.TEST.', category: 'page', evidenceClass: 'provider_report',
@@ -81,4 +81,60 @@ test('digest failures do not expose unexpected implementation messages or publis
   context.mock.method(globalThis.crypto.subtle, 'digest', async () => { throw new Error('private digest detail'); });
   await assert.rejects(parseSelectedFindingJson(bytes(JSON.stringify(document()))),
     { message: 'The selected file digest could not be prepared. No findings were imported.' });
+});
+
+const csvHeader = 'domain,category,summary,observed_at,completeness,limitation,reference';
+const csvRow = 'Login.Example.TEST.,dns,"=literal, ""quoted"" observation",2026-10-01T01:00:00+10:00,partial,Fixture source,';
+
+test('selected CSV cells retain quoting, blanks, BOM, record identity and an empty terminal cell without changing conversion', async () => {
+  const raw = `\ufeff\r\n${csvHeader}\r\n\r\n${csvRow}`;
+  const input = bytes(raw), pending = parseSelectedFindingCsv(input);
+  new Uint8Array(input).fill(0);
+  const { document, original } = await pending;
+  const finding = document.findings[0]!;
+  const location = original.locate(document, finding, 'finding.summary');
+  assert.equal(location.state, 'available');
+  if (location.state !== 'available') throw new Error('Missing CSV cell');
+  assert.equal(location.format, 'csv');
+  assert.equal(location.path, 'CSV record 4, column 3 (summary)');
+  assert.equal(location.lexical, '"=literal, ""quoted"" observation"');
+  assert.equal(location.value, '=literal, "quoted" observation');
+  assert.equal(location.line, 4); assert.equal(location.column, 25);
+  assert.equal(location.offset, raw.indexOf('"=literal'));
+  assert.equal(raw.slice(location.offset, location.end), location.lexical);
+  assert.equal(location.digestSha256, createHash('sha256').update(raw).digest('hex'));
+  assert.equal(location.byteOrderMark, true);
+  assert.equal(finding.domain, 'login.example.test');
+  assert.equal(finding.observedAt, '2026-09-30T15:00:00.000Z');
+  assert.equal(finding.summary, location.value);
+  const empty = original.locate(document, finding, 'finding.reference');
+  assert.equal(empty.state, 'available');
+  if (empty.state !== 'available') throw new Error('Missing empty cell');
+  assert.equal(empty.lexical, ''); assert.equal(empty.value, '');
+  assert.equal(empty.offset, raw.length); assert.equal(empty.end, raw.length);
+  assert.equal(finding.reference, null);
+  assert.equal(original.locate(document, finding, 'source.name').state, 'unavailable');
+  assert.equal(original.locate(document, finding, 'finding.evidenceClass').state, 'unavailable');
+  assert.equal(original.locate({ ...document }, finding, 'finding.summary').state, 'unavailable');
+  assert.equal(original.locate(document, { ...finding }, 'finding.summary').state, 'unavailable');
+  assert.doesNotMatch(JSON.stringify(externalFindingCaseProjection(finding, document.source)), /CSV record|byteOrderMark|digestSha256/);
+  original.dispose(); assert.equal(original.locate(document, finding, 'finding.summary').state, 'unavailable');
+});
+
+test('CSV deduplication never attributes the next distinct finding to a removed row', async () => {
+  const raw = [csvHeader, csvRow, '', csvRow.replace('Login.Example.TEST.', 'login.example.test'), csvRow.replace('Login.Example.TEST.', 'Other.Example.TEST.')].join('\n');
+  const { document, original } = await parseSelectedFindingCsv(bytes(raw));
+  assert.equal(document.findings.length, 2);
+  assert.equal(original.locate(document, document.findings[0]!, 'finding.domain').state, 'ambiguous');
+  const second = original.locate(document, document.findings[1]!, 'finding.domain');
+  assert.equal(second.state === 'available' && second.path, 'CSV record 5, column 1 (domain)');
+  assert.equal(second.state === 'available' && second.value, 'Other.Example.TEST.');
+});
+
+test('CSV source context retains strict column, UTF-8, byte and accepted-text bounds', async () => {
+  for (const raw of ['', `${csvHeader}\n${csvRow}extra,extra`, `${csvHeader}\n${csvRow.slice(0, -1)}`,
+    `${csvHeader}\n${csvRow.replace('quoted', 'quoted\nmultiline')}`, ' '.repeat(MAX_EXTERNAL_FINDINGS_IMPORT_BYTES + 1)]) {
+    await assert.rejects(parseSelectedFindingCsv(bytes(raw)));
+  }
+  await assert.rejects(parseSelectedFindingCsv(Uint8Array.of(0xff).buffer));
 });

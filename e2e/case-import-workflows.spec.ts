@@ -128,7 +128,7 @@ test('new files and cancellation reset review selection without writing Cases', 
   } }));
   const explanation = review.getByText('Explain a field for finding 1', { exact: true }).locator('..');
   await explanation.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
-  await expect(explanation).toContainText('Original locations are available for supported fields');
+  await expect(explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true })).toBeVisible();
   await expect(explanation.locator('pre')).toHaveCount(0);
   await explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true }).selectOption('value');
   const copy = explanation.getByRole('button', { name: 'Copy finding 1 accepted finding.summary', exact: true });
@@ -171,8 +171,8 @@ test('new files and cancellation reset review selection without writing Cases', 
   await expect(page.locator('.case-head')).toHaveCount(0);
 });
 
-for (const phase of ['file', 'digest'] as const) for (const exit of ['replace', 'navigate'] as const) {
-  test(`selected original ${phase} completion cannot survive ${exit}`, async ({ page }) => {
+for (const format of ['json', 'csv'] as const) for (const phase of ['file', 'digest'] as const) for (const exit of ['replace', 'navigate'] as const) {
+  test(`selected ${format} original ${phase} completion cannot survive ${exit}`, async ({ page }) => {
     await openCasesView(page);
     const before = await readBrowserLocalCollection(page, 'cases');
     const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
@@ -187,7 +187,7 @@ for (const phase of ['file', 'digest'] as const) for (const exit of ['replace', 
       if (phase === 'file') {
         const original = File.prototype.arrayBuffer;
         File.prototype.arrayBuffer = async function() {
-          if (this.name !== 'held-original.json') return original.call(this);
+          if (!this.name.startsWith('held-original.')) return original.call(this);
           File.prototype.arrayBuffer = original; scope.originalImportHeld = true;
           await held;
           try { return await original.call(this); } finally { finished(); }
@@ -203,7 +203,9 @@ for (const phase of ['file', 'digest'] as const) for (const exit of ['replace', 
       }
     }, phase);
     const file = pagedFindingFile(1);
-    await importer.locator('input[type="file"]').setInputFiles({ ...file, name: 'held-original.json', buffer: Buffer.from(file.buffer.toString().replace('Paged source review', 'Held source')) });
+    await importer.locator('input[type="file"]').setInputFiles(format === 'json'
+      ? { ...file, name: 'held-original.json', buffer: Buffer.from(file.buffer.toString().replace('Paged source review', 'Held source')) }
+      : { name: 'held-original.csv', mimeType: 'text/csv', buffer: Buffer.from('domain,category,summary,observed_at,completeness,limitation,reference\nheld.example,dns,Held source,2026-10-01T00:00:00Z,partial,Fixture,') });
     await expect.poll(() => page.evaluate(() => Reflect.get(window, 'originalImportHeld'))).toBe(true);
     if (exit === 'replace') {
       await toggle.click(); await expect(importer).not.toHaveAttribute('open');
@@ -221,6 +223,40 @@ for (const phase of ['file', 'digest'] as const) for (const exit of ['replace', 
     expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   });
 }
+
+test('selected CSV explains exact cells without exporting raw spelling or retaining preview identity', async ({ page }, testInfo) => {
+  await openCasesView(page);
+  const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
+  await importer.locator(':scope > summary').click();
+  const raw = '\ufeffdomain,category,summary,observed_at,completeness,limitation,reference\r\nLogin.Example.TEST.,dns,"=literal, ""quoted"" observation",2026-10-01T01:00:00+10:00,partial,Fixture,';
+  await importer.locator('input[type="file"]').setInputFiles({ name: 'selected.csv', mimeType: 'text/csv', buffer: Buffer.from(raw) });
+  const review = importer.getByRole('region', { name: 'Validated import review' });
+  const before = await readBrowserLocalCollection(page, 'cases');
+  const explanation = review.getByText('Explain a field for finding 1', { exact: true }).locator('..');
+  await explanation.locator(':scope > summary').click();
+  await explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true }).selectOption('value');
+  const original = explanation.getByText('Show in selected original: finding.summary', { exact: true }).locator('..');
+  await original.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  await expect(original.locator('pre')).toHaveText('"=literal, ""quoted"" observation"');
+  await expect(original).toContainText('CSV record 2, column 3 (summary)');
+  await expect(original).toContainText(createHash('sha256').update(raw).digest('hex'));
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    const trigger = original.locator(':scope > summary'); await trigger.focus();
+    await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+    await expectFocusedResultsVisible(page, trigger, trigger); await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`selected-csv-${theme}-${width}.png`) });
+  }
+  await page.emulateMedia({ media: 'print' }); await expect(original).not.toBeVisible(); await page.emulateMedia({ media: null });
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  await review.getByRole('button', { name: 'Import into cases', exact: true }).click();
+  await expect(review).toHaveCount(0);
+  const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(saved.records[0]!.value.evidencePins[0]!.observationHostname).toBe('login.example.test');
+  expect(JSON.stringify(saved)).not.toContain('Login.Example.TEST.');
+  expect(JSON.stringify(saved)).not.toContain('CSV record');
+  expect(JSON.stringify(saved)).not.toContain(createHash('sha256').update(raw).digest('hex'));
+});
 
 for (const outcome of ['write-failure', 'refresh-failure'] as const) {
   test(`import selection preserves the correct retry boundary after ${outcome}`, async ({ page }) => {
@@ -463,7 +499,7 @@ test('portable WARC evidence is normalized locally before deliberate case import
   expect(JSON.stringify(stored.records)).not.toContain('token=secret');
 });
 
-test('portable WACZ evidence verifies package fixity before using the WARC privacy filter', async ({ page }) => {
+test('portable WACZ evidence verifies package fixity before using the WARC privacy filter', async ({ page }, testInfo) => {
   await openCasesView(page);
   const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
   await externalImport.getByText('Import bounded external findings', { exact: true }).click();
@@ -527,8 +563,57 @@ test('portable WACZ evidence verifies package fixity before using the WARC priva
   await expect(externalImport).toContainText('Reviewed packaged page');
   await expect(externalImport).not.toContainText('discarded package body');
   await expect(externalImport).not.toContainText('token=secret');
+  const explanation = externalImport.getByText('Explain a field for finding 1', { exact: true }).locator('..');
+  await explanation.locator(':scope > summary').click();
+  const provenance = explanation.getByText('Show selected archive provenance for finding 1', { exact: true }).locator('..');
+  await provenance.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  await expect(provenance).toContainText(createHash('sha256').update(wacz).digest('hex'));
+  await expect(provenance).toContainText('archive/capture.warc.gz');
+  await expect(provenance).toContainText(createHash('sha256').update(compressedWarc).digest('hex'));
+  await expect(provenance).toContainText(`Record byte range [0, ${headers.length + block.length})`);
+  await expect(provenance).toContainText('not ZIP offsets');
+  await expect(provenance).not.toContainText('token=secret'); await expect(provenance).not.toContainText('discarded package body');
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    const trigger = provenance.locator(':scope > summary'); await trigger.focus();
+    await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+    await expectFocusedResultsVisible(page, trigger, trigger); await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`selected-wacz-${theme}-${width}.png`) });
+  }
+  await page.emulateMedia({ media: 'print' }); await expect(provenance).not.toBeVisible(); await page.emulateMedia({ media: null });
+  // Hold the final record digest, after package/resource verification, then
+  // replace the selection. Its completion cannot restore the old context.
+  await page.evaluate(() => {
+    const scope = window as unknown as { archiveRecordHeld: boolean; releaseArchiveRecord(): Promise<void> };
+    scope.archiveRecordHeld = false;
+    let release!: () => void, finished!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; }), done = new Promise<void>(resolve => { finished = resolve; });
+    scope.releaseArchiveRecord = async () => { release(); await done; await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); };
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    crypto.subtle.digest = async (algorithm, data) => {
+      if (!new TextDecoder().decode(data as ArrayBuffer).startsWith('HTTP/1.1 200 OK')) return digest(algorithm, data);
+      crypto.subtle.digest = digest; scope.archiveRecordHeld = true;
+      await held;
+      try { return await digest(algorithm, data); } finally { finished(); }
+    };
+  });
+  await externalImport.locator('input[type="file"]').setInputFiles({ name: 'held.wacz', mimeType: 'application/wacz', buffer: Buffer.from(wacz) });
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, 'archiveRecordHeld'))).toBe(true);
+  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  await expect(externalImport).not.toHaveAttribute('open');
+  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  await externalImport.locator('input[type="file"]').setInputFiles(pagedFindingFile(1));
+  await page.evaluate(() => (window as unknown as { releaseArchiveRecord(): Promise<void> }).releaseArchiveRecord());
+  await expect(externalImport.getByRole('heading', { name: 'Paged source review', exact: true })).toBeVisible();
+  await expect(provenance).toHaveCount(0);
+  await externalImport.locator('input[type="file"]').setInputFiles({ name: 'reviewed.wacz', mimeType: 'application/wacz', buffer: Buffer.from(wacz) });
+  await expect(externalImport.getByRole('heading', { name: 'Portable WACZ evidence', exact: true })).toBeVisible();
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(page.locator('.case-head', { hasText: 'package-review.invalid' })).toBeVisible();
+  await expect(provenance).toHaveCount(0);
+  const retained = JSON.stringify(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 }));
+  expect(retained).not.toContain('archive/capture.warc.gz');
+  expect(retained).toContain(`urn:sha256:${createHash('sha256').update(wacz).digest('hex')}`);
 });
 
 test('STIX claims require an existing selected case and remain separate from collected evidence', async ({ page }, testInfo) => {

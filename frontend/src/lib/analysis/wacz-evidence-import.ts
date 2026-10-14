@@ -8,11 +8,13 @@ import {
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
   parseExternalFindingsDocument,
+  type ExternalFinding,
 } from './external-findings-import.ts';
 import {
   MAX_WARC_IMPORT_BYTES,
   parseWarcEvidenceArchive,
   type WarcImportReport,
+  type WarcFindingOrigin,
 } from './warc-evidence-import.ts';
 
 export const MAX_WACZ_IMPORT_BYTES = 8 * 1024 * 1024;
@@ -40,6 +42,13 @@ type WaczResource = Readonly<{
   bytes: number;
   digestSha256: string;
 }>;
+
+export type WaczFindingOrigin = Readonly<{ record: number }> & (
+  Readonly<{ state: 'available'; offset: number; end: number; resource: WaczResource & Readonly<{
+    ordinal: number; compression: 'gzip' | 'none'; expandedBytes: number;
+  }> }>
+  | Readonly<{ state: 'spans_resources' }>
+);
 
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const SHA256_RE = /^sha256:([a-f0-9]{64})$/iu;
@@ -274,6 +283,7 @@ function unpackSelectedEntries(bytes: Uint8Array): Readonly<{
 export async function parseWaczEvidenceArchive(
   input: ArrayBuffer,
   fileName = 'evidence.wacz',
+  observeOrigin?: (finding: ExternalFinding, origins: readonly WaczFindingOrigin[]) => void,
 ): Promise<WaczImportReport> {
   if (!input.byteLength || input.byteLength > MAX_WACZ_IMPORT_BYTES) {
     throw new Error(`WACZ imports must be between 1 byte and ${MAX_WACZ_IMPORT_BYTES} bytes.`);
@@ -301,6 +311,7 @@ export async function parseWaczEvidenceArchive(
   }
 
   const warcChunks: Uint8Array[] = [];
+  const resourceSpans: Array<{ start: number; end: number; resource: Extract<WaczFindingOrigin, { state: 'available' }>['resource'] }> = [];
   let warcBytes = 0;
   for (const [index, resource] of resources.entries()) {
     const data = files[resource.path];
@@ -314,6 +325,9 @@ export async function parseWaczEvidenceArchive(
     const warc = resource.path.toLowerCase().endsWith('.gz')
       ? gunzipBounded(data, MAX_WARC_IMPORT_BYTES - warcBytes)
       : data;
+    if (observeOrigin) resourceSpans.push({ start: warcBytes, end: warcBytes + warc.byteLength, resource: Object.freeze({
+      ...resource, ordinal: index + 1, compression: resource.path.toLowerCase().endsWith('.gz') ? 'gzip' : 'none', expandedBytes: warc.byteLength,
+    }) });
     warcBytes += warc.byteLength;
     if (warcBytes > MAX_WARC_IMPORT_BYTES) {
       throw new Error(`Expanded WARC data exceeds the ${MAX_WARC_IMPORT_BYTES}-byte import bound.`);
@@ -323,9 +337,14 @@ export async function parseWaczEvidenceArchive(
 
   const warcInput = concatBytes(warcChunks, warcBytes);
   const warcBuffer: ArrayBuffer = warcInput.slice().buffer;
+  const warcOrigins = new Map<ExternalFinding, WarcFindingOrigin[]>();
   const warcReport = await parseWarcEvidenceArchive(
     warcBuffer,
     'wacz-evidence.warc',
+    observeOrigin ? (finding, origin) => {
+      const origins = warcOrigins.get(finding);
+      if (origins) origins.push(origin); else warcOrigins.set(finding, [origin]);
+    } : undefined,
   );
   const packageLimitation = manifestDigest === 'verified'
     ? 'The WACZ manifest digest and each selected WARC resource SHA-256 digest were verified before normalisation.'
@@ -343,7 +362,15 @@ export async function parseWaczEvidenceArchive(
       limitations: [...finding.limitations, packageLimitation],
       reference: `urn:sha256:${archiveDigestSha256}`,
     })),
-  });
+  }, observeOrigin ? (finding, index) => {
+    const origins = warcOrigins.get(warcReport.document.findings[index]!) ?? [];
+    observeOrigin(finding, Object.freeze(origins.map(origin => {
+      const span = resourceSpans.find(item => origin.offset >= item.start && origin.end <= item.end);
+      return span ? Object.freeze({ state: 'available' as const, record: origin.record,
+        offset: origin.offset - span.start, end: origin.end - span.start, resource: span.resource })
+        : Object.freeze({ state: 'spans_resources' as const, record: origin.record });
+    })));
+  } : undefined);
 
   return Object.freeze({
     document,
