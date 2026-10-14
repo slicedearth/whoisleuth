@@ -6,7 +6,7 @@
 type UnknownRecord = Record<string, unknown>;
 
 export const RDAP_CAPABILITY_INSPECTION_VERSION = 1;
-export const RDAP_EXTENSION_CATALOG_REVIEWED_AT = '2026-07-31';
+export const RDAP_EXTENSION_CATALOG_REVIEWED_AT = '2026-10-14';
 export const MAX_RDAP_CAPABILITY_DECLARATIONS = 50;
 export const MAX_RDAP_UNKNOWN_CAPABILITIES = 20;
 
@@ -61,7 +61,7 @@ export interface ReviewedRdapExtensionCatalogEntry {
   status: 'current' | 'obsolete';
 }
 
-// Reviewed against the protocol registry on 2026-07-31. The registry-drift
+// Reviewed against the protocol registry on 2026-10-14. The registry-drift
 // audit owns freshness checks; runtime lookup behavior never depends on this
 // catalogue being exhaustive.
 const EXTENSION_CATALOG: Readonly<Record<string, CatalogEntry>> = Object.freeze({
@@ -191,6 +191,11 @@ const EXTENSION_CATALOG: Readonly<Record<string, CatalogEntry>> = Object.freeze(
     label: 'Registration type extension',
     category: 'operator',
     capability: 'Operator-specific registration-type context.',
+  },
+  reliabilityassessment: {
+    label: 'Reliability assessment metadata',
+    category: 'operator',
+    capability: 'Operator-declared assessment metadata; no assessment is retrieved or verified.',
   },
   reverse_search: {
     label: 'Reverse search',

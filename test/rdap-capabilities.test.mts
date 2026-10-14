@@ -49,6 +49,25 @@ describe('RDAP capability inspection', () => {
     assert.match(result.reverseSearch.detail, /help response could still declare/iu);
   });
 
+  test('recognises assessment metadata without treating it as a verified judgement', () => {
+    const result = inspectRdapCapabilities({
+      conformance: ['reliabilityAssessment'],
+      reliabilityAssessment: { score: 100, verdict: 'trusted' },
+    }, 'success');
+
+    assert.deepEqual(result.declarations, [{
+      identifier: 'reliabilityassessment',
+      label: 'Reliability assessment metadata',
+      category: 'operator',
+      registered: true,
+      status: 'current',
+      capability: 'Operator-declared assessment metadata; no assessment is retrieved or verified.',
+    }]);
+    assert.equal(result.reverseSearch.execution, 'not_attempted');
+    assert.equal(result.reverseSearch.actionAvailable, false);
+    assert.doesNotMatch(JSON.stringify(result), /"score"|"verdict"|trusted/u);
+  });
+
   test('keeps unavailable and partial declaration sets inconclusive', () => {
     const unavailable = inspectRdapCapabilities(undefined, 'error');
     assert.equal(unavailable.state, 'unavailable');

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import fc from 'fast-check';
+import { isAtOrAbove } from 'retire';
 
 import {
   MAX_INLINE_LIBRARY_SCAN_CHARS,
@@ -220,7 +221,16 @@ describe('bounded browser-library profile', () => {
     const finding = profile.findings.find(({ id }) => id === 'nextjs');
 
     assert.ok(finding);
-    assert.equal(finding.advisoryCount, 34);
+    // Use the upstream comparator as an independent oracle; a catalogue
+    // refresh must not require a hand-maintained advisory-count baseline.
+    const matches = RETIRE_BROWSER_CATALOG.components.nextjs.vulnerabilities.filter((advisory) => {
+      const range: { below: string; atOrAbove?: string; excludes?: string[] } = advisory;
+      return !isAtOrAbove('15.0.0', range.below)
+        && (range.atOrAbove === undefined || isAtOrAbove('15.0.0', range.atOrAbove))
+        && !range.excludes?.includes('15.0.0');
+    });
+    assert.ok(matches.length > 16, 'The fixture must exercise detail truncation.');
+    assert.equal(finding.advisoryCount, matches.length);
     assert.ok(finding.advisoryIdentifiers.length <= 16);
     assert.ok(finding.weaknessClasses.length <= 12);
     assert.equal(profile.status, 'success');

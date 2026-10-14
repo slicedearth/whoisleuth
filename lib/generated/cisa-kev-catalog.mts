@@ -2,9 +2,9 @@
 // United States Government work; do not edit by hand.
 
 const CISA_KEV_CATALOG = Object.freeze({
-  catalogVersion: "2026.10.02",
-  releasedAt: "2026-10-02T15:19:38.2945Z",
-  sourceSha256: "d2c8c6cb23291b46ff2b086197641a6b1fa35e6b746bba714cc280a1778f9e48",
+  catalogVersion: "2026.10.13",
+  releasedAt: "2026-10-13T19:10:43.6568Z",
+  sourceSha256: "136904f12e4c6762e526352e3a67ed7b28cd21b4d82bed9c91719ff2e94f2f28",
   sourceUrl: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
   identifiers: Object.freeze([
   "CVE-2002-0367",
@@ -195,6 +195,7 @@ const CISA_KEV_CATALOG = Object.freeze({
   "CVE-2015-3043",
   "CVE-2015-3113",
   "CVE-2015-3246",
+  "CVE-2015-3306",
   "CVE-2015-4068",
   "CVE-2015-4495",
   "CVE-2015-4852",
@@ -204,6 +205,7 @@ const CISA_KEV_CATALOG = Object.freeze({
   "CVE-2015-5123",
   "CVE-2015-5287",
   "CVE-2015-5317",
+  "CVE-2015-5477",
   "CVE-2015-6175",
   "CVE-2015-7450",
   "CVE-2015-7645",
@@ -230,6 +232,7 @@ const CISA_KEV_CATALOG = Object.freeze({
   "CVE-2016-20017",
   "CVE-2016-2386",
   "CVE-2016-2388",
+  "CVE-2016-3081",
   "CVE-2016-3088",
   "CVE-2016-3235",
   "CVE-2016-3298",
@@ -843,6 +846,7 @@ const CISA_KEV_CATALOG = Object.freeze({
   "CVE-2021-31955",
   "CVE-2021-31956",
   "CVE-2021-31979",
+  "CVE-2021-3199",
   "CVE-2021-32030",
   "CVE-2021-32648",
   "CVE-2021-33044",
@@ -1081,6 +1085,7 @@ const CISA_KEV_CATALOG = Object.freeze({
   "CVE-2023-22515",
   "CVE-2023-22518",
   "CVE-2023-22527",
+  "CVE-2023-22894",
   "CVE-2023-22952",
   "CVE-2023-23376",
   "CVE-2023-23397",
@@ -1578,6 +1583,7 @@ const CISA_KEV_CATALOG = Object.freeze({
   "CVE-2026-102489",
   "CVE-2026-102490",
   "CVE-2026-104286",
+  "CVE-2026-104935",
   "CVE-2026-10520",
   "CVE-2026-11645",
   "CVE-2026-12569",
@@ -1734,12 +1740,14 @@ const CISA_KEV_CATALOG = Object.freeze({
   "CVE-2026-87902",
   "CVE-2026-88771",
   "CVE-2026-88772",
+  "CVE-2026-88779",
   "CVE-2026-9082",
   "CVE-2026-9198",
   "CVE-2026-93616",
   "CVE-2026-93952",
   "CVE-2026-94127",
-  "CVE-2026-9586"
+  "CVE-2026-9586",
+  "CVE-2026-96951"
 ]),
 });
 
