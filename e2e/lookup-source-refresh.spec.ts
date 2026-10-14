@@ -130,7 +130,7 @@ test('refreshed facts survive section navigation and save through the existing C
   await expect(registryTimes.locator('time').nth(0)).toHaveAttribute('datetime', EARLIER);
   await expect(registryTimes.locator('time').nth(1)).toHaveAttribute('datetime', LATER);
   expect(await registryTimes.locator('time').nth(2).getAttribute('datetime')).not.toBe(LATER);
-  await expect(overview.getByRole('listitem', { name: 'WHOIS', exact: true })).toContainText('Not requested');
+  await expect(overview.getByRole('listitem', { name: 'WHOIS', exact: true })).toContainText('No refresh retained in this review');
   await page.getByRole('button', { name: 'Collapse details: Source quality evidence', exact: true }).click();
   await page.getByRole('button', { name: 'Expand details: Source quality evidence', exact: true }).click();
   await page.locator('#source-quality .records-disclosure > summary').click();
@@ -184,6 +184,8 @@ test('refreshed facts survive section navigation and save through the existing C
   await expect(later).toContainText('Compared with refresh 1.');
   await expect(later.locator('article', { has: page.locator('strong', { hasText: /^Registrar$/u }) })).toContainText('equal');
   expect(requests).toBe(2);
+  const earlierRequest = await later.locator(':scope > details > p > time').getAttribute('datetime');
+  expect(earlierRequest).not.toBeNull();
   // A non-admitted response retains an unavailable attempt, never the prior
   // observation as the latest result. HTTP failure paths are covered in the model.
   await page.route('**/api/rdap?*', route => route.fulfill({ json: { error: 'Fixture unavailable' } }));
@@ -192,6 +194,33 @@ test('refreshed facts survive section navigation and save through the existing C
   await expect(registryTimes).toContainText('No observation retained by this request');
   await expect(registryTimes.locator('time').first()).toHaveAttribute('datetime', EARLIER);
   await expect(later).toContainText('Updated registrar');
+
+  // Keep another source family in the review while all RDAP entries are removed.
+  await page.route('**/api/whois?*', route => route.fulfill({ json: { error: 'Fixture unavailable' } }));
+  await refresh.getByRole('button', { name: 'Refresh WHOIS', exact: true }).click();
+  await expect(refresh.locator('.refresh-results > li')).toHaveCount(4);
+  const removeEntry = async (index: number) => {
+    const entry = refresh.locator('.refresh-results > li').nth(index);
+    if (await entry.locator(':scope > details').getAttribute('open') === null) await entry.locator(':scope > details > summary').click();
+    await entry.getByRole('button', { name: `Remove transient refresh ${index + 1}`, exact: true }).click();
+  };
+  await removeEntry(2);
+  await expect(refresh.locator('.refresh-results > li')).toHaveCount(3);
+  await expect(registryTimes).toContainText('Latest retained refresh · fact times');
+  await expect(registryTimes).toContainText('Latest retained request in this review:');
+  await expect(registryTimes.locator('time').nth(1)).toHaveAttribute('datetime', LATER);
+  await expect(registryTimes.locator('time').last()).toHaveAttribute('datetime', earlierRequest!);
+  await expect(registryTimes).not.toContainText('No observation retained by this request');
+  await expect(overview).toContainText('removed and cancelled requests are not represented');
+  await removeEntry(1); await removeEntry(0);
+  await expect(refresh.locator('.refresh-results > li')).toHaveCount(1);
+  await expect(registryTimes).toContainText('No refresh retained in this review');
+  await expect(registryTimes).not.toContainText('Latest retained request in this review:');
+  await expect(registryTimes).not.toContainText('Not requested');
+  await expect(registryTimes.locator('time')).toHaveCount(1);
+  await expect(registryTimes.locator('time')).toHaveAttribute('datetime', EARLIER);
+  await expect(overview.getByRole('listitem', { name: 'WHOIS', exact: true })).toContainText('No observation retained by this request');
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.evidencePins).toEqual(after.evidencePins);
 });
 
 test('cancelling a held source response does not retain late evidence', async ({ page }) => {

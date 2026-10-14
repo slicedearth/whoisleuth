@@ -131,15 +131,15 @@
     {#if results.length}
       <section class="observation-overview" aria-label="Original and refreshed observations">
         <h6>Original and refreshed observations</h6>
-        <p>The original result stays unchanged. Request times show when you asked; fact times show when each source was observed.</p>
+        <p>The original result stays unchanged. This overview covers only refreshes retained in this review; removed and cancelled requests are not represented. Request times show when you asked; fact times show when each source was observed.</p>
         <ul class="observation-summary">
           {#each observationSummary as row (row.id)}
             <li aria-label={row.label}>
               <strong>{row.label}</strong>
               <dl><div><dt>Original Lookup · fact times</dt><dd>{@render observationTimes(row.originalTimes)}</dd></div>
-                <div><dt>Latest refresh · fact times</dt><dd>{#if row.latest?.state === 'unavailable'}No observation retained by this request
-                  {:else if row.refreshedTimes}{@render observationTimes(row.refreshedTimes)}{:else}Not requested{/if}</dd></div></dl>
-              {#if row.latest}<p>Latest request: <EvidenceTimestamp value={row.latest.attemptedAt} copyable={false} /> · {row.latest.state}</p>{/if}
+                <div><dt>Latest retained refresh · fact times</dt><dd>{#if row.latest?.state === 'unavailable'}No observation retained by this request
+                  {:else if row.refreshedTimes}{@render observationTimes(row.refreshedTimes)}{:else}No refresh retained in this review{/if}</dd></div></dl>
+              {#if row.latest}<p>Latest retained request in this review: <EvidenceTimestamp value={row.latest.attemptedAt} copyable={false} /> · {row.latest.state}</p>{/if}
             </li>
           {/each}
         </ul>

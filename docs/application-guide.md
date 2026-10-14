@@ -563,9 +563,12 @@ In **Source quality**, open the source-record review to refresh a source and
 compare its normalised facts with the original Lookup or its previous refresh.
 Source timestamps remain distinct from request times, including cached results.
 **Original and refreshed observations** summarises the original fact times beside
-the latest deliberately requested refresh for each source. Mixed times and undated
-facts stay explicit. An unsuccessful latest request does not replace the original
-or promote an earlier refresh to the latest observation; earlier entries remain below.
+the latest retained refresh for each source in this review. Mixed times and undated
+facts stay explicit. While a latest unsuccessful attempt remains retained, its
+missing observation is not replaced by an earlier success. Removing that attempt
+reveals the next latest retained entry, not the latest request ever made. Removed
+and cancelled requests are not represented; **No refresh retained in this review**
+does not mean a source was never requested.
 The review survives collapsing sections, but not leaving or reloading Lookup.
 Retain selected dated facts in a Case or download a readable review before
 leaving. A selected URL must be selected again in a new Deep lookup; refreshing
