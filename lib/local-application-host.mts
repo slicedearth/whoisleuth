@@ -15,6 +15,7 @@ import { CAPABILITY_MANIFEST } from '../packages/contracts/capability-manifest.m
 import { createRateLimitChecker, API_RATE_LIMIT, LOGIN_RATE_LIMIT, type RateLimitChecker } from './rate-limit.mts';
 import { exact, array, digest } from '../packages/evidence/artifact-structure.mts';
 import { MAX_SELECTED_FILES } from '../packages/contracts/selected-file-limits.mts';
+import { LOCAL_WORKSPACE_FORMAT_VERSION } from '../packages/contracts/local-application.mts';
 import {
   LOCAL_APPLICATION_PROTOCOL_VERSION, LOCAL_APPLICATION_MAX_TRANSFER_BYTES, LOCAL_APPLICATION_READ_REQUEST_BYTES,
   localApplicationCollections, localApplicationOperationId,
@@ -186,6 +187,9 @@ export async function startLocalApplication(options: Readonly<{
       response.setHeader('Set-Cookie', sessionCookie(buildClearCookie({ secure: false }))); response.json({ ok: true });
     });
     app.get('/api/local-workspace/info', (_request, response) => response.json({ version: LOCAL_APPLICATION_PROTOCOL_VERSION,
+      // Worker readiness follows the store's exact format validation. This is
+      // launch-time information, not another filesystem read or a lock probe.
+      workspaceFormatVersionAtLaunch: LOCAL_WORKSPACE_FORMAT_VERSION,
       workspaceId: identity.workspaceId, directory: identity.directory, storage: 'filesystem', encryptedAtRest: false, offline: options.offline ?? false }));
     app.use('/api/local-workspace', (request, response, next) => {
       if (request.headers['x-workspace-id'] !== identity.workspaceId) { response.status(409).json({ error: 'The selected filesystem workspace changed. Reload before continuing.', code: 'LOCAL_DATA_WORKSPACE_CHANGED', committed: false }); return; }

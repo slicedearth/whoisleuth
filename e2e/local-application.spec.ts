@@ -195,6 +195,8 @@ for (const theme of ['light', 'dark'] as const) {
     await page.locator('#workspaces > summary').click();
     const workspace = page.getByRole('region', { name: 'Filesystem workspace', exact: true });
     await expect(workspace).toContainText('Offline — network collection disabled');
+    await expect(workspace.locator('dl > div').filter({ has: page.getByText('Workspace format at launch', { exact: true }) }).locator('dd')).toHaveText('1');
+    await expect(workspace.locator('dl > div').filter({ has: page.getByText('Lock observation', { exact: true }) }).locator('dd')).toHaveText('Unavailable');
     await expect(page.getByRole('button', { name: 'Create workspace', exact: true })).toHaveCount(0);
     const operations: string[] = [];
     const observe = (request: import('@playwright/test').Request) => {
@@ -257,7 +259,8 @@ test('temporary restart references stay private, nonexecuting and clear with the
   await shortlist.getByRole('button', { name: 'Add supplied reference', exact: true }).click();
   await expect(shortlist.locator('ol > li')).toHaveCount(2);
   const declared = shortlist.locator('ol > li').first();
-  await expect(declared).toContainText('Format/version: Not checked · Lock state: Not checked');
+  await expect(declared).toContainText('Format/version: Not checked · Lock observation: Unavailable');
+  await expect(shortlist.locator('ol > li').last()).toContainText('Format/version: 1 (validated at launch) · Lock observation: Unavailable');
   await expect(declared.locator('code')).not.toBeVisible();
   await declared.getByText('Reveal supplied path', { exact: true }).click();
   await expect(declared.locator('code')).toHaveText('./operator-selected review');

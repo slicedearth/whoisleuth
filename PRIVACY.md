@@ -85,6 +85,8 @@ IndexedDB. The workspace is plaintext at rest; protect it with operating-system
 access controls and disk encryption. Encrypted portable backups remain separate.
 The browser exchanges saved data only with its authenticated loopback process.
 The selected folder is displayed locally and is not included in exports.
+Its format information comes from validation at application launch; displaying
+it performs no new filesystem inspection and does not observe other-process locks.
 An optional temporary restart shortlist holds only explicitly added folder
 references in page memory. Supplied paths remain hidden until revealed, are not
 inserted into commands, and are excluded from print and exports. No folder is

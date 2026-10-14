@@ -31,6 +31,7 @@ async function start(create: boolean) {
       ...(body === undefined ? {} : { body }), redirect: 'error', signal: AbortSignal.timeout(30_000),
     });
     const info = await (await request('/api/local-workspace/info')).json();
+    assert.equal(info.workspaceFormatVersionAtLaunch, 1);
     return { origin, request, workspaceId: info.workspaceId as string, close: process.close };
   } catch (cause) { await process.close(); throw cause; }
 }

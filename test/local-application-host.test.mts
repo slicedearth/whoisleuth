@@ -11,7 +11,7 @@ import { LOCAL_WORKSPACE_FILE } from '../lib/local-application-store.mts';
 import { PRERENDERED_ROUTES } from '../lib/prerendered-routes.mts';
 import { BrowserLocalDataProvider } from '../frontend/src/lib/browser-local-data.ts';
 import { BROWSER_LOCAL_COLLECTIONS, CASES_COLLECTION } from '../frontend/src/lib/browser-local-data-definitions.ts';
-import { createLocalApplicationStorage } from '../frontend/src/lib/local-application-storage.ts';
+import { createLocalApplicationStorage, readLocalApplicationInfo } from '../frontend/src/lib/local-application-storage.ts';
 import { currentCaseFixture } from './support/current-case.mts';
 import { COOKIE_NAME, isValidSessionToken, parseCookies } from '../lib/auth.mts';
 import { API_RATE_LIMIT, LOGIN_RATE_LIMIT } from '../lib/rate-limit.mts';
@@ -60,6 +60,18 @@ function authenticatedFetch(instance: LocalApplicationInstance, cookie: string):
 function provider(instance: LocalApplicationInstance, fetchImpl: typeof fetch) {
   return new BrowserLocalDataProvider({ storageAdapter: createLocalApplicationStorage(instance.origin, instance.workspaceId, fetchImpl), timeoutMs: 60_000 });
 }
+
+test('workspace information distinguishes omitted format metadata from a validated launch format', () => {
+  const info = { version: 1, workspaceId: '00000000-0000-4000-8000-000000000001', directory: '/selected/workspace',
+    storage: 'filesystem', encryptedAtRest: false, offline: true };
+  assert.deepEqual(readLocalApplicationInfo(info, info.workspaceId), info);
+  assert.equal(readLocalApplicationInfo({ ...info, workspaceFormatVersionAtLaunch: 1 }, info.workspaceId).workspaceFormatVersionAtLaunch, 1);
+  for (const value of [0, 2, '1', null, undefined]) {
+    assert.throws(() => readLocalApplicationInfo({ ...info, workspaceFormatVersionAtLaunch: value }, info.workspaceId), { code: 'LOCAL_DATA_WORKSPACE_CHANGED' });
+  }
+  assert.throws(() => readLocalApplicationInfo(info, '00000000-0000-4000-8000-000000000002'), { code: 'LOCAL_DATA_WORKSPACE_CHANGED' });
+  assert.throws(() => readLocalApplicationInfo({ ...info, unlocked: true }, info.workspaceId), /unsupported or malformed/);
+});
 
 test('anonymous requests cannot consume admitted session capacity; global and launch bounds remain separate', async context => fixture(async options => {
   let now = Date.now();
@@ -148,6 +160,15 @@ test('local host binds only loopback, authenticates storage, confines origins an
     const info = await (await send(`${instance.origin}/api/local-workspace/info`)).json();
     assert.equal(info.workspaceId, instance.workspaceId); assert.equal(info.directory, instance.directory);
     assert.equal(info.encryptedAtRest, false); assert.equal(info.offline, true);
+    assert.equal(info.workspaceFormatVersionAtLaunch, 1);
+    assert.deepEqual(readLocalApplicationInfo(info, instance.workspaceId), info);
+    const filename = path.join(instance.directory, LOCAL_WORKSPACE_FILE), beforeInfo = await readFile(filename);
+    const otherWriter = new DatabaseSync(filename);
+    try {
+      otherWriter.exec('BEGIN IMMEDIATE');
+      assert.deepEqual(await (await send(`${instance.origin}/api/local-workspace/info`)).json(), info);
+    } finally { otherWriter.exec('ROLLBACK'); otherWriter.close(); }
+    assert.deepEqual(await readFile(filename), beforeInfo, 'Displaying launch metadata must not write or probe a new write lock.');
     assert.equal((await send(`${instance.origin}/api/fixture-collection`, { method: 'POST' })).status, 503);
     assert.equal(options.calls(), 0);
     const capabilities = await send(`${instance.origin}/api/capabilities`);

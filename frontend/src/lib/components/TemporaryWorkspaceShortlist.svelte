@@ -3,7 +3,7 @@
   import { LOCAL_WORKSPACE_MAX_DIRECTORY_CHARACTERS } from '../../../../packages/contracts/local-application.mts';
   import { addTemporaryWorkspaceReference, TEMPORARY_WORKSPACE_REFERENCE_COUNT, TEMPORARY_WORKSPACE_LABEL_CHARACTERS,
     type TemporaryWorkspaceReference } from '#lib/analysis/temporary-workspace-references.ts';
-  let { workspaceId, directory }: { workspaceId: string; directory: string } = $props();
+  let { workspaceId, directory, formatVersionAtLaunch }: { workspaceId: string; directory: string; formatVersionAtLaunch: number | undefined } = $props();
   let root = $state<HTMLDetailsElement>(), heading = $state<HTMLHeadingElement>();
   let enabled = $state(false), rows = $state.raw<readonly TemporaryWorkspaceReference[]>([]);
   let label = $state(''), path = $state(''), error = $state(''), status = $state('');
@@ -47,7 +47,12 @@
     {#if status}<p role="status">{status}</p>{/if}
     <ol>{#each rows as row (row.id)}<li>
       <h4>{row.label}</h4><p>{row.basis === 'current_launch' ? 'Folder shown by this launch' : 'Analyst-supplied reference'} · Added <time datetime={row.addedAt}>{row.addedAt}</time></p>
-      <p>Format/version: Not checked · Lock state: Not checked</p>
+      <p>Format/version:
+        {#if row.basis !== 'current_launch'}Not checked
+        {:else if formatVersionAtLaunch === undefined}Not provided by this launch
+        {:else}{formatVersionAtLaunch} (validated at launch){/if}
+        · Lock observation: Unavailable
+      </p>
       <details><summary>Reveal supplied path</summary><code>{row.path}</code></details>
       <button class="btn" aria-label={`Remove reference: ${row.label}`} onclick={() => void remove(row.id)}>Remove from shortlist</button>
     </li>{/each}</ol>
