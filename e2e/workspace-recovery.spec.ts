@@ -53,6 +53,12 @@ test('downloaded backup and file packages rehearse independently without switchi
   const before = await readBrowserLocalCollection(page, 'cases');
   const originalSelection = await page.evaluate(key => sessionStorage.getItem(key), SELECTION);
   const { content } = await downloadWorkspaceArchive(page);
+  const preparedCoverage = page.locator('.backup-coverage');
+  await preparedCoverage.locator(':scope > summary').click();
+  await expect(preparedCoverage).toContainText('2 Case file references require 1 distinct original file (');
+  await expect(preparedCoverage).toContainText('Saved review position');
+  await expect(preparedCoverage).toContainText('Unfinished Case forms');
+  await expect(preparedCoverage).toContainText('not confirmation of a completed download or restore');
   const fileBackup = page.locator('.file-backup');
   await expect(fileBackup.locator(':scope > summary')).toContainText('1 referenced file separately');
   await fileBackup.locator(':scope > summary').click();
@@ -67,7 +73,11 @@ test('downloaded backup and file packages rehearse independently without switchi
   expect(independent.identityVerified).toBe(true); expect(independent.contents.size).toBe(1);
   expect(Buffer.from(independent.contents.get('artifact-1')!)).toEqual(bytes);
   expect(independent.manifest.artifacts[0]).toMatchObject({ source: { identity: null, observedAt: null } });
-  await review(page, content); const recovery = await start(page);
+  await review(page, content);
+  const coverage = panel(page).locator('.backup-coverage');
+  await coverage.locator(':scope > summary').click();
+  await expect(coverage).toContainText('2 Case file references require 1 distinct original file (');
+  const recovery = await start(page);
   await recovery.getByText('Recovery set index', { exact: true }).click();
   const archiveIndex = recovery.getByRole('region', { name: 'Selected workspace backup', exact: true });
   const sourceIndex = recovery.getByRole('region', { name: 'Matching recovery sources', exact: true });

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import { formatRecoverySetInventory, type ReviewedWorkspaceArchive } from '../../../../packages/workspace/workspace-recovery.mts';
+  import { formatRecoverySetInventory, workspaceBackupCoverage, type ReviewedWorkspaceArchive } from '../../../../packages/workspace/workspace-recovery.mts';
   import type { RetainedFileReference } from '../../../../packages/evidence/retained-file.mts';
   import { ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA, ENCRYPTED_WORKSPACE_ARCHIVE_VERSION } from '../../../../packages/contracts/case-portability.mts';
   import type { WorkspaceRecovery, WorkspaceRecoveryReport } from '#lib/workspace-recovery.ts';
@@ -11,6 +11,7 @@
   import EvidencePackageInput from './EvidencePackageInput.svelte';
   import RecoveryFileChecklist from './RecoveryFileChecklist.svelte';
   import CopyButton from './CopyButton.svelte';
+  import WorkspaceBackupCoverage from './WorkspaceBackupCoverage.svelte';
 
   let { readArchive, archiveFile, archiveSchema, archiveVersion, encryptedSource, requireEncryption = false, onbusy = () => {} }: {
     readArchive: () => ReviewedWorkspaceArchive; requireEncryption?: boolean; onbusy?: (value: boolean) => void;
@@ -29,6 +30,7 @@
   let sourcePage = $state(1);
   const SOURCE_PAGE_SIZE = 20;
   const sourcePages = $derived(Math.max(1, Math.ceil(sourceIndex.packages.length / SOURCE_PAGE_SIZE)));
+  const coverage = $derived(workspaceBackupCoverage(readArchive()));
   onMount(() => {
     const close = () => { inventoryClosed = true; void recovery?.close(); };
     window.addEventListener('pagehide', close);
@@ -93,6 +95,7 @@
 <details class="recovery" bind:this={root}>
   <summary>Rehearse recovery in a separate workspace</summary>
   <p>Restore this reviewed backup without switching workspaces. Section checksums cover saved records and their links; original file bytes must be supplied separately. Preferences are validated in the backup review, not applied to this tab.</p>
+  <WorkspaceBackupCoverage {coverage} />
   <details class="set-index" bind:this={inventory}>
     <summary>Recovery set index</summary>
     <p>This index identifies selected bytes, not completed downloads or writes. Use the recovery result below to check the destination.</p>

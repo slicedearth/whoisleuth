@@ -143,6 +143,12 @@ until its reference is removed.
 Review Inbox forms retain their drafts while another item is inspected; use the
 existing explicit review checkpoint to retain them across a reload.
 
+Choose the recovery tool for the task: a saved review position resumes the
+question, filters and selected item in this browser; a pinned checkpoint revisits
+exact retained evidence in this tab; a workspace backup moves saved records to
+another workspace. None substitutes for the others. Finish and save Case forms
+before a backup when their contents need to travel with it.
+
 Use [Browser-local storage and archives](#browser-local-storage-and-archives)
 for backup, restore and original-file recovery.
 
@@ -1366,6 +1372,14 @@ download** for each file group when needed; JSON backup encryption is separate.
 To test recovery, review the downloaded JSON and open **Rehearse recovery in a
 separate workspace**. Create a destination, then restore the downloaded evidence
 packages or original files. The active workspace is not switched or modified.
+**What this backup can recover** is available after preparing or reviewing a
+backup. It lists reviewed sections, recorded counts, unsupported sections and
+historical migration explanations. It separates Case file references from distinct
+required originals and their declared byte counts; unreadable references remain
+unknown, not zero. Saved review positions, unfinished Case forms and certificate
+search history are not archive sections. Temporary comparisons and tab references
+are not backed up either. This overview does not check original-file availability,
+confirm a completed download or replace destination verification.
 Section checksums and Case identities are compared with the selected backup;
 every referenced file must match before recovery is reported as verified.
 **Recovery set index** identifies the exact selected JSON or encrypted backup

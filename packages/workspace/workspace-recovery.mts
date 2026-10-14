@@ -8,8 +8,28 @@ import { retainedFileGroups, type RetainedFileInput, type RetainedFileReference 
 import { INVESTIGATION_MANIFEST_SCHEMA } from '../investigation/investigation-manifest.mts';
 import type { readWorkspaceArchive } from './workspace-archive.mts';
 import type { CaseRecord } from '../cases/case-record-contracts.mts';
+import { BROWSER_LOCAL_COLLECTION_MANIFEST, WORKSPACE_ARCHIVE_COLLECTIONS } from '../contracts/browser-local-collection-manifest.mts';
 
 export type ReviewedWorkspaceArchive = Awaited<ReturnType<typeof readWorkspaceArchive>>;
+
+/** Describe reviewed metadata only; neither source bytes nor destination writes are inspected. */
+export function workspaceBackupCoverage(archive: ReviewedWorkspaceArchive) {
+  const portableCollections = new Set<string>(WORKSPACE_ARCHIVE_COLLECTIONS.map(([, id]) => id));
+  let originals: Readonly<{ state: 'known'; references: number; files: number; byteLength: number }> | Readonly<{ state: 'unknown' }> = { state: 'unknown' };
+  try {
+    const references = archiveCaseRecords(archive).flatMap(row => readCaseAttachments(row.attachments) ?? []);
+    const files = retainedFileGroups(references).flat();
+    originals = { state: 'known', references: references.length, files: files.length,
+      byteLength: files.reduce((sum, file) => sum + file.byteLength, 0) };
+  } catch { /* An unsupported or inconsistent reference list cannot establish zero required originals. */ }
+  return Object.freeze({
+    sourceVersion: archive.sourceVersion,
+    sections: Object.freeze(archive.sections.map(({ id, label, status, recordCount, reason }) =>
+      Object.freeze({ id, label, status, recordCount, reason }))),
+    originals: Object.freeze(originals),
+    localOnly: Object.freeze(BROWSER_LOCAL_COLLECTION_MANIFEST.filter(item => !portableCollections.has(item.id)).map(item => item.label)),
+  });
+}
 
 export type RecoveryPackageIdentity = RetainedFileReference & Readonly<{
   manifestSchema: string; manifestVersion: number; encryptionVersion: number | null;

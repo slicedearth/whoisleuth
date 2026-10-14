@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { buildWorkspaceArchive, mergeReadyWorkspaceArchiveData, prepareWorkspaceArchive, readWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
-import { compareRecoveredWorkspace, formatRecoverySetInventory, inspectCaseOriginalFiles, inspectRecoveryFiles, matchRecoveryFiles, recoverySourceIndex, workspaceAttachmentGroups, type RecoveryPackageIdentity } from '../packages/workspace/workspace-recovery.mts';
+import { compareRecoveredWorkspace, formatRecoverySetInventory, inspectCaseOriginalFiles, inspectRecoveryFiles, matchRecoveryFiles, recoverySourceIndex, workspaceAttachmentGroups, workspaceBackupCoverage, type RecoveryPackageIdentity } from '../packages/workspace/workspace-recovery.mts';
 import { MAX_CASES } from '../packages/contracts/case-portability.mts';
 import { plaintextLocalBinaryCodec } from '../frontend/src/lib/browser-local-binaries.ts';
 import type { CaseAttachment } from '../packages/cases/case-attachment-model.mts';
@@ -21,6 +21,39 @@ async function fixture() {
   const second = { ...createCase({ domain: 'second.example' }, NOW), id: 'case-two', attachments: [{ ...attachment('other-provenance'), source: 'A separate observation' }] };
   return readWorkspaceArchive(await buildWorkspaceArchive({ cases: [first, second] }, { generatedAt: NOW }));
 }
+
+test('backup coverage distinguishes recorded provenance, distinct original bytes and browser-only work', async () => {
+  const source = await fixture(), before = structuredClone(source);
+  const coverage = workspaceBackupCoverage(source);
+  assert.deepEqual(coverage.originals, { state: 'known', references: 2, files: 1, byteLength: BODY.byteLength });
+  assert.deepEqual(coverage.sections.find(item => item.id === 'cases'), { id: 'cases', label: 'Cases', status: 'ready', recordCount: 2, reason: '' });
+  assert.deepEqual(coverage.localOnly, ['Saved review position', 'Unfinished Case forms', 'Certificate Transparency history']);
+  assert.doesNotMatch(JSON.stringify(coverage), /first\.example|original\.txt|Analyst-retained source|digestSha256|downloaded|verified|restored/u);
+  assert.deepEqual(source, before);
+  assert.ok(Object.isFrozen(coverage) && Object.isFrozen(coverage.originals) && Object.isFrozen(coverage.sections));
+});
+
+test('backup coverage keeps a known empty file list distinct from unsupported or conflicting references', async () => {
+  const empty = await readWorkspaceArchive(await buildWorkspaceArchive({}, { generatedAt: NOW }));
+  assert.deepEqual(workspaceBackupCoverage(empty).originals, { state: 'known', references: 0, files: 0, byteLength: 0 });
+  const unsupported = await fixture();
+  Object.assign(unsupported.sections.find(item => item.id === 'cases')!, { status: 'unsupported', reason: 'This section uses newer schema 999.' });
+  assert.deepEqual(workspaceBackupCoverage(unsupported).originals, { state: 'unknown' });
+  assert.equal(workspaceBackupCoverage(unsupported).sections.find(item => item.id === 'cases')!.reason, 'This section uses newer schema 999.');
+  const inconsistent = await fixture();
+  const rows = (inconsistent.sections.find(item => item.id === 'cases')!.data as { cases: { attachments: CaseAttachment[] }[] }).cases;
+  rows[1]!.attachments[0] = { ...rows[1]!.attachments[0]!, byteLength: BODY.byteLength + 1 };
+  assert.deepEqual(workspaceBackupCoverage(inconsistent).originals, { state: 'unknown' });
+});
+
+test('backup coverage retains historical-section explanations without inventing saved decisions or views', async () => {
+  const raw = JSON.parse(await readFile(new URL('fixtures/workspace-populated-v5-public.json', import.meta.url), 'utf8'));
+  const coverage = workspaceBackupCoverage(await readWorkspaceArchive(raw));
+  assert.equal(coverage.sourceVersion, 5);
+  assert.match(coverage.sections.find(item => item.id === 'analystReviewState')!.reason, /did not contain Review Item lifecycle state/u);
+  assert.match(coverage.sections.find(item => item.id === 'caseViews')!.reason, /predates saved Case views/u);
+  assert.equal(coverage.sections.find(item => item.id === 'caseViews')!.recordCount, 0);
+});
 
 test('recovery source index groups exact package bytes without conflating selection with a verified write', () => {
   const first: RecoveryPackageIdentity = Object.freeze({ digestSha256: `sha256:${'a'.repeat(64)}`, byteLength: 301,
