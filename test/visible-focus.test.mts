@@ -14,7 +14,7 @@ test('sticky focus protection respects pointer release, modal ownership and tear
   container.children.add(target); boundary.bottom = 54;
   const document = { activeElement: target as ElementStub | null };
   const movements: ScrollToOptions[] = [];
-  const window = Object.assign(new EventTarget(), { scrollBy(value: ScrollToOptions) { movements.push(value); } });
+  const window = Object.assign(new EventTarget(), { innerHeight: 700, scrollBy(value: ScrollToOptions) { movements.push(value); } });
   for (const [key, value] of Object.entries({ HTMLElement: ElementStub, document, window })) {
     const before = Object.getOwnPropertyDescriptor(globalThis, key);
     Object.defineProperty(globalThis, key, { configurable: true, value });
@@ -43,5 +43,21 @@ test('sticky focus protection respects pointer release, modal ownership and tear
   surface = null; focus(); surface = boundary;
   assert.equal(movements.length, before);
   guard.reveal(); assert.equal(movements.length, before + 1);
-  guard.destroy(); focus(); assert.equal(movements.length, before + 1);
+
+  // Native focus can leave a fraction of a pixel below the viewport. Keep the
+  // whole control and its focus ring visible, not merely its rounded position.
+  target.top = 660.3125; target.bottom = 700.3125;
+  focus();
+  assert.deepEqual(movements.at(-1), { top: 13, behavior: 'instant' });
+  const afterReveal = movements.length;
+  target.top = 600; target.bottom = 688; focus();
+  assert.equal(movements.length, afterReveal, 'a control with lower-edge clearance must not move');
+  target.top = 100; target.bottom = 750; focus();
+  assert.equal(movements.length, afterReveal, 'an oversized target must not move its leading edge behind the sticky controls');
+  target.top = 660.3125; target.bottom = 700.3125;
+  target.modal = true; focus(); target.modal = false;
+  container.dispatchEvent(new Event('pointerdown')); focus(); window.dispatchEvent(new Event('pointerup'));
+  boundary.bottom = -1; focus(); boundary.bottom = 54;
+  assert.equal(movements.length, afterReveal, 'lower-edge correction must preserve modal, pointer and boundary ownership');
+  guard.destroy(); focus(); assert.equal(movements.length, afterReveal);
 });
