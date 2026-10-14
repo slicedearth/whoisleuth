@@ -14,7 +14,7 @@ import { WORKSPACE_ARCHIVE_VERSION, type WorkspaceArchiveDocument } from '../fro
 import type { EncryptedWorkspaceArchiveEnvelope } from '../frontend/src/lib/analysis/workspace-archive-crypto';
 import { richSourceQualifiedBulkSessionStore } from '../test/bulk-session-fixture.mts';
 import { BULK_SESSIONS_COLLECTION } from '../frontend/src/lib/browser-local-data-definitions';
-import { downloadWorkspaceArchive, downloadEncryptedWorkspaceArchive, reviewWorkspaceBackup, workspaceArchivePreview, workspaceArchiveStatus } from './workspace-backup';
+import { downloadWorkspaceArchive, downloadEncryptedWorkspaceArchive, reviewWorkspaceBackup, workspaceArchivePreview, workspaceArchiveSections, workspaceArchiveStatus } from './workspace-backup';
 
 const NOW = '2026-07-14T08:00:00.000Z';
 
@@ -741,7 +741,7 @@ test('the dashboard encrypts and locally unlocks a portable workspace backup', a
   await page.getByRole('button', { name: 'Unlock and review' }).click();
   const preview = workspaceArchivePreview(page);
   await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
-  await expect(preview.locator('li')).toHaveCount(originalWorkspace.manifest.sectionCount);
+  await expect(workspaceArchiveSections(page)).toHaveCount(originalWorkspace.manifest.sectionCount);
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
   await preview.getByRole('button', { name: 'Add selected data' }).click();
@@ -778,9 +778,9 @@ test('workspace archive import previews conflicts before a non-destructive mobil
 
   const preview = workspaceArchivePreview(page);
   await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
-  await expect(preview.locator('li')).toHaveCount(archive.manifest.sectionCount);
-  await expect(preview.locator('li', { hasText: 'Cases' })).toContainText('1 new');
-  await expect(preview.locator('li', { hasText: 'Workspace settings' })).toContainText('Ready');
+  await expect(workspaceArchiveSections(page)).toHaveCount(archive.manifest.sectionCount);
+  await expect(workspaceArchiveSections(page).filter({ hasText: 'Cases' })).toContainText('1 new');
+  await expect(workspaceArchiveSections(page).filter({ hasText: 'Workspace settings' })).toContainText('Ready');
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
 
@@ -830,7 +830,7 @@ test('workspace selection reuses verified content while preview and merge see pe
   const checksumCalls = () => page.evaluate(() => (window as typeof window & { archiveChecksumCalls: number }).archiveChecksumCalls);
   await reviewWorkspaceBackup(page, { name: 'verified-workspace.json', mimeType: 'application/json', buffer: Buffer.from(content) });
   const preview = workspaceArchivePreview(page);
-  const cases = preview.locator('li', { hasText: 'Cases' });
+  const cases = workspaceArchiveSections(page).filter({ hasText: 'Cases' });
   await expect(cases).toContainText('1 new');
   expect(await checksumCalls()).toBe(archive.manifest.sectionCount);
 
@@ -891,8 +891,8 @@ test('workspace application skips the same malformed Brand Profile identifiers a
     buffer: Buffer.from(JSON.stringify(archive)),
   });
   const preview = workspaceArchivePreview(page);
-  const profiles = preview.locator('li', { hasText: 'Brand Profiles' });
-  const settings = preview.locator('li', { hasText: 'Workspace settings' });
+  const profiles = workspaceArchiveSections(page).filter({ hasText: 'Brand Profiles' });
+  const settings = workspaceArchiveSections(page).filter({ hasText: 'Workspace settings' });
   await expect(profiles).toContainText('1 skipped');
   await expect(settings).toContainText('1 skipped');
   for (const checkbox of await preview.getByRole('checkbox').all()) {
@@ -922,8 +922,8 @@ test('workspace Settings preview and application preserve the active profile whe
   });
 
   const preview = workspaceArchivePreview(page);
-  const profiles = preview.locator('li', { hasText: 'Brand Profiles' });
-  const settings = preview.locator('li', { hasText: 'Workspace settings' });
+  const profiles = workspaceArchiveSections(page).filter({ hasText: 'Brand Profiles' });
+  const settings = workspaceArchiveSections(page).filter({ hasText: 'Workspace settings' });
   await expect(settings).toContainText('0 skipped');
   await profiles.getByRole('checkbox').uncheck();
   await expect(settings).toContainText('1 skipped');
@@ -963,7 +963,7 @@ test('workspace Settings application preserves malformed active-profile values a
       buffer: Buffer.from(JSON.stringify(archive)),
     });
     const preview = workspaceArchivePreview(page);
-    const settings = preview.locator('li', { hasText: 'Workspace settings' });
+    const settings = workspaceArchiveSections(page).filter({ hasText: 'Workspace settings' });
     await expect(settings.getByRole('checkbox')).toBeVisible();
     for (const checkbox of await preview.getByRole('checkbox').all()) {
       const isSettings = await checkbox.evaluate((element) => (
@@ -1019,9 +1019,9 @@ test('workspace identifier collisions cannot rebind Cases or the active-profile 
   });
 
   const preview = workspaceArchivePreview(page);
-  const profiles = preview.locator('li', { hasText: 'Brand Profiles' });
-  const cases = preview.locator('li', { hasText: 'Cases' });
-  const settings = preview.locator('li', { hasText: 'Workspace settings' });
+  const profiles = workspaceArchiveSections(page).filter({ hasText: 'Brand Profiles' });
+  const cases = workspaceArchiveSections(page).filter({ hasText: 'Cases' });
+  const settings = workspaceArchiveSections(page).filter({ hasText: 'Workspace settings' });
   await expect(profiles).toContainText('Blocked');
   await expect(cases).toContainText('Blocked');
   await expect(settings).toContainText('Blocked');
@@ -1040,7 +1040,7 @@ test('workspace identifier collisions cannot rebind Cases or the active-profile 
   for (const checkbox of await preview.getByRole('checkbox').all()) {
     if (await checkbox.isChecked()) await checkbox.uncheck();
   }
-  await preview.locator('li', { hasText: 'Campaigns' }).getByRole('checkbox').check();
+  await workspaceArchiveSections(page).filter({ hasText: 'Campaigns' }).getByRole('checkbox').check();
   await preview.getByRole('button', { name: 'Add selected data' }).click();
   const [storedProfiles, storedCases, activeProfile] = await Promise.all([
     readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 }),
@@ -1064,7 +1064,7 @@ test('workspace archive import reports future sections and rolls back an interru
   futureWatchlistManifest.bytes = new TextEncoder().encode(JSON.stringify(future.sections.watchlists)).byteLength;
   futureWatchlistManifest.checksum = await sha256ArtifactDigest(future.sections.watchlists);
   await reviewWorkspaceBackup(page, { name: 'future.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(future)) });
-  const futureWatchlists = workspaceArchivePreview(page).getByRole('listitem').filter({ hasText: 'Watchlists' });
+  const futureWatchlists = workspaceArchiveSections(page).filter({ hasText: 'Watchlists' });
   await expect(futureWatchlists).toContainText('Unsupported');
   await expect(futureWatchlists.getByRole('checkbox')).toBeDisabled();
   expect(await futureWatchlists.evaluate((element) => {
@@ -1090,8 +1090,8 @@ test('workspace archive import reports future sections and rolls back an interru
   for (const checkbox of await preview.getByRole('checkbox').all()) {
     if (await checkbox.isChecked()) await checkbox.uncheck();
   }
-  await preview.locator('li', { hasText: 'Cases' }).getByRole('checkbox').check();
-  await preview.locator('li', { hasText: 'Campaigns' }).getByRole('checkbox').check();
+  await workspaceArchiveSections(page).filter({ hasText: 'Cases' }).getByRole('checkbox').check();
+  await workspaceArchiveSections(page).filter({ hasText: 'Campaigns' }).getByRole('checkbox').check();
   await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   await failBrowserLocalManifestWrites(page, 'campaigns');
   await preview.getByRole('button', { name: 'Add selected data' }).click();
@@ -1116,8 +1116,8 @@ test('workspace rollback preserves a settings value changed after the import beg
   for (const checkbox of await preview.getByRole('checkbox').all()) {
     if (await checkbox.isChecked()) await checkbox.uncheck();
   }
-  await preview.locator('li', { hasText: 'Cases' }).getByRole('checkbox').check();
-  await preview.locator('li', { hasText: 'Workspace settings' }).getByRole('checkbox').check();
+  await workspaceArchiveSections(page).filter({ hasText: 'Cases' }).getByRole('checkbox').check();
+  await workspaceArchiveSections(page).filter({ hasText: 'Workspace settings' }).getByRole('checkbox').check();
   await page.evaluate(() => {
     const originalSetItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function setItem(key: string, value: string) {

@@ -263,7 +263,7 @@
         <span>{preview.bytes.toLocaleString()} bytes · {preview.generatedAt?formatEvidenceDate(preview.generatedAt):'Unknown creation time'}</span>
       </header>
       <p>Existing matches use each data type's established merge rules. Records absent from the backup are retained, and nothing is written until you choose Add selected data.</p>
-      <ul>
+      <ul aria-label="Backup sections to import">
         {#each preview.sections as section}
           <li class:unsupported={section.status==='unsupported'} class:blocked={section.status==='blocked'}>
             <label>
