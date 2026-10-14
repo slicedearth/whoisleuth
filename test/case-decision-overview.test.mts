@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildCaseCompletionReview, buildCaseDecisionOverview, caseQuestionNextActions, latestRetainedCaseReview } from '../packages/cases/case-decision-overview.mts';
+import { buildCaseCompletionReview, buildCaseDecisionOverview, caseCompletionNextActions, caseQuestionNextActions, latestRetainedCaseReview } from '../packages/cases/case-decision-overview.mts';
 import { createCase } from '../packages/cases/case-model.mts';
 import { caseRecheckComparisonWarnings } from '../packages/cases/case-recheck-model.mts';
 import type { CaseEvidencePin, CaseDecisionRecord, CaseActionRecord } from '../packages/cases/case-response-records.mts';
@@ -156,8 +156,9 @@ test('completion review does not invent closure readiness, open objects or missi
   const record = createCase({ domain: 'review.example' }, NOW);
   const before = structuredClone(record);
   assert.deepEqual(buildCaseCompletionReview(record, NOW), {
-    openObjects: [], otherObjects: [], opposingClaims: [], reviews: [], requests: [],
+    openObjects: [], otherObjects: [], opposingClaims: [], evidenceGaps: [], reviews: [], requests: [],
   });
+  assert.deepEqual(caseCompletionNextActions(buildCaseCompletionReview(record, NOW), 0), { actions: [], further: [] });
   assert.deepEqual(record, before);
 });
 
@@ -180,7 +181,40 @@ test('completion review keeps current incident state distinct from resolved, his
   assert.deepEqual(review.otherObjects.map(row => [row.object.identifier, row.targetRetained]), [
     ['https://review.example/earlier', false], ['review.example', false],
   ]);
+  assert.deepEqual(caseCompletionNextActions(review, 0).actions.map(action => action.id), ['objects']);
   assert.deepEqual(record, before);
+});
+
+test('completion suggestions retain one category each, three initial reviews and every remaining local review', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  record.evidencePins = [{ ...pin, observedAt: null, responseObject: { kind: 'domain', identifier: 'review.example', incidentTargetId: null } },
+    { ...pin, id: 'failed', sourceState: 'unavailable' }, { ...pin, id: 'skipped', sourceState: 'skipped' }, { ...pin, id: 'cut', truncated: true }];
+  record.assertions = ['first', 'second'].map(id => ({ id, kind: 'hypothesis', statement: 'Retained question', rationale: null,
+    state: 'open', evidencePinIds: ['pin-one'], evidenceRelations: [{ evidencePinId: 'pin-one', stance: 'unresolved' }], createdAt: NOW, updatedAt: NOW }));
+  record.actions = [{ id: 'action', type: 'registrar_report', recipient: 'Fixture desk', contactSource: 'Manual route',
+    routeObservedAt: NOW, routeReviewAfter: null, contactLimitations: [], dueAt: null, state: 'acknowledged', reference: null,
+    followUpAt: NOW, providerOutcome: 'more_information_requested', outcome: null, originActionId: null,
+    history: [{ id: 'request', previousState: 'submitted', nextState: 'acknowledged', occurredAt: NOW, sourceClass: 'provider',
+      provenance: 'Recorded request', reference: null, evidencePinId: null, limitations: [], providerOutcome: 'more_information_requested',
+      outcomeDetail: null, originActionId: null, applied: true, evidenceRequest: { id: 'needed', packetDigestSha256: 'a'.repeat(64),
+        summary: 'Provide the retained page', dueAt: NOW, state: 'unavailable', evidencePinIds: [], rationale: 'Bytes unavailable', previousEventIds: [] } }],
+    historyOmitted: 0, historyLimitations: [], createdAt: NOW, metadataUpdatedAt: NOW, updatedAt: NOW }];
+  const before = structuredClone(record);
+  const review = buildCaseCompletionReview(record, NOW);
+  const next = caseCompletionNextActions(review, 2);
+  assert.deepEqual(next.actions.map(action => action.id), ['claims', 'gaps', 'requests']);
+  assert.deepEqual(next.further.map(action => action.id), ['reviews', 'objects', 'files']);
+  assert.deepEqual(review.evidenceGaps.map(value => value.id), ['pin-one', 'failed', 'skipped', 'cut']);
+  assert.match(next.actions[0]!.reason, /^2 open assessments/);
+  assert.match(next.actions[2]!.limitation, /does not prove.*obtainable or delivered/);
+  assert.match(next.further[2]!.reason, /^2 retained file references/);
+  for (const action of [...next.actions, ...next.further]) {
+    assert.ok(action.label && action.reason && action.expectedOutcome && action.prerequisite && action.limitation);
+  }
+  assert.deepEqual(caseCompletionNextActions(review, 2), next);
+  assert.deepEqual(record, before);
+  record.assertions.forEach(assertion => { assertion.state = 'resolved'; });
+  assert.equal(caseCompletionNextActions(buildCaseCompletionReview(record, NOW), 0).actions.some(action => action.id === 'claims'), false);
 });
 
 test('completion review preserves exact contrary and unavailable links without reopening resolved assessments', () => {

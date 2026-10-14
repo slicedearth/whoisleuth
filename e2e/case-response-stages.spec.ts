@@ -16,6 +16,7 @@ import {
 import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, openSeededTimelineCase } from './case-test-fixtures';
 import { addFixtureCasePin, caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep } from './case-response-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import { readCaseAttachment } from '../packages/cases/case-attachment-model.mts';
 
 test.use({ timezoneId: 'UTC' });
 
@@ -85,11 +86,15 @@ test('an open Case updates due reviews as time advances without changing retaine
 });
 
 test('the decision overview retains opposing evidence and unknowns across responsive layouts', async ({ page }, testInfo) => {
+  const collectionRequests: string[] = [];
+  page.on('request', request => { if (/^\/api\/(lookup|dns|whois|rdap|scan|collect)/u.test(new URL(request.url()).pathname)) collectionRequests.push(request.url()); });
   const at = '2026-09-10T10:00:00.000Z';
   const pin = { id: 'supporting-pin', checkpointId: null, field: 'http.status', category: 'http', label: 'Observed page', value: 'A sign-in page was observed',
     source: 'Direct HTTP observation', sourceState: 'complete', sourceSchema: null, observedAt: at, collectionDepth: 'deep',
     completeness: 'complete', truncated: false, transitionExpectation: null, limitations: [], createdAt: at };
-  const record = caseRecord({ domain: 'decision-overview.example',
+  const recordBase = caseRecord({ domain: 'decision-overview.example',
+    actions: [currentActionFixture({ id: 'follow-up', type: 'registrar_report', recipient: 'Fixture desk', contactSource: 'Retained route',
+      routeObservedAt: at, contactLimitations: [], dueAt: null, targetState: 'acknowledged', reference: null, followUpAt: at, outcome: null, createdAt: at, updatedAt: at })],
     evidencePins: [pin, { ...pin, id: 'contrary-pin', label: 'Separate observation', value: 'The supplied screenshot shows a different page', source: 'Analyst-supplied screenshot', observedAt: null, completeness: 'unknown' }],
     assertions: [{ id: 'assessment', kind: 'hypothesis', statement: 'Does this page imitate the reported service?', rationale: 'Compare the retained observations.', state: 'open',
       evidencePinIds: ['supporting-pin', 'contrary-pin'], evidenceRelations: [{ evidencePinId: 'supporting-pin', stance: 'supports' }, { evidencePinId: 'contrary-pin', stance: 'contradicts' }], createdAt: at, updatedAt: at },
@@ -97,6 +102,8 @@ test('the decision overview retains opposing evidence and unknowns across respon
         evidencePinIds: ['supporting-pin'], evidenceRelations: [{ evidencePinId: 'supporting-pin', stance: 'supports' }], createdAt: at, updatedAt: at }],
     decisions: [{ id: 'decision', summary: 'Further review needed', rationale: 'The two sources disagree.', confidence: 'low', confidenceBasis: 'The supplied screenshot is undated.', evidencePinIds: ['supporting-pin', 'contrary-pin'], createdAt: at }],
   });
+  const record = { ...recordBase, attachments: [readCaseAttachment({ id: 'referenced-original', fileName: 'original.txt', mediaType: 'application/octet-stream', source: 'Fixture reference', observedAt: at,
+    retainedAt: at, byteLength: 1, digestSha256: `sha256:${'1'.repeat(64)}` })] };
   await openSeededTimelineCase(page, record.domain, [record], CASE_SCHEMA_VERSION);
   await openCaseResponseWorkspace(page, '', 'quick');
   await openCaseSection(page, 'Summary');
@@ -105,13 +112,32 @@ test('the decision overview retains opposing evidence and unknowns across respon
   await expect(overview.getByRole('region', { name: 'Contrary evidence' })).toContainText('Observation time unavailable');
   await expect(overview).toContainText('Further review needed');
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
-  const completionToggle = page.locator('.completion-review > summary');
-  await completionToggle.focus(); await completionToggle.press('Enter');
+  const draftsBefore = await readBrowserLocalCollection(page, 'case_drafts');
+  const completionSuggestions = page.getByRole('region', { name: 'Next reviews before pausing or closing this Case', exact: true });
+  await expect(completionSuggestions.getByRole('button')).toHaveCount(3);
   const completion = page.getByRole('region', { name: 'Case completion review', exact: true });
+  await expect(completion).toHaveCount(0);
+  await completionSuggestions.getByText('More completion reviews · 1', { exact: true }).click();
+  for (const [action, heading] of [
+    ['Review contrary or unresolved evidence', 'Contrary or unresolved evidence · 1 assessment'],
+    ['Review incomplete or undated observations', 'Incomplete or undated observations · 1'],
+    ['Review follow-up commitments', 'Follow-up commitments'],
+    ['Review referenced file availability', 'Referenced files · 1'],
+  ] as const) {
+    const button = completionSuggestions.getByRole('button', { name: action, exact: true });
+    await button.focus(); await button.press('Enter');
+    const target = completion.getByRole('heading', { name: heading, exact: true });
+    await expect(target).toBeFocused(); await expectFocusedResultsVisible(page, target, target);
+    await expect(page.getByRole('navigation', { name: 'Case sections' }).getByRole('link', { name: 'Summary', exact: true })).toHaveAttribute('aria-current', 'page');
+  }
+  await expect(completion.getByRole('status', { name: 'Case original-file check', exact: true })).toContainText('Original-file availability has not been checked');
+  const completionToggle = page.locator('.completion-review > summary');
+  await completionToggle.click();
+  await completionToggle.focus(); await completionToggle.press('Enter');
   await expect(completion.getByRole('region', { name: 'Contrary or unresolved evidence', exact: true })).toContainText('Separate observation');
   await expect(completion).toContainText('No current incident links are recorded as open');
-  await expect(completion.getByRole('button', { name: 'Check referenced files', exact: true })).toBeDisabled();
-  await expect(completion.getByRole('status', { name: 'Case original-file check', exact: true })).toContainText('No file references are recorded');
+  await expect(completion.getByRole('button', { name: 'Check referenced files', exact: true })).toBeEnabled();
+  await expect(completion.getByRole('status', { name: 'Case original-file check', exact: true })).toContainText('Original-file availability has not been checked');
   await expect(completion.getByRole('button', { name: 'Close case with reason', exact: true })).toHaveCount(0);
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   const nextReviews = overview.getByRole('region', { name: 'Next reviews for the selected assessment' });
@@ -138,11 +164,28 @@ test('the decision overview retains opposing evidence and unknowns across respon
       await expectNoHorizontalOverflow(page);
       if (width === 320) expect((await new AxeBuilder({ page }).include('.completion-review')
         .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
-      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.evaluate(() => {
+        // End the prior focus exercise before positioning the visual overview.
+        // Responsive focus recovery otherwise keeps that lower review visible.
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      });
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
       if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`decision-page-${theme}-${width}.png`), fullPage: true }); }
       if (captureVisualEvidenceEnabled()) { await overview.screenshot({ path: testInfo.outputPath(`decision-overview-${theme}-${width}.png`) }); }
       if (captureVisualEvidenceEnabled() && [320, 1280].includes(width)) await completion.screenshot({ path: testInfo.outputPath(`completion-${theme}-${width}.png`) });
+      if (width === 320 || width === 1280) {
+        const action = completionSuggestions.getByRole('button', { name: 'Review incomplete or undated observations', exact: true });
+        await action.focus(); await action.press('Enter');
+        const target = completion.getByRole('heading', { name: 'Incomplete or undated observations · 1', exact: true });
+        await expect(target).toBeFocused(); await expectFocusedResultsVisible(page, target, target);
+        await expect.poll(async () => {
+          const heading = await target.boundingBox(), navigation = await page.getByRole('navigation', { name: 'Case sections' }).boundingBox();
+          if (!heading || !navigation) throw new Error('Case review focus geometry is unavailable.');
+          return heading.y - (navigation.y + navigation.height);
+        }).toBeGreaterThanOrEqual(0);
+        if (captureVisualEvidenceEnabled()) await completionSuggestions.screenshot({ path: testInfo.outputPath(`completion-suggestions-${theme}-${width}.png`) });
+      }
     }
   }
   await overview.getByRole('button', { name: 'Review assessment', exact: true }).focus();
@@ -151,6 +194,8 @@ test('the decision overview retains opposing evidence and unknowns across respon
   const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   expect(stored.records[0]!.value.decisions[0]?.summary).toBe('Further review needed');
   expect(stored.records[0]!.value.evidencePins).toHaveLength(2);
+  expect(await readBrowserLocalCollection(page, 'case_drafts')).toEqual(draftsBefore);
+  expect(collectionRequests).toEqual([]);
 });
 
 test('a recheck uses selected evidence without advancing its clock or discarding the manual draft', async ({ page }, testInfo) => {

@@ -68,9 +68,64 @@ export function buildCaseCompletionReview(record: CaseRecord, now: string) {
     opposingClaims: overview.claims.map(claim => ({ ...claim,
       references: claim.references.filter(reference => reference.stance === 'contradicts' || reference.stance === 'unresolved'),
     })).filter(claim => claim.references.length),
+    evidenceGaps: overview.evidenceGaps,
     reviews: overview.reviews,
     requests: caseRequestedEvidenceQueue(record, now).filter(item => item.editable && !item.deliveries.length),
   };
+}
+
+export type CaseCompletionReviewTarget = 'claims' | 'gaps' | 'requests' | 'reviews' | 'objects' | 'files';
+type CaseCompletionAction = Readonly<{
+  id: CaseCompletionReviewTarget; label: string; reason: string;
+  expectedOutcome: string; prerequisite: string; limitation: string;
+}>;
+
+/** One local review per category; the complete checklist remains authoritative. */
+export function caseCompletionNextActions(review: ReturnType<typeof buildCaseCompletionReview>, attachmentCount: number) {
+  const actions: CaseCompletionAction[] = [];
+  if (review.opposingClaims.length) actions.push({
+    id: 'claims', label: 'Review contrary or unresolved evidence',
+    reason: `${review.opposingClaims.length} open assessment${review.opposingClaims.length === 1 ? '' : 's'} with contrary or unresolved links.`,
+    expectedOutcome: 'Compare the exact linked observations before deciding whether your explanation needs to change.',
+    prerequisite: 'Read each retained source and its observation time; any assessment change needs an explicit save.',
+    limitation: 'Disagreement does not establish which explanation is correct.',
+  });
+  if (review.evidenceGaps.length) actions.push({
+    id: 'gaps', label: 'Review incomplete or undated observations',
+    reason: `${review.evidenceGaps.length} retained observation${review.evidenceGaps.length === 1 ? '' : 's'} with missing scope, collection quality or time.`,
+    expectedOutcome: 'Identify which conclusions need to remain qualified by the retained evidence.',
+    prerequisite: 'Read the source details. Further collection, if appropriate, is a separate deliberate action.',
+    limitation: 'A failed or partial observation is not evidence of absence.',
+  });
+  if (review.requests.length) actions.push({
+    id: 'requests', label: 'Review undelivered evidence requests',
+    reason: `${review.requests.length} current request branch${review.requests.length === 1 ? '' : 'es'} without recorded delivery.`,
+    expectedOutcome: 'Check what was requested, prepared or unavailable and which exact branch still needs attention.',
+    prerequisite: 'Inspect the retained request and any preparation before recording a response.',
+    limitation: 'A request or prepared packet does not prove that evidence is obtainable or delivered.',
+  });
+  if (review.reviews.length) actions.push({
+    id: 'reviews', label: 'Review follow-up commitments',
+    reason: `${review.reviews.length} dated follow-up commitment${review.reviews.length === 1 ? '' : 's'} retained.`,
+    expectedOutcome: 'Review due and upcoming commitments before pausing this investigation.',
+    prerequisite: 'Check each action or independent recheck in its original context.',
+    limitation: 'A scheduled date is not a completed review or observation of removal.',
+  });
+  if (review.openObjects.length || review.otherObjects.length) actions.push({
+    id: 'objects', label: 'Review remaining incident scopes',
+    reason: `${review.openObjects.length} analyst-open incident objects; ${review.otherObjects.length} other retained scopes.`,
+    expectedOutcome: 'Check whether each exact object has an appropriate recorded disposition.',
+    prerequisite: 'Review incident-link histories and distinguish domain-wide from individual-page evidence.',
+    limitation: 'Whole-Case status does not settle every object or establish removal.',
+  });
+  if (attachmentCount > 0) actions.push({
+    id: 'files', label: 'Review referenced file availability',
+    reason: `${attachmentCount} retained file reference${attachmentCount === 1 ? '' : 's'}; current bytes are checked separately.`,
+    expectedOutcome: 'Locate the explicit file check before depending on original or derived files for a handoff.',
+    prerequisite: 'Choose Check referenced files to read and verify bytes in the current workspace.',
+    limitation: 'A reference does not establish available bytes; a matching digest does not authenticate the source.',
+  });
+  return { actions: actions.slice(0, 3), further: actions.slice(3) };
 }
 
 /** Suggestions refer only to the selected assertion's retained links. */

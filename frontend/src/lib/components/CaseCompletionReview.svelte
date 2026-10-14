@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import type { CaseRecord } from '../../../../packages/cases/case-record-contracts.mts';
-  import { buildCaseCompletionReview } from '../../../../packages/cases/case-decision-overview.mts';
+  import { buildCaseCompletionReview, caseCompletionNextActions, type CaseCompletionReviewTarget } from '../../../../packages/cases/case-decision-overview.mts';
+  import { caseRecheckEvidence } from '#lib/analysis/case-evidence-presentation.ts';
   import { inspectRetainedCaseOriginals } from '#lib/case-review-package.ts';
   import { evidenceTime } from '#lib/analysis/evidence-time.ts';
   import type { CaseWorkspaceSection } from '#lib/analysis/case-response-stage.ts';
@@ -18,12 +19,16 @@
     selectSection: (section: CaseWorkspaceSection) => void | Promise<void>;
   } = $props();
   const review = $derived(buildCaseCompletionReview(record, new Date($reviewClock).toISOString()));
+  const nextReviews = $derived(caseCompletionNextActions(review, record.attachments?.length ?? 0));
+  let reviewBody = $state<HTMLDivElement>();
+  let reviewGeneration = 0;
+  let requestsExpanded = $state(false);
   let expanded = $state(false),
     busy = $state(false),
     error = $state('');
   let files = $state.raw<Awaited<ReturnType<typeof inspectRetainedCaseOriginals>> | null>(null);
   let controller: AbortController | null = null;
-  type ListId = 'objects' | 'scopes' | 'claims' | 'files' | 'reviews' | 'requests';
+  type ListId = CaseCompletionReviewTarget | 'scopes';
   const pageSize = 10;
   let pages = $state<Partial<Record<ListId, number>>>({});
   const currentPage = (count: number, id: ListId) =>
@@ -46,9 +51,22 @@
     visible;
     resetFiles();
     pages = {};
+    reviewGeneration += 1;
+    requestsExpanded = false;
     if (!visible) expanded = false;
   });
-  onDestroy(resetFiles);
+  onDestroy(() => { reviewGeneration += 1; resetFiles(); });
+
+  async function openReview(target: CaseCompletionReviewTarget) {
+    if (!visible) return;
+    const generation = reviewGeneration, selected = record;
+    expanded = true;
+    if (target === 'requests') requestsExpanded = true;
+    await tick();
+    if (!visible || !expanded || generation !== reviewGeneration || record !== selected) return;
+    const heading = reviewBody?.querySelector<HTMLElement>(`[data-completion-section="${target}"]`);
+    heading?.focus();
+  }
 
   async function checkOriginals() {
     if (busy || !visible || !expanded) return;
@@ -83,6 +101,27 @@
   />
 {/snippet}
 
+{#snippet nextAction(action: (typeof nextReviews.actions)[number])}
+  <li>
+    <button class="btn small" type="button" onclick={() => void openReview(action.id)}>{action.label}</button>
+    <p>{action.reason}</p>
+    <details><summary>What this review can tell you</summary>
+      <p>{action.expectedOutcome}</p><p>{action.prerequisite}</p><p>{action.limitation}</p>
+    </details>
+  </li>
+{/snippet}
+
+<section class="next-reviews" aria-label="Next reviews before pausing or closing this Case">
+  <h3>Before pausing or closing this Case</h3>
+  {#if nextReviews.actions.length}
+    <p>Start with these saved-record reviews. Opening a review does not collect data, read file bodies or change the Case.</p>
+    <ol>{#each nextReviews.actions as action (action.id)}{@render nextAction(action)}{/each}</ol>
+    {#if nextReviews.further.length}<details><summary>More completion reviews · {nextReviews.further.length}</summary>
+      <ol start={nextReviews.actions.length + 1}>{#each nextReviews.further as action (action.id)}{@render nextAction(action)}{/each}</ol>
+    </details>{/if}
+  {:else}<p>No matching completion items are recorded. This is not confirmation that the investigation is complete or ready to close.</p>{/if}
+</section>
+
 <details
   class="completion-review"
   bind:open={expanded}
@@ -92,13 +131,13 @@
 >
   <summary>Case completion review</summary>
   {#if expanded}
-    <div class="review-body" role="region" aria-label="Case completion review">
+    <div bind:this={reviewBody} class="review-body" role="region" aria-label="Case completion review">
       <p
         >Review what remains before pausing or closing this Case. This summary does not change its
         status or replace your closure decision.</p
       >
       <section aria-label="Open incident objects">
-        <h4>Open incident objects · {review.openObjects.length}</h4>
+        <h4 tabindex="-1" data-completion-section="objects">Open incident objects · {review.openObjects.length}</h4>
         {#if review.openObjects.length}<ul
             >{#each visibleRows(review.openObjects, 'objects') as row (JSON.stringify(row.object))}<li
                 ><code>{row.object.identifier}</code><small
@@ -129,7 +168,7 @@
         >
       </section>
       <section aria-label="Contrary or unresolved evidence">
-        <h4>Contrary or unresolved evidence · {review.opposingClaims.length} assessment{review.opposingClaims.length === 1 ? '' : 's'}</h4>
+        <h4 tabindex="-1" data-completion-section="claims">Contrary or unresolved evidence · {review.opposingClaims.length} assessment{review.opposingClaims.length === 1 ? '' : 's'}</h4>
         {#if review.opposingClaims.length}<ul
             >{#each visibleRows(review.opposingClaims, 'claims') as claim (claim.assertion.id)}<li
                 ><strong>{claim.assertion.statement}</strong><ul
@@ -145,8 +184,17 @@
           >Review assessments</button
         >
       </section>
+      <section aria-label="Incomplete or undated observations">
+        <h4 tabindex="-1" data-completion-section="gaps">Incomplete or undated observations · {review.evidenceGaps.length}</h4>
+        {#if review.evidenceGaps.length}<ul>{#each visibleRows(review.evidenceGaps, 'gaps') as pin (pin.id)}<li>
+          <strong>{pin.label}</strong><small>{pin.source} · {caseRecheckEvidence(pin).completeness} · {evidenceTime(pin.observedAt)?.readable ?? 'Observation time unavailable'}{#if pin.truncated} · truncated{/if}</small>
+          {#if pin.limitations.length}<p>{pin.limitations.join(' ')}</p>{/if}
+        </li>{/each}</ul>{@render pagination(review.evidenceGaps.length, 'gaps', 'Observation gap pages')}
+        {:else}<p>No retained pin matches this incomplete-or-undated check. Uncollected evidence remains unknown.</p>{/if}
+        <button class="btn small" type="button" onclick={() => void selectSection('evidence')}>Review retained observations</button>
+      </section>
       <section aria-label="Referenced original files">
-        <h4>Referenced files · {record.attachments?.length ?? 0}</h4>
+        <h4 tabindex="-1" data-completion-section="files">Referenced files · {record.attachments?.length ?? 0}</h4>
         <p
           >References alone do not confirm that original or derived files are available. Check the
           current workspace's bytes explicitly.</p
@@ -194,7 +242,7 @@
         >
       </section>
       <section aria-label="Remaining follow-up commitments">
-        <h4>Follow-up commitments</h4>
+        <h4 tabindex="-1" data-completion-section="reviews">Follow-up commitments</h4>
         {#if review.reviews.length}<ul
             >{#each visibleRows(review.reviews, 'reviews') as item (item.id)}<li
                 ><strong
@@ -217,8 +265,8 @@
             'reviews',
             'Follow-up commitment pages',
           )}{:else}<p>No dated review commitment is retained.</p>{/if}
-        {#if review.requests.length}<details
-            ><summary>Undelivered evidence requests · {review.requests.length}</summary><ul
+        {#if review.requests.length}<details bind:open={requestsExpanded}
+            ><summary data-completion-section="requests">Undelivered evidence requests · {review.requests.length}</summary><ul
               >{#each visibleRows(review.requests, 'requests') as item (JSON.stringify([item.actionId, item.eventId]))}<li
                   ><strong>{item.label}</strong> · {item.recipient}<p>{item.request.summary}</p
                   ><small
@@ -251,6 +299,11 @@
   .completion-review {
     border-block: 1px solid var(--border);
   }
+  .next-reviews { padding-bottom: 14px; }
+  .next-reviews h3 { margin: 0; font-size: var(--text-sm); }
+  .next-reviews ol { display: grid; gap: 12px; margin: 0; padding-left: 20px; }
+  .next-reviews li { display: grid; gap: 4px; }
+  [data-completion-section]:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
   summary {
     min-height: 44px;
     padding-block: 10px;

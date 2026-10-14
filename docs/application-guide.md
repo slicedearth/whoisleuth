@@ -904,9 +904,15 @@ exports retain its revision origin, including after later explicit edits.
 The Summary's decision overview keeps the latest analyst conclusion, supporting
 and contrary observations, incomplete evidence and next scheduled review together.
 Evidence added later prompts another review; it does not change the conclusion.
-**Case completion review** in Summary brings together analyst-open incident
+**Before pausing or closing this Case** in Summary shows up to three next reviews
+derived from the selected Case, with the remaining reviews available in a
+disclosure. Each opens its exact section in the full checklist; opening it does
+not collect data, check file bodies or change a decision. The explanations describe
+what the review can establish and what it needs. Suggestions are not closure readiness.
+**Case completion review** brings together analyst-open incident
 objects, contrary or unresolved assessment links, and retained follow-up
-commitments. Domain and historical scopes without a current incident-link state
+commitments, including undelivered requests and incomplete or undated observations.
+Domain and historical scopes without a current incident-link state
 stay separate. This advisory review neither closes the Case nor adds a required
 step. **Check referenced files** deliberately reads the current workspace's
 original and derived files in bounded groups: missing bytes and unreadable storage
