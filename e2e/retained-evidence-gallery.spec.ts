@@ -6,7 +6,7 @@ import { openRetainedFiles, storedFiles } from './case-attachment-fixtures';
 import { sourceImage } from './case-image-fixtures';
 import { createCase as caseRecord } from '../packages/cases/case-record-operations.mts';
 import { readCaseAttachment } from '../packages/cases/case-attachment-model.mts';
-import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
+import { currentBrowserLocalDocument, expectFocusedResultsVisible, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 
@@ -194,14 +194,23 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   await expect(gallery.getByRole('alert')).toContainText('original bytes are missing');
   await expect(gallery.getByRole('link', { name: 'Candidate Case files', exact: true })).toHaveAttribute('href', `/cases?case=${encodeURIComponent(missing.id)}&section=evidence`);
   await expect(gallery.getByRole('link', { name: 'Reference Case files', exact: true })).toHaveAttribute('href', /^\/cases\?case=.+&section=evidence$/u);
-  if (captureVisualEvidenceEnabled()) {
-    for (const theme of ['light', 'dark'] as const) {
-      await useTheme(page, theme);
-      for (const width of [320, 1280]) {
-        await page.setViewportSize({ width, height: 844 });
-        await gallery.getByRole('region', { name: 'Selected comparison files', exact: true }).screenshot({ path: testInfo.outputPath(`gallery-recovery-${theme}-${width}.png`) });
-      }
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    const shelf = gallery.getByRole('region', { name: 'Selected comparison files', exact: true });
+    for (const control of [
+      shelf.getByRole('combobox', { name: 'Reference file', exact: true }),
+      shelf.getByRole('combobox', { name: 'Candidate file', exact: true }),
+      shelf.getByRole('button', { name: 'Clear reference', exact: true }),
+      shelf.getByRole('button', { name: 'Clear candidate', exact: true }),
+      compare, shelf.getByRole('button', { name: 'Swap reference and candidate', exact: true }),
+      shelf.getByRole('link', { name: 'Reference Case files', exact: true }),
+      shelf.getByRole('link', { name: 'Candidate Case files', exact: true }),
+    ]) {
+      await control.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+      await expectFocusedResultsVisible(page, control, control);
     }
+    await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await shelf.screenshot({ path: testInfo.outputPath(`gallery-recovery-${theme}-${width}.png`) });
   }
   await gallery.getByRole('link', { name: 'Candidate Case files', exact: true }).focus();
   await expect(gallery.getByRole('link', { name: 'Candidate Case files', exact: true })).toBeFocused();
