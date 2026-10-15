@@ -144,11 +144,13 @@ export function createCaseDraftRecovery(options: Readonly<{
     if (state.busy || submitting || state.status === 'unknown') return;
     options.onInvalidate?.();
     const revision = editRevision;
+    let discarded = false;
     clearTimeout(timer); emit({ busy: true });
     try {
       if (writing) await writing;
       const receipt = candidate ?? identity;
       if (receipt) await options.storage.update(store => removeCaseDraft(store, receipt, options.caseId));
+      discarded = true;
       if (!candidate) {
         identity = null; storedRevision = revision;
         if (editRevision === revision) {
@@ -160,7 +162,12 @@ export function createCaseDraftRecovery(options: Readonly<{
       if (failedLocalMutationOutcome(cause) === 'unknown') failure(cause);
       else emit({ status: 'error', message: 'The draft could not be discarded, or changed in another tab. It has not been replaced.' });
     }
-    finally { emit({ busy: false }); if (editRevision !== revision) resumePending(); }
+    finally {
+      emit({ busy: false });
+      // Removing another saved copy does not discard this form's pending edit.
+      // Resume only a confirmed removal or a later edit, never retry a failed write.
+      if ((candidate && discarded) || editRevision !== revision) resumePending();
+    }
   }
 
   async function leaveForm(): Promise<boolean> {

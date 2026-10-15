@@ -276,6 +276,38 @@ describe('bounded Case recovery drafts', () => {
     assert.equal(h.store.records.length, 1); assert.notEqual(h.store.records[0]?.id, oldId);
     assert.deepEqual(h.store.records[0]?.fields, h.fields); h.controller.destroy();
   });
+  test('discarding another recovery candidate resumes the current pending autosave', async context => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const h = harness(); const original = draft();
+    context.after(() => h.controller.destroy());
+    h.store = { ...h.store, records: [original] };
+    await h.controller.refresh();
+    h.fields = { summary: 'Keep this current form' }; h.controller.changed();
+    await h.controller.discard(original);
+    context.mock.timers.tick(1000);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(h.store.records.some(item => item.id === original.id), false);
+    assert.equal(h.store.records.length, 1);
+    assert.deepEqual(h.store.records[0]?.fields, h.fields);
+    assert.equal(h.state?.status, 'saved'); assert.equal(h.unprotected, false);
+    assert.equal(h.writes, 2);
+  });
+  for (const outcome of ['failed', 'unknown'] as const) test(`${outcome} candidate discard does not automatically repeat a write`, async context => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const h = harness(); const original = draft();
+    context.after(() => h.controller.destroy());
+    h.store = { ...h.store, records: [original] };
+    h.fields = { summary: 'Keep the unsaved form' }; h.controller.changed();
+    if (outcome === 'failed') h.failWrite = true;
+    else h.unknownWrite = 'before';
+    await h.controller.discard(original);
+    context.mock.timers.tick(1000);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.deepEqual(h.store.records, [original]);
+    assert.deepEqual(h.fields, { summary: 'Keep the unsaved form' });
+    assert.equal(h.state?.status, outcome === 'failed' ? 'error' : 'unknown');
+    assert.equal(h.unprotected, true); assert.equal(h.writes, 1);
+  });
   test('a new edit during target selection prevents the selection from clearing it', async () => {
     const h = harness(); h.fields = { summary: 'Previous target' }; h.controller.changed();
     const held = gate(); h.readHold = held; const changing = h.controller.leaveForm();
