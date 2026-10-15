@@ -120,6 +120,7 @@
       </div>
     </header>
     <p>{description}</p>
+    {#if graph.layout === 'grouped' && layout === 'force'}<p>Facts are grouped to keep the labels readable.</p>{/if}
     {#if graph.clusters.length}
       <ul class="cluster-legend" aria-label="Evidence groups">
         {#each graph.clusters as cluster (cluster.id)}
