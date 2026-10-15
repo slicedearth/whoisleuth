@@ -280,9 +280,9 @@ test('optional retained topology preserves full source list, long identity pivot
   await expect(sourceList.getByRole('link')).toHaveCount(3);
   await relationships.getByRole('searchbox', { name: 'Search complete retained topology', exact: true }).fill('');
   const initialFocus = relationships.getByRole('combobox', { name: 'Focus diagram identity', exact: true });
-  const campaignOption = (await initialFocus.locator('option').allTextContents()).find(value => value.includes('topology-campaign · campaign'));
-  expect(campaignOption).toBeDefined();
-  await initialFocus.selectOption({ label: campaignOption! });
+  const campaignOption = initialFocus.locator('option').filter({ hasText: /^\[\d+\] topology-campaign · campaign$/u });
+  await expect(campaignOption).toHaveCount(1);
+  await initialFocus.selectOption({ label: (await campaignOption.textContent())! });
   await relationships.getByRole('button', { name: 'Show exact source rows for topology-campaign', exact: true }).click();
   await expect(sourceList.locator('li.highlighted')).toHaveCount(1);
   await expect(sourceList.locator('li.highlighted')).toBeFocused();
