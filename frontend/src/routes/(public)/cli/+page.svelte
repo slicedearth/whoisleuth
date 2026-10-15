@@ -69,7 +69,7 @@
   {/snippet}
 
 <section class="cli-section" id="start" aria-labelledby="start-title">
-  <div class="section-intro"><h2 id="start-title">Run the CLI locally</h2><p>Node.js 24 or later. Choosing between the browser and terminal? <a href="#choose-mode">Compare ways to run WHOISleuth</a>.</p></div>
+  <div class="section-intro"><h2 id="start-title">Run the CLI locally</h2><p>Node.js 24 or later.</p></div>
   <ol class="start-steps">
     <li>
       <span>1</span><div><h3>Run help without installing</h3><CopyableCommand command={PUBLIC_CLI_GUIDANCE.runOnce[0]} label="run-once help command" /></div>
@@ -81,6 +81,7 @@
       <span>3</span><div><h3>Inspect a request before running it</h3><p>Show planned sources and limits without starting collection.</p><CopyableCommand command={PUBLIC_CLI_GUIDANCE.runOnce[1]} label="lookup plan command" /></div>
     </li>
   </ol>
+  <p>Choosing between the browser and terminal? <a href="#choose-mode">Compare ways to run WHOISleuth</a>.</p>
   <div class="start-notes independent-grid">
     <p>Use <code>whoisleuth &lt;command&gt; --help</code> for the exact options installed on your machine.</p>
     <details class="update-instructions compact-disclosure"><summary>Update an installed package</summary><div>{#each PUBLIC_CLI_GUIDANCE.update as command}<CopyableCommand {command} label="update command" compact />{/each}</div></details>
