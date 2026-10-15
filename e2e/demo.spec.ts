@@ -757,6 +757,17 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
   }
   await page.getByRole('button', { name: 'Inspect suspicious domain' }).click();
   await expect(page.getByRole('heading', { name: 'exampleshop-login.example', exact: true })).toBeFocused();
+  const tools = page.getByRole('navigation', { name: 'Synthetic tool substeps', exact: true });
+  await expect(tools.getByRole('button')).toHaveCount(6);
+  for (const name of ['Brands', 'Discover', 'Bulk']) {
+    await expect(tools.getByRole('button', { name: `${name} Available`, exact: true })).toBeEnabled();
+  }
+  await expect(tools.getByRole('button', { name: 'Lookup Current', exact: true })).toHaveAttribute('aria-current', 'step');
+  await expect(tools).not.toContainText('Completed');
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'exampleshop-login.example', exact: true })).toBeVisible();
+  await expect(tools.getByRole('button', { name: 'Brands Available', exact: true })).toBeEnabled();
+  await expect(tools).not.toContainText('Completed');
   await expect(page.getByRole('button', { name: 'Open synthetic Case' })).toBeVisible();
   await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   const evidence = page.getByRole('region', { name: 'Where this result came from', exact: true });
@@ -799,6 +810,9 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
   await expect(decorative).toHaveCount(0);
   await page.getByRole('button', { name: 'Compare a reported change' }).click();
   await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeFocused();
+  await expect(tools.getByRole('button', { name: 'Lookup Available', exact: true })).toBeEnabled();
+  await expect(tools.getByRole('button', { name: 'Cases Current', exact: true })).toHaveAttribute('aria-current', 'step');
+  await expect(tools).not.toContainText('Completed');
   await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
   await expect(page.getByRole('heading', { name: 'Repeated evidence and material changes stay distinct' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Export synthetic case report' })).toBeVisible();

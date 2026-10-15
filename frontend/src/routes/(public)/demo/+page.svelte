@@ -235,17 +235,8 @@
       ||(target==='lookup'&&Boolean(demoState.selectedCandidateId))
       ||(target==='monitor'&&demoState.caseReady);
   }
-  function complete(target:View){
-    if(target==='dashboard')return demoState.started;
-    if(target==='brands')return demoState.profileReady;
-    if(target==='discover')return demoState.candidatesReady;
-    if(target==='bulk')return Boolean(demoState.selectedCandidateId);
-    if(target==='lookup')return demoState.caseReady;
-    return demoState.followUpReady;
-  }
   function stageStatus(target:View){
     if(view===target)return 'Current';
-    if(complete(target))return 'Completed';
     if(available(target))return 'Available';
     return 'Upcoming';
   }
@@ -377,12 +368,11 @@
       disabled={!available(item.id as View)||stageTransitioning}
       aria-current={view===item.id?'step':undefined}
       class:active={view===item.id}
-      class:complete={complete(item.id as View)}
       onpointerenter={()=>void ensureStage(item.id as View)}
       onfocus={()=>void ensureStage(item.id as View)}
       onclick={()=>void goToStage(item.id as View)}
     >
-      <span class="stage-number" aria-hidden="true">{complete(item.id as View)&&view!==item.id?'✓':String(index+1).padStart(2,'0')}</span>
+      <span class="stage-number" aria-hidden="true">{String(index+1).padStart(2,'0')}</span>
       <span class="stage-copy"><strong>{stageName(item.label)}</strong><small>{stageStatus(item.id as View)}</small></span>
     </button>
   {/each}
@@ -634,7 +624,7 @@
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
   .demo-actions button,.candidate button,.case-actions button,.filter-bar button,.lookup-handoff button,.profile-handoff button{padding:9px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);font:700 var(--text-xs) var(--mono)}
   .demo-hero{max-width:900px}.demo-hero h1{margin:.25rem 0;font:700 clamp(1.9rem,4.4vw,3.1rem) var(--mono);letter-spacing:-.05em}.hero-compact-title{display:none}.demo-hero>p:not(.eyebrow){max-width:78ch;color:var(--muted);line-height:1.6}.synthetic-flag{display:inline-block;margin-top:9px;padding:7px 10px;border:1px solid var(--amber);border-radius:999px;color:var(--amber);font:700 var(--text-2xs) var(--mono)}
-  .demo-steps{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;margin:30px 0 8px;padding:5px}.demo-steps button{position:relative;display:grid;grid-template-columns:24px minmax(0,1fr);min-width:0;min-height:52px;align-items:center;gap:7px;padding:7px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);text-align:left}.demo-steps button:not(:last-child)::after{content:"";position:absolute;right:-4px;width:5px;height:1px;background:var(--border)}.demo-steps button.active{border-color:var(--accent);background:rgb(var(--accent-rgb) / .08);color:var(--text);box-shadow:inset 0 -2px var(--accent)}.demo-steps button.complete:not(.active){color:var(--text)}.stage-number{display:grid;width:23px;height:23px;place-items:center;border:1px solid var(--border);border-radius:50%;font:700 .56rem var(--mono)}.complete .stage-number{border-color:var(--accent2);background:rgb(var(--accent2-rgb) / .09);color:var(--accent2)}.active .stage-number{border-color:var(--accent);color:var(--accent)}.stage-copy{min-width:0}.stage-copy strong,.stage-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.stage-copy strong{font:700 var(--text-2xs) var(--mono)}.stage-copy small{margin-top:3px;color:var(--muted);font-size:.54rem}.complete .stage-copy small{color:var(--accent2)}.active .stage-copy small{color:var(--accent)}
+  .demo-steps{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;margin:30px 0 8px;padding:5px}.demo-steps button{position:relative;display:grid;grid-template-columns:24px minmax(0,1fr);min-width:0;min-height:52px;align-items:center;gap:7px;padding:7px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);text-align:left}.demo-steps button:not(:last-child)::after{content:"";position:absolute;right:-4px;width:5px;height:1px;background:var(--border)}.demo-steps button.active{border-color:var(--accent);background:rgb(var(--accent-rgb) / .08);color:var(--text);box-shadow:inset 0 -2px var(--accent)}.stage-number{display:grid;width:23px;height:23px;place-items:center;border:1px solid var(--border);border-radius:50%;font:700 .56rem var(--mono)}.active .stage-number{border-color:var(--accent);color:var(--accent)}.stage-copy{min-width:0}.stage-copy strong,.stage-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.stage-copy strong{font:700 var(--text-2xs) var(--mono)}.stage-copy small{margin-top:3px;color:var(--muted);font-size:.54rem}.active .stage-copy small{color:var(--accent)}
   .demo-steps button:disabled{opacity:1;color:color-mix(in srgb,var(--muted) 82%,var(--text));background:color-mix(in srgb,var(--panel-raised) 55%,transparent)}.demo-steps button:disabled .stage-number{border-color:color-mix(in srgb,var(--muted) 72%,var(--border))}.demo-steps button:disabled .stage-copy small{color:color-mix(in srgb,var(--muted) 90%,var(--text))}
   .demo-stage-summary{display:flex;min-width:0;align-items:baseline;gap:10px;margin:0 0 12px;padding:8px 10px;border-left:2px solid var(--accent);color:var(--muted);font-size:var(--text-xs);line-height:1.5}.demo-stage-summary strong{flex:0 0 auto;color:var(--accent);font:700 var(--text-2xs) var(--mono)}
   .demo-actions{display:flex;min-height:40px;align-items:center;gap:14px;margin-bottom:18px}.demo-actions span{color:var(--muted);font-size:var(--text-xs)}
