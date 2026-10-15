@@ -866,10 +866,11 @@ Different exports have different sensitivity:
 
 - a full saved Lookup can contain targets, bounded source endpoints and timings,
   raw RDAP publications, WHOIS response bodies and publicly published contacts;
-- current Lookup evidence schema 30 excludes raw registration payloads,
+- current Lookup evidence schema 31 excludes raw registration payloads,
   expanded contacts, credentials and complete query-bearing URLs. Published v2
-  schemas 27–29 and exact v1 schema 26 remain readable; schema 26 may contain public
-  contact fields;
+  schemas 27–30 and exact v1 schema 26 remain readable; schema 26 may contain public
+  contact fields. Schema 31 retains the bounded WHOIS registration classification,
+  not the underlying raw response or contacts;
 - Case, workspace, Case-pack, graph, campaign and response files can identify
   investigated targets or contain analyst-authored material; and
 - selected Case follow-up calendars identify only the stable Case reference by

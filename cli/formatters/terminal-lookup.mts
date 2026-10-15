@@ -1,4 +1,5 @@
 import { registryAccessProfileLabel } from '../registry-access.mts';
+import { isSupportedRegistryInsightsVersion } from '../../packages/contracts/registry-insights.mts';
 import { dnsAddressFamilyEvidence } from '../../packages/evidence/dns-query-outcome.mts';
 import { lookupCollectionReceiptReview } from '../../packages/evidence/lookup-collection-review.mts';
 import { appendTechnologyLines } from './terminal-technology.mts';
@@ -274,7 +275,7 @@ function formatTerminalLookup(
     appendNetworkRegistrationLines(registrationLines, terminalRecord(rdap.parsed), document.type, detail);
   }
   const registryInsights = terminalRecord(document.registryInsights);
-  if (detail !== 'summary' && registryInsights.version === 1) {
+  if (detail !== 'summary' && isSupportedRegistryInsightsVersion(registryInsights.version)) {
     const lifecycle = terminalRecord(registryInsights.lifecycle);
     const disclosure = terminalRecord(registryInsights.contactDisclosure);
     const registryDisclosure = terminalRecord(disclosure.registryRdap);

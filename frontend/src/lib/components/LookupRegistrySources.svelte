@@ -11,6 +11,7 @@
   import { buildRdapReverseSearchPreviews } from '#lib/analysis/rdap-reverse-search-preview.ts';
   import { boundedTechnologyText } from '#lib/analysis/lookup-display-shared.ts';
   import { registrarStandingOfficialSourceUrl } from '../../../../lib/registrar-standing-catalogue-contract.mts';
+  import { isSupportedRegistryInsightsVersion } from '../../../../packages/contracts/registry-insights.mts';
 
   type JsonRecord = Record<string, unknown>;
   type DisplayRow = { label: string; value: string; datetime?: string };
@@ -428,7 +429,7 @@
   </section>
 {/if}
 
-{#if insights.version === 1}
+{#if isSupportedRegistryInsightsVersion(insights.version)}
   <details class="registry-insights evidence-card card" aria-labelledby="registry-interpretation-title">
     <summary class="evidence-summary">
       <span class="evidence-summary-row">

@@ -3,8 +3,48 @@ import { describe, test } from 'node:test';
 
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { parseRdap } from '../lib/rdap.mts';
+import { isSupportedRegistryInsightsVersion } from '../packages/contracts/registry-insights.mts';
 
 describe('registry insight interpretation', () => {
+  test('requires positive WHOIS authority before interpreting lifecycle or absent locks', () => {
+    for (const registrationStatus of ['not_found', 'inconclusive', undefined, 'unexpected']) {
+      const result = buildRegistryInsights({
+        rdapStatus: 'error', whoisStatus: 'complete',
+        whoisParsed: { registrationStatus, chainStatus: 'complete', statuses: ['pendingDelete'] },
+      });
+      assert.equal(result.version, 2);
+      assert.equal(result.publications[1]?.state, 'complete', 'collection completion remains separate');
+      assert.equal(result.lifecycle.stage, 'unknown');
+      assert.equal(result.lifecycle.pendingDelete, null);
+      assert.deepEqual(result.lifecycle.hold, { client: null, server: null });
+      assert.deepEqual(result.lifecycle.locks, { client: null, server: null, clientStatuses: [], serverStatuses: [] });
+    }
+    for (const whoisStatus of ['complete', 'partial']) {
+      const result = buildRegistryInsights({ whoisStatus,
+        whoisParsed: { registrationStatus: 'registered', statuses: ['clientHold'] },
+      });
+      assert.equal(result.lifecycle.stage, 'hold');
+      assert.equal(result.lifecycle.hold.client, true);
+      assert.equal(result.lifecycle.hold.server, whoisStatus === 'complete' ? false : null);
+    }
+    const rdap = buildRegistryInsights({ rdapStatus: 'success', rdapParsed: { statuses: ['pendingTransfer'] },
+      whoisStatus: 'complete', whoisParsed: { registrationStatus: 'not_found', statuses: [] },
+    });
+    assert.equal(rdap.lifecycle.stage, 'pending_transfer', 'negative WHOIS cannot erase positive registry evidence');
+  });
+
+  test('retains historical derivation explicitly and rejects unknown insight versions', () => {
+    const input = { whoisStatus: 'complete', whoisParsed: { registrationStatus: 'not_found', statuses: [] } };
+    const historical = buildRegistryInsights(input, { version: 1 });
+    assert.equal(historical.version, 1);
+    assert.equal(historical.lifecycle.stage, 'registered');
+    assert.equal(historical.lifecycle.locks.client, false);
+    assert.equal(buildRegistryInsights(input).lifecycle.stage, 'unknown');
+    for (const value of [1, 2]) assert.equal(isSupportedRegistryInsightsVersion(value), true);
+    for (const value of [undefined, null, 0, 3, '2']) assert.equal(isSupportedRegistryInsightsVersion(value), false);
+    assert.throws(() => buildRegistryInsights(input, { version: 3 as 2 }), /Unsupported registry insight version/u);
+  });
+
   test('uses the full admitted status inventory independently of ordering, duplicates and display caps', () => {
     for (const status of [
       [...Array.from({ length: 80 }, () => 'active'), 'pending delete'],

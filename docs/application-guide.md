@@ -1679,7 +1679,7 @@ Exports are deliberate local actions. Review them before sharing:
 - a full saved Lookup can include target, endpoints, raw RDAP publications,
   WHOIS bodies and publicly published contact data;
 - normalised Lookup evidence excludes raw registration payloads and expanded
-  contacts. Current schema 29 and published v2 schemas 27 and 28 retain that boundary;
+  contacts. Current schema 31 and supported schemas 27–30 retain that boundary;
   exact v1 schema 26 can contain public contact fields;
 - Case, workspace and all Case-pack audiences can identify investigated
   hostnames and contain analyst records. Public packs retain Case, pin and
@@ -1753,8 +1753,11 @@ are true or current.
 - For a browser workspace, run `verify-artifact workspace.json --json` and
   `interchange-report workspace.json --json` before using the Dashboard import
   preview.
-- For a CLI Lookup, save `lookup.json`, verify it, then use **Replay exported
-  evidence** in browser Lookup before retaining anything in a Case.
+- For a CLI Lookup, retain and verify the private `lookup.json` original, run
+  `whoisleuth export lookup.json --output evidence.json`, then verify the separate
+  `evidence.json` file. Select that evidence export in **Replay exported evidence**
+  in browser Lookup before retaining anything in a Case. The private saved Lookup
+  and the privacy-minimised evidence export are different formats.
 - For a Case handoff, choose the audience explicitly, run `sharing-review` on
   the separate package and review its redaction manifest before sharing it.
 

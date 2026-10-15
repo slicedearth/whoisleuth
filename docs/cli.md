@@ -82,11 +82,16 @@ private document from the interactive view:
 
 ```bash
 whoisleuth lookup example.test --deep --browse --save-lookup lookup.json
+whoisleuth verify-artifact lookup.json --json
+whoisleuth export lookup.json --output evidence.json
+whoisleuth verify-artifact evidence.json --json
 ```
 
-In Console Lookup, open **Replay exported evidence**, select the file, verify
-its digest and source states, then create or update a browser-local Case. The
-file is not uploaded. Case classification, exact incident links and response
+Keep `lookup.json` as the private CLI original. In Console Lookup, open **Replay
+exported evidence**, select `evidence.json`, check its digest and source states,
+then create or update a browser-local Case. The private CLI document is not a
+browser replay format; the separate evidence export excludes raw registration
+payloads and expanded contacts. Neither file is uploaded. Case classification, exact incident links and response
 actions remain deliberate analyst steps. Ordinary Case files also support the
 offline CLI workflow below.
 When several incident Cases share a domain, select the intended Case before

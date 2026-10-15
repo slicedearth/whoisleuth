@@ -173,9 +173,11 @@ export const PUBLIC_CLI_GUIDANCE = {
       "label": "Continue a CLI Lookup in the browser",
       "commands": [
         "whoisleuth lookup example.test --deep --browse --save-lookup lookup.json",
-        "whoisleuth verify-artifact lookup.json --json"
+        "whoisleuth verify-artifact lookup.json --json",
+        "whoisleuth export lookup.json --output evidence.json",
+        "whoisleuth verify-artifact evidence.json --json"
       ],
-      "result": "Replay the saved file from Console Lookup, inspect its source states and then choose whether to retain it in a Case."
+      "result": "Keep lookup.json as the private CLI original. Replay evidence.json from Console Lookup, inspect its source states and then choose whether to retain it in a Case."
     },
     {
       "id": "case-handoff",

@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { networkFeaturePolicy } from '../lib/feature-policy.mts';
 import { runUnifiedLookup } from '../lib/lookup.mts';
+import { buildLookupEvidence } from '../lib/evidence-export.mts';
+import { buildLookupEvidenceReport } from '../lib/evidence-report.mts';
+import { formatTerminalLookup } from '../cli/formatters/terminal-lookup.mts';
 import { REGISTRAR_STANDING_CATALOGUE } from '../lib/generated/registrar-standing-catalogue.mts';
 import { REGISTRAR_STANDING_MAX_AGE_DAYS } from '../lib/registrar-standing-catalogue-contract.mts';
 import { createLookupHttpResponse, parseLookupHttpResponse } from '../lib/lookup-response-contract.mts';
@@ -376,6 +379,16 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.diagnostics.rdap.status, 'error');
     assert.equal(result.diagnostics.rdap.errorCode, 'RDAP_UPSTREAM_FAILED');
     assert.equal(result.diagnostics.whois.status, 'complete');
+    for (const insights of [result.registryInsights, buildLookupEvidence(result).analysis.registryInsights]) {
+      const lifecycle = recordValue(requiredValue(insights).lifecycle);
+      assert.equal(lifecycle.stage, 'unknown');
+      assert.equal(lifecycle.pendingDelete, null);
+      assert.deepEqual(lifecycle.hold, { client: null, server: null });
+      assert.deepEqual(lifecycle.locks, { client: null, server: null, clientStatuses: [], serverStatuses: [] });
+    }
+    assert.match(formatTerminalLookup(result), /Lifecycle\s+Lifecycle unavailable/iu);
+    const report = buildLookupEvidenceReport(buildLookupEvidence(result));
+    assert.match(report.registryInterpretation.find(item => item.label === 'Lifecycle')?.value ?? '', /^Lifecycle unavailable$/iu);
   });
 
   test('bounds source failure detail before returning a browser-valid response', async () => {

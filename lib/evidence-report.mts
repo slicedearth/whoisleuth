@@ -1,4 +1,5 @@
 import { registryAccessProfileLabel } from './registry-access.mts';
+import { isSupportedRegistryInsightsVersion } from '../packages/contracts/registry-insights.mts';
 import { dnsAddressFamilyEvidence } from '../packages/evidence/dns-query-outcome.mts';
 import {
   buildPortableGeneratorMetadata,
@@ -433,7 +434,7 @@ function buildLookupEvidenceReport(
       reportField('Standing limitations', listText(registrarStanding.limitations)),
       reportField('Review steps', listText(registrarStanding.nextActions)),
     ] : [],
-    registryInterpretation: registryInsights.version === 1 ? [
+    registryInterpretation: isSupportedRegistryInsightsVersion(registryInsights.version) ? [
       reportField('Lifecycle', displayLabel(registryLifecycle.label)),
       reportField('Raw lifecycle statuses', listText(registryLifecycle.rawStatuses)),
       reportField('Client registration lock observed', yesNoUnknown(registryLocks.client)),

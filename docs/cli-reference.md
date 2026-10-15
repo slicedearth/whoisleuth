@@ -143,18 +143,23 @@ Readers accept only their declared public and current versions. Unknown,
 unreleased historical and future schemas fail before partial interpretation;
 an invalid import is not treated as an empty document.
 
-`inspect-archive` reads current workspace archive v9 and exact versions 5–8. It
+`inspect-archive` reads current workspace archive v10 and exact versions 5–9. It
 reports section metadata and digest-only search results unless `--reveal` is
 explicitly selected. It never searches notes, contacts or arbitrary raw fields.
 
 `export` reads supported saved Lookup versions 1–3 and writes current Lookup
-evidence schema 30. Published v2 schemas 27–29 and exact v1 schema 26 remain
-readable. Versions 27–30 exclude raw registration payloads, expanded
+evidence schema 31. Supported schemas 27–30 and exact v1 schema 26 remain
+readable. Versions 27–31 exclude raw registration payloads, expanded
 contacts, credentials, complete query-bearing URLs and provider payloads;
-schemas 28 and 29 also retain the bounded registrar-standing projection.
+Schemas 28 and later also retain the bounded registrar-standing projection.
 Schema 29 identifies the hostname used for DNS, TLS and web observations,
 separately from the registrable domain used by registration sources. Older
 evidence retains its original collection scope.
+Schema 31 retains WHOIS registration classification separately from collection
+completion. Lifecycle interpretation requires positive registration evidence;
+a completed negative or inconclusive WHOIS reply does not establish registration
+or absence of locks. Earlier exports retain their exact original interpretation
+for historical verification and are not silently relabelled.
 
 Saved Lookup version 3 can retain a bounded collection receipt: original
 optional selections, admitted source families, collector starts, outcomes and

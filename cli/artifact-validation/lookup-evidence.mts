@@ -5,6 +5,7 @@ import {
   assertLookupEvidencePortableTree,
   LOOKUP_EVIDENCE_SCHEMA,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  lookupEvidenceRegistryInsightsVersion,
   HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   REGISTRAR_STANDING_LOOKUP_EVIDENCE_SCHEMA_VERSION,
@@ -358,7 +359,7 @@ function validateLookupEvidenceWhois(value: unknown, version: number): string {
   optionalText(complete.conflictingHop, 'Lookup evidence WHOIS conflicting hop', 253);
   nullableRecord(complete.parsed, 'Lookup evidence WHOIS parsed data');
   if (version >= PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION
-    && !isDeepStrictEqual(complete.parsed, projectLookupEvidenceWhoisPublication(complete.parsed))) {
+    && !isDeepStrictEqual(complete.parsed, projectLookupEvidenceWhoisPublication(complete.parsed, version))) {
     fail('Lookup evidence WHOIS portable publication');
   }
   array(complete.chain, 'Lookup evidence WHOIS chain', 16).forEach((item, index) => {
@@ -704,7 +705,10 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
       whoisParsed,
       whoisStatus: whoisDiagnosticStatus,
       whoisQueriedAt: whois.queriedAt,
-    }, { rdapCapabilityCatalogReviewedAt: catalogReviewedAt });
+    }, {
+      rdapCapabilityCatalogReviewedAt: catalogReviewedAt,
+      version: lookupEvidenceRegistryInsightsVersion(version),
+    });
     const expectedInsights = version >= PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION
       ? projectLookupEvidenceRegistryInsights(rebuiltInsights)
       : rebuiltInsights;

@@ -6,6 +6,7 @@ import {
   LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES,
   LOOKUP_EVIDENCE_SCHEMA,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  lookupEvidenceRegistryInsightsVersion,
   HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   REGISTRAR_STANDING_LOOKUP_EVIDENCE_SCHEMA_VERSION,
@@ -136,11 +137,11 @@ function validateCurrentPrivacyBoundary(
 ): void {
   try {
     if (!sameJsonValue(rdap, projectLookupEvidenceRdapSourcePublication(rdap))
-      || !sameJsonValue(whois, projectLookupEvidenceWhoisSourcePublication(whois))
+      || !sameJsonValue(whois, projectLookupEvidenceWhoisSourcePublication(whois, schemaVersion))
       || (rdap.status !== 'error'
         && !sameJsonValue(rdap.parsed, projectLookupEvidenceRdapPublication(rdap.parsed)))
       || (whois.status !== 'error'
-        && !sameJsonValue(whois.parsed, projectLookupEvidenceWhoisPublication(whois.parsed)))
+        && !sameJsonValue(whois.parsed, projectLookupEvidenceWhoisPublication(whois.parsed, schemaVersion)))
       || !sameJsonValue(availability, projectLookupEvidenceAvailability(availability))
       || !sameJsonValue(registryInsights, projectLookupEvidenceRegistryInsights(registryInsights))) {
       throw new Error('invalid current projection');
@@ -393,6 +394,9 @@ export async function parseLookupEvidenceReplay(
   const diagnostics = record(document.diagnostics);
   const sources = record(document.sources);
   const analysis = record(document.analysis);
+  if (record(analysis.registryInsights).version !== lookupEvidenceRegistryInsightsVersion(schemaVersion)) {
+    throw new Error('Lookup evidence registry interpretation does not match its schema version.');
+  }
   const availability = record(analysis.availability);
   if (((availability.observationHostname !== undefined || availability.webObservationMode !== undefined) && schemaVersion < HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION)
     || !validLookupObservationScope(availability, query)) {

@@ -6,6 +6,7 @@
 import { resolveProviderReportingRoutes } from './provider-reporting-routes.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import { emailRecipient } from '../../../../packages/evidence/email-recipient.mts';
+import { isSupportedRegistryInsightsVersion } from '../../../../packages/contracts/registry-insights.mts';
 
 export type AbuseRecipientKind =
   | 'application_platform'
@@ -351,7 +352,7 @@ export function resolveAbuseRecipients(input: Readonly<{
       state: 'unavailable' as const,
       detail: `security.txt was collected with state ${text(securityTxt.state, 40) || 'unknown'}; no usable route was available.`,
     };
-    if ((kind === 'registrar' || kind === 'registry') && registryInsights.version !== 1) return {
+    if ((kind === 'registrar' || kind === 'registry') && !isSupportedRegistryInsightsVersion(registryInsights.version)) return {
       kind,
       state: 'unavailable' as const,
       detail: 'Registry publication routing evidence was unavailable.',
