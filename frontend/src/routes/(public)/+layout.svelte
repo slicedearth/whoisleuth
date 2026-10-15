@@ -125,7 +125,7 @@
   .public-header{display:flex;position:static;inset:auto;z-index:auto;height:auto;align-items:center;justify-content:space-between;gap:12px 24px;padding:18px 0;border-bottom:1px solid var(--border);background:transparent;container:public-header/inline-size;flex-wrap:wrap}
   :global(:root[data-theme='light']) .public-shell{width:100%;padding-inline:0}
   :global(:root[data-theme='light']) :is(.public-body,.public-header){width:min(var(--public-width),100%);margin:auto;padding-inline:var(--public-gutter)}
-  :global(:root[data-theme='light']) .site-header{border-bottom:1px solid var(--border);background:var(--bg);color:var(--text)}
+  :global(:root[data-theme='light']) .site-header{border-bottom:1px solid var(--border);background:var(--panel);color:var(--text)}
   :global(:root[data-theme='light']) .public-header{border-bottom:0}
   .public-brand{display:flex;min-height:44px;align-items:center;gap:10px;font-family:var(--mono)}
   .public-brand .mark{width:38px;height:38px}

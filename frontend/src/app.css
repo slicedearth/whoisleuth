@@ -1,5 +1,4 @@
-/* The light workspace's contrasting header reuses the dark palette. */
-:root, :root[data-theme="light"] .site-header {
+:root {
   color-scheme: dark;
   --bg: #0f1115;
   --bg-rgb: 15 17 21;
@@ -744,7 +743,7 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
 :root[data-theme='light'] .shell { --console-toolbar-height: 62px; grid-template-areas: "header header" "sidebar main"; }
 :root[data-theme='light'] .shell > aside { top: var(--console-toolbar-height); height: calc(100dvh - var(--console-toolbar-height)); background: var(--panel); box-shadow: none; }
 :root[data-theme='light'] .shell > aside .brand { display: none; }
-:root[data-theme='light'] .shell > header { z-index: 30; justify-content: space-between; padding-inline: 24px; background: var(--bg); color: var(--text); }
+:root[data-theme='light'] .shell > header { z-index: 30; justify-content: space-between; padding-inline: 24px; background: var(--panel); color: var(--text); }
 :root[data-theme='light'] .shell > header > a { display: flex; min-width: 0; gap: 10px; align-items: center; font-family: var(--mono); }
 @media (min-width: 901px) {
   :root[data-theme='light'] .console-brand-copy { display: block; }
@@ -778,7 +777,7 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
   .shell > header > a { display: flex; min-width: 0; gap: 10px; align-items: center; font-family: var(--mono); }
   :root[data-theme='light'] .shell > header { padding-inline: 18px; }
   .shell > header > a strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .navigation-toggle { display: block; width: 40px; height: 40px; padding: 0; border: 1px solid var(--quiet-control-border); border-radius: var(--radius-sm); background: var(--panel); }
+  .navigation-toggle { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 1px solid var(--quiet-control-border); border-radius: var(--radius-sm); background: var(--panel); }
   .shell > aside { position: fixed; inset: var(--console-toolbar-height) auto auto 0; visibility: hidden; width: min(310px,86vw); height: calc(100dvh - var(--console-toolbar-height)); padding-bottom: max(74px,calc(env(safe-area-inset-bottom) + 24px)); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: max(74px,calc(env(safe-area-inset-bottom) + 24px)); pointer-events: none; transform: translateX(-105%); transition:none; }
   .shell > aside .terminal-strip { padding-right: 52px; }
   .shell > aside .brand { display: none; }

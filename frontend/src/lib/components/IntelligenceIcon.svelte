@@ -23,6 +23,7 @@
     | 'bulk'
     | 'watchlist'
     | 'brand'
+    | 'menu'
     | 'command'
     | 'search';
 
@@ -124,6 +125,8 @@
   {:else if name === 'asset'}
     <path class="icon-wash" d="M8.5 4.5h7l4 4v7l-4 4h-7l-4-4v-7z"/>
     <path d="M8.5 4.5h7l4 4v7l-4 4h-7l-4-4v-7zM8.5 12l2.2 2.2 4.8-5"/>
+  {:else if name === 'menu'}
+    <path d="M4 6h16M4 12h16M4 18h16"/>
   {:else if name === 'lookup' || name === 'search' || name === 'command'}
     <circle class="icon-wash" cx="10.5" cy="10.5" r="6.5"/>
     <circle cx="10.5" cy="10.5" r="6.5"/>
