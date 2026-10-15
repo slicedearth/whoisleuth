@@ -51,6 +51,14 @@ upstream repository do not require a new pin.
 | Registrars and notices | `npm run registrar:standing:update -- --iana-source /path/to/registrars.csv --icann-source /path/to/notices.html --observed-at <ISO-timestamp>`; then `npm run registrar:standing:check` |
 | Root zone, RDAP bootstrap and extensions | [Registry data contract](registry-data-contract.md); refresh the reviewed baseline and capability projections together |
 
+RDAP capability interpretation lives in `lib/rdap-capabilities.mts`. Saved
+Lookup evidence retains its review date and selects the corresponding semantic
+catalogue epoch; future or unsupported review dates are rejected. A date-only
+review updates the current review date, without copying a catalogue. A genuine
+interpretation change adds an immutable epoch by extending the previous table.
+Keep epochs required by supported saved-artifact versions, and verify historical
+readers without regenerating their fixtures.
+
 Cloudflare's publisher date can remain old while its complete ranges are
 unchanged. The range owner verifies both official lists and records a separate,
 digest-bound observation; it does not relabel publication time. Mismatch,

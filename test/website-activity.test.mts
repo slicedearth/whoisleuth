@@ -315,6 +315,7 @@ describe('website activity classification', () => {
 
   test('binds page identity to the homepage HTTP observation without another request', async () => {
     let homepageCalls = 0;
+    const privateGeneratorVersion = '0.1.987654321';
     const result = await checkDomainAvailability('example.test', {
       featurePolicy: networkFeaturePolicy({ WHOISLEUTH_DISABLE_DNS_INTELLIGENCE: '1', WHOISLEUTH_DISABLE_TLS_INTELLIGENCE: '1' }),
       rdapRecord: {
@@ -329,7 +330,7 @@ describe('website activity classification', () => {
       fetchHomepage: async () => {
         homepageCalls += 1;
         return {
-          text: '<html lang="en"><head><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\' \'sha256-private-page-hash\'"><meta name="generator" content="Hugo 0.1"><link rel="canonical" href="../account?token=secret"></head><body><astro-island></astro-island><form method="post" action="https://collect.example/submit?key=secret"></form></body></html>',
+          text: '<html lang="en"><head><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\' \'sha256-private-page-hash\'"><meta name="generator" content="Hugo ' + privateGeneratorVersion + '"><link rel="canonical" href="../account?token=secret"></head><body><astro-island></astro-island><form method="post" action="https://collect.example/submit?key=secret"></form></body></html>',
           status: 'fetched',
           detail: 'Homepage responded.',
           responsePolicy: analyzeResponsePolicyHeaders(new Headers({
@@ -380,7 +381,8 @@ describe('website activity classification', () => {
     assert.equal(availability.credentialSurfaceProfile, null);
     assert.equal(technologyProfile.status, 'partial');
     assert.deepEqual(technologyFindings.map((item) => item.id), ['hugo', 'astro', 'caddy']);
-    assert.doesNotMatch(JSON.stringify(technologyProfile), /token=|key=|secret|submit|0\.1/);
+    assert.doesNotMatch(JSON.stringify(technologyProfile), /token=|key=|secret|submit/);
+    assert.equal(JSON.stringify(technologyProfile).includes(privateGeneratorVersion), false);
     assert.equal(pageRoleProfile.source, 'derived');
     assert.equal(pageRoleProfile.status, 'partial');
     assert.equal(clientBehaviorProfile.source, 'derived');

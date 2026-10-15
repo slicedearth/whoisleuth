@@ -48,6 +48,7 @@ import { buildCliCasePack } from '../cli/case-pack.mts';
 import { buildCliEvidenceExport } from '../cli/export-evidence.mts';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import * as lookupEvidenceModule from '../lib/evidence-export.mts';
+import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { CASE_SCHEMA_VERSION, createCase, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
 import {
   appendCaseAction,
@@ -671,6 +672,37 @@ describe('offline artifact verifier', () => {
     assert.equal(report.state, 'structure_valid');
     assert.equal(report.checks.structure, 'verified');
     assert.equal(report.checks.contentIntegrity, 'not_checked');
+  });
+
+  test('binds saved capability declarations to their source and recorded catalogue epoch', async () => {
+    for (const reviewedAt of ['2026-07-31', '2026-08-15', '2026-10-14']) {
+      const evidence = JSON.parse(await loadLookupEvidenceV27Fixture());
+      const { rdap, whois } = evidence.sources;
+      rdap.parsed.conformance = ['rdap_level_0', 'reliabilityAssessment'];
+      evidence.analysis.registryInsights = lookupEvidenceModule.projectLookupEvidenceRegistryInsights(buildRegistryInsights({
+        rdapParsed: rdap.parsed, rdapStatus: rdap.status, rdapFetchedAt: rdap.fetchedAt,
+        whoisParsed: whois.parsed, whoisStatus: whois.status, whoisQueriedAt: whois.queriedAt,
+      }, { rdapCapabilityCatalogReviewedAt: reviewedAt }));
+      const capabilities = evidence.analysis.registryInsights.rdapCapabilities;
+      assert.equal(capabilities.registry.declarations[1].category, reviewedAt === '2026-10-14' ? 'operator' : 'unknown');
+      const before = JSON.stringify(evidence);
+      assert.equal((await verifyOfflineArtifact(before)).state, 'structure_valid');
+      assert.equal(JSON.stringify(evidence), before);
+
+      const mutations: readonly [string, (value: typeof capabilities) => void][] = [
+        ['unknown inspection version', (value) => { value.registry.version = 2; }],
+        ['mismatched review dates', (value) => { value.registrar.catalogReviewedAt = '2026-09-01'; }],
+        ['unreviewed epoch', (value) => { value.registry.catalogReviewedAt = value.registrar.catalogReviewedAt = '9999-12-31'; }],
+        ['invented source declaration', (value) => { value.registry.declarations[0].identifier = 'not_declared'; }],
+        ['changed classification', (value) => { value.registry.declarations[1].category = 'standard'; }],
+        ['changed label', (value) => { value.registry.declarations[0].label = 'Changed catalogue interpretation'; }],
+      ];
+      for (const [label, mutate] of mutations) {
+        const forged = structuredClone(evidence);
+        mutate(forged.analysis.registryInsights.rdapCapabilities);
+        await assert.rejects(verifyOfflineArtifact(JSON.stringify(forged)), /unsupported or malformed structure/iu, label);
+      }
+    }
   });
 
   test('accepts exact current homepage metadata while rejecting malformed and pre-homepage injection', async () => {

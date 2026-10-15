@@ -27,6 +27,7 @@ import {
 } from '../../lib/registrar-standing-contract.mts';
 import { compareRegistrySources } from '../../lib/registry-comparison.mts';
 import { buildRegistryInsights } from '../../lib/registry-insights.mts';
+import { resolveRdapCapabilityCatalogRevision } from '../../lib/rdap-capabilities.mts';
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../packages/analysis/project-metadata.mts';
 import {
   validHttpDeliveryMetadata,
@@ -687,6 +688,15 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
     });
     if (!isDeepStrictEqual(registryComparison, expectedComparison)) fail('Lookup evidence registry comparison derivation');
 
+    const capabilities = record(registryInsights.rdapCapabilities, 'Lookup evidence RDAP capabilities');
+    const registryCapabilities = record(capabilities.registry, 'Lookup evidence registry RDAP capabilities');
+    const registrarCapabilities = record(capabilities.registrar, 'Lookup evidence registrar RDAP capabilities');
+    const catalogReviewedAt = registryCapabilities.catalogReviewedAt;
+    if (typeof catalogReviewedAt !== 'string'
+      || resolveRdapCapabilityCatalogRevision(catalogReviewedAt) === null
+      || registrarCapabilities.catalogReviewedAt !== catalogReviewedAt) {
+      fail('Lookup evidence RDAP capability catalogue revision');
+    }
     const rebuiltInsights = buildRegistryInsights({
       rdapParsed,
       rdapStatus: rdapDiagnosticStatus,
@@ -694,7 +704,7 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
       whoisParsed,
       whoisStatus: whoisDiagnosticStatus,
       whoisQueriedAt: whois.queriedAt,
-    });
+    }, { rdapCapabilityCatalogReviewedAt: catalogReviewedAt });
     const expectedInsights = version >= PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION
       ? projectLookupEvidenceRegistryInsights(rebuiltInsights)
       : rebuiltInsights;

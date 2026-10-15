@@ -323,7 +323,7 @@ export function buildRegistryInsights(input: {
   registrarRdapParsed?: unknown;
   registrarRdapStatus?: unknown;
   registrarRdapFetchedAt?: unknown;
-}) {
+}, options: Readonly<{ rdapCapabilityCatalogReviewedAt?: string }> = {}) {
   const rdap = record(input.rdapParsed);
   const whois = record(input.whoisParsed);
   const registrarRdap = record(input.registrarRdapParsed);
@@ -404,8 +404,8 @@ export function buildRegistryInsights(input: {
     },
     publications,
     rdapCapabilities: {
-      registry: inspectRdapCapabilities(input.rdapParsed, input.rdapStatus),
-      registrar: inspectRdapCapabilities(input.registrarRdapParsed, input.registrarRdapStatus),
+      registry: inspectRdapCapabilities(input.rdapParsed, input.rdapStatus, options.rdapCapabilityCatalogReviewedAt),
+      registrar: inspectRdapCapabilities(input.registrarRdapParsed, input.registrarRdapStatus, options.rdapCapabilityCatalogReviewedAt),
     },
     abuseRouting: [...uniqueRoutes.values()],
   };
