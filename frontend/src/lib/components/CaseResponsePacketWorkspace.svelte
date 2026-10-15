@@ -84,6 +84,7 @@
   let packetReviewDigest = $state('');
   let packetReviewSignature = $state('');
   let packetAuthorisationConfirmedAt = $state('');
+  let packetConfirmationRevision = 0;
   let packetConfirmations = $state<Record<ResponseAuthorisationConfirmationId, boolean>>({
     selectedEvidence: false,
     recipientScope: false,
@@ -207,14 +208,17 @@
   const selectedPacketAction = $derived(record.actions.find((action) => action.id === packetActionId) ?? null);
   const investigationContext = $derived(caseInvestigationContext(record));
   const packetConfirmationsComplete = $derived(RESPONSE_AUTHORISATION_CONFIRMATION_IDS.every((id) => packetConfirmations[id]));
-  const packetAuthorisationReadinessComplete = $derived(
-    packetReadiness.rows.every((row) => !row.requiredForAuthorisation || !['not_provided', 'unavailable'].includes(row.state))
-      && packetReadiness.rows.find((row) => row.id === 'authority_review')?.state === 'complete',
-  );
+  function readinessAllowsPacketAuthorisation(readiness: ReturnType<typeof buildCaseResponseReadiness>) {
+    return readiness.rows.every((row) => !row.requiredForAuthorisation || !['not_provided', 'unavailable'].includes(row.state))
+      && readiness.rows.find((row) => row.id === 'authority_review')?.state === 'complete';
+  }
+  const packetAuthorisationReadinessComplete = $derived(readinessAllowsPacketAuthorisation(packetReadiness));
+  const packetAuthorisationIsCurrent = $derived(Boolean(packetAuthorisationConfirmedAt)
+    && packetReviewIsCurrent && packetConfirmationsComplete && packetAuthorisationReadinessComplete);
   const stage = $derived<CaseResponseStage>({
     id: 'evidence_handoff',
     ...CASE_RESPONSE_STAGE_DEFINITIONS.evidence_handoff,
-    status: packetAuthorisationConfirmedAt && packetReviewIsCurrent
+    status: packetAuthorisationIsCurrent
       ? 'complete'
       : packetReviewDigest && !packetReviewIsCurrent
         ? 'attention'
@@ -228,7 +232,7 @@
         ? 'Review the exact packet inputs and bind their digest.'
         : !packetReviewIsCurrent
           ? 'Material inputs changed; bind and review the current inputs again.'
-          : !packetAuthorisationConfirmedAt
+          : !packetAuthorisationIsCurrent
             ? 'Complete explicit confirmations and authorise the exact bound inputs.'
             : 'Export locally only when the intended recipient and scope remain correct.',
   });
@@ -329,6 +333,7 @@
       }
       packetReviewDigest = digest;
       packetReviewSignature = signature;
+      packetConfirmationRevision++;
       packetConfirmations = {
         selectedEvidence: false,
         recipientScope: false,
@@ -348,6 +353,7 @@
   }
 
   function setPacketConfirmation(id: ResponseAuthorisationConfirmationId, checked: boolean) {
+    packetConfirmationRevision++;
     packetConfirmations = { ...packetConfirmations, [id]: checked };
     packetAuthorisationConfirmedAt = '';
   }
@@ -355,13 +361,23 @@
   async function authorisePacketInputs() {
     if (!packetReviewIsCurrent || !packetConfirmationsComplete || !packetAuthorisationReadinessComplete || packetBusy) return;
     const operation = beginPacketOperation(); if (!operation) return;
+    const confirmationRevision = packetConfirmationRevision;
+    packetAuthorisationConfirmedAt = '';
     try {
       const signature = packetMaterialSignature();
       const currentDigest = await buildCaseResponseReviewDigest(record, packetInput(false), new Date().toISOString());
       if (!operationIsCurrent(operation)) return;
+      if (confirmationRevision !== packetConfirmationRevision || !packetConfirmationsComplete) {
+        onmessage('The confirmation decision changed during authorisation. Review your current confirmations and authorise again.');
+        return;
+      }
       if (signature !== packetMaterialSignature() || signature !== packetReviewSignature || currentDigest !== packetReviewDigest) {
         packetAuthorisationConfirmedAt = '';
         onmessage('The reviewed inputs or their freshness state changed. Review and bind the current packet again before authorisation.');
+        return;
+      }
+      if (!readinessAllowsPacketAuthorisation(buildCaseResponseReadiness(record, packetInput(false), new Date().toISOString()))) {
+        onmessage('Required readiness inputs are no longer complete. Review readiness before authorising the current packet.');
         return;
       }
       packetAuthorisationConfirmedAt = utcInputFromIso(new Date().toISOString());
@@ -637,7 +653,7 @@
       {/if}
       {#if packetWizardStep === 2}
         <section id={`packet-wizard-step-${record.id}-7`} class="wizard-panel authorisation" tabindex="-1" aria-labelledby={`authorisation-title-${record.id}`}>
-          <header><div><p class="eyebrow">Explicit decision</p><h4 id={`authorisation-title-${record.id}`}>Authorise exact bound inputs</h4></div><span class:attention={!packetReviewIsCurrent || !packetConfirmationsComplete || !packetAuthorisationReadinessComplete || !packetAuthorisationConfirmedAt}>{packetReviewIsCurrent && packetConfirmationsComplete && packetAuthorisationReadinessComplete && packetAuthorisationConfirmedAt ? 'authorised inputs' : 'draft · authorisation incomplete'}</span></header>
+          <header><div><p class="eyebrow">Explicit decision</p><h4 id={`authorisation-title-${record.id}`}>Authorise exact bound inputs</h4></div><span class:attention={!packetAuthorisationIsCurrent}>{packetAuthorisationIsCurrent ? 'authorised inputs' : 'draft · authorisation incomplete'}</span></header>
           {#if !packetReviewIsCurrent}<p class="history-warning">The exact current inputs do not have a current digest. Bind the current inputs above before confirming authorisation.</p>{/if}
           <fieldset class="confirmations" disabled={!packetReviewIsCurrent}><legend>Explicit confirmations</legend>{#each RESPONSE_AUTHORISATION_CONFIRMATION_IDS as id}<label class="choice"><input type="checkbox" checked={packetConfirmations[id]} onchange={(event) => setPacketConfirmation(id, event.currentTarget.checked)}><span>{id === 'selectedEvidence' ? 'I reviewed the exact selected evidence.' : id === 'recipientScope' ? 'I reviewed the recipient and scope.' : id === 'privacyRedactions' ? 'I reviewed privacy and redactions.' : id === 'analystAuthority' ? 'I confirm analyst authority for this scope.' : 'I reviewed evidence freshness and retained cautions.'}</span></label>{/each}</fieldset>
           <button class="btn" type="button" onclick={() => void authorisePacketInputs()} disabled={packetBusy || !packetReviewIsCurrent || !packetConfirmationsComplete || !packetAuthorisationReadinessComplete}>Authorise exact bound inputs</button>
@@ -680,7 +696,7 @@
               <button class="btn" type="button" onclick={() => void continueToDeliveryRecord()} disabled={packetBusy}>Continue to record delivery</button>
             </div>
           {/if}
-          <p class="wizard-status">{packetAuthorisationConfirmedAt && packetReviewIsCurrent ? 'The current exact inputs are authorised for deliberate local export.' : 'The current packet remains a draft. Draft export retains that status explicitly.'}</p>
+          <p class="wizard-status">{packetAuthorisationIsCurrent ? 'The current exact inputs are authorised for deliberate local export.' : 'The current packet remains a draft. Draft export retains that status explicitly.'}</p>
         </section>
       {/if}
 

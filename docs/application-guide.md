@@ -1258,7 +1258,10 @@ WHOISleuth creates only a drafting action and never submits the complaint.
 Response packet preflight checks the selected evidence, recipient scope,
 privacy, redactions, analyst authority, freshness and contradictions. Drafts
 remain available with cautions. Reviewed authorisation is bound to the exact
-canonical inputs and is invalidated by material change. Packet generation is a
+canonical inputs and the current confirmation decision. Changing a confirmation
+during authorisation cancels that attempt, even if you select it again before
+the check finishes. Review the current confirmations and authorise again.
+Material changes also invalidate authorisation. Packet generation is a
 local export; WHOISleuth does not send it or promise a provider outcome.
 In the packet's **Review** phase, **Prepare original files separately** checks
 retained files against their recorded size and SHA-256 before you select any.

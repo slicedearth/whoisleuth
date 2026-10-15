@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { caseRecord, openCaseResponseWorkspace, openSeededTimelineCase } from './case-test-fixtures';
 import { caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep } from './case-response-fixtures';
@@ -73,6 +73,80 @@ async function holdPreparation(page: Page, fail = false, reviewOnly = false) {
     release: () => page.evaluate(index => (window as PacketProbe).heldPackets[index]!.release(), index),
   };
 }
+
+async function prepareAuthorisation(packet: Locator) {
+  await openPacketWizardStep(packet, 'Review');
+  for (const label of ['Infrastructure responsibility', 'Analyst authority', 'Contradiction review', 'Source limitations review']) {
+    const section = packet.locator('.readiness-editor section', { hasText: label });
+    await section.getByRole('combobox', { name: 'State', exact: true }).selectOption('complete');
+    await section.getByLabel('Detail', { exact: true }).fill(`Reviewed ${label.toLowerCase()} for this fixture.`);
+  }
+  await packet.getByRole('button', { name: 'Review and bind exact inputs', exact: true }).click();
+  const confirmations = packet.getByRole('group', { name: 'Explicit confirmations', exact: true });
+  await expect(confirmations.getByRole('checkbox')).toHaveCount(5);
+  for (const confirmation of await confirmations.getByRole('checkbox').all()) await confirmation.check();
+  await expect(packet.getByRole('button', { name: 'Authorise exact bound inputs', exact: true })).toBeEnabled();
+}
+
+for (const reselect of [false, true]) test(`withdrawing a pending packet confirmation${reselect ? ' and selecting it again' : ''} cannot restore authorisation`, { tag: '@timing-sensitive' }, async ({ page }) => {
+  const packet = await openPacket(page);
+  await prepareAuthorisation(packet);
+  const held = await holdPreparation(page, false, true);
+  await packet.getByRole('button', { name: 'Authorise exact bound inputs', exact: true }).click();
+  await held.entered();
+  const confirmation = packet.getByRole('checkbox', { name: 'I reviewed the exact selected evidence.', exact: true });
+  await confirmation.uncheck();
+  if (reselect) await confirmation.check();
+  await held.release();
+  await expect(packet.getByLabel('Confirmation time', { exact: true })).toHaveValue('');
+  await expect(packet).toContainText('draft · authorisation incomplete');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('confirmation decision changed');
+  await openPacketWizardStep(packet, 'Export and record');
+  await expect(packet.locator('.wizard-status')).toContainText('remains a draft');
+  await packet.getByRole('button', { name: 'Preview manual complaint', exact: true }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Prepared the exact draft manual complaint preview');
+});
+
+test('packet authorisation requires unchanged material and readiness while the digest is pending', { tag: '@timing-sensitive' }, async ({ page }) => {
+  const packet = await openPacket(page);
+  await prepareAuthorisation(packet);
+  const held = await holdPreparation(page, false, true);
+  await packet.getByRole('button', { name: 'Authorise exact bound inputs', exact: true }).click();
+  await held.entered();
+  const authority = packet.locator('.readiness-editor section', { hasText: 'Analyst authority' });
+  await authority.getByRole('combobox', { name: 'State', exact: true }).selectOption('unavailable');
+  await held.release();
+  await expect(packet.getByLabel('Confirmation time', { exact: true })).toHaveValue('');
+  await expect(packet.getByRole('button', { name: 'Authorise exact bound inputs', exact: true })).toBeDisabled();
+  await expect(packet).toContainText('review stale');
+  await openPacketWizardStep(packet, 'Export and record');
+  await expect(packet.locator('.wizard-status')).toContainText('remains a draft');
+});
+
+test('a closed authorisation cannot complete or clear a replacement operation', { tag: '@timing-sensitive' }, async ({ page }) => {
+  const packet = await openPacket(page);
+  await prepareAuthorisation(packet);
+  const authorise = packet.getByRole('button', { name: 'Authorise exact bound inputs', exact: true });
+  const old = await holdPreparation(page, false, true);
+  await authorise.click();
+  await old.entered();
+  await packet.locator(':scope > summary').click();
+  await expect(packet).not.toHaveAttribute('open', '');
+  await packet.locator(':scope > summary').click();
+  const current = await holdPreparation(page, false, true);
+  await authorise.click();
+  await current.entered();
+  const message = await caseWorkspaceActionStatus(page).textContent();
+  await old.release();
+  await expect(authorise).toBeDisabled();
+  await expect(packet.getByLabel('Confirmation time', { exact: true })).toHaveValue('');
+  expect(await caseWorkspaceActionStatus(page).textContent()).toBe(message);
+  await current.release();
+  await expect(packet.locator('.wizard-status')).toHaveText('The current exact inputs are authorised for deliberate local export.');
+  await openPacketWizardStep(packet, 'Review');
+  await expect(packet.getByLabel('Confirmation time', { exact: true })).toHaveValue('2000-01-03T00:00');
+  await expect(packet).toContainText('authorised inputs');
+});
 
 test('closed packet preparations cannot download, copy, reveal previews or retain a delivery handoff', { tag: '@timing-sensitive' }, async ({ page }) => {
   const packet = await openPacket(page);
