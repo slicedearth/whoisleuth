@@ -462,6 +462,11 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   await expect(disclosure).toContainText('Fixture abuse review desk');
   await expect(disclosure).toContainText('1 selected of 1 retained pins');
   await expect(disclosure).toContainText('a query or fragment');
+  const readinessTable = packet.getByRole('region', { name: 'Response-packet readiness table', exact: true });
+  await readinessTable.focus();
+  await expect(readinessTable).toBeFocused();
+  await readinessTable.press('ArrowRight');
+  await expect.poll(() => readinessTable.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
   if (captureVisualEvidenceEnabled()) {
     for (const theme of ['light', 'dark'] as const) {
       await useTheme(page, theme);

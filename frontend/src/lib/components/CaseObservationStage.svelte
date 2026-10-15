@@ -102,7 +102,7 @@
 
 {#if selectionError}<p role="alert">{selectionError} The draft remains available.</p>{/if}
 
-<section class="case-response-stage observation-stage" aria-label="Case observations">
+<section class="case-response-stage" aria-label="Case observations">
   <details id={`case-response-observation-${record.id}`} bind:open={expanded}>
     <summary>Pin an observed fact</summary>
     <form class="response-form observation-form" data-recovery-form={pinDraft.form} oninput={pinDraft.changed} onsubmit={(event) => { event.preventDefault(); void addPin(); }}>
@@ -243,8 +243,6 @@
 </section>
 
 <style>
-  .observation-stage{container-type:inline-size;padding-inline:var(--card-pad);background:var(--panel);border-block:1px solid var(--border)}
-  .observation-stage>details:first-child{border-top:0}
   .observation-columns{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:24px;min-width:0}
   .observation-fields{display:grid;align-content:start;gap:14px;margin:0;padding:0;min-width:0;border:0}
   .observation-fields>legend{margin-bottom:14px;padding:0;font:650 var(--text-md) var(--font-sans);color:var(--text)}
@@ -252,7 +250,6 @@
   .limitation-fields{margin-top:4px;padding-top:14px;border-top:1px solid var(--border)}
   .limitation-fields>legend{margin-bottom:0;padding-right:12px}
   @container(max-width:680px){.observation-columns{grid-template-columns:minmax(0,1fr)}.source-fields{padding-left:0;padding-top:14px;border-left:0;border-top:1px solid var(--border)}.source-fields>legend{padding-right:12px}}
-  @media print{.observation-stage{padding-inline:0;background:transparent}}
   .chronology {
     display: grid;
     gap: 8px;
