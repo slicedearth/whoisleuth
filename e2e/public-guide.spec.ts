@@ -578,7 +578,7 @@ test('public footer links remain reachable without overlap on mobile', async ({ 
 
 test('authenticated console groups its public reference without duplicating Ctrl+K', async ({ page }) => {
   await page.goto('/lookup');
-  await expect(page.getByText('Domain intelligence console', { exact: true })).toBeVisible();
+  await expect(page.locator('header.site-header').getByText('Domain intelligence console', { exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Console' })).toBeVisible();
   const reference = page.getByRole('navigation', { name: 'Reference' });
   await expect(reference.getByRole('link')).toHaveCount(2);

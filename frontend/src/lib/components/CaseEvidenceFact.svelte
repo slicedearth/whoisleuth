@@ -11,7 +11,7 @@
   <span class="value">{pin.value}</span>
   <span class="source-strip">
     <span class="provenance"><span class="metadata-label">Source</span>{pin.source}</span>
-    <span class="provenance"><span class="metadata-label">Observation time</span>{#if pin.observedAt}<span>Observed <time datetime={pin.observedAt}>{pin.observedAt}</time></span>{:else}Observation time unavailable{/if}</span>
+    <span class="provenance"><span class="metadata-label">Observation time</span>{#if pin.observedAt}<span>Observed <time datetime={pin.observedAt}>{pin.observedAt}</time></span>{:else}<span>Observation time unavailable</span>{/if}</span>
     {#if pin.observationHostname}<span class="provenance"><span class="metadata-label">Observation hostname:</span><span class="identifier">{pin.observationHostname}</span></span>{/if}
   </span>
   {#if pin.webObservationMode}<span class="provenance">Selected URL observation; path and query are not retained in this fact.</span>{/if}

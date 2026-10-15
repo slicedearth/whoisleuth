@@ -162,7 +162,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(consoleFooterLinks.getByRole('link', { name: 'Resources', exact: true })).toHaveCount(0);
   await expect(page.locator('footer.site-footer .new-tab')).toHaveCount(0);
 
-  const dashboardLink = page.locator('#console-navigation').getByRole('link', { name: /^WHOISleuth\s+Domain intelligence console$/u });
+  const dashboardLink = page.getByRole('link', { name: 'WHOISleuth Dashboard', exact: true });
   await expect(dashboardLink).toBeVisible();
   await expect(dashboardLink).toHaveAttribute('href', '/dashboard');
   await page.locator('#query').fill('public-signout-state.example.test');
