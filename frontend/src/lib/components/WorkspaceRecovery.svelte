@@ -8,6 +8,8 @@
   import { MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS, MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES } from '#lib/browser-workspace-encryption-model.ts';
   import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../../packages/contracts/selected-file-limits.mts';
   import { downloadLocalFile } from '#lib/download-local-file.ts';
+  import { recoveryResultBrief } from '#lib/analysis/recovery-result.ts';
+  import { evidenceTime } from '#lib/analysis/evidence-time.ts';
   import EvidencePackageInput from './EvidencePackageInput.svelte';
   import RecoveryFileChecklist from './RecoveryFileChecklist.svelte';
   import CopyButton from './CopyButton.svelte';
@@ -21,6 +23,8 @@
   let encrypted = $state(true), passphrase = $state(''), confirmation = $state('');
   let recovery = $state.raw<WorkspaceRecovery | null>(null), report = $state.raw<WorkspaceRecoveryReport | null>(null);
   let busy = $state(false), message = $state(''), error = $state(''), confirmDelete = $state(false);
+  let laterOperation = $state(false);
+  const brief = $derived(report ? recoveryResultBrief(report) : null);
   let status = $state<HTMLParagraphElement>();
   let errorStatus = $state<HTMLParagraphElement>();
   let disposed = false;
@@ -42,6 +46,7 @@
     if (busy) return false;
     const origin = document.activeElement;
     busy = true; onbusy(true); message = ''; error = '';
+    if (report) laterOperation = true;
     try { await work(); return true; }
     catch (cause) {
       error = cause instanceof Error ? cause.message : 'Recovery could not be completed.';
@@ -57,6 +62,7 @@
   }
   function showReport(value: WorkspaceRecoveryReport) {
     report = value;
+    laterOperation = false;
     message = value.verified
       ? 'Recovery verified for the selected backup data and every referenced file. The active workspace is unchanged.'
       : 'Restore inspected, but recovery is not fully verified. Review section differences and missing files below.';
@@ -142,12 +148,27 @@
   {:else}
     <h4>{recovery.workspace.name}</h4>
     <p>Other tabs cannot open this workspace until you finish the rehearsal. Leaving the page keeps its data; keep or delete it deliberately when finished.</p>
-    {#if report}
+    {#if report && brief}
+      <section class="recovery-brief" aria-label="Last completed recovery check">
+      <h5>{laterOperation ? 'Earlier recovery result' : brief.heading}</h5>
+      <p>Completed {evidenceTime(report.checkedAt)?.readable ?? 'at an unavailable time'}. This checks the selected backup in the rehearsal workspace, not the active workspace or later changes.</p>
+      {#if laterOperation}<p class="pending-verification">A newer operation has not produced a completed verification. The result below does not verify later selections or writes. Use <strong>Verify restored data</strong> before relying on the destination.</p>{/if}
       <p class="result">Last completed verification: {report.caseCount ?? 'Unknown'} Case{report.caseCount === 1 ? '' : 's'} · Case identities {report.identitiesMatch ? 'match' : 'not verified'} · {report.files.verified} of {report.files.expected} unique files verified · {report.files.missing} missing · {report.files.unverified} unverified</p>
+      {#if !report.verified}
+        <h6>What to do next</h6>
+        <ul class="next-steps">
+          {#if brief.sectionsNeedReview}<li>Open <strong>Section comparison</strong> and review differing, migrated or unavailable records before using this workspace. Do not repeat the restore over existing data.</li>{/if}
+          {#if brief.originalsNeeded}<li>Use the checklist to locate exact missing originals, then choose <strong>Restore original files</strong> or <strong>Restore evidence package</strong>. A workspace backup alone does not contain their bytes.</li>{/if}
+          {#if brief.integrityFailure}<li>An integrity check failed within a file group. Preserve the existing data and locate the exact originals; no individual file is identified as damaged by this group result.</li>{/if}
+          {#if brief.unsupported}<li>Some retained-file storage is unsupported. Use a compatible reader; do not treat those files as missing.</li>{/if}
+          {#if brief.unverified}<li>Review the unverified-file guidance, check workspace access, then choose <strong>Verify restored data</strong>. Verification does not repeat a write.</li>{/if}
+        </ul>
+      {:else}<p>Keep or delete the rehearsal when finished. Keep the downloaded backup and original files separately; this result is not a replacement backup.</p>{/if}
       <RecoveryFileChecklist files={report.files.checklist} />
       <details><summary>Section comparison</summary><ul>
         {#each report.sections as section}<li><strong>{section.label}</strong>: {section.state === 'exact' ? 'Checksum matches' : section.state === 'migrated' ? 'Migrated format — review normalised data' : section.state === 'changed' ? 'Data differs from the backup' : 'Not restored'} · {section.records ?? 'Unknown'} of {section.expectedRecords} records</li>{/each}
       </ul>{#if report.omissions}<p>{report.omissions} skipped or omitted records prevent complete recovery verification.</p>{/if}</details>
+      </section>
     {/if}
     <div class="actions">
       <label class="btn file-btn">Restore original files<input type="file" multiple disabled={busy} onchange={event => void addFiles(event, 'originals')}></label>
@@ -166,6 +187,7 @@
 </details>
 
 <style>
+  .recovery-brief{min-width:0;padding-block:12px;border-block:1px solid var(--border);margin-block:12px}.recovery-brief h5{font-size:var(--text-base);margin:0}.recovery-brief h6{font-size:var(--text-sm);margin-block:12px 4px}.next-steps{padding-inline-start:22px}.next-steps li{margin-block:6px}.pending-verification{color:var(--text)}
   .set-index{margin-block:14px}.set-index section,.set-index li{min-width:0}.set-index h4{margin-block:12px 6px}.set-index ol{padding-inline-start:22px}.set-index code{overflow-wrap:anywhere;word-break:break-all}.set-index nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
   .recovery{margin-top:18px;border-top:1px solid var(--border);padding-top:14px;min-width:0}summary{cursor:pointer;font-weight:700}p,li{font-size:var(--text-xs);line-height:1.55;color:var(--muted);overflow-wrap:anywhere}form,label{display:grid;gap:6px;min-width:0}form{gap:12px;margin-block:12px}input{min-width:0;max-width:100%}.choice{display:flex;align-items:center;gap:8px}.passwords{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-block:12px}.actions>*{max-width:100%;white-space:normal;overflow-wrap:anywhere}.result{color:var(--text)}h4{overflow-wrap:anywhere}.delete-confirmation{border-left:2px solid var(--danger);padding-left:12px}[role=alert]{color:var(--danger)}.status:empty{display:none}@media(max-width:600px){.passwords{grid-template-columns:minmax(0,1fr)}.actions{display:grid;grid-template-columns:minmax(0,1fr)}}
 </style>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { RecoveryFile } from '../../../../packages/workspace/workspace-recovery.mts';
+  import { recoveryFileGuidance } from '#lib/analysis/recovery-result.ts';
   import CopyButton from './CopyButton.svelte';
   let { files }: { files: readonly RecoveryFile[] } = $props();
   const PAGE_SIZE = 20,
@@ -19,8 +20,8 @@
   <h5>Original-file recovery checklist</h5>
   <p
     >Each SHA-256 and exact byte length identifies one unique original. Filenames are locating hints
-    only; matching names do not establish matching bytes. Unverified means storage could not be
-    read, not that the file is absent. This checklist stays in this rehearsal only.</p
+    only; matching names do not establish matching bytes. Unverified means a read or integrity check
+    did not complete successfully, not that the file is absent. This checklist stays in this rehearsal only.</p
   >
   <p aria-live="polite"
     >{files.length} unique original{files.length === 1 ? '' : 's'} still need verification. Page {page}
@@ -28,13 +29,15 @@
   >
   <ol start={(page - 1) * PAGE_SIZE + 1}>
     {#each visible as file (file.digestSha256)}
+      {@const guidance = recoveryFileGuidance(file)}
       {@const referencePage = referencePages[file.digestSha256] ?? 1}
       {@const referencePageCount = Math.max(
         1,
         Math.ceil(file.references.length / REFERENCES_PER_PAGE),
       )}
       <li>
-        <strong>{file.state === 'missing' ? 'Missing' : 'Unverified — retry verification'}</strong>
+        <strong>{guidance.label}</strong>
+        <p>{guidance.next}</p>
         <p><code>{file.digestSha256}</code> · {file.byteLength.toLocaleString()} bytes</p>
         <CopyButton
           value={file.digestSha256}

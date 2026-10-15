@@ -294,6 +294,9 @@ test('recovery package index keeps distinct matching groups separate from failed
   await expect(index).not.toContainText('renamed-');
   await expect(recovery.locator('.result')).toContainText('Last completed verification:');
   await expect(recovery.locator('.result')).toContainText('1 of 2 unique files verified');
+  const brief = recovery.getByRole('region', { name: 'Last completed recovery check', exact: true });
+  await expect(brief.getByRole('heading', { name: 'Earlier recovery result', exact: true })).toBeVisible();
+  await expect(brief).toContainText('does not verify later selections or writes');
   const inventory = await downloadInventory();
   expect(inventory).toContain(`Full selected-file SHA-256: sha256:${createHash('sha256').update(backup).digest('hex')}\nBytes: ${Buffer.byteLength(backup)}`);
   for (const item of packages) expect(inventory).toContain(`Full selected-file SHA-256: sha256:${createHash('sha256').update(item.bytes).digest('hex')}\nBytes: ${item.bytes.length}`);
@@ -308,6 +311,8 @@ test('recovery package index keeps distinct matching groups separate from failed
   await recovery.getByRole('button', { name: 'Verify restored data', exact: true }).click();
   await expect(recovery.getByRole('status')).toContainText('Recovery verified');
   await expect(recovery.locator('.result')).toContainText('2 of 2 unique files verified');
+  await expect(brief.getByRole('heading', { name: 'Selected backup recovered and verified', exact: true })).toBeVisible();
+  await expect(brief).not.toContainText('does not verify later selections or writes');
   await add(0);
   await expect(index.locator('ol > li')).toHaveCount(2);
   expect((await new AxeBuilder({ page }).include('details.recovery').analyze()).violations).toEqual([]);
@@ -336,6 +341,60 @@ test('recovery package index keeps distinct matching groups separate from failed
   expect(replaced).toContain('Matching packages: 0');
   await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
   await expect(inventoryButton).toBeDisabled();
+});
+
+test('recovery separates missing originals from a failed integrity group and verifies exact replacement bytes', async ({ page }, testInfo) => {
+  const bodies = [Buffer.from('First intact original'), Buffer.from('Second intact original')];
+  const references: CaseAttachment[] = bodies.map((body, index) => ({ id: `integrity-${index}`, fileName: `original-${index}.txt`,
+    mediaType: 'application/octet-stream', source: null, observedAt: null, retainedAt: NOW, byteLength: body.length,
+    digestSha256: `sha256:${createHash('sha256').update(body).digest('hex')}` }));
+  await page.goto('/dashboard'); await review(page, await simpleBackup(references));
+  const recovery = await start(page);
+  const brief = recovery.getByRole('region', { name: 'Last completed recovery check', exact: true });
+  await expect(brief).toContainText('0 of 2 unique files verified · 2 missing · 0 unverified');
+  await expect(brief).toContainText('locate exact missing originals');
+  const [row] = await directoryRows(page), destination = namedDatabase(row!.id);
+  const before = await readBrowserLocalCollection(page, 'cases', { databaseName: destination });
+  const restore = async () => recovery.getByLabel('Restore original files', { exact: true }).setInputFiles(bodies.map((buffer, index) => ({ name: `renamed-${index}.txt`, mimeType: 'text/plain', buffer })));
+  await restore();
+  await expect(brief).toContainText('2 of 2 unique files verified · 0 missing · 0 unverified');
+  const restored = await readBrowserLocalCollection(page, 'cases', { databaseName: destination });
+  expect(restored.records).toEqual(before.records);
+  await page.evaluate(async databaseName => {
+    const request = indexedDB.open(databaseName);
+    const database = await new Promise<IDBDatabase>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+    try {
+      const transaction = database.transaction('files', 'readwrite'), files = transaction.objectStore('files');
+      const rows = files.getAll();
+      rows.onsuccess = () => {
+        if (rows.result.length !== 2) { transaction.abort(); return; }
+        const first = rows.result[0] as { payload: ArrayBuffer };
+        const bytes = new Uint8Array(first.payload);
+        bytes[0] = bytes[0]! ^ 1;
+        files.put(first);
+      };
+      await new Promise<void>((resolve, reject) => { transaction.oncomplete = () => resolve(); transaction.onabort = () => reject(transaction.error); });
+    } finally { database.close(); }
+  }, destination);
+  await recovery.getByRole('button', { name: 'Verify restored data', exact: true }).click();
+  await expect(brief).toContainText('0 of 2 unique files verified · 0 missing · 2 unverified');
+  await expect(brief).toContainText('no individual file is identified as damaged');
+  await expect(brief.getByText('Unverified — integrity check failed in this group', { exact: true })).toHaveCount(2);
+  expect(await readBrowserLocalCollection(page, 'cases', { databaseName: destination })).toEqual(restored);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await brief.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`recovery-brief-${theme}-${width}.png`) });
+    }
+  }
+  expect((await new AxeBuilder({ page }).include('details.recovery').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+  await restore();
+  await expect(brief).toContainText('2 of 2 unique files verified · 0 missing · 0 unverified');
+  await expect(brief.getByText('Unverified — integrity check failed in this group', { exact: true })).toHaveCount(0);
+  expect((await readBrowserLocalCollection(page, 'cases', { databaseName: destination })).records).toEqual(before.records);
+  await deleteRehearsal(page);
 });
 
 test('a committed restore followed by failed reconciliation offers verification, not a second restore', { tag: '@cross-browser-critical' }, async ({ page }) => {

@@ -98,18 +98,23 @@ export type RecoveryFile = Readonly<{
   digestSha256: string; byteLength: number;
   references: readonly Readonly<{ caseId: string; attachment: CaseAttachment }>[];
   state: 'missing' | 'unverified';
+  /** Group-level read failure, not proof that this individual file is damaged. */
+  failure?: OriginalFileReadFailure;
 }>;
+
+export type OriginalFileReadFailure = 'unavailable' | 'integrity' | 'unsupported';
 
 /** Inspect each bounded storage group; an unreadable group is not absence. */
 export async function inspectRecoveryFiles(archive: ReviewedWorkspaceArchive,
-  read: (group: readonly CaseAttachment[]) => Promise<ReadonlyMap<string, Blob | null>>) {
-  return inspectCaseOriginalFiles(archiveCaseRecords(archive), read);
+  read: (group: readonly CaseAttachment[]) => Promise<ReadonlyMap<string, Blob | null>>,
+  classifyFailure?: (cause: unknown) => OriginalFileReadFailure) {
+  return inspectCaseOriginalFiles(archiveCaseRecords(archive), read, undefined, classifyFailure);
 }
 
 /** A Case review and a recovery rehearsal inspect the same bounded file groups. */
 export async function inspectCaseOriginalFiles(rows: readonly Pick<CaseRecord, 'id' | 'attachments'>[],
   read: (group: readonly CaseAttachment[]) => Promise<ReadonlyMap<string, Blob | null>>,
-  signal?: AbortSignal) {
+  signal?: AbortSignal, classifyFailure?: (cause: unknown) => OriginalFileReadFailure) {
   if (!Array.isArray(rows) || rows.length > MAX_CASES) throw new Error('Case records cannot be inspected for required files.');
   signal?.throwIfAborted();
   const references = new Map<string, { caseId: string; attachment: CaseAttachment }[]>();
@@ -123,14 +128,20 @@ export async function inspectCaseOriginalFiles(rows: readonly Pick<CaseRecord, '
   for (const group of groups) {
     signal?.throwIfAborted();
     let files: ReadonlyMap<string, Blob | null> | null = null;
-    try { files = await read(group); } catch { /* Keep failed reads distinct from missing bytes. */ }
+    let failure: OriginalFileReadFailure = 'unavailable';
+    try { files = await read(group); } catch (cause) {
+      // Retain a closed diagnostic category only, never a provider's raw error.
+      const classified = classifyFailure?.(cause);
+      if (classified === 'integrity' || classified === 'unsupported') failure = classified;
+    }
     signal?.throwIfAborted();
     for (const item of group) {
       if (files?.get(item.digestSha256)) { verified++; bytes += item.byteLength; continue; }
       const state = files === null ? 'unverified' as const : 'missing' as const;
       if (state === 'missing') missing++; else unverified++;
       checklist.push(Object.freeze({ digestSha256: item.digestSha256, byteLength: item.byteLength,
-        references: Object.freeze(references.get(item.digestSha256)!), state }));
+        references: Object.freeze(references.get(item.digestSha256)!), state,
+        ...(state === 'unverified' ? { failure } : {}) }));
     }
   }
   return Object.freeze({ expected: verified + missing + unverified, verified, missing, unverified, bytes,

@@ -1421,11 +1421,18 @@ the index without changing saved provenance. Failed reads or unmatched files do
 not join the set. Selection and matching do not prove a completed download or
 write: the separate recovery result reports the last completed destination
 verification. Keep the downloaded files themselves, not just their digests.
+The recovery brief records when the last completed check ran and lists its next
+steps. If a later operation fails, the earlier result stays visible but is marked
+as earlier: it does not verify the new selections or writes. **Verify restored
+data** reads the destination again without repeating the restore.
 The paged **Original-file recovery checklist** shows each missing or unverified
 exact SHA-256 and byte length, plus the independent Case provenance references
 for shared bytes. Filenames are locating hints only: renamed exact bytes match;
 same-name different bytes do not. An unreadable storage group is labelled
-unverified rather than absent. Copy a digest with the keyboard-operated copy
+unverified rather than absent. Integrity failures and unsupported file storage
+have separate guidance. A failed group does not identify an individual damaged
+file; preserve the data and locate exact originals rather than substituting a
+similar file. Copy a digest with the keyboard-operated copy
 control, then restore bounded groups until the checklist is empty. The checklist
 is transient and clears when the rehearsal is kept, deleted or closed.
 Migrated formats are labelled for review rather than claimed byte-equivalent.

@@ -9,7 +9,9 @@ import { plaintextLocalBinaryCodec } from '../frontend/src/lib/browser-local-bin
 import type { CaseAttachment } from '../packages/cases/case-attachment-model.mts';
 import { createCase } from '../packages/cases/case-model.mts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../packages/contracts/selected-file-limits.mts';
-import { openWorkspaceRecovery } from '../frontend/src/lib/workspace-recovery.ts';
+import { openWorkspaceRecovery, recoveryFileReadFailure } from '../frontend/src/lib/workspace-recovery.ts';
+import { BrowserLocalDataError } from '../frontend/src/lib/browser-local-data-content.ts';
+import { recoveryFileGuidance, recoveryResultBrief } from '../frontend/src/lib/analysis/recovery-result.ts';
 
 const NOW = '2026-09-01T00:00:00.000Z';
 const BODY = new TextEncoder().encode('An independently matched original.');
@@ -162,6 +164,50 @@ test('current Case original inspection captures references, distinguishes missin
   const unavailable = await inspectCaseOriginalFiles(rows, async () => { throw new Error('Private storage detail'); });
   assert.deepEqual([unavailable.verified, unavailable.missing, unavailable.unverified], [0, 0, 2]);
   assert.doesNotMatch(JSON.stringify(unavailable), /Private storage detail/u);
+});
+
+test('recovery guidance classifies typed group failures without exposing details or claiming individual corruption', async () => {
+  const rows = [{ id: 'selected-case', attachments: [attachment(), attachment('another', `sha256:${'b'.repeat(64)}`)] }];
+  for (const [cause, category] of [
+    [new BrowserLocalDataError('LOCAL_DATA_BINARY_INTEGRITY', 'Private storage detail'), 'integrity'],
+    [new BrowserLocalDataError('LOCAL_DATA_BINARY_UNSUPPORTED', 'Private storage detail'), 'unsupported'],
+    [new BrowserLocalDataError('LOCAL_DATA_LOCKED', 'Private storage detail'), 'unavailable'],
+    [Object.assign(new Error('Private storage detail'), { code: 'LOCAL_DATA_BINARY_INTEGRITY' }), 'unavailable'],
+  ] as const) {
+    const result = await inspectCaseOriginalFiles(rows, async () => { throw cause; }, undefined, recoveryFileReadFailure);
+    assert.deepEqual([result.verified, result.missing, result.unverified], [0, 0, 2]);
+    assert.deepEqual(result.checklist.map(file => file.failure), [category, category]);
+    const guidance = result.checklist.map(recoveryFileGuidance);
+    assert.doesNotMatch(JSON.stringify({ result, guidance }), /Private storage detail/u);
+    if (category === 'integrity') {
+      assert.match(guidance[0]!.next, /does not identify which one/u);
+      assert.match(guidance[0]!.next, /Do not substitute/u);
+    }
+  }
+  const absent = await inspectCaseOriginalFiles(rows, async () => new Map(), undefined, recoveryFileReadFailure);
+  assert.ok(absent.checklist.every(file => file.state === 'missing' && file.failure === undefined));
+  assert.match(recoveryFileGuidance(absent.checklist[0]!).next, /exact SHA-256 and byte length/u);
+});
+
+test('recovery brief keeps record differences and file availability independent', async () => {
+  const source = await fixture();
+  const comparison = compareRecoveredWorkspace(source, source);
+  const complete = { ...comparison, files: await inspectRecoveryFiles(source, async () => new Map([[DIGEST, new Blob([BODY])]])),
+    omissions: 0, verified: true, checkedAt: NOW };
+  const before = structuredClone(complete);
+  const brief = recoveryResultBrief(complete);
+  assert.equal(brief.sectionsNeedReview, false); assert.equal(brief.originalsNeeded, false); assert.equal(brief.unverified, false);
+  assert.deepEqual(complete, before);
+  const missing = { ...complete, files: await inspectRecoveryFiles(source, async () => new Map()), verified: false };
+  assert.equal(recoveryResultBrief(missing).originalsNeeded, true);
+  assert.equal(recoveryResultBrief(missing).unverified, false);
+  assert.equal(recoveryResultBrief({ ...complete, omissions: 1, verified: false }).sectionsNeedReview, true);
+  assert.equal(recoveryResultBrief({ ...complete, metadataMatches: false, verified: false }).sectionsNeedReview, true);
+  const unsupported = { ...complete, verified: false, files: await inspectRecoveryFiles(source,
+    async () => { throw new BrowserLocalDataError('LOCAL_DATA_BINARY_UNSUPPORTED', 'Private storage detail'); }, recoveryFileReadFailure) };
+  assert.equal(recoveryResultBrief(unsupported).unsupported, true);
+  assert.equal(recoveryResultBrief(unsupported).originalsNeeded, false);
+  assert.doesNotMatch(JSON.stringify(recoveryResultBrief(unsupported)), /private|original\.txt|first\.example|case-one/iu);
 });
 
 test('cancelled original inspection starts no read or further group and never reports cancellation as missing bytes', async () => {

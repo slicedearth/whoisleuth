@@ -1,6 +1,6 @@
 import { WORKSPACE_ARCHIVE_COLLECTIONS } from '../../../packages/contracts/browser-local-collection-manifest.mts';
 import { buildWorkspaceArchive, mergeReadyWorkspaceArchiveData, readWorkspaceArchive } from '../../../packages/workspace/workspace-archive.mts';
-import { compareRecoveredWorkspace, inspectRecoveryFiles, matchRecoveryFiles, recoverySourceIndex, workspaceAttachmentGroups, type RecoveryPackageIdentity, type ReviewedWorkspaceArchive } from '../../../packages/workspace/workspace-recovery.mts';
+import { compareRecoveredWorkspace, inspectRecoveryFiles, matchRecoveryFiles, recoverySourceIndex, workspaceAttachmentGroups, type OriginalFileReadFailure, type RecoveryPackageIdentity, type ReviewedWorkspaceArchive } from '../../../packages/workspace/workspace-recovery.mts';
 import { sha256ArtifactBytes } from '../../../packages/evidence/artifact-integrity.mts';
 import { browserWorkspaceDirectory } from './browser-workspace-directory.ts';
 import { openBrowserWorkspaceDestination } from './browser-workspace-destination.ts';
@@ -8,14 +8,24 @@ export { WorkspaceDestinationStartError as WorkspaceRecoveryStartError } from '.
 import { currentBrowserWorkspaceId } from './browser-workspace-context.ts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../packages/contracts/selected-file-limits.mts';
 import { ENCRYPTED_INVESTIGATION_PACKAGE_VERSION, MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../../../packages/contracts/investigation-package-limits.mts';
-import type { AnyLocalDataCollectionDefinition } from './browser-local-data-content.ts';
+import { BrowserLocalDataError, type AnyLocalDataCollectionDefinition } from './browser-local-data-content.ts';
 import type { CaseRecord } from '../../../packages/cases/case-model.mts';
 
 export type WorkspaceRecoveryReport = ReturnType<typeof compareRecoveredWorkspace> & Readonly<{
   files: Awaited<ReturnType<typeof inspectRecoveryFiles>>;
   omissions: number;
   verified: boolean;
+  checkedAt: string;
 }>;
+
+/** Provider codes qualify a failed group without exposing storage diagnostics. */
+export function recoveryFileReadFailure(cause: unknown): OriginalFileReadFailure {
+  if (cause instanceof BrowserLocalDataError) {
+    if (cause.code === 'LOCAL_DATA_BINARY_INTEGRITY') return 'integrity';
+    if (cause.code === 'LOCAL_DATA_BINARY_UNSUPPORTED') return 'unsupported';
+  }
+  return 'unavailable';
+}
 
 /** Own one fresh destination, its exclusive lease and its in-memory key. */
 export async function openWorkspaceRecovery(input: ReviewedWorkspaceArchive, options: Readonly<{ name: string; passphrase?: string; requireEncryption: boolean }>) {
@@ -61,8 +71,8 @@ export async function openWorkspaceRecovery(input: ReviewedWorkspaceArchive, opt
       { generatedAt: source.generatedAt ?? new Date().toISOString() }));
     const comparison = compareRecoveredWorkspace(source, restored);
     const files = await inspectRecoveryFiles(source, group => provider.readFiles(CASES_COLLECTION,
-      group.map(({ digestSha256, byteLength }) => ({ digestSha256, byteLength }))));
-    return { ...comparison, files, omissions,
+      group.map(({ digestSha256, byteLength }) => ({ digestSha256, byteLength }))), recoveryFileReadFailure);
+    return { ...comparison, files, omissions, checkedAt: new Date().toISOString(),
       verified: comparison.metadataMatches && omissions === 0 && files.missing === 0 && files.unverified === 0 };
   }
   function close(): Promise<void> {
