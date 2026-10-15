@@ -8,7 +8,8 @@ import { canonicalArtifactJsonV2, sha256ArtifactBytes } from '../packages/eviden
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../packages/contracts/selected-file-limits.mts';
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../packages/contracts/investigation-package-limits.mts';
 import { MAX_EDITABLE_CASE_OUTPUT_BYTES } from '../packages/contracts/case-portability.mts';
-import { prepareCaseReviewHandoff, assertCaseReviewHandoffCurrent, readPackagedCaseReview } from '../frontend/src/lib/case-review-package.ts';
+import { prepareCaseReviewHandoff, assertCaseReviewHandoffCurrent, readPackagedCaseReview, caseOriginalFileState } from '../frontend/src/lib/case-review-package.ts';
+import { inspectCaseOriginalFiles } from '../packages/workspace/workspace-recovery.mts';
 import { runInvestigationPackageOperation } from '../frontend/src/lib/investigation-package-worker-model.ts';
 import { verifyOfflineArtifact, formatOfflineArtifactVerification } from '../cli/artifact-verify.mts';
 import { verifyOfflineInvestigationPackage } from '../cli/investigation-package-review.mts';
@@ -74,6 +75,29 @@ test('missing files, cancellation and changed Cases stop preparation or publicat
   await assertCaseReviewHandoffCurrent(expected, record.id, async () => [record]);
   await assert.rejects(assertCaseReviewHandoffCurrent(expected, record.id, async () => [{ ...record, title: 'Changed after review' }]), /changed/u);
   await assert.rejects(assertCaseReviewHandoffCurrent(expected, record.id, async () => []), /changed/u);
+});
+
+test('original-byte inspection covers exact selected references, not names, matching bytes or later provenance', async () => {
+  const { record, originals } = await fixture();
+  const selected = originals[0]!.attachment;
+  const otherObservation = { ...selected, id: 'separate-observation', source: 'Another observation of these bytes' };
+  const selection = caseReviewFileSelection(addCaseAttachments(record, [otherObservation], NOW), [selected.id]);
+  const result = await inspectCaseOriginalFiles([{ id: record.id, attachments: selection.selected }], async group => {
+    assert.deepEqual(group.map(item => item.id), [selected.id]);
+    return new Map([[selected.digestSha256, originals[0]!.file]]);
+  });
+  const inspection = { ...result, checkedReferences: selection.selected };
+  assert.equal(caseOriginalFileState(inspection, selected), 'verified');
+  for (const unselected of [originals[1]!.attachment, otherObservation,
+    { ...selected, source: 'Changed provenance' }, { ...selected, byteLength: selected.byteLength + 1 },
+    { ...selected, digestSha256: originals[1]!.attachment.digestSha256 }]) {
+    assert.equal(caseOriginalFileState(inspection, unselected), 'not_checked');
+  }
+  assert.equal(caseOriginalFileState(null, selected), 'not_checked');
+  const missing = await inspectCaseOriginalFiles([{ id: record.id, attachments: selection.selected }], async () => new Map());
+  assert.equal(caseOriginalFileState({ ...missing, checkedReferences: selection.selected }, selected), 'missing');
+  const unreadable = await inspectCaseOriginalFiles([{ id: record.id, attachments: selection.selected }], async () => { throw new Error('Private storage detail'); });
+  assert.equal(caseOriginalFileState({ ...unreadable, checkedReferences: selection.selected }, selected), 'unverified');
 });
 
 test('encrypted handoff round trip preserves exact Case and original bytes and identifies partial returns', async () => {

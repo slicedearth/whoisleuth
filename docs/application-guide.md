@@ -1268,15 +1268,19 @@ its existing control: missing readiness, changed material, confirmations or
 explicit authorisation. **View full readiness matrix** keeps every row available.
 If a pending authorisation loses its review context, the status explains that it
 stopped; returning to the packet does not complete that earlier attempt.
-In the packet's **Review** phase, **Prepare original files separately** checks
-retained files against their recorded size and SHA-256 before you select any.
-Missing or unverified files remain visible but cannot be selected. A packet
+In the packet's **Review** phase, **Prepare original files separately** lets you
+select candidate references, then **Check selected originals** against their
+recorded size and SHA-256. **Check all Case originals** remains an explicit
+alternative. Selection is not verification: missing, unverified or unchecked
+references cannot enter a package. A completed check covers only its exact
+references, even when another reference has the same filename or bytes. A packet
 capture reference matches only an equal digest and byte length, not a filename.
 The separate package contains only the files you select with their existing
 source and image-derivation declarations, not the full Case backup. Packet
 redaction rules do not change those file contents; review them for the recipient.
-Changing packet inputs or leaving or closing this review clears the temporary
-check and selection. Export rechecks the bytes and current Case, without changing
+Changing selection cancels an unfinished check; the last completed check stays
+separately labelled. Changing packet inputs or leaving or closing this review
+clears the temporary check and selection. Export rechecks the bytes and current Case, without changing
 the packet, authorising delivery or recording a submission.
 In **Local handoff**, JSON export is the primary action. **Other export formats**
 contains Markdown, email download and email copy; all use the same packet review

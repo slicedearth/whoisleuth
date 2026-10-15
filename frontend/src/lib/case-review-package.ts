@@ -6,13 +6,14 @@ import { boundedJsonLimitsForBytes, parseBoundedJson } from '../../../packages/a
 import { readRetainedCaseFiles } from './case-attachments.ts';
 import { browserLocalDataCollection, browserLocalDataProvider, readBrowserLocalData } from './browser-local-data-service.ts';
 import type { BrowserInvestigationPackageReview, SelectedInvestigationFile } from './investigation-package-worker-model.ts';
-import { readCaseAttachments } from '../../../packages/cases/case-attachment-model.mts';
+import { readCaseAttachments, type CaseAttachment } from '../../../packages/cases/case-attachment-model.mts';
 import { inspectCaseOriginalFiles } from '../../../packages/workspace/workspace-recovery.mts';
 
 /** Deliberate local inspection only; no bytes or check result are retained. */
-export async function inspectRetainedCaseOriginals(record: CaseRecord, signal: AbortSignal) {
+export async function inspectRetainedCaseOriginals(record: CaseRecord, signal: AbortSignal, ids?: readonly string[]) {
   const expectedCase = canonicalArtifactJsonV2(record), id = record.id;
-  const attachments = readCaseAttachments(record.attachments) ?? [];
+  const attachments = ids === undefined ? readCaseAttachments(record.attachments) ?? []
+    : caseReviewFileSelection(record, ids).selected;
   signal.throwIfAborted();
   const [provider, definition] = await Promise.all([browserLocalDataProvider(), browserLocalDataCollection('cases')]);
   signal.throwIfAborted();
@@ -22,7 +23,15 @@ export async function inspectRetainedCaseOriginals(record: CaseRecord, signal: A
   await assertCaseCurrent(expectedCase, id, () => readBrowserLocalData('cases'),
     'This Case changed while its files were being checked. Review its current contents and check again; no saved work changed.');
   signal.throwIfAborted();
-  return result;
+  return Object.freeze({ ...result, checkedReferences: Object.freeze(attachments) });
+}
+
+/** A byte check covers only the exact references deliberately included in it. */
+export function caseOriginalFileState(inspection: Awaited<ReturnType<typeof inspectRetainedCaseOriginals>> | null,
+  reference: CaseAttachment): 'not_checked' | 'verified' | 'missing' | 'unverified' {
+  const checked = inspection?.checkedReferences.find(item => item.id === reference.id);
+  if (!checked || canonicalArtifactJsonV2(checked) !== canonicalArtifactJsonV2(reference)) return 'not_checked';
+  return inspection!.checklist.find(item => item.digestSha256 === checked.digestSha256 && item.byteLength === checked.byteLength)?.state ?? 'verified';
 }
 
 export async function prepareCaseReviewHandoff(record: CaseRecord, ids: readonly string[], signal: AbortSignal,

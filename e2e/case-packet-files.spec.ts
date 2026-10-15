@@ -68,7 +68,8 @@ test('recipient file preparation distinguishes references from verified bytes an
   const { packet, reference, review, before, selected } = await prepareReview(page);
   const first = review.getByRole('checkbox', { name: /^selected\.json/ }), other = review.getByRole('checkbox', { name: /^other\.json/ });
   await expect(review).toContainText('1 packet capture reference without an exact retained-file match');
-  await expect(first).toBeDisabled(); await expect(other).toBeDisabled();
+  await expect(first).toBeEnabled(); await expect(other).toBeEnabled();
+  await expect(review.getByRole('button', { name: 'Check selected originals', exact: true })).toBeDisabled();
   await reference.getByLabel('Byte length', { exact: true }).fill(String(selected.byteLength + 1));
   await expect(review).toContainText('without an exact retained-file match');
   await reference.getByLabel('Byte length', { exact: true }).fill(String(selected.byteLength));
@@ -76,10 +77,19 @@ test('recipient file preparation distinguishes references from verified bytes an
   await expect(review.getByText('1 exact packet capture reference', { exact: true })).toBeVisible();
   await changeStoredFile(page, [...Buffer.from('{"other":"not selected"}')], 'remove');
   const bodies = await storedFiles(page);
-  await review.getByRole('button', { name: 'Check retained files', exact: true }).click();
+  await first.check();
+  await expect(review.getByRole('button', { name: 'Download private package', exact: true })).toHaveCount(0);
+  await review.getByRole('button', { name: 'Check selected originals', exact: true }).click();
+  await expect(review.getByRole('status', { name: 'Recipient original-file check', exact: true })).toContainText('1 reference · 1 verified · 0 missing · 0 unverified');
+  await expect(other).toHaveAccessibleName(/Not checked/u);
+  await other.check();
+  await expect(review.getByRole('button', { name: 'Download private package', exact: true })).toHaveCount(0);
+  await review.getByRole('button', { name: 'Check all Case originals', exact: true }).click();
   await expect(review.getByRole('status', { name: 'Recipient original-file check', exact: true })).toContainText('1 verified · 1 missing · 0 unverified');
-  await expect(first).toBeEnabled(); await expect(first).not.toBeChecked(); await expect(other).toBeDisabled();
-  await first.check(); await expect(review).toContainText('1 selected · 1 not selected');
+  await expect(first).toBeChecked(); await expect(other).toBeChecked();
+  await expect(other).toHaveAccessibleName(/Missing bytes/u);
+  await expect(review.getByRole('button', { name: 'Download private package', exact: true })).toHaveCount(0);
+  await other.uncheck(); await expect(review).toContainText('1 selected · 1 not selected');
   const download = page.waitForEvent('download');
   await review.getByRole('button', { name: 'Download private package', exact: true }).click();
   const result = await download, inspected = await inspectInvestigationPackage(await readFile((await result.path())!));
@@ -101,19 +111,22 @@ test('recipient file preparation distinguishes references from verified bytes an
       expect(layout.ancestors[0]!.right, JSON.stringify(layout)).toBeLessThanOrEqual(layout.viewport);
     }
     await page.setViewportSize({ width: theme === 'light' ? 320 : 1280, height: 900 });
-    const check = review.getByRole('button', { name: 'Check retained files', exact: true });
+    const check = review.getByRole('button', { name: 'Check all Case originals', exact: true });
     await check.focus(); await expect(check).toBeFocused();
     expect(await check.evaluate(element => { const box = element.getBoundingClientRect(); const navigation = document.querySelector('.case-sections')!.getBoundingClientRect(); return box.top > navigation.bottom && box.bottom < innerHeight; })).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`recipient-files-${theme}.png`) });
     expect((await new AxeBuilder({ page }).include('.packet-files').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
   }
   await reference.getByLabel('Label', { exact: true }).fill('Changed capture declaration');
-  await expect(first).toBeDisabled(); await expect(first).not.toBeChecked();
+  await expect(first).toHaveAccessibleName(/Not checked/u); await expect(first).not.toBeChecked();
   await expect(review.getByRole('button', { name: 'Download private package', exact: true })).toHaveCount(0);
   await changeStoredFile(page, [...original], 'corrupt');
-  await review.getByRole('button', { name: 'Check retained files', exact: true }).click();
-  await expect(review.getByRole('status', { name: 'Recipient original-file check', exact: true })).toContainText('0 verified · 0 missing · 2 unverified');
-  await expect(first).toBeDisabled(); expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  await first.check();
+  await review.getByRole('button', { name: 'Check selected originals', exact: true }).click();
+  await expect(review.getByRole('status', { name: 'Recipient original-file check', exact: true })).toContainText('0 verified · 0 missing · 1 unverified');
+  await expect(first).toHaveAccessibleName(/Unverified bytes/u);
+  await expect(review.getByRole('button', { name: 'Download private package', exact: true })).toHaveCount(0);
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
 });
 
 async function holdOriginalRead(page: Page) {
@@ -135,28 +148,29 @@ test('closing recipient preparation discards a late real byte check and cannot r
   const { packet, review, before } = await prepareReview(page);
   const gate = await holdOriginalRead(page);
   try {
-    await review.getByRole('button', { name: 'Check retained files', exact: true }).click(); await gate.evaluate(control => control.wait());
+    await review.getByRole('button', { name: 'Check all Case originals', exact: true }).click(); await gate.evaluate(control => control.wait());
     await openPacketWizardStep(packet, 'Prepare'); await openPacketWizardStep(packet, 'Review');
     await packet.getByText('Prepare original files separately · 2 retained references', { exact: true }).click();
     await gate.evaluate(control => control.release());
     await expect(review.getByRole('status', { name: 'Recipient original-file check', exact: true })).toContainText('has not been checked');
-    await expect(review.getByRole('checkbox', { name: /^selected\.json/ })).toBeDisabled();
-    await review.getByRole('button', { name: 'Check retained files', exact: true }).click();
+    await expect(review.getByRole('checkbox', { name: /^selected\.json/ })).toHaveAccessibleName(/Not checked/u);
+    await review.getByRole('button', { name: 'Check all Case originals', exact: true }).click();
     await expect(review.getByRole('status', { name: 'Recipient original-file check', exact: true })).toContainText('2 verified · 0 missing · 0 unverified');
     await review.getByRole('checkbox', { name: /^selected\.json/ }).check();
     await packet.locator(':scope > summary').click(); await packet.locator(':scope > summary').click();
     await packet.getByText('Prepare original files separately · 2 retained references', { exact: true }).click();
-    await expect(review.getByRole('checkbox', { name: /^selected\.json/ })).toBeDisabled();
+    await expect(review.getByRole('checkbox', { name: /^selected\.json/ })).toHaveAccessibleName(/Not checked/u);
+    await expect(review.getByRole('checkbox', { name: /^selected\.json/ })).not.toBeChecked();
     expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   } finally { await gate.evaluate(control => control.release()); await gate.dispose(); }
 });
 
 test('a pending separate-file export cannot survive closing its review or clear a replacement selection', { tag: '@timing-sensitive' }, async ({ page }) => {
   const { packet, review, before } = await prepareReview(page);
-  const check = review.getByRole('button', { name: 'Check retained files', exact: true });
+  const check = review.getByRole('button', { name: 'Check all Case originals', exact: true });
   const selected = review.getByRole('checkbox', { name: /^selected\.json/ });
   const download = review.getByRole('button', { name: 'Download private package', exact: true });
-  await check.click(); await expect(selected).toBeEnabled(); await selected.check();
+  await check.click(); await expect(selected).toHaveAccessibleName(/Verified bytes/u); await selected.check();
   await page.evaluate(() => {
     Reflect.set(window, 'recipientFileDownloads', 0);
     const click = HTMLAnchorElement.prototype.click;
@@ -168,8 +182,8 @@ test('a pending separate-file export cannot survive closing its review or clear 
     await expect(download).toBeDisabled();
     const toggle = packet.getByText('Prepare original files separately · 2 retained references', { exact: true });
     await toggle.click(); await toggle.click();
-    await expect(selected).toBeDisabled();
-    await check.click(); await expect(selected).toBeEnabled(); await selected.check();
+    await expect(selected).toHaveAccessibleName(/Not checked/u);
+    await check.click(); await expect(selected).toHaveAccessibleName(/Verified bytes/u); await selected.check();
     await gate.evaluate(control => control.release());
     await download.click();
     await expect(review.getByRole('status').filter({ hasText: 'Prepared a private package of 1 unchanged file' })).toBeVisible();
@@ -177,4 +191,46 @@ test('a pending separate-file export cannot survive closing its review or clear 
     await expect(selected).toBeChecked(); await expect(download).toBeEnabled();
     expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   } finally { await gate.evaluate(control => control.release()); await gate.dispose(); }
+});
+
+test('changing candidate references cancels the pending original check and only the replacement selection becomes exportable', { tag: '@timing-sensitive' }, async ({ page }) => {
+  const { review, before } = await prepareReview(page);
+  const first = review.getByRole('checkbox', { name: /^selected\.json/ });
+  const other = review.getByRole('checkbox', { name: /^other\.json/ });
+  const check = review.getByRole('button', { name: 'Check selected originals', exact: true });
+  await first.check();
+  const gate = await holdOriginalRead(page);
+  try {
+    await check.click(); await gate.evaluate(control => control.wait());
+    await first.uncheck(); await other.check();
+    await check.click();
+    await expect(other).toHaveAccessibleName(/Verified bytes/u);
+    await expect(first).toHaveAccessibleName(/Not checked/u);
+    await gate.evaluate(control => control.release());
+    await expect(first).not.toBeChecked(); await expect(other).toBeChecked();
+    await expect(first).toHaveAccessibleName(/Not checked/u);
+    const download = page.waitForEvent('download');
+    await review.getByRole('button', { name: 'Download private package', exact: true }).click();
+    const result = await download, inspected = await inspectInvestigationPackage(await readFile((await result.path())!));
+    expect(inspected.entries).toHaveLength(1);
+    expect(Buffer.from(inspected.contents.get('artifact-1')!)).toEqual(Buffer.from('{"other":"not selected"}'));
+    expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  } finally { await gate.evaluate(control => control.release()); await gate.dispose(); }
+});
+
+for (const mutation of ['remove', 'corrupt'] as const) test(`recipient export rechecks selected original bytes after they ${mutation === 'remove' ? 'disappear' : 'change'}`, async ({ page }) => {
+  const { review, before } = await prepareReview(page);
+  const first = review.getByRole('checkbox', { name: /^selected\.json/ });
+  await first.check();
+  await review.getByRole('button', { name: 'Check selected originals', exact: true }).click();
+  await expect(first).toHaveAccessibleName(/Verified bytes/u);
+  await changeStoredFile(page, [...original], mutation);
+  const downloads: string[] = [];
+  page.on('download', download => downloads.push(download.suggestedFilename()));
+  const exportButton = review.getByRole('button', { name: 'Download private package', exact: true });
+  await exportButton.click();
+  await expect(review.getByRole('alert')).toBeVisible();
+  await expect(exportButton).toBeEnabled();
+  expect(downloads).toEqual([]);
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
 });
