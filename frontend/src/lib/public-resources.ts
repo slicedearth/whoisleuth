@@ -338,7 +338,8 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     description: 'Understand what WHOISleuth keeps in the browser, what reaches public sources, and how deliberate exports preserve portability without hosted custody.',
     eyebrow: 'Privacy and storage',
     summary: Object.freeze([
-      'Cases, notes and saved observations stay in IndexedDB under the current browser origin. They are not automatically uploaded or synchronised across devices. Network collection still reaches the selected sources, and downloaded workspace archives provide backup and transfer.',
+      'When using WHOISleuth in the browser, Cases, notes and saved observations stay in IndexedDB under the current browser origin. They are not automatically uploaded or synchronised across devices. Network collection still reaches the selected sources, and downloaded workspace archives provide backup and transfer.',
+      'The optional local application instead keeps saved work and original files in a selected folder on your computer. Signing out or clearing browser site data does not delete that filesystem workspace.',
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Keep collection and retention separate', body: 'Opening a tool does not save its result. The analyst must choose a case, snapshot, watchlist, relationship or export action.' }),
