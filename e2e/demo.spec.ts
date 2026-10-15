@@ -747,6 +747,9 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
   const apiRequests: string[] = [];
   page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) apiRequests.push(request.url()); });
   await page.goto('/demo');
+  const tools = page.getByRole('navigation', { name: 'Synthetic tool substeps', exact: true });
+  await expect(tools).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Reset demo', exact: true })).toHaveCount(0);
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const width of [390, 1920]) {
@@ -757,7 +760,6 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
   }
   await page.getByRole('button', { name: 'Inspect suspicious domain' }).click();
   await expect(page.getByRole('heading', { name: 'exampleshop-login.example', exact: true })).toBeFocused();
-  const tools = page.getByRole('navigation', { name: 'Synthetic tool substeps', exact: true });
   await expect(tools.getByRole('button')).toHaveCount(6);
   for (const name of ['Brands', 'Discover', 'Bulk']) {
     await expect(tools.getByRole('button', { name: `${name} Available`, exact: true })).toBeEnabled();
@@ -862,11 +864,12 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(page.locator('.demo-footer').getByRole('link', { name: 'Sign in to investigate' })).toHaveAttribute('href', '/login');
   await expect(page.getByRole('heading', { name: 'Explore a synthetic domain investigation.' })).toBeVisible();
   await expect(page.getByText('Synthetic demo · State resets with this tab')).toBeVisible();
-  await expect(page.locator('.demo-stage-summary')).toContainText('Tool substep 1 of 6');
-  await expect(page.getByRole('button', { name: /Dashboard.*Current/ })).toHaveAttribute('aria-current', 'step');
-  await expect(page.getByRole('button', { name: /Cases.*Upcoming/ })).toBeDisabled();
+  await expect(page.getByRole('navigation', { name: 'Synthetic tool substeps', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
   await expect(page.getByRole('heading', { name: 'Define the official identity' })).toBeFocused();
+  await expect(page.locator('.demo-stage-summary')).toContainText('Tool substep 2 of 6');
+  await expect(page.getByRole('button', { name: /Brands.*Current/ })).toHaveAttribute('aria-current', 'step');
+  await expect(page.getByRole('button', { name: /Cases.*Upcoming/ })).toBeDisabled();
   await expect(page.getByRole('heading', { name: 'Example Shop' })).toBeVisible();
   await expect(page.getByText(/exampleshop\.example · Complete/)).toBeVisible();
   await page.getByRole('button', { name: 'Use synthetic profile' }).click();
@@ -1134,11 +1137,11 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await page.goto('/demo');
   const rail = page.locator('.demo-steps');
   const stageSummary = page.locator('.demo-stage-summary');
-  expect(await rail.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
-  expect(await rail.locator('button').evaluateAll((buttons) => buttons.every((button) => button.getBoundingClientRect().height >= 44))).toBe(true);
-  await expect(stageSummary).toBeVisible();
-  await expect(stageSummary).toContainText('Tool substep 1 of 6');
-  await expect(stageSummary.locator('span')).toBeHidden();
+  await expect(rail).toHaveCount(0);
+  await expect(stageSummary).toHaveCount(0);
+  for (const name of ['Inspect suspicious domain', 'Begin with Brands', 'Compare a reported change']) {
+    await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
+  }
   await expect(page.locator('.hero-full-title')).toBeVisible();
   await expect(page.locator('.hero-compact-title')).toHaveCount(1);
   await expect(page.locator('.hero-compact-title')).toBeHidden();
@@ -1146,6 +1149,12 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
+  await expect(rail.getByRole('button')).toHaveCount(6);
+  expect(await rail.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await rail.locator('button').evaluateAll((buttons) => buttons.every((button) => button.getBoundingClientRect().height >= 44))).toBe(true);
+  await expect(stageSummary).toBeVisible();
+  await expect(stageSummary).toContainText('Tool substep 2 of 6');
+  await expect(stageSummary.locator('span')).toBeHidden();
   await expect(page.locator('.hero-full-title')).toHaveCount(1);
   await expect(page.locator('.hero-full-title')).toBeHidden();
   await expect(page.locator('.hero-compact-title')).toBeVisible();
@@ -1213,6 +1222,7 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
 
   await page.getByRole('button', { name: 'Reset demo' }).click();
   await expect(page.getByRole('heading', { name: 'Choose a focused investigation task' })).toBeFocused();
+  await expect(rail).toHaveCount(0);
   await expect(page.locator('.hero-full-title')).toBeVisible();
   await expect(page.locator('.hero-compact-title')).toHaveCount(1);
   await expect(page.locator('.hero-compact-title')).toBeHidden();

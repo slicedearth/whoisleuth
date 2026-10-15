@@ -258,6 +258,10 @@ page discards them. Confirmed progress stays in the current tab.
 
 Choose **Explore an example investigation** on the public homepage to enter the
 demo. Its adjacent note identifies fictional evidence and no live collection.
+Choose a suspicious-domain, brand-lookalike or reported-change task first; the
+tool navigation appears after that task starts. **Reset demo** returns to the
+task choices. **Practise with real Case forms** is below the main workspace and
+can also be opened directly from the Resources practice link.
 The demo uses fixed fictional evidence and does not write protected workspace
 data. Its HTTP examples retain an origin when available, but not full
 requested or final URLs. Those URL rows therefore say **Not retained**; an origin

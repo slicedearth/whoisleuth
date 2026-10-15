@@ -356,11 +356,7 @@
   <div class="synthetic-flag">Synthetic demo · State resets with this tab</div>
 </section>
 
-<details id="case-practice" class="case-practice-entry card" bind:open={practiceOpen} ontoggle={event=>{if(event.currentTarget.isConnected&&event.currentTarget.open)practiceStarted=true;}}>
-  <summary onpointerenter={preloadCasePractice} onfocus={preloadCasePractice}>Practise with real Case forms</summary>
-  {#if practiceStarted}{#key practiceGeneration}<DeferredSurface load={()=>import('#lib/components/CasePractice.svelte')} props={{onreset:(scenario:CasePracticeScenario)=>{practiceRequested=scenario;practiceGeneration+=1;},visible:practiceOpen,requestedScenario:practiceRequested}} onready={()=>{if(practiceGeneration>0||practiceRequested!==null)document.getElementById('case-practice-title')?.focus();}} loadingLabel="Opening the isolated Case practice." unavailableLabel="Case practice could not be loaded." />{/key}{/if}
-</details>
-
+{#if demoState.started}
 <nav class="demo-steps card" bind:this={demoSteps} aria-label="Synthetic tool substeps">
   {#each SYNTHETIC_DEMO_STAGES as item,index}
     <button
@@ -378,7 +374,11 @@
   {/each}
 </nav>
 <p class="demo-stage-summary" aria-live="polite"><strong>Tool substep {currentStageIndex+1} of {SYNTHETIC_DEMO_STAGES.length}</strong><span>{stageDescriptions[view]}</span></p>
-<div class="demo-actions"><button type="button" onclick={reset}>Reset demo</button><span role="status" aria-live="polite">{message}</span></div>
+{/if}
+<div class="demo-actions" class:idle={!demoState.started&&!message}>
+  {#if demoState.started}<button type="button" onclick={reset}>Reset demo</button>{/if}
+  <span role="status" aria-live="polite">{message}</span>
+</div>
 
 <section
   id="demo-workspace"
@@ -403,8 +403,8 @@
     {/if}
   </section>
 {:else if view==='dashboard'}
-  <section class="demo-panel card" aria-labelledby="dashboard-heading">
-    <p class="eyebrow">Dashboard · Synthetic preview</p><h2 id="dashboard-heading" data-stage-heading tabindex="-1">Choose a focused investigation task</h2>
+  <section class="demo-panel task-picker" aria-labelledby="dashboard-heading">
+    <h2 id="dashboard-heading" data-stage-heading tabindex="-1">Choose a focused investigation task</h2>
     <p>Each scenario starts independently. Starting another replaces this tab’s demo progress, not saved Console work.</p>
     <div class="scenario-grid independent-grid">
       <article><h3>Suspicious domain</h3><p>Inspect a credential-lure fixture, separate observations from interpretation, and retain a Case for follow-up.</p><button class="primary" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('lookup')} onfocus={()=>void ensureStage('lookup')} onclick={()=>start('suspicious-domain')}>Inspect suspicious domain</button></article>
@@ -605,6 +605,11 @@
 {/if}
 </section>
 
+<details id="case-practice" class="case-practice-entry card" bind:open={practiceOpen} ontoggle={event=>{if(event.currentTarget.isConnected&&event.currentTarget.open)practiceStarted=true;}}>
+  <summary onpointerenter={preloadCasePractice} onfocus={preloadCasePractice}>Practise with real Case forms</summary>
+  {#if practiceStarted}{#key practiceGeneration}<DeferredSurface load={()=>import('#lib/components/CasePractice.svelte')} props={{onreset:(scenario:CasePracticeScenario)=>{practiceRequested=scenario;practiceGeneration+=1;},visible:practiceOpen,requestedScenario:practiceRequested}} onready={()=>{if(practiceGeneration>0||practiceRequested!==null)document.getElementById('case-practice-title')?.focus();}} loadingLabel="Opening the isolated Case practice." unavailableLabel="Case practice could not be loaded." />{/key}{/if}
+</details>
+
 <section class="demo-footer"><div><p>Ready for live investigation?</p><PublicConsoleCta /></div><p><a href="/">Return to the public overview</a></p></section>
 
 <style>
@@ -615,7 +620,8 @@
   .source-cover line { stroke: currentColor; stroke-width: 1; }
   .source-cover circle { fill: currentColor; }
   @media print { .source-cover, .source-cover-controls { display: none; } }
-  .case-practice-entry{padding:16px 22px;margin-bottom:24px;min-width:0}.case-practice-entry>summary{min-height:44px;align-content:center;font-weight:650}.case-practice-entry[open]>summary{margin-bottom:18px}
+  .case-practice-entry{padding:16px 22px;margin-top:24px;min-width:0;scroll-margin-top:24px}.case-practice-entry>summary{min-height:44px;align-content:center;font-weight:650}.case-practice-entry[open]>summary{margin-bottom:18px}
+  .demo-panel.task-picker{min-height:0;padding-block:28px}
   .scenario-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:22px;margin-top:24px}
   .scenario-grid article{min-width:0;padding-top:16px;border-top:1px solid var(--border)}
   .scenario-grid h3{margin:0;font-size:var(--text-md)}
@@ -628,6 +634,7 @@
   .demo-steps button:disabled{opacity:1;color:color-mix(in srgb,var(--muted) 82%,var(--text));background:color-mix(in srgb,var(--panel-raised) 55%,transparent)}.demo-steps button:disabled .stage-number{border-color:color-mix(in srgb,var(--muted) 72%,var(--border))}.demo-steps button:disabled .stage-copy small{color:color-mix(in srgb,var(--muted) 90%,var(--text))}
   .demo-stage-summary{display:flex;min-width:0;align-items:baseline;gap:10px;margin:0 0 12px;padding:8px 10px;border-left:2px solid var(--accent);color:var(--muted);font-size:var(--text-xs);line-height:1.5}.demo-stage-summary strong{flex:0 0 auto;color:var(--accent);font:700 var(--text-2xs) var(--mono)}
   .demo-actions{display:flex;min-height:40px;align-items:center;gap:14px;margin-bottom:18px}.demo-actions span{color:var(--muted);font-size:var(--text-xs)}
+  .demo-actions.idle{min-height:0;margin-bottom:0}
   .demo-workspace{min-width:0;scroll-margin-top:24px;overflow-anchor:none}
   .demo-panel{min-height:420px;padding:clamp(22px,4vw,38px)}.demo-panel:not(.card){padding-inline:0}.demo-panel>h2{margin:.25rem 0 8px;font:700 clamp(1.4rem,3vw,2rem) var(--mono)}.demo-panel>h2:focus{outline:none}.demo-panel>h2:focus-visible{outline:2px solid var(--focus);outline-offset:5px}.demo-panel>p:not(.eyebrow),.candidate p,.export-warning,.follow-up p{color:var(--muted);line-height:1.55}
   .deferred-demo-stage{display:flex;min-width:0;align-items:flex-start;flex-direction:column;justify-content:center}.deferred-demo-stage button{margin-top:10px}
