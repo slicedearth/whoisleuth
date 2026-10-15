@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { analyzeWhoisChainAuthority, parseWhoisChain } from '../lib/whois.mts';
 import { requiredValue } from './value-assertions.mts';
+import { whoisCollectionStatus } from '../lib/whois-authority.mts';
 
 const IANA = 'whois.iana.org';
 const REGISTRY = 'whois.verisign-grs.com';
@@ -47,6 +48,18 @@ const registrarError = { server: REGISTRAR, error: 'connect ETIMEDOUT' };
 const registrarRateLimited = { server: REGISTRAR, response: 'WHOIS LIMIT EXCEEDED - please try again later.\n' };
 
 describe('analyzeWhoisChainAuthority', () => {
+  test('recognises only an explicit not-issued policy hop and preserves historical failures', () => {
+    const policy = { server: 'registry capability policy', queryProfile: 'not-issued', status: 'unsupported' };
+    assert.equal(whoisCollectionStatus([policy]), 'unsupported');
+    assert.equal(whoisCollectionStatus([{ ...policy, status: 'skipped' }]), 'skipped');
+    for (const invalid of [
+      { ...policy, status: 'invented' }, { ...policy, queryProfile: 'domain' },
+      { ...policy, error: 'Fixture failure' }, { ...policy, response: 'Domain Name: EXAMPLE.TEST' },
+      { ...policy, queriedAt: '2026-07-01T00:00:00Z' }, { ...policy, address: '192.0.2.1' },
+      { server: policy.server, queryProfile: policy.queryProfile, error: 'Historical no-service error' },
+    ]) assert.equal(whoisCollectionStatus([invalid]), 'error');
+    assert.equal(whoisCollectionStatus([policy, registryPositive]), 'error');
+  });
   test('binds echoed positive and negative registry objects to the requested domain', () => {
     for (const response of [
       'Domain Name: OTHER.TEST\nRegistrar: Example Registrar',

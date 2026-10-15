@@ -25,6 +25,8 @@ export function normalizeWhoisChain(value: unknown): WhoisChain {
       // original hop retains its wire text. Lone and embedded controls remain.
       ...(typeof hop.response === 'string' ? { response: hop.response.slice(0, MAX_WHOIS_BYTES).replace(/\r\n/g, '\n') } : {}),
       ...(typeof hop.error === 'string' ? { error: hop.error.slice(0, 1000) } : {}),
+      ...(hop.status === 'unsupported' || hop.status === 'skipped' ? { status: hop.status } : {}),
+      ...(typeof hop.detail === 'string' ? { detail: hop.detail.slice(0, 1000) } : {}),
     });
   }
   return normalized;

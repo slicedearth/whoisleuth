@@ -103,6 +103,14 @@ Browser Lookup evidence can be verified or packaged in the CLI. `brief`,
 `export`, `compare`, `registry-doctor` and `source-report` instead require a
 saved CLI Lookup; they do not reconstruct it from a browser export.
 
+Registration source states are independent: `unsupported` means no RDAP or
+WHOIS service is published for the target, while `skipped` means no query was
+issued in that mode or under the registry access policy. Neither is a transport
+failure or a domain-absence finding. Standard terminal output explains these
+non-query outcomes; JSON and evidence exports retain their separate states.
+`--strict-exit` does not fail solely because a protocol is unsupported or skipped,
+but continues to report genuine failed or partial sources.
+
 Process selected local input:
 
 ```bash

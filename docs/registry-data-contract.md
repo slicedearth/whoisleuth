@@ -459,7 +459,7 @@ reinterpret a disabled, skipped, unsupported, or failed source as upstream
 absence. The source objects use explicit status values:
 
 - RDAP: `success`, `not_found`, `unsupported`, `disabled`, or `error`.
-- WHOIS: `complete`, `partial`, `skipped`, `disabled`, or `error`.
+- WHOIS: `complete`, `partial`, `unsupported`, `skipped`, `disabled`, or `error`.
 - Availability: `complete`, `not_applicable`, `disabled`, or `error`.
 
 RDAP diagnostics may include the selected endpoint, transport (`https` or
@@ -492,6 +492,19 @@ WHOIS diagnostics may include query time, authoritative hop, failed hop, and
 conflicting hop. A partial chain can still contain useful published values;
 field comparison uses those values but does not treat a missing field in a
 partial chain as proof that WHOIS omitted it.
+
+`unsupported` means no service was published through the applicable IANA
+discovery source; it is not a failed query or evidence that the domain is absent.
+A WHOIS admission decision records `queryProfile: "not-issued"`, its explicit
+`unsupported` or permission-gated `skipped` state, and a neutral detail instead
+of a transport error. No socket or observation time is invented. The live
+envelope has no parsed publication for either state. A fulfilled RDAP discovery
+with no matching service likewise returns `status: "unsupported"` and detail,
+not an error. Rejected bootstrap discovery, transport failures and partial
+referral chains keep their failure states; RDAP HTTP 404 remains `not_found`.
+Portable evidence retains these existing status values and registry-access
+context, with null parsed data and an empty chain for an uncollected publication.
+Historical exports keep their original recorded states.
 
 Stable source error codes include `RDAP_UPSTREAM_FAILED`, `RDAP_UNSUPPORTED`,
 `WHOIS_UPSTREAM_FAILED`, `AVAILABILITY_CHECK_FAILED`, and `FEATURE_DISABLED`.

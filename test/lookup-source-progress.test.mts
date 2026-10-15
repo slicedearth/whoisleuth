@@ -53,7 +53,7 @@ describe('Lookup source progress settlements', () => {
     const unsupported = normalizeLookupSourceSettlement('rdap', 'fulfilled', null);
     assert.equal(unsupported.state, 'unsupported');
     assert.equal(unsupported.complete, false);
-    assert.match(unsupported.fragment.limitation ?? '', /could not provide authoritative evidence/u);
+    assert.match(unsupported.fragment.limitation ?? '', /not a failed lookup or an absence finding/u);
     const disabled = normalizeLookupSourceSettlement('rdap', 'fulfilled', null, undefined, false);
     assert.equal(disabled.state, 'skipped');
     assert.equal(disabled.complete, false);
@@ -80,6 +80,8 @@ describe('Lookup source progress settlements', () => {
       ['whois', [{ server: 'whois.iana.org', error: 'Fixture failure' }], 'error', false],
       ['whois', [{ server: 'whois.iana.org', response: 'refer: whois.nic.test' }, { server: 'whois.nic.test', error: 'Fixture failure' }], 'partial', false],
       ['whois', [{ server: 'whois.iana.org', response: 'No referral' }], 'unsupported', false],
+      ['whois', [{ server: 'registry capability policy', queryProfile: 'not-issued', status: 'unsupported' }], 'unsupported', false],
+      ['whois', [{ server: 'registry capability policy', queryProfile: 'not-issued', status: 'skipped' }], 'skipped', false],
       ['domain_evidence', { state: 'unknown' }, 'partial', false],
       ['registrar_rdap', {}, 'error', false],
       ['network_context', { status: 'success', complete: false }, 'partial', false],
@@ -90,6 +92,9 @@ describe('Lookup source progress settlements', () => {
       const result = normalizeLookupSourceSettlement(source, 'fulfilled', value);
       assert.equal(result.state, state); assert.equal(result.truncated, truncated);
       assert.equal(result.complete, state === 'not_found');
+      if (source === 'whois' && state === 'skipped') {
+        assert.match(result.fragment.limitation ?? '', /not queried.*excluded by an access policy/u);
+      }
       assert.doesNotMatch(JSON.stringify(result.fragment), /example\.test|Fixture failure|refer:/u);
     }
   });

@@ -955,6 +955,8 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
     const isEs = suffix === 'es';
     const isCh = suffix === 'ch';
     const isDev = suffix === 'dev';
+    const failed = query === 'transport.dev';
+    const whoisState = failed ? 'error' : isEs || isCh ? 'skipped' : 'unsupported';
     const newlyPublished = query === 'new-service.gt';
     await route.fulfill({
       status: 200,
@@ -962,10 +964,14 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
       body: JSON.stringify({
         query: `example.${suffix}`, type: 'domain', registrableDomain: `example.${suffix}`,
         availability: { state: newlyPublished ? 'registered' : 'unknown', confidence: newlyPublished ? 'high' : 'low', domain: `example.${suffix}`, detail: newlyPublished ? 'The discovered registry returned this domain.' : 'Registry sources were inconclusive.' },
-        rdap: isDev || newlyPublished
+        rdap: failed ? { error: 'Fixture RDAP discovery failed.' } : isDev || newlyPublished
           ? { parsed: { domain: `example.${suffix}` } }
-          : { error: 'No RDAP registry found for this query via IANA bootstrap' },
-        whois: { parsed: {}, chain: [] },
+          : { status: 'unsupported', detail: 'No RDAP service is listed for this target in the IANA bootstrap.' },
+        whois: failed ? { error: 'Fixture WHOIS transport failed.', chain: [] } : {
+          status: whoisState, chain: [], detail: whoisState === 'skipped'
+            ? 'WHOIS collection requires registry permission; no socket was opened.'
+            : 'IANA publishes no domain WHOIS service for this suffix; no socket was opened.',
+        },
         diagnostics: {
           version: 5,
           registryAccess: {
@@ -991,7 +997,7 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
                   ? 'IANA publishes an RDAP bootstrap service but no domain WHOIS referral for this suffix. Missing WHOIS data is contextual only and is not evidence that the domain is unregistered.'
                   : 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.',
           },
-          rdap: { status: isDev || newlyPublished ? 'success' : 'unsupported' }, whois: { status: isDev ? 'unsupported' : 'partial' }, availability: { status: 'complete' },
+          rdap: { status: failed ? 'error' : isDev || newlyPublished ? 'success' : 'unsupported' }, whois: { status: whoisState }, availability: { status: 'complete' },
         },
       }),
     });
@@ -1004,6 +1010,15 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
   await expect(notice.getByText('Restricted access')).toBeVisible();
   await expect(notice.getByText('Source-IP authorisation required')).toBeVisible();
   await expect(notice.getByText(/does not decide registration, availability, safety, or maliciousness/i)).toBeVisible();
+  const rdapSource = page.locator('.sources > details').filter({ has: page.locator('summary').filter({ hasText: /^RDAP structured data$/u }) });
+  const whoisSource = page.locator('.sources > details').filter({ has: page.locator('summary').filter({ hasText: /^WHOIS structured data$/u }) });
+  const openSource = async (source: typeof rdapSource) => {
+    await expect(source).toHaveCount(1);
+    if (!(await source.evaluate(element => (element as HTMLDetailsElement).open))) await source.locator(':scope > summary').click();
+  };
+  await openSource(whoisSource);
+  await expect(whoisSource).toContainText('requires registry permission; no socket was opened');
+  await expect(whoisSource.locator('.source-error')).toHaveCount(0);
 
   await page.locator('#query').fill('example.ch');
   await page.getByRole('button', { name: 'Run lookup' }).click();
@@ -1032,6 +1047,10 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
   await expect(gtLookup).toHaveAttribute('target', '_blank');
   await expect(gtLookup).toHaveAttribute('rel', /\bnoreferrer\b/);
   await expect(gtNotice.getByText(/domain is not added to this link/i)).toBeVisible();
+  await openSource(rdapSource); await openSource(whoisSource);
+  await expect(rdapSource).toContainText('No RDAP service is listed');
+  await expect(whoisSource).toContainText('IANA publishes no domain WHOIS service');
+  await expect(page.locator('.sources .source-error')).toHaveCount(0);
 
   await page.locator('#query').fill('example.dev');
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
@@ -1059,6 +1078,36 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
   await expect(devNotice.getByText('IANA bootstrap discovery')).toBeVisible();
   await expect(devNotice.getByText(/Current RDAP discovery may differ from this retained profile/u)).toBeVisible();
   await expect(devNotice).toHaveClass(/expected/);
+  await openSource(whoisSource);
+  await expect(whoisSource).toContainText('no socket was opened');
+  await expect(whoisSource.locator('dl')).toHaveCount(0);
+  await expect(page.locator('.sources .source-error')).toHaveCount(0);
+  const whoisDiagnostic = page.getByRole('group', { name: 'Source diagnostics' }).locator('article').filter({ hasText: /^whois\b/iu });
+  await expect(whoisDiagnostic.locator(':scope > strong')).toHaveText('unsupported');
+  await whoisDiagnostic.getByText('Inspect source route').click();
+  await expect(whoisDiagnostic).toContainText('not a failed lookup or a domain-absence finding');
+  await expect(page.locator('details.comparison > summary')).toContainText('not comparable');
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: 844 }); await useTheme(page, theme);
+    if (width === 320) {
+      const badges = page.locator('.agreement-matrix .lane-cards li[data-comparison-state="whois_unavailable"] .lane-status');
+      await expect(badges).not.toHaveCount(0);
+      for (const badge of await badges.all()) {
+        await expect(badge).toBeVisible();
+        await expect(badge).toHaveText('WHOIS not supported');
+      }
+    }
+    await whoisSource.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+    await expect(whoisSource.locator('.callout')).toBeVisible();
+    if (captureVisualEvidenceEnabled()) await whoisSource.screenshot({ path: testInfo.outputPath(`unsupported-whois-${width}-${theme}.png`) });
+  }
+
+  await page.locator('#query').fill('transport.dev');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  await openSource(rdapSource); await openSource(whoisSource);
+  await expect(rdapSource.locator('.source-error')).toHaveText('Fixture RDAP discovery failed.');
+  await expect(whoisSource.locator('.source-error')).toHaveText('Fixture WHOIS transport failed.');
 
   await page.locator('#query').fill('new-service.gt');
   await page.getByRole('button', { name: 'Run lookup' }).click();

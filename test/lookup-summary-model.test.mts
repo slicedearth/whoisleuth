@@ -148,6 +148,21 @@ test('bounds hostile strings and preserves unknown source states', () => {
   assert.equal(summary.signals.length, 0);
 });
 
+test('unsupported protocol diagnostics explain service discovery rather than claiming a failed publication', () => {
+  const summary = buildLookupSummaryModel({ diagnostics: {
+    rdap: { status: 'unsupported' }, whois: { status: 'unsupported' }, availability: { status: 'complete' },
+  } });
+  for (const source of summary.diagnostics.slice(0, 2)) {
+    assert.equal(source.status, 'unsupported');
+    assert.match(source.detail, /No (?:RDAP|WHOIS) service.*not a failed lookup/u);
+    assert.doesNotMatch(source.route, /endpoint was selected|response follows/u);
+    assert.equal(source.endpoint, '');
+  }
+  const failed = buildLookupSummaryModel({ diagnostics: { rdap: { status: 'error', errorCode: 'RDAP_UPSTREAM_FAILED' } } });
+  assert.equal(failed.diagnostics[0]?.status, 'error');
+  assert.match(failed.diagnostics[0]?.detail ?? '', /RDAP_UPSTREAM_FAILED/u);
+});
+
 test('attributes each fallback registration fact to the publication that supplied it', () => {
   const whoisTime = '2026-03-01T01:02:03.000Z';
   const summary = buildLookupSummaryModel({

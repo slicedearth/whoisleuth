@@ -1576,6 +1576,12 @@ A source that publishes no value is different from a source that could not be
 queried, returned an unreadable result or was not selected. Truncation is
 reported wherever omitted records could change a conclusion.
 
+**Unsupported** RDAP or WHOIS means no service is published for that target,
+not that the lookup failed or the domain disappeared. Review whichever
+registration source is available. **Skipped** can instead mean the chosen mode
+omitted a query or registry permission is required. Actual timeouts, discovery
+failures and incomplete referral chains remain visible separately.
+
 ### Registration and availability
 
 Registry authority decides domain registration availability. Registrar RDAP,

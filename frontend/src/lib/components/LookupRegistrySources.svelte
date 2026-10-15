@@ -2,7 +2,7 @@
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import RdapDomainSource from '#lib/components/RdapDomainSource.svelte';
   import RegistryDateExplanation from './RegistryDateExplanation.svelte';
-  import type { RegistrationTraceState } from '#lib/analysis/lookup-registry-display.ts';
+  import { registrationSourceNotice, type RegistrationTraceState } from '#lib/analysis/lookup-registry-display.ts';
   import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
   import {
     projectEvidenceMatrix,
@@ -67,11 +67,13 @@
     comparisonRows,
     comparisonHasConflicts,
     rdapError,
+    rdapDetail = '',
     resultType,
     rdapParsed,
     rdapPartialDetail,
     rdapRows,
     whoisError,
+    whoisDetail = '',
     whoisParsed = {},
     whoisRows,
     whoisContactRoles,
@@ -85,11 +87,13 @@
     comparisonRows: ComparisonRow[];
     comparisonHasConflicts: boolean;
     rdapError: string;
+    rdapDetail?: string;
     resultType: string;
     rdapParsed: JsonRecord;
     rdapPartialDetail: string;
     rdapRows: DisplayRow[];
     whoisError: string;
+    whoisDetail?: string;
     whoisParsed?: JsonRecord;
     whoisRows: DisplayRow[];
     whoisContactRoles: ContactRole[];
@@ -149,6 +153,8 @@
         ? 'unavailable'
         : 'partial'));
   const whoisTraceState = $derived<TraceState>(registrationTrace.whois ?? (whoisError ? 'error' : 'unavailable'));
+  const rdapNotice = $derived(registrationSourceNotice('RDAP', registryTraceState, rdapDetail));
+  const whoisNotice = $derived(registrationSourceNotice('WHOIS', whoisTraceState, whoisDetail));
   const comparisonLanes = $derived.by((): MatrixInput[] => {
     return [
       ...comparisonRows.map((row, index): MatrixInput => ({
@@ -396,7 +402,7 @@
             <details class="lane-card" open={row.status !== 'equivalent' && row.status !== 'equal'}>
               <summary>
                 <span><strong>{row.label}</strong><small>{row.context}</small></span>
-                <span class="lane-status">{sourceStateLabel(row.status || 'unknown')}</span>
+                <span class="lane-status">{row.assessment || sourceStateLabel(row.status || 'unknown')}</span>
               </summary>
               <div class="lane-card-body">
                 <div class="publication-side">
@@ -544,6 +550,7 @@
   <details class="card">
     <summary>RDAP structured data</summary>
     {#if rdapError}<p class="error source-error">{rdapError}</p>
+    {:else if rdapNotice}<p class="callout source-partial">{rdapNotice}</p>
     {:else if resultType === 'domain'}<RdapDomainSource parsed={rdapParsed} source="Registry" />
     {:else}
       {#if rdapPartialDetail}<p class="callout warn source-partial"><strong>Server-declared partial response.</strong> {rdapPartialDetail}</p>{/if}
@@ -553,6 +560,7 @@
   <details class="card">
     <summary>WHOIS structured data</summary>
     {#if whoisError}<p class="error source-error">{whoisError}</p>
+    {:else if whoisNotice}<p class="callout source-partial">{whoisNotice}</p>
     {:else}
       <dl>{#each whoisRows as row}<dt>{row.label}</dt><dd>{row.value}</dd>{/each}</dl>
       {#if whoisContactRoles.length}

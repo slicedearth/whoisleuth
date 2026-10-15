@@ -260,6 +260,14 @@ function formatTerminalLookup(
     `RDAP           ${titleCase(rdapDiagnostics.status)}`,
     `WHOIS          ${titleCase(whoisDiagnostics.status)}`,
   ];
+  if (detail !== 'summary') {
+    for (const [source, status] of [['rdap', rdapDiagnostics.status], ['whois', whoisDiagnostics.status]] as const) {
+      const sourceDetail = terminalRecord(document[source]).detail;
+      if (['unsupported', 'skipped', 'disabled'].includes(String(status)) && typeof sourceDetail === 'string' && sourceDetail) {
+        registrationLines.push(`${source.toUpperCase()} detail    ${boundedTerminalComponent(sourceDetail, 300)}`);
+      }
+    }
+  }
   if (detail !== 'summary' && rdapDiagnostics.endpoint) {
     registrationLines.splice(1, 0, `RDAP source    ${safeTerminalValue(rdapDiagnostics.endpoint)}`);
   }

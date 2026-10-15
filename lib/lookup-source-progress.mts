@@ -149,9 +149,11 @@ function normalizeLookupSourceSettlement(
   const limitation = outcome === 'rejected'
     ? 'This source did not complete. No absence or safety conclusion was inferred.'
     : state === 'skipped'
-      ? 'This source was not requested or was not applicable to the target.'
+      ? 'This source was not queried: it was not requested, did not apply to the target, or was excluded by an access policy.'
       : state === 'unsupported'
-        ? 'This source could not provide authoritative evidence for this target.'
+        ? source === 'rdap' || source === 'whois'
+          ? 'No service is published through the applicable registry discovery source for this target; this is not a failed lookup or an absence finding.'
+          : 'This source could not provide authoritative evidence for this target.'
         : state === 'partial'
           ? 'This source returned incomplete evidence; missing fields remain unknown.'
           : null;

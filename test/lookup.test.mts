@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, test } from 'node:test';
 import { networkFeaturePolicy } from '../lib/feature-policy.mts';
 import { runUnifiedLookup } from '../lib/lookup.mts';
@@ -11,6 +12,11 @@ import { createLookupHttpResponse, parseLookupHttpResponse } from '../lib/lookup
 import type { ClassifiedQuery, IpQuery } from '../lib/classify.mts';
 import { recordValue, requiredValue } from './value-assertions.mts';
 import { deferred } from './deferred.mts';
+import { buildWhoisChainUncached } from '../lib/whois.mts';
+import { parseRdap } from '../lib/rdap.mts';
+import { parseLookupEvidenceReplay } from '../frontend/src/lib/analysis/lookup-evidence-replay.ts';
+import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
+import { lookupStrictExitFindings } from '../cli/strict-exit.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
@@ -345,7 +351,7 @@ describe('runUnifiedLookup', () => {
         parsed: { domain: 'EXAMPLE.COM', registrarIanaId: rdapIanaId, statuses: [], nameservers: [], events: [] },
         attempts: [],
       }),
-      buildWhoisChain: async () => [{
+      buildWhoisChain: async () => [{ server: 'whois.iana.org', response: 'refer: whois.example' }, {
         server: 'whois.example',
         response: `Domain Name: EXAMPLE.COM\nRegistrar IANA ID: ${whoisIanaId}\n`,
       }],
@@ -432,10 +438,68 @@ describe('runUnifiedLookup', () => {
     });
 
     assert.deepEqual(result.whois.chain, rootOnlyChain);
-    assert.equal(requiredValue(result.whois.parsed).registrationStatus, 'inconclusive');
-    assert.equal(requiredValue(result.whois.parsed).authoritativeHop, null);
+    assert.equal(result.whois.parsed, undefined);
     assert.equal(result.diagnostics.whois.status, 'unsupported');
     assert.equal(result.diagnostics.whois.errorCode, null);
+  });
+
+  test('keeps non-published protocols and permission restrictions distinct through live results and offline export', async () => {
+    for (const [domain, rdapAvailable, whoisAvailable, whoisStatus] of [
+      ['example.dev', true, false, 'unsupported'],
+      ['example.com', false, true, 'complete'],
+      ['example.gt', false, false, 'unsupported'],
+      ['example.es', true, false, 'skipped'],
+    ] as const) {
+      const settlements: Array<{ source: string; state: string }> = [];
+      const data = { objectClassName: 'domain', ldhName: domain, status: ['active'] };
+      const query = { type: 'domain' as const, value: domain, registrableDomain: domain, inputHostname: domain, isSubdomain: false };
+      const result = await runFullLookup(query, {
+        fetchRdapRecord: async () => rdapAvailable ? {
+          rdapServer: `https://registry.example/rdap/domain/${domain}`, upstreamStatus: 200,
+          transportSecurity: 'https', data, parsed: parseRdap('domain', data),
+        } : null,
+        buildWhoisChain: async () => whoisAvailable ? [
+          { server: 'whois.iana.org', response: 'refer: whois.registry.example' },
+          { server: 'whois.registry.example', response: `Domain Name: ${domain}\nRegistrar: Example Registrar` },
+        ] : buildWhoisChainUncached(domain, { whoisQuery: async () => assert.fail('Policy must not issue a WHOIS query') }),
+        checkDomainAvailability: async () => ({ applicable: true, domain, state: rdapAvailable || whoisAvailable ? 'registered' : 'unknown', confidence: 'low' }),
+        onSourceSettled: (value: { source: string; state: string }) => settlements.push(value),
+      });
+      const rdapStatus = rdapAvailable ? 'success' : 'unsupported';
+      assert.equal(result.diagnostics.rdap.status, rdapStatus);
+      assert.equal(result.diagnostics.whois.status, whoisStatus);
+      assert.equal(settlements.find(row => row.source === 'rdap')?.state, rdapStatus);
+      assert.equal(settlements.find(row => row.source === 'whois')?.state, whoisAvailable ? 'success' : whoisStatus);
+      assert.equal('error' in result.rdap, false);
+      assert.equal(result.whois.error, undefined);
+      assert.deepEqual(lookupStrictExitFindings(result).filter(finding => /^diagnostics\.(?:rdap|whois)\b/u.test(finding.path)), []);
+      if (!whoisAvailable) {
+        assert.equal(result.whois.parsed, undefined);
+        assert.equal(result.diagnostics.whois.queriedAt, null);
+        assert.equal(result.diagnostics.whois.failedHop, null);
+        assert.match(formatTerminalLookup(result), /WHOIS detail\s+.*no socket was opened/u);
+        const insights = recordValue(result.registryInsights);
+        assert.equal(recordValue(recordValue(insights.contactDisclosure).whois).state, 'unavailable');
+        assert.doesNotMatch(JSON.stringify(insights), /WHOIS referral chain was incomplete/u);
+      }
+      const http = createLookupHttpResponse(domain, query, result);
+      assert.equal(parseLookupHttpResponse(http).ok, true);
+      const evidence = buildLookupEvidence(http);
+      assert.equal(evidence.sources.rdap.status, rdapStatus);
+      assert.equal(evidence.sources.whois.status, whoisStatus);
+      if (!whoisAvailable) {
+        assert.equal(evidence.sources.whois.parsed, null);
+        assert.deepEqual(evidence.sources.whois.chain, []);
+      }
+      if (!rdapAvailable) assert.equal(evidence.sources.rdap.parsed, null);
+      const json = JSON.stringify(evidence);
+      const verification = await verifyOfflineArtifact(json);
+      assert.equal(verification.state, 'structure_valid');
+      const replay = await parseLookupEvidenceReplay(json, { expectedSha256: createHash('sha256').update(json).digest('hex') });
+      assert.equal(replay.sources.find(source => source.id === 'rdap')?.state, rdapStatus);
+      assert.equal(replay.sources.find(source => source.id === 'whois')?.state, whoisStatus);
+      assert.equal(replay.digestVerified, true);
+    }
   });
 
   test('reports an initial WHOIS transport failure as an error, not missing support', async () => {
@@ -446,6 +510,8 @@ describe('runUnifiedLookup', () => {
       checkDomainAvailability: async () => ({ state: 'unknown', confidence: 'low' }),
     });
     assert.equal(result.diagnostics.whois.status, 'error');
+    assert.equal(result.whois.error, 'Fixture transport failure');
+    assert.ok(lookupStrictExitFindings(result).some(finding => finding.path === 'diagnostics.whois.status' && finding.state === 'error'));
     assert.equal(requiredValue(result.whois.parsed).registrationStatus, 'inconclusive');
     assert.deepEqual(result.whois.chain, chain);
   });

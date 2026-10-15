@@ -52,15 +52,17 @@
   } = $derived(analysis);
 
   const sources = $derived({
-    comparisonSummary: `RDAP / WHOIS comparison · ${comparison.counts.conflict} ${comparison.counts.conflict === 1 ? 'conflict' : 'conflicts'} · ${sourceOnlyCount} source-only · ${redactedComparisonCount} redacted · ${limitedComparisonCount} unavailable/incomplete · ${comparison.counts.equivalent} equivalent`,
+    comparisonSummary: `RDAP / WHOIS comparison · ${comparison.counts.conflict} ${comparison.counts.conflict === 1 ? 'conflict' : 'conflicts'} · ${sourceOnlyCount} source-only · ${redactedComparisonCount} redacted · ${limitedComparisonCount} not comparable · ${comparison.counts.equivalent} equivalent`,
     comparisonRows: registryDisplay.comparisonRows,
     comparisonHasConflicts: comparison.counts.conflict > 0,
     rdapError: boundedTechnologyText(rdap.error, 240),
+    rdapDetail: boundedTechnologyText(rdap.detail, 300),
     resultType,
     rdapParsed,
     rdapPartialDetail: registryDisplay.rdapPartialDetail,
     rdapRows: registryDisplay.rdapRows,
     whoisError: boundedTechnologyText(whois.error, 240),
+    whoisDetail: boundedTechnologyText(whois.detail, 300),
     whoisParsed,
     whoisRows: registryDisplay.whoisRows,
     whoisContactRoles: registryDisplay.whoisContactRoles,
@@ -79,7 +81,7 @@
     metrics={[
       `${registryDisplay.comparisonMetrics.equivalent} equivalent`,
       `${registryDisplay.comparisonMetrics.conflict} ${registryDisplay.comparisonMetrics.conflict === 1 ? 'conflict' : 'conflicts'}`,
-      `${registryDisplay.comparisonMetrics.limitedOrSourceOnly} limited or source-only`,
+      `${registryDisplay.comparisonMetrics.limitedOrSourceOnly} not comparable or source-only`,
     ]}
     expanded={controls.expanded}
     onpreload={controls.onpreload}

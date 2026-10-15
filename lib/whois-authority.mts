@@ -202,9 +202,16 @@ export function analyzeWhoisChainAuthority(chain: unknown, requestedDomain?: str
 }
 
 /** Collection status shared by final and incremental Lookup presentation. */
-export function whoisCollectionStatus(chain: unknown, requestedDomain?: string): 'error' | 'unsupported' | 'complete' | 'partial' {
+export function whoisCollectionStatus(chain: unknown, requestedDomain?: string): 'error' | 'unsupported' | 'skipped' | 'complete' | 'partial' {
   const source = normalizeWhoisChain(chain);
   if (!source.length || source[0]?.error) return 'error';
+  const first = source[0]!;
+  if (first.server === 'registry capability policy') {
+    if (source.length === 1 && first.queryProfile === 'not-issued' && first.response === undefined
+      && first.address === undefined && first.queriedAt === undefined
+      && (first.status === 'unsupported' || first.status === 'skipped')) return first.status;
+    return 'error';
+  }
   if (source.length === 1) return 'unsupported';
   return analyzeWhoisChainAuthority(source, requestedDomain).chainStatus;
 }

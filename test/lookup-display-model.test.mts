@@ -7,7 +7,7 @@ import {
   buildLookupPageDisplay,
   buildLookupRegistryDisplay,
 } from '../frontend/src/lib/analysis/lookup-display-model.ts';
-import { registrationTraceState } from '../frontend/src/lib/analysis/lookup-registry-display.ts';
+import { registrationSourceNotice, registrationTraceState } from '../frontend/src/lib/analysis/lookup-registry-display.ts';
 import { buildLookupPageProfileDisplay } from '../frontend/src/lib/analysis/lookup-page-profile-display.ts';
 import {
   deliveryMetadataDisplay,
@@ -59,6 +59,20 @@ test('derives registration authority trace state from source health rather than 
   assert.equal(registrationTraceState('unsupported', { hasPublication: true }), 'unsupported');
   assert.equal(registrationTraceState('success', { hasPublication: false }), 'partial');
   assert.equal(registrationTraceState('success', { hasPublication: true }), 'complete');
+});
+
+test('explains absent registration services without replacing errors or not-found evidence', () => {
+  assert.match(registrationSourceNotice('WHOIS', 'unsupported'), /No WHOIS service.*not a failed lookup/u);
+  assert.match(registrationSourceNotice('RDAP', 'unsupported'), /No RDAP service.*domain-absence/u);
+  assert.match(registrationSourceNotice('WHOIS', 'skipped'), /not queried/u);
+  assert.match(registrationSourceNotice('RDAP', 'disabled'), /disabled/u);
+  assert.equal(registrationSourceNotice('WHOIS', 'skipped', 'Requires permission.'), 'Requires permission.');
+  for (const status of ['error', 'partial', 'not_found', 'success', 'complete', 'unknown']) {
+    assert.equal(registrationSourceNotice('WHOIS', status, 'Not a replacement for the real source state'), '');
+  }
+  const bounded = registrationSourceNotice('WHOIS', 'skipped', `not queried\u0000${'x'.repeat(400)}`);
+  assert.ok(bounded.length <= 300);
+  assert.doesNotMatch(bounded, /\u0000/u);
 });
 
 test('projects fixed homepage metadata without retaining source values or inventing absence', () => {
