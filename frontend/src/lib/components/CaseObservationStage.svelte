@@ -102,40 +102,49 @@
 
 {#if selectionError}<p role="alert">{selectionError} The draft remains available.</p>{/if}
 
-<section class="case-response-stage" aria-label="Case observations">
+<section class="case-response-stage observation-stage" aria-label="Case observations">
   <details id={`case-response-observation-${record.id}`} bind:open={expanded}>
     <summary>Pin an observed fact</summary>
-    <DocumentationSearch initialQuery="evidence" label="Evidence guidance" />
-    <form class="response-form" data-recovery-form={pinDraft.form} oninput={pinDraft.changed} onsubmit={(event) => { event.preventDefault(); void addPin(); }}>
-      <p class="notice">Date and time fields use UTC.</p>
-      <CaseResponseObjectSelect {record} label="Object observed by this evidence" bind:value={pinDraft.value.responseObject} />
-      <div class="two-columns">
-        <label class="field">Label
-          <input bind:value={pinDraft.value.pinLabel} maxlength="80" required placeholder="Observed login form">
-        </label>
-        <label class="field">Source
-          <input bind:value={pinDraft.value.pinSource} maxlength="80" required placeholder="Lookup evidence">
-        </label>
-        <div class="field">
-          <label for={`pin-observed-at-${record.id}`}>Observed at</label>
-          <input id={`pin-observed-at-${record.id}`} aria-describedby={`pin-time-help-${record.id}`} type="datetime-local" {...utcDateTimeInputAttributes} bind:value={pinDraft.value.pinObservedAt}>
-          <small id={`pin-time-help-${record.id}`}>Optional; leave blank if unknown.</small>
-        </div>
-        <label class="field">Completeness
-          <select bind:value={pinDraft.value.pinCompleteness}>
-            {#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}
-          </select>
-        </label>
+    <form class="response-form observation-form" data-recovery-form={pinDraft.form} oninput={pinDraft.changed} onsubmit={(event) => { event.preventDefault(); void addPin(); }}>
+      <div class="observation-columns">
+        <fieldset class="observation-fields">
+          <legend>Observation</legend>
+          <label class="field">Label
+            <input bind:value={pinDraft.value.pinLabel} maxlength="80" required placeholder="Observed login form">
+          </label>
+          <label class="field">Fact
+            <textarea bind:value={pinDraft.value.pinValue} maxlength="1000" rows="5" required></textarea>
+          </label>
+          <CaseResponseObjectSelect {record} label="Object observed by this evidence" bind:value={pinDraft.value.responseObject} />
+        </fieldset>
+        <fieldset class="observation-fields source-fields">
+          <legend>Source and time</legend>
+          <label class="field">Source
+            <input bind:value={pinDraft.value.pinSource} maxlength="80" required placeholder="Lookup evidence">
+          </label>
+          <div class="field">
+            <label for={`pin-observed-at-${record.id}`}>Observed at</label>
+            <input id={`pin-observed-at-${record.id}`} aria-describedby={`pin-time-help-${record.id}`} type="datetime-local" {...utcDateTimeInputAttributes} bind:value={pinDraft.value.pinObservedAt}>
+            <small id={`pin-time-help-${record.id}`}>Optional; leave blank if unknown.</small>
+          </div>
+          <p class="notice">Date and time fields use UTC.</p>
+          <label class="field">Completeness
+            <select bind:value={pinDraft.value.pinCompleteness}>
+              {#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}
+            </select>
+          </label>
+        </fieldset>
       </div>
-      <label class="field">Fact
-        <textarea bind:value={pinDraft.value.pinValue} maxlength="1000" rows="5" required></textarea>
-      </label>
-      <label class="field">Limitations <small>one per line</small>
-        <textarea bind:value={pinDraft.value.pinLimitations} maxlength="2000" rows="3"></textarea>
-      </label>
+      <fieldset class="observation-fields limitation-fields">
+        <legend>Limitations</legend>
+        <label class="field"><span class="sr-only">Limitations</span><small>One per line</small>
+          <textarea bind:value={pinDraft.value.pinLimitations} maxlength="2000" rows="3"></textarea>
+        </label>
+      </fieldset>
       <button class="primary" type="submit" disabled={pinDraft.state.busy || mutationBusy}>Pin evidence</button>
       <CaseDraftRecovery draft={pinDraft} />
     </form>
+    <DocumentationSearch initialQuery="evidence" label="Evidence guidance" />
     {#if record.evidencePins.length}
       <ol class="records">
         {#each [...record.evidencePins].reverse() as pin}
@@ -234,6 +243,16 @@
 </section>
 
 <style>
+  .observation-stage{container-type:inline-size;padding-inline:var(--card-pad);background:var(--panel);border-block:1px solid var(--border)}
+  .observation-stage>details:first-child{border-top:0}
+  .observation-columns{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:24px;min-width:0}
+  .observation-fields{display:grid;align-content:start;gap:14px;margin:0;padding:0;min-width:0;border:0}
+  .observation-fields>legend{margin-bottom:14px;padding:0;font:650 var(--text-md) var(--font-sans);color:var(--text)}
+  .source-fields{padding-left:24px;border-left:1px solid var(--border)}
+  .limitation-fields{margin-top:4px;padding-top:14px;border-top:1px solid var(--border)}
+  .limitation-fields>legend{margin-bottom:0;padding-right:12px}
+  @container(max-width:680px){.observation-columns{grid-template-columns:minmax(0,1fr)}.source-fields{padding-left:0;padding-top:14px;border-left:0;border-top:1px solid var(--border)}.source-fields>legend{padding-right:12px}}
+  @media print{.observation-stage{padding-inline:0;background:transparent}}
   .chronology {
     display: grid;
     gap: 8px;

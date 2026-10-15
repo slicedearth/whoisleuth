@@ -307,8 +307,8 @@
 {:else}
   <div class="shell" class:open={navOpen}>
     <a class="skip-link" href="#main-content">Skip to main content</a>
-    <header bind:this={consoleHeader} inert={commandOpen} aria-hidden={commandOpen?'true':undefined}>
-      <a href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark small"><BrandMark /></span><strong><BrandWordmark /></strong></a>
+    <header class="site-header" bind:this={consoleHeader} inert={commandOpen} aria-hidden={commandOpen?'true':undefined}>
+      <a href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark small"><BrandMark /></span><span class="console-brand-copy"><strong><BrandWordmark /></strong><small>Domain intelligence console</small></span></a>
       <div class="console-header-actions">
         <button class="command-trigger" type="button" aria-label="Search console navigation" bind:this={commandTrigger} onpointerenter={() => preloadBestEffort(() => import('#lib/console-command-navigation.ts'))} onfocus={() => preloadBestEffort(() => import('#lib/console-command-navigation.ts'))} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Search</strong></button>
         <span class="sign-out-control">

@@ -82,6 +82,7 @@
 
 <div class="public-shell" class:documentation-shell={referenceSectionActive}>
   <a class="skip-link" href="#main-content">Skip to main content</a>
+  <div class="site-header">
   <header class="public-header">
     <a class="public-brand" href="/" aria-label="WHOISleuth overview"><span class="mark"><BrandMark /></span><span class="brand-copy"><strong><BrandWordmark /></strong><small>Domain intelligence</small></span></a>
     <nav class="public-navigation-desktop" aria-label="Public navigation">
@@ -107,18 +108,25 @@
     </div>
     {#if logoutError}<p class="session-error" role="alert">{logoutError}</p>{/if}
   </header>
+  </div>
 
+  <div class="public-body">
   <main class="public-content" class:reference-page={referenceSectionActive} id="main-content" tabindex="-1">
     {@render children()}
   </main>
 
   <SiteFooter />
+  </div>
 </div>
 
 <style>
-  .public-shell{width:min(1280px,100%);min-height:100vh;margin:auto;padding:0 clamp(20px,4vw,48px)}
-  .public-shell.documentation-shell{width:min(1680px,100%);background:var(--reading-surface)}
+  .public-shell{--public-width:1280px;--public-gutter:clamp(20px,4vw,48px);width:min(var(--public-width),100%);min-height:100vh;margin:auto;padding-inline:var(--public-gutter)}
+  .public-shell.documentation-shell{--public-width:1680px;background:var(--reading-surface)}
   .public-header{display:flex;position:static;inset:auto;z-index:auto;height:auto;align-items:center;justify-content:space-between;gap:12px 24px;padding:18px 0;border-bottom:1px solid var(--border);background:transparent;container:public-header/inline-size;flex-wrap:wrap}
+  :global(:root[data-theme='light']) .public-shell{width:100%;padding-inline:0}
+  :global(:root[data-theme='light']) :is(.public-body,.public-header){width:min(var(--public-width),100%);margin:auto;padding-inline:var(--public-gutter)}
+  :global(:root[data-theme='light']) .site-header{border-bottom:1px solid var(--border);background:var(--bg);color:var(--text)}
+  :global(:root[data-theme='light']) .public-header{border-bottom:0}
   .public-brand{display:flex;min-height:44px;align-items:center;gap:10px;font-family:var(--mono)}
   .public-brand .mark{width:38px;height:38px}
   .public-brand strong,.public-brand small{display:block}
@@ -159,8 +167,8 @@
     .public-navigation-mobile{display:flex;position:relative;flex:1 1 auto;align-items:center;justify-content:flex-end;gap:5px;--public-nav-control-h:44px}
   }
   @media(max-width:720px){
-    .public-shell{padding-inline:12px}
-    .public-header{align-items:center;flex-direction:row;gap:6px;padding:12px 0}
+    .public-shell{--public-gutter:12px}
+    .public-header{align-items:center;flex-direction:row;gap:6px;padding-block:12px}
     .public-brand{flex:0 0 auto}
     .public-brand{gap:6px}
     .public-brand .mark{width:28px;height:28px}
@@ -174,7 +182,6 @@
     .public-content.reference-page{padding-top:20px}
   }
   @media(max-width:440px){
-    .public-shell{padding-inline:12px}
     .public-header{gap:4px}
     .public-brand{gap:4px}
     .public-brand .mark{width:20px;height:20px}

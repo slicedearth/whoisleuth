@@ -1,5 +1,5 @@
-:root {
-  font-family: var(--font-sans);
+/* The light workspace's contrasting header reuses the dark palette. */
+:root, :root[data-theme="light"] .site-header {
   color-scheme: dark;
   --bg: #0f1115;
   --bg-rgb: 15 17 21;
@@ -125,6 +125,10 @@
   --cluster-5: #bb77ff;
   --cluster-6: #5f8fd6;
   --cluster-7: #d388b7;
+}
+
+:root {
+  font-family: var(--font-sans);
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
@@ -155,21 +159,19 @@
 
 :root[data-theme="light"] {
   color-scheme: light;
-  /* Soft oyster and porcelain whites create the hierarchy without pure-white
-     glare or a coloured cast inside evidence cards. Chromatic tokens remain
-     reserved for interaction, evidence families, and semantic states. */
-  --bg: #e7e2d8;
-  --bg-rgb: 231 226 216;
-  --panel: #fffdf8;
-  --panel-rgb: 255 253 248;
-  --panel-raised: #f2eee6;
+  /* Neutral surfaces separate the workspace, reading areas and controls. */
+  --bg: #f3f4f6;
+  --bg-rgb: 243 244 246;
+  --panel: #ffffff;
+  --panel-rgb: 255 255 255;
+  --panel-raised: #eceef1;
   --surface: var(--panel);
   --reading-surface: var(--panel);
-  --border: #cec5b6;
-  --border-strong: #b0a798;
-  --text: #1c1915;
-  --muted: #585045;
-  --muted-subtle: #6f6759;
+  --border: #d4d8de;
+  --border-strong: #a2aab5;
+  --text: #171b22;
+  --muted: #505965;
+  --muted-subtle: #636c78;
   --accent: #005f9e;
   --accent-rgb: 0 95 158;
   --accent2: #006b49;
@@ -189,10 +191,10 @@
   --evidence-web: #84265f;
   --evidence-derived: #00636d;
   --evidence-analyst: #39485a;
-  --overlay-rgb: 45 42 37;
-  --shadow-rgb: 53 48 42;
-  --card-shadow-alpha: .07;
-  --card-hover-shadow-alpha: .12;
+  --overlay-rgb: 23 27 34;
+  --shadow-rgb: 23 27 34;
+  --card-shadow-alpha: .035;
+  --card-hover-shadow-alpha: .08;
   --body-grid-alpha: .008;
   --body-ambient-alpha: .025;
   --ambient-rgb: 0 95 158;
@@ -214,7 +216,7 @@
   --selection-text: #ffffff;
   --control-hover: color-mix(in srgb,var(--panel-raised) 94%,var(--text));
   --control-surface: #ffffff;
-  --control-border: #8f8575;
+  --control-border: #7b8490;
   --quiet-control-border: var(--control-border);
   --primary-border: #004c7c;
   --primary-text: #ffffff;
@@ -222,7 +224,7 @@
   --primary-end: #005b91;
   --primary-hover-start: #006aa5;
   --primary-hover-end: #004d7e;
-  --theme-color: #e7e2d8;
+  --theme-color: #f3f4f6;
   --source-registry-text: #5b237d;
   --source-registry-stroke: #7a32a8;
   --source-registrar-text: #005766;
@@ -737,6 +739,18 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
 .public-content { width: min(960px,100%); }
 .shell > header { position: sticky; top: 0; z-index: 18; grid-area: header; display: flex; min-width: 0; height: var(--console-toolbar-height); align-items: center; justify-content: flex-end; padding: 0 clamp(24px,4vw,58px); border-bottom: 1px solid var(--border); background: rgb(var(--bg-rgb) / .96); backdrop-filter: blur(8px); }
 .shell > header > a { display: none; }
+.console-brand-copy { display: contents; }
+.console-brand-copy small { display: none; }
+:root[data-theme='light'] .shell { --console-toolbar-height: 62px; grid-template-areas: "header header" "sidebar main"; }
+:root[data-theme='light'] .shell > aside { top: var(--console-toolbar-height); height: calc(100dvh - var(--console-toolbar-height)); background: var(--panel); box-shadow: none; }
+:root[data-theme='light'] .shell > aside .brand { display: none; }
+:root[data-theme='light'] .shell > header { z-index: 30; justify-content: space-between; padding-inline: 24px; background: var(--bg); color: var(--text); }
+:root[data-theme='light'] .shell > header > a { display: flex; min-width: 0; gap: 10px; align-items: center; font-family: var(--mono); }
+@media (min-width: 901px) {
+  :root[data-theme='light'] .console-brand-copy { display: block; }
+  :root[data-theme='light'] .console-brand-copy strong { display: block; font-size: 1.08rem; line-height: 1.2; }
+  :root[data-theme='light'] .console-brand-copy small { display: block; margin-top: 3px; color: var(--muted); font: var(--text-2xs) var(--font-sans); }
+}
 .console-header-actions { display: flex; min-width: 0; gap: 8px; align-items: center; }
 .console-sign-out { min-height: 34px; padding: 0 13px; border: 1px solid var(--quiet-control-border); border-radius: var(--radius-sm); color: var(--text); background: var(--panel); font: 700 var(--text-2xs) var(--mono); white-space: nowrap; }
 .console-sign-out:hover, .console-sign-out:focus-visible { border-color: var(--accent); color: var(--accent); background: rgb(var(--accent-rgb) / var(--interactive-fill-alpha)); }
@@ -762,6 +776,7 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
   .shell { --console-toolbar-height: 62px; display: block; padding-top: var(--console-toolbar-height); }
   .shell > header { position: fixed; inset: 0 0 auto; z-index: 30; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid var(--border); background: rgb(var(--bg-rgb) / .96); }
   .shell > header > a { display: flex; min-width: 0; gap: 10px; align-items: center; font-family: var(--mono); }
+  :root[data-theme='light'] .shell > header { padding-inline: 18px; }
   .shell > header > a strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .navigation-toggle { display: block; width: 40px; height: 40px; padding: 0; border: 1px solid var(--quiet-control-border); border-radius: var(--radius-sm); background: var(--panel); }
   .shell > aside { position: fixed; inset: var(--console-toolbar-height) auto auto 0; visibility: hidden; width: min(310px,86vw); height: calc(100dvh - var(--console-toolbar-height)); padding-bottom: max(74px,calc(env(safe-area-inset-bottom) + 24px)); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: max(74px,calc(env(safe-area-inset-bottom) + 24px)); pointer-events: none; transform: translateX(-105%); transition:none; }
@@ -776,7 +791,7 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
 }
 
 @media (max-width: 380px) {
-  .shell > header { padding-inline: 12px; }
+  .shell > header, :root[data-theme='light'] .shell > header { padding-inline: 12px; }
   .shell > header > a { gap: 7px; }
   .shell > header .mark.small { width: 30px; height: 30px; }
   .console-header-actions { gap: 6px; }
@@ -784,7 +799,7 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
 }
 
 @media (max-width: 330px) {
-  .shell > header { padding-inline: 8px; }
+  .shell > header, :root[data-theme='light'] .shell > header { padding-inline: 8px; }
   .console-header-actions { gap: 4px; }
   .console-sign-out { padding-inline: 4px; }
 }
@@ -870,7 +885,7 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
 }
 
 @media (forced-colors: active) {
-  .card, .compact-disclosure, .stat-grid > *, .shell > aside, .shell > header { background: Canvas; box-shadow: none; }
+  .card, .compact-disclosure, .stat-grid > *, .shell > aside, .site-header { background: Canvas; box-shadow: none; }
   .shell > aside nav a.active, .local-nav a.active, nav a[aria-current]:not([aria-current='false']) { outline: 2px solid Highlight; outline-offset: -2px; }
   .evidence-status, .chip, .badge { border: 1px solid ButtonText; background: Canvas; color: CanvasText; }
   .evidence-status.success, .evidence-status.partial, .evidence-status.error { border-style: solid; }

@@ -129,7 +129,7 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(trigger).toHaveAttribute('title', 'System theme');
   await expect(trigger.locator('.theme-trigger-label')).toHaveText('System');
   await expect(trigger.locator('[data-theme-symbol="system"]')).toBeVisible();
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e7e2d8');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f3f4f6');
   const lightCanvas = await page.locator('body').evaluate(element => getComputedStyle(element).backgroundColor);
   const lightPanel = await page.locator('.hero-preview .lookup-panel').evaluate(element => getComputedStyle(element).backgroundColor);
 
@@ -201,7 +201,7 @@ test('light preference applies before reload and persists across public pages', 
 
   await chooseTheme(page, 'Light');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e7e2d8');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f3f4f6');
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBe('light');
 
   await page.goto('/demo');
@@ -238,7 +238,7 @@ test('relationship-map cluster strokes stay contrast-safe in both themes', async
   }
 });
 
-test('light surfaces avoid pure white and separate layers, structural borders, and controls by role', async ({ page }) => {
+test('light surfaces separate reading layers, structural borders, and controls by role', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/');
   await chooseTheme(page, 'Light');
@@ -282,7 +282,6 @@ test('light surfaces avoid pure white and separate layers, structural borders, a
     };
   });
 
-  expect(palette.panel).not.toBe('rgb(255, 255, 255)');
   expect(palette.panel).not.toBe(palette.background);
   expect(palette.raised).not.toBe(palette.panel);
   expect(palette.contrast['--text']).toBeGreaterThanOrEqual(7);
@@ -539,7 +538,7 @@ test('terminal headers are optional, reversible and independent of other appeara
   }
 });
 
-test('the public theme control inherits its canvas and keeps an opaque option surface', async ({ page }) => {
+test('the public theme control inherits its header and keeps an opaque option surface', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/resources');
 
@@ -560,7 +559,7 @@ test('the public theme control inherits its canvas and keeps an opaque option su
       const colours = await page.evaluate(() => {
         const probe = document.createElement('span');
         probe.style.cssText = 'position:fixed;background:var(--panel)';
-        document.body.append(probe);
+        document.querySelector('.public-header')!.append(probe);
         const result = {
           trigger: getComputedStyle(document.querySelector('.theme-trigger')!).backgroundColor,
           options: getComputedStyle(document.querySelector('.theme-options')!).backgroundColor,
@@ -570,6 +569,7 @@ test('the public theme control inherits its canvas and keeps an opaque option su
         return result;
       });
       expect(colours.trigger).toBe('rgba(0, 0, 0, 0)');
+      expect(colours.options).not.toBe('rgba(0, 0, 0, 0)');
       expect(colours.options).toBe(colours.panel);
 
       await trigger.click();
