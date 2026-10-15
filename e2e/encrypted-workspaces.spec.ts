@@ -131,7 +131,7 @@ test('saved inbox positions protect review drafts and stay outside encrypted por
   await expect(item.getByLabel('Rationale', { exact: true })).toHaveValue('This unfinished review must remain in the encrypted working workspace.');
 });
 
-test('retained original bytes use the encrypted workspace keys and remain unavailable while locked', async ({ page }) => {
+test('retained original bytes use encrypted keys and locking cancels an in-flight original export', async ({ page }) => {
   await page.goto('/dashboard');
   const row = await createEncrypted(page, 'Protected original files'); await unlock(page, row.name);
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
@@ -157,10 +157,40 @@ test('retained original bytes use the encrypted workspace keys and remain unavai
   await files.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true }).click();
   await expect(files.locator('pre')).toContainText('A deliberately retained original');
   await expect(files.getByRole('status').filter({ hasText: 'Size and SHA-256 verified for this preview' })).toBeVisible();
-  await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
-  await expect(page.locator('pre')).toHaveCount(0);
-  await expect(page.getByRole('status').filter({ hasText: 'Size and SHA-256 verified for this preview' })).toHaveCount(0);
-  expect(await storedFiles(page, namedDatabase(row.id))).toEqual(persisted);
+  await files.getByRole('button', { name: 'Close file preview', exact: true }).click();
+  await files.locator('.file-export-selection > summary').click();
+  const selection = files.locator('.file-export-selection');
+  await selection.getByRole('checkbox', { name: new RegExp(`^${FILE_NAME.replaceAll('.', '\\.')}`) }).check();
+  const downloads: string[] = []; page.on('download', download => downloads.push(download.suggestedFilename()));
+  let entered = false, release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.exposeFunction('holdEncryptedOriginalDigest', async () => { entered = true; await held; });
+  await page.evaluate(exactBytes => {
+    const digest = SubtleCrypto.prototype.digest;
+    SubtleCrypto.prototype.digest = async function(algorithm, input) {
+      const result = await digest.call(this, algorithm, input);
+      if (new TextDecoder().decode(input as ArrayBuffer) === exactBytes) {
+        SubtleCrypto.prototype.digest = digest;
+        await Reflect.get(window, 'holdEncryptedOriginalDigest')();
+      }
+      return result;
+    };
+  }, FILE_BYTES.toString('utf8'));
+  try {
+    await selection.getByRole('button', { name: 'Download private package', exact: true }).click();
+    await expect.poll(() => entered).toBe(true);
+    await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Lock workspace', exact: true }).click()]);
+    await expect(page.getByRole('heading', { name: `Unlock ${row.name}`, exact: true })).toBeVisible();
+    release();
+    await unlock(page, row.name); files = await openRetainedFiles(page);
+    await expect(files.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true })).toBeVisible();
+    await expect(files.locator('pre')).toHaveCount(0);
+    await files.locator('.file-export-selection > summary').click();
+    await expect(files.locator('.file-export-selection').getByRole('checkbox').first()).not.toBeChecked();
+    await expect(files.getByRole('status').filter({ hasText: 'Prepared a private package' })).toHaveCount(0);
+    expect(downloads).toEqual([]);
+    expect(await storedFiles(page, namedDatabase(row.id))).toEqual(persisted);
+  } finally { release(); }
 });
 
 async function createEncrypted(page: Page, name: string) {
