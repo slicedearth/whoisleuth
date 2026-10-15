@@ -857,8 +857,6 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
     border-bottom: 1px solid var(--border);
   }
   .results-table td:first-child::before { display: none; }
-  .results-table td:nth-child(2),
-  .results-table td:nth-child(3) { white-space: nowrap; }
   .results-table td:nth-child(n+4) {
     grid-column: 1 / -1;
     display: grid;

@@ -227,6 +227,24 @@ test('Bulk keeps collection and result controls readable with a header-aware vie
       await page.setViewportSize(viewport);
       await expect(page.getByRole('heading', { name: 'Results', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
+      if (viewport.width <= 700) {
+        const risk = page.locator('.results-table tbody tr').first().locator('td[data-label="Risk"]');
+        const qualification = risk.locator('.bulk-risk > small');
+        await expect(qualification).toContainText('comparable cohort');
+        const geometry = await qualification.evaluate(element => {
+          const cell = element.closest('td')!.getBoundingClientRect();
+          const range = document.createRange(); range.selectNodeContents(element);
+          return { left: cell.left, right: cell.right,
+            text: [...range.getClientRects()].map(rect => ({ left: rect.left, right: rect.right, width: rect.width })) };
+        });
+        expect(geometry.text.length).toBeGreaterThan(0);
+        for (const rect of geometry.text) {
+          expect(rect.width).toBeGreaterThan(0);
+          expect(rect.left).toBeGreaterThanOrEqual(geometry.left - 1);
+          expect(rect.right).toBeLessThanOrEqual(Math.min(geometry.right, viewport.width) + 1);
+        }
+        await expect(risk.getByLabel(`Inspect Risk model and factors for ${targets[0]}`, { exact: true })).toBeVisible();
+      }
       for (const field of [page.locator('#domains'), page.getByLabel('Scan mode'), page.getByLabel('Request pacing')]) {
         const box = await field.boundingBox();
         expect(box).not.toBeNull();
