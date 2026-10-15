@@ -1,24 +1,29 @@
 import type { Locator, Page } from '@playwright/test';
+import { CASE_SCHEMA_VERSION, type CaseRecord } from '../packages/cases/case-record-contracts.mts';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
+import AxeBuilder from '@axe-core/playwright';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { expect, test } from './fixtures';
 import { caseRecord, openCaseResponseWorkspace, openSeededTimelineCase } from './case-test-fixtures';
 import { caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep } from './case-response-fixtures';
 import { openCaseSection, openConsoleView } from './console-navigation';
-import { expectNoHorizontalOverflow, useTheme } from './helpers';
+import { expectNoHorizontalOverflow, readBrowserLocalCollection, useTheme } from './helpers';
 
 type HeldPreparation = { entered: boolean; release: () => Promise<void> };
 type PacketProbe = typeof window & { heldPackets: HeldPreparation[]; packetOutputs: string[] };
 
-async function openPacket(page: Page) {
+async function openPacket(page: Page, overrides: Parameters<typeof caseRecord>[0] & Pick<CaseRecord, 'checkpointCollectionReceipts'> = {}) {
   const now = '2000-01-03T00:00:00.000Z';
   await page.clock.setFixedTime(now);
-  const record = caseRecord({ id: 'packet-owner', domain: 'packet-owner.example',
+  const record = { ...caseRecord({ id: 'packet-owner', domain: 'packet-owner.example',
     evidencePins: [{ id: 'owner-pin', checkpointId: null, field: 'analyst_note', category: 'page', label: 'Selected observation',
       value: 'Retained fixture fact', source: 'Selected source', sourceState: 'partial', sourceSchema: null, observedAt: now,
       collectionDepth: 'deep', completeness: 'partial', truncated: false, transitionExpectation: null, limitations: [], createdAt: now }],
     actions: [currentActionFixture({ id: 'owner-action', type: 'internal_review', recipient: 'Internal review desk',
       contactSource: 'Analyst supplied', routeObservedAt: now, contactLimitations: [], dueAt: null,
-      targetState: 'ready_for_review', reference: null, followUpAt: null, outcome: null, createdAt: now, updatedAt: now })] });
-  await openSeededTimelineCase(page, record.domain, [record]);
+      targetState: 'ready_for_review', reference: null, followUpAt: null, outcome: null, createdAt: now, updatedAt: now })] }), ...overrides };
+  await openSeededTimelineCase(page, record.domain, [record], CASE_SCHEMA_VERSION);
   const workspace = await openCaseResponseWorkspace(page, '', 'advanced', 'Response');
   const packet = workspace.locator('details[id^="case-response-preflight-"]');
   await packet.locator(':scope > summary').click();
@@ -42,6 +47,57 @@ async function openPacket(page: Page) {
   });
   return packet;
 }
+
+test('selected packet references navigate to exact local collection context without changing the recipient copy or saved Case', async ({ page }, testInfo) => {
+  const receipt = JSON.parse(readFileSync(path.resolve(__dirname, '../test/fixtures/cli-lookup-v3.json'), 'utf8')).collectionReceipt;
+  const pin = { id: 'trace-pin', checkpointId: 'trace-checkpoint', field: 'dns.nameservers', category: 'dns', label: 'Selected observation',
+    value: 'Private retained observation value', source: 'Selected source', sourceState: 'partial', sourceSchema: null,
+    observationHostname: 'portal.packet-owner.example', responseObject: { kind: 'hostname' as const, identifier: 'portal.packet-owner.example', incidentTargetId: null },
+    observedAt: '2000-01-01T00:00:00.000Z', createdAt: '2000-01-02T00:00:00.000Z', collectionDepth: 'deep' as const,
+    completeness: 'partial' as const, truncated: false, transitionExpectation: null, limitations: [] };
+  const packet = await openPacket(page, { evidencePins: [pin, { ...pin, id: 'other-trace-pin', checkpointId: 'other-checkpoint', label: 'Other observation' }],
+    checkpointCollectionReceipts: [{ checkpointId: pin.checkpointId, collectionReceipt: receipt }] });
+  const before = await readBrowserLocalCollection(page, 'cases');
+  await openPacketWizardStep(packet, 'Review');
+  const material = await packet.locator('.packet-disclosure pre').textContent();
+  const trace = packet.locator('.evidence-lineage');
+  await trace.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  const choice = trace.getByRole('combobox', { name: 'Evidence reference to trace', exact: true });
+  await expect(choice.locator('option')).toHaveCount(2);
+  await choice.selectOption(pin.id);
+  const context = trace.getByRole('region', { name: 'Selected checkpoint collection context', exact: true });
+  await expect(context).toContainText('portal.packet-owner.example');
+  await expect(context.locator(`time[datetime="${pin.observedAt}"]`)).toHaveCount(1);
+  await expect(context.locator(`time[datetime="${pin.createdAt}"]`)).toHaveCount(1);
+  await expect(context).toContainText('trace-checkpoint');
+  await expect(context).toContainText('Original collection choices');
+  await expect(trace).toContainText('not added to the recipient copy');
+  expect(await packet.locator('.packet-disclosure pre').textContent()).toBe(material);
+  expect(material).not.toMatch(/Private retained observation value|collectionReceipt|checkpointCollectionReceipts/u);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expectNoHorizontalOverflow(page);
+      await context.getByRole('heading', { name: 'Retained observation', exact: true }).evaluate(element => element.scrollIntoView({ block: 'center' }));
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`packet-lineage-${theme}-${width}.png`) });
+    }
+  }
+  expect((await new AxeBuilder({ page }).include('.evidence-lineage').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+  await openPacketWizardStep(packet, 'Prepare');
+  await packet.getByRole('checkbox', { name: /Selected observation/ }).uncheck();
+  await packet.getByRole('checkbox', { name: /Other observation/ }).check();
+  await openPacketWizardStep(packet, 'Review');
+  await expect(trace).not.toHaveAttribute('open', '');
+  await trace.locator(':scope > summary').click();
+  await expect(choice).toHaveValue('');
+  await expect(choice.locator('option')).toHaveCount(2);
+  await choice.selectOption('other-trace-pin');
+  await expect(context).toContainText('Collection context is unavailable for this exact reference');
+  await expect(context.getByRole('heading', { name: 'Original collection choices' })).toHaveCount(0);
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  expect(await page.evaluate(() => (window as PacketProbe).packetOutputs)).toEqual([]);
+});
 
 // Hold the final packet hash, not a timer or a mocked preparation callback.
 // Completion includes the real hash and subsequent component/render microtasks.

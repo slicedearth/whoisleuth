@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import type { CaseEvidencePin } from '../packages/cases/case-response-records.mts';
-import { caseEvidenceCheckpointGroups, caseEvidenceChoiceName, caseEvidenceReferences, caseRecheckEvidence } from '../frontend/src/lib/analysis/case-evidence-presentation.ts';
+import { caseEvidenceCheckpointGroups, caseEvidenceChoiceName, caseEvidenceOrigin, caseEvidenceReferences, caseRecheckEvidence } from '../frontend/src/lib/analysis/case-evidence-presentation.ts';
+import { parseLookupCollectionReceipt } from '../packages/evidence/lookup-collection-receipt.mts';
 
 const pin: CaseEvidencePin = {
   id: 'pin-one', checkpointId: 'checkpoint-one', field: 'dns.nameservers', category: 'dns',
@@ -50,4 +52,26 @@ test('checkpoint selection includes every member instead of labelling the group 
   const third = { ...pin, id: 'pin-three', checkpointId: 'checkpoint-two' };
   const groups = caseEvidenceCheckpointGroups([pin, second, { ...pin, id: 'manual', checkpointId: null }, third]);
   assert.deepEqual(groups, [{ id: 'checkpoint-one', pins: [pin, second] }, { id: 'checkpoint-two', pins: [third] }]);
+});
+
+test('source navigation resolves exact pin and checkpoint identities without borrowing matching context', () => {
+  const receipt = parseLookupCollectionReceipt(JSON.parse(readFileSync(new URL('./fixtures/cli-lookup-v3.json', import.meta.url), 'utf8')).collectionReceipt)!;
+  const scoped = { ...pin, observationHostname: 'portal.example.test',
+    responseObject: { kind: 'hostname' as const, identifier: 'portal.example.test', incidentTargetId: null } };
+  const other = { ...scoped, id: 'pin-two', checkpointId: 'checkpoint-two' };
+  const record = { evidencePins: [scoped, other], checkpointCollectionReceipts: [{ checkpointId: scoped.checkpointId!, collectionReceipt: receipt }] };
+  const before = structuredClone(record);
+  const origin = caseEvidenceOrigin(record, scoped.id);
+  assert.deepEqual(origin, { pin: scoped, receipt });
+  assert.equal(origin.pin?.observationHostname, 'portal.example.test');
+  assert.equal(origin.pin?.observedAt, '2026-09-01T00:00:00.000Z');
+  assert.equal(origin.pin?.createdAt, '2026-09-02T00:00:00.000Z');
+  assert.deepEqual(caseEvidenceOrigin(record, other.id), { pin: other, receipt: null });
+  assert.deepEqual(caseEvidenceOrigin(record, 'removed-pin'), { pin: null, receipt: null });
+  assert.deepEqual(caseEvidenceOrigin({ ...record, evidencePins: [scoped, { ...other, id: scoped.id }] }, scoped.id), { pin: null, receipt: null });
+  assert.equal(caseEvidenceOrigin({ evidencePins: [scoped] }, scoped.id).receipt, null);
+  const conflicting = { ...record, checkpointCollectionReceipts: [...record.checkpointCollectionReceipts,
+    { checkpointId: scoped.checkpointId!, collectionReceipt: { ...receipt, webSelection: 'selected_url' as const } }] };
+  assert.equal(caseEvidenceOrigin(conflicting, scoped.id).receipt, null);
+  assert.deepEqual(record, before);
 });

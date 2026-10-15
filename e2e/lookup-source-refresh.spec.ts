@@ -88,6 +88,7 @@ test('completed source-plan review stays bound to its original target, mode and 
   const pinDisclosure = observations.getByText('Pin an observed fact', { exact: true });
   if (await pinDisclosure.locator('..').getAttribute('open') === null) await pinDisclosure.click();
   await observations.getByText('Collection context for selected checkpoints', {exact: true}).click();
+  await observations.getByRole('combobox', { name: 'Evidence reference to trace', exact: true }).selectOption((retained.evidencePins as {id: string}[])[0]!.id);
   const context = observations.getByRole('region', {name: 'Selected checkpoint collection context'});
   await expect(context).toContainText('Nameservers');
   await expect(context).toContainText('security.txt: not selected');

@@ -7,6 +7,7 @@
   import CasePacketPrintPreview from './CasePacketPrintPreview.svelte';
   import CasePacketDisclosure from './CasePacketDisclosure.svelte';
   import CasePacketAttachmentReview from './CasePacketAttachmentReview.svelte';
+  import CaseEvidenceLineage from './CaseEvidenceLineage.svelte';
   import CaseDisclosureComparison from './CaseDisclosureComparison.svelte';
   import { prepareCaseReportPreview, type CaseReportPreview } from '../../../../packages/cases/case-report-preview.mts';
   import { buildCaseResponseReviewInputs } from '../../../../packages/cases/case-response-packet.mts';
@@ -669,6 +670,7 @@
         <section id={`packet-wizard-step-${record.id}-4`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-4`}>
           <header><div><p class="eyebrow">Review</p><h4 id={`packet-wizard-title-${record.id}-4`}>Privacy, redaction and optional capture</h4></div><span>Phase 2</span></header>
           {#if packetReview.material}<CasePacketDisclosure material={packetReview.material} retainedPinCount={record.evidencePins.length} />{:else}<p>Complete the blocked incident and recipient inputs to preview the selected copy.</p>{/if}
+          {#if packetReview.material}<CaseEvidenceLineage {record} pinIds={packetReview.material.selectedEvidence.map(pin => pin.id)} packet />{/if}
           {#if packetOpen && packetReview.material}<CasePacketAttachmentReview {record} material={packetReview.material} identity={packetMaterialSignature()} />{/if}
           <div class="privacy-review"><section><strong>Profile redactions</strong><ul>{#each packetProfilePreview.redactions as item}<li>{item}</li>{/each}</ul></section><section><strong>Profile exclusions</strong><ul>{#each packetProfilePreview.excludedEvidence as item}<li>{item}</li>{/each}</ul></section></div>
           <fieldset class="artefact-reference"><legend>Optional integrity-checked capture reference</legend><p class="notice">Retain metadata and SHA-256 only. Do not paste raw payloads, bodies, credentials, cookies, secrets, complete query-bearing URLs, or unnecessary personal data.</p><div class="two-columns"><label class="field">Label<input bind:value={packetArtefactLabel} maxlength="120"></label><label class="field">Media type<input bind:value={packetArtefactMediaType} maxlength="120"></label><label class="field">Captured at<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={packetArtefactCapturedAt}></label><label class="field">Source<input bind:value={packetArtefactSource} maxlength="120"></label><label class="field">SHA-256 digest<input bind:value={packetArtefactDigest} maxlength="64" pattern="[a-fA-F0-9]{64}"></label><label class="field">Byte length<input type="number" min="0" max="104857600" bind:value={packetArtefactByteLength}></label></div><label class="field">Limitations<textarea bind:value={packetArtefactLimitations} maxlength="2000" rows="2"></textarea></label></fieldset>

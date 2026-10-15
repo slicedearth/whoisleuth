@@ -1282,6 +1282,13 @@ Changing selection cancels an unfinished check; the last completed check stays
 separately labelled. Changing packet inputs or leaving or closing this review
 clears the temporary check and selection. Export rechecks the bytes and current Case, without changing
 the packet, authorising delivery or recording a submission.
+**Trace selected evidence to its source** follows an exact selected pin back to
+its retained observation and checkpoint collection choices. Observation hostname,
+exact object scope, observation time and saving time remain separate. Missing or
+conflicting context is shown as unavailable; matching labels, values or dates do
+not supply a replacement. This is local Case context, not additional recipient
+material. The same reader is available under **Collection context for selected
+checkpoints** in Case observations. It does not collect, save or authorise anything.
 In **Local handoff**, JSON export is the primary action. **Other export formats**
 contains Markdown, email download and email copy; all use the same packet review
 and freshness checks.
