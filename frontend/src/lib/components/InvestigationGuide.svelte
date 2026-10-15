@@ -127,7 +127,7 @@ import { isExpectedBrowserLocalDataFailure } from '#lib/browser-local-data-conte
     !evidenceContextPending && !caseContextPending && evidenceContextAvailable && caseContextAvailable,
   );
   const caseWorkspaceHref = $derived(contextCase
-    ? caseSectionHref(contextCase.id, 'response')
+    ? caseSectionHref(contextCase.id, 'assessment')
     : null);
   const actionPreflight = $derived(actionStage ? buildGuidedCollectionPreflight({
     label: actionStage.label,

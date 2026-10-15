@@ -10,6 +10,7 @@
   import { subscribeBrowserLocalData } from '#lib/browser-local-data-service.ts';
   import { createSelectedCaseContextReader, type SelectedCaseContextState } from '#lib/controllers/selected-case-context.ts';
   import { monitorViewFromUrl } from '#lib/controllers/monitor-route-controller.ts';
+  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
 
@@ -84,7 +85,7 @@
             {#if context.decisions.length}
               {#if context.decisions.length > 1}<p>Multiple decisions share the latest recorded time or have no usable time. None is selected as authoritative.</p>{/if}
               {#each context.decisions as decision}<article><h3>{decision.summary}</h3><p>{decision.rationale}</p><small>Confidence: {decision.confidence}{#if decision.confidenceBasis} · {decision.confidenceBasis}{/if}</small><CaseLinkedEvidence pins={record.evidencePins} ids={decision.evidencePinIds} /></article>{/each}
-              {#if context.earlierDecisions}<a href={`${href}#case-response-${encodeURIComponent(caseId)}`}>Review all {record.decisions.length} recorded decisions</a>{/if}
+              {#if context.earlierDecisions}<a href={`${caseWorkspaceHref(caseId, 'assessment')}#case-response-assessment-${encodeURIComponent(caseId)}`}>Review all {record.decisions.length} recorded decisions</a>{/if}
             {:else}<p>No evidence-linked decision recorded.</p>{/if}
           </section>
           <section aria-label="Case evidence pins">
