@@ -1263,6 +1263,11 @@ during authorisation cancels that attempt, even if you select it again before
 the check finishes. Review the current confirmations and authorise again.
 Material changes also invalidate authorisation. Packet generation is a
 local export; WHOISleuth does not send it or promise a provider outcome.
+**Packet authorisation status** explains the next review needed and takes you to
+its existing control: missing readiness, changed material, confirmations or
+explicit authorisation. **View full readiness matrix** keeps every row available.
+If a pending authorisation loses its review context, the status explains that it
+stopped; returning to the packet does not complete that earlier attempt.
 In the packet's **Review** phase, **Prepare original files separately** checks
 retained files against their recorded size and SHA-256 before you select any.
 Missing or unverified files remain visible but cannot be selected. A packet

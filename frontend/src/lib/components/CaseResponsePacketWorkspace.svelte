@@ -12,6 +12,7 @@
   import { buildCaseResponseReviewInputs } from '../../../../packages/cases/case-response-packet.mts';
   import { deliveryReceiptForPacket, type CaseDeliveryPacketReceipt } from '../../../../packages/cases/case-packet-correction.mts';
   import { caseEvidenceChoiceName } from '#lib/analysis/case-evidence-presentation.ts';
+  import { casePacketApprovalState, readinessAllowsPacketAuthorisation, type PacketApprovalTarget } from '#lib/analysis/case-packet-approval.ts';
   import { caseInvestigationContext } from '../../../../packages/cases/case-incident-context.mts';
   import { caseResponseIncidentUrls } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { caseTypeSummary } from '../../../../packages/cases/case-type-presentation.mts';
@@ -84,6 +85,7 @@
   let packetReviewDigest = $state('');
   let packetReviewSignature = $state('');
   let packetAuthorisationConfirmedAt = $state('');
+  let packetAuthorisationInterrupted = $state(false);
   let packetConfirmationRevision = 0;
   let packetConfirmations = $state<Record<ResponseAuthorisationConfirmationId, boolean>>({
     selectedEvidence: false,
@@ -100,7 +102,13 @@
   let packetWizardStep = $state(1);
   let packetOpen = $state(false);
   let packetElement = $state<HTMLDetailsElement>();
-  type PacketOperation = Readonly<{ generation: number; caseId: string; phase: number; scope: ConsoleReferenceScope }> & { outputStarted: boolean };
+  type PacketOperation = Readonly<{
+    generation: number;
+    caseId: string;
+    phase: number;
+    scope: ConsoleReferenceScope;
+    kind: 'authorisation' | 'other';
+  }> & { outputStarted: boolean };
   let operationGeneration = 0;
   let activeOperation = $state.raw<PacketOperation | null>(null);
   const packetBusy = $derived(activeOperation !== null);
@@ -146,17 +154,20 @@
       && operation.caseId === record.id && operation.phase === packetWizardStep
       && sameScope(operation.scope, captureConsoleReferenceScope());
   }
-  function beginPacketOperation(): PacketOperation | null {
+  function beginPacketOperation(kind: PacketOperation['kind'] = 'other'): PacketOperation | null {
     if (packetBusy || !packetIsOpen()) return null;
     const scope = captureConsoleReferenceScope();
     if (scope.workspaceId === null) return null;
-    return activeOperation = { generation: ++operationGeneration, caseId: record.id, phase: packetWizardStep, scope, outputStarted: false };
+    return activeOperation = {
+      generation: ++operationGeneration, caseId: record.id, phase: packetWizardStep, scope, kind, outputStarted: false,
+    };
   }
   function finishPacketOperation(operation: PacketOperation) {
     if (activeOperation === operation) activeOperation = null;
   }
   function invalidatePacketWork(announce = false) {
     const cancelled = activeOperation;
+    if (cancelled?.kind === 'authorisation') packetAuthorisationInterrupted = true;
     operationGeneration++;
     activeOperation = null;
     printPreview = null;
@@ -208,33 +219,21 @@
   const selectedPacketAction = $derived(record.actions.find((action) => action.id === packetActionId) ?? null);
   const investigationContext = $derived(caseInvestigationContext(record));
   const packetConfirmationsComplete = $derived(RESPONSE_AUTHORISATION_CONFIRMATION_IDS.every((id) => packetConfirmations[id]));
-  function readinessAllowsPacketAuthorisation(readiness: ReturnType<typeof buildCaseResponseReadiness>) {
-    return readiness.rows.every((row) => !row.requiredForAuthorisation || !['not_provided', 'unavailable'].includes(row.state))
-      && readiness.rows.find((row) => row.id === 'authority_review')?.state === 'complete';
-  }
-  const packetAuthorisationReadinessComplete = $derived(readinessAllowsPacketAuthorisation(packetReadiness));
-  const packetAuthorisationIsCurrent = $derived(Boolean(packetAuthorisationConfirmedAt)
-    && packetReviewIsCurrent && packetConfirmationsComplete && packetAuthorisationReadinessComplete);
+  const packetApproval = $derived(casePacketApprovalState({
+    preflight: packetPreflight,
+    readiness: packetReadiness,
+    reviewPresent: Boolean(packetReviewDigest),
+    reviewCurrent: packetReviewIsCurrent,
+    confirmationsComplete: packetConfirmationsComplete,
+    confirmed: Boolean(packetAuthorisationConfirmedAt),
+    interrupted: packetAuthorisationInterrupted,
+  }));
   const stage = $derived<CaseResponseStage>({
     id: 'evidence_handoff',
     ...CASE_RESPONSE_STAGE_DEFINITIONS.evidence_handoff,
-    status: packetAuthorisationIsCurrent
-      ? 'complete'
-      : packetReviewDigest && !packetReviewIsCurrent
-        ? 'attention'
-        : packetPreflight.canExport
-          ? 'in_progress'
-          : 'not_started',
+    status: packetApproval.stageStatus,
     summary: `${packetPreflight.counts.pass} preflight pass, ${packetPreflight.counts.caution} caution, and ${packetPreflight.counts.block} block.`,
-    nextRequirement: !packetPreflight.canExport
-      ? 'Complete the next blocked packet input.'
-      : !packetReviewDigest
-        ? 'Review the exact packet inputs and bind their digest.'
-        : !packetReviewIsCurrent
-          ? 'Material inputs changed; bind and review the current inputs again.'
-          : !packetAuthorisationIsCurrent
-            ? 'Complete explicit confirmations and authorise the exact bound inputs.'
-            : 'Export locally only when the intended recipient and scope remain correct.',
+    nextRequirement: packetApproval.message,
   });
 
   $effect(() => onstagechange(stage));
@@ -321,7 +320,9 @@
   }
 
   async function reviewPacketInputs() {
-    const operation = beginPacketOperation(); if (!operation) return;
+    const operation = beginPacketOperation();
+    if (!operation) return;
+    packetAuthorisationInterrupted = false;
     try {
       const signature = packetMaterialSignature();
       const digest = await buildCaseResponseReviewDigest(record, packetInput(false), new Date().toISOString());
@@ -359,10 +360,12 @@
   }
 
   async function authorisePacketInputs() {
-    if (!packetReviewIsCurrent || !packetConfirmationsComplete || !packetAuthorisationReadinessComplete || packetBusy) return;
-    const operation = beginPacketOperation(); if (!operation) return;
+    if (!packetApproval.canAuthorise || packetBusy) return;
+    const operation = beginPacketOperation('authorisation');
+    if (!operation) return;
     const confirmationRevision = packetConfirmationRevision;
     packetAuthorisationConfirmedAt = '';
+    packetAuthorisationInterrupted = false;
     try {
       const signature = packetMaterialSignature();
       const currentDigest = await buildCaseResponseReviewDigest(record, packetInput(false), new Date().toISOString());
@@ -571,6 +574,33 @@
     const phaseTarget = [1, 4, 8][phase - 1];
     document.getElementById(`packet-wizard-step-${caseId}-${phaseTarget}`)?.focus({ preventScroll: true });
   }
+
+  async function focusPacketReview(target: PacketApprovalTarget | 'matrix') {
+    const caseId = record.id;
+    const scope = captureConsoleReferenceScope();
+    const row = packetApproval.readinessRow ?? 'authority_review';
+    const phase = ['incident', 'evidence', 'recipient'].includes(target) ? 1 : target === 'export' ? 3 : 2;
+    const transition = setPacketWizardStep(phase);
+    const generation = operationGeneration;
+    await transition;
+    if (!packetIsOpen() || record.id !== caseId || generation !== operationGeneration
+      || packetWizardStep !== phase || !sameScope(scope, captureConsoleReferenceScope())) return;
+    if (target === 'matrix') {
+      document.getElementById(`packet-readiness-matrix-${caseId}`)?.focus();
+      return;
+    }
+    const panelNumber = { incident: 1, evidence: 2, recipient: 3, readiness: 5,
+      review: 6, confirmations: 7, authorise: 7, export: 8 }[target];
+    const panel = document.getElementById(`packet-wizard-step-${caseId}-${panelNumber}`);
+    const selector = target === 'readiness' ? `[data-readiness="${row}"] select`
+      : target === 'confirmations' ? 'input[type="checkbox"]:not(:checked):not(:disabled)'
+        : target === 'authorise' || target === 'review' ? 'button:not(:disabled)'
+          : target === 'export' ? '.actions > button.primary'
+            : target === 'recipient' ? 'select'
+              : target === 'evidence' ? 'input[type="checkbox"]'
+                : 'input:invalid, textarea:invalid';
+    (panel?.querySelector<HTMLElement>(selector) ?? panel)?.focus();
+  }
 </script>
 
 {#if visible}
@@ -584,6 +614,16 @@
       <nav class="packet-wizard-nav" aria-label="Response-packet phases">
         <ol>{#each packetWizardSteps as label, index}<li><button type="button" aria-current={packetWizardStep === index + 1 ? 'step' : undefined} onclick={() => void setPacketWizardStep(index + 1)}><span>{index + 1}</span>{label}</button></li>{/each}</ol>
       </nav>
+
+      <section class="approval-summary" aria-labelledby={`packet-approval-title-${record.id}`}>
+        <strong id={`packet-approval-title-${record.id}`}>Packet authorisation status</strong>
+        <p aria-live="polite">{packetApproval.message}</p>
+        {#if packetApproval.contextNotice}<p class="history-warning">{packetApproval.contextNotice}</p>{/if}
+        <div class="actions">
+          <button class="btn" type="button" onclick={() => void focusPacketReview(packetApproval.target)} disabled={packetBusy}>{packetApproval.actionLabel}</button>
+          <button class="btn" type="button" onclick={() => void focusPacketReview('matrix')} disabled={packetBusy}>View full readiness matrix</button>
+        </div>
+      </section>
 
       {#if packetWizardStep === 1}
         <section id={`packet-wizard-step-${record.id}-1`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-1`}>
@@ -638,8 +678,47 @@
         <section id={`packet-wizard-step-${record.id}-5`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-5`}>
           <header><div><p class="eyebrow">Review</p><h4 id={`packet-wizard-title-${record.id}-5`}>Readiness and limitations</h4></div><span>Decision boundary</span></header>
           <section class="preflight" aria-labelledby={`preflight-title-${record.id}`}><div><strong id={`preflight-title-${record.id}`}>Response preflight</strong><span class={`preflight-state state-${packetPreflight.status}`}>{packetPreflight.status.replaceAll('_', ' ')}</span></div><p>{packetPreflight.counts.pass} pass · {packetPreflight.counts.caution} caution · {packetPreflight.counts.block} block</p><ul>{#each packetPreflight.checks as check}<li data-state={check.state}><strong>{check.label}</strong><span>{check.detail}</span></li>{/each}</ul></section>
-          <fieldset class="readiness-inputs"><legend>Explicit review inputs</legend><div class="readiness-editor"><section><strong>Infrastructure responsibility</strong><label class="field">State<select bind:value={packetInfrastructureState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label><label class="field">Detail<input bind:value={packetInfrastructureDetail} maxlength="500"></label><label class="field">Limitations<textarea bind:value={packetInfrastructureLimitations} maxlength="2000" rows="2"></textarea></label></section><section><strong>Analyst authority</strong><label class="field">State<select bind:value={packetAuthorityState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label><label class="field">Detail<input bind:value={packetAuthorityDetail} maxlength="500"></label><label class="field">Limitations<textarea bind:value={packetAuthorityLimitations} maxlength="2000" rows="2"></textarea></label></section><section><strong>Contradiction review</strong><label class="field">State<select bind:value={packetContradictionsState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label><label class="field">Detail<input bind:value={packetContradictionsDetail} maxlength="500"></label><label class="field">Limitations<textarea bind:value={packetContradictionsLimitations} maxlength="2000" rows="2"></textarea></label></section><section><strong>Source limitations review</strong><label class="field">State<select bind:value={packetSourceLimitationsState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label><label class="field">Detail<input bind:value={packetSourceLimitationsDetail} maxlength="500"></label><label class="field">Limitations<textarea bind:value={packetSourceLimitations} maxlength="2000" rows="2"></textarea></label></section></div></fieldset>
-          <section class="readiness-matrix" aria-labelledby={`readiness-title-${record.id}`}><div><strong id={`readiness-title-${record.id}`}>Profile-specific readiness matrix</strong><span>{packetReadiness.counts.complete} complete · {packetReadiness.counts.partial} partial · {packetReadiness.counts.stale} stale · {packetReadiness.counts.unavailable} unavailable · {packetReadiness.counts.not_provided} not provided</span></div><div class="table-wrap"><table><thead><tr><th scope="col">Review input</th><th scope="col">State</th><th scope="col">Detail and limitations</th></tr></thead><tbody>{#each packetReadiness.rows as row}<tr><th scope="row">{row.label}{row.requiredForAuthorisation ? ' *' : ''}</th><td><span class={`readiness-state state-${row.state}`}>{row.state.replaceAll('_', ' ')}</span></td><td>{row.detail}{#if row.limitations.length}<small>{row.limitations.join('; ')}</small>{/if}</td></tr>{/each}</tbody></table></div><small>* Required for authorisation. Partial and stale states remain visible and require deliberate freshness and limitation confirmation.</small></section>
+          <fieldset class="readiness-inputs">
+            <legend>Explicit review inputs</legend>
+            <div class="readiness-editor">
+              <section data-readiness="infrastructure_responsibility">
+                <strong>Infrastructure responsibility</strong>
+                <label class="field">State<select bind:value={packetInfrastructureState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
+                <label class="field">Detail<input bind:value={packetInfrastructureDetail} maxlength="500"></label>
+                <label class="field">Limitations<textarea bind:value={packetInfrastructureLimitations} maxlength="2000" rows="2"></textarea></label>
+              </section>
+              <section data-readiness="authority_review">
+                <strong>Analyst authority</strong>
+                <label class="field">State<select bind:value={packetAuthorityState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
+                <label class="field">Detail<input bind:value={packetAuthorityDetail} maxlength="500"></label>
+                <label class="field">Limitations<textarea bind:value={packetAuthorityLimitations} maxlength="2000" rows="2"></textarea></label>
+              </section>
+              <section data-readiness="contradictions">
+                <strong>Contradiction review</strong>
+                <label class="field">State<select bind:value={packetContradictionsState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
+                <label class="field">Detail<input bind:value={packetContradictionsDetail} maxlength="500"></label>
+                <label class="field">Limitations<textarea bind:value={packetContradictionsLimitations} maxlength="2000" rows="2"></textarea></label>
+              </section>
+              <section data-readiness="source_limitations">
+                <strong>Source limitations review</strong>
+                <label class="field">State<select bind:value={packetSourceLimitationsState}>{#each RESPONSE_READINESS_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
+                <label class="field">Detail<input bind:value={packetSourceLimitationsDetail} maxlength="500"></label>
+                <label class="field">Limitations<textarea bind:value={packetSourceLimitations} maxlength="2000" rows="2"></textarea></label>
+              </section>
+            </div>
+          </fieldset>
+          <section id={`packet-readiness-matrix-${record.id}`} class="readiness-matrix" tabindex="-1" aria-labelledby={`readiness-title-${record.id}`}>
+            <div><strong id={`readiness-title-${record.id}`}>Profile-specific readiness matrix</strong><span>{packetReadiness.counts.complete} complete · {packetReadiness.counts.partial} partial · {packetReadiness.counts.stale} stale · {packetReadiness.counts.unavailable} unavailable · {packetReadiness.counts.not_provided} not provided</span></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th scope="col">Review input</th><th scope="col">State</th><th scope="col">Detail and limitations</th></tr></thead>
+                <tbody>{#each packetReadiness.rows as row}
+                  <tr><th scope="row">{row.label}{row.requiredForAuthorisation ? ' *' : ''}</th><td><span class={`readiness-state state-${row.state}`}>{row.state.replaceAll('_', ' ')}</span></td><td>{row.detail}{#if row.limitations.length}<small>{row.limitations.join('; ')}</small>{/if}</td></tr>
+                {/each}</tbody>
+              </table>
+            </div>
+            <small>* Required for authorisation. Partial and stale states remain visible and require deliberate freshness and limitation confirmation.</small>
+          </section>
         </section>
       {/if}
       {#if packetWizardStep === 2}
@@ -653,10 +732,10 @@
       {/if}
       {#if packetWizardStep === 2}
         <section id={`packet-wizard-step-${record.id}-7`} class="wizard-panel authorisation" tabindex="-1" aria-labelledby={`authorisation-title-${record.id}`}>
-          <header><div><p class="eyebrow">Explicit decision</p><h4 id={`authorisation-title-${record.id}`}>Authorise exact bound inputs</h4></div><span class:attention={!packetAuthorisationIsCurrent}>{packetAuthorisationIsCurrent ? 'authorised inputs' : 'draft · authorisation incomplete'}</span></header>
+          <header><div><p class="eyebrow">Explicit decision</p><h4 id={`authorisation-title-${record.id}`}>Authorise exact bound inputs</h4></div><span class:attention={!packetApproval.authorised}>{packetApproval.authorised ? 'authorised inputs' : 'draft · authorisation incomplete'}</span></header>
           {#if !packetReviewIsCurrent}<p class="history-warning">The exact current inputs do not have a current digest. Bind the current inputs above before confirming authorisation.</p>{/if}
           <fieldset class="confirmations" disabled={!packetReviewIsCurrent}><legend>Explicit confirmations</legend>{#each RESPONSE_AUTHORISATION_CONFIRMATION_IDS as id}<label class="choice"><input type="checkbox" checked={packetConfirmations[id]} onchange={(event) => setPacketConfirmation(id, event.currentTarget.checked)}><span>{id === 'selectedEvidence' ? 'I reviewed the exact selected evidence.' : id === 'recipientScope' ? 'I reviewed the recipient and scope.' : id === 'privacyRedactions' ? 'I reviewed privacy and redactions.' : id === 'analystAuthority' ? 'I confirm analyst authority for this scope.' : 'I reviewed evidence freshness and retained cautions.'}</span></label>{/each}</fieldset>
-          <button class="btn" type="button" onclick={() => void authorisePacketInputs()} disabled={packetBusy || !packetReviewIsCurrent || !packetConfirmationsComplete || !packetAuthorisationReadinessComplete}>Authorise exact bound inputs</button>
+          <button class="btn" type="button" onclick={() => void authorisePacketInputs()} disabled={packetBusy || !packetApproval.canAuthorise}>Authorise exact bound inputs</button>
           <label class="field">Confirmation time<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={packetAuthorisationConfirmedAt} readonly disabled={!packetReviewIsCurrent || !packetConfirmationsComplete}></label>
           <p class="notice">Authorisation applies only to the exact inputs bound to the current digest. It does not submit the packet or establish a provider outcome.</p>
         </section>
@@ -696,7 +775,7 @@
               <button class="btn" type="button" onclick={() => void continueToDeliveryRecord()} disabled={packetBusy}>Continue to record delivery</button>
             </div>
           {/if}
-          <p class="wizard-status">{packetAuthorisationIsCurrent ? 'The current exact inputs are authorised for deliberate local export.' : 'The current packet remains a draft. Draft export retains that status explicitly.'}</p>
+          <p class="wizard-status">{packetApproval.authorised ? packetApproval.message : 'The current packet remains a draft. Draft export retains that status explicitly.'}</p>
         </section>
       {/if}
 
@@ -724,6 +803,9 @@
   .pin-references,.contacts,.readiness-inputs,.artefact-reference,.confirmations{display:grid;grid-template-columns:minmax(0,1fr);min-width:0;gap:8px;margin:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm)}
   legend{padding:0 5px;font:700 var(--text-xs) var(--mono)}
   .actions{display:flex;flex-wrap:wrap;gap:8px}
+  .approval-summary{display:grid;min-width:0;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .approval-summary>p{margin:0;overflow-wrap:anywhere;font-size:var(--text-xs)}
+  .readiness-matrix:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .other-formats>.actions{padding:12px}
   .notice{margin:0;padding:9px 10px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .06);color:var(--muted);font-size:var(--text-xs)}
   .history-warning{margin:7px 0;padding:8px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .06);color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}

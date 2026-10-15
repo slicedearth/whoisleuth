@@ -3,6 +3,7 @@ import { expect, test } from './fixtures';
 import { caseRecord, openCaseResponseWorkspace, openSeededTimelineCase } from './case-test-fixtures';
 import { caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep } from './case-response-fixtures';
 import { openCaseSection, openConsoleView } from './console-navigation';
+import { expectNoHorizontalOverflow, useTheme } from './helpers';
 
 type HeldPreparation = { entered: boolean; release: () => Promise<void> };
 type PacketProbe = typeof window & { heldPackets: HeldPreparation[]; packetOutputs: string[] };
@@ -74,7 +75,7 @@ async function holdPreparation(page: Page, fail = false, reviewOnly = false) {
   };
 }
 
-async function prepareAuthorisation(packet: Locator) {
+async function prepareAuthorisation(packet: Locator, confirm = true) {
   await openPacketWizardStep(packet, 'Review');
   for (const label of ['Infrastructure responsibility', 'Analyst authority', 'Contradiction review', 'Source limitations review']) {
     const section = packet.locator('.readiness-editor section', { hasText: label });
@@ -84,9 +85,48 @@ async function prepareAuthorisation(packet: Locator) {
   await packet.getByRole('button', { name: 'Review and bind exact inputs', exact: true }).click();
   const confirmations = packet.getByRole('group', { name: 'Explicit confirmations', exact: true });
   await expect(confirmations.getByRole('checkbox')).toHaveCount(5);
-  for (const confirmation of await confirmations.getByRole('checkbox').all()) await confirmation.check();
-  await expect(packet.getByRole('button', { name: 'Authorise exact bound inputs', exact: true })).toBeEnabled();
+  if (confirm) {
+    for (const confirmation of await confirmations.getByRole('checkbox').all()) await confirmation.check();
+    await expect(packet.getByRole('button', { name: 'Authorise exact bound inputs', exact: true })).toBeEnabled();
+  }
 }
+
+test('packet approval explains the next review and focuses its existing control without taking the action', async ({ page }, testInfo) => {
+  const packet = await openPacket(page);
+  const status = packet.getByRole('region', { name: 'Packet authorisation status', exact: true });
+  await expect(status).toContainText('Complete the analyst authority review');
+  await status.getByRole('button', { name: 'Review missing readiness', exact: true }).click();
+  const authority = packet.locator('.readiness-editor section', { hasText: 'Analyst authority' });
+  await expect(authority.getByRole('combobox', { name: 'State', exact: true })).toBeFocused();
+  await openPacketWizardStep(packet, 'Prepare');
+  await status.getByRole('button', { name: 'View full readiness matrix', exact: true }).click();
+  await expect(packet.getByRole('region', { name: 'Profile-specific readiness matrix', exact: true })).toBeFocused();
+
+  await prepareAuthorisation(packet, false);
+  await status.getByRole('button', { name: 'Go to confirmations', exact: true }).click();
+  const confirmations = packet.getByRole('group', { name: 'Explicit confirmations', exact: true }).getByRole('checkbox');
+  await expect(confirmations.first()).toBeFocused();
+  await expect(confirmations.first()).not.toBeChecked();
+  for (const confirmation of await confirmations.all()) await confirmation.check();
+  await status.getByRole('button', { name: 'Go to authorisation', exact: true }).click();
+  await expect(packet.getByRole('button', { name: 'Authorise exact bound inputs', exact: true })).toBeFocused();
+  await expect(packet.getByLabel('Confirmation time', { exact: true })).toHaveValue('');
+
+  await authority.getByLabel('Detail', { exact: true }).fill('Changed authority context for manual review.');
+  await expect(status).toContainText('Material inputs changed');
+  await status.getByRole('button', { name: 'Go to exact-input review', exact: true }).click();
+  await expect(packet.getByRole('button', { name: 'Review and bind exact inputs', exact: true })).toBeFocused();
+  await expect(packet).toContainText('review stale');
+  expect(await page.evaluate(() => (window as PacketProbe).packetOutputs)).toEqual([]);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expectNoHorizontalOverflow(page);
+      await status.screenshot({ path: testInfo.outputPath(`packet-approval-${theme}-${width}.png`) });
+    }
+  }
+});
 
 for (const reselect of [false, true]) test(`withdrawing a pending packet confirmation${reselect ? ' and selecting it again' : ''} cannot restore authorisation`, { tag: '@timing-sensitive' }, async ({ page }) => {
   const packet = await openPacket(page);
@@ -133,6 +173,8 @@ test('a closed authorisation cannot complete or clear a replacement operation', 
   await packet.locator(':scope > summary').click();
   await expect(packet).not.toHaveAttribute('open', '');
   await packet.locator(':scope > summary').click();
+  await expect(packet.getByRole('region', { name: 'Packet authorisation status', exact: true }))
+    .toContainText('The previous authorisation stopped when its review context changed');
   const current = await holdPreparation(page, false, true);
   await authorise.click();
   await current.entered();
@@ -146,6 +188,8 @@ test('a closed authorisation cannot complete or clear a replacement operation', 
   await openPacketWizardStep(packet, 'Review');
   await expect(packet.getByLabel('Confirmation time', { exact: true })).toHaveValue('2000-01-03T00:00');
   await expect(packet).toContainText('authorised inputs');
+  await expect(packet.getByRole('region', { name: 'Packet authorisation status', exact: true }))
+    .not.toContainText('The previous authorisation stopped');
 });
 
 test('closed packet preparations cannot download, copy, reveal previews or retain a delivery handoff', { tag: '@timing-sensitive' }, async ({ page }) => {
