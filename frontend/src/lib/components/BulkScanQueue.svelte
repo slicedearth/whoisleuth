@@ -150,7 +150,7 @@
   @media(max-width:700px){
     .queue-label{align-items:flex-start;flex-direction:column;gap:8px}
     .queue-actions{align-items:stretch;flex-direction:column}
-    .queue-actions .field{margin:0}
+    .queue-actions .field{flex:0 0 auto;margin:0}
     .queue-actions select{width:100%;min-width:0}
   }
 </style>
