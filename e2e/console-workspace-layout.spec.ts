@@ -14,6 +14,56 @@ const viewports = [
   { width: 3840, height: 2160 },
 ] as const;
 
+test('public and console footers keep one layout and complete accessible links', async ({ page }, testInfo) => {
+  for (const width of [320, 1024, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    let publicLayout: number[] | undefined;
+    for (const path of ['/', '/resources', '/dashboard']) {
+      await page.goto(path);
+      await useTheme(page, theme);
+      const footer = page.locator('.site-footer');
+      const links = footer.getByRole('navigation', { name: 'Footer', exact: true });
+      await expect(links.getByRole('link')).toHaveCount(5);
+      for (const [label, href] of [['Privacy', '/privacy'], ['Terms', '/terms'], ['Request policy', '/request-policy'], ['Contact', '/contact']] as const) {
+        const link = links.getByRole('link', { name: new RegExp(`^${label}(?: \\(|$)`, 'u') });
+        await expect(link).toHaveAttribute('href', href);
+        await expect(link).toBeVisible();
+        if (path === '/dashboard') {
+          await expect(link).toHaveAttribute('target', '_blank');
+          await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+        } else await expect(link).not.toHaveAttribute('target');
+      }
+      await expect(links.getByRole('link', { name: 'Source and licence (opens in a new tab)', exact: true })).toHaveAttribute('target', '_blank');
+      await page.evaluate(() => document.fonts.ready);
+      await footer.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      const layout = await footer.evaluate(element => {
+        const box = element.getBoundingClientRect();
+        const metadata = element.querySelector('p')!.getBoundingClientRect();
+        const navigation = element.querySelector('nav')!.getBoundingClientRect();
+        return {
+          metadataBottom: metadata.bottom - box.top,
+          navigationTop: navigation.top - box.top,
+          positions: Array.from(element.querySelectorAll('nav > a')).flatMap(link => {
+            const bounds = link.getBoundingClientRect();
+            return [bounds.left - box.left, bounds.top - box.top];
+          }),
+        };
+      });
+      expect(layout.navigationTop).toBeGreaterThan(layout.metadataBottom);
+      if (publicLayout) {
+        expect(layout.positions).toHaveLength(publicLayout.length);
+        layout.positions.forEach((value, index) => expect(value).toBeCloseTo(publicLayout![index]!, 0));
+      } else publicLayout = layout.positions;
+      if (captureVisualEvidenceEnabled()) await footer.screenshot({ path: testInfo.outputPath(`footer-${path.slice(1) || 'home'}-${width}-${theme}.png`) });
+    }
+  }
+  await page.getByRole('navigation', { name: 'Footer' }).getByRole('link').first().focus();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('navigation', { name: 'Footer' }).getByRole('link', { name: /^Terms/u })).toBeFocused();
+  expect((await new AxeBuilder({ page }).include('.site-footer').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
+});
+
 test('optional Case covers and workspace markers stay temporary and retain exact identities and review clocks', async ({ page }, testInfo) => {
   const record = createCase({ domain: 'cover.example' }, '2026-09-01T00:00:00.000Z');
   record.updatedAt = '2026-09-20T00:00:00.000Z';

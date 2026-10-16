@@ -27,8 +27,8 @@
   footer{padding:22px 0 30px;border-top:1px solid var(--border);color:var(--muted);font:var(--text-2xs) var(--mono);line-height:1.6}
   footer.console{margin-top:54px}
   p{margin:0}
-  .footer-meta{display:flex;align-items:flex-start;justify-content:space-between;gap:16px 30px}
-  .footer-links{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:4px 14px;margin:0}
+  .footer-meta{display:flex;align-items:flex-start;flex-direction:column;gap:8px;min-width:0}
+  .footer-links{display:flex;justify-content:flex-start;flex-wrap:wrap;gap:4px 14px;margin:0}
   .footer-links a{display:inline-flex;align-items:center;min-height:32px;margin:0;padding:4px 0}
   .footer-links a.active{color:var(--text);text-decoration:underline;text-underline-offset:4px}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
@@ -36,7 +36,6 @@
   a:hover,a:focus-visible{color:var(--text)}
   @media(max-width:720px){
     footer{padding:18px 0 22px}
-    .footer-meta{width:100%;align-items:flex-start;flex-direction:column;gap:8px;text-align:left}
     .footer-links{display:grid;width:100%;grid-template-columns:repeat(3,minmax(0,max-content));justify-content:start;gap:0 20px}
     .footer-links a{min-width:0;min-height:44px;overflow-wrap:anywhere}
   }
