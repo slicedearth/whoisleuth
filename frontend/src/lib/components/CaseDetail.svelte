@@ -183,7 +183,7 @@
       <span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span>
       <span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span>
       <span title={`Complete Case number: ${caseNumber(record.id)}`}>Case …{caseNumber(record.id).slice(-8)}</span>
-      <span>Updated <EvidenceTimestamp value={record.updatedAt} label="Case update time" /></span>
+      <span>Case record updated <EvidenceTimestamp value={record.updatedAt} label="Case update time" /></span>
     </div>
   </div>
   <div class="case-actions">

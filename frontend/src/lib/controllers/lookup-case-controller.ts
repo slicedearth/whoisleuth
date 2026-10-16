@@ -135,7 +135,7 @@ export class LookupCaseController {
         });
         return {
           record: refreshed.record,
-          status: `Refreshed the retained Case evidence for ${refreshed.record.domain}.${pruneSuffix(refreshed.pruned)}`,
+          status: `Saved this Lookup observation to the Case for ${refreshed.record.domain}.${pruneSuffix(refreshed.pruned)}`,
           mutationOutcome: 'committed',
         };
       }

@@ -34,6 +34,24 @@ export function caseOriginalFileState(inspection: Awaited<ReturnType<typeof insp
   return inspection!.checklist.find(item => item.digestSha256 === checked.digestSha256 && item.byteLength === checked.byteLength)?.state ?? 'verified';
 }
 
+/** Compare completed checks only. A different reference is not a changed file. */
+export function compareCaseOriginalChecks(previous: Awaited<ReturnType<typeof inspectRetainedCaseOriginals>> | null,
+  current: Awaited<ReturnType<typeof inspectRetainedCaseOriginals>>) {
+  const earlier = new Map(previous?.checkedReferences.map(reference =>
+    [canonicalArtifactJsonV2(reference), caseOriginalFileState(previous, reference)]));
+  let compared = 0;
+  const changed = current.checkedReferences.flatMap(reference => {
+    const before = earlier.get(canonicalArtifactJsonV2(reference));
+    if (before === undefined) return [];
+    compared++;
+    const after = caseOriginalFileState(current, reference);
+    return before === after ? [] : [Object.freeze({ referenceId: reference.id, before, after })];
+  });
+  return Object.freeze({ compared, changed: Object.freeze(changed),
+    newlyChecked: current.checkedReferences.length - compared,
+    notRechecked: earlier.size - compared });
+}
+
 export async function prepareCaseReviewHandoff(record: CaseRecord, ids: readonly string[], signal: AbortSignal,
   readFiles: typeof readRetainedCaseFiles = readRetainedCaseFiles) {
   const document = caseReviewDocument(record), snapshot = readCaseReviewDocument(document);

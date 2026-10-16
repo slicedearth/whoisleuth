@@ -1272,6 +1272,9 @@ local export; WHOISleuth does not send it or promise a provider outcome.
 **Packet authorisation status** explains the next review needed and takes you to
 its existing control: missing readiness, changed material, confirmations or
 explicit authorisation. **View full readiness matrix** keeps every row available.
+The handoff summary separates selected evidence references, supporting files,
+the prepared preview and the recorded response action. Preparing or exporting
+either a packet or a file package does not record delivery.
 If a pending authorisation loses its review context, the status explains that it
 stopped; returning to the packet does not complete that earlier attempt.
 In the packet's **Review** phase, **Prepare original files separately** lets you
@@ -1285,7 +1288,11 @@ The separate package contains only the files you select with their existing
 source and image-derivation declarations, not the full Case backup. Packet
 redaction rules do not change those file contents; review them for the recipient.
 Changing selection cancels an unfinished check; the last completed check stays
-separately labelled. Changing packet inputs or leaving or closing this review
+separately labelled with its completion time. Successive completed checks compare
+only identical references, including their provenance, and distinguish changed
+results from newly checked or no-longer-checked references. This is a temporary
+review of file availability and integrity, not ongoing monitoring or a comparison
+of evidence content. Changing packet inputs or leaving or closing this review
 clears the temporary check and selection. Export rechecks the bytes and current Case, without changing
 the packet, authorising delivery or recording a submission.
 **Trace selected evidence to its source** follows an exact selected pin back to

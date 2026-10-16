@@ -150,6 +150,10 @@ async function prepareAuthorisation(packet: Locator, confirm = true) {
 test('packet approval explains the next review and focuses its existing control without taking the action', async ({ page }, testInfo) => {
   const packet = await openPacket(page);
   const status = packet.getByRole('region', { name: 'Packet authorisation status', exact: true });
+  const summary = packet.locator('.handoff-summary');
+  await expect(summary).toContainText('1 selected reference');
+  await expect(summary).toContainText('Not prepared in this review');
+  await expect(summary).toContainText('Preparing or exporting does not record delivery');
   await expect(status).toContainText('Complete the analyst authority review');
   await status.getByRole('button', { name: 'Review missing readiness', exact: true }).click();
   const authority = packet.locator('.readiness-editor section', { hasText: 'Analyst authority' });
@@ -180,6 +184,7 @@ test('packet approval explains the next review and focuses its existing control 
       await page.setViewportSize({ width, height: 900 });
       await expectNoHorizontalOverflow(page);
       await status.screenshot({ path: testInfo.outputPath(`packet-approval-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`packet-handoff-${theme}-${width}.png`) });
     }
   }
 });

@@ -192,7 +192,7 @@ describe('Lookup case controller', () => {
       inputHostname: 'account.example.test',
       availability: 'registered',
     }, 'deep');
-    assert.match(refreshed.status, /Refreshed the retained Case evidence/iu);
+    assert.match(refreshed.status, /Saved this Lookup observation to the Case/iu);
     assert.deepEqual(refreshed.record?.evidenceHistory.map((snapshot) => snapshot.inputHostname), [
       'login.example.test',
       'account.example.test',

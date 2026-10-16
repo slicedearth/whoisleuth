@@ -81,11 +81,16 @@ test('recipient file preparation distinguishes references from verified bytes an
   await expect(review.getByRole('button', { name: 'Download private package', exact: true })).toHaveCount(0);
   await review.getByRole('button', { name: 'Check selected originals', exact: true }).click();
   await expect(review.getByRole('status', { name: 'Recipient original-file check', exact: true })).toContainText('1 reference · 1 verified · 0 missing · 0 unverified');
+  await expect(review.locator('.check-context time')).toHaveAttribute('datetime', '2000-01-03T00:00:00.000Z');
+  await expect(review.locator('.check-comparison')).toHaveCount(0);
   await expect(other).toHaveAccessibleName(/Not checked/u);
   await other.check();
   await expect(review.getByRole('button', { name: 'Download private package', exact: true })).toHaveCount(0);
+  await page.clock.setFixedTime('2000-01-03T00:01:00.000Z');
   await review.getByRole('button', { name: 'Check all Case originals', exact: true }).click();
   await expect(review.getByRole('status', { name: 'Recipient original-file check', exact: true })).toContainText('1 verified · 1 missing · 0 unverified');
+  await expect(review.locator('.check-context time')).toHaveAttribute('datetime', '2000-01-03T00:01:00.000Z');
+  await expect(review.locator('.check-comparison')).toContainText('identical references rechecked: 1; changed results: 0; newly checked: 1; earlier references not rechecked: 0');
   await expect(first).toBeChecked(); await expect(other).toBeChecked();
   await expect(other).toHaveAccessibleName(/Missing bytes/u);
   await expect(review.getByRole('button', { name: 'Download private package', exact: true })).toHaveCount(0);
@@ -117,15 +122,18 @@ test('recipient file preparation distinguishes references from verified bytes an
     await page.screenshot({ path: testInfo.outputPath(`recipient-files-${theme}.png`) });
     expect((await new AxeBuilder({ page }).include('.packet-files').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
   }
-  await reference.getByLabel('Label', { exact: true }).fill('Changed capture declaration');
-  await expect(first).toHaveAccessibleName(/Not checked/u); await expect(first).not.toBeChecked();
-  await expect(review.getByRole('button', { name: 'Download private package', exact: true })).toHaveCount(0);
   await changeStoredFile(page, [...original], 'corrupt');
-  await first.check();
+  await page.clock.setFixedTime('2000-01-03T00:02:00.000Z');
   await review.getByRole('button', { name: 'Check selected originals', exact: true }).click();
   await expect(review.getByRole('status', { name: 'Recipient original-file check', exact: true })).toContainText('0 verified · 0 missing · 1 unverified');
+  await expect(review.locator('.check-comparison')).toContainText('identical references rechecked: 1; changed results: 1; newly checked: 0; earlier references not rechecked: 1');
+  await expect(review).toContainText('Check result changed: verified → unverified');
+  await expect(other).toHaveAccessibleName(/Not checked/u);
   await expect(first).toHaveAccessibleName(/Unverified bytes/u);
   await expect(review.getByRole('button', { name: 'Download private package', exact: true })).toHaveCount(0);
+  await reference.getByLabel('Label', { exact: true }).fill('Changed capture declaration');
+  await expect(first).toHaveAccessibleName(/Not checked/u); await expect(first).not.toBeChecked();
+  await expect(review.locator('.check-context, .check-comparison')).toHaveCount(0);
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
 });
 
@@ -199,14 +207,22 @@ test('changing candidate references cancels the pending original check and only 
   const other = review.getByRole('checkbox', { name: /^other\.json/ });
   const check = review.getByRole('button', { name: 'Check selected originals', exact: true });
   await first.check();
+  await check.click(); await expect(first).toHaveAccessibleName(/Verified bytes/u);
+  const completedAt = await review.locator('.check-context time').getAttribute('datetime');
+  await page.clock.setFixedTime('2000-01-03T00:01:00.000Z');
   const gate = await holdOriginalRead(page);
   try {
     await check.click(); await gate.evaluate(control => control.wait());
+    await expect(review.locator('.check-context time')).toHaveAttribute('datetime', completedAt!);
     await first.uncheck(); await other.check();
+    await expect(review.locator('.check-context time')).toHaveAttribute('datetime', completedAt!);
     await check.click();
     await expect(other).toHaveAccessibleName(/Verified bytes/u);
+    await expect(review.locator('.check-comparison')).toContainText('identical references rechecked: 0; changed results: 0; newly checked: 1; earlier references not rechecked: 1');
+    await expect(review.locator('.check-context time')).toHaveAttribute('datetime', '2000-01-03T00:01:00.000Z');
     await expect(first).toHaveAccessibleName(/Not checked/u);
     await gate.evaluate(control => control.release());
+    await expect(review.locator('.check-context time')).toHaveAttribute('datetime', '2000-01-03T00:01:00.000Z');
     await expect(first).not.toBeChecked(); await expect(other).toBeChecked();
     await expect(first).toHaveAccessibleName(/Not checked/u);
     const download = page.waitForEvent('download');

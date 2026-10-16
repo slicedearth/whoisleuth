@@ -8,7 +8,7 @@ import { canonicalArtifactJsonV2, sha256ArtifactBytes } from '../packages/eviden
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../packages/contracts/selected-file-limits.mts';
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../packages/contracts/investigation-package-limits.mts';
 import { MAX_EDITABLE_CASE_OUTPUT_BYTES } from '../packages/contracts/case-portability.mts';
-import { prepareCaseReviewHandoff, assertCaseReviewHandoffCurrent, readPackagedCaseReview, caseOriginalFileState } from '../frontend/src/lib/case-review-package.ts';
+import { prepareCaseReviewHandoff, assertCaseReviewHandoffCurrent, readPackagedCaseReview, caseOriginalFileState, compareCaseOriginalChecks } from '../frontend/src/lib/case-review-package.ts';
 import { inspectCaseOriginalFiles } from '../packages/workspace/workspace-recovery.mts';
 import { runInvestigationPackageOperation } from '../frontend/src/lib/investigation-package-worker-model.ts';
 import { verifyOfflineArtifact, formatOfflineArtifactVerification } from '../cli/artifact-verify.mts';
@@ -98,6 +98,32 @@ test('original-byte inspection covers exact selected references, not names, matc
   assert.equal(caseOriginalFileState({ ...missing, checkedReferences: selection.selected }, selected), 'missing');
   const unreadable = await inspectCaseOriginalFiles([{ id: record.id, attachments: selection.selected }], async () => { throw new Error('Private storage detail'); });
   assert.equal(caseOriginalFileState({ ...unreadable, checkedReferences: selection.selected }, selected), 'unverified');
+});
+
+test('completed file comparisons use full reference identity and never turn an unselected reference into missing bytes', async () => {
+  const { record, originals } = await fixture();
+  const [first, second] = originals.map(item => item.attachment);
+  const check = async (references: NonNullable<typeof record.attachments>, present: boolean) => ({
+    ...await inspectCaseOriginalFiles([{ id: record.id, attachments: references }], async () => present
+      ? new Map(originals.map(item => [item.attachment.digestSha256, item.file])) : new Map()),
+    checkedReferences: references,
+  });
+  const previous = await check([first!, second!], true), current = await check([first!], false);
+  const compared = compareCaseOriginalChecks(previous, current);
+  assert.deepEqual(compared, { compared: 1, changed: [{ referenceId: first!.id, before: 'verified', after: 'missing' }], newlyChecked: 0, notRechecked: 1 });
+  assert.equal(caseOriginalFileState(current, second!), 'not_checked');
+  assert.deepEqual(compareCaseOriginalChecks(null, current), { compared: 0, changed: [], newlyChecked: 1, notRechecked: 0 });
+  assert.deepEqual(compareCaseOriginalChecks(current, current), { compared: 1, changed: [], newlyChecked: 0, notRechecked: 0 });
+  for (const changed of [
+    { ...first!, source: 'Different source' }, { ...first!, observedAt: NOW },
+    { ...first!, fileName: 'Different label.bin' }, { ...first!, id: 'another-reference' },
+    { ...first!, retainedAt: '2026-09-14T00:00:00.000Z' },
+    { ...first!, digestSha256: second!.digestSha256 }, { ...first!, byteLength: first!.byteLength + 1 },
+  ]) {
+    const next = await check([changed], false);
+    assert.deepEqual(compareCaseOriginalChecks(current, next), { compared: 0, changed: [], newlyChecked: 1, notRechecked: 1 });
+  }
+  assert.equal(previous.verified, 2); assert.equal(current.missing, 1);
 });
 
 test('encrypted handoff round trip preserves exact Case and original bytes and identifies partial returns', async () => {

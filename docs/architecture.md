@@ -56,6 +56,11 @@ adapters.
 Console routes compose view effects around responsibility-specific controllers.
 Domain models own validation; storage adapters own transactions and conflict
 checks. A committed write and a failed subsequent refresh remain distinct.
+The packet review controller owns transient digest bindings, confirmations and
+authorisation. The packet component owns operation lifetime, view transitions
+and focus; the existing Case mutation coordinator owns persisted actions.
+Original-file checks use full reference identity and retain only the latest
+completed result and a small comparison summary for the open review.
 The static frontend adapter, preprocessing, browser policy and bundler plugins
 are configured in `frontend/vite.config.ts`. Frontend imports use the native
 `#lib/*` package mapping with explicit extensions; its TypeScript project extends
