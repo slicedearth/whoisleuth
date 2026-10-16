@@ -26,19 +26,19 @@
       await tick();
       if (live && generation === current) heading?.focus();
     } catch {
-      if (live && generation === current) error = 'The fictional drafts could not be compared. Your practice Case and drafts are unchanged.';
+      if (live && generation === current) error = 'The fictional drafts could not be compared. Your practice case and drafts are unchanged.';
     } finally { if (live && generation === current) busy = false; }
   }
 </script>
 
 <section class="practice-packets" aria-label="Fictional response draft comparison">
-  <p>Compare two draft selections from a fresh copy of the supplied fictional Case. They change the internal recipient, page or advertisement scope, and selected evidence. Your practice edits and simulated delivery history stay separate.</p>
+  <p>Compare two draft selections from a fresh copy of the supplied fictional case. They change the internal recipient, page or advertisement scope, and selected evidence. Your practice edits and simulated delivery history stay separate.</p>
   <div class="actions"><button class="btn" type="button" disabled={busy} onclick={() => void prepare()}>Compare supplied fictional drafts</button>
     <button class="btn" type="button" onclick={clear}>Clear fictional comparison</button></div>
   {#if busy}<p role="status">Preparing and validating fictional drafts…</p>{/if}
   {#if error}<p role="alert">{error}</p>{/if}
   {#if copies}<h4 bind:this={heading} tabindex="-1">Fictional draft differences</h4>
-    <p>Both packets remain unauthorised drafts. No packet was downloaded, delivered or imported. A pin missing from one selection is still retained in the source Case.</p>
+    <p>Both packets remain unauthorised drafts. No packet was downloaded, delivered or imported. A pin missing from one selection is still retained in the source case.</p>
     <CaseHandoffComparisonView {comparison} labels={['Baseline draft', 'Comparison draft']} />
     <details><summary>Fictional packet identities</summary>
       {#each copies as copy, index}<p>{index === 0 ? 'Baseline' : 'Comparison'} · response packet schema {copy.version}<br><code>{copy.digest}</code></p>{/each}

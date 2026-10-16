@@ -88,7 +88,7 @@
       record = session.journey(operation, reviewedSignature);
       message = operation === 'prepare' ? 'Prepared two fictional drafting actions. Review the separate recipient material.'
         : operation === 'deliver' ? 'Recorded separate simulated delivery references and a fictional page acknowledgement. Nothing was exported or submitted.'
-        : 'Closed only the independently reviewed page action and incident link. The advertisement remains unresolved and this practice Case remains open.';
+        : 'Closed only the independently reviewed page action and incident link. The advertisement remains unresolved and this practice case remains open.';
     } catch (cause) { message = cause instanceof Error ? cause.message : 'The practice step could not be recorded.'; }
     finally { mutationBusy = false; await tick(); if (live) restoreSubmittedFocus(origin, document.getElementById('practice-response'), owner); }
   }
@@ -115,7 +115,7 @@
 </script>
 
 <section class="case-practice" aria-labelledby="case-practice-title">
-  <header><div><h2 id="case-practice-title" tabindex="-1">Practise a Case review</h2><p>Use Case forms with supplied fictional evidence and simulated response steps. Practice stays on this page and disappears on restart, reload or navigation. Nothing is collected or submitted.</p></div><button class="btn" type="button" onclick={onreset} disabled={mutationBusy}>Discard practice and restart</button></header>
+  <header><div><h2 id="case-practice-title" tabindex="-1">Practise a case review</h2><p>Use case forms with supplied fictional evidence and simulated response steps. Practice stays on this page and disappears on restart, reload or navigation. Nothing is collected or submitted.</p></div><button class="btn" type="button" onclick={onreset} disabled={mutationBusy}>Discard practice and restart</button></header>
   <CasePracticeWalkthrough evidence={suppliedEvidence} {visible} />
   <nav aria-label="Case practice steps">{#each steps as item, index}<button class="btn" type="button" aria-current={step === item.id ? 'step' : undefined} onclick={() => void select(item.id)}>{index + 1}. {item.label}</button>{/each}</nav>
   <p class="practice-status" role="status">{message}</p>
@@ -190,7 +190,7 @@
         {#if containment}<section aria-label="Fictional containment disclosure"><h4 bind:this={containmentHeading} tabindex="-1">Fictional containment disclosure</h4>
           <p>{containment.assertions.length} selected request · {containment.evidencePins.length} supporting pin · {containment.state}.</p>
           {#each containment.assertions as request}<p>{request.statement} · recorded state {request.state}. {#each request.evidence as link}{link.stance}: {link.state.replaceAll('_', ' ')}. {/each}</p>{/each}
-          <p>Public preview excludes internal requests and pins. Provider resolution and Case status do not close open requests.</p>
+          <p>Public preview excludes internal requests and pins. Provider resolution and case status do not close open requests.</p>
           <details><summary>Inspect exact fictional containment disclosure</summary><pre>{JSON.stringify(containment, null, 2)}</pre></details>
         </section>{/if}
       </details>
@@ -205,12 +205,12 @@
         {:else}
           <ul aria-label="Practice response records">{#each record.actions as action}<li><strong>{action.recipient}</strong> · {action.state}<ul>{#each action.history.filter(event => event.reference) as event}<li>{event.reference} · {event.sourceClass}</li>{/each}</ul></li>{/each}</ul>
           {#if journeyActions[0]?.state === 'acknowledged'}<p><strong>Supplied independent later observation:</strong> the complete exact offer-page capture, under the same unauthenticated viewport, shows ordinary text and no credential form. The advertisement was not reviewed. This is fictional independent evidence, not the provider acknowledgement.</p><button class="btn" type="button" onclick={() => advanceJourney('close-page')}>Record supplied independent review and close only the page scope</button>
-          {:else}<p>Page scope closed after the supplied complete comparable observation. Advertisement distribution remains unresolved. The Case itself is not closed, and no general safety or removal claim is made.</p>{/if}
+          {:else}<p>Page scope closed after the supplied complete comparable observation. Advertisement distribution remains unresolved. The case itself is not closed, and no general safety or removal claim is made.</p>{/if}
         {/if}
       {/if}
     </div>
   {:else if scenario === 'requested-amendment'}
-    <div hidden={step !== 'response'}><h3 id="practice-response" tabindex="-1">Preserve the original delivery and prepare an amendment</h3><p>The reserved digest identifies synthetic practice history only. Use the actual requested-evidence form to select references and record limitations. Creating a drafting amendment does not deliver it.</p><CaseRequestedEvidence {record} {persist} {mutationBusy} onamendment={() => { message = 'The drafting amendment is retained only in this practice Case. Review and delivery are not rehearsed by this step.'; }} /></div>
+    <div hidden={step !== 'response'}><h3 id="practice-response" tabindex="-1">Preserve the original delivery and prepare an amendment</h3><p>The reserved digest identifies synthetic practice history only. Use the actual requested-evidence form to select references and record limitations. Creating a drafting amendment does not deliver it.</p><CaseRequestedEvidence {record} {persist} {mutationBusy} onamendment={() => { message = 'The drafting amendment is retained only in this practice case. Review and delivery are not rehearsed by this step.'; }} /></div>
   {/if}
   <div hidden={step !== 'recheck'} class="case-response-stage">
     <h3 id="practice-recheck" tabindex="-1">Keep an incomplete recheck inconclusive</h3>

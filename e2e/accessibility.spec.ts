@@ -252,7 +252,7 @@ test('scans representative public initial, error, populated, and expanded states
   await expect(mobileComparison).toHaveAttribute('open', '');
   await expectNoAccessibilityViolations(page, testInfo, 'public-populated-expanded-light-mobile');
   await expectSequentialHeadingOrder(page, 'public populated demo');
-  await page.getByRole('button', { name: 'Open Case' }).click();
+  await page.getByRole('button', { name: 'Open case' }).click();
   await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeVisible();
   await expectSequentialHeadingOrder(page, 'public monitor demo');
 });

@@ -126,7 +126,7 @@ export const CASE_PRACTICE_SCENARIOS = [
     inadequate: '“New domain plus MX proves phishing.” Neither signal shows a sent message or a credential lure.' },
   { id: 'related-hosts', title: 'Related hosts with different affected identities',
     observation: 'Supplied captures show accounts.parent.example/service-a and jobs.parent.example/service-b making different identity claims. They share a parent domain and an edge address; each affected identity and page is distinct.',
-    assessment: 'Retain exact incident links and separate Brand Profile associations or related Cases. Shared infrastructure is a lead, not common ownership or one universal incident.',
+    assessment: 'Retain exact incident links and separate brand profile associations or related cases. Shared infrastructure is a lead, not common ownership or one universal incident.',
     recheck: 'The service-a recheck failed. It says nothing about service-b.',
     question: 'Is the service-a claim still observable?', conditions: 'Exact service-a page and claimed identity, not any sibling hostname.',
     source: 'Fictional separately scoped page captures', urls: ['https://accounts.parent.example/service-a', 'https://jobs.parent.example/service-b'], routes: [],
@@ -210,7 +210,7 @@ export const CASE_PRACTICE_SCENARIOS = [
     recheck: 'The later capture failed; that gap belongs in the amendment, not in an invented complete observation.',
     question: 'Is a complete later exact-page observation available?', conditions: 'Exact requested page and time scope; do not claim unavailable evidence was supplied.',
     source: 'Fictional recipient request and delivery record', urls: ['https://case-practice.example/offer'], routes: [],
-    adequate: 'Use Requested evidence in a real Case to select retained references, state limitations and create a separately reviewed drafting amendment.',
+    adequate: 'Use Requested evidence in a real case to select retained references, state limitations and create a separately reviewed drafting amendment.',
     inadequate: '“Overwrite the first packet with the latest evidence.” This loses the original recipient-material lineage.' },
   { id: 'restored-dispute', title: 'A disputed report and a restored page',
     observation: 'A fictional provider reports that content was restored after a dispute. The procedure is attributed to the provider; no independent later page capture completed.',
@@ -584,7 +584,7 @@ export function createCasePracticeSession(scenario: CasePracticeScenario = 'cred
     update: async change => {
       const id = current().id;
       const next = normalizeCaseDraftStore(change(structuredClone(drafts)));
-      if (next.records.some(draft => draft.caseId !== id)) throw new Error('Practice drafts belong only to the fictional Case.');
+      if (next.records.some(draft => draft.caseId !== id)) throw new Error('Practice drafts belong only to the fictional case.');
       drafts = next;
     },
   };

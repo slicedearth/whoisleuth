@@ -12,14 +12,14 @@
     { title: 'Registration first', description: 'WHOIS and RDAP stay separate. Authoritative registry evidence takes priority; positive authoritative DNS delegation can support registered status when registry results are inconclusive.' },
     { title: 'Supporting context', description: 'DNS, certificates, mail and website checks help explain a domain without overriding registration evidence.' },
     { title: 'Offline intake', description: 'Review supplied text, messages and supported files locally without opening their links.', guide: { label: 'Read the intake guide', href: '/resources#tool-lookup-input' } },
-    { title: 'Evidence handoff', description: 'Keep sources and decisions in a Case, review the selected disclosure and export a packet to share yourself.', guide: { label: 'Read the handoff guide', href: '/resources/reporting-and-takedown-guidance' } },
+    { title: 'Evidence handoff', description: 'Keep sources and decisions in a case, review the selected disclosure and export a packet to share yourself.', guide: { label: 'Read the handoff guide', href: '/resources/reporting-and-takedown-guidance' } },
   ];
 
 </script>
 
 <PublicSeo
   title="WHOISleuth | WHOIS, RDAP and domain investigation"
-  description="Review domain registration and supporting evidence, inspect supplied material locally, and prepare selected Case evidence for a deliberate handoff."
+  description="Review domain registration and supporting evidence, inspect supplied material locally, and prepare selected case evidence for a deliberate handoff."
   path="/"
   website
 />
@@ -29,7 +29,7 @@
   <div class="hero-copy">
     <p class="eyebrow hero-kicker">Domain intelligence console</p>
     <h1>Understand a domain.<br><span>Before you act.</span></h1>
-    <p class="lede">Investigate a domain or inspect material you already have. Compare source evidence, keep a Case and prepare a reviewed handoff.</p>
+    <p class="lede">Investigate a domain or inspect material you already have. Compare source evidence, keep a case and prepare a reviewed handoff.</p>
     <div class="hero-actions">
       <div class="example-action">
         <a class="primary" href="/demo" aria-describedby="example-scope">Explore an example investigation</a>
@@ -44,7 +44,7 @@
 </section>
 
 <section class="jobs" id="features" aria-labelledby="jobs-title">
-  <div class="section-intro"><p class="eyebrow">Investigate · Respond · Assure</p><h2 id="jobs-title">Start with the work in front of you</h2><p>Choose a domain, a suspicious message, a Brand candidate or a saved Case. The guides and fictional examples are open to everyone; your own investigations use the Console.</p></div>
+  <div class="section-intro"><p class="eyebrow">Investigate · Respond · Assure</p><h2 id="jobs-title">Start with the work in front of you</h2><p>Choose a domain, a suspicious message, a brand candidate or a saved case. The guides and fictional examples are open to everyone; your own investigations use the console.</p></div>
   <PublicGoalPaths goals={publicGuideGoals} />
 </section>
 

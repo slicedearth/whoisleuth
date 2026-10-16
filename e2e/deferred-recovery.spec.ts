@@ -24,7 +24,7 @@ const CASES_KEY = 'whois-rdap-cases-v1';
 
 test('a failed opening action preserves an already loaded panel and does not repeat the action', async ({ page }, testInfo) => {
   await page.goto('/demo#case-practice');
-  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const practice = page.getByRole('region', { name: 'Practise a case review', exact: true });
   await expect(practice).toBeVisible();
   await page.evaluate(() => {
     const original = HTMLElement.prototype.focus;
@@ -52,7 +52,7 @@ test('a failed opening action preserves an already loaded panel and does not rep
   await expect(page.locator('body')).not.toContainText('private opening-action sentinel');
   await expect(page.getByRole('button', { name: 'Reload page', exact: true })).toHaveCount(0);
   await practice.getByRole('button', { name: 'Discard practice and restart', exact: true }).click();
-  await expect(practice.getByRole('heading', { name: 'Practise a Case review', exact: true })).toBeFocused();
+  await expect(practice.getByRole('heading', { name: 'Practise a case review', exact: true })).toBeFocused();
   await expect(label).toHaveValue('');
   await expect(page.getByText('This section loaded, but its opening action could not finish.', { exact: false })).toHaveCount(0);
 });

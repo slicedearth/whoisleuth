@@ -100,8 +100,8 @@ export function createCaseDraftRecovery(options: Readonly<{
       identity = { id: draft.id, revision: draft.revision };
       storedRevision = revision;
       emit({ status: 'saved', message: options.retention === 'document'
-        ? 'Practice draft retained on this page only. Not yet added to the practice Case.'
-        : 'Draft saved in this workspace. Not yet added to the Case.' });
+        ? 'Practice draft retained on this page only. Not yet added to the practice case.'
+        : 'Draft saved in this workspace. Not yet added to the case.' });
     }).catch(cause => { failure(cause); throw cause; }).finally(() => { writing = null; });
     await writing;
   }
@@ -135,7 +135,7 @@ export function createCaseDraftRecovery(options: Readonly<{
       options.restoreFields(caseDraftFields(current.fields));
       identity = { id: current.id, revision: current.revision };
       editRevision++; storedRevision = editRevision;
-      emit({ edited: true, status: 'saved', message: 'Recovered this form. Review it before adding it to the Case.', candidates: state.candidates.filter(item => item.id !== current.id) });
+      emit({ edited: true, status: 'saved', message: 'Recovered this form. Review it before adding it to the case.', candidates: state.candidates.filter(item => item.id !== current.id) });
     } catch { emit({ status: 'error', message: 'This saved draft cannot be restored into the current form. It has not been changed.' }); }
     finally { emit({ busy: false }); if (editRevision !== revision) resumePending(); }
   }
@@ -204,7 +204,7 @@ export function createCaseDraftRecovery(options: Readonly<{
         options.onInvalidate?.();
         identity = null;
         storedRevision = submittedRevision;
-        emit({ edited: editRevision !== submittedRevision, status: 'idle', message: 'Added to the Case. The submitted recovery copy was removed.' });
+        emit({ edited: editRevision !== submittedRevision, status: 'idle', message: 'Added to the case. The submitted recovery copy was removed.' });
       }
       return committed;
     } catch (cause) { failure(cause); return false; }

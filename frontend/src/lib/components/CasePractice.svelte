@@ -26,7 +26,7 @@
 <div class="practice-reading" class:presentation>
 {#if unavailableRequest}<p role="status">That fictional tour is not available in this build. Choose a practice scenario below; an open practice has not been replaced.</p>{/if}
 <div class="scenario-choice"><label>Practice scenario<select bind:value={selected}>{#each CASE_PRACTICE_SCENARIOS as scenario}<option value={scenario.id}>{scenario.title}</option>{/each}</select></label>
-  {#if selected !== active}<div><p>Changing scenario discards this practice Case and its drafts.</p><button class="btn" type="button" onclick={() => void changeScenario()}>Discard practice and change scenario</button><button class="btn" type="button" onclick={() => selected = active}>Keep current practice</button></div>{/if}
+  {#if selected !== active}<div><p>Changing scenario discards this practice case and its drafts.</p><button class="btn" type="button" onclick={() => void changeScenario()}>Discard practice and change scenario</button><button class="btn" type="button" onclick={() => selected = active}>Keep current practice</button></div>{/if}
 </div>
 <div class="practice-options" role="group" aria-label="Optional fictional presentation">
   <label><input type="checkbox" bind:checked={presentation}> Larger practice reading</label>

@@ -12,7 +12,7 @@ test('fictional walkthroughs preserve selected order, evidence attribution and p
   const verifyIsolation = await isolateCasePractice(page);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/demo#case-practice');
-  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const practice = page.getByRole('region', { name: 'Practise a case review', exact: true });
   const draft = practice.locator('form[data-recovery-form="evidence-pin"]').getByLabel('Label', { exact: true });
   await draft.fill('Keep this unsubmitted practice draft');
   const facts = practice.getByRole('region', { name: 'Case observations', exact: true }).locator('.evidence-fact');
@@ -72,8 +72,8 @@ test('fictional walkthroughs preserve selected order, evidence attribution and p
   await expect(start).toBeDisabled();
   await expect(walkthrough.getByRole('checkbox', { checked: true })).toHaveCount(0);
   await walkthrough.getByRole('checkbox', { name: 'Include Earlier page', exact: true }).check();
-  await page.getByText('Practise with real Case forms', { exact: true }).click();
-  await page.getByText('Practise with real Case forms', { exact: true }).click();
+  await page.getByText('Practise with real case forms', { exact: true }).click();
+  await page.getByText('Practise with real case forms', { exact: true }).click();
   await expect(walkthrough).not.toHaveAttribute('open');
   await summary.click();
   await expect(start).toBeDisabled();
@@ -103,7 +103,7 @@ test('practice scenarios require deliberate replacement and keep provider outcom
   await page.goto('/examples');
   await page.locator('#related-hosts summary').click();
   await page.getByRole('link', { name: 'Open the related-host practice', exact: true }).click();
-  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const practice = page.getByRole('region', { name: 'Practise a case review', exact: true });
   const label = practice.locator('form[data-recovery-form="evidence-pin"]').getByLabel('Label', { exact: true });
   const scenario = page.getByRole('combobox', { name: 'Practice scenario', exact: true });
   const followTour = async (id: string) => {
@@ -134,7 +134,7 @@ test('practice scenarios require deliberate replacement and keep provider outcom
   await expect(scenario).toHaveValue('contradictory-sources');
   await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
   await expect(label).toHaveValue('');
-  await expect(practice.getByRole('heading', { name: 'Practise a Case review', exact: true })).toBeFocused();
+  await expect(practice.getByRole('heading', { name: 'Practise a case review', exact: true })).toBeFocused();
   await expect(practice).toContainText('Separate review reported no credential form');
   await scenario.selectOption('provider-resolved');
   await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
@@ -160,7 +160,7 @@ test('fictional inference exercises explain evidence limits without recording an
   const verifyIsolation = await isolateCasePractice(page);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/demo#case-practice');
-  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const practice = page.getByRole('region', { name: 'Practise a case review', exact: true });
   const scenario = page.getByRole('combobox', { name: 'Practice scenario', exact: true });
   const exercise = practice.getByRole('region', { name: 'Fictional inference exercise', exact: true });
   const disclosure = practice.getByText('Find the weak inference', { exact: true });
@@ -253,8 +253,8 @@ test('fictional inference exercises explain evidence limits without recording an
   await practice.getByText('Check your reasoning', { exact: true }).click();
   await expect(practice.getByRole('list', { name: 'Practice record checks', exact: true })).toContainText('Not yet recorded: The decision links retained evidence');
   await exercise.getByRole('radio').first().check();
-  await page.getByText('Practise with real Case forms', { exact: true }).click();
-  await page.getByText('Practise with real Case forms', { exact: true }).click();
+  await page.getByText('Practise with real case forms', { exact: true }).click();
+  await page.getByText('Practise with real case forms', { exact: true }).click();
   await expect(exercise).toHaveCount(0);
   await disclosure.click();
   await expect(exercise.getByRole('radio', { checked: true })).toHaveCount(0);
@@ -265,12 +265,12 @@ test('fictional inference exercises explain evidence limits without recording an
 test('bounded practice examples preserve scope, reported mechanisms and source-reuse qualifications', async ({ page }, testInfo) => {
   const verifyIsolation = await isolateCasePractice(page);
   await page.goto('/demo#case-practice');
-  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const practice = page.getByRole('region', { name: 'Practise a case review', exact: true });
   const scenario = page.getByRole('combobox', { name: 'Practice scenario', exact: true });
   const select = async (id: string) => {
     await scenario.selectOption(id);
     await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
-    await expect(practice.getByRole('heading', { name: 'Practise a Case review', exact: true })).toBeFocused();
+    await expect(practice.getByRole('heading', { name: 'Practise a case review', exact: true })).toBeFocused();
   };
   for (const [id, observation] of [
     ['compromised-page', 'Separate ordinary root-page capture'],
@@ -320,8 +320,8 @@ test('bounded practice examples preserve scope, reported mechanisms and source-r
         }
         if (captureVisualEvidenceEnabled()) await matrix.screenshot({ path: testInfo.outputPath(`demo-conditions-${theme}-${width}.png`) });
       }
-      await page.getByText('Practise with real Case forms', { exact: true }).click();
-      await page.getByText('Practise with real Case forms', { exact: true }).click();
+      await page.getByText('Practise with real case forms', { exact: true }).click();
+      await page.getByText('Practise with real case forms', { exact: true }).click();
       await expect(sessionChoice).toHaveValue('');
     }
   }
@@ -402,7 +402,7 @@ async function isolateCasePractice(page: Page) {
     expect(requests).toEqual([]);
     expect(await page.evaluate(() => (window as unknown as { __practiceStorageAccess: string[] }).__practiceStorageAccess)).toEqual([]);
     expect(await page.evaluate(() => [localStorage.getItem('saved-work-sentinel'), sessionStorage.getItem('saved-work-sentinel')])).toEqual(['Keep this saved value.', 'Keep this tab value.']);
-    const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+    const practice = page.getByRole('region', { name: 'Practise a case review', exact: true });
     await expect(practice.locator('a[href], input[type=file]')).toHaveCount(0);
   };
 }
@@ -412,7 +412,7 @@ test('source-linked and containment practice uses real offline reviews without s
   await page.goto('/resources/domain-investigation-workflow');
   await page.getByRole('link', { name: 'Practise supplied evidence and handoff review', exact: true }).click();
   await expect(page).toHaveURL(/\/demo#case-practice$/u);
-  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const practice = page.getByRole('region', { name: 'Practise a case review', exact: true });
   await practice.getByText('Try source-linked offline review', { exact: true }).click();
   await practice.getByRole('button', { name: 'Review supplied text and context', exact: true }).click();
   const source = practice.getByRole('region', { name: 'Fictional source-linked review', exact: true });
@@ -451,7 +451,7 @@ test('fictional draft comparison shares the complete read-only view without save
   const verifyIsolation = await isolateCasePractice(page);
   let downloads = 0; page.on('download', () => downloads++);
   await page.goto('/demo#case-practice');
-  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const practice = page.getByRole('region', { name: 'Practise a case review', exact: true });
   await practice.getByRole('button', { name: '4. Rehearse separate response scopes', exact: true }).click();
   await practice.getByText('Compare fictional response drafts', { exact: true }).click();
   const comparison = practice.getByRole('region', { name: 'Fictional response draft comparison', exact: true });
@@ -492,7 +492,7 @@ test('fictional draft comparison shares the complete read-only view without save
   await holdPacketFileDigest(page, true); await prepare.click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { packetDigestHeld: boolean }).packetDigestHeld)).toBe(true);
   await page.evaluate(() => (window as unknown as { releasePacketDigest: () => Promise<void> }).releasePacketDigest());
-  await expect(comparison.getByRole('alert')).toHaveText('The fictional drafts could not be compared. Your practice Case and drafts are unchanged.');
+  await expect(comparison.getByRole('alert')).toHaveText('The fictional drafts could not be compared. Your practice case and drafts are unchanged.');
   await expect(comparison.getByRole('region', { name: 'Selected comparison values', exact: true })).toHaveCount(0);
   await expect(prepare).toBeEnabled(); await prepare.click();
   await expect(comparison.getByRole('heading', { name: 'Fictional draft differences', exact: true })).toBeFocused();
@@ -504,7 +504,7 @@ test('fictional packet comparison discards held completions without overwriting 
   const verifyIsolation = await isolateCasePractice(page);
   let downloads = 0; page.on('download', () => downloads++);
   await page.goto('/demo#case-practice');
-  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const practice = page.getByRole('region', { name: 'Practise a case review', exact: true });
   const draft = practice.locator('form[data-recovery-form="evidence-pin"]').getByLabel('Label', { exact: true });
   await draft.fill('Keep this practice draft');
   const disclosure = practice.getByText('Compare fictional response drafts', { exact: true });
@@ -526,7 +526,7 @@ test('fictional packet comparison discards held completions without overwriting 
     if (disposal === 'clear') await comparison.getByRole('button', { name: 'Clear fictional comparison', exact: true }).click();
     else if (disposal === 'close') { await disclosure.click(); await expect(comparison).toHaveCount(0); }
     else if (disposal === 'outer') {
-      const outer = page.getByText('Practise with real Case forms', { exact: true });
+      const outer = page.getByText('Practise with real case forms', { exact: true });
       await outer.click(); await expect(comparison).toHaveCount(0); await outer.click();
     } else if (disposal === 'step') {
       await practice.getByRole('button', { name: '1. Pin a fact', exact: true }).click();
@@ -559,7 +559,7 @@ test('requested-evidence practice reviews declared image history and creates onl
   await page.goto('/demo#case-practice');
   await page.getByRole('combobox', { name: 'Practice scenario', exact: true }).selectOption('requested-amendment');
   await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
-  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const practice = page.getByRole('region', { name: 'Practise a case review', exact: true });
   const history = practice.getByText('Review fictional image history', { exact: true }).locator('..');
   await history.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
   const links = history.getByText('Inspect declared links (2)', { exact: true });
@@ -594,7 +594,7 @@ test('requested-evidence practice reviews declared image history and creates onl
 test('real Case forms practise evidence, conclusions and inconclusive rechecks without saved-work access', async ({ page }, testInfo) => {
   const verifyIsolation = await isolateCasePractice(page);
   await page.goto('/demo#case-practice');
-  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const practice = page.getByRole('region', { name: 'Practise a case review', exact: true });
   await expect(practice).toBeVisible();
   const pin = practice.locator('form[data-recovery-form="evidence-pin"]');
   await pin.getByLabel('Label', { exact: true }).fill('Practice fact');
@@ -709,13 +709,13 @@ test('Case practice is reachable, responsive and discarded on restart or reload'
   await practiceLink.focus();
   await practiceLink.press('Enter');
   await expect(page).toHaveURL(/\/demo#case-practice$/u);
-  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const practice = page.getByRole('region', { name: 'Practise a case review', exact: true });
   const form = practice.locator('form[data-recovery-form="evidence-pin"]');
   await expect(form).toBeVisible();
   await form.getByLabel('Label', { exact: true }).fill('Discard this practice draft');
   await expect(form.getByRole('status')).toContainText('page only');
   await practice.getByRole('button', { name: 'Discard practice and restart', exact: true }).click();
-  await expect(practice.getByRole('heading', { name: 'Practise a Case review', exact: true })).toBeFocused();
+  await expect(practice.getByRole('heading', { name: 'Practise a case review', exact: true })).toBeFocused();
   await expect(form.getByLabel('Label', { exact: true })).toHaveValue('');
   await form.getByLabel('Label', { exact: true }).fill('Discard this on reload too');
   await expect(form.getByRole('status')).toContainText('page only');
@@ -763,7 +763,7 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
   await expect(page.getByRole('heading', { name: 'exampleshop-login.example', exact: true })).toBeFocused();
   const demoScope = page.locator('.demo-scope');
   await demoScope.getByText('About this demo', { exact: true }).click();
-  await expect(demoScope.locator('p')).toContainText('No sign-in, live collection or saved Console access.');
+  await expect(demoScope.locator('p')).toContainText('No sign-in, live collection or saved console access.');
   await demoScope.getByText('About this demo', { exact: true }).click();
   await expect(tools.getByRole('button')).toHaveCount(6);
   for (const name of ['Brands', 'Discover', 'Bulk']) {
@@ -775,7 +775,7 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
   await expect(page.getByRole('heading', { name: 'exampleshop-login.example', exact: true })).toBeVisible();
   await expect(tools.getByRole('button', { name: 'Brands Available', exact: true })).toBeEnabled();
   await expect(tools).not.toContainText('Completed');
-  await expect(page.getByRole('button', { name: 'Open Case' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open case' })).toBeVisible();
   await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   const evidence = page.getByRole('region', { name: 'Where this result came from', exact: true });
   await expect(evidence).toBeVisible();
@@ -822,7 +822,7 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
   await expect(tools).not.toContainText('Completed');
   await page.getByRole('button', { name: 'Load later observation' }).click();
   await expect(page.getByRole('heading', { name: 'Repeated evidence and material changes stay distinct' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Export demo Case report' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Export demo case report' })).toBeVisible();
   expect(apiRequests.filter(url => new URL(url).pathname !== '/api/session')).toEqual([]);
 });
 
@@ -902,7 +902,7 @@ test('completes the guided synthetic workflow without investigation requests or 
   const familyControls = page.locator('.lookup-family button[aria-expanded]');
   await expect(familyControls).toHaveCount(5);
   expect(await familyControls.evaluateAll((buttons) => buttons.every((button) => button.getAttribute('aria-expanded') === 'false'))).toBe(true);
-  const monitorHandoff = page.getByRole('button', { name: 'Open Case' });
+  const monitorHandoff = page.getByRole('button', { name: 'Open case' });
   await expect(monitorHandoff).toBeVisible();
   await expect(monitorHandoff).toBeInViewport();
   await expect(page.locator('#demo-evidence-registry')).toHaveCount(0);
@@ -1055,7 +1055,7 @@ test('completes the guided synthetic workflow without investigation requests or 
   await verifyIsolation();
 
   const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export demo Case report' }).click();
+  await page.getByRole('button', { name: 'Export demo case report' }).click();
   const download = await downloadPromise;
   const body = await (await download.createReadStream()).toArray();
   const payload = JSON.parse(Buffer.concat(body).toString('utf-8'));
@@ -1090,7 +1090,7 @@ test('settles long-to-short stage transitions at one stable workspace anchor', a
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/demo');
   await progressToLookup(page);
-  await page.getByRole('button', { name: 'Open Case' }).click();
+  await page.getByRole('button', { name: 'Open case' }).click();
   await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeFocused();
   await expect(page.locator('#demo-workspace')).toHaveAttribute('aria-busy', 'false');
   await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeInViewport({ ratio: 1 });
@@ -1187,7 +1187,7 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   });
   await expect.poll(activeStageCenterOffset).toBeLessThanOrEqual(3);
   await expect(page.locator('.lookup-family button[aria-expanded="true"]')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Open Case' })).toBeInViewport();
+  await expect(page.getByRole('button', { name: 'Open case' })).toBeInViewport();
   await expectNoHorizontalOverflow(page);
 
   await rail.evaluate((element) => element.scrollTo({ left: 0, behavior: 'auto' }));
@@ -1208,7 +1208,7 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await page.setViewportSize({ width: 393, height: 852 });
   await expectNoHorizontalOverflow(page);
 
-  await page.getByRole('button', { name: 'Open Case' }).click();
+  await page.getByRole('button', { name: 'Open case' }).click();
   await page.getByRole('button', { name: 'Load later observation' }).click();
   await expect(page.getByRole('heading', { name: 'Repeated evidence and material changes stay distinct' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Watchlist activity' })).toHaveCount(0);

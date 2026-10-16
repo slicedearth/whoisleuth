@@ -19,7 +19,7 @@
     syntheticDemoCandidate, syntheticDemoLookupView, syntheticDemoRelationshipGroups, syntheticDemoStage,
   } from '#lib/analysis/demo-model-core.ts';
 
-  const demoScope = 'Inspect a suspicious domain, review a brand lookalike, or compare a reported change using fixed fictional evidence. No sign-in, live collection or saved Console access. Progress lasts for this tab.';
+  const demoScope = 'Inspect a suspicious domain, review a brand lookalike, or compare a reported change using fixed fictional evidence. No sign-in, live collection or saved console access. Progress lasts for this tab.';
   type View='dashboard'|'brands'|'discover'|'bulk'|'lookup'|'monitor';
   type CandidateFilter='all'|'high'|'related';
   type DemoVisualView='evidence'|'relationships'|'timeline';
@@ -409,11 +409,11 @@
 {:else if view==='dashboard'}
   <section class="demo-panel task-picker" aria-labelledby="dashboard-heading">
     <h2 id="dashboard-heading" data-stage-heading tabindex="-1">Choose a focused investigation task</h2>
-    <p>Each scenario starts independently. Starting another replaces this tab’s demo progress, not saved Console work.</p>
+    <p>Each scenario starts independently. Starting another replaces this tab’s demo progress, not saved console work.</p>
     <div class="scenario-grid independent-grid">
-      <article><h3>Suspicious domain</h3><p>Inspect a credential-lure fixture, separate observations from interpretation, and retain a Case for follow-up.</p><button class="primary" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('lookup')} onfocus={()=>void ensureStage('lookup')} onclick={()=>start('suspicious-domain')}>Inspect suspicious domain</button></article>
-      <article><h3>Brand lookalike</h3><p>Start with an official Brand Profile, compare three candidates and investigate the strongest lead.</p><button class="btn" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('brands')} onfocus={()=>void ensureStage('brands')} onclick={()=>start('brand-lookalike')}>Begin with Brands</button></article>
-      <article><h3>Reported change</h3><p>Open an existing synthetic Case, compare a later observation and export the evidence without treating change as proof of removal.</p><button class="btn" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('monitor')} onfocus={()=>void ensureStage('monitor')} onclick={()=>start('reported-change')}>Compare a reported change</button></article>
+      <article><h3>Suspicious domain</h3><p>Inspect a credential-lure fixture, separate observations from interpretation, and retain a case for follow-up.</p><button class="primary" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('lookup')} onfocus={()=>void ensureStage('lookup')} onclick={()=>start('suspicious-domain')}>Inspect suspicious domain</button></article>
+      <article><h3>Brand lookalike</h3><p>Start with an official brand profile, compare three candidates and investigate the strongest lead.</p><button class="btn" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('brands')} onfocus={()=>void ensureStage('brands')} onclick={()=>start('brand-lookalike')}>Begin with Brands</button></article>
+      <article><h3>Reported change</h3><p>Open an existing synthetic case, compare a later observation and export the evidence without treating change as proof of removal.</p><button class="btn" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('monitor')} onfocus={()=>void ensureStage('monitor')} onclick={()=>start('reported-change')}>Compare a reported change</button></article>
     </div>
   </section>
 {:else if view==='brands'}
@@ -452,7 +452,7 @@
 
     <section class="demo-decision-brief card" aria-labelledby="demo-decision-title">
       <header><div><p class="eyebrow">Decision brief</p><h3 id="demo-decision-title">What needs analyst attention?</h3></div><span class="priority-cue">{selectedRiskBand}</span></header>
-      <div class="lookup-handoff"><div><p class="eyebrow">Case decision</p><strong>Retain the finding only when it warrants follow-up</strong><span>Create a tab-scoped synthetic case for comparison.</span></div><button class="primary" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('monitor')} onfocus={()=>void ensureStage('monitor')} onclick={openCase}>Open Case</button></div>
+      <div class="lookup-handoff"><div><p class="eyebrow">Case decision</p><strong>Retain the finding only when it warrants follow-up</strong><span>Create a tab-scoped synthetic case for comparison.</span></div><button class="primary" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('monitor')} onfocus={()=>void ensureStage('monitor')} onclick={openCase}>Open case</button></div>
       <div class="decision-layout">
         <dl><div><dt>Registration</dt><dd>{selected.availability}</dd></div><div><dt>Candidate origin</dt><dd>{selected.mutation}</dd></div><div><dt>Evidence complete</dt><dd>{lookupCompleteEvidenceCount}</dd></div><div><dt>Evidence limited</dt><dd>{lookupLimitedEvidenceCount}</dd></div></dl>
         <div class="key-observations"><h4>Three review cues</h4><ol><li>Registry evidence reports the name as {selected.availability.toLowerCase()}.</li><li>The candidate was retained from {selected.provenance.source.toLowerCase()} evidence.</li><li>{#if selected.relationship}{selected.relationship.label} appears across {selected.relationship.relatedCandidates} candidates.{:else}No exact relationship lead appears in this fixture.{/if}</li></ol></div>
@@ -501,7 +501,7 @@
           {#if LookupDnsEvidenceView}<div class="shared-evidence" id="demo-evidence-dns"><LookupDnsEvidenceView {...lookupView.dns} /></div>{/if}
           {#if LookupHttpEvidenceView}<div class="shared-evidence" id="demo-evidence-http"><LookupHttpEvidenceView {...lookupView.http} /></div>{/if}
           {#if LookupTlsEvidenceView}<div class="shared-evidence" id="demo-evidence-tls"><LookupTlsEvidenceView {...lookupView.tls} /></div>{/if}
-          <div class="coverage-note"><strong>Also separated in the signed-in Console</strong><span>security.txt · structured identity · credential surface · passive posture · technology · certificate warning data</span></div>
+          <div class="coverage-note"><strong>Also separated in the signed-in console</strong><span>security.txt · structured identity · credential surface · passive posture · technology · certificate warning data</span></div>
         </div>
       {/if}
     </section>
@@ -595,20 +595,20 @@
     <h3 class="sr-only">Synthetic case evidence</h3>
     {#if EvidenceTimelineView}<div class="shared-timeline">{#key `${caseRecord.id}:${caseRecord.evidenceHistory.length}`}<EvidenceTimelineView record={caseRecord} />{/key}</div>{/if}
     {#if RetainedEvidenceTimelineView&&retainedTimeline}<details class="shared-timeline"><summary>Explore the retained investigation timeline</summary>
-      <p>These are the same fictional Case records, not additional observations. Freshness is evaluated at the fixture’s recorded review time: <time datetime={caseRecord.updatedAt}>{formatDate(caseRecord.updatedAt)}</time>.</p>
+      <p>These are the same fictional case records, not additional observations. Freshness is evaluated at the fixture’s recorded review time: <time datetime={caseRecord.updatedAt}>{formatDate(caseRecord.updatedAt)}</time>.</p>
       <RetainedEvidenceTimelineView timeline={retainedTimeline} recordNavigation={false} />
     </details>{/if}
     {#if demoState.followUpReady}
       <section class="change-review card" aria-labelledby="change-review-title"><header><div><p class="eyebrow">Comparison result</p><h3 id="change-review-title">Repeated evidence and material changes stay distinct</h3></div><span>{caseRecord.evidenceHistory.length} retained observations</span></header><div class="change-list">{#each monitorTimeline as entry}<article><div><strong>{entry.label}</strong><time datetime={entry.capturedAt}>{formatDate(entry.capturedAt)}</time></div>{#if entry.repeated}<p>A repeated observation matched this retained state and is counted without inventing a change.</p>{/if}{#if entry.changes.length}<dl>{#each entry.changes as change}<div><dt>{change.field}</dt><dd><span>{displayChangeValue(change.before)}</span><b aria-hidden="true">→</b><span>{displayChangeValue(change.after)}</span></dd></div>{/each}</dl>{:else if !entry.repeated}<p>No material field change in this retained observation.</p>{/if}</article>{/each}</div></section>
     {/if}
-    {#if demoState.followUpReady}<div class="case-actions"><button class="primary" type="button" onclick={exportCase}>Export demo Case report</button><button type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('lookup')} onfocus={()=>void ensureStage('lookup')} onclick={()=>void goToStage('lookup')}>Review Lookup evidence</button></div><p class="export-warning">Exports use a distinct schema, include <code>synthetic: true</code>, and must not be used as evidence or an abuse report.</p>{/if}
+    {#if demoState.followUpReady}<div class="case-actions"><button class="primary" type="button" onclick={exportCase}>Export demo case report</button><button type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('lookup')} onfocus={()=>void ensureStage('lookup')} onclick={()=>void goToStage('lookup')}>Review Lookup evidence</button></div><p class="export-warning">Exports use a distinct schema, include <code>synthetic: true</code>, and must not be used as evidence or an abuse report.</p>{/if}
   </section>
 {/if}
 </section>
 
 <details id="case-practice" class="case-practice-entry card" bind:open={practiceOpen} ontoggle={event=>{if(event.currentTarget.isConnected&&event.currentTarget.open)practiceStarted=true;}}>
-  <summary onpointerenter={preloadCasePractice} onfocus={preloadCasePractice}>Practise with real Case forms</summary>
-  {#if practiceStarted}{#key practiceGeneration}<DeferredSurface load={()=>import('#lib/components/CasePractice.svelte')} props={{onreset:(scenario:CasePracticeScenario)=>{practiceRequested=scenario;practiceGeneration+=1;},visible:practiceOpen,requestedScenario:practiceRequested}} onready={()=>{if(practiceGeneration>0||practiceRequested!==null)document.getElementById('case-practice-title')?.focus();}} loadingLabel="Opening the isolated Case practice." unavailableLabel="Case practice could not be loaded." />{/key}{/if}
+  <summary onpointerenter={preloadCasePractice} onfocus={preloadCasePractice}>Practise with real case forms</summary>
+  {#if practiceStarted}{#key practiceGeneration}<DeferredSurface load={()=>import('#lib/components/CasePractice.svelte')} props={{onreset:(scenario:CasePracticeScenario)=>{practiceRequested=scenario;practiceGeneration+=1;},visible:practiceOpen,requestedScenario:practiceRequested}} onready={()=>{if(practiceGeneration>0||practiceRequested!==null)document.getElementById('case-practice-title')?.focus();}} loadingLabel="Opening the isolated case practice." unavailableLabel="Case practice could not be loaded." />{/key}{/if}
 </details>
 
 <section class="demo-footer"><div><p>Ready for live investigation?</p><PublicConsoleCta /></div><p><a href="/">Return to the public overview</a></p></section>

@@ -54,7 +54,7 @@
   <summary>Present selected fictional evidence</summary>
   {#if open}
     <div class="walkthrough-content">
-      <p>Choose supplied evidence for a page-local walkthrough. Values are fictional and shown unmasked. This does not read saved work, change the practice Case, export or broadcast.</p>
+      <p>Choose supplied evidence for a page-local walkthrough. Values are fictional and shown unmasked. This does not read saved work, change the practice case, export or broadcast.</p>
       {#if !presenting}
         <fieldset>
           <legend bind:this={question} tabindex="-1">Choose the original supplied evidence</legend>

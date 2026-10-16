@@ -225,7 +225,7 @@ test('a practice Case mutation and its submitted draft settle together without s
   await session.storage.update(store => replaceCaseDraft(store, draft, null));
   assert.throws(() => session.edit({ note: 'Must not commit' }, { id: draft.id, revision: 'stale' }), /draft changed/u);
   assert.deepEqual(session.read(), before);
-  await assert.rejects(session.storage.update(store => replaceCaseDraft(store, { ...draft, id: 'other-draft', caseId: 'another-case' }, null)), /fictional Case/u);
+  await assert.rejects(session.storage.update(store => replaceCaseDraft(store, { ...draft, id: 'other-draft', caseId: 'another-case' }, null)), /fictional case/u);
   assert.deepEqual((await session.storage.read()).records, [draft]);
   session.edit({ note: 'The reviewed practice note.' }, draft);
   assert.equal(session.read().notes.at(-1)!.body, 'The reviewed practice note.');

@@ -27,7 +27,7 @@
 </script>
 
 <section class="inference-practice" aria-label="Fictional inference exercise">
-  <p>Use the original supplied observations below, separate from any edits to your practice Case. No answer is saved or applied to a Case.</p>
+  <p>Use the original supplied observations below, separate from any edits to your practice case. No answer is saved or applied to a case.</p>
   <details><summary>Supplied evidence</summary>
     <ul aria-label="Original fictional evidence">{#each evidence as pin}<li><CaseEvidenceFact {pin} /></li>{/each}</ul>
   </details>

@@ -432,7 +432,7 @@ test('recovery saves retain a full-capacity Case workspace without rewriting its
     });
     await beginBrowserInteractionReadiness(page, {
       start: { event: 'input', selector: 'form[data-recovery-form="evidence-pin"] input' },
-      targets: [{ selector: 'form[data-recovery-form="evidence-pin"] [data-recovery-status="saved"] [role="status"]', exactText: 'Draft saved in this workspace. Not yet added to the Case.' }],
+      targets: [{ selector: 'form[data-recovery-form="evidence-pin"] [data-recovery-status="saved"] [role="status"]', exactText: 'Draft saved in this workspace. Not yet added to the case.' }],
     });
     await form.getByLabel('Label', { exact: true }).fill(`Capacity recovery sample ${sample}`);
     await expect(form.getByRole('status')).toContainText('Draft saved in this workspace');

@@ -260,11 +260,11 @@ page discards them. Confirmed progress stays in the current tab.
 
 Choose **Explore an example investigation** on the public homepage to enter the
 demo. The opening explains its fictional evidence, no live collection or saved
-Console access, and tab-only progress. After starting, the small **Demo** label
+console access, and tab-only progress. After starting, the small **Demo** label
 remains; **About this demo** reopens that explanation.
 Choose a suspicious-domain, brand-lookalike or reported-change task first; the
 tool navigation appears after that task starts. **Reset demo** returns to the
-task choices. **Practise with real Case forms** is below the main workspace and
+task choices. **Practise with real case forms** is below the main workspace and
 can also be opened directly from the Resources practice link.
 The demo uses fixed fictional evidence and does not write protected workspace
 data. Its HTTP examples retain an origin when available, but not full
@@ -273,19 +273,19 @@ does not identify the page path, and an inconclusive example has no observed
 response or final origin.
 The demo's **Source quality** view uses the same source-scope display as Lookup;
 missing query outcomes, connection hostnames and source times stay unknown.
-In its Case step, **Explore the retained investigation timeline** groups the
-existing fictional observations by evidence family without opening saved Cases.
+In its case step, **Explore the retained investigation timeline** groups the
+existing fictional observations by evidence family without opening saved cases.
 Combined snapshots do not supply separate clocks for each family.
 
-Use **Practise with real Case forms** in the demo to choose a supplied incident,
+Use **Practise with real case forms** in the demo to choose a supplied incident,
 conflicting-source or provider-response scenario. Pin an observation,
 record an evidence-linked conclusion and review an incomplete later capture.
-The forms and validation match the Console, but the practice Case and drafts
+The forms and validation match the console, but the practice case and drafts
 remain only on that page. Restarting, reloading or leaving discards them. The
 exercise makes no collection, submission or export. The credential-page exercise
 rehearses separate recipient reviews, simulated deliveries and page-only closure;
 the requested-evidence exercise prepares a drafting amendment. Changing scenario
-requires confirming that its Case and drafts should be discarded. Feedback
+requires confirming that its case and drafts should be discarded. Feedback
 checks retained relationships and states, not the quality of free-text reasoning.
 
 Use **Larger practice reading** or **Show practice companion** for a different
@@ -304,7 +304,7 @@ For related hosts, conflicting sources and provider-reported resolution, open
 **Find the weak inference** in **Record a conclusion**. Inspect the original
 supplied evidence, choose the statement that exceeds it and select **Explain
 this choice**. The explanation distinguishes the observation from the unsupported
-conclusion; it does not score you or record a Case decision. Closing the exercise,
+conclusion; it does not score you or record a case decision. Closing the exercise,
 changing steps or collapsing practice clears the choice without changing your drafts.
 
 In the source-reuse exercise, record a conclusion citing the provider's reused
@@ -318,10 +318,10 @@ simulated deliveries; no prepared packet is attached to their history.
 
 **Compare fictional response drafts** is a separate, optional exercise. Choose
 **Compare supplied fictional drafts** to inspect two in-memory draft packets
-from a fresh copy of the supplied Case. They change recipient, exact page or
+from a fresh copy of the supplied case. They change recipient, exact page or
 advertisement scope, and selected evidence. Open a difference to inspect both
 complete values. A pin absent from one packet is still retained in the source
-Case. The normal packet writer, validation and comparison are used, but neither
+case. The normal packet writer, validation and comparison are used, but neither
 draft is authorised, downloaded, delivered or imported. Your practice edits and
 simulated delivery history are unchanged. Clearing or closing the comparison,
 closing practice, changing steps or scenario, restarting or leaving discards
