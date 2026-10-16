@@ -60,6 +60,27 @@ export type AnalystReviewDismissalReason = typeof ANALYST_REVIEW_DISMISSAL_REASO
 
 export type AnalystReviewInboxItem = AnalystReviewItem & Readonly<{ lifecycle: AnalystReviewLifecycle }>;
 
+/** Names the retained event; it does not reinterpret or replace its timestamp. */
+export function analystReviewTimeLabel(kind: AnalystReviewKind): string {
+  switch (kind) {
+    case 'case':
+    case 'detection_rule': return 'Case updated';
+    case 'case_action':
+    case 'incomplete_packet': return 'Action updated';
+    case 'suppression':
+    case 'change_window': return 'Baseline updated';
+    case 'bulk_session': return 'Session updated';
+    case 'orphaned_state': return 'Last decision';
+    case 'watchlist_change': return 'Check time';
+    case 'evidence_gap': return 'Evidence or assertion time';
+    case 'observed_effect_review':
+    case 'comparison':
+    case 'desired_posture':
+    case 'certificate': return 'Observed';
+    default: return 'Recorded time';
+  }
+}
+
 export type AnalystReviewProjectionAdmission = Readonly<{
   omittedAtLeast: Readonly<Partial<Record<AnalystReviewEvidenceFamily, number>>>;
   lowerBoundFamilies: readonly AnalystReviewEvidenceFamily[];

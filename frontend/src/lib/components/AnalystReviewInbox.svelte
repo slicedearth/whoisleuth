@@ -287,9 +287,9 @@
       <label class="field">Case
         <input bind:value={caseFilter} oninput={() => { page = 1; }} maxlength="253" placeholder="Filter domain" />
       </label>
-      <label class="field">Severity
+      <label class="field">Priority
         <select bind:value={priorityFilter} onchange={() => { page = 1; }}>
-          <option value="">Any severity</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option>
+          <option value="">Any priority</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option>
         </select>
       </label>
       <label class="field">Next action

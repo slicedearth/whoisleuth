@@ -16,7 +16,7 @@ import {
   MAX_LOOKUP_TLS_NAME_VALUES,
 } from '../../../../lib/lookup-network-evidence-bounds.mts';
 import type { LookupViewModel } from './lookup-response.ts';
-import { MAX_OBSERVATION_LIMITATIONS, MAX_OBSERVATION_LIMITATION_LENGTH } from '../../../../packages/evidence/observation.mts';
+import { MAX_OBSERVATION_LIMITATIONS, MAX_OBSERVATION_LIMITATION_LENGTH, normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
 function tlsName(value: JsonRecord): string {
   const common = stringList(value.commonNames, MAX_LOOKUP_TLS_NAME_VALUES, 256);
@@ -175,6 +175,7 @@ export function buildLookupTlsDisplay(input: Pick<LookupViewModel,
       limitations: stringList(tlsEvidence.limitations, MAX_OBSERVATION_LIMITATIONS, MAX_OBSERVATION_LIMITATION_LENGTH),
       validFrom: typeof tlsCertificate.validFrom === 'string' ? tlsCertificate.validFrom : null,
       validTo: typeof tlsCertificate.validTo === 'string' ? tlsCertificate.validTo : null,
+      observedAt: normalizeExplicitIsoTimestamp(tlsEvidence.observedAt),
     },
     tlsRows: [
       { label: 'Connected address', value: show(tlsEvidence.connectedAddress) },
@@ -203,7 +204,7 @@ export function buildLookupTlsDisplay(input: Pick<LookupViewModel,
       {
         label: 'Validity',
         value: tlsValidity.status === 'valid'
-          ? 'Valid now'
+          ? 'Valid at observation'
           : tlsValidity.status === 'expired'
             ? 'Expired'
             : tlsValidity.status === 'not_yet_valid'

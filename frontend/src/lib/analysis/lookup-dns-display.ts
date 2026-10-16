@@ -110,7 +110,7 @@ function missingReverseDnsValue(reverseDns: JsonRecord): string {
     || ['partial', 'error', 'unsupported'].includes(String(diagnostic.status))) {
     return 'Not established (source unavailable or incomplete)';
   }
-  return 'Not observed';
+  return 'Not established (source state unavailable)';
 }
 
 function boundedOwnEntries(value: JsonRecord, maximum: number): Array<[string, unknown]> {
@@ -167,7 +167,7 @@ export function buildLookupDnsDisplay(input: {
       || diagnostic.truncated === true || dnsEvidence.status === 'partial') {
       return 'Not established (partial source)';
     }
-    return dnsEvidence.status === 'error' ? 'Unavailable' : 'Not observed';
+    return dnsEvidence.status === 'error' ? 'Unavailable' : 'Not established (source state unavailable)';
   };
   const dnsRows: Array<{ label: string; value: string }> = [
     { label: 'DNSSEC', value: show(availability.dnssec) },

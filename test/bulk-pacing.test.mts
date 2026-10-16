@@ -32,7 +32,7 @@ test('derives a bounded progress estimate only from the current scan', () => {
   assert.equal(progress.percent, 40);
   assert.equal(progress.estimatedRemainingMs, 3_000);
   assert.equal(progress.label, '6 remaining · about 3s remaining');
-  assert.equal(buildBulkProgressEstimate(10, 10, 5_000).label, 'Scan complete');
+  assert.equal(buildBulkProgressEstimate(10, 10, 5_000).label, 'Scan finished');
   assert.equal(buildBulkProgressEstimate(99, 10, Number.POSITIVE_INFINITY).completed, 10);
 });
 

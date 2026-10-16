@@ -62,12 +62,12 @@
         const output = await runInvestigationPackageWorker('capsule', { capsule: $state.snapshot(input), generatedAt, ...(passphrase === undefined ? {} : { passphrase }) }, { signal: current.signal });
         if (current.signal.aborted) return;
         downloadLocalFile(output.file, `whoisleuth-investigation-${generatedAt.slice(0, 10)}.${passphrase === undefined ? 'zip' : 'wlep'}`);
-        message = `Prepared ${passphrase === undefined ? 'a private' : 'an encrypted'} package containing the capsule and its exact linked Lookup evidence. Confirm the download completed. No saved records were changed.`;
+        message = `Prepared ${passphrase === undefined ? 'an unencrypted' : 'an encrypted'} package containing the capsule and its exact linked Lookup evidence. Confirm the download completed. No saved records were changed.`;
       } else {
         const capsule = await buildInvestigationCapsule(input);
         if (current.signal.aborted) return;
         downloadLocalFile(new Blob([serializeInvestigationCapsule(capsule)], { type: 'application/json;charset=utf-8' }), investigationCapsuleFilename(capsule));
-        message = 'Downloaded a checksummed local handoff manifest.';
+        message = 'Prepared a checksummed local handoff manifest for download. Confirm the download completed.';
       }
     } catch {
       if (!current.signal.aborted) error = 'The local handoff could not be prepared. No saved records were changed.';

@@ -362,6 +362,40 @@ test('HTTP display keeps requested and final provenance separate without recover
   assert.equal(historical.httpRows.find(row => row.label === 'Final URL')?.value, 'Not retained');
 });
 
+test('unknown DNS collection states do not imply a completed non-observation', () => {
+  for (const status of [undefined, 'unknown', 'unrecognised', 'unsupported']) {
+    const diagnostic: { status?: string } = {};
+    if (status !== undefined) diagnostic.status = status;
+    const input = {
+      ...emptyNetworkDisplayInput(),
+      reverseDns: { ...diagnostic, diagnostics: { ptr: diagnostic } },
+      dnsEvidence: { ...diagnostic, diagnostics: { a: diagnostic, mx: diagnostic } },
+      dnsRecords: { a: [], mx: [] },
+    };
+    const original = structuredClone(input);
+    const display = buildLookupNetworkDisplay(input);
+    for (const label of ['A', 'MX']) {
+      assert.equal(display.dnsRows.find(row => row.label === label)?.value,
+        'Not established (source state unavailable)');
+    }
+    assert.equal(display.reverseDnsRows[0]?.value, status === 'unsupported'
+      ? 'Not established (source unavailable or incomplete)'
+      : 'Not established (source state unavailable)');
+    assert.deepEqual(input, original);
+  }
+  for (const [status, expected] of [
+    ['success', 'Not observed'], ['not_found', 'Not observed'], ['skipped', 'Not evaluated'],
+  ] as const) {
+    const display = buildLookupNetworkDisplay({
+      ...emptyNetworkDisplayInput(),
+      reverseDns: { status, diagnostics: { ptr: { status } } },
+      dnsEvidence: { status, diagnostics: { mx: { status } } },
+    });
+    assert.equal(display.reverseDnsRows[0]?.value, expected);
+    assert.equal(display.dnsRows.find(row => row.label === 'MX')?.value, expected);
+  }
+});
+
 test('projects malformed, partial, incompatible, and conflicting network evidence without inventing absence', () => {
   const malformed = buildLookupNetworkDisplay({
     ...emptyNetworkDisplayInput(),

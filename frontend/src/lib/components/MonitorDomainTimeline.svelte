@@ -33,10 +33,10 @@
 {#if timeline.undatedEvents}<p class="undated">{timeline.undatedEvents} retained check{timeline.undatedEvents === 1 ? ' has' : 's have'} an unknown time and cannot be placed on the dated chart. The details remain below.</p>{/if}
 {#if timeline.events.length && timeline.lanes.length}
   <section class="timeline" aria-labelledby="domain-change-timeline-title">
-    <header><div><p class="eyebrow">Change sequence</p><h4 id="domain-change-timeline-title">Observed domain timeline</h4></div>{#if timeline.truncated}<span>Partial visual</span>{/if}</header>
+    <header><div><p class="eyebrow">Change sequence</p><h4 id="domain-change-timeline-title">Domain check history</h4></div>{#if timeline.truncated}<span>Partial visual</span>{/if}</header>
     <p>Each column is a retained check. Filled cells show the categories with recorded changes; the exact before and after values remain below.</p>
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -- scrollable timeline must be keyboard reachable -->
-    <div class="timeline-frame" role="img" tabindex="0" aria-label={`Observed domain timeline with ${timeline.events.length} checks and ${timeline.lanes.length} evidence categories`}>
+    <div class="timeline-frame" role="img" tabindex="0" aria-label={`Domain check history with ${timeline.events.length} checks and ${timeline.lanes.length} evidence categories`}>
       <svg class="data-chart" width={timeline.width} height={timeline.height} viewBox={`0 0 ${timeline.width} ${timeline.height}`} aria-hidden="true">
         {#each timeline.lanes as lane}
           <text x="8" y={lane.y + lane.height / 2 + 3}>{lane.label}</text>

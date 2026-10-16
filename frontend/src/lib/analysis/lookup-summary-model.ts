@@ -564,9 +564,9 @@ export function buildLookupSummaryModel(input: LookupSummaryInput): LookupSummar
         value: display(availability.activityStatus),
         detail: display(availability.websiteProbeDetail),
         provenance: {
-          sources: ['Bounded homepage and favicon observation'],
+          sources: ['Bounded page and favicon observation'],
           observedAt: formatDate(input.resultObservedAt),
-          fieldFamilies: ['HTTP response', 'redirect chain', 'bounded homepage body', 'favicon response'],
+          fieldFamilies: ['HTTP response', 'redirect chain', 'bounded page body', 'favicon response'],
           normalization: 'Observed responses are classified into active, parked, inactive, or unknown context without executing page scripts.',
           completeness: record(availability.http).status === 'success' && record(availability.http).complete === true
             ? 'complete'

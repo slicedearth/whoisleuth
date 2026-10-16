@@ -114,6 +114,27 @@ test('empty page evidence supplies no fingerprints, identities or inferred page 
   assert.equal(display.pageComparison, null);
 });
 
+test('TLS presentation preserves its own observation clock without inventing one', () => {
+  for (const [observedAt, expected] of [
+    ['2026-07-01T12:00:00+02:00', '2026-07-01T10:00:00.000Z'],
+    [undefined, null], [null, null], ['invalid', null], ['2026-07-01T12:00:00', null],
+  ] as const) {
+    const tlsEvidence: Parameters<typeof buildLookupNetworkDisplay>[0]['tlsEvidence'] = observedAt === undefined
+      ? { status: 'success' } : { status: 'success', observedAt };
+    const input = {
+      ...emptyNetworkInput(),
+      httpEvidence: { observedAt: '2026-09-01T00:00:00.000Z' },
+      tlsEvidence,
+      tlsValidity: { status: 'valid' },
+    };
+    const original = structuredClone(input);
+    const props = lookupTlsProps(buildLookupNetworkDisplay(input));
+    assert.equal(props.observedAt, expected);
+    assert.equal(props.rows.find(row => row.label === 'Validity')?.value, 'Valid at observation');
+    assert.deepEqual(input, original);
+  }
+});
+
 test('projects complete bounded DNS families and delegation evidence', () => {
   const display = buildLookupNetworkDisplay({
     ...emptyNetworkInput(),
@@ -308,7 +329,7 @@ test('projects bounded HTTP and certificate metadata without retaining raw mater
   assert.equal(display.httpMetadata.find((row) => row.label === 'Declared length')?.value, '1.0 KiB');
   assert.match(display.httpMetadata.find((row) => row.label === 'Hash scope')?.value ?? '', /Captured prefix/u);
   assert.equal(display.tlsRows.find((row) => row.label === 'Chain trust')?.value, 'Authorised');
-  assert.equal(display.tlsRows.find((row) => row.label === 'Validity')?.value, 'Valid now');
+  assert.equal(display.tlsRows.find((row) => row.label === 'Validity')?.value, 'Valid at observation');
   assert.equal(display.alternativeNames.length, 3);
   assert.equal(display.tlsChain.length, 2);
   assert.match(display.leafCertificate.find((row) => row.label === 'SAN classes')?.value ?? '', /DNS 2 · IP 1 · URI 1 · truncated/u);

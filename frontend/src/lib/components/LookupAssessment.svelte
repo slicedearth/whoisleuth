@@ -131,7 +131,7 @@
     <div>
       <p class="eyebrow">Evidence assessment</p>
       <h4 id="lookup-assessment-title">{detail}</h4>
-      <p>{confidence} confidence · review the canonical evidence and limitations above before using either triage model.</p>
+      <p>{confidence} confidence. Review the source evidence and its limits before using these triage results.</p>
     </div>
   </header>
 

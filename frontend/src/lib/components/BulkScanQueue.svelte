@@ -107,7 +107,7 @@
   <p class="mode-help">{mode === 'deep' ? 'Bulk Deep collects compact WHOIS, DNS, website, TLS, mail, and technology evidence for comparison. Open a domain in Lookup for more detailed source evidence and optional sources.' : 'Fast keeps the lower-request registration-first contract and omits WHOIS, website, TLS, and deep sources.'} {pacingOptions.find((option) => option.id === pacing)?.detail ?? 'Request pacing'}; at most {concurrency} {concurrency === 1 ? 'lookup runs' : 'lookups run'} in parallel.</p>
   <CollectionPreflight {preflight} />
   {#if running || total}<div class="progress" role="progressbar" aria-label="Bulk scan progress" aria-valuemin="0" aria-valuemax={total} aria-valuenow={completed}><span style:width={`${total ? completed / total * 100 : 0}%`}></span></div>{/if}
-  {#if running || total}<p class="progress-detail">{progress.completed} of {progress.total} settled · {progress.percent}% · {progress.label}</p>{/if}
+  {#if running || total}<p class="progress-detail">{progress.completed} of {progress.total} processed · {progress.percent}% · {progress.label}</p>{/if}
   {#if running || total}
     <dl class="outcomes" aria-label="Settled scan outcomes">
       <div><dt>Complete</dt><dd>{outcomes.complete}</dd></div>

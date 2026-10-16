@@ -3,7 +3,7 @@
   import { restoreSubmittedFocus } from '../controllers/submitted-draft.ts';
   import { failedLocalMutationOutcome } from '../local-mutation-outcome.ts';
   import {
-    ANALYST_REVIEW_DISMISSAL_REASONS, ANALYST_REVIEW_QUEUE_OPTIONS, analystReviewQueueMembership, analystReviewWaitingReasons,
+    ANALYST_REVIEW_DISMISSAL_REASONS, ANALYST_REVIEW_QUEUE_OPTIONS, analystReviewQueueMembership, analystReviewWaitingReasons, analystReviewTimeLabel,
     type AnalystReviewDismissalReason, type AnalystReviewInboxItem,
   } from '../analysis/analyst-review-inbox.ts';
   import ReviewLifecycleControls from './ReviewLifecycleControls.svelte';
@@ -34,6 +34,7 @@
   $effect(() => { if (expanded) prepared = true; });
   const membership = $derived(analystReviewQueueMembership(item, now));
   const waiting = $derived(analystReviewWaitingReasons(item, now));
+  const timeLabel = $derived(analystReviewTimeLabel(item.kind));
   const waitingLabels = { evidence: 'Evidence', provider: 'Provider response', analyst: 'Analyst decision', time: 'Reviewed time' };
 
   async function dismiss() {
@@ -78,7 +79,7 @@
     <p>{item.detail}</p>
     <dl class="item-facts">
       <div><dt>Source</dt><dd>{item.source}</dd></div>
-      <div><dt>Observed</dt><dd><EvidenceTimestamp value={item.observedAt} label={`observation time for ${item.title}`} unavailable="at an unknown time" /></dd></div>
+      <div><dt>{timeLabel}</dt><dd><EvidenceTimestamp value={item.observedAt} label={`${timeLabel} for ${item.title}`} unavailable="at an unknown time" /></dd></div>
       <div><dt>Evidence</dt><dd>{item.evidenceFamily.replaceAll('_', ' ')} · {item.completeness} · {item.age}</dd></div>
       <div><dt>Item type</dt><dd>{item.kind.replaceAll('_', ' ')}</dd></div>
       {#if item.dueAt}<div class:overdue={Date.parse(item.dueAt) <= Date.parse(now)}><dt>Due</dt><dd><EvidenceTimestamp value={item.dueAt} label={`due time for ${item.title}`} /></dd></div>{/if}

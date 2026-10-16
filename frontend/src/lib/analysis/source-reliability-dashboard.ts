@@ -295,11 +295,11 @@ export function parseSourceReliabilityDashboard(raw: string): SourceReliabilityD
       ...base,
       tone: rowTone(base),
       sampleLabel: eligibleStateSamples === 0
-        ? `No collected samples · ${uncollectedStateSamples} skipped or unsupported`
+        ? `No samples eligible for rates · ${uncollectedStateSamples} excluded states`
         : eligibleStateSamples < 5
           ? `Limited sample · ${eligibleStateSamples} eligible of ${stateSamples}`
           : uncollectedStateSamples
-            ? `${eligibleStateSamples} eligible · ${uncollectedStateSamples} skipped or unsupported`
+            ? `${eligibleStateSamples} eligible · ${uncollectedStateSamples} excluded states`
             : `${eligibleStateSamples} eligible samples`,
     });
   }).sort((left, right) => {

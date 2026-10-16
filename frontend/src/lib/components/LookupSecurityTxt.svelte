@@ -39,9 +39,11 @@
 </script>
 
 <details class="security-txt evidence-card card">
-  <summary>
-    <span><small>Disclosure contact</small><strong>security.txt</strong></span>
-    <span class="state {state}">{stateLabel}</span>
+  <summary class="evidence-summary">
+    <span class="evidence-summary-row">
+      <span class="evidence-summary-copy"><small>Disclosure contact</small><strong>security.txt</strong></span>
+      <span class="state {state}">{stateLabel}</span>
+    </span>
   </summary>
   <div class="body">
     <p class="detail">{detail}</p>
@@ -74,9 +76,7 @@
 
 <style>
   .security-txt{padding:0;overflow:hidden}
-  summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:var(--card-pad);cursor:pointer;list-style:none}
-  summary::-webkit-details-marker{display:none}
-  summary>span:first-child{display:grid;gap:3px;min-width:0}
+  summary{padding:var(--card-pad);cursor:pointer}
   summary small{color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.08em;text-transform:uppercase}
   summary strong{font:700 var(--text-sm) var(--mono)}
   .state{flex:0 0 auto;padding:4px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:700 var(--text-2xs) var(--mono)}
@@ -99,5 +99,5 @@
   .meta{margin:14px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .callout{margin:12px 0 0}
   .card-note{margin:16px 0 0}
-  @media(max-width:600px){summary{align-items:flex-start}.source-grid{grid-template-columns:1fr}}
+  @media(max-width:600px){.source-grid{grid-template-columns:1fr}}
 </style>

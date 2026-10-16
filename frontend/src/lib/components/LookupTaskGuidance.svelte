@@ -29,7 +29,7 @@
     <p class="limitation">{guidance.limitation}</p>
   </div>
   <div class="guidance-actions">
-    {#if guidance.recommendation !== 'review_retained'}<button class="btn" type="button" onclick={applyRecommendation} disabled={lookupMode === guidance.recommendation}>Use {guidance.recommendation === 'fast' ? 'Fast' : 'Deep'} recommendation</button>{/if}
+    {#if guidance.recommendation !== 'review_retained'}<button class="btn" type="button" onclick={applyRecommendation} disabled={lookupMode === guidance.recommendation}>Use {guidance.recommendation === 'fast' ? 'Fast' : 'Deep'}</button>{/if}
   </div>
   </details>
 </section>

@@ -364,7 +364,7 @@ test('watchlist deletion advances and clear-all falls back to the primary empty 
   await expect(secondDelete).toBeVisible();
   await expect(secondDelete).toBeFocused();
 
-  const clear = page.getByRole('button', { name: 'Clear all' });
+  const clear = page.getByRole('button', { name: 'Clear all watchlists', exact: true });
   await clear.focus();
   page.once('dialog', (dialog) => dialog.dismiss());
   await clear.click();

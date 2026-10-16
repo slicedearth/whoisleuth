@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   analystReviewQueue,
+  analystReviewTimeLabel,
   analystReviewQueueMembership,
   analystReviewWaitingReasons,
   analystReviewMatchesQueue,
@@ -23,6 +24,18 @@ import type { BulkSession } from '../frontend/src/lib/analysis/bulk-session-mode
 import type { WatchlistCollection } from '../frontend/src/lib/analysis/watchlist-store.ts';
 
 const NOW = '2026-07-28T08:00:00.000Z';
+
+test('review time labels name the underlying event rather than claiming every time is an observation', () => {
+  for (const [kind, label] of [
+    ['case', 'Case updated'], ['detection_rule', 'Case updated'],
+    ['case_action', 'Action updated'], ['incomplete_packet', 'Action updated'],
+    ['suppression', 'Baseline updated'], ['change_window', 'Baseline updated'],
+    ['bulk_session', 'Session updated'], ['orphaned_state', 'Last decision'],
+    ['watchlist_change', 'Check time'], ['evidence_gap', 'Evidence or assertion time'],
+    ['observed_effect_review', 'Observed'], ['comparison', 'Observed'],
+    ['desired_posture', 'Observed'], ['certificate', 'Observed'],
+  ] as const) assert.equal(analystReviewTimeLabel(kind), label);
+});
 
 function caseRecord(): CaseRecord {
   return {

@@ -895,7 +895,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await publication.locator(':scope > summary').press('Enter');
   await expect(publication.getByText('index, nofollow', { exact: true })).toBeVisible();
   await expect(publication.getByText(/3 images · missing 1 · empty 1 · non-empty 1/u)).toBeVisible();
-  await expect(publication.getByText(/Static homepage declarations and candidates do not prove indexing/u)).toBeVisible();
+  await expect(publication.getByText(/Static page declarations and candidates do not prove indexing/u)).toBeVisible();
   await expect(publication).not.toContainText('private-twitter-title');
 
   const roleBehaviorCard = page.locator('details').filter({ has: page.getByRole('heading', { name: 'Page role and client behaviour' }) });
@@ -1218,12 +1218,13 @@ test('completed technology analysis distinguishes an unmatched catalogue from so
   await expectNoHorizontalOverflow(page);
 });
 
-test('TLS evidence presents one-connection certificate evidence without narrow-width overflow', async ({ page }) => {
+test('TLS evidence presents one-connection certificate evidence without narrow-width overflow', async ({ page }, testInfo) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({
       query: 'tls-evidence.test', type: 'domain', registrableDomain: 'tls-evidence.test',
+      fetchedAt: '2026-07-20T00:00:00.000Z',
       availability: {
         state: 'registered', confidence: 'high', domain: 'tls-evidence.test',
         tls: {
@@ -1279,6 +1280,10 @@ test('TLS evidence presents one-connection certificate evidence without narrow-w
   await expect(card.getByText('192.0.2.34', { exact: true })).toBeVisible();
   await expect(card.getByText('TLSv1.3', { exact: true })).toBeVisible();
   await expect(card.getByText('Not authorised', { exact: true })).toBeVisible();
+  await expect(card.getByText('Valid at observation', { exact: true })).toBeVisible();
+  await expect(page.locator('.result-context time')).toHaveAttribute('datetime', '2026-07-20T00:00:00.000Z');
+  await expect(card.getByRole('img', { name: /Certificate validity from/u })).toHaveAttribute('aria-label',
+    'Certificate validity from 2026-07-01T00:00:00.000Z to 2026-08-01T00:00:00.000Z, observed 2026-07-13T00:00:00.000Z');
   await expect(card.getByText('Certificate not authorised', { exact: true })).toBeVisible();
   const leafCertificate = card.locator('.tls-detail').nth(0);
   await leafCertificate.locator('summary').click();
@@ -1300,8 +1305,19 @@ test('TLS evidence presents one-connection certificate evidence without narrow-w
   await expect(policyCard.getByText('CAA collection was incomplete, unavailable, or truncated, so no current-policy comparison is available.', { exact: true })).toBeVisible();
   await expect(policyCard.getByText('Partial', { exact: true })).toBeVisible();
 
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expectNoHorizontalOverflow(page);
+  for (const theme of ['dark', 'light'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280, 2560]) {
+      await page.setViewportSize({ width, height: width === 320 ? 844 : 900 });
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) {
+        await card.evaluate(element => {
+          window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 180);
+        });
+        await page.screenshot({ path: testInfo.outputPath(`tls-${theme}-${width}.png`) });
+      }
+    }
+  }
 });
 
 test('IP results use network-specific RDAP labels instead of domain fields', async ({ page }) => {

@@ -104,7 +104,7 @@ function publicationMetadataDisplay(value: unknown): HomepageMetadataDisplay | n
       },
     ],
     limitations: root.limitations as string[],
-    note: 'Static homepage declarations and candidates do not prove indexing, identity, accessibility conformance, performance, safety, or maliciousness.',
+    note: 'Static page declarations and candidates do not prove indexing, identity, accessibility conformance, performance, safety, or maliciousness.',
   };
 }
 

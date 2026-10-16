@@ -248,7 +248,7 @@ test('a signed-in user explicitly schedules, pauses, resumes, replaces, restores
   expect(mock.commands.at(-1)?.action).toBe('update');
   expect(mock.commands.at(-1)?.entry).toBeTruthy();
 
-  await page.getByRole('button', { name: 'Clear all' }).click();
+  await page.getByRole('button', { name: 'Clear all watchlists', exact: true }).click();
   const cleared = await readBrowserLocalCollection(page, 'watchlists', { minimumRevision: 2 });
   expect(cleared.records).toEqual([]);
 

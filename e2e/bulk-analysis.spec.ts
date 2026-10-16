@@ -922,7 +922,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   await expect(issuerRow).toContainText('CN=Fixture Authority Two');
   await expect(comparison.getByRole('row', { name: /Certificate TLS public-key fingerprint/u })).toBeVisible();
   await expect(comparison.getByText('Evidence freshness')).toBeVisible();
-  await expect(comparison.getByRole('link', { name: 'View settled row' })).toHaveCount(56);
+  await expect(comparison.getByRole('link', { name: 'View result row' })).toHaveCount(56);
 
   const downloadPromise = page.waitForEvent('download');
   await comparison.getByRole('button', { name: 'Export comparison' }).click();
@@ -973,7 +973,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   await expectNoHorizontalOverflow(page);
   await expectNoHorizontalScrollContainers(comparison);
   await expectNoHorizontalScrollContainers(mailReview);
-  const mobileEvidenceLink = technologyRow.getByRole('link', { name: 'View settled row' }).first();
+  const mobileEvidenceLink = technologyRow.getByRole('link', { name: 'View result row' }).first();
   await expect(mobileEvidenceLink).toBeVisible();
   await expect(mobileEvidenceLink).toHaveAttribute('href', '#bulk-result-0');
   expect((await boundingBox(mobileEvidenceLink)).height).toBeGreaterThanOrEqual(44);

@@ -159,7 +159,7 @@
         <article class:current={session.id === currentSessionId}>
           <div>
             <h3>{session.name}</h3>
-            <p>{session.mode === 'deep' ? 'Deep' : 'Fast'} · {session.results.length}/{session.domains.length} settled · {sourceSummary(session)}</p>
+            <p>{session.mode === 'deep' ? 'Deep' : 'Fast'} · {session.results.length}/{session.domains.length} processed · {sourceSummary(session)}</p>
             <p>Profile context: {session.profileContext.sourceState.replace('_', ' ')}{session.profileContext.limitation ? ` — ${session.profileContext.limitation}` : ''}</p>
             <dl>
               <div><dt>Complete</dt><dd>{completedCount(session)}</dd></div>
@@ -200,7 +200,7 @@
         {#if baselineId && currentId && baselineId === currentId}
           <p class="session-status">Choose two different sessions.</p>
         {:else if comparison}
-          <p><strong>{comparison.changed}</strong> changed, <strong>{comparison.added}</strong> added, <strong>{comparison.removed}</strong> absent from the later settled set, and <strong>{comparison.unchanged}</strong> unchanged.</p>
+          <p><strong>{comparison.changed}</strong> changed, <strong>{comparison.added}</strong> added, <strong>{comparison.removed}</strong> absent from the later processed results, and <strong>{comparison.unchanged}</strong> unchanged.</p>
           {#if comparison.rows.length}
             <div class="table-wrap">
               <table>

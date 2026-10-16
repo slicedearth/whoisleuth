@@ -111,7 +111,7 @@ export function buildBulkProgressEstimate(
     label: total === 0
       ? 'No scan queued'
       : remaining === 0
-        ? 'Scan complete'
+        ? 'Scan finished'
         : estimatedRemainingMs === null
           ? `${remaining} remaining`
           : `${remaining} remaining · ${durationLabel(estimatedRemainingMs)}`,

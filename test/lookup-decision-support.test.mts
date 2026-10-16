@@ -480,7 +480,7 @@ test('quality matrix joins coverage, timing, freshness, refresh, and downstream 
   );
   assert.match(
     matrix.entries.find((entry) => entry.id === 'http')?.description ?? '',
-    /bounded homepage request/ui,
+    /bounded page request/ui,
   );
   assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.truncated, false);
   assert.deepEqual(matrix.entries.find((entry) => entry.id === 'rdap')?.supports, [

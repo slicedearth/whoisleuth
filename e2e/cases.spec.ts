@@ -528,7 +528,7 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
   await detailFilters.getByRole('combobox', { name: 'Source', exact: true }).selectOption('whois');
   await detailFilters.getByRole('combobox', { name: 'Age', exact: true }).selectOption('stale');
   await detailFilters.getByRole('textbox', { name: 'Case', exact: true }).fill('gap-mobile');
-  await detailFilters.getByRole('combobox', { name: 'Severity', exact: true }).selectOption('high');
+  await detailFilters.getByRole('combobox', { name: 'Priority', exact: true }).selectOption('high');
   await detailFilters.getByRole('combobox', { name: 'Next action', exact: true }).selectOption('refresh');
   await expect(inboxReviewControls(page)).toHaveCount(1);
   const item = await openInboxReview(inboxReviewControls(page));

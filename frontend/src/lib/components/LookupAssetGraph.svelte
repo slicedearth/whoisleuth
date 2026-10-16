@@ -87,7 +87,7 @@
     {#if projection.edges.length}
       <BoundedRelationshipMap
         title={`${labels[lens]} evidence relationships`}
-        description="Nodes are bounded facts from the current Deep lookup. Dashed visual edges indicate partial or uncertain collection, not inferred absence."
+        description="Nodes describe this Lookup’s retained evidence. Dashed edges indicate partial or uncertain collection, not absent relationships."
         nodes={projection.nodes}
         links={projection.links}
         focusNodeId={graph.targetId}

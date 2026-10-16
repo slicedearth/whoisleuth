@@ -88,21 +88,21 @@ test('task guidance recommends evidence depth without submitting a lookup', asyn
   await expect(question).toHaveValue('general');
   await expect(guidance).toContainText('Fast recommended');
   await guidance.locator('summary').click();
-  await expect(guidance.getByRole('button', { name: 'Use Fast recommendation' })).toBeDisabled();
+  await expect(guidance.getByRole('button', { name: 'Use Fast', exact: true })).toBeDisabled();
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
 
   await question.selectOption('brand');
   await expect(guidance).toContainText('Deep recommended');
   await expect(guidance).toContainText('Deep is broader, not complete or authoritative for every question');
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
-  await guidance.getByRole('button', { name: 'Use Deep recommendation' }).click();
+  await guidance.getByRole('button', { name: 'Use Deep', exact: true }).click();
   await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
 
   await question.selectOption('owned');
   await expect(guidance).toContainText('Deep recommended');
   await expect(guidance).toContainText('registration, DNS, TLS, mail, and web observations');
   await expect(guidance).toContainText('does not by itself establish compromise, remediation, or control');
-  await expect(guidance.getByRole('button', { name: 'Use Deep recommendation' })).toBeDisabled();
+  await expect(guidance.getByRole('button', { name: 'Use Deep', exact: true })).toBeDisabled();
   expect(lookupRequests).toEqual([]);
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -143,7 +143,7 @@ test('acquisition deep-link guidance preserves the route and permits deliberate 
   await guidance.locator('summary').click();
   await expect(guidance).toContainText('Deep recommended');
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
-  await guidance.getByRole('button', { name: 'Use Deep recommendation' }).click();
+  await guidance.getByRole('button', { name: 'Use Deep', exact: true }).click();
   await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
   await expect(page).toHaveURL('/lookup?task=acquisition&depth=fast#query');
 });
@@ -299,7 +299,7 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await expect(coverage).toContainText('700 ms');
   await expect(coverage).toContainText('Request error');
   await expect(coverage).toContainText('WHOIS');
-  await expect(coverage).toContainText('A bounded homepage request covering redirects, response metadata, and a capped body prefix.');
+  await expect(coverage).toContainText('A bounded page request covering redirects, response metadata, and a capped body prefix.');
   await expect(coverage).toContainText('2.0 s');
   const sourceQualityTable = coverage.getByRole('table', { name: 'Source quality and freshness' });
   await expect(sourceQualityTable).toHaveAttribute('aria-colcount', '5');
@@ -327,7 +327,7 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await expect(diagnostics.getByRole('heading', { name: 'Collection timing' })).toBeVisible();
   await expect(diagnostics.getByRole('img', { name: 'Overlapping collection timing for 3 source branches' })).toBeVisible();
   const timingSummary = diagnostics.locator('.timing-summary');
-  await expect(timingSummary).toContainText('Longest branch');
+  await expect(timingSummary).toContainText('Longest-running branch');
   await expect(timingSummary).toContainText('Domain evidence');
   await expect(timingSummary).toContainText('Request errors');
   await expect(timingSummary).toContainText('1 branch');
@@ -705,9 +705,20 @@ test('a completed Case action cannot publish beneath a replacement Lookup', asyn
   await expect(page.getByRole('button', { name: 'Create case' })).toBeEnabled();
 });
 
-test('a delayed replay comparison cannot rebind to a replacement primary capture', async ({ page }) => {
+test('a delayed replay comparison cannot rebind to a replacement primary capture', async ({ page }, testInfo) => {
   const replay = page.locator('details.replay');
-  await replay.locator('summary').click();
+  await replay.locator('summary').focus();
+  await replay.locator('summary').press('Enter');
+  if (captureVisualEvidenceEnabled()) {
+    for (const theme of ['dark', 'light'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await expectNoHorizontalOverflow(page);
+        await replay.screenshot({ path: testInfo.outputPath(`replay-${theme}-${width}.png`) });
+      }
+    }
+  }
   const primaryInput = replay.locator('input[type="file"]').first();
   await primaryInput.setInputFiles({
     name: 'primary-a.json',
@@ -969,7 +980,7 @@ for (const publication of [
   { state: 'current', expiresAt: '2027-01-01T00:00:00.000Z' },
   { state: 'expired', expiresAt: '2026-07-22T11:00:00.000Z' },
 ] as const) {
-test(`security.txt ${publication.state} collection retains its route deadline and is mobile safe`, async ({ page }) => {
+test(`security.txt ${publication.state} collection retains its route deadline and is mobile safe`, async ({ page }, testInfo) => {
   await page.clock.setFixedTime(new Date('2026-07-22T12:00:00.000Z'));
   await page.route('**/api/lookup?*', async (route) => {
     await route.fulfill({
@@ -1023,7 +1034,8 @@ test(`security.txt ${publication.state} collection retains its route deadline an
   await page.getByRole('button', { name: 'Expand details: Web and DNS evidence' }).click();
   const disclosure = page.locator('details.security-txt');
   await expect(disclosure).not.toHaveAttribute('open', '');
-  await disclosure.locator('summary').click();
+  await disclosure.locator('summary').focus();
+  await disclosure.locator('summary').press('Enter');
   await expect(disclosure.getByText('mailto:security@example.test', { exact: true })).toBeVisible();
   await expect(disclosure.getByText(/does not authorise testing/u)).toBeVisible();
   if (publication.state === 'expired') {
@@ -1043,6 +1055,19 @@ test(`security.txt ${publication.state} collection retains its route deadline an
 
   await page.setViewportSize({ width: 320, height: 640 });
   await expectNoHorizontalOverflow(page);
+  if (captureVisualEvidenceEnabled()) {
+    for (const theme of ['dark', 'light'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 1280]) {
+        await page.setViewportSize({ width, height: 900 });
+        await expectNoHorizontalOverflow(page);
+        await disclosure.evaluate(element => {
+          window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 180);
+        });
+        await page.screenshot({ path: testInfo.outputPath(`security-txt-${publication.state}-${theme}-${width}.png`) });
+      }
+    }
+  }
 });
 }
 

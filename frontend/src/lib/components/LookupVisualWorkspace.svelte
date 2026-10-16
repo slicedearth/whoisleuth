@@ -67,7 +67,7 @@
     <div>
       <p class="eyebrow">Maps and timeline</p>
       <h4 id="lookup-visual-workspace-title">Relationships and history</h4>
-      <p>Move between source coverage, exact observed relationships, and dated events without repeating the underlying evidence.</p>
+      <p>Review source coverage, observed relationships and dated events.</p>
     </div>
     <div class="visual-tabs" role="tablist" aria-label="Relationship and history view">
       {#each options as option}

@@ -36,7 +36,6 @@
             : noMatches
               ? 'Analysis complete; no curated identity entity was published'
               : 'No conclusive metadata'}
-          · Expand for retained fields and limitations
         </span>
       </span>
       <span class="evidence-status {evidenceStatusTone(status, { complete, neutral: noMatches })}">
@@ -66,7 +65,7 @@
     {/if}
 
     {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-    <p class="card-note">WHOISleuth reads capped JSON-LD already present in the captured homepage. It retains only curated types, labels, origins, and hostnames, makes no additional request, and does not use this evidence for availability or Risk scoring.</p>
+    <p class="card-note">WHOISleuth reads capped JSON-LD already present in the captured page. It retains only curated types, labels, origins, and hostnames, makes no additional request, and does not use this evidence for availability or Risk scoring.</p>
   </div>
 </details>
 
