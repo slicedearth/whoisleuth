@@ -154,7 +154,7 @@ test('the source review keeps exact rates without a decorative rate strip', asyn
     buffer: Buffer.from(JSON.stringify(report)),
   });
 
-  const rdap = page.locator('.source-card').filter({ has: page.getByRole('heading', { name: 'Rdap' }) });
+  const rdap = page.locator('.source-card').filter({ has: page.getByRole('heading', { name: 'RDAP', exact: true }) });
   await expect(rdap.locator('dl > div').filter({ hasText: 'Failure' })).toContainText('17%');
   await expect(rdap.locator('dl > div').filter({ hasText: 'p95 duration' })).toContainText('900 ms');
   await expect(page.locator('.rate-strip')).toHaveCount(0);
@@ -237,6 +237,13 @@ test('the local inspector explains explicit and generic suffix support without a
   await expect(result).toContainText('.com');
   await expect(result).toContainText('Discovery only');
   await expect(result).toContainText('IANA bootstrap discovery');
+
+  await input.fill('.hr');
+  await inspectButton.click();
+  await expect(result.locator('dl > div').filter({ has: page.locator('dt', { hasText: /^Parser$/u }) }).locator('dd')).toHaveText('ICANN Style Colon');
+  await page.getByRole('link', { name: 'Show in catalogue' }).click();
+  await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(1);
+  await expect(page.locator('.catalogue-section tbody td[data-label="WHOIS behaviour"]')).toContainText('ICANN Style Colon');
 
   await input.fill('.mil');
   await inspectButton.click();

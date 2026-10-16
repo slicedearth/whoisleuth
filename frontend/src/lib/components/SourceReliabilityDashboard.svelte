@@ -1,5 +1,6 @@
 <script lang="ts">
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { registrySupportLabel } from '#lib/analysis/registry-support.ts';
   import {
     parseSourceReliabilityDashboard,
     reliabilityDurationLabel,
@@ -44,10 +45,6 @@
     fileName = '';
   }
 
-  function sourceLabel(value: string): string {
-    return value.replaceAll('_', ' ').replace(/\b\w/gu, (letter) => letter.toUpperCase());
-  }
-
   function trendLabel(value: 'faster' | 'slower' | 'steady' | 'unmeasured'): string {
     return ({ faster: 'Faster', slower: 'Slower', steady: 'Steady', unmeasured: 'Unmeasured' })[value];
   }
@@ -86,7 +83,7 @@
         {#each dashboard.rows as row}
           <article class="source-card" data-tone={row.tone}>
             <header>
-              <div><h3>{sourceLabel(row.source)}</h3><span>{row.sampleLabel}</span></div>
+              <div><h3>{registrySupportLabel(row.source)}</h3><span>{row.sampleLabel}</span></div>
               <span class="tone">{row.tone === 'attention' ? 'Review' : row.tone === 'limited' ? 'Limited sample' : row.tone === 'healthy' ? 'Healthy sample' : 'Mixed sample'}</span>
             </header>
             <dl>
