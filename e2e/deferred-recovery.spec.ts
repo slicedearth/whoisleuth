@@ -340,7 +340,7 @@ test('Case readiness cannot complete while its selected workspace is held', asyn
     await waitForAnimationFrames(page);
     expect(await isBrowserInteractionReadinessMarked(page)).toBe(false);
 
-    await expect(page.getByText('Opening Case…', { exact: true })).toBeVisible();
+    await expect(page.getByText('Opening case…', { exact: true })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Case sections' })).toHaveCount(0);
     await waitForAnimationFrames(page);
     expect(await isBrowserInteractionReadinessMarked(page)).toBe(false);

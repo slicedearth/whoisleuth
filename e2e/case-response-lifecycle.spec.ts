@@ -310,7 +310,7 @@ test('a committed sighting is not offered as a failed write when refreshing Case
   await sighting.getByLabel(/Limitations/).fill('Selected source only.');
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await sighting.getByRole('button', { name: 'Record sighting' }).click();
-  await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but Cases could not be reread');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but cases could not be reread');
   await expect(sighting.getByLabel(/Limitations/)).toHaveValue('');
   await expect(sighting.locator('ol.records > li')).toHaveCount(1);
   const committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1, minimumRevision: before.manifest.revision + 1 });
@@ -500,7 +500,7 @@ test('a committed note remains singular when its immediate reread fails', async 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await note.getByRole('button', { name: 'Add note' }).click();
 
-  await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but Cases could not be reread');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but cases could not be reread');
   await expect(note.getByLabel('Add note')).toHaveValue('');
   await expectNeighbourRetained(page, 'note-neighbour.invalid');
   const committed = await readBrowserLocalCollection(page, 'cases', {
@@ -535,7 +535,7 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await status.selectOption('reviewing');
   await expect(caseWorkspaceActionStatus(page).filter({
-    hasText: 'Set reconcile-target.invalid to Reviewing. The change was saved, but Cases could not be reread',
+    hasText: 'Set reconcile-target.invalid to Reviewing. The change was saved, but cases could not be reread',
   })).toBeVisible();
   await expect(status).toHaveValue('reviewing');
   await expectNeighbourRetained(page, 'reconcile-neighbour.invalid');
@@ -550,7 +550,7 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await page.getByRole('button', { name: 'Save tags' }).click();
   await expect(caseWorkspaceActionStatus(page).filter({
-    hasText: 'Updated tags for reconcile-target.invalid. The change was saved, but Cases could not be reread',
+    hasText: 'Updated tags for reconcile-target.invalid. The change was saved, but cases could not be reread',
   })).toBeVisible();
   await expect(page.getByLabel('Tags')).toHaveValue('reviewed, retained');
   await expect(page.getByRole('textbox', { name: /^Additional tags/ })).toHaveValue('reviewed, retained');
@@ -565,7 +565,7 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
   await page.getByText('Case options', { exact: true }).click();
   await page.getByRole('button', { name: 'Delete case' }).click();
   await expect(caseWorkspaceActionStatus(page).filter({
-    hasText: 'Deleted the case for reconcile-target.invalid. The change was saved, but Cases could not be reread',
+    hasText: 'Deleted the case for reconcile-target.invalid. The change was saved, but cases could not be reread',
   })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'reconcile-target.invalid' })).toHaveCount(0);
   await expect(page).toHaveURL('/cases');
@@ -684,7 +684,7 @@ test('shows the complete committed Case snapshot when the immediate action rerea
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await action.getByRole('button', { name: 'Create drafting action' }).click();
 
-  await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'The change was saved, but Cases could not be reread' })).toContainText('complete committed Case snapshot');
+  await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'The change was saved, but cases could not be reread' })).toContainText('complete committed case snapshot');
   await expect(workspace).toContainText('registry report · drafting');
   await expectNeighbourRetained(page, 'action-neighbour.invalid');
   const committed = await readBrowserLocalCollection(page, 'cases', {
@@ -753,7 +753,7 @@ test('shows the complete committed Case snapshot when an investigation-branch re
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await branch.getByRole('button', { name: 'Create branch' }).click();
 
-  await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'The change was saved, but Cases could not be reread' })).toContainText('complete committed Case snapshot');
+  await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'The change was saved, but cases could not be reread' })).toContainText('complete committed case snapshot');
   await expect(workspace).toContainText('Committed branch');
   await expectNeighbourRetained(page, 'branch-neighbour.invalid');
   const committed = await readBrowserLocalCollection(page, 'cases', {

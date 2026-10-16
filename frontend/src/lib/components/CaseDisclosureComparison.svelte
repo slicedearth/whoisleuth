@@ -29,7 +29,7 @@
               {#if column.side.ambiguous}<p>Multiple matching references are included below; no one record was chosen.</p>{/if}
               <!-- svelte-ignore a11y_no_noninteractive_tabindex -- keyboard access to the complete bounded prepared value -->
               <div class="value" role="region" tabindex="0" aria-label={`${row.group} ${row.reference} ${column.label} exact value`}><pre>{JSON.stringify(column.side.value, null, 2) ?? 'Value unavailable'}</pre></div>
-            {:else}<p>Not represented on this side. This does not establish deletion or absence from the Case.</p>{/if}
+            {:else}<p>Not represented on this side. This does not establish deletion or absence from the case.</p>{/if}
           </section>
         {/each}
       </div>

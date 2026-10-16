@@ -673,7 +673,7 @@ test('a Quick closure without a response action preserves validation, failed-wri
   expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).manifest.revision).toBe(before.manifest.revision);
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await submit.click();
-  await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but Cases could not be reread');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but cases could not be reread');
   await expect(summary).toHaveValue('');
   const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   expect(stored.manifest.revision).toBe(before.manifest.revision + 1);

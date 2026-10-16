@@ -40,7 +40,7 @@
   }
 </script>
 <section class="context-review" aria-label="Domain history and retired dependencies"><h3>Domain history and retired dependencies</h3><div class="body">
-  <p>Compare this Case’s retained observations. Add expected maintenance, a retired dependency or a source-linked registration boundary to put changes in context without replacing earlier evidence.</p>
+  <p>Compare this case’s retained observations. Add expected maintenance, a retired dependency or a source-linked registration boundary to put changes in context without replacing earlier evidence.</p>
   <details><summary>Retirement review checklist</summary><div class="body">
     <p>Before retiring a domain, review the references you control. These are planning prompts, not checks performed by this review.</p>
     <ul>{#each RETIRED_DEPENDENCY_REVIEW_STEPS as step}<li>{step}</li>{/each}</ul>
@@ -77,5 +77,5 @@
   </div></details>
   <button class="btn" type="button" disabled={mutationBusy} onclick={review}>Review retained history</button>
   {#if error}<p role="alert">{error}</p>{/if}
-  {#if report}<CaseContextReport {report} {record} {mutationBusy} {persistOperation} reusableInput={input} retainReusableInput={false} /><p class="meta">The reusable input download includes this Case’s retained record. It is not duplicated in Case storage.</p>{/if}
+  {#if report}<CaseContextReport {report} {record} {mutationBusy} {persistOperation} reusableInput={input} retainReusableInput={false} /><p class="meta">The reusable input download includes this case’s retained record. It is not duplicated in case storage.</p>{/if}
 </div></section>

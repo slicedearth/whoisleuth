@@ -7,12 +7,12 @@
 </script>
 
 <div class="image-lineage">
-  <p>{review.steps.length} declared parent link{review.steps.length === 1 ? '' : 's'} reviewed in this Case. File bytes have not been checked by this review.</p>
+  <p>{review.steps.length} declared parent link{review.steps.length === 1 ? '' : 's'} reviewed in this case. File bytes have not been checked by this review.</p>
   {#if review.termination === 'no_further_declaration'}<p>The last matching parent has no recorded edit declaration; this does not prove it is an unedited original.</p>
-  {:else if review.termination === 'missing_parent'}<p>Stopped at a parent reference not retained in this Case. Earlier history is unresolved.</p>
+  {:else if review.termination === 'missing_parent'}<p>Stopped at a parent reference not retained in this case. Earlier history is unresolved.</p>
   {:else if review.termination === 'conflicting_parent'}<p>Stopped at a conflicting parent reference. No alternative reference was substituted.</p>
   {:else if review.termination === 'cycle'}<p>Stopped at a repeated parent reference (a cycle). The declarations do not establish a creation order.</p>
-  {:else}<p>Stopped at the Case limit of {MAX_SELECTED_FILES} declared parent links. Earlier history is unresolved.</p>{/if}
+  {:else}<p>Stopped at the case limit of {MAX_SELECTED_FILES} declared parent links. Earlier history is unresolved.</p>{/if}
   <details bind:open={expanded}>
     <summary>Inspect declared links ({review.steps.length})</summary>
     {#if expanded}<ol aria-label="Declared image links">
@@ -20,7 +20,7 @@
         <li>
           <p>Declared edits: {step.declaration.operations.map(kind => kind === 'redact' ? 'redaction' : 'outline').join(', ')} · {step.declaration.method}</p>
           <p>Declared parent: <code>{step.declaration.source.digestSha256}</code> · {step.declaration.source.byteLength.toLocaleString('en-AU')} bytes</p>
-          {#if step.parentReference === 'missing'}<p>The declared parent reference is not retained in this Case.</p>
+          {#if step.parentReference === 'missing'}<p>The declared parent reference is not retained in this case.</p>
           {:else if step.parentReference === 'conflicting'}<p>The retained parent reference conflicts with this declaration.</p>
           {:else}<p>The parent reference matches the recorded fingerprint and size. {step.parentHasDeclaredEdits ? 'It also declares edits.' : 'It has no recorded edit declaration.'}</p>{/if}
         </li>

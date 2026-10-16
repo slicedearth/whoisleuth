@@ -113,7 +113,7 @@ test('edited PNGs preserve originals and source context, verify every output pix
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await review.getByRole('button', { name: 'Retain edited PNG', exact: true }).focus(); await page.keyboard.press('Enter');
-  await expect(page.getByRole('status').filter({ hasText: 'The change was saved, but Cases could not be reread' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'The change was saved, but cases could not be reread' })).toBeVisible();
   await expect(review.getByRole('button', { name: 'Retain edited PNG', exact: true })).toHaveCount(0);
   await expect(review).toBeFocused();
   const after = await readBrowserLocalCollection(page, 'cases');

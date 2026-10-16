@@ -10,7 +10,7 @@
   ] as const;
 </script>
 
-<PublicSeo title="Synthetic input and output examples | WHOISleuth" description="Open validated command inputs, reserved-domain Lookup plans, offline reviews and Case handoff previews." path="/examples" />
+<PublicSeo title="Synthetic input and output examples | WHOISleuth" description="Open validated command inputs, reserved-domain Lookup plans, offline reviews and case handoff previews." path="/examples" />
 
 <PublicReferenceDocument
   currentHref="/examples"
@@ -42,7 +42,7 @@
       </article>
       <article id="separate-response-scopes">
         <h3>One page changes; the advertisement is unresolved</h3>
-        <p><strong>Outcome:</strong> Close only the reviewed page action. The separate advertisement and the wider Case remain open.</p>
+        <p><strong>Outcome:</strong> Close only the reviewed page action. The separate advertisement and the wider case remain open.</p>
         <details><summary>Evidence and next step</summary>
           <p>A complete later review of the same page under comparable conditions no longer reproduces the credential form. The advertisement was not rechecked.</p>
           <p>Retain the exact page, observation time and comparison scope. This does not establish permanent removal, advertisement removal or general safety.</p>
@@ -75,7 +75,7 @@
 
   <aside class="interpretation card" aria-labelledby="interpretation-title">
     <h2 id="interpretation-title">How to read the examples</h2>
-    <p>Input examples are starting points, not findings to retain unchanged. A plan records intended collection, an offline review assesses supplied material, and a Case pack records an export.</p>
+    <p>Input examples are starting points, not findings to retain unchanged. A plan records intended collection, an offline review assesses supplied material, and a case pack records an export.</p>
   </aside>
 </PublicReferenceDocument>
 

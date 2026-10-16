@@ -400,7 +400,7 @@ test('previews association storage pressure, exports or cancels, and reconciles 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await review.getByRole('button', { name: 'Remove listed snapshots and save' }).click();
 
-  await expect(page.getByRole('status').filter({ hasText: 'Brand Profile association saved' })).toContainText('complete committed Case snapshot');
+  await expect(page.getByRole('status').filter({ hasText: 'Brand profile association saved' })).toContainText('complete committed case snapshot');
   await expect(associations).toContainText('Fixture profile');
   await expect(associations).toBeFocused();
   await expect(review).toHaveCount(0);

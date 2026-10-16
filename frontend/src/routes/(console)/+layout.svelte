@@ -151,7 +151,7 @@
 
   async function createSavedViewStorage(){
     if (localData.state !== 'error' || localData.code !== 'LOCAL_DATA_MISSING') return;
-    if (!window.confirm('Create empty saved Case view storage in this workspace? This does not recover lost views. If views were previously saved here, restore a verified backup instead. Existing records and files will not be replaced.')) return;
+    if (!window.confirm('Create empty saved case view storage in this workspace? This does not recover lost views. If views were previously saved here, restore a verified backup instead. Existing records and files will not be replaced.')) return;
     localData={state:'initializing'};
     localData=await initializeBrowserLocalData({createMissingCollections:['case_views']});
     await tick();
@@ -160,7 +160,7 @@
 
   async function logout(){
     if(signingOut)return;
-    if(hasUnprotectedCaseDrafts()&&!window.confirm('Some Case edits are not saved. Sign out and lose those edits?'))return;
+    if(hasUnprotectedCaseDrafts()&&!window.confirm('Some case edits are not saved. Sign out and lose those edits?'))return;
     signingOut=true;
     logoutError='';
     try{
@@ -367,7 +367,7 @@
         </div>
         {/snippet}
         </BrowserWorkspaceIndicator>
-        {#if showCaseContext && selectedCaseId}<DeferredSurface load={() => import('#lib/components/SelectedCaseContext.svelte')} props={{caseId:selectedCaseId,compact:true}} loadingLabel="Reading selected Case…" unavailableLabel="Selected Case context could not be loaded." />{/if}
+        {#if showCaseContext && selectedCaseId}<DeferredSurface load={() => import('#lib/components/SelectedCaseContext.svelte')} props={{caseId:selectedCaseId,compact:true}} loadingLabel="Reading selected case…" unavailableLabel="Selected case context could not be loaded." />{/if}
       </section>
       <div class="presentation-workspace" class:references-open={tabReferencesOpen}>
         <aside class="tab-references" aria-label="Tab reference bench">

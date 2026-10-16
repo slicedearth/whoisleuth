@@ -37,7 +37,7 @@ test('new incident creation preserves drafts on failed writes and source clocks 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await form.getByRole('button', { name: 'Create incident Case', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Independent second review', exact: true })).toBeVisible();
-  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but Cases could not be reread.');
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but cases could not be reread.');
   const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
   expect(saved.records).toHaveLength(2);
   const original = saved.records.find(item => item.value.id === 'incident-first')!.value;

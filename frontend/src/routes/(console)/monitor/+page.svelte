@@ -237,7 +237,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
       caseMessage = `${success}${prunedNote(committed.pruned)}`;
     } catch {
       installCommittedCaseSnapshot(committed.cases, 'partial');
-      caseMessage = `${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.${prunedNote(committed.pruned)}`;
+      caseMessage = `${success} The change was saved, but cases could not be reread. The complete committed case snapshot is shown locally; reload to retry the workspace read.${prunedNote(committed.pruned)}`;
     }
   }
   async function reconcileCommittedCaseMutation(committed: Awaited<ReturnType<typeof editCase>>, success: string) {

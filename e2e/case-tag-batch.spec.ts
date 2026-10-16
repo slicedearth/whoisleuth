@@ -46,7 +46,7 @@ test('Case tag preview keeps cross-page targets separate from inspection and com
     }
   }
   await preview.getByRole('button', { name: 'Apply reviewed tag changes', exact: true }).click();
-  await expect(panel.getByRole('status', { name: 'Case tag batch status', exact: true })).toContainText('Tags saved for 2 Cases');
+  await expect(panel.getByRole('status', { name: 'Case tag batch status', exact: true })).toContainText('Tags saved for 2 cases');
   const after = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 26 });
   expect(after.manifest.revision).toBe(before.manifest.revision + 1);
   for (const row of after.records) {
@@ -80,8 +80,8 @@ test('stale and rejected tag batches preserve the draft, and committed read fail
   await expect(text).toHaveValue('Selected batch'); await prepare.click();
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await panel.getByRole('button', { name: 'Apply reviewed tag changes', exact: true }).click();
-  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but Cases could not be reread');
-  await expect(panel.getByRole('status', { name: 'Case tag batch status' })).toContainText('Tags saved for 2 Cases');
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but cases could not be reread');
+  await expect(panel.getByRole('status', { name: 'Case tag batch status' })).toContainText('Tags saved for 2 cases');
   await expect(prepare).toBeDisabled();
   const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 26 });
   expect(saved.manifest.revision).toBe(peerSaved.manifest.revision + 1);

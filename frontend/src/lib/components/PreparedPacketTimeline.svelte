@@ -12,7 +12,7 @@
 
 <section aria-label="Prepared packet timeline">
   <h3>Selected packet timeline</h3>
-  <p>{rows.length} time fields in this packet. This is not the full Case history. Preparation is not observation; a declared file time is not verified capture provenance.</p>
+  <p>{rows.length} time fields in this packet. This is not the full case history. Preparation is not observation; a declared file time is not verified capture provenance.</p>
   <p>Provider summary: {packet.responseLifecycle.providerOutcomeState}. Independent-review summary: {packet.responseLifecycle.observedChangeState}. Missing or ambiguous summary times remain unavailable.</p>
   <ul>{#each [...packet.escalationHistoryLimitations, ...packet.responseLifecycle.limitations] as limitation}<li>{limitation}</li>{/each}</ul>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -- bounded two-dimensional table has keyboard scroll access -->

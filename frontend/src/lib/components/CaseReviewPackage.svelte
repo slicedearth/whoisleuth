@@ -36,32 +36,32 @@
     finally { if (controller === current) { controller = null; checking = false; onbusy(false); } }
   }
   async function validate() {
-    if (!ready || stale) throw new Error('Check the current Case and file selection again before downloading.');
+    if (!ready || stale) throw new Error('Check the current case and file selection again before downloading.');
     await assertCaseReviewHandoffCurrent(ready.expectedCase, ready.record.id);
   }
 </script>
 
 <section class="review-package" aria-labelledby={`review-package-${record.id}`}>
   <h4 id={`review-package-${record.id}`}>Prepare an encrypted handoff</h4>
-  <p>Include the full Case and the originals the reviewer needs. Notes, incident links, filenames and saved response records are private, unredacted content. Unfinished forms, authentication state and other Cases are not included.</p>
+  <p>Include the full case and the originals the reviewer needs. Notes, incident links, filenames and saved response records are private, unredacted content. Unfinished forms, authentication state and other cases are not included.</p>
   {#if record.attachments?.length}<fieldset disabled={disabled || busy || checking}><legend>Original files to include</legend>
     {#each record.attachments as attachment (attachment.id)}<label><input type="checkbox" checked={ids.includes(attachment.id)} onchange={event => { excludedIds = event.currentTarget.checked ? excludedIds.filter(id => id !== attachment.id) : [...excludedIds, attachment.id]; }}> <span>{attachment.fileName} · {attachment.byteLength.toLocaleString('en-AU')} bytes</span></label>{/each}
   </fieldset>{/if}
-  <p>{selection.length} of {record.attachments?.length ?? 0} file references selected. Identical bytes are packaged once; each source declaration stays in the Case.</p>
-  <button class="btn" type="button" disabled={disabled || busy || checking} onclick={() => void check()}>{checking ? 'Checking Case and originals…' : 'Check handoff contents'}</button>
+  <p>{selection.length} of {record.attachments?.length ?? 0} file references selected. Identical bytes are packaged once; each source declaration stays in the case.</p>
+  <button class="btn" type="button" disabled={disabled || busy || checking} onclick={() => void check()}>{checking ? 'Checking case and originals…' : 'Check handoff contents'}</button>
   {#if error}<p role="alert">{error}</p>{/if}
   {#if ready}
     <div class="checked">
       <h5 bind:this={heading} tabindex="-1">Handoff contents checked</h5>
-      <p>{ready.selection.omitted.length ? 'Partial file selection' : 'All referenced originals included'} · One full retained Case record · {ready.selection.files.length} distinct file bodies · {ready.files.reduce((sum, item) => sum + item.file.size, 0).toLocaleString('en-AU')} bytes</p>
-      {#if ready.selection.omitted.length}<p>{ready.selection.omitted.length} reference{ready.selection.omitted.length === 1 ? ' has' : 's have'} no selected bytes. The Case keeps those references; the recipient’s completeness check will identify them.</p><ul>{#each ready.selection.omitted as item}<li>{item.fileName}</li>{/each}</ul>{/if}
-      {#if stale}<p role="alert">The Case or selection changed. Check the contents again before downloading.</p>
+      <p>{ready.selection.omitted.length ? 'Partial file selection' : 'All referenced originals included'} · One full retained case record · {ready.selection.files.length} distinct file bodies · {ready.files.reduce((sum, item) => sum + item.file.size, 0).toLocaleString('en-AU')} bytes</p>
+      {#if ready.selection.omitted.length}<p>{ready.selection.omitted.length} reference{ready.selection.omitted.length === 1 ? ' has' : 's have'} no selected bytes. The case keeps those references; the recipient’s completeness check will identify them.</p><ul>{#each ready.selection.omitted as item}<li>{item.fileName}</li>{/each}</ul>{/if}
+      {#if stale}<p role="alert">The case or selection changed. Check the contents again before downloading.</p>
       {:else}
         <dl class="handoff-checks" aria-label="Handoff checks">
           <div><dt>Original bytes</dt><dd>{ready.selection.files.length} selected file {ready.selection.files.length === 1 ? 'body is' : 'bodies are'} available. {ready.selection.omitted.length} retained {ready.selection.omitted.length === 1 ? 'reference has' : 'references have'} no selected bytes.</dd></div>
           <div><dt>Digest match</dt><dd>{ready.selection.files.length ? 'Selected originals match their retained SHA-256 digests and byte counts.' : 'No original bytes selected; no original digests checked.'}</dd></div>
           <div><dt>Format compatibility</dt><dd>Case JSON v{CASE_SCHEMA_VERSION} is accepted by this build. The download will use investigation manifest v{INVESTIGATION_MANIFEST_VERSION} in encrypted envelope v{ENCRYPTED_INVESTIGATION_PACKAGE_VERSION}. The recipient’s version has not been checked.</dd></div>
-          <div><dt>Source declarations</dt><dd>Preserved as supplied in the Case; a digest match does not authenticate their source, observation time or earlier custody.</dd></div>
+          <div><dt>Source declarations</dt><dd>Preserved as supplied in the case; a digest match does not authenticate their source, observation time or earlier custody.</dd></div>
           <div><dt>Recipient access</dt><dd>Not checked. Downloading does not establish delivery, passphrase access or complete recovery.</dd></div>
         </dl>
       {/if}
@@ -69,9 +69,9 @@
         getFiles={async signal => { signal.throwIfAborted(); await validate(); return ready!.files; }} validateSelection={validate}
         onbusy={value => { busy = value; onbusy(value); }} onmessage={value => message = value} />
       <details class="recipient-steps"><summary>Recipient verification steps</summary><ol>
-        <li>Use a version that supports the formats above. Unlock and verify the package in Dashboard’s saved-work tools; check the Case and original-file matches, not only whether the file opens.</li>
-        <li>Open the temporary Case review to inspect the contents without saving. If editing is needed, download its Case JSON and needed originals, import into a separate workspace, then check that the originals are available there.</li>
-        <li>Confirm receipt and access separately. Return a current Case export or another encrypted handoff. Send the passphrase through a separate channel.</li>
+        <li>Use a version that supports the formats above. Unlock and verify the package in Dashboard’s saved-work tools; check the case and original-file matches, not only whether the file opens.</li>
+        <li>Open the temporary case review to inspect the contents without saving. If editing is needed, download its case JSON and needed originals, import into a separate workspace, then check that the originals are available there.</li>
+        <li>Confirm receipt and access separately. Return a current case export or another encrypted handoff. Send the passphrase through a separate channel.</li>
       </ol></details>
     </div>
   {/if}

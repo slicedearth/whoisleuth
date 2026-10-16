@@ -67,7 +67,7 @@ test('selected originals require a deliberate atomic save and preserve drafts ac
   }
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await files.getByRole('button', { name: 'Retain selected files', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'The change was saved, but Cases could not be reread' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'The change was saved, but cases could not be reread' })).toBeVisible();
   await expect(files.getByRole('button', { name: 'Retain selected files', exact: true })).toHaveCount(0);
   const saved = await readBrowserLocalCollection(page, 'cases', { minimumRevision: before.manifest.revision + 1 });
   expect(saved.manifest.revision).toBe(before.manifest.revision + 1);

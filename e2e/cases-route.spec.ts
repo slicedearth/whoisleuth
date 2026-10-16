@@ -93,7 +93,7 @@ test('missing direct Cases are explicit without selecting an unrelated record', 
       cases: [caseRecord({ id: 'retained-case', domain: 'retained-case.example' })],
     }),
   }, { destination: '/cases?case=missing-case#case-response-missing-case' });
-  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('That Case is not available in this workspace.');
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('That case is not available in this workspace.');
   await expect(page.locator('#case-head-retained-case')).toHaveAttribute('href', '/cases?case=retained-case');
   await expect(page.locator('.response-workspace')).toHaveCount(0);
 });
@@ -198,7 +198,7 @@ test('a committed Case note remains saved when refreshing the list fails', async
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await page.getByRole('textbox', { name: 'Add note', exact: true }).fill('Committed note');
   await page.getByRole('button', { name: 'Add note', exact: true }).click();
-  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but Cases could not be reread.');
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but cases could not be reread.');
   await expect(page.locator('.notes')).toContainText('Committed note');
   await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('');
   expect((await readBrowserLocalCollection(page, 'cases')).records[0]?.value.notes).toHaveLength(1);

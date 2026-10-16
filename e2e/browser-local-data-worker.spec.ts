@@ -99,7 +99,7 @@ test('a verification worker failure after a committed note preserves the write a
   try {
     await page.getByRole('textbox', { name: 'Add note', exact: true }).fill('One committed note.');
     await page.getByRole('button', { name: 'Add note', exact: true }).click();
-    await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but Cases could not be reread.');
+    await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but cases could not be reread.');
     expect(rejected).toBeGreaterThan(0);
     await expect(page.locator('.notes')).toContainText('One committed note.');
     await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('');

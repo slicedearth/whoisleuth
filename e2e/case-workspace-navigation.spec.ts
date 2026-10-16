@@ -284,13 +284,13 @@ for (const [section, preserveLaterFocus] of [
         ? '/cases?case=delayed-case&response=1#case-response-preflight-delayed-case'
         : '/cases?case=delayed-case&section=evidence';
       await page.goto(destination, { waitUntil: 'domcontentloaded' });
-      await expect(page.getByText('Opening Case…', { exact: true })).toBeVisible();
+      await expect(page.getByText('Opening case…', { exact: true })).toBeVisible();
       await expect(page.locator('#case-head-delayed-case')).toHaveCount(0);
       const laterControl = page.getByRole('button', { name: 'Sign out', exact: true });
       if (preserveLaterFocus) await laterControl.focus();
       release();
       await expect(page.getByRole('heading', { name: 'delayed-review.example', exact: true })).toBeVisible();
-      await expect(page.getByText('Opening Case…', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('Opening case…', { exact: true })).toHaveCount(0);
       const target = section === 'response'
         ? page.locator('#case-response-preflight-delayed-case > summary')
         : page.locator('#case-head-delayed-case');
@@ -503,7 +503,7 @@ test('a committed Case history write with a failed reread is not offered as a fa
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await page.getByRole('textbox', { name: 'What did you do or decide?', exact: true }).fill('Reviewed the retained evidence');
   await page.getByRole('button', { name: 'Record manual step', exact: true }).click();
-  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but Cases could not be reread.');
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but cases could not be reread.');
   await expect(page.getByRole('textbox', { name: 'What did you do or decide?', exact: true })).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Record manual step', exact: true })).toBeFocused();
   const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });

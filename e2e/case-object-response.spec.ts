@@ -48,7 +48,7 @@ test('exact affected subset survives failed writes and committed refresh failure
   expect((await readBrowserLocalCollection(page, 'cases')).manifest.revision).toBe(initial.manifest.revision);
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await submit.focus(); await page.keyboard.press('Enter');
-  await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but Cases could not be reread');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but cases could not be reread');
   await expect(form).toContainText('This action is terminal');
   const saved = (await readBrowserLocalCollection(page, 'cases')).records[0]!.value;
   expect(saved.actions).toHaveLength(1);

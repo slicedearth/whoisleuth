@@ -61,7 +61,7 @@
   const activeSection = $derived(caseWorkspaceSection(new URL(page.url.href)));
   function pinCheckpoint(snapshotId: string) {
     const result = pinConsoleCaseCheckpoint({ caseId: record.id, snapshotId });
-    setMessage(result === 'added' ? 'Checkpoint pinned in this tab. Open Pinned checkpoints in the Console context.'
+    setMessage(result === 'added' ? 'Checkpoint pinned in this tab. Open Pinned checkpoints in the console context.'
       : result === 'already-pinned' ? 'This checkpoint is already pinned.'
       : result === 'full' ? 'Four checkpoints are already pinned. Remove one before adding another.'
       : 'The current workspace is unavailable. No reference was pinned.');
@@ -120,7 +120,7 @@
       const start = navigation && startMarker ? startMarker.getBoundingClientRect().top + window.scrollY - (Number.parseFloat(getComputedStyle(navigation).top) || 0) : 0;
       window.scrollTo({ top: readingPositions.get(section) ?? Math.max(0, start), behavior: 'instant' });
     } catch {
-      setMessage('The Case section could not be opened. Your drafts are unchanged.');
+      setMessage('The case section could not be opened. Your drafts are unchanged.');
     }
   }
 

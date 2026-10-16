@@ -94,7 +94,7 @@
 {#snippet inspector()}
   {#if inspected}
     <h4>Evidence pins</h4>
-    <p>First {Math.min(5, inspected.evidencePins.length)} of {inspected.evidencePins.length} retained pins. Open the Case workspace for the complete record and linked history.</p>
+    <p>First {Math.min(5, inspected.evidencePins.length)} of {inspected.evidencePins.length} retained pins. Open the case workspace for the complete record and linked history.</p>
     {#each inspected.evidencePins.slice(0, 5) as pin (pin.id)}<div class="peek-pin"><CaseEvidenceFact {pin} copyable /></div>{/each}
   {/if}
 {/snippet}

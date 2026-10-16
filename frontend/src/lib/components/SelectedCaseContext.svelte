@@ -105,12 +105,12 @@
       {/if}
     </details>
     {#if context.followUps[0]}<p class="next-review">Earliest recorded follow-up: <time datetime={context.followUps[0].at}>{date(context.followUps[0].at)}</time></p>{/if}
-    {#if contextState?.phase === 'loading'}<p class="next-review" role="status">Refreshing retained Case context…</p>{/if}
+    {#if contextState?.phase === 'loading'}<p class="next-review" role="status">Refreshing retained case context…</p>{/if}
   {:else}
     <div class="context-heading"><span class="context-label">Selected Case</span><button class="btn" type="button" onclick={clearSelection}>Clear selection</button></div>
-    {#if contextState?.phase === 'missing'}<p role="status">The selected Case is no longer in this workspace.</p><a href="/cases">Choose a Case</a>
-    {:else if contextState?.phase === 'unavailable'}<p role="status">The selected Case could not be read. Its saved state is unknown.</p><button class="btn" type="button" onclick={requestRefresh}>Retry Case read</button>
-    {:else}<p role="status">Reading selected Case…</p>{/if}
+    {#if contextState?.phase === 'missing'}<p role="status">The selected case is no longer in this workspace.</p><a href="/cases">Choose a Case</a>
+    {:else if contextState?.phase === 'unavailable'}<p role="status">The selected case could not be read. Its saved state is unknown.</p><button class="btn" type="button" onclick={requestRefresh}>Retry Case read</button>
+    {:else}<p role="status">Reading selected case…</p>{/if}
   {/if}
 </section>
 {/if}

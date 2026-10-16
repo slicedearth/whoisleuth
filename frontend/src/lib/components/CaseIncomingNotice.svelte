@@ -26,7 +26,7 @@
 
 <details class="notice">
   <summary>Compare an unexpected response notice locally</summary>
-  <p>This comparison stays in page memory and is not included when saving the intake review. It does not authenticate a sender, confirm a provider outcome, close this Case or authorise disclosure.</p>
+  <p>This comparison stays in page memory and is not included when saving the intake review. It does not authenticate a sender, confirm a provider outcome, close this case or authorise disclosure.</p>
   <label>Recorded action<select bind:value={actionId} onchange={clearFields}><option value="">Choose an action</option>{#each record.actions as item (item.id)}<option value={item.id}>{item.type.replaceAll('_', ' ')} · {item.recipient} · {item.id}</option>{/each}</select></label>
   {#if action}
     <p>Retained recipient: {action.recipient}. Route source: {action.contactSource ?? 'Not retained'}. Route freshness: {review.routeFreshness}. Source text is not a trusted link or authenticated identity.</p>

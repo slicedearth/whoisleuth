@@ -129,7 +129,7 @@ test('receipt validation and write failures retain the draft while a committed r
   expect((await readBrowserLocalCollection(page, 'cases')).manifest.revision).toBe(before.manifest.revision);
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await submit.click();
-  await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but Cases could not be reread');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but cases could not be reread');
   await expect(receipt).toContainText('This action is terminal');
   await expect(submit).toHaveCount(0);
   const committed = await readBrowserLocalCollection(page, 'cases');

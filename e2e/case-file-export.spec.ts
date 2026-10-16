@@ -43,7 +43,7 @@ test('selected image history follows only this Case metadata without reading anc
   await selection.getByRole('checkbox', { name: 'outlined.png', exact: false }).check();
   const sheet = selection.locator('.selected-image-review');
   await sheet.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
-  await expect(sheet).toContainText('Stopped at a parent reference not retained in this Case');
+  await expect(sheet).toContainText('Stopped at a parent reference not retained in this case');
   const summary = sheet.getByText('Inspect declared links (2)', { exact: true });
   await summary.focus(); await summary.press('Enter');
   const links = sheet.getByRole('list', { name: 'Declared image links', exact: true }).getByRole('listitem');
@@ -51,7 +51,7 @@ test('selected image history follows only this Case metadata without reading anc
   await expect(links.nth(0)).toContainText(first.digestSha256);
   await expect(links.nth(0)).toContainText('parent reference matches');
   await expect(links.nth(1)).toContainText(source.digestSha256);
-  await expect(links.nth(1)).toContainText('parent reference is not retained in this Case');
+  await expect(links.nth(1)).toContainText('parent reference is not retained in this case');
   await expect(sheet).not.toContainText('other.example');
   await expect(sheet).toContainText('only each selected image\'s immediate-parent fingerprint');
   expect(await page.evaluate(() => (window as unknown as { __lineageFileAccess: string[] }).__lineageFileAccess)).toEqual([]);

@@ -286,7 +286,7 @@ for (const outcome of ['write-failure', 'refresh-failure'] as const) {
       expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).manifest.revision).toBe(before.manifest.revision);
       await submit.click();
     } else {
-      await expect(caseWorkspaceActionStatus(page)).toContainText('The import was saved, but Cases could not be reread');
+      await expect(caseWorkspaceActionStatus(page)).toContainText('The import was saved, but cases could not be reread');
     }
     await expect(review).toHaveCount(0);
     const committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1, minimumRevision: before.manifest.revision + 1 });

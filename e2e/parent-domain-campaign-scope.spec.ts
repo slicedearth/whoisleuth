@@ -334,7 +334,7 @@ test('a fresh campaign read replaces the partial state from a committed Case rer
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await openCase.getByRole('combobox', { name: /^Status/u }).selectOption('reviewing');
   await expect(page.getByRole('status').filter({
-    hasText: 'The change was saved, but Cases could not be reread',
+    hasText: 'The change was saved, but cases could not be reread',
   })).toBeVisible();
 
   await openConsoleView(page, 'campaigns');

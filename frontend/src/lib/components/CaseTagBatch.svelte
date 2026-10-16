@@ -44,12 +44,12 @@
       const intent = { ids: [...selectedIds], operation, tags: parseCaseBatchTags(text) };
       const result = await onpreview(intent);
       if (disposed || request !== generation) return;
-      if (!unchanged()) { message = 'The selection or tag draft changed while Cases were read. Preview the current draft.'; return; }
+      if (!unchanged()) { message = 'The selection or tag draft changed while cases were read. Preview the current draft.'; return; }
       preview = result; previewKey = key; previewPage = 1;
       await tick();
       if (!disposed && request === generation) restoreSubmittedFocus(origin, heading, root);
     } catch (cause) {
-      if (!disposed && request === generation) message = cause instanceof Error ? cause.message : 'The tag preview could not be prepared. Saved Cases were not changed.';
+      if (!disposed && request === generation) message = cause instanceof Error ? cause.message : 'The tag preview could not be prepared. Saved cases were not changed.';
     } finally {
       if (!disposed && request === generation) {
         phase = null; await tick();
@@ -65,7 +65,7 @@
     try {
       const result = await onapply(reviewed);
       if (disposed || request !== generation) return;
-      message = `Tags saved for ${result.changed} Cases; ${result.unchanged} already matched the requested tags.`;
+      message = `Tags saved for ${result.changed} cases; ${result.unchanged} already matched the requested tags.`;
       if (unchanged()) { text = ''; onclear(); preview = null; }
       else message += ' The current tag draft was not part of this write.';
     } catch (cause) {
@@ -85,14 +85,14 @@
 </script>
 
 <section aria-label="Case batch tagging" bind:this={root}>
-  <p>Select Cases in the queue, then add or remove literal tags. {selectedIds.length} selected across pages and filters.</p>
+  <p>Select cases in the queue, then add or remove literal tags. {selectedIds.length} selected across pages and filters.</p>
   <div class="tag-controls">
     <label>Tag operation<select bind:value={operation} onchange={edit}><option value="add">Add tags</option><option value="remove">Remove tags</option></select></label>
     <label>Batch tags<textarea bind:value={text} oninput={edit} maxlength={MAX_CASE_TAG_BATCH_TEXT_LENGTH} rows="2" placeholder="Separate tags with commas or new lines"></textarea></label>
   </div>
   <div class="actions"><button class="btn" type="button" disabled={busy || disabled || uncertain || !selectedIds.length || !text.trim()} onclick={prepare}>Preview exact tag changes</button>
     <button class="btn" type="button" disabled={busy || uncertain} onclick={discard}>Discard tag draft and selection</button></div>
-  {#if phase}<p role="status" aria-live="polite">{phase === 'preparing' ? 'Reading Cases and preparing exact tag changes…' : 'Saving the reviewed tag changes…'}</p>{/if}
+  {#if phase}<p role="status" aria-live="polite">{phase === 'preparing' ? 'Reading cases and preparing exact tag changes…' : 'Saving the reviewed tag changes…'}</p>{/if}
   {#if message}<p bind:this={status} tabindex="-1" role="status" aria-label="Case tag batch status" aria-live="polite">{message}</p>{/if}
   {#if uncertain}<button class="btn" type="button" onclick={() => window.location.reload()}>Reload saved Cases</button>{/if}
   {#if currentPreview}
@@ -115,7 +115,7 @@
       {#if !changedCount && currentPreview.canApply}<p>No tag changes are needed; saved records and timestamps remain unchanged.</p>{/if}
     </section>
   {/if}
-  <details><summary>Tag selection limits</summary><p>At most {MAX_CASE_BATCH_MUTATIONS} exact Cases and {MAX_TAGS_PER_CASE} requested tags of {MAX_TAG_LENGTH} characters each. Matching ignores case but preserves retained spelling and order. Duplicates and over-limit additions are rejected, not shortened. Every target is rechecked before one atomic write; tags do not change evidence or disposition.</p></details>
+  <details><summary>Tag selection limits</summary><p>At most {MAX_CASE_BATCH_MUTATIONS} exact cases and {MAX_TAGS_PER_CASE} requested tags of {MAX_TAG_LENGTH} characters each. Matching ignores case but preserves retained spelling and order. Duplicates and over-limit additions are rejected, not shortened. Every target is rechecked before one atomic write; tags do not change evidence or disposition.</p></details>
 </section>
 
 <style>

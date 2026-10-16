@@ -245,7 +245,7 @@ test('encrypted Case handoff includes selected originals, excludes recovery draf
   await expect(handoff).toContainText('a digest match does not authenticate their source');
   await expect(handoff).toContainText('Not checked. Downloading does not establish delivery, passphrase access or complete recovery.');
   await handoff.getByText('Recipient verification steps', { exact: true }).click();
-  await expect(handoff).toContainText('check the Case and original-file matches, not only whether the file opens');
+  await expect(handoff).toContainText('check the case and original-file matches, not only whether the file opens');
   const passphrase = 'Encrypted handoff fixture phrase';
   await handoff.getByLabel('Package passphrase', { exact: true }).fill(passphrase);
   await handoff.getByLabel('Confirm package passphrase', { exact: true }).fill('Different fixture phrase');
@@ -394,7 +394,7 @@ test('full review copy and selective return preserve write failure, dependency a
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await apply.click();
   await expect(section.getByRole('status', { name: 'Case review return status' })).toContainText('Selected review entries were saved.');
-  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but Cases could not be reread.');
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but cases could not be reread.');
   await expect(section.getByRole('heading', { name: 'Review with another analyst', exact: true })).toBeFocused();
   const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
   const result = saved.records.find(item => item.value.id === current.id)!.value;

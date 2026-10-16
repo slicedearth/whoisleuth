@@ -110,9 +110,9 @@ test('Cases and monitoring report unreadable collections without false empty sta
   const workspace = page.getByRole('region', { name: 'Cases', exact: true });
   try {
     await openConsoleView(page, 'cases');
-    await expect(workspace.getByRole('heading', { name: 'Opening saved Cases' })).toBeVisible();
+    await expect(workspace.getByRole('heading', { name: 'Opening saved cases' })).toBeVisible();
     await expect(workspace).toHaveAttribute('aria-busy', 'true');
-    await expect(workspace.getByText('Reading Case records from this workspace.')).toBeVisible();
+    await expect(workspace.getByText('Reading case records from this workspace.')).toBeVisible();
     await expect(workspace.getByRole('heading', { name: 'No cases yet' })).toHaveCount(0);
     await expect(workspace.getByRole('button', { name: 'Open or create Case', exact: true })).toHaveCount(0);
   } finally {
@@ -121,7 +121,7 @@ test('Cases and monitoring report unreadable collections without false empty sta
   await expect(page.locator('#case-head-read-recovery')).toBeVisible();
   await expect(workspace.getByRole('button', { name: 'Open or create Case', exact: true })).toBeVisible();
   await expect(workspace).toHaveAttribute('aria-busy', 'false');
-  await expect(workspace.getByRole('heading', { name: 'Opening saved Cases' })).toHaveCount(0);
+  await expect(workspace.getByRole('heading', { name: 'Opening saved cases' })).toHaveCount(0);
   const monitorPanel = page.locator('#monitor-view-panel');
   const openingViews = [
     ['inbox', ['Opening review inbox']],
@@ -405,7 +405,7 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   await workspace.getByRole('checkbox', { name: /^Trademark infringement/u }).check();
   await workspace.getByRole('checkbox', { name: /^Copyright infringement/u }).check();
   await workspace.getByRole('button', { name: 'Save Case types', exact: true }).click();
-  await expect(caseWorkspaceActionStatus(page)).toContainText('Saved Case types');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Saved case types');
   await expect(workspace.locator('.case-types')).not.toHaveAttribute('open', '');
   await expect(workspace.locator('.case-types').locator(':scope > summary')).toContainText('Phishing, Trademark infringement and 1 more');
   const typeReadiness = workspace.getByRole('region', { name: 'Evidence readiness by Case type' });
@@ -431,7 +431,7 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   await workspace.getByRole('checkbox', { name: /^Trademark infringement/u }).check();
   await expect(trademarkRoute.getByRole('checkbox').first()).not.toBeChecked();
   await workspace.getByRole('button', { name: 'Save Case types', exact: true }).click();
-  await expect(caseWorkspaceActionStatus(page)).toContainText('Saved Case types');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Saved case types');
   await routes.locator('.route', { hasText: 'Report an account or content' }).getByRole('button', { name: 'Create drafting action' }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('Nothing was submitted');
   for (const width of [1280, 1024, 390, 320]) {
@@ -540,7 +540,7 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
   await item.getByRole('button', { name: 'Dismiss gap' }).click();
   await expect(item).toHaveCount(0);
   await expect(reviewInboxActionStatus(page, 'Recorded the reviewed evidence-gap dismissal')).toBeVisible();
-  await expect(reviewInboxActionStatus(page, 'The change was saved, but Cases could not be reread')).toBeVisible();
+  await expect(reviewInboxActionStatus(page, 'The change was saved, but cases could not be reread')).toBeVisible();
   const committed = await readBrowserLocalCollection(page, 'cases', {
     minimumRecords: 1,
     minimumRevision: before.manifest.revision + 1,

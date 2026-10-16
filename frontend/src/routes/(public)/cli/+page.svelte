@@ -29,7 +29,7 @@
     {
       id: 'respond',
       label: 'Respond',
-      description: 'Maintain local Case files and prepare reviewed handoffs.',
+      description: 'Maintain local case files and prepare reviewed handoffs.',
     },
     {
       id: 'assure',
@@ -145,7 +145,7 @@
 </section>
 
 <section class="cli-section" id="local-application" aria-labelledby="local-application-title">
-  <div class="section-intro"><h2 id="local-application-title">Console with a filesystem workspace</h2><p>The separate local application serves the Console on your machine and saves records, drafts and original files in a folder you choose. It requires Node.js <code>{localMode?.nodeRequirement ?? 'as declared by the package'}</code> and a verified local package archive.</p></div>
+  <div class="section-intro"><h2 id="local-application-title">Console with a filesystem workspace</h2><p>The separate local application serves the console on your machine and saves records, drafts and original files in a folder you choose. It requires Node.js <code>{localMode?.nodeRequirement ?? 'as declared by the package'}</code> and a verified local package archive.</p></div>
   <CopyableCommand command={PUBLIC_CLI_GUIDANCE.localArchive.initialize} label="new offline local workspace command" />
   <details class="compact-disclosure"><summary>Verify and install a local archive</summary>
     <ul>{#each PUBLIC_CLI_GUIDANCE.localArchive.verification as item}<li>{item}</li>{/each}</ul>
