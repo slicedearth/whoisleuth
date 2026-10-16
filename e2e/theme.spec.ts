@@ -669,16 +669,15 @@ test('theme controls fit beside authenticated public navigation across common ph
     const overlapsBrand = Math.min(brandRight, navigationRight) - Math.max(brandBox!.x, navigationBox!.x) > 0
       && Math.min(brandBottom, navigationBottom) - Math.max(brandBox!.y, navigationBox!.y) > 0;
     expect(overlapsBrand).toBe(false);
-    if (navigationBox!.y >= brandBottom) {
-      expect(navigationBox!.y - brandBottom).toBeGreaterThanOrEqual(2);
-    } else {
-      expect(navigationBox!.x - brandRight).toBeGreaterThanOrEqual(2);
-    }
+    expect(Math.min(brandBottom, navigationBottom) - Math.max(brandBox!.y, navigationBox!.y)).toBeGreaterThan(0);
+    expect(navigationBox!.x - brandRight).toBeGreaterThanOrEqual(2);
     expect(navigationRight).toBeLessThanOrEqual(width);
     expect(menuTriggerBox!.x).toBeGreaterThanOrEqual(navigationBox!.x);
     expect(consoleBox!.x).toBeGreaterThan(menuTriggerBox!.x + menuTriggerBox!.width);
     expect(themeBox!.x).toBeGreaterThan(consoleBox!.x + consoleBox!.width);
     expect(themeTriggerBox!.x).toBeGreaterThanOrEqual(themeBox!.x);
+    expect(themeTriggerBox!.width).toBeGreaterThanOrEqual(44);
+    expect(themeTriggerBox!.height).toBeGreaterThanOrEqual(44);
     const themeSymbolSize = await themeTrigger.locator('.theme-symbol').evaluate(
       (element) => parseFloat(getComputedStyle(element).width),
     );
@@ -713,9 +712,16 @@ test('the mobile appearance panel stays connected to its trigger and within the 
 
   const trigger = page.getByRole('button', { name: /^Colour theme,/ });
   await expect(trigger.locator('.theme-trigger-label')).toHaveText(/\S/u);
-  await expect(trigger.locator('.theme-trigger-label')).toBeVisible();
+  await expect(trigger.locator('.theme-trigger-label')).toBeHidden();
+  await expect(trigger.locator('.theme-symbol')).toBeVisible();
   await trigger.click();
   const options = page.getByRole('listbox', { name: 'Colour theme options' });
+  for (const theme of ['Light', 'Dark', 'System']) {
+    const option = options.getByRole('option', { name: `${theme} theme`, exact: true });
+    await expect(option).toBeVisible();
+    await expect(option).toHaveText(theme);
+    await expect(option.locator('.theme-symbol')).toBeVisible();
+  }
   const triggerBox = await trigger.boundingBox();
   const optionsBox = await options.boundingBox();
 

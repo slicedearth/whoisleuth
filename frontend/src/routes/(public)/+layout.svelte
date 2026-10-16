@@ -143,8 +143,9 @@
   .console-label-short{display:none}
   .public-navigation-desktop button.sign-out{color:var(--muted)}
   .public-navigation-mobile{display:none}
-  .public-navigation-mobile :global(.theme-selector){height:44px;margin:0;font-size:var(--text-2xs)}
-  .public-navigation-mobile :global(.theme-trigger){height:44px}
+  .public-navigation-mobile :global(.theme-selector){--theme-trigger-width:44px;height:44px;margin:0;font-size:var(--text-2xs)}
+  .public-navigation-mobile :global(.theme-trigger){height:44px;justify-content:center;gap:0;padding:0}
+  .public-navigation-mobile :global(.theme-trigger-label),.public-navigation-mobile :global(.theme-trigger .chevron){display:none}
   .site-menu{position:static}
   .site-menu>summary{list-style:none}
   .site-menu>summary::-webkit-details-marker{display:none}
@@ -189,7 +190,7 @@
     .public-brand strong{font-size:.75rem}
     .public-navigation-mobile{gap:3px}
     .public-navigation-mobile>a,.site-menu>summary{padding-inline:5px;font-size:var(--text-2xs);line-height:1}
-    .public-navigation-mobile :global(.theme-selector){--theme-trigger-width:84px;font-size:var(--text-2xs);line-height:1}
+    .public-navigation-mobile :global(.theme-selector){font-size:var(--text-2xs);line-height:1}
   }
   @media(max-width:360px){
     .public-navigation-mobile>a,.site-menu>summary{padding-inline:3px}

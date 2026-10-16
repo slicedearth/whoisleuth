@@ -3,6 +3,7 @@
   import PublicReferenceSidebar from '#lib/components/PublicReferenceSidebar.svelte';
   import { PUBLIC_REFERENCE_DESTINATIONS, relatedPublicReferences } from '#lib/public-reference-navigation.ts';
   import { revealDocumentationTarget } from '#lib/documentation-anchors.ts';
+  import { keepFocusBelow } from '#lib/visible-focus.ts';
   import { WHOISLEUTH_SITE_ORIGIN } from '../../../../packages/analysis/project-metadata.mts';
 
   let {
@@ -54,6 +55,14 @@
   let article: HTMLElement;
   let printReady = $state(false);
   onMount(() => {
+    const navigation = article.parentElement?.querySelector<HTMLElement>('.reference-sidebar');
+    const focus = keepFocusBelow(article, () => {
+      if (!navigation) return null;
+      const edge = navigation.getBoundingClientRect(), content = article.getBoundingClientRect();
+      // The narrow toolbar overlaps the article's horizontal span. The desktop
+      // sidebar does not; its height must never become a page-scroll offset.
+      return edge.left < content.right && edge.right > content.left ? navigation : null;
+    });
     const openedForPrint: HTMLDetailsElement[] = [];
     const beforePrint = () => {
       for (const detail of article.querySelectorAll('details:not([open])')) {
@@ -74,7 +83,7 @@
     addEventListener('beforeprint', beforePrint);
     addEventListener('afterprint', afterPrint);
     printReady = true;
-    return () => { printReady = false; cancelAnimationFrame(frame); removeEventListener('hashchange', revealHash); removeEventListener('beforeprint', beforePrint); removeEventListener('afterprint', afterPrint); afterPrint(); };
+    return () => { printReady = false; focus.destroy(); cancelAnimationFrame(frame); removeEventListener('hashchange', revealHash); removeEventListener('beforeprint', beforePrint); removeEventListener('afterprint', afterPrint); afterPrint(); };
   });
 </script>
 

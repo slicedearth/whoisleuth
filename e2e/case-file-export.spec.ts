@@ -18,7 +18,6 @@ test('selected image history follows only this Case metadata without reading anc
   const second = readCaseAttachment({ ...first, id: 'outlined-image', fileName: 'outlined.png', digestSha256: `sha256:${'c'.repeat(64)}`, byteLength: 120,
     derivation: { ...first.derivation!, sourceAttachmentId: first.id, source: { digestSha256: first.digestSha256, byteLength: first.byteLength },
       plan: { width: 20, height: 20, regions: [{ kind: 'outline', x: 1, y: 1, width: 10, height: 10 }] } } });
-  await page.goto('/cases');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [
       { ...caseRecord({ id: 'image-chain', domain: 'image-chain.example' }), attachments: [first, second] },
