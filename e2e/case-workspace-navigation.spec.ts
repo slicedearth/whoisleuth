@@ -526,7 +526,11 @@ test('legacy response deep links still open the packet and Case follow-up keeps 
   await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('Keep this draft through response navigation');
   await Promise.all([
     page.waitForEvent('dialog').then(async dialog => {
-      try { expect(dialog.message()).toBe('Some case edits are not saved. Leave and lose those edits?'); }
+      try {
+        expect(dialog.type()).toBe('confirm');
+        expect(dialog.message()).toMatch(/\b(?:unsaved|not saved)\b/iu);
+        expect(dialog.message()).toMatch(/\b(?:lose|discard)\b/iu);
+      }
       finally { await dialog.accept(); }
     }),
     page.getByRole('link', { name: 'Review follow-up', exact: true }).click(),

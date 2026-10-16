@@ -451,7 +451,14 @@ test('scans populated Lookup, Bulk, and guided-investigation states', async ({ p
   const currentAction = page.locator('.guide .current-action');
   await currentAction.getByRole('button', { name: 'Review requests' }).click();
   await expect(currentAction.getByRole('region', { name: /Review requests for/ })).toBeVisible();
+  const resources = page.getByRole('navigation', { name: 'Investigation help' }).getByRole('link', { name: /^Open resources\b/u });
+  await expect(resources).toHaveCount(1);
+  await expect(resources).toHaveAccessibleName(/ Opens in a new tab\.$/u);
+  await expect(resources).toHaveAttribute('href', '/resources#start');
+  await expect(resources).toHaveAttribute('target', '_blank');
+  await expect(resources).toHaveAttribute('rel', 'noopener noreferrer');
   await expectNoAccessibilityViolations(page, testInfo, 'console-guided-investigation-request-review-light-desktop');
+  if (captureVisualEvidenceEnabled()) await resources.screenshot({ path: testInfo.outputPath('guided-resources-link.png') });
 });
 
 test.describe('anonymous login accessibility', () => {

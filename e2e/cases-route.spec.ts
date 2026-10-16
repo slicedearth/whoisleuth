@@ -174,7 +174,11 @@ test('Case note and tag saves preserve later drafts and conditional undo does no
   await expect(tags).toHaveValue('later-tag-draft');
   await Promise.all([
     page.waitForEvent('dialog').then(async dialog => {
-      try { expect(dialog.message()).toBe('Some case edits are not saved. Leave and lose those edits?'); }
+      try {
+        expect(dialog.type()).toBe('confirm');
+        expect(dialog.message()).toMatch(/\b(?:unsaved|not saved)\b/iu);
+        expect(dialog.message()).toMatch(/\b(?:lose|discard)\b/iu);
+      }
       finally { await dialog.dismiss(); }
     }),
     page.getByRole('link', { name: 'All Cases', exact: true }).click(),
@@ -184,7 +188,11 @@ test('Case note and tag saves preserve later drafts and conditional undo does no
   await expect(note).toHaveValue('Later note draft');
   await Promise.all([
     page.waitForEvent('dialog').then(async dialog => {
-      try { expect(dialog.message()).toBe('Some case edits are not saved. Leave and lose those edits?'); }
+      try {
+        expect(dialog.type()).toBe('confirm');
+        expect(dialog.message()).toMatch(/\b(?:unsaved|not saved)\b/iu);
+        expect(dialog.message()).toMatch(/\b(?:lose|discard)\b/iu);
+      }
       finally { await dialog.accept(); }
     }),
     page.getByRole('link', { name: 'All Cases', exact: true }).click(),

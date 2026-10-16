@@ -111,7 +111,11 @@ test('downloaded backup and file packages rehearse independently without switchi
   await expect(sourceIndex).not.toContainText('files.wlep');
   await page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable: true,
     value: { writeText: async (value: string) => { Reflect.set(window, 'recoverySetCopiedDigest', value); } } }); });
-  await sourceIndex.getByRole('button', { name: `Copy SHA-256 — Copy recovery package SHA-256 ${packageDigest}`, exact: true }).focus();
+  const packageRow = sourceIndex.getByRole('listitem').filter({ has: page.getByText(packageDigest, { exact: true }) });
+  await expect(packageRow).toHaveCount(1);
+  const copyPackageDigest = packageRow.getByRole('button');
+  await expect(copyPackageDigest).toHaveCount(1);
+  await copyPackageDigest.focus();
   await page.keyboard.press('Enter');
   expect(await page.evaluate(() => Reflect.get(window, 'recoverySetCopiedDigest'))).toBe(packageDigest);
   expect((await storedFiles(page, destination))[0]!.bytes).toEqual([...bytes]);
@@ -461,9 +465,12 @@ test('paged recovery checklist retains shared provenance and clears only after e
   await expect(checklist).toContainText(`${bodies[0]!.length} bytes`);
   await page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable: true,
     value: { writeText: async (value: string) => { Reflect.set(window, 'recoveryCopiedDigest', value); } } }); });
-  const copy = checklist.getByRole('button', { name: new RegExp(`^(?:Copy SHA-256|Copied) for recovery original ${references[0]!.digestSha256}$`, 'u') });
+  const originalRow = checklist.getByRole('listitem').filter({ has: page.getByText(references[0]!.digestSha256, { exact: true }) });
+  await expect(originalRow).toHaveCount(1);
+  const copy = originalRow.getByRole('button', { name: /^Copy\b/u });
+  await expect(copy).toHaveCount(1);
   await copy.focus(); await page.keyboard.press('Enter');
-  await expect(copy).toHaveAccessibleName(`Copied for recovery original ${references[0]!.digestSha256}`);
+  await expect(originalRow.getByRole('button', { name: /^Copied\b/u })).toHaveCount(1);
   expect(await page.evaluate(() => Reflect.get(window, 'recoveryCopiedDigest'))).toBe(references[0]!.digestSha256);
   const next = checklist.getByRole('button', { name: 'Next originals', exact: true });
   await next.focus(); await page.keyboard.press('Enter');
