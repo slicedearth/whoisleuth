@@ -353,7 +353,7 @@
 <section class="demo-hero" class:started={demoState.started}>
   <p class="eyebrow">Demo</p>
   <h1><span class="hero-full-title">Explore a domain investigation.</span><span class="hero-compact-title">Domain investigation</span></h1>
-  {#if demoState.started}
+  {#if demoState.started || practiceOpen}
     <details class="demo-scope"><summary>About this demo</summary><p>{demoScope}</p></details>
   {:else}
     <p>{demoScope}</p>

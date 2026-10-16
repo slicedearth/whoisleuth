@@ -38,7 +38,7 @@
   {#if busy}<p role="status">Preparing and validating fictional drafts…</p>{/if}
   {#if error}<p role="alert">{error}</p>{/if}
   {#if copies}<h4 bind:this={heading} tabindex="-1">Fictional draft differences</h4>
-    <p>Both packets remain unauthorised drafts. No packet was downloaded, delivered or imported. A pin missing from one selection is still retained in the source case.</p>
+    <p>Both packets remain unauthorised drafts. A pin missing from one selection is still retained in the source case.</p>
     <CaseHandoffComparisonView {comparison} labels={['Baseline draft', 'Comparison draft']} />
     <details><summary>Fictional packet identities</summary>
       {#each copies as copy, index}<p>{index === 0 ? 'Baseline' : 'Comparison'} · response packet schema {copy.version}<br><code>{copy.digest}</code></p>{/each}

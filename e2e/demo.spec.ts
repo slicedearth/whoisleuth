@@ -608,7 +608,7 @@ test('real Case forms practise evidence, conclusions and inconclusive rechecks w
   await expect(pin.getByLabel('Label', { exact: true })).toHaveValue('Practice fact');
   await pin.getByRole('button', { name: 'Pin evidence', exact: true }).click();
   await expect(pin.getByLabel('Fact', { exact: true })).toHaveValue('');
-  await expect(practice.locator('.practice-status')).toContainText('nothing was written to your saved workspace');
+  await expect(practice.locator('.practice-status')).toHaveText('Practice: Pinned analyst-selected evidence for case-practice.example.');
 
   await practice.getByRole('button', { name: '2. Record a conclusion', exact: true }).click();
   const decision = practice.locator('form[data-recovery-form="decision"]');

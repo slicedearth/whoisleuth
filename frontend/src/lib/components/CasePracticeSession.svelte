@@ -67,7 +67,7 @@
     mutationBusy = true;
     try {
       record = session.edit(patch, receipt);
-      message = `${success} Practice only; nothing was written to your saved workspace.`;
+      message = `Practice: ${success}`;
       return true;
     } catch (cause) { message = cause instanceof Error ? cause.message : 'The practice change was not saved.'; return false; }
     finally {
@@ -107,15 +107,15 @@
         containment = reviewed;
       }
       reviewedScope = selectedScope;
-      message = 'Reviewed fixed fictional material locally. No saved-work access, collection, export or follow-up state change occurred.';
+      message = kind === 'source' ? 'Reviewed the supplied practice material.' : 'Prepared the practice handoff preview.';
       await tick(); if (live) (kind === 'source' ? sourceHeading : containmentHeading)?.focus();
-    } catch { if (live) message = 'The fictional review could not be prepared. Nothing was collected or saved.'; }
+    } catch { if (live) message = 'The practice review could not be prepared. Your practice edits remain available.'; }
     finally { if (live) localReviewBusy = false; }
   }
 </script>
 
 <section class="case-practice" aria-labelledby="case-practice-title">
-  <header><div><h2 id="case-practice-title" tabindex="-1">Practise a case review</h2><p>Use case forms with supplied fictional evidence and simulated response steps. Practice stays on this page and disappears on restart, reload or navigation. Nothing is collected or submitted.</p></div><button class="btn" type="button" onclick={onreset} disabled={mutationBusy}>Discard practice and restart</button></header>
+  <header><div><h2 id="case-practice-title" tabindex="-1">Practise a case review</h2><p>Use real case forms with fictional evidence and simulated responses. Practice does not access saved work, collect live evidence or submit reports. Restarting, reloading or leaving the page discards these drafts.</p></div><button class="btn" type="button" onclick={onreset} disabled={mutationBusy}>Discard practice and restart</button></header>
   <CasePracticeWalkthrough evidence={suppliedEvidence} {visible} />
   <nav aria-label="Case practice steps">{#each steps as item, index}<button class="btn" type="button" aria-current={step === item.id ? 'step' : undefined} onclick={() => void select(item.id)}>{index + 1}. {item.label}</button>{/each}</nav>
   <p class="practice-status" role="status">{message}</p>
@@ -149,7 +149,7 @@
         <pre>{CASE_PRACTICE_INTAKE_TEXT}</pre>
         <button class="btn" type="button" disabled={localReviewBusy || mutationBusy} onclick={() => void reviewSupplied('source')}>Review supplied text and context</button>
         {#if sourceReview}<section aria-label="Fictional source-linked review"><h4 bind:this={sourceHeading} tabindex="-1">Source-linked review</h4>
-          <p>{sourceReview.intake.indicators.length} literal indicators · {sourceReview.intake.indicatorCoverage.state} · no target request.</p>
+          <p>{sourceReview.intake.indicators.length} literal indicators · {sourceReview.intake.indicatorCoverage.state}.</p>
           <ul>{#each sourceReview.intake.indicators as indicator}<li>{indicator.kind}: <code>{indicator.value}</code> · {indicator.location.partId}</li>{/each}</ul>
           <p>Source bytes: <code>{sourceReview.intake.source.digestSha256}</code></p>
           <p>Declared distribution: {sourceReview.intake.distributionContext?.channel} · {sourceReview.intake.distributionContext?.vantageLabel}. This is a supplied claim, not verified capture conditions.</p>
@@ -175,7 +175,7 @@
   {#if scenario === 'credential-form'}
     <div hidden={step !== 'response'} class="practice-response">
       <h3 id="practice-response" tabindex="-1">Separate page response from advertisement distribution</h3>
-      <p>The supplied lure leads to a copied offer and credential form. The reference prose has no logo or brand name. Copyright authority is unverified; this exercise makes no rights declaration. No actual packet export or provider submission occurs.</p>
+      <p>The supplied lure leads to a copied offer and credential form. The reference prose has no logo or brand name. Copyright authority is unverified; this exercise makes no rights declaration.</p>
       <p>Open <strong>Exact incident-object coverage</strong> to inspect the page and advertisement separately as you progress. The shared response-history view distinguishes drafting, simulated delivery, a provider acknowledgement and an independent page review. Those simulated deliveries have no retained packet identity; the optional draft comparison below stays separate.</p>
       <CaseIncidentCoverage {record} />
       <details class="practice-local" bind:open={packetComparisonOpen}><summary>Compare fictional response drafts</summary>
@@ -183,7 +183,7 @@
           loadingLabel="Opening fictional packet comparison." unavailableLabel="The fictional packet comparison could not be opened." />{/if}
       </details>
       <details class="practice-local"><summary>Preview the separate internal follow-up</summary>
-        <p>Use the existing retained question and its linked fictional pin. This preview uses the normal audience projection but cannot save, download, send a task or apply a control.</p>
+        <p>Preview the retained question and its linked pin for the chosen audience. The preview does not carry out the requested action.</p>
         <label>Practice handoff audience<select bind:value={practiceAudience} disabled={localReviewBusy}><option value="internal">Internal</option><option value="trusted">Trusted recipient</option><option value="public">Public preview</option></select></label>
         <label><input type="checkbox" bind:checked={includeSupportingPin} disabled={localReviewBusy}>Include the linked supporting pin</label>
         <button class="btn" type="button" disabled={localReviewBusy || mutationBusy} onclick={() => void reviewSupplied('containment')}>Preview fictional internal handoff</button>

@@ -260,8 +260,9 @@ page discards them. Confirmed progress stays in the current tab.
 
 Choose **Explore an example investigation** on the public homepage to enter the
 demo. The opening explains its fictional evidence, no live collection or saved
-console access, and tab-only progress. After starting, the small **Demo** label
-remains; **About this demo** reopens that explanation.
+console access, and tab-only progress. After starting a task or opening practice,
+**About this demo** reopens that explanation. Practice has its own opening scope
+statement and keeps action-specific warnings beside the relevant controls.
 Choose a suspicious-domain, brand-lookalike or reported-change task first; the
 tool navigation appears after that task starts. **Reset demo** returns to the
 task choices. **Practise with real case forms** is below the main workspace and
