@@ -11,6 +11,7 @@ import { describe, test } from 'node:test';
 import { analyzeWhoisChainAuthority, parseWhoisChain } from '../lib/whois.mts';
 import { requiredValue } from './value-assertions.mts';
 import { whoisCollectionStatus } from '../lib/whois-authority.mts';
+import { MAX_WHOIS_BYTES } from '../lib/whois-transport.mts';
 
 const IANA = 'whois.iana.org';
 const REGISTRY = 'whois.verisign-grs.com';
@@ -48,6 +49,35 @@ const registrarError = { server: REGISTRAR, error: 'connect ETIMEDOUT' };
 const registrarRateLimited = { server: REGISTRAR, response: 'WHOIS LIMIT EXCEEDED - please try again later.\n' };
 
 describe('analyzeWhoisChainAuthority', () => {
+  test('requires affirmative target-bound discovery before reporting no WHOIS service', () => {
+    const record = 'domain: TEST\norganisation: Example Registry\nwhois: \nstatus: ACTIVE\nsource: IANA\n';
+    const hop = { server: IANA, response: record };
+    assert.equal(whoisCollectionStatus([hop], 'login.example.test'), 'unsupported');
+    assert.equal(whoisCollectionStatus([{ ...hop, response: record.replaceAll('\n', '\r\n') }], 'EXAMPLE.TEST.'), 'unsupported');
+    const inconclusive = [
+      '', ' \n\t', 'No referral', 'Query rate limit exceeded.', 'Service temporarily unavailable.',
+      'No match for example.test.', 'Unrecognised discovery response.',
+      record.replace('TEST', 'OTHER'), record.replace('source: IANA\n', ''),
+      record.replace('whois: \n', ''), record.replace('organisation: Example Registry', 'organisation: '),
+      record.replace('status: ACTIVE', 'status: unknown'),
+      `${record}domain: TEST\n`, `${record}source: IANA\n`, `${record}whois: \n`,
+      `${record}refer: whois.registry.example\n`, `${record}ReferralServer: malformed\n`,
+      `${record}whois = whois.registry.example\n`, record.replace('whois: \n', 'whois:\n registry.example\n'),
+      `${record}Service temporarily unavailable.\n`, `${record}\u0000`,
+      `${record}${' '.repeat(MAX_WHOIS_BYTES)}\nwhois: whois.registry.example\n`,
+      `${record}${'\r\n'.repeat(MAX_WHOIS_BYTES / 2)}whois: whois.registry.example\n`,
+    ];
+    for (const response of inconclusive) {
+      const chain = [{ ...hop, response }];
+      assert.equal(whoisCollectionStatus(chain, 'example.test'), 'partial', response.slice(0, 160));
+      assert.equal(analyzeWhoisChainAuthority(chain, 'example.test').registrationStatus, 'inconclusive');
+    }
+    assert.equal(whoisCollectionStatus([hop]), 'partial', 'Unknown target cannot establish applicable discovery.');
+    assert.equal(whoisCollectionStatus([{ ...hop, server: 'whois.other.example' }], 'example.test'), 'partial');
+    assert.equal(whoisCollectionStatus([{ server: IANA }], 'example.test'), 'partial');
+    assert.equal(whoisCollectionStatus([null, hop], 'example.test'), 'partial', 'Dropped malformed hops cannot prove a complete response.');
+  });
+
   test('recognises only an explicit not-issued policy hop and preserves historical failures', () => {
     const policy = { server: 'registry capability policy', queryProfile: 'not-issued', status: 'unsupported' };
     assert.equal(whoisCollectionStatus([policy]), 'unsupported');

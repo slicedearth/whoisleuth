@@ -14,7 +14,7 @@
     <details>
       <summary>Collector execution · {review.sources.length} source families</summary>
       <dl>{#each review.sources as source (source.id)}
-        <div><dt>{source.label}</dt><dd>{source.summary}<br />{source.outcome}</dd></div>
+        <div><dt>{source.label}</dt><dd>{source.summary}<br />{source.outcome}<br />{source.explanation}</dd></div>
       {/each}</dl>
       <p>Starting a collector does not prove a request reached a provider. Source results and their individual limitations remain separate; a completed Lookup does not make every source complete.</p>
     </details>

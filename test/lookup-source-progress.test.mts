@@ -79,7 +79,7 @@ describe('Lookup source progress settlements', () => {
       ['whois', [], 'error', false],
       ['whois', [{ server: 'whois.iana.org', error: 'Fixture failure' }], 'error', false],
       ['whois', [{ server: 'whois.iana.org', response: 'refer: whois.nic.test' }, { server: 'whois.nic.test', error: 'Fixture failure' }], 'partial', false],
-      ['whois', [{ server: 'whois.iana.org', response: 'No referral' }], 'unsupported', false],
+      ['whois', [{ server: 'whois.iana.org', response: 'No referral' }], 'partial', false],
       ['whois', [{ server: 'registry capability policy', queryProfile: 'not-issued', status: 'unsupported' }], 'unsupported', false],
       ['whois', [{ server: 'registry capability policy', queryProfile: 'not-issued', status: 'skipped' }], 'skipped', false],
       ['domain_evidence', { state: 'unknown' }, 'partial', false],

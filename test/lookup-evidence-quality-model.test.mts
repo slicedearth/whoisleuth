@@ -213,6 +213,9 @@ describe('completed Lookup recipe and source outcomes', () => {
     assert.deepEqual(review.groups.map(group => [group.id, group.diagnosticState]), [
       ['rdap', 'partial'], ['whois', 'unsupported'], ['reverse_dns', 'rate_limited'],
     ]);
+    assert.match(review.groups[0]!.explanation, /incomplete or inconclusive/u);
+    assert.match(review.groups[1]!.explanation, /registry policy or discovery/u);
+    assert.match(review.groups[2]!.explanation, /permitted retry window/u);
     assert.deepEqual(portableDiagnosticStates(response.diagnostics), lookupDiagnosticStates(response.diagnostics));
     assert.deepEqual(buildLookupCollectionOutcomeReview(original('asn'), 'fast', []).groups.map(group => group.id), ['rdap']);
     assert.deepEqual(response, before);
@@ -270,6 +273,7 @@ describe('completed Lookup recipe and source outcomes', () => {
     const record = { ...entries()[0]!, id: 'rdap', observedAt: null };
     const review = buildLookupCollectionOutcomeReview(response, 'deep', [record]);
     assert.equal(review.groups[0]?.diagnosticState, null);
+    assert.match(review.groups[0]!.explanation, /not retained.*unknown/u);
     assert.equal(review.groups[0]?.records[0]?.observedAt, null);
     assert.deepEqual(review.groups[1]?.records, []);
     const excess = Array.from({ length: MAX_EVIDENCE_COVERAGE_ENTRIES + 1 }, (_, index) => ({

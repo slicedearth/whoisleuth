@@ -12,6 +12,38 @@ import { deferred } from './deferred.mts';
 import { collectObservedNetworkContext } from '../lib/observed-network-context.mts';
 import { prepareLookupHttpOperation } from '../lib/lookup-http-operation.mts';
 import { createLookupHttpResponse, parseLookupHttpResponse } from '../lib/lookup-response-contract.mts';
+import { lookupCollectionReceiptReview, lookupSourceStateExplanation } from '../packages/evidence/lookup-collection-review.mts';
+
+test('source explanations preserve recorded selection, policy, uncertainty and retry boundaries', () => {
+  const value = receipt();
+  const before = structuredClone(value);
+  const review = lookupCollectionReceiptReview(value)!;
+  assert.equal(review.sources.length, value.sources.length);
+  assert.match(review.sources[0]!.explanation, /incomplete or inconclusive.*remain unknown.*may help/u);
+  assert.deepEqual(value, before);
+  const row = value.sources[0]!;
+  const pending = { ...row, attempt: 'not_started' as const, settlement: 'unknown' as const, complete: null, truncated: null };
+  assert.match(lookupSourceStateExplanation('unknown', row.source, { ...pending, intent: 'not_requested' }), /Not requested/u);
+  assert.match(lookupSourceStateExplanation('unknown', row.source, { ...pending, admission: 'disabled' }), /disabled by policy.*does not change/u);
+  assert.match(lookupSourceStateExplanation('unknown', row.source, { ...pending, admission: 'prerequisite_unavailable' }), /earlier evidence.*did not start/u);
+  assert.match(lookupSourceStateExplanation('unknown', row.source, { ...pending, admission: 'not_applicable' }), /did not apply/u);
+  assert.match(lookupSourceStateExplanation('unknown', row.source, { ...pending, admission: 'unsupported' }), /not supported/u);
+  assert.match(lookupSourceStateExplanation('unknown', 'whois', { ...pending, admission: 'disabled' }), /unknown/u, 'An unrelated receipt cannot supply the reason.');
+  assert.match(lookupSourceStateExplanation('unsupported', 'whois'), /registry policy or discovery/u);
+  assert.doesNotMatch(lookupSourceStateExplanation('unsupported', 'security_txt'), /registry/u);
+  assert.match(lookupSourceStateExplanation('skipped', 'whois'), /mode or access policy/u);
+  assert.doesNotMatch(lookupSourceStateExplanation('skipped', 'whois'), /failed|unregistered|retry may help/u);
+  assert.match(lookupSourceStateExplanation('error'), /not an absence finding/u);
+  assert.match(lookupSourceStateExplanation('rate_limited'), /permitted retry window.*no reset time/u);
+  assert.match(lookupSourceStateExplanation('not_found'), /source.*authority and search scope/u);
+  assert.match(lookupSourceStateExplanation('complete'), /source’s scope/u);
+  assert.match(lookupSourceStateExplanation('stale'), /out of date.*deliberate refresh/u);
+  for (const state of [null, 'private-untrusted-state']) {
+    const message = lookupSourceStateExplanation(state);
+    assert.match(message, /not retained.*unknown/u);
+    assert.doesNotMatch(message, /private-untrusted-state/u);
+  }
+});
 
 function receipt(): LookupCollectionReceipt {
   return {

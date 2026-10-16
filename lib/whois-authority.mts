@@ -5,6 +5,7 @@
 import type { WhoisHop } from './whois-chain.mts';
 import type { WhoisAuthority } from './whois-contracts.mts';
 import { normalizeWhoisChain } from './whois-normalization.mts';
+import { MAX_WHOIS_BYTES } from './whois-transport.mts';
 import { domainToASCII } from 'node:url';
 import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
 import {
@@ -155,6 +156,45 @@ function ianaRegistryReferral(hop: WhoisHop | undefined): string | null {
   return null;
 }
 
+/** A complete, target-bound delegation record can establish missing service;
+ * merely reaching the end of an unrecognised response cannot. */
+function ianaDiscoveryHasNoWhoisService(chain: unknown, hop: WhoisHop, requestedDomain?: string): boolean {
+  const expectedRoot = requestedDomain === undefined ? null : canonicalObjectName(requestedDomain)?.split('.').at(-1);
+  if (!expectedRoot || normalizedWhoisServer(hop.server) !== 'whois.iana.org') return false;
+  if (!Array.isArray(chain) || chain.length !== 1) return false;
+  const original = chain[0]?.response;
+  // Normalisation bounds imported text. Do not interpret a clipped prefix as
+  // an entire discovery record with no referral in its omitted remainder.
+  if (typeof original !== 'string' || original.length > MAX_WHOIS_BYTES
+    || Buffer.byteLength(original, 'utf8') > MAX_WHOIS_BYTES) return false;
+  const text = hop.response ?? '';
+  if (/[\u0000-\u0008\u000b-\u001f\u007f]/u.test(text)
+    || classifyHopEvidence(hop, 0) !== 'inconclusive') return false;
+  const fields = new Map<string, string>();
+  const emptyServiceFields = new Set<string>();
+  let previousServiceField = false;
+  for (const line of text.split('\n')) {
+    if (previousServiceField && /^[ \t]+\S/u.test(line)) return false;
+    previousServiceField = false;
+    if (/^[ \t]*(?:refer|ReferralServer|whois)\b/iu.test(line)) {
+      const service = line.match(/^[ \t]*(refer|ReferralServer|whois):[ \t]*$/iu)?.[1]?.toLowerCase();
+      if (!service || emptyServiceFields.has(service)) return false;
+      emptyServiceFields.add(service);
+      previousServiceField = true;
+    }
+    const field = line.match(/^[ \t]*(domain|organisation|status|source):[ \t]*(.*)$/iu);
+    if (!field) continue;
+    const key = field[1]!.toLowerCase();
+    if (fields.has(key)) return false;
+    fields.set(key, field[2]!.trim());
+  }
+  return emptyServiceFields.size > 0
+    && fields.get('domain')?.toLowerCase() === expectedRoot
+    && Boolean(fields.get('organisation'))
+    && fields.get('status')?.toUpperCase() === 'ACTIVE'
+    && fields.get('source')?.toUpperCase() === 'IANA';
+}
+
 export function analyzeWhoisChainAuthority(chain: unknown, requestedDomain?: string): WhoisAuthority {
   const source = normalizeWhoisChain(chain);
   const evidence = source.map((hop, index) => ({
@@ -212,6 +252,6 @@ export function whoisCollectionStatus(chain: unknown, requestedDomain?: string):
       && (first.status === 'unsupported' || first.status === 'skipped')) return first.status;
     return 'error';
   }
-  if (source.length === 1) return 'unsupported';
+  if (source.length === 1) return ianaDiscoveryHasNoWhoisService(chain, first, requestedDomain) ? 'unsupported' : 'partial';
   return analyzeWhoisChainAuthority(source, requestedDomain).chainStatus;
 }

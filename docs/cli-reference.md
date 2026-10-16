@@ -161,10 +161,17 @@ a completed negative or inconclusive WHOIS reply does not establish registration
 or absence of locks. Earlier exports retain their exact original interpretation
 for historical verification and are not silently relabelled.
 
+New WHOIS collection distinguishes confirmed no-service discovery from an
+incomplete discovery response. Empty, refused or unrecognised bootstrap
+responses remain partial; they do not establish that WHOIS is unsupported.
+`--strict-exit` treats that incomplete attempt as a source failure. Explicit
+no-request access-policy restrictions remain distinct from transport failures.
+
 Saved Lookup version 3 can retain a bounded collection receipt: original
 optional selections, admitted source families, collector starts, outcomes and
 explicitly known completeness. `lookup --verbose` and `lookup --browse`
-show this account. Earlier files have no inferred receipt. The receipt contains
+show this account with source-specific explanations and qualified retry guidance.
+Earlier files have no inferred receipt. The receipt contains
 no target values, URLs, contacts or raw errors and does not prove network
 delivery. It stays in full private Lookup JSON; the minimised `export` report
 does not include it. `--plan` remains offline and produces no completed receipt.

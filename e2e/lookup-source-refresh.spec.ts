@@ -45,6 +45,7 @@ test('completed source-plan review stays bound to its original target, mode and 
   await expect(receipt.locator('dt')).toHaveCount(10);
   await expect(receipt).toContainText('Collector started');
   await expect(receipt).toContainText('Collector not started');
+  await expect(receipt).toContainText('Not requested in this Lookup');
   await expect(review).not.toContainText('original selection unknown');
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
@@ -104,6 +105,41 @@ test('completed source-plan review stays bound to its original target, mode and 
       }
     }
   }
+});
+
+test('inconclusive WHOIS discovery is explained as incomplete evidence rather than absent service', async ({ page }, testInfo) => {
+  let requests = 0;
+  await page.route('**/api/lookup?*', async route => {
+    requests++;
+    const fixture = sectionedLookupFixture(DOMAIN);
+    Object.assign(fixture, {
+      whois: { chain: [{ server: 'whois.iana.org', response: 'Service temporarily unavailable.' }],
+        parsed: { registrationStatus: 'inconclusive', chainStatus: 'partial', notFound: false, nameservers: [], contactsByRole: {} } },
+    });
+    Object.assign(fixture.diagnostics.whois, { status: 'partial' });
+    await route.fulfill({ json: fixture });
+  });
+  await page.goto('/lookup');
+  await page.locator('#query').fill(DOMAIN);
+  await page.getByRole('radio', { name: /Deep/u }).check();
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await page.getByRole('button', { name: 'Expand details: Source quality evidence', exact: true }).click();
+  await page.locator('#evidence-quality .collection-outcomes > summary').click();
+  const source = page.locator('[data-planned-source="whois"]');
+  await expect(source).toContainText('Completed diagnostic: partial');
+  await expect(source).toContainText('incomplete or inconclusive');
+  await expect(source).toContainText('a later retry may help');
+  await expect(source).not.toContainText('No applicable service');
+  await expect(source).not.toContainText('Not requested');
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: 844 });
+    await useTheme(page, theme);
+    await source.scrollIntoViewIfNeeded();
+    await expect(source).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await source.screenshot({ path: testInfo.outputPath(`whois-inconclusive-${width}-${theme}.png`) });
+  }
+  expect(requests).toBe(1);
 });
 
 test('refreshed facts survive section navigation and save through the existing Case checkpoint without replacing its observation', async ({ page }, testInfo) => {
