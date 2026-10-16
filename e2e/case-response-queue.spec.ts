@@ -68,7 +68,9 @@ test('the response queue links receipts and questions without inferring removal 
   await expect(followUps).toContainText('Due now');
   await expect(followUps).toContainText('route stale');
   const receipt = page.getByRole('form', { name: 'Record response event', exact: true });
-  await queue.getByRole('button', { name: 'Review action: Reviewed recipient active', exact: true }).click();
+  const actionReview = followUps.getByRole('listitem').filter({ has: page.getByText('Reviewed recipient active', { exact: true }) }).getByRole('button', { name: /^Review action/u });
+  await expect(actionReview).toHaveAccessibleName('Review action and receipt — Reviewed recipient active');
+  await actionReview.click();
   await expect(receipt.getByRole('combobox', { name: 'Provider outcome', exact: true })).toBeFocused();
   await receipt.getByLabel('Reference', { exact: true }).fill('UNSUBMITTED-RECEIPT');
   await receipt.getByLabel('Outcome detail', { exact: true }).fill('Unsubmitted provider detail');
@@ -76,9 +78,11 @@ test('the response queue links receipts and questions without inferring removal 
   await openCaseSection(page, 'Response');
   await workspace.getByRole('button', { name: 'Advanced', exact: true }).click();
   await workspace.getByRole('button', { name: 'Quick', exact: true }).click();
-  await queue.getByRole('button', { name: 'Review action: Reviewed recipient active', exact: true }).click();
+  await actionReview.click();
   await expect(receipt.getByLabel('Reference', { exact: true })).toHaveValue('UNSUBMITTED-RECEIPT');
-  const questionButton = queue.getByRole('button', { name: 'Review question: Is the reported page still observed?', exact: true });
+  const questionButton = queue.getByRole('region', { name: 'Open recheck questions', exact: true }).getByRole('article')
+    .filter({ has: page.getByText('Is the reported page still observed?', { exact: true }) }).getByRole('button', { name: /^Review question/u });
+  await expect(questionButton).toHaveAccessibleName('Review question and answers · 0 — Is the reported page still observed?');
   await questionButton.focus();
   await page.keyboard.press('Enter');
   const recheck = page.getByRole('form', { name: 'Record a recheck', exact: true });

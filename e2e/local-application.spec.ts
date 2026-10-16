@@ -265,9 +265,11 @@ test('temporary restart references stay private, nonexecuting and clear with the
   await expect(declared.locator('code')).not.toBeVisible();
   await declared.getByText('Reveal supplied path', { exact: true }).click();
   await expect(declared.locator('code')).toHaveText('./operator-selected review');
-  expect(await declared.getByRole('button').getAttribute('aria-label')).not.toContain('operator-selected');
+  const removeReference = declared.getByRole('button', { name: /^Remove from shortlist/u });
+  await expect(removeReference).toHaveAccessibleName('Remove from shortlist — Separate review');
+  await expect(removeReference).not.toHaveAccessibleName(/operator-selected/u);
   await page.emulateMedia({ media: 'print' }); await expect(shortlist).not.toBeVisible(); await page.emulateMedia({ media: null });
-  await declared.getByRole('button', { name: 'Remove reference: Separate review', exact: true }).click();
+  await removeReference.click();
   await expect(shortlist.getByRole('heading', { name: 'Restart references in this page', exact: true })).toBeFocused();
   await expect(shortlist.locator('ol > li')).toHaveCount(1);
   await shortlist.getByRole('button', { name: 'Clear shortlist', exact: true }).click();

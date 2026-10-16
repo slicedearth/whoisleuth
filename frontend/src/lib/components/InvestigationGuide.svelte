@@ -836,7 +836,7 @@ import { isExpectedBrowserLocalDataFailure } from '#lib/browser-local-data-conte
 {/if}
 
 {#if guide && recipe && actionStage}
-  <button class="guide-return" class:available={!actionVisible} type="button" aria-label={`Return to guided investigation: ${actionStage.label}`} tabindex={actionVisible ? -1 : 0} onclick={revealAction}>
+  <button class="guide-return" class:available={!actionVisible} type="button" tabindex={actionVisible ? -1 : 0} onclick={revealAction}>
     <span>Guided investigation</span>
     <strong>{actionStage.label}</strong>
     <small>Review step ↑</small>

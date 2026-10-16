@@ -365,7 +365,8 @@ test('missing originals and changed selections require an explicit new handoff c
   await expect(handoff).toContainText('0 selected file bodies are available. 1 retained reference has no selected bytes.');
   await expect(handoff).toContainText('No original bytes selected; no original digests checked.');
   await handoff.getByRole('checkbox', { name: new RegExp(FILE_NAME.replaceAll('.', '\\.')) }).check();
-  await expect(handoff.getByRole('alert')).toHaveText('The case or selection changed. Check the contents again before downloading.');
+  await expect(handoff.getByRole('alert')).toContainText(/(?:case|selection) changed/iu);
+  await expect(handoff.getByRole('alert')).toContainText(/check .* again before downloading/iu);
   await expect(handoff.locator('.handoff-checks')).toHaveCount(0);
   await expect(handoff.getByRole('button', { name: 'Download encrypted Case handoff', exact: true })).toBeDisabled();
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);

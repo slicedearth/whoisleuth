@@ -94,7 +94,7 @@ test('temporary Brand references preserve original attribution and clear across 
   await panel.getByRole('combobox', { name: 'Context for reference 1: reference.png', exact: true }).selectOption('Campaign');
   await expect(panel).toContainText('Observed: Unknown');
   await expect(panel).toContainText('Declared source: Reviewed campaign reference');
-  const preview = panel.getByRole('button', { name: 'Preview reference 1: reference.png', exact: true });
+  const preview = panel.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'reference.png', exact: true }) }).getByRole('button', { name: /^Preview /u });
   await preview.focus(); await preview.press('Enter');
   const opened = panel.getByRole('region', { name: 'Selected Brand original', exact: true });
   await expect(opened.getByRole('heading', { name: 'reference.png', exact: true })).toBeFocused();
@@ -107,7 +107,7 @@ test('temporary Brand references preserve original attribution and clear across 
     if (captureVisualEvidenceEnabled()) await panel.screenshot({ path: testInfo.outputPath(`brand-references-${width}-${theme}.png`) });
   }
   await panel.getByRole('button', { name: 'Close preview', exact: true }).click(); await expect(preview).toBeFocused();
-  await selectFile('missing.png'); await panel.getByRole('button', { name: 'Preview reference 2: missing.png', exact: true }).click();
+  await selectFile('missing.png'); await panel.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'missing.png', exact: true }) }).getByRole('button', { name: /^Preview /u }).click();
   await expect(panel.getByRole('alert')).toContainText('original could not be read and verified'); await expect(opened).toHaveCount(0);
   const release = await holdBrowserLocalTransaction(page);
   try {
@@ -724,6 +724,13 @@ test('official channels and rights references remain editable and browser-local'
   await page.getByText('Rights and official channels', { exact: true }).click();
   await expect(page.getByLabel('Official channel 1 exact public URL')).toHaveValue('https://social.example/example/');
   await expect(page.getByLabel('Rights reference 1 identifier')).toHaveValue('TM-123');
+  const channel = page.getByRole('article', { name: 'Official channel 1', exact: true });
+  const rights = page.getByRole('article', { name: 'Rights reference 1', exact: true });
+  await channel.getByRole('button', { name: /^Remove channel/u }).click();
+  await rights.getByRole('button', { name: /^Remove reference/u }).click();
+  await expect(channel).toHaveCount(0);
+  await expect(rights).toHaveCount(0);
+  expect((await readBrowserLocalCollection(page, 'brand_profiles')).records).toEqual(snapshot.records);
 });
 
 test('the active Brand Profile has a separate maintainable allowlist', async ({ page }) => {

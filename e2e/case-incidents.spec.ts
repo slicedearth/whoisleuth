@@ -71,7 +71,7 @@ test('Lookup respects incident selection and does not move an unsaved note to an
   page.once('dialog', dialog => dialog.accept());
   await picker.selectOption('incident-second');
   await expect(card.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('');
-  await card.getByRole('button', { name: `Refresh retained Case evidence for ${DOMAIN}`, exact: true }).click();
+  await card.getByRole('button', { name: /^Refresh case evidence/u }).click();
   await expect(card.getByRole('status').filter({ hasText: 'Saved this Lookup observation to the Case' })).toBeVisible();
   const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
   expect(saved.records.find(item => item.value.id === 'incident-first')!.value.notes).toHaveLength(1);

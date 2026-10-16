@@ -134,8 +134,8 @@
             <div class="card-controls">
               <button id={`${instance}-earlier-${item.card.id}`} class="btn" type="button" aria-label={`Move temporary card ${index + 1} earlier`} disabled={index === 0} onclick={() => move(item.card.id, -1)}>Earlier</button>
               <button id={`${instance}-later-${item.card.id}`} class="btn" type="button" aria-label={`Move temporary card ${index + 1} later`} disabled={index === board.cards.length - 1} onclick={() => move(item.card.id, 1)}>Later</button>
-              {#if item.card.kind !== 'reference'}<button class="btn" type="button" aria-label={`Edit temporary card ${index + 1}`} onclick={() => edit(item.card.id)}>Edit text</button>{/if}
-              <button id={`${instance}-remove-${item.card.id}`} class="btn" type="button" aria-label={`Remove temporary card ${index + 1}`} onclick={() => void remove(item.card.id, index)}>Remove card</button>
+              {#if item.card.kind !== 'reference'}<button class="btn" type="button" onclick={() => edit(item.card.id)}>Edit text<span class="sr-only"> for card {index + 1}</span></button>{/if}
+              <button id={`${instance}-remove-${item.card.id}`} class="btn" type="button" onclick={() => void remove(item.card.id, index)}>Remove card<span class="sr-only"> {index + 1}</span></button>
             </div>
           </li>
         {/each}
@@ -152,7 +152,7 @@
         </form>
       {/if}
       <ul class="board-links" aria-label="Temporary analyst-declared relationships">
-        {#each board.links as link (link.id)}<li><strong>Card {number(link.from)} → Card {number(link.to)} · {label(link.kind)}</strong><p class="authored-text">{link.basis}</p><button class="btn" type="button" aria-label={`Remove authored relationship ${board.links.indexOf(link) + 1}`} onclick={() => void apply({ kind: 'unlink', id: link.id })}>Remove relationship</button></li>{/each}
+        {#each board.links as link (link.id)}<li><strong>Card {number(link.from)} → Card {number(link.to)} · {label(link.kind)}</strong><p class="authored-text">{link.basis}</p><button class="btn" type="button" onclick={() => void apply({ kind: 'unlink', id: link.id })}>Remove relationship<span class="sr-only"> {board.links.indexOf(link) + 1}</span></button></li>{/each}
       </ul>
       <button class="btn" type="button" disabled={!dirty} onclick={() => void reset()}>Clear temporary board</button>
     </section>

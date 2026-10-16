@@ -27,7 +27,7 @@ test('retained Case inspection leaves the saved record and queue filters unchang
   const search = page.getByRole('textbox', { name: 'Search', exact: true });
   await search.fill('peek');
   const workbench = page.getByRole('region', { name: 'Saved Case review', exact: true });
-  const inspect = workbench.getByRole('button', { name: /^Inspect saved Case /u });
+  const inspect = workbench.getByRole('button', { name: /^Inspect retained evidence/u });
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const width of [320, 390, 1280, 1920]) {

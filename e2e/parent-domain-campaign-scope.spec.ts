@@ -221,6 +221,10 @@ test('reviews, filters, selects and exports exact parent scope without collectio
   });
   await accountSelection.check();
   await expect(scope.getByRole('status')).toContainText('1 of 3 exact hostnames selected');
+  await scope.getByRole('button', { name: /^Clear selection/u }).click();
+  await expect(accountSelection).not.toBeChecked();
+  await expect(scope.getByRole('button', { name: /^Clear selection/u })).toBeDisabled();
+  await accountSelection.check();
   const downloadPromise = page.waitForEvent('download');
   await scope.getByRole('button', { name: 'Export hostname review' }).click();
   const download = await downloadPromise;
@@ -248,9 +252,9 @@ test('reviews, filters, selects and exports exact parent scope without collectio
   expect(await page.evaluate(() => (window as typeof window & { __parentScopeLocalStorageWrites?: number }).__parentScopeLocalStorageWrites)).toBe(0);
   page.off('request', recordDataRequest);
 
-  const pivot = scope.getByRole('button', {
-    name: `Open ${formattedCaseNumber('parent-scope-case')} for example.test, retained hostname account.example.test`,
-  });
+  const pivot = scope.getByRole('row').filter({ has: page.getByText('account.example.test', { exact: true }) })
+    .getByRole('button', { name: formattedCaseNumber('parent-scope-case') });
+  await expect(pivot).toHaveAccessibleName(`example.test · ${formattedCaseNumber('parent-scope-case')} — retained hostname account.example.test`);
   await pivot.focus();
   await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Tab');

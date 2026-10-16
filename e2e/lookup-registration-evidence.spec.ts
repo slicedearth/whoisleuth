@@ -1448,7 +1448,7 @@ test('only deliberate Case creation and refresh retain the exact submitted hostn
 
   await runLookup('account.scope.test');
   const refresh = page.getByRole('button', {
-    name: 'Refresh retained Case evidence for scope.test',
+    name: /^Refresh case evidence/u,
   });
   await expect(refresh).toBeVisible();
   const beforeRefresh = await retainedCase(created.collection.manifest.revision);

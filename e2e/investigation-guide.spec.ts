@@ -81,7 +81,7 @@ async function markReviewed(page: import('@playwright/test').Page, step: string)
 async function useGuideReturn(page: import('@playwright/test').Page, step: string) {
   await openWorkPlan(page);
   const action = currentAction(page);
-  const control = page.getByRole('button', { name: `Return to guided investigation: ${step}` });
+  const control = page.getByRole('button', { name: /^Guided investigation /u }).filter({ has: page.getByText(step, { exact: true }) });
   const hasStableUsefulExposure = () => action.evaluate(async (element) => {
     const exposed = () => {
       const rect = element.getBoundingClientRect();
@@ -669,9 +669,10 @@ test('return control follows every visibility change in a delivered batch', { ta
   });
   await startRecipe(page);
   const action = currentAction(page);
-  const control = page.getByRole('button', { name: 'Return to guided investigation: Collect domain evidence' });
+  const control = page.getByRole('button', { name: /^Guided investigation /u }).filter({ has: page.getByText('Collect domain evidence', { exact: true }) });
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await expect(control).toBeVisible();
+  await expect(control).toHaveAccessibleName(/^Guided investigation Collect domain evidence Review step/u);
   await page.evaluate(() => (window as typeof window & { __guideIntersectionBatch: BatchControl }).__guideIntersectionBatch.hold());
   await action.evaluate(element => element.scrollIntoView({ block: 'center' }));
   const ratios = () => page.evaluate(() => (window as typeof window & { __guideIntersectionBatch: BatchControl }).__guideIntersectionBatch.ratios());
@@ -692,7 +693,7 @@ test('return control recovers when the first action-panel scroll is displaced', 
   await startRecipe(page);
   const action = currentAction(page);
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  const control = page.getByRole('button', { name: 'Return to guided investigation: Collect domain evidence' });
+  const control = page.getByRole('button', { name: /^Guided investigation /u }).filter({ has: page.getByText('Collect domain evidence', { exact: true }) });
   await expect(control).toBeVisible();
 
   await action.evaluate((element) => {

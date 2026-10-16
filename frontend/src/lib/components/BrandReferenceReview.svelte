@@ -84,7 +84,7 @@
             <p>Case domain: {file.caseDomain}<br />Declared source: {file.attachment.source ?? 'Not declared'}<br />Observed: {file.attachment.observedAt ?? 'Unknown'}<br />Retained: {file.attachment.retainedAt}</p>
             <details><summary>Recorded file identity</summary><code>{file.reference.attachmentId}</code><br /><code>{file.attachment.digestSha256}</code><p>{file.attachment.byteLength} bytes. {file.attachment.derivation ? 'Derived image; the original parent pixels are not selected by this reference.' : 'No image derivation declaration is retained.'}</p>{#if file.attachment.derivation}<code>{file.attachment.derivation.source.digestSha256}</code>{/if}</details>
             <label>Context for reference {index + 1}: {file.attachment.fileName}<select bind:value={item.context}>{#each BRAND_REFERENCE_CONTEXTS as context}<option>{context}</option>{/each}</select></label>
-            <div class="actions"><button class="btn" aria-label={`Preview reference ${index + 1}: ${file.attachment.fileName}`} disabled={busy} onclick={event => void preview(file, event.currentTarget)}>Preview {file.attachment.fileName}</button><button class="btn" aria-label={`Remove reference ${index + 1}: ${file.attachment.fileName}`} onclick={() => remove(file.key)}>Remove {file.attachment.fileName}</button></div>
+            <div class="actions"><button class="btn" disabled={busy} onclick={event => void preview(file, event.currentTarget)}>Preview {file.attachment.fileName}<span class="sr-only"> — reference {index + 1}</span></button><button class="btn" onclick={() => remove(file.key)}>Remove {file.attachment.fileName}<span class="sr-only"> — reference {index + 1}</span></button></div>
           </li>{/if}
         {/each}
       </ol>

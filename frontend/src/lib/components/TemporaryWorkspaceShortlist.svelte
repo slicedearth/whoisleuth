@@ -54,7 +54,7 @@
         · Lock observation: Unavailable
       </p>
       <details><summary>Reveal supplied path</summary><code>{row.path}</code></details>
-      <button class="btn" aria-label={`Remove reference: ${row.label}`} onclick={() => void remove(row.id)}>Remove from shortlist</button>
+      <button class="btn" onclick={() => void remove(row.id)}>Remove from shortlist<span class="sr-only"> — {row.label}</span></button>
     </li>{/each}</ol>
     <button class="btn" disabled={!rows.length} onclick={() => void clearRows()}>Clear shortlist</button>
     <p>Remove and clear erase references, not files. Closing this panel, leaving the page or reloading clears all entries and unfinished inputs. Use the fixed reopen examples above and choose the folder yourself in the terminal.</p>

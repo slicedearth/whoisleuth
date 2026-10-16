@@ -25,7 +25,7 @@ test('Case tag preview keeps cross-page targets separate from inspection and com
   page.on('request', request => { const url = new URL(request.url()); if (url.pathname.startsWith('/api/') && url.pathname !== '/api/session') collectionRequests.push(url.pathname); });
   await select(page, 0).check();
   await page.getByRole('navigation', { name: 'Case pages', exact: true }).getByRole('button', { name: 'Next', exact: true }).click();
-  await page.getByRole('button', { name: `Inspect saved Case ${caseNumber(records[25]!.id)}`, exact: true }).click();
+  await page.getByRole('article').filter({ has: select(page, 25) }).getByRole('button', { name: /^Inspect retained evidence/u }).click();
   await expect(select(page, 25)).not.toBeChecked();
   await page.getByRole('button', { name: 'Back to queue', exact: true }).click();
   await select(page, 25).check();
