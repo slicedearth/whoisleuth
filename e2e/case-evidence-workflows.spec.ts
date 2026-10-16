@@ -497,6 +497,7 @@ test.describe('case report export', () => {
     const trigger = page.locator('.export-controls').getByRole('button', { name: 'Preview report', exact: true });
     await trigger.click();
     const preview = page.getByRole('dialog', { name: 'Case report preview', exact: true });
+    await expect(preview.locator('.case-report-reading > header')).toContainText('Report prepared:');
     await preview.getByText('Exact JSON download', { exact: true }).click();
     const exactJson = preview.getByRole('region', { name: 'Exact report JSON', exact: true });
     const beforeBytes = await exactJson.locator('pre').textContent();

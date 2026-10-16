@@ -303,6 +303,8 @@ test('deleting a Case also removes its unsubmitted recovery copies', async ({ pa
 });
 
 test('action metadata and transition drafts keep independent targets through selection and recovery', async ({ page }) => {
+  const recordedAt = '2026-10-16T06:00:00.000Z';
+  await page.clock.setFixedTime(recordedAt);
   await openCasesView(page); await createCase(page, 'action-recovery.example');
   async function actionStage() {
     const workspace = await openCaseResponseWorkspace(page, '', 'advanced', 'Response');
@@ -339,6 +341,72 @@ test('action metadata and transition drafts keep independent targets through sel
   await transition.locator('summary').click(); await transition.getByRole('button', { name: 'Restore draft', exact: true }).click();
   await expect(stage.getByRole('combobox', { name: 'Action for transition', exact: true })).toHaveValue(first);
   await expect(stage.getByLabel('Bounded reference', { exact: true })).toHaveValue('first-desk-event-reference');
+  await expect(stage.getByLabel(/^Event time/u)).toHaveValue('');
+  await stage.getByRole('button', { name: 'Append transition', exact: true }).click();
+  await expect.poll(async () => {
+    const cases = await readBrowserLocalCollection(page, 'cases');
+    return cases.records[0]!.value.actions.find(action => action.id === first)?.history.at(-1)?.reference;
+  }).toBe('first-desk-event-reference');
+  const appended = (await readBrowserLocalCollection(page, 'cases')).records[0]!.value.actions.find(action => action.id === first)!.history.at(-1)!;
+  expect(appended.occurredAt).toBe(recordedAt);
+  expect(appended.nextState).toBe('ready_for_review');
+  await expect(stage.getByLabel(/Contact limitations/)).toHaveValue('Unsubmitted metadata for the first desk');
+});
+
+test('recovered malformed event times remain drafts instead of becoming current-time transitions', async ({ page }) => {
+  const now = '2026-10-16T06:00:00.000Z';
+  await page.clock.setFixedTime(now);
+  await openCasesView(page);
+  const action = currentActionFixture({
+    id: 'recovered-time-action', type: 'internal_review', recipient: 'Fixture reviewer', contactSource: 'Analyst supplied',
+    routeObservedAt: null, contactLimitations: [], dueAt: null, targetState: 'ready_for_review', reference: null,
+    followUpAt: null, outcome: null, createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z',
+  });
+  const record = caseRecord({ id: 'recovered-time-case', domain: 'recovered-time.example', actions: [action] });
+  const fields = {
+    transitionActionId: action.id, transitionNextState: 'reviewed', transitionOccurredAt: '2026-02-30T09:30',
+    transitionProvenance: 'Recovered analyst event', transitionReference: 'retain-this-reference',
+  };
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: 13, cases: [record] },
+    'whoisleuth-case-drafts-v1': { schema: 'whoisleuth.case-drafts', version: 1, records: [{
+      id: 'recovered-event', revision: 'original-draft', caseId: record.id, form: 'action-transition', formVersion: 1, updatedAt: now, fields,
+    }] },
+  }, { destination: `/cases?case=${record.id}&section=response`, clearStorage: true });
+  const workspace = await openCaseResponseWorkspace(page, '', 'advanced', 'Response');
+  const stage = workspace.getByRole('region', { name: 'Case response actions', exact: true });
+  const disclosure = stage.locator(':scope > details');
+  if (await disclosure.getAttribute('open') === null) await disclosure.locator(':scope > summary').click();
+  const recovery = stage.locator('.draft-recovery[data-recovery-form="action-transition"]');
+  await recovery.locator('summary').click();
+  await recovery.getByRole('button', { name: 'Restore draft', exact: true }).click();
+  const form = stage.locator('form[data-recovery-form="action-transition"]');
+  const time = form.getByLabel(/^Event time/u);
+  // A native datetime field sanitises the recovered malformed string to an empty
+  // display. The model still owns that nonempty draft and must not treat it as now.
+  await expect(time).toHaveValue('');
+  expect(await form.evaluate(element => (element as HTMLFormElement).checkValidity())).toBe(true);
+  const before = await readBrowserLocalCollection(page, 'cases');
+  const draftBefore = await readBrowserLocalCollection(page, 'case_drafts');
+  await form.getByRole('button', { name: 'Append transition', exact: true }).click();
+  await expect(workspace.getByRole('alert')).toContainText('Enter a valid UTC event time');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  expect(await readBrowserLocalCollection(page, 'case_drafts')).toEqual(draftBefore);
+  await expect(form.getByLabel('Bounded reference', { exact: true })).toHaveValue('retain-this-reference');
+
+  await time.fill('10000-01-01T00:00');
+  expect(await time.evaluate(element => (element as HTMLInputElement).validity.rangeOverflow)).toBe(true);
+  await form.getByRole('button', { name: 'Append transition', exact: true }).click();
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+
+  await time.fill('2026-10-15T09:30:12.345');
+  await form.getByRole('button', { name: 'Append transition', exact: true }).click();
+  await expect.poll(async () => (await readBrowserLocalCollection(page, 'cases')).records[0]!.value.actions[0]!.history.length).toBe(action.history.length + 1);
+  const event = (await readBrowserLocalCollection(page, 'cases')).records[0]!.value.actions[0]!.history.at(-1)!;
+  expect(event.occurredAt).toBe('2026-10-15T09:30:12.345Z');
+  expect(event.reference).toBe('retain-this-reference');
+  expect(event.nextState).toBe('reviewed');
+  expect((await readBrowserLocalCollection(page, 'case_drafts')).records).toHaveLength(0);
 });
 
 test('recovery saves retain a full-capacity Case workspace without rewriting its evidence', async ({ page }, testInfo) => {

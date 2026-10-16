@@ -208,6 +208,11 @@
   async function addActionTransition() {
     if (!transitionAction) return;
     selectionError = '';
+    const occurredAt = isoFromUtcInput(transitionDraft.value.transitionOccurredAt);
+    if (transitionDraft.value.transitionOccurredAt && !occurredAt) {
+      selectionError = 'Enter a valid UTC event time, or explicitly clear it to use the current time.';
+      return;
+    }
     let responseObjects;
     try { responseObjects = transitionDraft.value.responseObjects.map(value => selectedCaseResponseObject(record, value)!); }
     catch (cause) { selectionError = cause instanceof Error ? cause.message : 'Review the selected objects.'; return; }
@@ -217,7 +222,7 @@
         id: transitionAction.id,
         transition: {
           nextState: transitionDraft.value.transitionNextState,
-          occurredAt: isoFromUtcInput(transitionDraft.value.transitionOccurredAt) || new Date().toISOString(),
+          occurredAt: occurredAt ?? new Date().toISOString(),
           sourceClass: transitionDraft.value.transitionSourceClass,
           provenance: transitionDraft.value.transitionProvenance,
           reference: transitionDraft.value.transitionReference || null,

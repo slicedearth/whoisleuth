@@ -9,7 +9,7 @@
 </script>
 
 <article class="case-report-reading" aria-label="Case report contents">
-  <header><h3>{report.case.title || report.case.domain}</h3><p><code>{report.case.domain}</code> · {report.case.status} · Analyst disposition: {report.case.disposition.replaceAll('_', ' ')}</p><p>Case reference: <code>{report.case.id}</code></p><EvidenceTimestamp value={report.generatedAt} label={timeLabel} /></header>
+  <header><h3>{report.case.title || report.case.domain}</h3><p><code>{report.case.domain}</code> · {report.case.status} · Analyst disposition: {report.case.disposition.replaceAll('_', ' ')}</p><p>Case reference: <code>{report.case.id}</code></p><p>{timeLabel}: <EvidenceTimestamp value={report.generatedAt} label={timeLabel} /></p></header>
   {#if view === 'brief'}
     <CasePreparedDecisionBrief {report} />
   {:else}

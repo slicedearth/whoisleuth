@@ -19,7 +19,7 @@
 <dialog bind:this={dialog} aria-labelledby={id} onclose={onclose}>
   <header><h2 {id} bind:this={heading} tabindex="-1">Temporary Case review</h2><button type="button" class="btn" onclick={() => dialog.close()}>Return to package</button></header>
   <p>Read-only packaged evidence. No saved workspace is read or changed. Close the package to clear its decrypted contents from this page.</p>
-  <CaseReportReading {report} timeLabel="retained Case update" />
+  <CaseReportReading {report} timeLabel="Retained case update" />
   <CaseAssessmentComparison record={review.record} />
   <section aria-label="Packaged original files"><h3>Original files · {review.attachments.length}</h3>
     <ul>{#each review.attachments as item}<li><h4>{item.attachment.fileName}</h4><p>{item.attachment.source} · {item.attachment.byteLength.toLocaleString()} bytes</p><p>SHA-256: <code>{item.attachment.digestSha256}</code></p>
