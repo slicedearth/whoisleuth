@@ -17,11 +17,12 @@ type JunitCase = Readonly<{ name: string; failure?: string }>;
 function junitCases(document: UnknownRecord): JunitCase[] {
   const schema = String(document.schema || '');
   if (schema === 'whoisleuth.cli.lookup') {
-    const sources = lookupDiagnosticEntries(document.diagnostics).filter(source => source.state !== null);
+    const sources = lookupDiagnosticEntries(document.diagnostics).filter(source => source.present);
     const findings = lookupStrictExitFindings(document);
     const cases: JunitCase[] = sources.map(({ source, path, state }) => {
-      return findings.some(finding => finding.path === path)
-        ? { name: `source ${source}`, failure: `Source state: ${state}` }
+      const failure = findings.find(finding => finding.path === path);
+      return failure || state === null
+        ? { name: `source ${source}`, failure: `Source state: ${failure?.state ?? 'unavailable'}` }
         : { name: `source ${source}` };
     });
     // Retain nested and historical failure coverage without echoing imported

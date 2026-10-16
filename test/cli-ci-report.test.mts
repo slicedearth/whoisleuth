@@ -51,6 +51,64 @@ describe('redacted CLI CI formats', () => {
     assert.doesNotMatch(output, /private|endpoint|providers/u);
   });
 
+  test('keeps present unusable sources incomplete beside another valid source', async () => {
+    for (const rdap of [{}, null, { status: 'private.invalid' }, { status: null }]) {
+      const diagnostics = { rdap, whois: { status: 'skipped' } };
+      const formatted = formatCliJunit({ schema: 'whoisleuth.cli.lookup', diagnostics });
+      assert.match(formatted, /tests="2" failures="1"/u);
+      assert.match(formatted, /name="source rdap"><failure message="Source state: unavailable"/u);
+      assert.doesNotMatch(formatted, /private\.invalid/u);
+      let output = '';
+      const code = await runCli(['lookup', 'example.test', '--junit'], {
+        stdout: { write(value) { output += value; } }, stderr: { write() {} },
+        runUnifiedLookup: async () => ({
+          rdap: { parsed: {} }, diagnostics,
+          availability: { state: 'registered' },
+        }),
+      });
+      // Required RDAP/WHOIS diagnostics are validated before the real writer.
+      assert.equal(code, EXIT_CODES.LOOKUP_FAILED);
+      assert.equal(output, '');
+    }
+  });
+
+  test('the normal Lookup command retains present unusable optional diagnostic sources', async () => {
+    for (const optional of [
+      { network: null }, { network: {} }, { network: { status: 'private.invalid' } },
+      { rdap: { status: 'success', registrar: {} } },
+      { rdap: { status: 'success', registrar: null } },
+      { rdap: { status: 'success', registrar: { status: 'private.invalid' } } },
+    ]) {
+      let output = '';
+      const code = await runCli(['lookup', 'example.test', '--junit'], {
+        stdout: { write(value) { output += value; } }, stderr: { write() {} },
+        runUnifiedLookup: async () => ({
+          rdap: { parsed: {} },
+          diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' }, ...optional },
+          availability: { state: 'registered' },
+        }),
+      });
+      assert.equal(code, EXIT_CODES.SUCCESS);
+      assert.match(output, /tests="3" failures="1"/u);
+      assert.match(output, /name="source (?:network_context|registrar_rdap)"><failure message="Source state: unavailable"/u);
+      assert.doesNotMatch(output, /private\.invalid/u);
+    }
+  });
+
+  test('distinguishes missing optional sources from present unusable nested diagnostics', () => {
+    for (const registrar of [{}, null, { status: 'unknown' }]) {
+      const output = formatCliJunit({ schema: 'whoisleuth.cli.lookup', diagnostics: {
+        rdap: { status: 'success', registrar }, whois: { status: 'skipped' },
+      } });
+      assert.match(output, /tests="3" failures="1"/u);
+      assert.match(output, /name="source registrar_rdap"><failure message="Source state: unavailable"/u);
+      assert.doesNotMatch(output, /source (?:reverse_dns|network_context|security_txt|sslbl)/u);
+    }
+    const absent = formatCliJunit({ schema: 'whoisleuth.cli.lookup', diagnostics: { rdap: { status: 'success' } } });
+    assert.match(absent, /tests="1" failures="0"/u);
+    assert.doesNotMatch(absent, /name="source (?:registrar_rdap|whois|reverse_dns|network_context|security_txt|sslbl)"/u);
+  });
+
   test('ignores failed attempt metadata but keeps missing and bounded diagnostics incomplete', () => {
     const success = formatCliJunit({ schema: 'whoisleuth.cli.lookup', diagnostics: {
       rdap: { status: 'success', attempts: [{ outcome: 'failed' }, { outcome: 'success' }] },

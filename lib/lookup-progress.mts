@@ -35,14 +35,22 @@ const DIAGNOSTIC_SOURCE_PATHS = Object.freeze({
 } as const);
 
 export function lookupDiagnosticEntries(value: unknown): readonly Readonly<{
-  source: string; path: string; state: typeof LOOKUP_SOURCE_STATES[number] | null;
+  source: string; path: string; present: boolean; state: typeof LOOKUP_SOURCE_STATES[number] | null;
 }>[] {
   const record = (input: unknown): Record<string, unknown> => input && typeof input === 'object' && !Array.isArray(input)
     ? input as Record<string, unknown> : {};
   return Object.freeze(Object.entries(DIAGNOSTIC_SOURCE_PATHS).map(([source, keys]) => {
-    const state = record(keys.reduce<unknown>((current, key) => record(current)[key], value)).status;
+    let current = value;
+    let present = true;
+    for (const key of keys) {
+      const parent = record(current);
+      if (!Object.hasOwn(parent, key)) { present = false; break; }
+      current = parent[key];
+    }
+    const diagnostic = record(current);
+    const state = present && Object.hasOwn(diagnostic, 'status') ? diagnostic.status : undefined;
     return Object.freeze({
-      source, path: `diagnostics.${keys.join('.')}.status`,
+      source, path: `diagnostics.${keys.join('.')}.status`, present,
       state: typeof state === 'string' && FINAL_SOURCE_STATES.has(state) ? state as typeof LOOKUP_SOURCE_STATES[number] : null,
     });
   }));
