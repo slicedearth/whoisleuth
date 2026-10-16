@@ -1,6 +1,6 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, selectBulkResultView, useTheme } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, selectBulkResultView, useTheme } from './helpers';
 import { BASE_URL } from './constants.ts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { formattedCaseNumber } from '../packages/cases/case-workflow-metadata.mts';
@@ -300,8 +300,12 @@ async function retainCases(page: import('@playwright/test').Page, label: string,
     await expect(caseSelector).toBeFocused();
   } else {
     await expect(completedGuide.getByRole('button', { name: 'Choose Case for handoff' })).toHaveCount(0);
-    await expect(caseSelector.locator('option:checked')).toHaveText(firstDomain);
   }
+  const expectedCases = (await readBrowserLocalCollection(page, 'cases')).records.filter(row => row.value.domain === firstDomain);
+  expect(expectedCases).toHaveLength(1);
+  const expectedCase = expectedCases[0]!.value;
+  await expect(caseSelector).toHaveValue(expectedCase.id);
+  await expect(caseSelector.locator('option:checked')).toHaveText(`${firstDomain} · ${formattedCaseNumber(expectedCase.id)}`);
   await expect(completedGuide).toContainText('Case needs a reviewed disposition or decision');
   await expect(completedGuide.getByRole('link', { name: 'Review case decision workspace' })).toHaveAttribute('href', /\/cases\?case=.+&section=assessment$/u);
 }
