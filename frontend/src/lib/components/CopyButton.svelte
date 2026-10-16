@@ -2,6 +2,9 @@
   import { onDestroy } from 'svelte';
   let { value, label = 'Copy', description = label }: { value: string; label?: string; description?: string } = $props();
   let state = $state<'idle' | 'copied' | 'failed'>('idle');
+  const visibleLabel = $derived(state === 'copied' ? 'Copied' : label);
+  const context = $derived(description === label ? '' : description.startsWith(`${label} `)
+    ? description.slice(label.length) : ` — ${description}`);
   let generation = 0;
   $effect(() => { value; generation++; state = 'idle'; });
   onDestroy(() => { generation++; });
@@ -17,7 +20,7 @@
 </script>
 
 <span class="copy-control">
-  <button class="btn" type="button" aria-label={description} onclick={() => void copy()}>{state === 'copied' ? 'Copied' : label}</button>
+  <button class="btn" type="button" onclick={() => void copy()}>{visibleLabel}<span class="sr-only">{context}</span></button>
   <span class:sr-only={state !== 'failed'} aria-live="polite">{state === 'copied' ? `${description}: copied.` : state === 'failed' ? 'Clipboard unavailable. Select the value below to copy it.' : ''}</span>
   {#if state === 'failed'}<code class="copy-fallback">{value}</code>{/if}
 </span>

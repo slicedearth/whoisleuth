@@ -37,6 +37,7 @@ async function reviewDocument(intake: Locator, document: typeof selectedDocument
   });
   await intake.getByRole('button', { name: 'Review locally', exact: true }).click();
   await expect(intake.getByRole('heading', { name: 'Extracted destinations' })).toBeFocused();
+  await expect(intake.getByRole('button', { name: 'Remove file', exact: true })).toHaveAccessibleDescription('Select a file');
   await expect(intake.getByRole('button', { name: `Use ${document.hostname} in Lookup`, exact: true })).toBeVisible();
 }
 

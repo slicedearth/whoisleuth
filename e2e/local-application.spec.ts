@@ -221,6 +221,7 @@ for (const theme of ['light', 'dark'] as const) {
     expect(examples.join('\n')).not.toContain(localApplication.instance.launchUrl);
     await workspace.getByRole('button', { name: 'Copy existing filesystem workspace command', exact: true }).click();
     await expect.poll(() => copied).toEqual([examples[0]]);
+    await expect(workspace.getByRole('button', { name: 'Copied existing filesystem workspace command', exact: true })).toBeFocused();
     expect(operations).toEqual([]); page.off('request', observe);
     for (const viewport of viewports) {
       await page.setViewportSize(viewport); await expectNoHorizontalOverflow(page);

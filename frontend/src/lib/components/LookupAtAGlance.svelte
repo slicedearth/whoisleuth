@@ -41,6 +41,7 @@
   const selectedMetric = $derived(
     metricGroups.find((metric) => metric.id === selectedMetricId) ?? null,
   );
+  const descriptionId = $props.id();
 
   function toggleMetric(metricId: LookupAtAGlanceGroupId): void {
     selectedMetricId = selectedMetricId === metricId ? null : metricId;
@@ -136,7 +137,7 @@
           data-count={metric.count}
           data-displayed-count={metric.displayedItems.length}
           data-omitted-count={metric.omittedCount}
-          aria-label={metric.presentation.assistiveText}
+          aria-describedby={`${descriptionId}-${metric.id}`}
           aria-expanded={selectedMetricId === metric.id}
           aria-controls={selectedMetric ? 'lookup-metric-detail' : undefined}
           onclick={() => toggleMetric(metric.id)}
@@ -146,8 +147,9 @@
             <strong>{metric.count}</strong>
           </span>
           <span class="metric-label">{metric.presentation.label}</span>
-          <span class="metric-action" aria-hidden="true">{selectedMetricId === metric.id ? 'Close' : 'Details'}</span>
+          <span class="metric-action">{selectedMetricId === metric.id ? 'Close' : 'Details'}</span>
         </button>
+        <span id={`${descriptionId}-${metric.id}`} class="sr-only">{metric.presentation.assistiveText}</span>
       {/each}
       <p class="metric-note">Complete and limited describe evidence coverage; neither state establishes safety.</p>
     </div>

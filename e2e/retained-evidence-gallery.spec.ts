@@ -97,7 +97,7 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   expect(new Set(sameNameLabels).size).toBe(3);
   const selectedDetails = gallery.locator('details').filter({ has: page.getByText('Candidate file details', { exact: true }) });
   await selectedDetails.locator('summary').click();
-  const copyHash = selectedDetails.getByRole('button', { name: 'Copy Candidate selected file SHA-256', exact: true });
+  const copyHash = selectedDetails.getByRole('button', { name: /^(?:Copy hash|Copied) — Copy Candidate selected file SHA-256$/u });
   await expect(selectedDetails.getByText('Unknown', { exact: true })).toBeVisible();
   await copyHash.focus(); await copyHash.press('Enter');
   await expect.poll(() => copied).toBe(missing.attachments[0]!.digestSha256);
@@ -105,10 +105,10 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   const other = missing.attachments[1]!;
   await candidateSelector.selectOption(JSON.stringify([missing.id, other.id]));
   await expect(pages.getByRole('spinbutton', { name: 'Retained gallery page', exact: true })).toHaveValue('2');
-  await expect(copyHash).toHaveText('Copy hash');
+  await expect(copyHash).toHaveAccessibleName('Copy hash — Copy Candidate selected file SHA-256');
   await expect(selectedDetails.locator('code').filter({ hasText: other.digestSha256 })).toHaveText(other.digestSha256);
   await copyHash.click(); await expect.poll(() => copied).toBe(other.digestSha256);
-  await selectedDetails.getByRole('button', { name: 'Copy Candidate selected file attachment ID', exact: true }).click();
+  await selectedDetails.getByRole('button', { name: 'Copy ID — Copy Candidate selected file attachment ID', exact: true }).click();
   await expect.poll(() => copied).toBe(other.id);
   const observedTime = selectedDetails.getByRole('button', { name: /Copy exact Candidate selected file observation time:/u });
   await expect(observedTime).toContainText('UTC');
@@ -140,7 +140,7 @@ test('cross-Case gallery preserves exact originals, independent sources and temp
   await expect(gallery.getByRole('button', { name: 'Compare selected text', exact: true })).toBeDisabled();
   await rowReference.press('Enter');
   await expect(rowReference).toHaveAttribute('aria-pressed', 'true');
-  await selectedDetails.getByRole('button', { name: 'Copy Candidate selected file attachment ID', exact: true }).click();
+  await selectedDetails.getByRole('button', { name: /^(?:Copy ID|Copied) — Copy Candidate selected file attachment ID$/u }).click();
   await expect.poll(() => copied).toBe(repeated.id);
   await observedTime.click(); await expect.poll(() => copied).toBe(repeated.observedAt);
   await copyHash.click(); await expect.poll(() => copied).toBe(missing.attachments[0]!.digestSha256);

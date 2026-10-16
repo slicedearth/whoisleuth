@@ -5,6 +5,7 @@ import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, lookupDom
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { openCaseSection } from './console-navigation';
 import { PUBLIC_REFERENCE_DESTINATIONS } from '../frontend/src/lib/public-reference-navigation.ts';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 const REQUIRED_MANUAL_RULES = new Set([
@@ -411,6 +412,36 @@ test('scans populated Lookup, Bulk, and guided-investigation states', async ({ p
   await runBulkScan(page, ['portal.test', 'peer.test', 'mail.test']);
   await expect(page.locator('.results-table tbody tr')).toHaveCount(3);
   await expectNoAccessibilityViolations(page, testInfo, 'console-bulk-populated-light-mobile');
+  const shortlist = page.getByRole('button', { name: /^(?:Add portal\.test to|Remove portal\.test from) shortlist$/u });
+  await expect(shortlist).toHaveAccessibleName('Add portal.test to shortlist');
+  await expect(shortlist).toHaveAttribute('aria-pressed', 'false');
+  await shortlist.focus();
+  await shortlist.press('Enter');
+  await expect(shortlist).toHaveAccessibleName('Remove portal.test from shortlist');
+  await expect(shortlist).toHaveAttribute('aria-pressed', 'true');
+  await expect(shortlist).toBeFocused();
+  await expect(shortlist).toBeInViewport({ ratio: 1 });
+  expect(await shortlist.evaluate((button) => {
+    const box = button.getBoundingClientRect();
+    return [[.25, .25], [.75, .25], [.25, .75], [.75, .75], [.5, .5]].every(([x, y]) => {
+      const hit = document.elementFromPoint(box.left + box.width * x!, box.top + box.height * y!);
+      return hit === button || button.contains(hit);
+    });
+  })).toBe(true);
+  if (captureVisualEvidenceEnabled()) {
+    for (const [width, theme] of [[390, 'light'], [1280, 'dark']] as const) {
+      await page.setViewportSize({ width, height: 844 });
+      await useTheme(page, theme);
+      await shortlist.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath(`shortlist-selected-${width}-${theme}.png`) });
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await useTheme(page, 'light');
+  }
+  await shortlist.focus();
+  await shortlist.press('Enter');
+  await expect(shortlist).toHaveAccessibleName('Add portal.test to shortlist');
+  await expect(shortlist).toHaveAttribute('aria-pressed', 'false');
 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/dashboard');

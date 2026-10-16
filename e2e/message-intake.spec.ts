@@ -40,7 +40,7 @@ test('authentication headers retain separate receiver choices, nested provenance
   expect(report.authenticationReview.headers.map((header: { receiverTrust: string }) => header.receiverTrust)).toEqual(['analyst_selected', 'not_established', 'not_established']);
   expect(report.messageParts[1].parentPart).toBe(1); expect(text).not.toContain('private@');
   expect(collections).toBe(0);
-  await intake.getByRole('button', { name: 'Remove select a file', exact: true }).click();
+  await intake.getByRole('button', { name: 'Remove file', exact: true }).click();
   await expect(review).toHaveCount(0);
 });
 
@@ -81,7 +81,7 @@ test('local message review exposes destination mismatch and fills Lookup without
     }
   }
   expect(lookups).toBe(0);
-  await intake.getByRole('button', { name: 'Remove select a file', exact: true }).click();
+  await intake.getByRole('button', { name: 'Remove file', exact: true }).click();
   await expect(intake.getByRole('heading', { name: 'Extracted destinations' })).toHaveCount(0);
   await expect(intake.getByLabel('Select a file')).toBeFocused();
   await intake.locator('.local-file').evaluate(element => {

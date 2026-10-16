@@ -131,7 +131,7 @@ test('new files and cancellation reset review selection without writing Cases', 
   await expect(explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true })).toBeVisible();
   await expect(explanation.locator('pre')).toHaveCount(0);
   await explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true }).selectOption('value');
-  const copy = explanation.getByRole('button', { name: 'Copy finding 1 accepted finding.summary', exact: true });
+  const copy = explanation.getByRole('button', { name: /^(?:Copy|Copied) finding 1 accepted finding\.summary$/u });
   await copy.focus(); await page.keyboard.press('Enter');
   const suppliedSummary = `1: ${'v'.repeat(880)}`;
   await expect.poll(() => copies).toEqual([suppliedSummary]);

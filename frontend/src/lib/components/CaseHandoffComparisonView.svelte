@@ -41,8 +41,7 @@
         <strong>{fieldLabel(row.field)}{row.order ? ' · order of shared records' : ''}</strong>
         {#if row.recordId}<code>{row.recordId}</code>{/if}
         <span>{states[row.state]}</span>
-        <button class="btn" type="button" onclick={() => void inspect(row.key)}
-          aria-label={`Inspect ${fieldLabel(row.field)}${row.recordId ? ` ${row.recordId}` : row.order ? ' record order' : ''}`}>Inspect values</button>
+        <button class="btn" type="button" onclick={() => void inspect(row.key)}>Inspect values<span class="sr-only"> for {fieldLabel(row.field)}{row.recordId ? ` ${row.recordId}` : row.order ? ' record order' : ''}</span></button>
       </li>{/each}
     </ul>
     {#if pages > 1}<nav aria-label="Handoff comparison pages">

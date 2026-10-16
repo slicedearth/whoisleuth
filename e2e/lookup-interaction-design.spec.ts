@@ -131,7 +131,7 @@ test('Lookup analyst question and disclosure controls change presentation withou
       label: label?.textContent?.trim() ?? '',
       icon: icon?.getAttribute('data-icon') ?? '',
       iconHidden: icon?.getAttribute('aria-hidden'),
-      accessibleExplanation: metric.getAttribute('aria-label') ?? '',
+      accessibleExplanation: document.getElementById(metric.getAttribute('aria-describedby') ?? '')?.textContent ?? '',
     };
   }));
   expect(metricPresentation.every((metric) => (
@@ -167,6 +167,9 @@ test('Lookup analyst question and disclosure controls change presentation withou
   expect(nextActionsBeforeDisclosure.length).toBeLessThanOrEqual(3);
   for (const metric of await glanceMetrics.all()) {
     const count = Number(await metric.getAttribute('data-count'));
+    const label = await metric.locator('.metric-label').innerText();
+    await expect(metric).toHaveAccessibleName(`${count} ${label} Details`);
+    await expect(metric).toHaveAccessibleDescription(/.+/u);
     const displayedCount = Number(await metric.getAttribute('data-displayed-count'));
     const omittedCount = Number(await metric.getAttribute('data-omitted-count'));
     expect(count).toBe(displayedCount + omittedCount);
@@ -174,6 +177,7 @@ test('Lookup analyst question and disclosure controls change presentation withou
     await expect(metric).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(metric).toHaveAttribute('aria-expanded', 'true');
+    await expect(metric).toHaveAccessibleName(`${count} ${label} Close`);
     const metricDetail = atAGlance.locator('.metric-detail');
     await expect(metricDetail).toHaveAttribute('data-selected-metric-id', await metric.getAttribute('data-metric-id') ?? '');
     await expect(metricDetail.locator('header > p')).toBeVisible();

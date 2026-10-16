@@ -151,7 +151,7 @@ test('lifecycle explanations preserve supplied values and missing provenance acr
   await expect(whois).toContainText('No usable ISO companion was supplied');
   await expect(whois).toContainText('2024-04-03T00:00:00.000Z');
   await expect(explanation.getByRole('region', { name: 'Registrar RDAP date explanation', exact: true })).toContainText('Publication: not collected');
-  const sourceCopy = registry.getByRole('button', { name: 'Copy Registry RDAP parsed.lifecycle.createdDate source text', exact: true });
+  const sourceCopy = registry.getByRole('button', { name: /^(?:Copy|Copied) Registry RDAP parsed\.lifecycle\.createdDate source text$/u });
   await sourceCopy.focus(); await sourceCopy.press('Enter');
   await expect.poll(() => copies).toEqual(['2024-03-14T01:00:00+10:00']);
   await expect(sourceCopy).toBeFocused();
@@ -590,7 +590,8 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await expect(page.getByRole('button', { name: 'Expand details: Web and DNS evidence' })).toBeVisible();
   await expandLookupFamilies(page);
 
-  const registrationSummary = page.getByRole('button', { name: 'Collapse details: Registration evidence' });
+  const registrationSummary = page.locator('.family-summary').filter({ has: page.getByRole('button', { name: 'Collapse details: Registration evidence', exact: true }) });
+  await expect(registrationSummary).toHaveCount(1);
   await expect(registrationSummary).toContainText('7 equivalent');
   await expect(registrationSummary).toContainText('1 conflict');
 
@@ -1647,14 +1648,16 @@ test('IDN review shows Unicode and ASCII together with cautious profile similari
   await expect(card.getByText('similarity indicators and do not establish maliciousness')).toBeVisible();
   await expect(card.getByText('sample.example', { exact: true })).toBeVisible();
   await expect(card).toContainText('not a DNS name or canonical domain identity');
-  for (const [name, value] of [
-    ['Copy exact Unicode display', 'sаmple.example'],
-    ['Copy exact DNS-safe ASCII', 'xn--smple-4ve.example'],
-    ['Copy exact visual skeleton', 'sample.example'],
+  for (const [label, description, value] of [
+    ['Copy Unicode', 'Copy exact Unicode display', 'sаmple.example'],
+    ['Copy ASCII', 'Copy exact DNS-safe ASCII', 'xn--smple-4ve.example'],
+    ['Copy skeleton', 'Copy exact visual skeleton', 'sample.example'],
   ] as const) {
-    const button = card.getByRole('button', { name, exact: true });
+    const button = card.getByRole('button', { name: new RegExp(`^(?:${label}|Copied) — ${description}$`, 'u') });
+    await expect(button).toHaveAccessibleName(`${label} — ${description}`);
     await button.focus(); await button.press('Enter');
     await expect.poll(() => copies.at(-1)).toBe(value);
+    await expect(button).toHaveAccessibleName(`Copied — ${description}`);
     await expect(button).toBeFocused();
   }
   expect(copies).toEqual(['sаmple.example', 'xn--smple-4ve.example', 'sample.example']);
@@ -1671,12 +1674,12 @@ test('IDN review shows Unicode and ASCII together with cautious profile similari
     await useTheme(page, theme);
     await expectNoHorizontalOverflow(page);
     expect((await new AxeBuilder({ page }).include('.idn-card').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
-    const copy = card.getByRole('button', { name: 'Copy exact Unicode display', exact: true });
+    const copy = card.getByRole('button', { name: 'Copied — Copy exact Unicode display', exact: true });
     await copy.focus(); await expect(copy).toBeInViewport();
     if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`idn-identity-${width}-${theme}.png`) });
   }
   rejectCopy = true;
-  await card.getByRole('button', { name: 'Copy exact DNS-safe ASCII', exact: true }).click();
+  await card.getByRole('button', { name: 'Copied — Copy exact DNS-safe ASCII', exact: true }).click();
   await expect(card.locator('.copy-fallback')).toHaveText('xn--smple-4ve.example');
   await expect(card).not.toContainText('Private clipboard transport detail');
   expect(requests).toEqual(['xn--smple-4ve.example']);

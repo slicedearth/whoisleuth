@@ -111,7 +111,7 @@ test('downloaded backup and file packages rehearse independently without switchi
   await expect(sourceIndex).not.toContainText('files.wlep');
   await page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable: true,
     value: { writeText: async (value: string) => { Reflect.set(window, 'recoverySetCopiedDigest', value); } } }); });
-  await sourceIndex.getByRole('button', { name: `Copy recovery package SHA-256 ${packageDigest}`, exact: true }).focus();
+  await sourceIndex.getByRole('button', { name: `Copy SHA-256 — Copy recovery package SHA-256 ${packageDigest}`, exact: true }).focus();
   await page.keyboard.press('Enter');
   expect(await page.evaluate(() => Reflect.get(window, 'recoverySetCopiedDigest'))).toBe(packageDigest);
   expect((await storedFiles(page, destination))[0]!.bytes).toEqual([...bytes]);
@@ -461,9 +461,9 @@ test('paged recovery checklist retains shared provenance and clears only after e
   await expect(checklist).toContainText(`${bodies[0]!.length} bytes`);
   await page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable: true,
     value: { writeText: async (value: string) => { Reflect.set(window, 'recoveryCopiedDigest', value); } } }); });
-  const copy = checklist.getByRole('button', { name: `Copy SHA-256 for recovery original ${references[0]!.digestSha256}`, exact: true });
+  const copy = checklist.getByRole('button', { name: new RegExp(`^(?:Copy SHA-256|Copied) for recovery original ${references[0]!.digestSha256}$`, 'u') });
   await copy.focus(); await page.keyboard.press('Enter');
-  await expect(copy).toHaveText('Copied');
+  await expect(copy).toHaveAccessibleName(`Copied for recovery original ${references[0]!.digestSha256}`);
   expect(await page.evaluate(() => Reflect.get(window, 'recoveryCopiedDigest'))).toBe(references[0]!.digestSha256);
   const next = checklist.getByRole('button', { name: 'Next originals', exact: true });
   await next.focus(); await page.keyboard.press('Enter');

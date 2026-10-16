@@ -132,16 +132,18 @@ test('requested evidence preserves failed drafts and creates a separately review
     `Receipt 2 · aaaaaaaaaaaa…bbbbbbbb · ${delivery.occurredAt}`,
     `Receipt 3 · aaaaaaaaaaaa…bbbbbbbb · ${delivery.occurredAt}`,
   ]);
-  const copy = identity.getByRole('button', { name: 'Copy original submitted packet SHA-256', exact: true });
+  const copy = identity.getByRole('button');
   for (const value of [firstDigest, similarDigest, digest]) {
     await packet.selectOption(value);
+    await expect(copy).toHaveCount(1);
     await expect(identity.locator('p code')).toHaveText(value);
     await expect(packet).toHaveAccessibleDescription(`Original packet SHA-256: ${value}`);
-    await expect(copy).toHaveText('Copy digest');
+    await expect(copy).toHaveAccessibleName('Copy digest — Copy original submitted packet SHA-256');
+    await expect(copy).toContainText('Copy digest');
     await copy.focus(); await copy.press('Enter');
     await expect.poll(() => copied).toBe(value);
     await expect(copy).toBeFocused();
-    await expect(copy).toHaveText('Copied');
+    await expect(copy).toHaveAccessibleName('Copied — Copy original submitted packet SHA-256');
   }
   refuseCopy = true;
   await copy.click();
@@ -151,7 +153,7 @@ test('requested evidence preserves failed drafts and creates a separately review
   await expect(identity).toHaveCount(0);
   await packet.selectOption(digest);
   await expect(identity.locator('p code')).toHaveText(digest);
-  await expect(copy).toHaveText('Copy digest');
+  await expect(copy).toHaveAccessibleName('Copy digest — Copy original submitted packet SHA-256');
   expect((await readBrowserLocalCollection(page, 'cases')).records).toEqual(beforeInspection.records);
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);

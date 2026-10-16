@@ -69,7 +69,7 @@ test('selected Case exports compare read-only with exact records, replacement an
   await expect(status).toContainText('12 changed · 1 only in comparison · 1 only in baseline');
   await expect(comparison.getByRole('button', { name: /Save|Import|Add|Download/u })).toHaveCount(0);
   await expect(comparison.getByText('Only in baseline export', { exact: true })).toBeVisible();
-  const inspect = comparison.getByRole('button', { name: `Inspect Notes ${baseline.notes[0]!.id}`, exact: true });
+  const inspect = comparison.getByRole('button', { name: `Inspect values for Notes ${baseline.notes[0]!.id}`, exact: true });
   await inspect.focus(); await inspect.press('Enter');
   const values = comparison.getByRole('region', { name: 'Selected comparison values', exact: true });
   await expect(values.getByRole('heading', { level: 4 })).toBeFocused();
@@ -77,7 +77,7 @@ test('selected Case exports compare read-only with exact records, replacement an
   await expect(values.getByText('Not present in this selected copy.', { exact: true })).toBeVisible();
   await comparison.getByRole('button', { name: 'Next differences', exact: true }).click();
   await expect(values).toHaveCount(0);
-  await comparison.getByRole('button', { name: 'Inspect Notes comparison-only-note', exact: true }).click();
+  await comparison.getByRole('button', { name: 'Inspect values for Notes comparison-only-note', exact: true }).click();
   await expect(values.getByRole('region', { name: 'Comparison export text', exact: true })).toContainText('Deliberately selected new note');
   for (const [width, height] of [[320, 700], [1280, 720]] as const) for (const theme of ['light', 'dark'] as const) {
     await page.setViewportSize({ width, height }); await useTheme(page, theme);
@@ -165,7 +165,7 @@ test('selected response packets require full admission and retain read-only scop
   await second.setInputFiles(upload(right));
   await expect(status).toContainText('1 only in comparison · 1 only in baseline');
   await expect(comparison.getByRole('button', { name: /Save|Import|Add|Download/u })).toHaveCount(0);
-  const inspect = comparison.getByRole('button', { name: `Inspect Escalation History ${actionId}`, exact: true });
+  const inspect = comparison.getByRole('button', { name: `Inspect values for Escalation History ${actionId}`, exact: true });
   await inspect.focus(); await inspect.press('Enter');
   const values = comparison.getByRole('region', { name: 'Selected comparison values', exact: true });
   await expect(values.getByRole('heading', { level: 4 })).toBeFocused();

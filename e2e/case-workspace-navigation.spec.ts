@@ -340,6 +340,7 @@ test('Case detail replaces the list and returns to its retained filters and focu
     await expect(control).toHaveAttribute('title', value);
     await expect(control.locator('time')).toHaveAttribute('datetime', value);
     await expect(control.locator('time')).toContainText('UTC');
+    await expect(control).toHaveAccessibleName(`${await control.locator('time').innerText()} Copy exact ${label}: ${value}`);
     await control.focus();
     await control.press('Enter');
     await expect.poll(() => copied.at(-1)).toBe(value);
