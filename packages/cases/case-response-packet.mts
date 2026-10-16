@@ -1,5 +1,4 @@
 import type {
-  ResponseContactKind,
   ResponsePacketProfileId,
   ResponseAuthorisationConfirmationId,
   ResponseReadinessInput,
@@ -12,7 +11,7 @@ import type {
   CaseResponsePacket,
 } from './case-response-packet-types.mts';
 import { renderCaseResponsePacket } from './case-response-packet-render.mts';
-import { responseContactLabel as contactLabel } from './case-response-packet-vocabulary.mts';
+import { responseActionContactKind, responseContactLabel as contactLabel } from './case-response-packet-vocabulary.mts';
 export type * from './case-response-packet-types.mts';
 
 // Pure abuse-evidence packet builder. It creates local review artifacts only:
@@ -293,15 +292,6 @@ function normalizeLimitations(value: unknown): string[] {
   return [...unique];
 }
 
-function actionContactKind(type: string): ResponseContactKind | 'manual' {
-  if (type === 'registrar_report') return 'registrar';
-  if (type === 'registry_report') return 'registry';
-  if (type === 'network_hosting_report') return 'network_hosting';
-  if (type === 'security_contact_report') return 'security_txt';
-  if (type === 'platform_report') return 'application_platform';
-  return 'manual';
-}
-
 function selectedPacketAction(caseRecord: CaseRecord, input: CaseResponsePacketInput) {
   const actionId = typeof input.actionId === 'string' && /^[A-Za-z0-9_-]{1,64}$/u.test(input.actionId)
     ? input.actionId
@@ -361,7 +351,7 @@ function bindPacketRoute(
       contacts: [],
     };
   }
-  const kind = actionContactKind(action.type);
+  const kind = responseActionContactKind(action.type);
   const compatible = profile.requiredContactKind
     ? kind === profile.requiredContactKind
     : profile.id === 'browser_blocklist'

@@ -1,3 +1,9 @@
+import {
+  LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
+  V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+} from '../../../packages/contracts/lookup-evidence.mts';
+
 export type PublicGuideStep = {
   id: string;
   label: string;
@@ -172,7 +178,7 @@ export const glossaryTerms: readonly GuideDefinition[] = Object.freeze([
 ]);
 
 export const guideFaqs: readonly GuideFaq[] = Object.freeze([
-  Object.freeze({ question: 'Can I review a Lookup evidence export without scanning again?', answer: 'Yes. Lookup validates and replays exact v1 schema 26, published v2 schemas 27 and 28, or current schema 29 evidence locally without contacting the target. Older captures keep their original observation scope. Schema 26 may contain public contact fields, so review it before sharing.' }),
+  Object.freeze({ question: 'Can I review a Lookup evidence export without scanning again?', answer: `Yes. Lookup validates and replays supported schemas ${SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.join(', ')}, including current schema ${LOOKUP_EVIDENCE_SCHEMA_VERSION}, locally without contacting the target. Older captures keep their original observation scope. Schema ${V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} may contain public contact fields, so review it before sharing.` }),
   Object.freeze({ question: 'Does WHOISleuth decide whether a domain is malicious?', answer: 'No. It organises observed evidence and provides an explainable Risk score for prioritisation. An analyst must review the sources and context.' }),
   Object.freeze({ question: 'Should I use Fast or Deep lookup?', answer: 'Use Fast for registration-first triage. Deep adds DNS, website, certificate and network context, including SOA, HTTPS service bindings, effective CAA and separately attributed PTR names where relevant.' }),
   Object.freeze({ question: 'Does a lookup contact the website?', answer: 'A Deep domain lookup can make bounded requests to public registration, DNS, homepage, favicon, certificate, and IP RDAP endpoints. security.txt and external intelligence sources run only when selected. Fast collection avoids website and certificate checks.' }),

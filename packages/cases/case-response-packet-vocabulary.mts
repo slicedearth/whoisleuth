@@ -1,4 +1,5 @@
 // Response packet vocabulary shared by construction and independent validation.
+import type { CaseActionType } from './case-response-records.mts';
 
 export const RESPONSE_CONTACT_KINDS = [
   'registrar',
@@ -7,6 +8,20 @@ export const RESPONSE_CONTACT_KINDS = [
   'security_txt',
   'application_platform',
 ] as const;
+
+const ACTION_CONTACT_KINDS = {
+  registrar_report: 'registrar',
+  registry_report: 'registry',
+  network_hosting_report: 'network_hosting',
+  security_contact_report: 'security_txt',
+  platform_report: 'application_platform',
+  defensive_control: 'manual',
+  internal_review: 'manual',
+} as const satisfies Record<CaseActionType, typeof RESPONSE_CONTACT_KINDS[number] | 'manual'>;
+
+export function responseActionContactKind(type: CaseActionType): typeof RESPONSE_CONTACT_KINDS[number] | 'manual' {
+  return ACTION_CONTACT_KINDS[type];
+}
 
 export const RESPONSE_PACKET_PROFILE_IDS = [
   'registrar',

@@ -730,6 +730,31 @@ describe('case response packet', () => {
     assert.deepEqual(result.json.contacts, []);
   });
 
+  test('admits each action route with model-default provenance and unknown observation time', async (t) => {
+    for (const [type, kind] of [
+      ['registrar_report', 'registrar'],
+      ['registry_report', 'registry'],
+      ['network_hosting_report', 'network_hosting'],
+      ['security_contact_report', 'security_txt'],
+      ['platform_report', 'application_platform'],
+      ['defensive_control', 'manual'],
+      ['internal_review', 'manual'],
+    ] as const) await t.test(type, async () => {
+      const record = createCase({
+        domain: 'route.example',
+        action: { type, recipient: 'Reserved review desk' },
+      }, NOW);
+      const input = { ...packetInput(record), profile: 'internal_soc' };
+      const packet = (await buildCaseResponsePacket(record, input, NOW)).json;
+      assert.equal(packet.recipientRoute?.kind, kind);
+      assert.equal(packet.recipientRoute?.source, 'analyst_supplied');
+      assert.equal(packet.recipientRoute?.observedAt, null);
+      assert.equal(packet.recipientRoute?.reviewAfter, null);
+      assert.doesNotThrow(() => validateCaseResponseReviewInputs(buildCaseResponseReviewInputs(record, input, NOW)));
+      assert.doesNotThrow(() => validateOfflineArtifactStructure(CASE_RESPONSE_PACKET_SCHEMA, packet));
+    });
+  });
+
   test('retains route observation time across later action metadata edits', async () => {
     let caseRecord = reviewedCase();
     caseRecord = updateCase([caseRecord], caseRecord.id, {

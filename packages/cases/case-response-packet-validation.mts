@@ -4,6 +4,7 @@ import { CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION } from './case-evidence-links.
 import { CASE_RESPONSE_PACKET_SCHEMA, OBJECT_RESPONSE_CASE_PACKET_VERSION, OBJECT_RESPONSE_CASE_REVIEW_INPUTS_VERSION } from '../contracts/case-portability.mts';
 import type { CaseActionRecord, CaseActionTransitionEvent } from './case-response-records.mts';
 import { assertBoundedJsonStructure } from '../analysis/bounded-json.mts';
+import { assertCaseResponseRecipientAction } from './case-response-review-inputs.mts';
 
 import { canonicalArtifactJsonV2, sha256ArtifactBytes } from '../evidence/artifact-integrity.mts';
 import { EVIDENCE_FOLLOW_UP_CASE_RESPONSE_PACKET_VERSION, EVIDENCE_FOLLOW_UP_CASE_RESPONSE_REVIEW_INPUTS_VERSION } from '../contracts/case-portability.mts';
@@ -711,6 +712,7 @@ function validateVersionedCaseResponsePacket(
     if (actionIds.size !== lineageActionIds.length
       || actionIdOrder.some((id, index) => lineageActionIds[index] !== id)) fail('Case-response action lineage');
     if (recipientRoute && !actionIds.has(recipientRoute.actionId as string)) fail('Case-response recipient action');
+    assertCaseResponseRecipientAction(recipientRoute, history as UnknownRecord[], hasPlatformRoutes);
   }
   if (version >= 11) assertPacketAmendmentSelection(history.map(candidate => {
     const action = candidate as UnknownRecord;

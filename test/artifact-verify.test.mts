@@ -49,6 +49,7 @@ import { buildCliEvidenceExport } from '../cli/export-evidence.mts';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import * as lookupEvidenceModule from '../lib/evidence-export.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
+import { CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION } from '../packages/cases/case-evidence-links.mts';
 import { CASE_SCHEMA_VERSION, createCase, normalizeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
 import {
   appendCaseAction,
@@ -316,6 +317,8 @@ async function rebindCaseResponseReview<T extends Record<string, unknown>>(value
     escalationHistoryOmitted: value.escalationHistoryOmitted,
     escalationHistoryLimitations: value.escalationHistoryLimitations,
     responseLifecycle: value.responseLifecycle,
+    sourceQualifications: (value.provenance as { limitations: string[] }).limitations
+      .filter(item => item === CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION),
   };
   const authorisation = value.authorisation as Record<string, unknown>;
   authorisation.reviewedInputDigestSha256 = (await sha256ArtifactDigestV2(reviewMaterial)).slice('sha256:'.length);
@@ -682,7 +685,7 @@ describe('offline artifact verifier', () => {
       evidence.analysis.registryInsights = lookupEvidenceModule.projectLookupEvidenceRegistryInsights(buildRegistryInsights({
         rdapParsed: rdap.parsed, rdapStatus: rdap.status, rdapFetchedAt: rdap.fetchedAt,
         whoisParsed: whois.parsed, whoisStatus: whois.status, whoisQueriedAt: whois.queriedAt,
-      }, { rdapCapabilityCatalogReviewedAt: reviewedAt }));
+      }, { version: 1, rdapCapabilityCatalogReviewedAt: reviewedAt }));
       const capabilities = evidence.analysis.registryInsights.rdapCapabilities;
       assert.equal(capabilities.registry.declarations[1].category, reviewedAt === '2026-10-14' ? 'operator' : 'unknown');
       const before = JSON.stringify(evidence);
@@ -1284,6 +1287,9 @@ describe('offline artifact verifier', () => {
     assert.equal(verified.state, 'verified');
     assert.equal(verified.artifact.version, CASE_RESPONSE_PACKET_VERSION);
 
+    const rebound = await rebindCaseResponseReview(structuredClone(packet) as unknown as Record<string, unknown>);
+    assert.equal((await verifyOfflineArtifact(JSON.stringify(await resignCaseResponsePacket(rebound)))).state, 'verified');
+
     const forged = structuredClone(packet) as unknown as Record<string, unknown>;
     const authorisation = forged.authorisation as Record<string, unknown>;
     authorisation.reviewedInputDigestSha256 = 'f'.repeat(64);
@@ -1293,6 +1299,38 @@ describe('offline artifact verifier', () => {
       verifyOfflineArtifact(JSON.stringify(await resignCaseResponsePacket(forged))),
       /case-response .*unsupported or malformed structure/iu,
     );
+  });
+
+  test('rejects contradictory selected-action routes after valid digest rebinding', async (t) => {
+    const at = '2026-07-15T00:00:00.000Z';
+    const record = createCase({
+      domain: 'route-binding.example',
+      evidence: { availability: 'registered', capturedAt: at },
+      action: { type: 'registrar_report', recipient: 'Reserved response desk',
+        contactSource: 'fixture_registry', routeObservedAt: at },
+    }, at);
+    const packet = (await buildCaseResponsePacket(record, {
+      actionId: record.actions[0]!.id, category: 'Reserved review', affectedParty: 'Reserved service',
+      abusiveUrls: ['https://route-binding.example/review'], observedHarm: 'Synthetic observation', observedAt: at,
+    }, '2026-07-15T01:00:00.000Z')).json;
+    const original = JSON.stringify(packet);
+    const rebound = await rebindCaseResponseReview(structuredClone(packet) as unknown as Record<string, unknown>);
+    assert.equal((await verifyOfflineArtifact(JSON.stringify(await resignCaseResponsePacket(rebound)))).state, 'verified');
+
+    for (const [field, value] of [
+      ['contactSource', 'different_provenance'],
+      ['recipient', 'Other reserved response desk'],
+      ['routeObservedAt', '2026-07-14T00:00:00.000Z'],
+      ['routeReviewAfter', '2026-07-16T00:00:00.000Z'],
+      ['type', 'network_hosting_report'],
+    ] as const) await t.test(field, async () => {
+      const forged = structuredClone(packet) as unknown as Record<string, unknown>;
+      (forged.escalationHistory as Record<string, unknown>[])[0]![field] = value;
+      await rebindCaseResponseReview(forged);
+      await assert.rejects(verifyOfflineArtifact(JSON.stringify(await resignCaseResponsePacket(forged))),
+        /recipient route must match its selected action/u);
+    });
+    assert.equal(JSON.stringify(packet), original);
   });
 
   test('reconstructs the current provider lifecycle projection instead of trusting a re-signed summary', async () => {

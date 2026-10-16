@@ -222,6 +222,37 @@ describe('canonical Case portability lifecycle', () => {
     assert.equal(decrypted.version, 5);
   });
 
+  test('binds recipient details to the selected action in each supported bound format', async () => {
+    for (const version of [2, 3, 4, 5, 6, 7]) {
+      const review = await fixture<Record<string, unknown>>(`case-response-review-inputs-v${version}`);
+      const packet = await fixture<Record<string, unknown>>(`case-response-packet-v${version + 6}`);
+      const reviewBefore = structuredClone(review);
+      const packetBefore = structuredClone(packet);
+      assert.doesNotThrow(() => responsePacket.validateCaseResponseReviewInputs(review));
+      assert.doesNotThrow(() => validateOfflineArtifactStructure(contracts.CASE_RESPONSE_PACKET_SCHEMA, packet));
+      const changes: [string, string][] = [
+        ['recipient', 'Other reserved response desk'],
+        ['contactSource', 'Other retained source'],
+        ['type', 'network_hosting_report'],
+        ['routeObservedAt', '2026-08-21T00:00:00.000Z'],
+      ];
+      if (version >= 3) changes.push(['routeReviewAfter', '2026-08-23T00:00:00.000Z']);
+      for (const [field, value] of changes) {
+        const changedReview = structuredClone(review);
+        const changedPacket = structuredClone(packet);
+        for (const changed of [changedReview, changedPacket]) {
+          (changed.escalationHistory as Record<string, unknown>[])[0]![field] = value;
+        }
+        assert.throws(() => responsePacket.validateCaseResponseReviewInputs(changedReview),
+          /recipient route must match its selected action/u, `review inputs ${version}: ${field}`);
+        assert.throws(() => validateOfflineArtifactStructure(contracts.CASE_RESPONSE_PACKET_SCHEMA, changedPacket),
+          /recipient route must match its selected action/u, `packet ${version + 6}: ${field}`);
+      }
+      assert.deepEqual(review, reviewBefore);
+      assert.deepEqual(packet, packetBefore);
+    }
+  });
+
   test('keeps fixed writer shapes aligned without coupling independently versioned archive sections', async () => {
     const frozenExport = await fixture('case-export-v15');
     const cases = caseModel.mergeCases([], frozenExport).cases;
