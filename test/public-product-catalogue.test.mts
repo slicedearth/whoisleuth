@@ -5,6 +5,8 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 
 import { CLI_COMMAND_REGISTRY } from '../cli/command-reference.mts';
+import { runCli } from '../cli/runner.mts';
+import { createCase, CASE_SCHEMA_VERSION } from '../packages/cases/case-model.mts';
 import {
   INVESTIGATION_PLAN_RECIPES,
   buildWorkflowRecipeCatalogue,
@@ -58,6 +60,43 @@ function strings(value: unknown): string[] {
 }
 
 describe('public product catalogue', () => {
+  test('Watchlist export help agrees with an actual offline export', async () => {
+    let help = '', exported = '';
+    const input = readFileSync(new URL('./fixtures/brand-candidate-workflow/candidate-watch-input-v1.json', import.meta.url), 'utf8');
+    assert.equal(await runCli(['watchlist-review', '--help'], {
+      stdout: { write(value) { help += value; } }, stderr: { write() {} },
+    }), 0);
+    assert.equal(await runCli(['watchlist-review', 'export', '--json'], {
+      stdout: { write(value) { exported += value; } }, stderr: { write() {} },
+      readArtifactInput: async () => input, now: () => '2026-10-01T00:00:00.000Z',
+    }), 0);
+    const document = JSON.parse(exported);
+    assert.equal(document.schema, 'whoisleuth.watchlists');
+    assert.ok(help.includes(`Watchlist schema ${document.version}`));
+  });
+
+  test('published Case handoff commands create the file consumed by the next step', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'whoisleuth-public-handoff-'));
+    const now = '2026-10-01T00:00:00.000Z';
+    const source = path.join(root, 'cases.json'), output = path.join(root, 'case-pack.json');
+    try {
+      writeFileSync(source, JSON.stringify({ version: CASE_SCHEMA_VERSION, cases: [createCase({ domain: 'handoff.example' }, now)] }));
+      const recipe = CLI_PUBLIC_GUIDANCE.interchangeRecipes.find(item => item.id === 'case-handoff')!;
+      const commands = recipe.commands.map(command => (command.match(/"[^"]*"|\S+/gu) ?? []).slice(1)
+        .map(token => token.startsWith('"') ? token.slice(1, -1) : token)
+        .map(token => token === 'cases.json' ? source : token === 'case-pack.json' ? output : token));
+      const sink = { write() {} };
+      assert.equal(await runCli(commands[0], { stdout: sink, stderr: sink, now: () => now }), 0);
+      const original = readFileSync(output, 'utf8');
+      assert.equal(JSON.parse(original).packet.schema, 'whoisleuth.cli.case-pack');
+      let review = '';
+      assert.equal(await runCli(commands[1], { stdout: { write(value) { review += value; } }, stderr: sink, now: () => now }), 0);
+      assert.notEqual(JSON.parse(review).summary.status, 'blocked');
+      assert.notEqual(await runCli(commands[0], { stdout: sink, stderr: sink, now: () => now }), 0);
+      assert.equal(readFileSync(output, 'utf8'), original);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
   test('generated command data preserves every canonical field after sharing repeated options', () => {
     assert.deepEqual(PUBLIC_CLI_CATALOGUE, JSON.parse(JSON.stringify(publicCliCatalogue())));
     assert.deepEqual(PUBLIC_CLI_GRAMMAR, Object.fromEntries(CLI_COMMAND_REGISTRY.map(definition => [definition.command, definition.grammar])));

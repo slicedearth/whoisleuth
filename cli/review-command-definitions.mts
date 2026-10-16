@@ -57,9 +57,9 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
   }),
   "source-report": commandSeed({
     reference: {
-      description: 'Create a target-free reliability summary from a saved lookup.',
+      description: 'Summarise source reliability from saved Lookup or Bulk evidence, or merge source-reliability reports.',
       example: 'whoisleuth source-report lookup.json --json',
-      boundary: 'The report retains source states and timings but excludes targets, queries, endpoints, and raw evidence.',
+      boundary: 'Accepts supported Lookup, Bulk or Bulk-item documents, or an unmixed set of source-reliability reports. Retains source states and timings but excludes targets, queries, endpoints and raw evidence.',
     },
     collection: { scope: 'Reads bounded saved evidence and emits target-free source reliability data.' },
     summary: 'Build a target-free source report',

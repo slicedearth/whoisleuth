@@ -68,7 +68,7 @@ const SHARED_COMMAND_OPTIONS = [
     "option": "--network",
     "scope": "command",
     "usage": "--network",
-    "description": "Include the optional public DNS and port 43 runtime checks.",
+    "description": "Include the optional public DNS, HTTPS and WHOIS (port 43) runtime checks.",
     "values": [],
     "repeatable": false,
     "ranges": [],
@@ -3877,12 +3877,12 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "source-report",
       "summary": "Build a target-free source report",
-      "description": "Create a target-free reliability summary from a saved lookup.",
+      "description": "Summarise source reliability from saved Lookup or Bulk evidence, or merge source-reliability reports.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth source-report [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth source-report lookup.json --json",
-      "boundary": "The report retains source states and timings but excludes targets, queries, endpoints, and raw evidence.",
+      "boundary": "Accepts supported Lookup, Bulk or Bulk-item documents, or an unmixed set of source-reliability reports. Retains source states and timings but excludes targets, queries, endpoints and raw evidence.",
       "collection": {
         "mode": "offline",
         "scope": "Reads bounded saved evidence and emits target-free source reliability data."
@@ -5344,7 +5344,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "common": false,
       "usage": "whoisleuth watchlist-review \u003cplan|export> [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth watchlist-review plan selection.json --json",
-      "boundary": "Reads bounded local JSON only. Plan shows exact domains, duplicates, per-domain outcomes, destination and review priority with zero additional requests. Export emits Watchlist schema 5 without creating a scan or baseline. Neither mode enables collection or scheduling.",
+      "boundary": "Reads bounded local JSON only. Plan shows exact domains, duplicates, per-domain outcomes, destination and review priority with zero additional requests. Export emits Watchlist schema 6 without creating a scan or baseline. Neither mode enables collection or scheduling.",
       "collection": {
         "mode": "offline",
         "scope": "At most 2,000 selected candidate domains; no target requests."

@@ -28,23 +28,28 @@ const SOURCE_STATES = new Set([
 // Final diagnostic states are distinct from the provisional progress subset.
 const FINAL_SOURCE_STATES: ReadonlySet<string> = new Set(LOOKUP_SOURCE_STATES);
 
-export function lookupDiagnosticStates(value: unknown): Readonly<Record<string, typeof LOOKUP_SOURCE_STATES[number] | null>> {
+const DIAGNOSTIC_SOURCE_PATHS = Object.freeze({
+  rdap: ['rdap'], registrar_rdap: ['rdap', 'registrar'], whois: ['whois'],
+  availability: ['availability'], reverse_dns: ['reverseDns'], network_context: ['network'],
+  security_txt: ['securityTxt'], sslbl: ['sslbl'],
+} as const);
+
+export function lookupDiagnosticEntries(value: unknown): readonly Readonly<{
+  source: string; path: string; state: typeof LOOKUP_SOURCE_STATES[number] | null;
+}>[] {
   const record = (input: unknown): Record<string, unknown> => input && typeof input === 'object' && !Array.isArray(input)
     ? input as Record<string, unknown> : {};
-  const diagnostics = record(value);
-  const candidates = {
-    rdap: record(diagnostics.rdap).status,
-    registrar_rdap: record(record(diagnostics.rdap).registrar).status,
-    whois: record(diagnostics.whois).status,
-    availability: record(diagnostics.availability).status,
-    reverse_dns: record(diagnostics.reverseDns).status,
-    network_context: record(diagnostics.network).status,
-    security_txt: record(diagnostics.securityTxt).status,
-    sslbl: record(diagnostics.sslbl).status,
-  };
-  return Object.freeze(Object.fromEntries(Object.entries(candidates).map(([source, state]) => [
-    source, typeof state === 'string' && FINAL_SOURCE_STATES.has(state) ? state as typeof LOOKUP_SOURCE_STATES[number] : null,
-  ])));
+  return Object.freeze(Object.entries(DIAGNOSTIC_SOURCE_PATHS).map(([source, keys]) => {
+    const state = record(keys.reduce<unknown>((current, key) => record(current)[key], value)).status;
+    return Object.freeze({
+      source, path: `diagnostics.${keys.join('.')}.status`,
+      state: typeof state === 'string' && FINAL_SOURCE_STATES.has(state) ? state as typeof LOOKUP_SOURCE_STATES[number] : null,
+    });
+  }));
+}
+
+export function lookupDiagnosticStates(value: unknown): Readonly<Record<string, typeof LOOKUP_SOURCE_STATES[number] | null>> {
+  return Object.freeze(Object.fromEntries(lookupDiagnosticEntries(value).map(({ source, state }) => [source, state])));
 }
 const SOURCE_ID_RE = /^[a-z][a-z0-9_]{0,39}$/u;
 

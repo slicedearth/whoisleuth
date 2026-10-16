@@ -9,12 +9,15 @@ WHOISleuth is intended for authorised defensive investigation, abuse response,
 threat research, domain acquisition due diligence, asset review, and education.
 Network collection is initiated explicitly by the operator, uses bounded
 requests, and keeps source provenance and incomplete results visible. Hosted
-and distributable collection does not exploit targets, bypass access controls,
+and main-CLI collection does not exploit targets, bypass access controls,
 submit credentials, execute remote page scripts, or automate enforcement
-actions. The separate repo-local rendered-capture package is an explicit
-authorised exception: it executes page JavaScript in a disposable,
-network-bounded browser and writes only a local screenshot plus sanitised
-digest and manifest artefacts for operator-controlled review and deletion.
+actions. The separate optional rendered-capture companion is distributed as a
+locally assembled archive, not as part of the hosted application or main CLI,
+and is not published to a package registry. It executes page JavaScript only
+after explicit authorisation, in a disposable, sandboxed, network-bounded
+browser. Admitted resource operators receive their requested URLs; screenshots
+and sanitised digest/manifest artefacts remain local for operator-controlled
+review and deletion.
 
 Operators are responsible for using WHOISleuth only on systems and data they
 are authorised to examine and in accordance with applicable laws, provider

@@ -96,8 +96,10 @@ PKIX, STARTTLS and SMTP transport remain separate evidence states.
 STARTTLS detection uses the full bounded reply. If the retained capability
 inventory is shortened, the report remains partial and names the omission.
 
-The repository-only rendered-capture package is outside hosted and distributable
-collection. It executes remote page JavaScript only for an explicitly
+The separate optional rendered-capture companion is distributed as a locally
+assembled archive, not as part of the hosted application or main CLI, and is
+not published to a package registry. Its sandboxed, bounded browser executes
+remote page JavaScript only for an explicitly
 authorised route set, and each admitted resource operator receives the exact
 requested URL. Captures and screenshots remain local until the operator deletes
 them.

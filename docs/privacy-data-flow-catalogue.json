@@ -6980,7 +6980,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "The report retains source states and timings but excludes targets, queries, endpoints, and raw evidence.",
+        "Accepts supported Lookup, Bulk or Bulk-item documents, or an unmixed set of source-reliability reports. Retains source states and timings but excludes targets, queries, endpoints and raw evidence.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -7347,7 +7347,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Reads bounded local JSON only. Plan shows exact domains, duplicates, per-domain outcomes, destination and review priority with zero additional requests. Export emits Watchlist schema 5 without creating a scan or baseline. Neither mode enables collection or scheduling.",
+        "Reads bounded local JSON only. Plan shows exact domains, duplicates, per-domain outcomes, destination and review priority with zero additional requests. Export emits Watchlist schema 6 without creating a scan or baseline. Neither mode enables collection or scheduling.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],

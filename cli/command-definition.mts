@@ -240,7 +240,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--config': file('Load explicit versioned CLI configuration from this file.'),
   '--profile': text('Select a named profile from the supplied configuration.', true),
   '--palette': enumeration('Choose the terminal colour palette; redirected output and no-colour settings still take precedence.', ['auto', 'light', 'dark']),
-  '--network': flag('Include the optional public DNS and port 43 runtime checks.'),
+  '--network': flag('Include the optional public DNS, HTTPS and WHOIS (port 43) runtime checks.'),
   '--json': flag('Write structured JSON to stdout or the selected output file.'),
   '--reported-action': optionDefinition('enum', 'Record an analyst-reported identity action; repeat for separate actions.', { values: IDENTITY_ACTIONS.map(action => action.id), occurrence: 'repeatable' }),
   '--trusted-auth-header': optionDefinition('text', 'Select a recognised receiver header by part:header-index. This records analyst trust, not independent authentication; repeat for separate headers.', { occurrence: 'repeatable' }),

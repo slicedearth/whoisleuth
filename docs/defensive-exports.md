@@ -9,7 +9,9 @@ Bulk can export filtered, high-risk registered domains in four local text format
 - `STIX 2.1`: a JSON bundle with separate domain observations, heuristic Indicators, and `based-on` relationships.
 - `MISP event JSON`: an unpublished, organisation-only event containing non-IDS domain attributes for analyst review.
 
-An entry is eligible only when its Bulk result is registered, for sale, or expiring; has a Risk score of at least 70; is not trusted by the active Brand Profile; and did not fail its lookup. The active Bulk filters are applied before export. Domains are canonicalised, deduplicated, sorted, and capped at 2,000 text entries after inspecting at most 8,000 input records. STIX exports are capped at 1,000 domains, producing at most 4,001 objects.
+The candidate shortlist requires a registered, for-sale or expiring Bulk result, a Risk score of at least 70, ready Brand Profile context, no trusted-domain match and no failed lookup. Missing or unavailable Profile context does not admit a candidate. Active Bulk filters narrow this shortlist; they do not approve it for use.
+
+Export preflight checks the explicit selection and reviewed dispositions separately. Unselected or unreviewed domains, declared official domains, allowlisted domains and common infrastructure are excluded. Domains are canonicalised, deduplicated, sorted, and capped at 2,000 text entries after inspecting at most 8,000 input records. STIX exports are capped at 1,000 domains, producing at most 4,001 objects.
 
 Every file includes its generation time and a false-positive warning. These are heuristic candidate indicators, not declarations that a domain is malicious. WHOISleuth never applies, uploads, or submits the generated rules automatically. Review the domains and test the target resolver or blocking system before deployment.
 

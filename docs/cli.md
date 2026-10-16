@@ -1,7 +1,5 @@
 # WHOISleuth CLI guide
 
-`review-evidence` also reviews bounded source-qualified infrastructure snapshots and explicit earlier/later comparison inputs entirely offline. See [infrastructure observations](infrastructure-observations.md) for the exact schemas, outcome semantics and retained-evidence limitations.
-
 The first-party CLI runs on the operator's machine and does not call the hosted
 WHOISleuth deployment. Use this guide for installation, common commands,
 collection boundaries and output. Installed `whoisleuth --help`, focused
@@ -294,6 +292,8 @@ queries retain their historical JSON shape and exit behaviour, without intrinsic
 metadata or freshness admission; terminal output identifies that limitation.
 
 ### Contextual reviews
+
+`review-evidence` reviews bounded source-qualified infrastructure snapshots and explicit earlier/later comparisons offline. See [infrastructure observations](infrastructure-observations.md) for supported inputs and how to interpret their outcomes.
 
 `review-evidence` also accepts [contextual review inputs](contextual-reviews.md)
 for source-qualified incident sequences, retained domain history, platform-object continuity, authorised storefront
@@ -757,6 +757,9 @@ and machine output contains no ANSI or transient progress text.
 - `lookup --browse` provides an interactive terminal view; press `?` for keys.
 - `--events` writes versioned lifecycle events to stderr.
 - `--strict-exit` and `--fail-on` expose selected evidence states to automation.
+- `lookup --junit` reports retained diagnostic source states, not version or
+  timing metadata. Nested diagnostic failures remain failures; target-bearing
+  diagnostic paths are not copied into the XML. This is not a truth verdict.
 - `--output` writes a private local file atomically and refuses an existing path
   unless `--force` is also selected.
 

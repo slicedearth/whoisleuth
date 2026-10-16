@@ -187,7 +187,7 @@ const CLI_PUBLIC_GUIDANCE = Object.freeze({
       id: 'case-handoff',
       label: 'Prepare a reviewed Case handoff',
       commands: Object.freeze([
-        'whoisleuth case-pack cases.json --audience public --reviewed --json',
+        'whoisleuth case-pack cases.json --audience public --reviewed --json --output case-pack.json',
         'whoisleuth sharing-review case-pack.json --marking clear --recipient-scope public --purpose "Reviewed evidence handoff" --human-reviewed --personal-data-reviewed --redactions-confirmed --json',
       ]),
       result: 'Verify the output digest and review the audience projection before deliberately sharing the separate file.',
