@@ -177,8 +177,13 @@ export const glossaryTerms: readonly GuideDefinition[] = Object.freeze([
   Object.freeze({ term: 'Workspace archive', definition: 'A versioned local backup that combines supported browser-saved records. Dashboard recommends a passphrase-encrypted download, while a separately labelled unencrypted download remains available for compatibility. It is a file format, not a separate area of the interface.' }),
 ]);
 
+const lookupEvidenceVersionLabel = SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.length > 1
+  && SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.every((version, index, versions) => index === 0 || version === versions[index - 1]! + 1)
+  ? `${SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS[0]}–${SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.at(-1)}`
+  : SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.join(', ');
+
 export const guideFaqs: readonly GuideFaq[] = Object.freeze([
-  Object.freeze({ question: 'Can I review a Lookup evidence export without scanning again?', answer: `Yes. Lookup validates and replays supported schemas ${SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.join(', ')}, including current schema ${LOOKUP_EVIDENCE_SCHEMA_VERSION}, locally without contacting the target. Older captures keep their original observation scope. Schema ${V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} may contain public contact fields, so review it before sharing.` }),
+  Object.freeze({ question: 'Can I review a Lookup evidence export without scanning again?', answer: `Yes. Lookup validates and replays schemas ${lookupEvidenceVersionLabel} (current: ${LOOKUP_EVIDENCE_SCHEMA_VERSION}) locally without contacting the target. Older captures keep their original observation scope. Schema ${V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} may contain public contact fields, so review it before sharing.` }),
   Object.freeze({ question: 'Does WHOISleuth decide whether a domain is malicious?', answer: 'No. It organises observed evidence and provides an explainable Risk score for prioritisation. An analyst must review the sources and context.' }),
   Object.freeze({ question: 'Should I use Fast or Deep lookup?', answer: 'Use Fast for registration-first triage. Deep adds DNS, website, certificate and network context, including SOA, HTTPS service bindings, effective CAA and separately attributed PTR names where relevant.' }),
   Object.freeze({ question: 'Does a lookup contact the website?', answer: 'A Deep domain lookup can make bounded requests to public registration, DNS, homepage, favicon, certificate, and IP RDAP endpoints. security.txt and external intelligence sources run only when selected. Fast collection avoids website and certificate checks.' }),
