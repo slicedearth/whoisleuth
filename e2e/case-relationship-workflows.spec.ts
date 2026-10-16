@@ -170,7 +170,7 @@ test.describe('browser-local campaigns', () => {
     await expect(reviewSummary.locator('article', { hasText: 'Password field observed' })).toContainText('1');
     await expect(reviewSummary.locator('article', { hasText: 'Official identity relationship' })).toContainText('1');
     await expect(reviewSummary.locator('article', { hasText: 'Redirect or transport review' })).toContainText('1');
-    await expect(reviewSummary.locator('article', { hasText: 'Mail exchanger observed' })).toContainText('1');
+    await expect(reviewSummary.locator('article', { hasText: 'MX publication retained' })).toContainText('1');
     const sourceSequence = page.getByRole('region', { name: 'Retained source sequence' });
     await expect(sourceSequence).toContainText('Mail');
     await expect(sourceSequence).toContainText('member-one.invalid');
@@ -463,7 +463,9 @@ test.describe('browser-local campaigns', () => {
     await page.getByRole('button', { name: 'Create campaign' }).click();
     await page.locator('.add-case select').selectOption('long-mobile-campaign-member.invalid');
     await page.getByRole('button', { name: 'Add domain', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Retained source sequence' })).toContainText('No source-qualified pins or sightings');
+    const sourceSequence = page.getByRole('region', { name: 'Retained source sequence' });
+    await expect(sourceSequence.locator('.empty')).toHaveText('Save a source-qualified Lookup fact or reviewed sighting to a member Case to build this sequence. None are retained for these campaign members yet.');
+    await expect(sourceSequence.getByRole('button', { name: 'Export review', exact: true })).toBeDisabled();
     await expectNoHorizontalOverflow(page);
   });
 });
