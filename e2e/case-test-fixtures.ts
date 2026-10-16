@@ -157,7 +157,7 @@ export async function openCasesView(page: Page) {
 export async function createCase(page: Page, domain: string) {
   if (new URL(page.url()).searchParams.has('case')) await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   await page.locator('#new-case').fill(domain);
-  await page.getByRole('button', { name: 'Open or create case' }).click();
+  await page.getByRole('button', { name: 'Open or create Case' }).click();
   const heading = page.getByRole('heading', { name: domain, exact: true });
   await expect(heading).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Case sections', exact: true })).toBeVisible();

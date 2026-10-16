@@ -424,7 +424,7 @@ test.describe('browser-local campaigns', () => {
     await openConsoleView(page, 'campaigns');
 
     const downloadPromise = page.waitForEvent('download');
-    await page.locator('.campaign-toolbar').getByRole('button', { name: 'Export JSON' }).click();
+    await page.locator('.campaign-toolbar').getByRole('button', { name: 'Export campaigns JSON' }).click();
     const download = await downloadPromise;
     const body = await (await download.createReadStream()).toArray();
     const parsed = JSON.parse(Buffer.concat(body).toString('utf-8'));
@@ -445,7 +445,7 @@ test.describe('browser-local campaigns', () => {
       createdAt: '2026-07-01T00:00:00.000Z', updatedAt: '2026-07-01T00:00:00.000Z',
     }] };
     const chooserPromise = page.waitForEvent('filechooser');
-    await page.locator('.campaign-toolbar label', { hasText: 'Import JSON' }).click();
+    await page.locator('.campaign-toolbar label', { hasText: 'Import campaigns JSON' }).click();
     const chooser = await chooserPromise;
     await chooser.setFiles({ name: 'campaigns.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(payload)) });
 
@@ -928,7 +928,7 @@ test.describe('accessible cross-case relationship table', () => {
         })),
       });
     }
-    await expect(controls.getByRole('status')).toContainText('Downloaded 4 nodes and 4 edges');
+    await expect(controls.getByRole('status')).toContainText('Prepared 4 nodes and 4 edges');
   });
 
   test('shows a clear empty state when no retained evidence relates cases', async ({ page }) => {

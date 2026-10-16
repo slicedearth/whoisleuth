@@ -114,12 +114,12 @@ test('Cases and monitoring report unreadable collections without false empty sta
     await expect(workspace).toHaveAttribute('aria-busy', 'true');
     await expect(workspace.getByText('Reading Case records from this workspace.')).toBeVisible();
     await expect(workspace.getByRole('heading', { name: 'No cases yet' })).toHaveCount(0);
-    await expect(workspace.getByRole('button', { name: 'Open or create case', exact: true })).toHaveCount(0);
+    await expect(workspace.getByRole('button', { name: 'Open or create Case', exact: true })).toHaveCount(0);
   } finally {
     await release();
   }
   await expect(page.locator('#case-head-read-recovery')).toBeVisible();
-  await expect(workspace.getByRole('button', { name: 'Open or create case', exact: true })).toBeVisible();
+  await expect(workspace.getByRole('button', { name: 'Open or create Case', exact: true })).toBeVisible();
   await expect(workspace).toHaveAttribute('aria-busy', 'false');
   await expect(workspace.getByRole('heading', { name: 'Opening saved Cases' })).toHaveCount(0);
   const monitorPanel = page.locator('#monitor-view-panel');
@@ -315,8 +315,8 @@ test('response lifecycle surfaces remain accessible across major desktop and mob
     await expect(actionTimelines).toContainText('Provider outcome: accepted for review · Acknowledged for bounded review.');
     await actions.getByRole('button', { name: 'Review or append event' }).focus();
     await expect(actions.getByRole('button', { name: 'Review or append event' })).toBeFocused();
-    const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
-    await remediation.getByText('Verify remediation independently and close deliberately', { exact: true }).click();
+    const remediation = workspace.locator('details', { hasText: 'Review independent observations and record closure' });
+    await remediation.getByText('Review independent observations and record closure', { exact: true }).click();
     await expect(remediation).toContainText('Provider outcome time');
     await expect(remediation).toContainText('Independently observed change time');
     const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });

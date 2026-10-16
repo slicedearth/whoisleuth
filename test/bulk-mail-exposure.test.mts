@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
 import { relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
 
@@ -64,6 +65,28 @@ function result(
 }
 
 describe('Bulk lookalike mail exposure', () => {
+  test('new baseline descriptions name DNS publications while historical report bytes remain verifiable', async () => {
+    const report = buildBulkMailExposureReport([
+      result('published-mail.example'),
+      result('policy-gap.example', { hasDmarc: false }),
+    ], { generatedAt: OBSERVED_AT, observedAt: OBSERVED_AT, profile: 'standard' });
+    assert.equal(report.rows[0]?.baselineDetail,
+      'Published MX, SPF and DMARC records match the configured standard-mail baseline.');
+    assert.equal(report.rows[1]?.baselineDetail,
+      'MX publication was observed with a mail-authentication policy gap relative to the configured baseline.');
+    const current = await buildBulkMailExposureExport(report);
+    assert.equal((await verifyOfflineArtifact(current.content)).state, 'verified');
+    assert.equal(current.document.version, 2);
+
+    const historical = await readFile(new URL('./fixtures/investigation-portability/bulk-mail-exposure-v2.json', import.meta.url), 'utf8');
+    const retained = JSON.parse(historical);
+    assert.equal(retained.report.rows[0].baselineDetail,
+      'Receiving mail plus SPF and DMARC matches the configured standard-mail baseline.');
+    assert.equal(retained.integrity.digestSha256,
+      'sha256:34ae2a8ace28193f545b897035d3c72b26a2e14a09b0845dbdd5a5d337955aa3');
+    assert.equal((await verifyOfflineArtifact(historical)).state, 'verified');
+  });
+
   test('keeps receiving, null-MX, no-explicit-MX, gaps, and incomplete evidence separate', () => {
     const report = buildBulkMailExposureReport([
       result('authenticated.example'),

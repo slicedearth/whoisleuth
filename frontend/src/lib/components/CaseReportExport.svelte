@@ -55,12 +55,12 @@
 </script>
 
 <fieldset class="export-controls">
-  <legend>Case evidence package</legend>
+  <legend>Case report exports</legend>
   <label class="export-choice choice">
     <input type="checkbox" bind:checked={includeNotes}>
     <span>
       Include analyst notes
-      <small>Notes may contain sensitive information. Review the package before sharing it.</small>
+      <small>Notes may contain sensitive information. Review the report before sharing it.</small>
     </span>
   </label>
   <label class="export-choice choice">
@@ -72,8 +72,8 @@
   </label>
   <div class="export-actions">
     <button bind:this={previewTrigger} type="button" class="btn" onclick={event => { event.currentTarget.focus({ preventScroll: true }); prepare(); }}>Preview report</button>
-    <button type="button" class="btn" onclick={() => exportReport('json')}>Export JSON</button>
-    <button type="button" class="btn" onclick={() => exportReport('md')}>Export Markdown</button>
+    <button type="button" class="btn" onclick={() => exportReport('json')}>Export report JSON</button>
+    <button type="button" class="btn" onclick={() => exportReport('md')}>Export report Markdown</button>
     <button type="button" class="btn" onclick={exportSightings} disabled={!record.sightings.length}>Export sightings STIX</button>
   </div>
   <small class="exchange-note">The STIX export includes only source-qualified sightings and their bounded provenance. Negative review states remain notes and never erase earlier observations.</small>

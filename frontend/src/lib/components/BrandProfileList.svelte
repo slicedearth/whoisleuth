@@ -77,7 +77,7 @@
     </div>
     <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Brand profile pages" />
   </section>
-{:else}<section class="empty-state card"><h2>No brand profiles saved</h2><p>Create a profile to establish official domains and trusted infrastructure.</p></section>{/if}
+{:else}<section class="empty-state card"><h2>No brand profiles saved</h2><p>Create a profile to record declared official domains and comparison references.</p></section>{/if}
 
 <style>
   .profiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));align-items:start;gap:12px}

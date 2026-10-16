@@ -158,7 +158,7 @@
   async function addIncidentTarget() {
     const unchanged = targetDraft.capture();
     if (incidentTargets.length >= MAX_CASE_INCIDENT_TARGETS) {
-      onmessage(`A Case can retain at most ${MAX_CASE_INCIDENT_TARGETS} active incident links. Resolve one before adding another.`);
+      onmessage(`A Case can retain at most ${MAX_CASE_INCIDENT_TARGETS} active incident links. Remove one from active scope before adding another.`);
       return;
     }
     const url = normalizeCaseIncidentTargetUrl(targetUrl);
@@ -273,7 +273,7 @@
     {#if incidentTargets.length}
       <ol class="target-list">
         {#each incidentTargets as target}
-          <li><div class="target-context"><a href={target.url} target="_blank" rel="noopener noreferrer">{target.url}<span class="sr-only"> (opens in a new tab)</span></a><label>Reporting platform for this incident<select aria-label={`Reporting platform for ${target.url}`} value={manualPlatforms[target.id] ?? ''} onchange={event => manualPlatforms[target.id] = event.currentTarget.value as IncidentPlatformId | ''}><option value="">Match the exact hostname</option>{#each INCIDENT_PLATFORMS as platform}<option value={platform.id}>{platform.label} · analyst-selected</option>{/each}</select></label></div><button class="btn small" type="button" disabled={busy} onclick={() => void resolveIncidentTarget(target.id)}>Resolve</button></li>
+          <li><div class="target-context"><a href={target.url} target="_blank" rel="noopener noreferrer">{target.url}<span class="sr-only"> (opens in a new tab)</span></a><label>Reporting platform for this incident<select aria-label={`Reporting platform for ${target.url}`} value={manualPlatforms[target.id] ?? ''} onchange={event => manualPlatforms[target.id] = event.currentTarget.value as IncidentPlatformId | ''}><option value="">Match the exact hostname</option>{#each INCIDENT_PLATFORMS as platform}<option value={platform.id}>{platform.label} · analyst-selected</option>{/each}</select></label></div><button class="btn small" type="button" disabled={busy} onclick={() => void resolveIncidentTarget(target.id)}>Remove from active scope</button></li>
         {/each}
       </ol>
     {:else}

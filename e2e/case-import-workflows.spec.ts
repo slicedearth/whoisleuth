@@ -21,7 +21,7 @@ test('a complete maximum-size Case file imports without losing records or notes'
   expect(Buffer.byteLength(raw)).toBeGreaterThan(MAX_CASE_STORE_BYTES);
   expect(Buffer.byteLength(raw)).toBeLessThan(MAX_CASE_IMPORT_BYTES);
   await openCasesView(page);
-  const input = page.getByRole('region', { name: 'Case workspace controls' }).getByLabel('Import JSON', { exact: true });
+  const input = page.getByRole('region', { name: 'Case workspace controls' }).getByLabel('Import Cases JSON', { exact: true });
   const start = performance.now();
   await input.setInputFiles({ name: 'complete-cases.json', mimeType: 'application/json', buffer: Buffer.from(raw) });
   await expect(caseWorkspaceActionStatus(page)).toContainText('Imported 500 new and 0 merged cases.');
@@ -60,11 +60,11 @@ function pagedFindingFile(count = 100, longFields = false) {
 
 test('every accepted finding is reachable and the final deselection stays empty across pages', async ({ page }) => {
   await openCasesView(page);
-  const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
-  await importer.getByText('Import bounded external findings', { exact: true }).click();
+  const importer = page.locator('details').filter({ has: page.getByText('Import external observations and claims', { exact: true }) });
+  await importer.getByText('Import external observations and claims', { exact: true }).click();
   const fileInput = importer.locator('input[type="file"]');
   await fileInput.setInputFiles(pagedFindingFile());
-  const review = importer.getByRole('region', { name: 'Validated import review' });
+  const review = importer.getByRole('region', { name: 'Import content review' });
   await expect(review).toContainText('100 findings · 20 domains');
   const navigation = review.getByRole('navigation', { name: 'Import preview pages' });
   const encountered: string[] = [];
@@ -104,11 +104,11 @@ test('every accepted finding is reachable and the final deselection stays empty 
 
 test('new files and cancellation reset review selection without writing Cases', async ({ page }, testInfo) => {
   await openCasesView(page);
-  const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
-  await importer.getByText('Import bounded external findings', { exact: true }).click();
+  const importer = page.locator('details').filter({ has: page.getByText('Import external observations and claims', { exact: true }) });
+  await importer.getByText('Import external observations and claims', { exact: true }).click();
   const fileInput = importer.locator('input[type="file"]');
   await fileInput.setInputFiles(pagedFindingFile());
-  const review = importer.getByRole('region', { name: 'Validated import review' });
+  const review = importer.getByRole('region', { name: 'Import content review' });
   await review.getByRole('button', { name: 'Clear selection' }).click();
   await review.getByRole('navigation', { name: 'Import preview pages' }).getByRole('button', { name: 'Next' }).click();
   const source = pagedFindingFile(1, true);
@@ -175,8 +175,8 @@ for (const format of ['json', 'csv'] as const) for (const phase of ['file', 'dig
   test(`selected ${format} original ${phase} completion cannot survive ${exit}`, async ({ page }) => {
     await openCasesView(page);
     const before = await readBrowserLocalCollection(page, 'cases');
-    const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
-    const toggle = importer.getByText('Import bounded external findings', { exact: true });
+    const importer = page.locator('details').filter({ has: page.getByText('Import external observations and claims', { exact: true }) });
+    const toggle = importer.getByText('Import external observations and claims', { exact: true });
     await toggle.click();
     await page.evaluate(phase => {
       const scope = window as unknown as { originalImportHeld: boolean; releaseOriginalImport(): Promise<void> };
@@ -211,26 +211,26 @@ for (const format of ['json', 'csv'] as const) for (const phase of ['file', 'dig
       await toggle.click(); await expect(importer).not.toHaveAttribute('open');
       await expect(importer.locator('input[type="file"]')).toBeEnabled(); await toggle.click();
       await importer.locator('input[type="file"]').setInputFiles(file);
-      await expect(importer.getByRole('region', { name: 'Validated import review' })).toContainText('Paged source review');
+      await expect(importer.getByRole('region', { name: 'Import content review' })).toContainText('Paged source review');
     } else {
       await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Lookup', exact: true }).click();
       await expect(page).toHaveURL(/\/lookup$/u);
     }
     await page.evaluate(() => (window as unknown as { releaseOriginalImport(): Promise<void> }).releaseOriginalImport());
     await expect(page.getByText('Held source', { exact: true })).toHaveCount(0);
-    if (exit === 'replace') await expect(importer.getByRole('region', { name: 'Validated import review' })).toContainText('Paged source review');
-    else await expect(page.getByRole('region', { name: 'Validated import review' })).toHaveCount(0);
+    if (exit === 'replace') await expect(importer.getByRole('region', { name: 'Import content review' })).toContainText('Paged source review');
+    else await expect(page.getByRole('region', { name: 'Import content review' })).toHaveCount(0);
     expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   });
 }
 
 test('selected CSV explains exact cells without exporting raw spelling or retaining preview identity', async ({ page }, testInfo) => {
   await openCasesView(page);
-  const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
+  const importer = page.locator('details').filter({ has: page.getByText('Import external observations and claims', { exact: true }) });
   await importer.locator(':scope > summary').click();
   const raw = '\ufeffdomain,category,summary,observed_at,completeness,limitation,reference\r\nLogin.Example.TEST.,dns,"=literal, ""quoted"" observation",2026-10-01T01:00:00+10:00,partial,Fixture,';
   await importer.locator('input[type="file"]').setInputFiles({ name: 'selected.csv', mimeType: 'text/csv', buffer: Buffer.from(raw) });
-  const review = importer.getByRole('region', { name: 'Validated import review' });
+  const review = importer.getByRole('region', { name: 'Import content review' });
   const before = await readBrowserLocalCollection(page, 'cases');
   const explanation = review.getByText('Explain a field for finding 1', { exact: true }).locator('..');
   await explanation.locator(':scope > summary').click();
@@ -264,10 +264,10 @@ for (const outcome of ['write-failure', 'refresh-failure'] as const) {
     await createCase(page, 'review-2.invalid');
     await page.getByRole('link', { name: 'All Cases', exact: true }).click();
     const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
-    const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
-    await importer.getByText('Import bounded external findings', { exact: true }).click();
+    const importer = page.locator('details').filter({ has: page.getByText('Import external observations and claims', { exact: true }) });
+    await importer.getByText('Import external observations and claims', { exact: true }).click();
     await importer.locator('input[type="file"]').setInputFiles(pagedFindingFile(12));
-    const review = importer.getByRole('region', { name: 'Validated import review' });
+    const review = importer.getByRole('region', { name: 'Import content review' });
     await review.getByRole('button', { name: 'Clear selection' }).click();
     const navigation = review.getByRole('navigation', { name: 'Import preview pages' });
     await navigation.getByRole('button', { name: 'Next', exact: true }).click();
@@ -304,10 +304,10 @@ for (const width of [320, 390, 1024, 1280, 1920, 3840]) {
       await page.setViewportSize({ width, height: width < 700 ? 844 : 900 });
       await useTheme(page, theme);
       await openCasesView(page);
-      const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
-      await importer.getByText('Import bounded external findings', { exact: true }).click();
+      const importer = page.locator('details').filter({ has: page.getByText('Import external observations and claims', { exact: true }) });
+      await importer.getByText('Import external observations and claims', { exact: true }).click();
       await importer.locator('input[type="file"]').setInputFiles(pagedFindingFile(100, true));
-      const review = importer.getByRole('region', { name: 'Validated import review' });
+      const review = importer.getByRole('region', { name: 'Import content review' });
       await expect(review).toContainText('100 findings · 20 domains');
       await expect(review.getByText(/Shortened Case fields:/)).toHaveCount(10);
       await expect(review).toContainText('Retained observation hostname: review-0.invalid · Retained completeness: partial · Storage truncation: yes');
@@ -346,8 +346,8 @@ for (const width of [320, 390, 1024, 1280, 1920, 3840]) {
 
 test('external findings require a validated preview before creating local evidence pins', async ({ page }) => {
   await openCasesView(page);
-  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
-  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const externalImport = page.locator('details', { hasText: 'Import external observations and claims' });
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
   const payload = JSON.stringify({
     schema: 'whoisleuth.external-findings',
     schemaVersion: EXTERNAL_FINDINGS_VERSION,
@@ -381,7 +381,7 @@ test('external findings require a validated preview before creating local eviden
   await expect(externalWorkspace).toContainText('WHOISleuth did not collect or independently verify this provider finding');
 
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
-  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
   await externalImport.locator('input[type="file"]').setInputFiles(file);
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'skipped 1 duplicate' })).toBeVisible();
@@ -392,8 +392,8 @@ test('external findings require a validated preview before creating local eviden
 
 test('external findings serialize file parsing before exposing import actions', async ({ page }) => {
   await openCasesView(page);
-  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
-  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const externalImport = page.locator('details', { hasText: 'Import external observations and claims' });
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
   await page.evaluate(() => {
     const originalArrayBuffer = File.prototype.arrayBuffer;
     let holdNextRead = true;
@@ -444,8 +444,8 @@ test('external findings serialize file parsing before exposing import actions', 
 
 test('portable WARC evidence is normalized locally before deliberate case import', async ({ page }) => {
   await openCasesView(page);
-  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
-  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const externalImport = page.locator('details', { hasText: 'Import external observations and claims' });
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
   const prefix = [
     'HTTP/1.1 200 OK',
     'Content-Type: text/html; charset=utf-8',
@@ -501,8 +501,8 @@ test('portable WARC evidence is normalized locally before deliberate case import
 
 test('portable WACZ evidence verifies package fixity before using the WARC privacy filter', async ({ page }, testInfo) => {
   await openCasesView(page);
-  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
-  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const externalImport = page.locator('details', { hasText: 'Import external observations and claims' });
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
   const block = Buffer.from([
     'HTTP/1.1 200 OK',
     'Content-Type: text/html; charset=utf-8',
@@ -599,9 +599,9 @@ test('portable WACZ evidence verifies package fixity before using the WARC priva
   });
   await externalImport.locator('input[type="file"]').setInputFiles({ name: 'held.wacz', mimeType: 'application/wacz', buffer: Buffer.from(wacz) });
   await expect.poll(() => page.evaluate(() => Reflect.get(window, 'archiveRecordHeld'))).toBe(true);
-  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
   await expect(externalImport).not.toHaveAttribute('open');
-  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
   await externalImport.locator('input[type="file"]').setInputFiles(pagedFindingFile(1));
   await page.evaluate(() => (window as unknown as { releaseArchiveRecord(): Promise<void> }).releaseArchiveRecord());
   await expect(externalImport.getByRole('heading', { name: 'Paged source review', exact: true })).toBeVisible();
@@ -620,8 +620,8 @@ test('STIX claims require an existing selected case and remain separate from col
   await openCasesView(page);
   await createCase(page, 'intelligence-case.invalid');
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
-  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
-  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const externalImport = page.locator('details', { hasText: 'Import external observations and claims' });
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
   const payload = JSON.stringify({
     type: 'bundle',
     id: 'bundle--00000000-0000-4000-8000-000000000101',
@@ -728,7 +728,7 @@ test('a case file imports and merges through the Cases toolbar', async ({ page }
   };
 
   const fileChooserPromise = page.waitForEvent('filechooser');
-  await page.locator('.case-toolbar label', { hasText: 'Import JSON' }).click();
+  await page.locator('.case-toolbar label', { hasText: 'Import Cases JSON' }).click();
   const fileChooser = await fileChooserPromise;
   await fileChooser.setFiles({
     name: 'cases.json',

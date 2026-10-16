@@ -587,7 +587,7 @@ test('selects two or three exact Case checkpoints without saving a timeline or s
   const laterId = retainedHistory.find(item => item.capturedAt === LATER)!.id;
   expect(new Set([earlierId, middleId, laterId]).size).toBe(3);
   await review.getByText('Choose Case checkpoints', { exact: true }).click();
-  const stage = review.getByRole('region', { name: 'Case checkpoint stage' });
+  const stage = review.getByRole('region', { name: 'Compare Case checkpoints' });
   await stage.getByLabel('Case for checkpoint review').selectOption('ledger-interval-case');
   const first = stage.getByRole('checkbox', { name: new RegExp(earlierId, 'u') });
   const middle = stage.getByRole('checkbox', { name: new RegExp(middleId, 'u') });
@@ -626,7 +626,7 @@ test('selects two or three exact Case checkpoints without saving a timeline or s
   await expect(stage.getByRole('checkbox', { checked: true })).toHaveCount(0);
   await expect(stage.getByLabel('Interval to inspect')).toHaveCount(0);
   await expect(stage.getByRole('heading', { name: 'Selected checkpoint interval' })).toHaveCount(0);
-  await stage.getByRole('button', { name: 'Clear stage' }).click();
+  await stage.getByRole('button', { name: 'Clear comparison' }).click();
   await expect(stage.getByLabel('Case for checkpoint review')).toHaveValue('');
   const retainedAfter = await readBrowserLocalCollection(page, 'cases');
   expect(retainedAfter.records).toEqual(retainedBefore.records);

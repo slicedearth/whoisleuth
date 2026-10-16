@@ -21,18 +21,18 @@
   <h4>Try this revision against retained candidates</h4>
   <p>{comparison.profileName} · {comparison.rows.length} retained candidates · proposed revision {comparison.afterRevision}</p>
   {#if comparison.beforeRevision !== null}
-    <p>Compared with saved revision {comparison.beforeRevision}: {comparison.counts.added} new matches,
-      {comparison.counts.removed} removed matches, {comparison.counts.unchanged_match} still match and
-      {comparison.counts.unchanged_nonmatch} still do not match.</p>
+    <p>Compared with saved revision {comparison.beforeRevision}: {comparison.counts.added} newly match,
+      {comparison.counts.removed} no longer match, {comparison.counts.unchanged_match} still match and
+      {comparison.counts.unchanged_nonmatch} still do not match under the literal rules.</p>
   {:else}
     <p>No saved campaign revision exists. The proposal matches {comparison.afterMatches} of these
-      {comparison.rows.length} candidates; added or removed matches cannot be determined.</p>
+      {comparison.rows.length} candidates; match changes cannot be determined.</p>
   {/if}
   <details>
     <summary>Corpus identity and coverage</summary>
     <dl>
       <div><dt>Brand</dt><dd>{comparison.profileName} · <code>{comparison.profileId}</code></dd></div>
-      <div><dt>Saved Brand updated</dt><dd>{formatEvidenceDate(comparison.profileUpdatedAt)}</dd></div>
+      <div><dt>Brand record updated</dt><dd>{formatEvidenceDate(comparison.profileUpdatedAt)}</dd></div>
       <div><dt>Compared</dt><dd>{formatEvidenceDate(comparison.comparedAt)}</dd></div>
       <div><dt>Local corpus fingerprint</dt><dd><code>{comparison.revision}</code>
         <CopyButton value={comparison.revision} description="Copy local corpus fingerprint" /></dd></div>

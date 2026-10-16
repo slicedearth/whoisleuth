@@ -14,7 +14,7 @@
 <section class="control-centre card" aria-labelledby="domain-control-centre-title">
   <header class="section-head">
     <div>
-      <p class="eyebrow">Owned domains</p>
+      <p class="eyebrow">Declared official domains</p>
       <h2 id="domain-control-centre-title">Domain controls</h2>
       <p>Review lifecycle intent, expected settings, planned changes and shared dependencies across official domains. These workspace records are analyst-authored.</p>
     </div>
@@ -22,7 +22,7 @@
 
   <div class="metrics" aria-label="Portfolio control summary">
     <article><strong>{centre.counts.baselines}/{centre.counts.domains}</strong><span>baselines configured</span></article>
-    <article><strong>{centre.counts.retainedObservations}</strong><span>domains observed</span></article>
+    <article><strong>{centre.counts.retainedObservations}</strong><span>domains with retained observations</span></article>
     <article><strong>{centre.counts.plannedOrActiveChanges}</strong><span>planned changes</span></article>
     <article><strong>{centre.counts.retiringOrRetired}</strong><span>retiring or retired</span></article>
   </div>
@@ -35,7 +35,7 @@
           <div><dt>Zone intent</dt><dd>{row.baseline?.zoneIntent.replaceAll('_', ' ') || 'Not configured'}</dd></div>
           <div><dt>Nameserver preflight</dt><dd class={`state-${row.nameserverPreflight}`}>{row.nameserverPreflight.replaceAll('_', ' ')}</dd></div>
           <div><dt>Baseline depth</dt><dd>{row.baselineFields}/11 fields</dd></div>
-          <div><dt>Latest observation</dt><dd>{row.observationLimitation || date(row.latestObservationAt)}</dd></div>
+          <div><dt>Latest retained observation</dt><dd>{row.observationLimitation || date(row.latestObservationAt)}</dd></div>
           <div><dt>Recovery dependency</dt><dd>{row.baseline?.recoveryDependency || 'Not recorded'}</dd></div>
         </dl>
         {#if row.activeWindow}

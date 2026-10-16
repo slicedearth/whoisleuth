@@ -98,7 +98,7 @@
       previewTargets = targets;
       manifestFile = file;
       attachments = reviewed;
-      onmessage(`Validated ${countLabel(document.findings.length, 'capture finding')} for this Case. Review the manifest summary before importing.`);
+      onmessage(`Format-checked ${countLabel(document.findings.length, 'capture finding')} for this Case. Review the manifest summary before importing.`);
     } catch (cause) {
       if (generation === selectionGeneration) {
         onmessage(cause instanceof Error ? cause.message : 'Could not validate the rendered-capture manifest.');

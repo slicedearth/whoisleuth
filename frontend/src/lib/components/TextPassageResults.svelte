@@ -17,7 +17,7 @@
   <p role="status">{result.matchedCandidateWords} of {result.candidate.words} candidate words and {result.matchedReferenceWords} of {result.reference.words} reference words participate in these matches. {result.exactBytes ? 'The complete file bytes are identical.' : 'The complete file bytes differ.'}</p>
   <details><summary>Sources and comparison method</summary>
     <ComparisonFrame>
-      {#snippet header()}<h5>Verified text sources</h5>{/snippet}
+      {#snippet header()}<h5>Compared text files</h5>{/snippet}
       {#snippet left()}<section aria-label="Reference retained text source"><dl><dt>Reference: {reference.fileName}</dt><dd>{#if referenceScope}{referenceScope}<br />{/if}{reference.source ?? 'Source not declared'} · {reference.observedAt ?? 'Observation time unknown'}<br /><code>{result.reference.digestSha256}</code></dd></dl></section>{/snippet}
       {#snippet right()}<section aria-label="Candidate retained text source"><dl><dt>Candidate: {candidate.fileName}</dt><dd>{#if candidateScope}{candidateScope}<br />{/if}{candidate.source ?? 'Source not declared'} · {candidate.observedAt ?? 'Observation time unknown'}<br /><code>{result.candidate.digestSha256}</code></dd></dl></section>{/snippet}
       {#snippet children()}<ul>{#each result.limitations as limitation}<li>{limitation}</li>{/each}<li>Directional controls are shown as Unicode code points in the excerpts.</li></ul>{/snippet}

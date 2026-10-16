@@ -136,7 +136,7 @@
     <div>
       <p class="eyebrow">Active profile scope</p>
       <h2 id="brand-asset-register-title" tabindex="-1">Brand asset register</h2>
-      <p>Canonical domains from authored roles, exact profile-associated Cases, and non-transitive one-hop retained observations.</p>
+      <p>Review declared profile roles, explicitly associated Cases and directly linked retained observations.</p>
     </div>
     <strong class:numeric={projection.state === 'ready' || projection.state === 'partial'}>{projection.state === 'unavailable' ? 'Unavailable' : projection.state === 'loading' && !projection.rows.length ? 'Loading' : projection.rows.length}</strong>
   </header>
@@ -169,7 +169,7 @@
       <label>Classification<select id="brand-asset-class-filter" value={assetClass} onchange={(event) => void updateCategoricalFilter('assetClass', event.currentTarget.value)}>{#each CLASS_OPTIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
       <label>Source<select id="brand-asset-source-filter" value={assetSource} onchange={(event) => void updateCategoricalFilter('assetSource', event.currentTarget.value)}>{#each SOURCE_OPTIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
       <label>Observation evidence<select id="brand-asset-evidence-filter" value={assetEvidence} onchange={(event) => void updateCategoricalFilter('assetEvidence', event.currentTarget.value)}>{#each EVIDENCE_OPTIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
-      <label>Domain contains<input type="search" value={domainFilter} oninput={(event) => { domainFilter = event.currentTarget.value; }} autocomplete="off" placeholder="Filter this page locally"></label>
+      <label>Domain contains<input type="search" value={domainFilter} oninput={(event) => { domainFilter = event.currentTarget.value; }} autocomplete="off" placeholder="Filter retained domains locally"></label>
     </form>
 
     <p class="count-status" role="status" aria-live="polite" aria-atomic="true">{filteredRows.length} matching asset row{filteredRows.length === 1 ? '' : 's'}. {filteredRows.length ? `Showing ${firstVisible}–${lastVisible}.` : 'No rows match the current filters.'}</p>

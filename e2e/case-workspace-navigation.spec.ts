@@ -117,7 +117,7 @@ test('temporary Caseboard keeps authored reasoning local, protects cancelled exi
   }
   await page.emulateMedia({ media: 'print' }); await expect(disclosure).toBeHidden(); await page.emulateMedia({ media: 'screen' });
   await openCaseSection(page, 'Response');
-  const download = page.waitForEvent('download'); await page.locator('.export-controls').getByRole('button', { name: 'Export JSON', exact: true }).click();
+  const download = page.waitForEvent('download'); await page.locator('.export-controls').getByRole('button', { name: 'Export report JSON', exact: true }).click();
   const file = await download; const exported = Buffer.concat(await (await file.createReadStream()).toArray()).toString('utf8');
   expect(exported).not.toContain('Unpublished board'); expect(exported).not.toContain('Unpublished supports reasoning'); expect(exported).not.toContain('Unfinished temporary card');
   expect(await readBrowserLocalCollection(page, 'case_drafts')).toEqual(draftsBefore);
@@ -327,7 +327,7 @@ test('Case detail replaces the list and returns to its retained filters and focu
   await expect(page).toHaveURL('/cases?case=workspace-first');
   await expect(page.getByRole('heading', { name: 'first-work.example', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Saved Cases', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('textbox', { name: 'Track a domain', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Open a Case for a domain', exact: true })).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Case sections' }).getByRole('link')).toHaveText(['Summary', 'Evidence', 'Assessment', 'Response', 'History']);
   await expect(page.getByRole('group', { name: 'Case response presentation', includeHidden: true })).toBeHidden();
   await expect(page.getByRole('textbox', { name: /^Additional tags/, includeHidden: true })).toBeHidden();

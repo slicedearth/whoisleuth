@@ -27,13 +27,13 @@
 <section class="case-workspace-controls" aria-label="Case workspace controls">
 <div class="case-toolbar card">
   <form class="track" onsubmit={(event) => { event.preventDefault(); trackDomain(); }}>
-    <label for="new-case">Track a domain</label>
-    <div><input id="new-case" value={domain} oninput={(event) => setDomain(event.currentTarget.value)} placeholder="suspicious.example" autocomplete="off" spellcheck="false"><button class="primary" type="submit" disabled={!domain.trim() || openingCase}>Open or create case</button></div>
+    <label for="new-case">Open a Case for a domain</label>
+    <div><input id="new-case" value={domain} oninput={(event) => setDomain(event.currentTarget.value)} placeholder="suspicious.example" autocomplete="off" spellcheck="false"><button class="primary" type="submit" disabled={!domain.trim() || openingCase}>Open or create Case</button></div>
   </form>
   <div class="top-actions toolbar">
-    <button class="btn" onclick={downloadCases} disabled={!caseCount}>Export JSON</button>
+    <button class="btn" onclick={downloadCases} disabled={!caseCount}>Export Cases JSON</button>
     {#if calibrationSelectedCount}<button class="btn" onclick={() => void reviewCalibrationDataset()}>Review calibration export ({calibrationSelectedCount})</button>{/if}
-    <label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importCaseFile}></label>
+    <label class="btn file-btn">Import Cases JSON<input type="file" accept="application/json,.json" onchange={importCaseFile}></label>
   </div>
 </div>
 {#if calibrationSelectedCount}<p class="calibration-note">Calibration export includes only explicitly selected reviewed cases and a bounded subset of their latest normalised evidence. It excludes notes and does not change Risk.</p>{/if}

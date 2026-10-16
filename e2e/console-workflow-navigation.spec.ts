@@ -207,7 +207,7 @@ test('held checkpoint reads cannot restore cleared references or cross an actual
       if (action === 'clear') await page.waitForFunction(key => (window as unknown as Record<string, boolean>)[key] === true, `${binding}Completed`);
       await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
       await expect(page.getByRole('list', { name: 'Pinned Case checkpoint references', exact: true })).toHaveCount(0);
-      await expect(page.getByRole('region', { name: 'Case checkpoint stage', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('region', { name: 'Compare Case checkpoints', exact: true })).toHaveCount(0);
       await expect(page.locator('body')).not.toContainText('Private checkpoint note');
       await expect(page.locator('body')).not.toContainText('Private observation title');
       await expect(page.locator('body')).not.toContainText(checkpoint);
@@ -249,14 +249,14 @@ test('pinned checkpoints and successful Case visits survive Console navigation w
   for (const id of ids) expect(preferences).not.toContain(id);
   for (const id of [ids[0]!, ids[2]!]) await references.locator('label').filter({ hasText: id }).getByRole('checkbox').check();
   await tray.getByRole('button', { name: 'Review selected checkpoints', exact: true }).click();
-  const stage = tray.getByRole('region', { name: 'Case checkpoint stage', exact: true });
+  const stage = tray.getByRole('region', { name: 'Compare Case checkpoints', exact: true });
   await expect(stage.getByRole('combobox', { name: 'Case for checkpoint review', exact: true })).toHaveValue('tray-case');
   const interval = stage.getByRole('combobox', { name: 'Interval to inspect', exact: true });
   await expect(interval).toBeVisible(); await interval.selectOption({ index: 1 });
   await expect(stage.getByRole('heading', { name: 'Selected checkpoint interval', exact: true })).toBeVisible();
   await expect(stage.getByRole('region', { name: 'Earlier selected checkpoint', exact: true })).toContainText(ids[0]!);
   await expect(stage.getByRole('region', { name: 'Later selected checkpoint', exact: true })).toContainText(ids[2]!);
-  await stage.getByRole('button', { name: 'Clear stage', exact: true }).click();
+  await stage.getByRole('button', { name: 'Clear comparison', exact: true }).click();
   await expect(stage.getByRole('combobox', { name: 'Case for checkpoint review', exact: true })).toHaveValue('');
   await tray.getByRole('button', { name: 'Review selected checkpoints', exact: true }).click();
   await expect(interval).toBeVisible(); await interval.selectOption({ index: 1 });
@@ -328,7 +328,7 @@ test('Console presentation preserves drafts, selected checkpoints and timeline e
   await expect(references.getByRole('checkbox')).toHaveCount(2);
   for (const checkbox of await references.getByRole('checkbox').all()) await checkbox.check();
   await tray.getByRole('button', { name: 'Review selected checkpoints', exact: true }).click();
-  const stage = tray.getByRole('region', { name: 'Case checkpoint stage', exact: true });
+  const stage = tray.getByRole('region', { name: 'Compare Case checkpoints', exact: true });
   const interval = stage.getByRole('combobox', { name: 'Interval to inspect', exact: true });
   await interval.selectOption({ index: 1 });
   const selectedInterval = await interval.inputValue();

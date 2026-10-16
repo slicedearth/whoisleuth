@@ -338,8 +338,8 @@
                 >{/each}</ul
             >
           {:else}<p
-              >No example hostnames evaluated. Enter examples to inspect literal, token-boundary and
-              canonical IDN effects before saving.</p
+              >No example hostnames evaluated. Enter examples to inspect literal matching and
+              canonical IDN text before saving.</p
             >{/if}
           {#if comparison}<BrandCampaignComparison {comparison} />{/if}
           <button class="btn" onclick={() => void save()}>Save reviewed campaign revision</button

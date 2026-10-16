@@ -53,7 +53,7 @@
   {#if ready}
     <div class="checked">
       <h5 bind:this={heading} tabindex="-1">Handoff contents checked</h5>
-      <p>{ready.selection.omitted.length ? 'Partial file selection' : 'All referenced originals included'} · One complete Case · {ready.selection.files.length} distinct file bodies · {ready.files.reduce((sum, item) => sum + item.file.size, 0).toLocaleString('en-AU')} bytes</p>
+      <p>{ready.selection.omitted.length ? 'Partial file selection' : 'All referenced originals included'} · One full retained Case record · {ready.selection.files.length} distinct file bodies · {ready.files.reduce((sum, item) => sum + item.file.size, 0).toLocaleString('en-AU')} bytes</p>
       {#if ready.selection.omitted.length}<p>{ready.selection.omitted.length} reference{ready.selection.omitted.length === 1 ? ' has' : 's have'} no selected bytes. The Case keeps those references; the recipient’s completeness check will identify them.</p><ul>{#each ready.selection.omitted as item}<li>{item.fileName}</li>{/each}</ul>{/if}
       {#if stale}<p role="alert">The Case or selection changed. Check the contents again before downloading.</p>
       {:else}

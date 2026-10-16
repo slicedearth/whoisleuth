@@ -171,7 +171,7 @@ test('official-domain review and comparison include later batches without implic
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toHaveText('Reviewed 1/1 official domain in this batch; 21 domains in the profile.');
   expect(requested).toEqual(['d20.example']);
   await openBrandWorkbench(page, 'portfolio');
-  const matrix = page.getByRole('region', { name: 'Owned-domain comparison' });
+  const matrix = page.getByRole('region', { name: 'Official-domain settings comparison' });
   await matrix.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(matrix).toContainText('d20.example');
   for (const width of [1280, 390, 320]) {
@@ -1391,7 +1391,7 @@ test('equal-time posture captures retain both source records and remain unknown 
   await comparison.getByRole('combobox', { name: 'Show fields for stored.example' }).selectOption('all');
   await expect(comparison.locator('.comparison-grid > article')).toHaveCount(allComparisons);
   await openBrandWorkbench(page, 'portfolio');
-  const matrix = page.getByRole('region', { name: 'Owned-domain comparison' });
+  const matrix = page.getByRole('region', { name: 'Official-domain settings comparison' });
   await expect(matrix.locator('tbody tr')).toContainText('Unknown');
   const records = matrix.locator('[id="retained-posture-observation-stored.example"]');
   expect(await records.locator(':scope > summary').evaluate((element) => getComputedStyle(element).display)).toBe('list-item');
@@ -1424,7 +1424,7 @@ test('legacy posture records remain readable without claiming current alignment'
     }] }]), [ACTIVE_KEY]: 'profile-1',
   }, { destination: '/brands' });
   await openBrandWorkbench(page, 'portfolio');
-  const matrix = page.getByRole('region', { name: 'Owned-domain comparison' });
+  const matrix = page.getByRole('region', { name: 'Official-domain settings comparison' });
   await expect(matrix.locator('tbody tr')).toContainText('Unknown');
   await expect(matrix.locator('tbody tr')).not.toContainText('Aligned');
   const retained = matrix.locator('[id="retained-posture-observation-stored.example"]');
@@ -1564,8 +1564,8 @@ test('cross-domain posture matrix links exact retained baselines and observation
   });
   await openBrandWorkbench(page, 'portfolio');
 
-  const matrix = page.getByRole('region', { name: 'Owned-domain comparison' });
-  await expect(matrix).toContainText('2/3 configured · 1 observed');
+  const matrix = page.getByRole('region', { name: 'Official-domain settings comparison' });
+  await expect(matrix).toContainText('2/3 configured · 1 with retained observations');
   const storedRow = matrix.locator('tbody tr', { hasText: 'stored.example' });
   await expect(storedRow).toContainText('Aligned');
   await expect(storedRow).toContainText('Unsupported');
@@ -1719,7 +1719,7 @@ test('exports and locally verifies a selective domain-control passport on deskto
   await expect(passport.getByRole('status')).toContainText('duplicate object key');
 
   await passport.getByLabel('Review passport').setInputFiles(path!);
-  await expect(passport).toContainText('Verified 1 passport entry');
+  await expect(passport).toContainText('Checked the passport format and digest for 1 entry');
   await expect(passport.getByRole('heading', { name: 'Import preview' })).toBeVisible();
   await expect(passport.getByText('Not configured; destination remains unchanged').first()).toBeVisible();
 
@@ -1823,7 +1823,7 @@ test('preserves explicit record expectations, null MX and complete record sets t
   const exported = JSON.parse(await readFile(file, 'utf8'));
   expect(exported.entries[0]).toEqual(expect.objectContaining({ nameservers, ds: [], mx: ['0 .'], caa: [], recordModes: expectedModes }));
   await passport.getByLabel('Review passport').setInputFiles(file);
-  await expect(passport).toContainText('Verified 1 passport entry');
+  await expect(passport).toContainText('Checked the passport format and digest for 1 entry');
   await expect(passport.getByRole('heading', { name: 'Import preview' })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);

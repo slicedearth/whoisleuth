@@ -102,7 +102,7 @@ for (const keepAuthored of [false, true]) test(`imported competing legal termina
   await page.clock.setFixedTime('2026-09-04T10:00:00.000Z');
   await openSeededTimelineCase(page,record.domain,[resolved],CASE_SCHEMA_VERSION);
   await page.getByRole('link',{name:'All Cases',exact:true}).click();
-  await page.getByRole('region',{name:'Case workspace controls'}).getByLabel('Import JSON',{exact:true}).setInputFiles({name:'conflicting-case.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(buildCaseExport([conflicting],'2026-09-03T00:00:00.000Z')))});
+  await page.getByRole('region',{name:'Case workspace controls'}).getByLabel('Import Cases JSON',{exact:true}).setInputFiles({name:'conflicting-case.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(buildCaseExport([conflicting],'2026-09-03T00:00:00.000Z')))});
   await expect(caseWorkspaceActionStatus(page)).toContainText('Imported 0 new and 1 merged cases');
   await page.locator('.case-head',{hasText:record.domain}).click();
   await openCaseResponseWorkspace(page,'','advanced'); await openCaseSection(page,'Response');

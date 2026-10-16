@@ -860,7 +860,7 @@ test('workspace selection reuses verified content while preview and merge see pe
     expect(await checksumCalls()).toBe(archive.manifest.sectionCount);
 
     await peer.getByRole('link', { name: 'All Cases', exact: true }).click();
-    await peer.getByLabel('Import JSON', { exact: true }).setInputFiles({
+    await peer.getByLabel('Import Cases JSON', { exact: true }).setInputFiles({
       name: 'same-incident.json', mimeType: 'application/json',
       buffer: Buffer.from(JSON.stringify(archive.sections.cases)),
     });

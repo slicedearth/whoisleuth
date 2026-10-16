@@ -75,7 +75,7 @@
 
 <section class="case-response-stage" aria-label="Case independent review and closure">
   <details id={`case-response-outcome-${record.id}`} bind:open={expanded}>
-    <summary>{mode === 'quick' ? 'Record recheck outcome and closure' : 'Verify remediation independently and close deliberately'}</summary>
+    <summary>{mode === 'quick' ? 'Record recheck outcome and closure' : 'Review independent observations and record closure'}</summary>
     <div class="response-form remediation-review">
       <p class="notice">Provider responses, independent observations and analyst closure are separate records.</p>
       <a class="btn" href={`/lookup?q=${encodeURIComponent(caseLookupTarget(record))}&case=${encodeURIComponent(record.id)}`}>Prepare a recheck for {caseLookupTarget(record)}</a>

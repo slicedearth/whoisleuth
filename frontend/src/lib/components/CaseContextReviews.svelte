@@ -10,7 +10,7 @@
   const tasks = [
     { id: 'incident', label: 'Trace an incident', component: IncidentSequenceReview },
     { id: 'history', label: 'Check domain history', component: DomainHistoryReview },
-    { id: 'platform', label: 'Track platform objects', component: PlatformContinuityReview },
+    { id: 'platform', label: 'Review platform continuity', component: PlatformContinuityReview },
     { id: 'storefront', label: 'Compare a storefront', component: StorefrontReview },
     { id: 'connector', label: 'Review connector configuration', component: ConnectorProvenanceReview },
   ] as const;

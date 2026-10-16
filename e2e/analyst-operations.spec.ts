@@ -310,7 +310,7 @@ test('calendar reaches and exports every matching event beyond the former five-h
   expect(new Set(exported.match(/^UID:.+$/gmu)).size).toBe(600);
   expect(exported).not.toMatch(/Private calendar owner|full-calendar-\d+/u);
   await expect(exportButton).toBeFocused();
-  await expect(calendar.getByRole('status').filter({ hasText: /^Exported 600 selected/ })).toHaveText('Exported 600 selected review events.');
+  await expect(calendar.getByRole('status').filter({ hasText: /^Prepared 600 selected/ })).toHaveText('Prepared 600 selected review events for download.');
   await calendar.getByRole('combobox', { name: 'Event type', exact: true }).selectOption('action_due');
   await expect(calendar.getByRole('button', { name: 'Export selected (0)', exact: true })).toBeDisabled();
   await calendar.getByRole('combobox', { name: 'Event type', exact: true }).selectOption('action_follow_up');

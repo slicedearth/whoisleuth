@@ -82,7 +82,7 @@ test('the command palette includes the direct Cases destination', async ({ page 
   await dialog.getByRole('option', { name: /^Cases\b/u }).click();
   await expect(page).toHaveURL('/cases');
   await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Track a domain' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Open a Case for a domain' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No cases yet' })).toBeVisible();
 });
 
@@ -100,7 +100,7 @@ test('missing direct Cases are explicit without selecting an unrelated record', 
 
 test('direct Cases do not offer empty-state mutations when local storage is unreadable', async ({ page }) => {
   await page.goto('/cases');
-  await expect(page.getByRole('textbox', { name: 'Track a domain' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Open a Case for a domain' })).toBeVisible();
   await failBrowserLocalCollectionReads(page, 'cases');
   const navigation = page.getByRole('navigation', { name: 'Console', exact: true });
   await navigation.getByRole('link', { name: /^Bulk/u }).click();
@@ -110,7 +110,7 @@ test('direct Cases do not offer empty-state mutations when local storage is unre
   await expect(page).toHaveURL('/cases');
   await expect(page.getByRole('heading', { name: 'Cases unavailable' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No cases yet' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Open or create case' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open or create Case' })).toHaveCount(0);
   await expect(page.locator('input[type="file"]')).toHaveCount(0);
 });
 
@@ -118,12 +118,12 @@ test('Case creation preserves a later domain draft and opens records hidden by f
   await page.goto('/cases');
   await createCase(page, 'existing-draft.example');
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
-  const domain = page.getByRole('textbox', { name: 'Track a domain' });
+  const domain = page.getByRole('textbox', { name: 'Open a Case for a domain' });
   await domain.fill('submitted-draft.example');
   const release = await holdBrowserLocalTransaction(page);
   try {
-    await page.getByRole('button', { name: 'Open or create case' }).click();
-    await expect(page.getByRole('button', { name: 'Open or create case' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Open or create Case' }).click();
+    await expect(page.getByRole('button', { name: 'Open or create Case' })).toBeDisabled();
     await domain.fill('later-draft.example');
   } finally {
     await release();
@@ -134,7 +134,7 @@ test('Case creation preserves a later domain draft and opens records hidden by f
   await page.getByRole('textbox', { name: 'Search', exact: true }).fill('not-retained.example');
   await expect(page.locator('.case-head')).toHaveCount(0);
   await domain.fill('submitted-draft.example');
-  await page.getByRole('button', { name: 'Open or create case' }).click();
+  await page.getByRole('button', { name: 'Open or create Case' }).click();
   await expect(page.getByRole('heading', { name: 'submitted-draft.example', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Search', exact: true })).toHaveValue('');
@@ -206,11 +206,11 @@ test('a committed Case note remains saved when refreshing the list fails', async
 
 test('Case creation completing after navigation does not return to its old editor', async ({ page }) => {
   await page.goto('/cases');
-  await page.getByRole('textbox', { name: 'Track a domain' }).fill('background-save.example');
+  await page.getByRole('textbox', { name: 'Open a Case for a domain' }).fill('background-save.example');
   const release = await holdBrowserLocalTransaction(page);
   try {
-    await page.getByRole('button', { name: 'Open or create case' }).click();
-    await expect(page.getByRole('button', { name: 'Open or create case' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Open or create Case' }).click();
+    await expect(page.getByRole('button', { name: 'Open or create Case' })).toBeDisabled();
     await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: /^Bulk/u }).click();
     await expect(page).toHaveURL('/bulk');
   } finally {
@@ -235,12 +235,12 @@ for (const anotherCase of [false, true]) {
     }, { destination: '/cases?case=first-editor' });
     await expect(page.getByRole('heading', { name: 'first-editor.example', exact: true })).toBeVisible();
     await page.getByRole('link', { name: 'All Cases', exact: true }).click();
-    await page.getByRole('textbox', { name: 'Track a domain' }).fill('pending-creation.example');
+    await page.getByRole('textbox', { name: 'Open a Case for a domain' }).fill('pending-creation.example');
     const release = await holdBrowserLocalTransaction(page);
     const selected = anotherCase ? 'second-editor' : 'first-editor';
     try {
-      await page.getByRole('button', { name: 'Open or create case' }).click();
-      await expect(page.getByRole('button', { name: 'Open or create case' })).toBeDisabled();
+      await page.getByRole('button', { name: 'Open or create Case' }).click();
+      await expect(page.getByRole('button', { name: 'Open or create Case' })).toBeDisabled();
       await page.locator(`#case-head-${selected}`).click();
       await openCaseSection(page, 'History');
       await page.getByRole('textbox', { name: 'Add note', exact: true }).fill('Later retained-Case note');
@@ -289,7 +289,7 @@ test('Cases first use and retained records remain readable across major widths a
         await page.reload();
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
         const heading = page.getByRole('heading', { name: 'Cases', exact: true });
-        const domain = page.getByRole('textbox', { name: 'Track a domain' });
+        const domain = page.getByRole('textbox', { name: 'Open a Case for a domain' });
         await expect(heading).toBeVisible();
         await expect(domain).toBeVisible();
         await expect(page.locator('input[type="file"]').first()).toBeAttached();
@@ -319,7 +319,7 @@ test('Cases first use and retained records remain readable across major widths a
         expect(main).not.toBeNull();
         expect(header).not.toBeNull();
         expect(Math.abs(main!.y - header!.y - header!.height)).toBeLessThanOrEqual(1);
-        const button = await page.getByRole('button', { name: 'Open or create case' }).boundingBox();
+        const button = await page.getByRole('button', { name: 'Open or create Case' }).boundingBox();
         expect(button).not.toBeNull();
         expect(button!.height).toBeGreaterThanOrEqual(44);
         const name = `cases-${populated ? 'retained' : 'empty'}-${theme}-${viewport.width}.png`;

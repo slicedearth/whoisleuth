@@ -93,7 +93,7 @@
         includeContext,
       }, generatedAt);
       downloadLocalFile(new Blob([content], { type: 'text/calendar;charset=utf-8' }), `whoisleuth-case-follow-ups-${generatedAt.slice(0, 10)}.ics`);
-      message = `Exported ${selectedEvents.length} selected review event${selectedEvents.length === 1 ? '' : 's'}.`;
+      message = `Prepared ${selectedEvents.length} selected review event${selectedEvents.length === 1 ? '' : 's'} for download.`;
     } catch (error) {
       message = `Calendar was not exported. ${error instanceof Error ? error.message : 'Review the selected events and try again.'}`;
     }

@@ -231,7 +231,7 @@
       <div>
         <p class="eyebrow">Encrypted backup</p>
         <h3>Unlock locally to review</h3>
-        <p>The decrypted content stays in memory only while this page reviews and merges it.</p>
+        <p>Unlock the backup in memory to review it. Selected records are saved only when you choose Add selected data.</p>
       </div>
       <label class="field">Backup passphrase
         <input type="password" autocomplete="off" minlength={MIN_WORKSPACE_ARCHIVE_PASSPHRASE_CHARACTERS} maxlength={MAX_WORKSPACE_ARCHIVE_PASSPHRASE_BYTES} bind:value={importPassphrase} disabled={busy} required>

@@ -30,7 +30,7 @@
 </script>
 
 <section class="draft-inventory" aria-label="Draft inventory">
-  <p>Inspect saved copies before returning to their Case forms. Nothing here restores or submits a draft.</p>
+  <p>Review saved draft values, then open the matching Case form to restore a copy. Nothing is restored or submitted here.</p>
   {#if warnings.length}
     <div role="alert">
       <h3>Unconfirmed writes in open forms · {warnings.length}</h3>
@@ -52,7 +52,7 @@
         <li>
           <strong>{caseLabel ?? 'Case unavailable'}</strong>
           <p>{draft.form.replaceAll('-', ' ')} · form version {draft.formVersion} · saved {formatEvidenceDate(draft.updatedAt)}</p>
-          {#if caseLabel === null}<p>The referenced Case is not in this readable snapshot. Normal Case deletion also removes its recovery copies; this reference does not establish when or why the Case became unavailable.</p><code>{draft.caseId}</code>{/if}
+          {#if caseLabel === null}<p>This Case is absent from the current readable snapshot; when and why are unknown. Its saved draft remains viewable.</p><code>{draft.caseId}</code>{/if}
           <div class="actions">
             {#if caseLabel !== null}<a class="btn small" href={caseWorkspaceHref(draft.caseId)}>Open Case</a>{/if}
             <button class="btn small" type="button" aria-expanded={preview === draft.id} aria-controls={`${id}-${draft.id}`}
@@ -64,7 +64,7 @@
     </ul>
     <Pagination {currentPage} {pageCount} setPage={value => { page = value; preview = null; }} ariaLabel="Saved draft pages" />
     {:else}<p>No saved recovery drafts were found in this workspace.</p>{/if}
-    <p>Use the matching Case form to restore a supported copy deliberately. Unavailable Cases or changed forms remain inspectable here, without creating records. Drafts are excluded from exports and backups; copy any text you need to keep separately.</p>
+    <p>Restore supported copies in the matching Case form. Unavailable Cases and changed forms remain inspectable without creating records. Drafts are excluded from exports and backups; copy text you need to keep.</p>
   {/if}
 </section>
 

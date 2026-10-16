@@ -285,7 +285,7 @@ test('retained corpus comparison is explicit, complete and transient, with scope
   await panel.getByRole('checkbox', { name: /Compare this Brand’s retained candidates/u }).check();
   await expect(panel.getByRole('region', { name: 'Keyword campaign preview' })).toHaveCount(0);
   await panel.getByRole('button', { name: 'Preview keyword campaign', exact: true }).click();
-  await expect(comparison).toContainText('1 new matches, 1 removed matches, 1 still match and 27 still do not match');
+  await expect(comparison).toContainText('1 newly match, 1 no longer match, 1 still match and 27 still do not match');
   const list = comparison.getByRole('list', { name: 'Campaign comparison candidates' });
   await expect(list.getByRole('listitem')).toHaveCount(25);
   await comparison.getByRole('navigation', { name: 'Campaign comparison pages' }).getByRole('button', { name: 'Next', exact: true }).click();

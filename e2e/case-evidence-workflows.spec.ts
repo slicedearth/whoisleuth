@@ -685,7 +685,7 @@ test.describe('case report export', () => {
 
     await openCaseSection(page, 'Response');
     const downloadPromise = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Export Markdown' }).click();
+    await page.getByRole('button', { name: 'Export report Markdown' }).click();
     const download = await downloadPromise;
 
     expect(download.suggestedFilename()).toMatch(/^whoisleuth-case-export-md\.invalid-.*\.md$/);
@@ -711,7 +711,7 @@ test.describe('case report export', () => {
 
     await openCaseSection(page, 'Response');
     const downloadPromise = page.waitForEvent('download');
-    await page.locator('.export-controls').getByRole('button', { name: 'Export JSON' }).click();
+    await page.locator('.export-controls').getByRole('button', { name: 'Export report JSON' }).click();
     const download = await downloadPromise;
 
     const body = await (await download.createReadStream()).toArray();
@@ -737,7 +737,7 @@ test.describe('case report export', () => {
     await page.getByRole('checkbox', { name: 'Include analyst notes' }).check();
 
     const downloadPromise = page.waitForEvent('download');
-    await page.locator('.export-controls').getByRole('button', { name: 'Export JSON' }).click();
+    await page.locator('.export-controls').getByRole('button', { name: 'Export report JSON' }).click();
     const download = await downloadPromise;
 
     const body = await (await download.createReadStream()).toArray();
@@ -775,7 +775,7 @@ test.describe('case report export', () => {
 
     await page.getByRole('link', { name: 'All Cases', exact: true }).click();
     const downloadPromise = page.waitForEvent('download');
-    await page.locator('.case-toolbar .top-actions button', { hasText: 'Export JSON' }).click();
+    await page.locator('.case-toolbar .top-actions button', { hasText: 'Export Cases JSON' }).click();
     const download = await downloadPromise;
     const body = await (await download.createReadStream()).toArray();
     const parsed = JSON.parse(Buffer.concat(body).toString('utf-8'));

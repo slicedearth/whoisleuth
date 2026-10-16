@@ -5,7 +5,7 @@
   import CasePreparedReferences from './CasePreparedReferences.svelte';
   import CasePreparedDecisionBrief from './CasePreparedDecisionBrief.svelte';
   import { snapshotFieldGroups, formatSnapshotValue } from '#lib/analysis/evidence-display.ts';
-  let { report, timeLabel = 'report time', view = 'full' }: { report: ReturnType<typeof buildCaseReport>['json']; timeLabel?: string; view?: 'full' | 'brief' } = $props();
+  let { report, timeLabel = 'Report prepared', view = 'full' }: { report: ReturnType<typeof buildCaseReport>['json']; timeLabel?: string; view?: 'full' | 'brief' } = $props();
 </script>
 
 <article class="case-report-reading" aria-label="Case report contents">
@@ -30,7 +30,7 @@
     </section>
   {/if}
   {#if report.analystResponse.evidencePins.length}
-  <section><h3>Selected evidence · {report.analystResponse.evidencePins.length}</h3><ol>{#each report.analystResponse.evidencePins as pin}<li><CaseEvidenceFact {pin} copyable /></li>{/each}</ol></section>
+  <section><h3>Evidence pins in this report · {report.analystResponse.evidencePins.length}</h3><ol>{#each report.analystResponse.evidencePins as pin}<li><CaseEvidenceFact {pin} copyable /></li>{/each}</ol></section>
   {/if}
   {#if report.analystResponse.decisions.length}
   <section><h3>Analyst decisions · {report.analystResponse.decisions.length}</h3><ol>{#each report.analystResponse.decisions as decision}<li><h4>{decision.summary}</h4><p>{decision.rationale}</p><p>Confidence: {decision.confidence}{decision.confidenceBasis ? ` · ${decision.confidenceBasis}` : ''}</p><EvidenceTimestamp value={decision.createdAt} label="decision time" /><CasePreparedReferences {report} statement={{ kind: 'decision', id: decision.id }} /></li>{/each}</ol></section>

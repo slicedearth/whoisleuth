@@ -4,7 +4,7 @@
 </script>
 
 <details class="backup-coverage">
-  <summary>What this backup can recover</summary>
+  <summary>Backup contents and recovery limits</summary>
   <p>Reviewed workspace backup v{coverage.sourceVersion}. These are recorded contents, not confirmation of a completed download or restore. Rehearse recovery from your downloaded files to check the destination.</p>
   <h4>Saved records</h4>
   <ul>

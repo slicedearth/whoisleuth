@@ -335,7 +335,7 @@
   aria-labelledby="candidate-review-title"
 >
   <h2 id="candidate-review-title">Candidate review for {active.name}</h2>
-  <p>Inspect a nomination, then select the domains you want to review or monitor.</p>
+  <p>Inspect a nomination, then select domains to shortlist, review or add to a Watchlist.</p>
   {#if message}<p bind:this={actionStatus} tabindex="-1" role="status" aria-label="Candidate review action status" aria-live="polite">{message}</p>{/if}
   {#if disabled}<p>The saved Brand context is being reconciled or is unavailable. This last-readable review and its drafts remain visible; mutations are disabled.</p>{/if}
   {#if commitUncertain}<button class="btn" onclick={() => window.location.reload()}>Reload saved decisions</button>
@@ -355,7 +355,7 @@
         <label>Candidate filter<select bind:value={filter} onchange={() => page = 1}><option value="all">All retained candidates</option><option value="new">New / needs review</option><option value="already_tracked">Already tracked for this Brand</option><option value="deferred">Deferred or dismissed until review</option><option value="excluded">Excluded exact matches</option></select></label>
         <label>Candidate order<select bind:value={sort} onchange={() => page = 1}><option value="retained">Retained order</option><option value="domain">Domain name</option></select></label>
       </div>
-      <p>{visible.length} shown · {rows.length} retained · {chosen.length} selected across all filters.</p>
+      <p>{visible.length} matching filters · {rows.length} retained · {chosen.length} selected across all filters.</p>
       <div class="candidate-queue">
         {#each pageRows as row (row.candidate.domain)}
           <article class:inspected={inspected === row.candidate.domain}>

@@ -118,7 +118,7 @@
           disabled={busy || !reference || !candidate || referenceId === candidateId}
           onclick={() => void compare()}>Compare text passages</button
         >{#if busy}<button class="btn" onclick={() => void cancel()}>Cancel comparison</button><span
-            role="status">Comparing verified local files…</span
+            role="status">Reading and comparing selected text files…</span
           >{/if}</div
       >
     {/if}

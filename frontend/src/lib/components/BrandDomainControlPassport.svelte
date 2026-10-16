@@ -93,7 +93,7 @@
       const input = buildBrandProfilePassportInput(active, selectedExports, expiresAt);
       const passport = await buildDomainControlPassport(input, generatedAt.toISOString());
       downloadLocalFile(new Blob([serializeDomainControlManifest(passport)], { type: 'application/json' }), `whoisleuth-domain-control-passport-${generatedAt.toISOString().slice(0, 10)}.json`);
-      message = `Exported ${passport.entries.length} verified domain-control entr${passport.entries.length === 1 ? 'y' : 'ies'}.`;
+      message = `Prepared settings for ${passport.entries.length} domain${passport.entries.length === 1 ? '' : 's'} for download.`;
     } catch (cause) {
       message = cause instanceof Error ? cause.message : 'Could not export the domain-control passport.';
     } finally {
@@ -120,7 +120,7 @@
         .map((entry) => entry.domain);
       addDomains = [];
       importFields = Object.fromEntries(verified.entries.map((entry) => [entry.domain, passportConfiguredFields(entry)]));
-      message = `Verified ${verified.entries.length} passport entr${verified.entries.length === 1 ? 'y' : 'ies'}. Review each field before importing.`;
+      message = `Checked the passport format and digest for ${verified.entries.length} entr${verified.entries.length === 1 ? 'y' : 'ies'}. Review each field before importing.`;
     } catch (cause) {
       imported = null;
       selectedImports = [];
@@ -200,7 +200,7 @@
         <label class="expiry"><span>Expires after</span><select bind:value={expiryDays}><option value="30">30 days</option><option value="90">90 days</option><option value="365">365 days</option></select></label>
         <button class="btn" type="button" onclick={downloadPassport} disabled={busy || writeDisabled || !selectedExports.length}>Export passport</button>
       {:else}
-        <p class="empty">Configure an owned-domain baseline before exporting a passport.</p>
+        <p class="empty">Configure a baseline for a declared official domain before exporting a passport.</p>
       {/if}
     </div>
 
@@ -213,7 +213,7 @@
 
   {#if imported}
     <div class="preview" aria-live="polite">
-      <header><div><p class="eyebrow">Verified locally</p><h3>Import preview</h3></div><p>Expires {formatEvidenceDate(imported.expiresAt)}</p></header>
+      <header><div><p class="eyebrow">Format and digest checked</p><h3>Import preview</h3></div><p>Expires {formatEvidenceDate(imported.expiresAt)}</p></header>
       {#each imported.entries as entry}
         {@const isOfficial = active.officialDomains.includes(entry.domain)}
         {@const importEligible = isOfficial || addDomains.includes(entry.domain)}
@@ -241,7 +241,7 @@
   {/if}
 
   {#if message}<p class="message" role="status">{message}</p>{/if}
-  <p class="limitation">A valid digest confirms that the file has not changed since export, not that its settings are correct or deployed. Selecting “Expect no records” clears that field’s expected values; omitted and unselected fields stay unchanged.</p>
+  <p class="limitation">A matching digest checks the declared content integrity, not its author, correctness or deployment. Selecting “Expect no records” clears that field’s expected values; omitted and unselected fields stay unchanged.</p>
 </section>
 
 <style>

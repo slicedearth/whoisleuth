@@ -158,7 +158,7 @@
         const document = directDocument;
         preview = { kind: 'findings', document };
         const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
-        onmessage(`Validated ${document.findings.length} local finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the preview before importing.`);
+        onmessage(`Ready to review: ${document.findings.length} finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Nothing has been imported.`);
       } else if (
         value
         && typeof value === 'object'
@@ -215,7 +215,7 @@
         const document = parseWebCaptureManifest(value);
         preview = { kind: 'findings', document };
         const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
-        onmessage(`Validated ${document.findings.length} sanitised web-capture manifest finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Artifact bytes were not imported. Review before importing.`);
+        onmessage(`Review ${document.findings.length} capture-manifest finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. No original file bytes have been imported.`);
       } else if (
         value
         && typeof value === 'object'
@@ -287,7 +287,7 @@
 </script>
 
 <details class="external-import card" aria-busy={parsing} bind:open ontoggle={(event) => { if (!event.currentTarget.open) clearPreview(); }}>
-  <summary>Import bounded external findings</summary>
+  <summary>Import external observations and claims</summary>
   <div class="import-body">
     <p>Review local evidence before adding it to Cases. Imports do not collect data, change analyst dispositions or submit reports.</p>
     <details class="formats"><summary>Supported files and limits</summary>

@@ -24,7 +24,7 @@ test('equal-time independent reviews remain visible without a selected outcome',
   await createCase(page, 'concurrent-reviews.invalid');
   const workspace = await openCaseResponseWorkspace(page);
   await openCaseSection(page, 'Response');
-  const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
+  const remediation = workspace.locator('details', { hasText: 'Review independent observations and record closure' });
   await remediation.locator(':scope > summary').click();
   const form = remediation.getByRole('form', { name: 'Record a recheck', exact: true });
   await expect(form).toHaveCount(1);
@@ -44,7 +44,7 @@ test('equal-time independent reviews remain visible without a selected outcome',
   await openConsoleView(page, 'cases');
   const reopened = await openCaseResponseWorkspace(page);
   await openCaseSection(page, 'Response');
-  const retained = reopened.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
+  const retained = reopened.locator('details', { hasText: 'Review independent observations and record closure' });
   await retained.locator(':scope > summary').click();
   await expect(retained).toContainText('A single latest independent review cannot be selected');
   await expect(retained.getByRole('list', { name: 'Independent observed-effect reviews' }).locator('li')).toHaveCount(2);
@@ -973,8 +973,8 @@ test('append-only response review, exact authorisation, independent verification
   await expect(action.locator('.transition-timeline > li')).toHaveCount(6);
 
   await openCaseSection(page, 'Response');
-  const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
-  await remediation.getByText('Verify remediation independently and close deliberately', { exact: true }).click();
+  const remediation = workspace.locator('details', { hasText: 'Review independent observations and record closure' });
+  await remediation.getByText('Review independent observations and record closure', { exact: true }).click();
   await expect(remediation).toContainText('accepted for review');
   await expect(remediation).toContainText('Withheld — missing');
   await remediation.getByLabel('Observed effect').selectOption('changed');

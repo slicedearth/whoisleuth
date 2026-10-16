@@ -89,7 +89,7 @@
         {/each}
       </ol>
     {/if}
-    {#if busy}<div class="actions"><p role="status">Reading the selected verified original…</p><button class="btn" onclick={closePreview}>Cancel preview</button></div>{/if}
+    {#if busy}<div class="actions"><p role="status">Reading and checking the selected original…</p><button class="btn" onclick={closePreview}>Cancel preview</button></div>{/if}
     {#if error}<p role="alert">{error}</p>{/if}
     {#if prepared}
       <section aria-label="Selected Brand original">

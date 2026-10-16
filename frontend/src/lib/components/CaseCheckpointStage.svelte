@@ -57,7 +57,7 @@
 </script>
 
 <section class="checkpoint-stage" aria-labelledby={`checkpoint-stage-${componentId}`}>
-  <header><h3 id={`checkpoint-stage-${componentId}`}>Case checkpoint stage</h3><button class="btn small" type="button" onclick={clear} disabled={!caseId}>Clear stage</button></header>
+  <header><h3 id={`checkpoint-stage-${componentId}`}>Compare Case checkpoints</h3><button class="btn small" type="button" onclick={clear} disabled={!caseId}>Clear comparison</button></header>
   <p>Choose two or three retained checkpoints from one Case, then inspect an interval. Selections stay on this page; no evidence is saved or collected.</p>
   <label>Case for checkpoint review
     <select value={caseId} onchange={event => chooseCase(event.currentTarget.value)}>

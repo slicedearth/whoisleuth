@@ -344,7 +344,7 @@
               <div class="two-columns">
                 <label class="field">Event source<select value={transitionDraft.value.transitionSourceClass} onchange={(event) => setTransitionSourceClass(event.currentTarget.value)}>{#each userActionEventSourceClasses as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
                 <label class="field">Next state<select value={transitionDraft.value.transitionNextState} onchange={(event) => setTransitionNextState(event.currentTarget.value)}>{#each legalTransitionStates as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
-                <label class="field">Original event time<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={transitionDraft.value.transitionOccurredAt}></label>
+                <label class="field">Event time <small>UTC; leave blank only when recording the event as it happens</small><input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={transitionDraft.value.transitionOccurredAt}></label>
                 <label class="field">Provenance<input bind:value={transitionDraft.value.transitionProvenance} maxlength="80" required></label>
                 <label class="field">Bounded reference<input id={`case-action-transition-reference-${record.id}`} bind:value={transitionDraft.value.transitionReference} maxlength="500"></label>
                 <CaseEvidencePinSelect label="Evidence pin" pins={record.evidencePins} bind:value={transitionDraft.value.transitionEvidencePinId} />

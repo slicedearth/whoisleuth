@@ -157,7 +157,7 @@
   {#if !sourcePresent}<p role="alert">The source reference changed or was removed. Unsaved edits remain here, but cannot be retained against that source.</p>{/if}
   <div class="image-pair" class:paired={right !== null}>
     <section class="image-column" aria-label="Selected source image">
-      <h5>{attachment.derivation ? 'Retained derivative' : 'Retained original'} · {attachment.fileName}</h5>
+      <h5>{attachment.derivation ? 'Retained derivative' : 'Retained file'} · {attachment.fileName}</h5>
       <p>{attachment.source ?? 'Source not declared'} · <EvidenceTimestamp value={attachment.observedAt} label="source observation time" unavailable="Observation time unknown" /></p>
       {@render identity(attachment)}
       <ArtifactPreview {file} mediaType="image/png" label={attachment.fileName} focusOnReady={false} onready={imageReady}
@@ -165,7 +165,7 @@
       {#if regions.length}<p>Marked rectangles are edit instructions; this preview still shows the source pixels.</p>{/if}
     </section>
     {#if right}<section class="image-column" aria-label={prepared ? 'Prepared edited image' : 'Comparison image'}>
-      <h5>{prepared ? 'Edited PNG · not saved' : right.attachment.derivation ? 'Retained derivative' : 'Retained original'} · {right.attachment.fileName}</h5>
+      <h5>{prepared ? 'Edited PNG · not saved' : right.attachment.derivation ? 'Retained derivative' : 'Retained file'} · {right.attachment.fileName}</h5>
       <p>{right.attachment.source ?? 'Source not declared'} · <EvidenceTimestamp value={right.attachment.observedAt} label="comparison observation time" unavailable="Observation time unknown" /></p>
       {@render identity(right.attachment)}
       <ArtifactPreview file={right.file} mediaType="image/png" label={right.attachment.fileName} focusOnReady={false} />

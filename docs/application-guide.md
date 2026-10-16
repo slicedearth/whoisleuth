@@ -1417,7 +1417,7 @@ download** for each file group when needed; JSON backup encryption is separate.
 To test recovery, review the downloaded JSON and open **Rehearse recovery in a
 separate workspace**. Create a destination, then restore the downloaded evidence
 packages or original files. The active workspace is not switched or modified.
-**What this backup can recover** is available after preparing or reviewing a
+**Backup contents and recovery limits** is available after preparing or reviewing a
 backup. It lists reviewed sections, recorded counts, unsupported sections and
 historical migration explanations. It separates Case file references from distinct
 required originals and their declared byte counts; unreadable references remain

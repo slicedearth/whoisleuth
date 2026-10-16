@@ -16,7 +16,7 @@ async function openReview(page: Page, name: string) {
   const entry = page.locator('.context-entry'); await entry.locator(':scope > summary').click();
   const tasks: Record<string, string> = {
     'Connector and MCP configuration provenance': 'Review connector configuration',
-    'Platform objects and version continuity': 'Track platform objects',
+    'Platform objects and version continuity': 'Review platform continuity',
     'Storefront and official-site comparison': 'Compare a storefront',
     'Domain history and retired dependencies': 'Check domain history',
     'Incident sequence and reported actions': 'Trace an incident',
@@ -85,7 +85,7 @@ test('platform continuity reloads editable observations and keeps provider claim
   await expect(report).toContainText('Recorded observations: 2; distinct platform objects: 1');
   await expect(report).toContainText('provider reports resolved'); await expect(report).toContainText('not reproduced'); await expect(report).toContainText('still observed');
   await page.getByRole('button', { name: 'Check domain history', exact: true }).click();
-  await page.getByRole('button', { name: 'Track platform objects', exact: true }).click();
+  await page.getByRole('button', { name: 'Review platform continuity', exact: true }).click();
   await expect(report).toBeVisible();
   await report.getByRole('button', { name: 'Print review', exact: true }).click();
   const preview = page.getByRole('dialog', { name: 'Platform object continuity', exact: true });

@@ -184,7 +184,7 @@
       <label>Exact hostnames<textarea bind:value={hosts} oninput={() => invalidate()} maxlength="51200" rows="3" placeholder="One hostname per line"></textarea></label>
     </div>
     {/if}
-    <p class="muted">Up to 20 positive and 20 negative literals (3–80 characters), or 200 exact hostnames. Any negative match vetoes this review before the 200-candidate bound, including an exact hostname. Literal ASCII/punycode substrings only; no token, typo, confusable or parent-domain expansion.</p>
+    <p class="muted">Use up to 20 positive and 20 negative literals (3–80 characters), or 200 exact hostnames. Negative literals veto all matches, including exact hosts, before the 200-candidate limit. Matching uses ASCII/punycode substrings only—no token, typo, confusable or parent-domain expansion.</p>
     <label>Local domain-only feed file<input type="file" accept=".txt,text/plain" onchange={chooseFile} /></label>
     {#if file}<p>{file.size.toLocaleString()} bytes selected for local scanning.</p>{/if}
     <p class="muted">The file stays on this device. Only candidates you choose to retain are saved.</p>

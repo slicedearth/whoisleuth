@@ -177,7 +177,7 @@
   }
   async function add(campaign:CampaignRecord){
     if(mutating||refreshRequired)return;
-    if(!selectedDomain){message='Choose a case to add.';return;}
+    if(!selectedDomain){message='Choose a domain to add.';return;}
     const origin=document.activeElement;
     mutating=true;
     const unchanged=memberDraft.capture();
@@ -187,7 +187,7 @@
       await reconcile(next,`Added ${submittedDomain} to “${campaign.name}”.`);
       if(unchanged())selectedDomain='';
     }
-    catch(cause){mutationFailure(cause,'Could not add the case.');}
+    catch(cause){mutationFailure(cause,'Could not add the domain.');}
     finally{mutating=false;await tick();restoreSubmittedFocus(origin,membershipFocusTarget(campaign.id),componentRoot);}
   }
   async function removeDomain(campaign:CampaignRecord,domain:string){
@@ -195,7 +195,7 @@
     const origin=document.activeElement;
     mutating=true;
     try{await reconcile(await removeCampaignDomain(campaign.id,domain),`Removed ${domain} from “${campaign.name}”.`);}
-    catch(cause){mutationFailure(cause,'Could not remove the case.');}
+    catch(cause){mutationFailure(cause,'Could not remove the domain.');}
     finally{mutating=false;await tick();restoreSubmittedFocus(origin,membershipFocusTarget(campaign.id),componentRoot);}
   }
   async function remove(campaign:CampaignRecord){
@@ -264,7 +264,7 @@
     <label for="new-campaign">New campaign</label>
     <div><input id="new-campaign" bind:value={newName} maxlength="100" placeholder="Investigation name" autocomplete="off"><button class="primary" type="submit" disabled={mutating || refreshRequired || !newName.trim()}>Create campaign</button></div>
   </form>
-  <div class="top-actions toolbar"><button class="btn" type="button" onclick={download} disabled={!campaigns.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile} disabled={mutating || refreshRequired}></label></div>
+  <div class="top-actions toolbar"><button class="btn" type="button" onclick={download} disabled={!campaigns.length}>Export campaigns JSON</button><label class="btn file-btn">Import campaigns JSON<input type="file" accept="application/json,.json" onchange={importFile} disabled={mutating || refreshRequired}></label></div>
 </section>
 {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 {#if refreshRequired}<button id="refresh-campaigns" class="btn" type="button" onclick={retryRefresh} disabled={mutating}>Refresh campaigns</button>{/if}
@@ -343,7 +343,7 @@
   </section>
   <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Campaign pages" />
 {:else if !orphanedDraft}
-  <section class="empty-state card"><h2>No campaigns yet</h2><p>Group existing analyst cases into a saved investigation without copying their evidence or notes.</p></section>
+  <section class="empty-state card"><h2>No campaigns yet</h2><p>Group retained domains into a saved investigation without copying Case evidence or notes.</p></section>
 {/if}
 
 <style>

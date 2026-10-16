@@ -626,7 +626,7 @@ test('measures navigation to a non-default Monitor view', async ({ page }, testI
 test('measures a deferred Brand Profile tool with a fictional active profile', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 393, height: 852 });
   const workbench = page.locator('#brand-workbench');
-  const heading = page.getByRole('heading', { name: 'Owned-domain comparison' });
+  const heading = page.getByRole('heading', { name: 'Official-domain settings comparison' });
 
   await measureDeferredInteraction({
     page,
@@ -648,7 +648,7 @@ test('measures a deferred Brand Profile tool with a fictional active profile', a
     browserReadiness: {
       start: { event: 'change', selector: '#brand-workbench' },
       targets: [
-        { selector: '#portfolio-posture-matrix-title', exactText: 'Owned-domain comparison' },
+        { selector: '#portfolio-posture-matrix-title', exactText: 'Official-domain settings comparison' },
         { selector: '#brand-workbench', requireEnabled: true },
       ],
     },
