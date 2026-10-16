@@ -523,8 +523,13 @@ test('legacy response deep links still open the packet and Case follow-up keeps 
   await expect(page.locator('#case-response-preflight-workspace-first > summary')).toBeInViewport({ ratio: 1 });
   await page.goForward();
   await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('Keep this draft through response navigation');
-  page.once('dialog', async dialog => { expect(dialog.message()).toContain('Case edits are not saved'); await dialog.accept(); });
-  await page.getByRole('link', { name: 'Review follow-up', exact: true }).click();
+  await Promise.all([
+    page.waitForEvent('dialog').then(async dialog => {
+      try { expect(dialog.message()).toBe('Some case edits are not saved. Leave and lose those edits?'); }
+      finally { await dialog.accept(); }
+    }),
+    page.getByRole('link', { name: 'Review follow-up', exact: true }).click(),
+  ]);
   await expect(page).toHaveURL('/monitor?view=inbox&queue=all&case-review=workspace-first');
   const inbox = page.getByRole('region', { name: 'Review inbox', exact: true });
   const clearCaseScope = inbox.getByRole('link', { name: 'Show all Cases', exact: true });
