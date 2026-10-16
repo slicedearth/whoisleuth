@@ -879,15 +879,15 @@ test('public privacy notices share the current material data-handling contract',
   );
   assert.match(
     normalisedDisclosure,
-    /Hosted and distributable collection does not .*execute remote page scripts/iu,
+    /Hosted and main-CLI collection does not [^.]*execute remote page scripts/iu,
   );
   assert.match(
     normalisedDisclosure,
-    /separate repo-local rendered-capture package is an explicit authorised exception/iu,
+    /separate optional rendered-capture companion is distributed as a locally assembled archive, not as part of the hosted application or main CLI, and is not published to a package registry/iu,
   );
   assert.match(
     normalisedDisclosure,
-    /executes page JavaScript in a disposable, network-bounded browser/iu,
+    /executes page JavaScript only after explicit authorisation, in a disposable, sandboxed, network-bounded browser/iu,
   );
 
   // Published epochs remain an independent expectation, not a mirror of the
