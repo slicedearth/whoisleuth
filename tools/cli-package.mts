@@ -21,7 +21,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
 import {
-  WHOISLEUTH_PROJECT_URL,
+  WHOISLEUTH_SITE_ORIGIN,
   WHOISLEUTH_SOURCE_ISSUES_URL,
   WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
 } from '../packages/analysis/project-metadata.mts';
@@ -296,7 +296,7 @@ export function buildCliPackageManifest(
   if (
     repository.type !== 'git'
     || repository.url !== WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL
-    || templateManifest.homepage !== WHOISLEUTH_PROJECT_URL
+    || templateManifest.homepage !== WHOISLEUTH_SITE_ORIGIN
     || bugs.url !== WHOISLEUTH_SOURCE_ISSUES_URL
   ) {
     throw new TypeError('CLI package public links must match the shared project metadata.');

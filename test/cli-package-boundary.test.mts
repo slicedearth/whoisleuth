@@ -7,7 +7,7 @@ import { join, posix } from 'node:path';
 import packageJson from '../package.json' with { type: 'json' };
 import packageTemplate from '../packages/cli/package.template.json' with { type: 'json' };
 import {
-  WHOISLEUTH_PROJECT_URL,
+  WHOISLEUTH_SITE_ORIGIN,
   WHOISLEUTH_SOURCE_ISSUES_URL,
   WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
 } from '../lib/project-metadata.mts';
@@ -44,13 +44,14 @@ describe('CLI package boundary', () => {
     assert.deepEqual(packageTemplate.contentPolicy, { class: 'dual-use' });
     assert.deepEqual(packageTemplate.bin, { whoisleuth: 'bin/whoisleuth.mjs' });
     assert.equal(packageTemplate.repository.url, WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL);
-    assert.equal(packageTemplate.homepage, WHOISLEUTH_PROJECT_URL);
+    assert.equal(packageTemplate.homepage, WHOISLEUTH_SITE_ORIGIN);
     assert.equal(packageTemplate.bugs.url, WHOISLEUTH_SOURCE_ISSUES_URL);
     assert.match(readFileSync(join(__dirname, '..', 'DISCLOSURE'), 'utf8'), /defensive domain investigation/u);
     assert.match(readFileSync(join(__dirname, '..', 'SECURITY.md'), 'utf8'), /private vulnerability reporting/u);
     assert.match(packageReadme, /npm install --global --ignore-scripts @slicedearth\/whoisleuth-cli/u);
     assert.match(packageReadme, /does not use the hosted WHOISleuth login or workspace/u);
-    assert.match(packageReadme, /private channel in `SECURITY\.md`/u);
+    assert.match(packageReadme, /private channel/u);
+    assert.match(packageReadme, /\]\(https:\/\/github\.com\/slicedearth\/whoisleuth\/blob\/main\/SECURITY\.md\)/u);
     assert.doesNotMatch(packageReadme, /whois-rdap-tool/u);
   });
 

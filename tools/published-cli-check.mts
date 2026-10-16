@@ -9,7 +9,7 @@ import { normalizeBoundedSemanticVersion } from '../packages/analysis/semantic-v
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { candidateDependencyAuditInput } from './installed-dependency-evidence.mts';
 import {
-  WHOISLEUTH_PROJECT_URL,
+  WHOISLEUTH_SITE_ORIGIN,
   WHOISLEUTH_SOURCE_ISSUES_URL,
   WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
 } from '../packages/analysis/project-metadata.mts';
@@ -64,7 +64,7 @@ const PACKAGE_NAME = '@slicedearth/whoisleuth-cli';
 const PACKAGE_AUTHOR = 'slicedearth';
 const PUBLIC_REGISTRY = 'https://registry.npmjs.org';
 const SOURCE_REPOSITORY = WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL;
-const PACKAGE_HOMEPAGE = WHOISLEUTH_PROJECT_URL;
+const PACKAGE_HOMEPAGE = WHOISLEUTH_SITE_ORIGIN;
 const PACKAGE_ISSUES = WHOISLEUTH_SOURCE_ISSUES_URL;
 const PROVENANCE_PREDICATE = 'https://slsa.dev/provenance/v1';
 export const PUBLISHED_CLI_CHECK_SCHEMA = 'whoisleuth.published-cli-check';

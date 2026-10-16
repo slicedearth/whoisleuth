@@ -1,13 +1,17 @@
 # WHOISleuth CLI
 
-WHOISleuth's command-line interface runs local WHOIS, RDAP, DNS, HTTP, TLS,
-certificate, posture and lookalike investigation commands. Networked commands
-run from the operator's machine; offline commands read only selected local input.
-It does not use the hosted WHOISleuth login or workspace.
+Investigate domains, IP addresses and ASNs from your terminal, review selected
+local files, and prepare evidence for a browser or offline handoff. Networked
+commands run from your computer; offline commands read selected local input.
+The CLI does not use the hosted WHOISleuth login or workspace.
 
-## Install
+[CLI guide](https://github.com/slicedearth/whoisleuth/blob/main/docs/cli.md) ·
+[Searchable commands](https://www.whoisleuth.com/cli) ·
+[Compatibility reference](https://github.com/slicedearth/whoisleuth/blob/main/docs/cli-reference.md)
 
-WHOISleuth requires Node.js 24 or later. Run the public package directly:
+## Install and update
+
+Use Node.js 24 or later. Run without a global installation:
 
 ```bash
 npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
@@ -17,95 +21,84 @@ Or install the `whoisleuth` command globally:
 
 ```bash
 npm install --global --ignore-scripts @slicedearth/whoisleuth-cli
+whoisleuth --version
 whoisleuth doctor
 ```
 
-The package has no dependency lifecycle scripts. Its version follows the
-application version.
+Update an existing installation with
+`npm install --global --ignore-scripts @slicedearth/whoisleuth-cli@latest`, then
+check `whoisleuth --version` and `whoisleuth doctor` again. The package requires
+no lifecycle scripts; its version follows the application version.
 
-## Quick start
+## First commands
 
-Inspect the installed command set and plan a Lookup:
+Browse the installed commands and plan a Lookup without collecting:
 
 ```bash
-whoisleuth --help
 whoisleuth commands --common
 whoisleuth lookup example.test --plan --json
 ```
 
-Run common commands:
+For a target you are authorised to assess, use Fast or Deep Lookup:
 
 ```bash
 whoisleuth example.test
 whoisleuth lookup example.test --deep --summary
-whoisleuth bulk domains.txt --csv
-whoisleuth discover example.test --preset common --jsonl
-whoisleuth compare lookup.json --json
+```
+
+Fast is registration-first; Deep adds the applicable DNS, website, TLS and
+other declared sources. `whoisleuth <command> --help` explains that command's
+inputs, request boundaries, output formats and exit policy.
+
+## Save, verify and continue in the browser
+
+Save a private Lookup by closing the interactive evidence browser normally,
+verify it offline, then create the separate browser-compatible export:
+
+```bash
+whoisleuth lookup example.test --deep --browse --save-lookup lookup.json
+whoisleuth verify-artifact lookup.json --json
+whoisleuth export lookup.json --output evidence.json
+whoisleuth verify-artifact evidence.json --json
+```
+
+In the console's Lookup page, open **Replay exported evidence** and select
+`evidence.json`. Review its digest and source states before retaining evidence
+in a case. Keep `lookup.json` as the private CLI original; it can contain raw
+registration responses and is not the browser replay format. The evidence
+export excludes raw registration payloads and expanded contacts; replay does
+not upload either file.
+
+## Work with selected files
+
+```bash
+whoisleuth bulk domains.txt --csv-with-metadata
 whoisleuth mail-headers message.eml --json
-whoisleuth verify-artifact lookup.json --json --strict-exit
+whoisleuth compare lookup.json --json
 ```
 
-One strict domain, IP address or ASN can occupy command position as Lookup
-shorthand. URL-like or ambiguous input requires the explicit `lookup` command;
-only `bulk` accepts multiple targets.
+`domains.txt` contains one target per line. `message.eml` is a message file you
+select for local review. `lookup.json` is the saved CLI document from the
+example above. Bulk performs collection; the mail-header and comparison
+commands in this example are offline.
 
-## Command groups
+Use `whoisleuth commands --group respond --mode offline` to find local case,
+packet and handoff tools. The [case-file guide](https://github.com/slicedearth/whoisleuth/blob/main/docs/cli.md#local-case-files)
+covers ordinary case files, JSON inputs and conflict handling. Output written
+with `--output` is private and atomic, and existing files require explicit
+`--force`. A completed command can still contain partial source evidence.
 
-Use the installed registry to browse Investigate, Respond, Assure and Utilities:
+## Separate tools and security
 
-```bash
-whoisleuth commands --group investigate
-whoisleuth commands --group respond --mode offline
-whoisleuth commands --json
-whoisleuth manual | man -l -
-```
+The [rendered-capture companion](https://github.com/slicedearth/whoisleuth/tree/main/packages/web-capture)
+and [filesystem-local application](https://github.com/slicedearth/whoisleuth/tree/main/packages/local-application)
+are separate, locally assembled archives—not included in this CLI or published
+as npm packages. Their guides cover installation and their distinct storage
+and collection boundaries.
 
-## Collection and output
+The package also includes `docs/cli.md` and `docs/cli-reference.md` for offline
+reading. Report suspected vulnerabilities through the private channel in the
+[security policy](https://github.com/slicedearth/whoisleuth/blob/main/SECURITY.md).
 
-Fast Lookup is registration-first. Deep Lookup explicitly adds the applicable
-WHOIS, DNS, website, TLS, registrar-RDAP and observed-network sources. Compact
-Deep Bulk retains only the fields needed for comparison. Authorised active
-commands require their dedicated command and per-run acknowledgement.
-
-Focused `whoisleuth <command> --help` states the exact target, request, input and
-output limits. `lookup --plan` lists planned sources before collection.
-
-Terminal text is the default. Commands expose JSON, JSONL, CSV, Markdown, HTML
-or domain-only output only where declared. `--output` writes a private local
-file atomically and refuses an existing path unless `--force` is selected.
-`--strict-exit` and `--fail-on` expose selected evidence states to automation.
-
-`case open --domain example.test --output cases.json` creates an ordinary local
-case file. `case show`, `note`, `pin`, `assess` and `recheck` review or update it
-offline. Mutations require explicit output and preserve earlier retained evidence;
-see `docs/cli.md#local-case-files` for JSON inputs and conflict handling. Working
-files contain private analyst content, not attached file bytes.
-
-`manifest --package --output evidence.wlep --passphrase-file ./passphrase.txt`
-encrypts selected evidence files and their manifest. Use the same explicit
-passphrase file with `verify-artifact --package` to authenticate and verify it
-offline. Ordinary ZIPs and folder exports remain unencrypted; see `docs/cli.md`
-for complete examples and file-handling boundaries.
-
-`workflow-run` pauses on a partial collection. Resume retains it without
-recollection and keeps exit code 4 even if later steps finish. Failed validation
-or export steps remain retryable. See `docs/cli.md` for checkpoint compatibility.
-
-The included `docs/cli-reference.md` lists common exit codes and compatibility
-contracts. A completed command can still contain partial source evidence.
-
-## Repository checkout
-
-Contributors can run the source command without installing the package:
-
-```bash
-node bin/whoisleuth.mts --help
-node bin/whoisleuth.mts lookup example.test --plan --json
-npm run cli:package:check
-```
-
-The package includes `docs/cli.md` for usage and `docs/cli-reference.md` for
-compatibility, privacy and evidence contracts. Report suspected vulnerabilities
-through the private channel in `SECURITY.md`.
-
-Copyright 2026 slicedearth. Licensed under AGPL-3.0-only.
+Copyright 2026 slicedearth. Licensed under
+[AGPL-3.0-only](https://github.com/slicedearth/whoisleuth/blob/main/LICENSE).
