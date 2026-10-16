@@ -748,7 +748,7 @@ test('measures a deferred Lookup evidence family from deterministic fixture evid
     contentType: 'application/json',
     body: JSON.stringify(lookupResponse(target)),
   }));
-  const familyToggle = page.locator('#web-evidence > button.family-summary');
+  const familyToggle = page.locator('#web-evidence > .family-summary > button');
   const dnsHeading = page.locator('#evidence-dns .dns-card').getByRole('heading', { name: 'DNS evidence' });
 
   await measureDeferredInteraction({
@@ -769,7 +769,7 @@ test('measures a deferred Lookup evidence family from deterministic fixture evid
       await page.keyboard.press('Enter');
     },
     browserReadiness: {
-      start: { event: 'click', selector: '#web-evidence > button.family-summary' },
+      start: { event: 'click', selector: '#web-evidence > .family-summary > button' },
       targets: [
         { selector: '#evidence-dns .dns-card' },
         { selector: '#evidence-dns .dns-card > summary' },

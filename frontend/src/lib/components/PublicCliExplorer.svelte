@@ -400,8 +400,6 @@
             <button
               class="command-open"
               type="button"
-              aria-label={`View ${command.id} command`}
-              aria-describedby={`command-summary-${command.id}`}
               aria-busy={loadingId === command.id}
               disabled={!clientReady || Boolean(loadError)}
               onfocus={preloadCatalogue}
@@ -412,7 +410,7 @@
                 <span class="command-identity"><code>{command.id}</code><small>{labelToken(command.group)} · {labelToken(command.mode)}{command.common ? ' · Common' : ''}</small></span>
                 <span class="command-summary" id={`command-summary-${command.id}`}>{command.summary}</span>
               </span>
-              <span class="command-action" aria-hidden="true">{loadingId === command.id ? 'Loading…' : 'View command'}</span>
+              <span class="command-action">{loadingId === command.id ? 'Loading…' : 'View command'}</span>
             </button>
           </div>
         </article>

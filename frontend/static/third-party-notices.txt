@@ -2686,7 +2686,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@peculiar/x509@2.1.0
+@peculiar/x509@2.2.0
 Relationship: direct production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -5437,7 +5437,7 @@ Apache License
 
    END OF TERMS AND CONDITIONS
 ================================================================================
-postal-mime@4.0.6
+postal-mime@4.0.7
 Relationship: direct production dependency
 Declared licence: MIT-0
 Licence source: LICENSE.txt
@@ -6493,7 +6493,7 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ================================================================================
-undici@8.12.1
+undici@8.12.2
 Relationship: direct production dependency
 Declared licence: MIT
 Licence source: LICENSE

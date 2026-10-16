@@ -112,7 +112,8 @@ test('the console command palette filters destinations and remains keyboard oper
   const trigger = page.getByRole('button', { name: 'Search console navigation' });
   await expect(trigger).toBeVisible();
   await expect(trigger.locator('.shortcut-wide')).toBeVisible();
-  await expect(trigger.locator('.shortcut-wide')).toHaveText('Ctrl/⌘ K');
+  await expect(trigger.locator('.shortcut-wide')).toHaveText('(Ctrl/⌘ K)');
+  await expect(trigger).toHaveAttribute('aria-keyshortcuts', 'Control+k Meta+k');
   await expect(trigger.locator('.command-icon')).toHaveCount(1);
   await expect(trigger.locator('.command-icon')).toBeHidden();
 

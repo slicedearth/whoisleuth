@@ -252,7 +252,7 @@ test('CLI navigation readiness waits for working client-side filtering', async (
     await expect(catalogue.getByRole('combobox', { name: 'Group', exact: true })).toBeDisabled();
     await expect(catalogue.getByRole('combobox', { name: 'Mode', exact: true })).toBeDisabled();
     await expect(catalogue.getByRole('checkbox', { name: 'Common commands only', exact: true })).toBeDisabled();
-    await expect(catalogue.getByRole('button', { name: 'View workflow-plan command', exact: true })).toBeDisabled();
+    await expect(catalogue.locator('article[data-command="workflow-plan"]').getByRole('button')).toBeDisabled();
     await expect(catalogue).toHaveAttribute('data-client-ready', 'false');
     await waitForAnimationFrames(page);
     expect(await isNavigationReadinessMarked(page)).toBe(false);

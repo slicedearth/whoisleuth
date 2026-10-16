@@ -2,11 +2,11 @@
 // browser-library catalogue. Apache-2.0 licensed source; do not edit by hand.
 
 const RETIRE_BROWSER_CATALOG = Object.freeze({
-  catalogVersion: "retire.js-2026.10.10",
-  sourceRevision: "0b660fba06adebbcba027f2eb621cdb4fd6c2583",
-  sourceUpdatedAt: "2026-10-10T16:09:18.000Z",
-  sourceSha256: "bf3864748745b69a8cc690f1f013dceda48b5e4aabfbd9229517dc7a62f59210",
-  sourceUrl: "https://github.com/RetireJS/retire.js/blob/0b660fba06adebbcba027f2eb621cdb4fd6c2583/repository/jsrepository.json",
+  catalogVersion: "retire.js-2026.10.15",
+  sourceRevision: "69016f934568b93ce2517073dc2ac99dba615215",
+  sourceUpdatedAt: "2026-10-15T07:45:18.000Z",
+  sourceSha256: "b026add16583e58cd463300722a36e319eca637ebdd507be79786a46634cf441",
+  sourceUrl: "https://github.com/RetireJS/retire.js/blob/69016f934568b93ce2517073dc2ac99dba615215/repository/jsrepository.json",
   components: {
   "jquery": {
     "extractors": {
@@ -2851,6 +2851,21 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
       {
         "below": "4.7.10",
         "severity": "critical",
+        "atOrAbove": "3.0.0",
+        "cwe": [
+          "CWE-1289",
+          "CWE-184"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-106445"
+          ],
+          "githubID": "GHSA-P8WG-VRV2-V86F"
+        }
+      },
+      {
+        "below": "4.7.10",
+        "severity": "critical",
         "atOrAbove": "4.0.0",
         "cwe": [
           "CWE-843",
@@ -2861,21 +2876,6 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
             "CVE-2026-106446"
           ],
           "githubID": "GHSA-8R5X-FM3F-WHWJ"
-        }
-      },
-      {
-        "below": "4.7.10",
-        "severity": "critical",
-        "atOrAbove": "4.0.0",
-        "cwe": [
-          "CWE-1289",
-          "CWE-184"
-        ],
-        "identifiers": {
-          "CVE": [
-            "CVE-2026-106445"
-          ],
-          "githubID": "GHSA-P8WG-VRV2-V86F"
         }
       },
       {
@@ -3600,6 +3600,9 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
           "CWE-79"
         ],
         "identifiers": {
+          "CVE": [
+            "CVE-2026-109345"
+          ],
           "githubID": "GHSA-6688-9RHM-GJV2"
         }
       },
@@ -3611,6 +3614,9 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
           "CWE-79"
         ],
         "identifiers": {
+          "CVE": [
+            "CVE-2026-109344"
+          ],
           "githubID": "GHSA-P98J-92PF-MC4P"
         }
       }

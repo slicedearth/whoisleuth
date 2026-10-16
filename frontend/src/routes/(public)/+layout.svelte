@@ -84,7 +84,7 @@
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <div class="site-header">
   <header class="public-header">
-    <a class="public-brand" href="/" aria-label="WHOISleuth overview"><span class="mark"><BrandMark /></span><span class="brand-copy"><strong><BrandWordmark /></strong><small>Domain intelligence</small></span></a>
+    <a class="public-brand" href="/"><span class="mark"><BrandMark /></span><span class="brand-copy"><strong><BrandWordmark /><span class="sr-only"> overview</span></strong><small>Domain intelligence</small></span></a>
     <nav class="public-navigation-desktop" aria-label="Public navigation">
       {#each publicHeaderNavigation as item}
         <a data-public-route={item.href} class:active={publicItemActive(item.href)} aria-current={publicItemCurrent(item.href)} href={item.href}>{item.label}</a>

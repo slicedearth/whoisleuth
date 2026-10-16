@@ -251,7 +251,8 @@ test('filters and opens the canonical CLI catalogue entirely by keyboard', async
   await expect(catalogue.getByRole('status')).toHaveText(`Showing 1 of ${CLI_COMMANDS.length} commands.`);
 
   const command = catalogue.locator('article[data-command="workflow-plan"]');
-  const open = command.getByRole('button', { name: 'View workflow-plan command' });
+  const open = command.getByRole('button');
+  await expect(open).toHaveAccessibleName(/^workflow-plan\b.*View command$/u);
   await expect(open).toContainText('View command');
   await open.focus();
   await page.keyboard.press('Enter');

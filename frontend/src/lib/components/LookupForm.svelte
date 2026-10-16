@@ -9,6 +9,7 @@
   import { MAX_DOMAIN_INPUT_CHARACTERS } from '#lib/analysis/utils.ts';
   import { prepareSelectedLookupUrl } from '../../../../packages/evidence/lookup-target.mts';
   import DeferredSurface from './DeferredSurface.svelte';
+  import IntelligenceIcon from './IntelligenceIcon.svelte';
 
   let {
     query = $bindable(),
@@ -138,7 +139,7 @@
   <div class="input-row">
     <div class="query-field">
       <textarea id="query" bind:value={query} maxlength={MAX_DOMAIN_INPUT_CHARACTERS} placeholder="example.com" autocomplete="off" spellcheck="false" rows="1" onkeydown={handleQueryKeydown} oninput={(event) => onquerychange?.(event.currentTarget.value)}></textarea>
-      {#if query}<button type="button" class="clear" aria-label="Clear query" onclick={() => { query = ''; onquerychange?.(''); }}>×</button>{/if}
+      {#if query}<button type="button" class="clear" aria-label="Clear query" onclick={() => { query = ''; onquerychange?.(''); }}><IntelligenceIcon name="close" size={18} /></button>{/if}
     </div>
     <button class="primary" aria-keyshortcuts="Control+Enter Meta+Enter" disabled={loading || !entryCount || inputTooLarge || Boolean(lookupDisabled)}>
       {loading ? 'Looking up…' : entryCount > 1 ? `Open ${Math.min(entryCount, entryLimit)} in Bulk` : 'Run lookup'}
@@ -244,7 +245,7 @@
   .input-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}
   .query-field{position:relative;min-width:0}
   .query-field textarea{display:block;width:100%;min-height:54px;padding:14px 48px 10px 12px;background:rgb(var(--bg-rgb) / .78);font-family:var(--mono);font-size:var(--text-sm)}
-  .clear{position:absolute;right:7px;top:9px;width:34px;height:34px;border:0;background:none;font-size:1.25rem}
+  .clear{position:absolute;right:7px;top:9px;display:grid;place-items:center;width:34px;height:34px;border:0;background:none;color:inherit}
   .input-help{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .input-help span{display:inline-block;margin-left:6px;color:var(--muted);font-family:var(--mono)}
   .incident-input-note{margin:8px 0 0;padding:8px 10px;border-left:3px solid var(--interface-accent);background:rgb(var(--interface-accent-rgb) / .06);color:var(--muted);font-size:var(--text-xs);line-height:1.5}

@@ -210,7 +210,7 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.locator('.product-preview .preview-panel')).toHaveCount(3);
   const candidateButtons = page.locator('.discover-panel .candidate-row');
   await expect(candidateButtons).toHaveCount(3);
-  await expect(page.getByRole('button', { name: 'Show exampleshop-login.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: /^exampleshop-login\.example\b/u })).toHaveAttribute('aria-pressed', 'true');
   const previewTabs = page.getByRole('tablist', { name: 'Lookup result layout preview' });
   await expect(previewTabs.getByRole('tab', { name: 'At a glance' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tabpanel', { name: 'At a glance' })).toBeVisible();
@@ -221,8 +221,8 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   const topologyGraphic = topology.getByRole('img', { name: 'Separately attributed evidence flow' });
   await expect(topologyGraphic).toBeVisible();
   await expect(page.locator('.mobile-source-summary > li')).toHaveCount(5);
-  await page.getByRole('button', { name: 'Show examplesh0p.example in the preview' }).click();
-  await expect(page.getByRole('button', { name: 'Show examplesh0p.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: /^examplesh0p\.example\b/u }).click();
+  await expect(page.getByRole('button', { name: /^examplesh0p\.example\b/u })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.lookup-panel > header small')).toHaveText('examplesh0p.example');
   await expect(topology).toContainText('unavailable');
   await expect(topology).toContainText('Repeat certificate');

@@ -791,7 +791,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await page.getByRole('radio', { name: /Deep/u }).check();
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('heading', { name: 'http-evidence.test' })).toBeVisible();
-  await holdBrowserLocalReads(page, 8_000, '.family-web button.family-summary');
+  await holdBrowserLocalReads(page, 8_000, '.family-web .family-summary > button');
   const snapshots = page.locator('.snapshot-manager');
   await expect(snapshots.getByRole('button', { name: 'Save current snapshot' })).toBeDisabled();
   await expect(snapshots).toHaveAttribute('aria-busy', 'true');

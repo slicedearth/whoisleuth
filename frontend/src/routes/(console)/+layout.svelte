@@ -308,9 +308,9 @@
   <div class="shell" class:open={navOpen}>
     <a class="skip-link" href="#main-content">Skip to main content</a>
     <header class="site-header" bind:this={consoleHeader} inert={commandOpen} aria-hidden={commandOpen?'true':undefined}>
-      <a href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark small"><BrandMark /></span><span class="console-brand-copy"><strong><BrandWordmark /></strong><small>Domain intelligence console</small></span></a>
+      <a href="/dashboard"><span class="mark small"><BrandMark /></span><span class="console-brand-copy"><strong><BrandWordmark /><span class="sr-only"> Dashboard</span></strong><small>Domain intelligence console</small></span></a>
       <div class="console-header-actions">
-        <button class="command-trigger" type="button" aria-label="Search console navigation" bind:this={commandTrigger} onpointerenter={() => preloadBestEffort(() => import('#lib/console-command-navigation.ts'))} onfocus={() => preloadBestEffort(() => import('#lib/console-command-navigation.ts'))} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Search</strong></button>
+        <button class="command-trigger" type="button" aria-label="Search console navigation" aria-keyshortcuts="Control+k Meta+k" bind:this={commandTrigger} onpointerenter={() => preloadBestEffort(() => import('#lib/console-command-navigation.ts'))} onfocus={() => preloadBestEffort(() => import('#lib/console-command-navigation.ts'))} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">(Ctrl/⌘ K)</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Search</strong></button>
         <span class="sign-out-control">
           <button class="console-sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>
           {#if logoutError}<span class="sign-out-error" role="alert">{logoutError}</span>{/if}
@@ -320,7 +320,7 @@
     </header>
     <aside id="console-navigation" bind:this={navigationPanel} inert={commandOpen} aria-hidden={commandOpen?'true':undefined}>
       <div class="terminal-strip" aria-hidden="true"><span class="prompt-sigil">❯</span><span>guest@whoisleuth / console</span></div>
-      <button class="navigation-drawer-close" type="button" aria-label="Close navigation" onclick={()=>void closeNavigation()}>×</button>
+      <button class="navigation-drawer-close" type="button" aria-label="Close navigation" onclick={()=>void closeNavigation()}><IntelligenceIcon name="close" size={18} /></button>
       <a class="brand" href="/dashboard"><span class="mark"><BrandMark /></span><span><strong><BrandWordmark /></strong><small>Domain intelligence console</small></span></a>
       <nav aria-label="Console">
         {#each consoleNavigationGroups as navigationGroup}

@@ -514,7 +514,7 @@ test('terminal headers are optional, reversible and independent of other appeara
     await expect(strip).toBeVisible();
     if (mobile) {
       await page.keyboard.press('Tab');
-      await expect(page.getByRole('link', { name: 'WHOISleuth Dashboard', exact: true })).toBeFocused();
+      await expect(page.getByRole('banner').getByRole('link', { name: /^WHOISleuth Dashboard\b/u })).toBeFocused();
       await page.keyboard.press('Shift+Tab');
       await expect(trigger).toBeFocused();
     }

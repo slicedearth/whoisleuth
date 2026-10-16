@@ -14,10 +14,10 @@ import {
 } from './maintainer-tool-helpers.mts';
 
 // Catalogue identity follows its data revision, independently of the scanner package.
-const SOURCE_VERSION = '2026.10.10';
-const SOURCE_UPDATED_AT = '2026-10-10T16:09:18.000Z';
-const SOURCE_REVISION = '0b660fba06adebbcba027f2eb621cdb4fd6c2583';
-const SOURCE_SHA256 = 'bf3864748745b69a8cc690f1f013dceda48b5e4aabfbd9229517dc7a62f59210';
+const SOURCE_VERSION = '2026.10.15';
+const SOURCE_UPDATED_AT = '2026-10-15T07:45:18.000Z';
+const SOURCE_REVISION = '69016f934568b93ce2517073dc2ac99dba615215';
+const SOURCE_SHA256 = 'b026add16583e58cd463300722a36e319eca637ebdd507be79786a46634cf441';
 const SOURCE_URL = `https://github.com/RetireJS/retire.js/blob/${SOURCE_REVISION}/repository/jsrepository.json`;
 const OUTPUT_PATH = 'lib/generated/retire-browser-catalog.mts';
 const OUTPUT_DIGEST_PATH = 'lib/generated/retire-browser-catalog.sha256';
