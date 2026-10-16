@@ -361,7 +361,7 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   expect((await verifyOfflineInvestigationPackage(encryptedBytes, packagePassphrase)).checks.authenticatedEncryption).toBe('verified');
   await expect(capsule.getByLabel('Package passphrase', { exact: true })).toHaveValue('');
   const comparison = page.locator('.comparison');
-  await expect(comparison.getByText(/0 source-only · 0 redacted · 4 unavailable\/incomplete/)).toBeVisible();
+  await expect(comparison.getByText(/0 source-only · 0 redacted · 4 not comparable/)).toBeVisible();
   await comparison.locator('summary').click();
   await expect(comparison.getByText('WHOIS incomplete').first()).toBeVisible();
 
