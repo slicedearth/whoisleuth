@@ -75,7 +75,7 @@
       <button class="btn" type="button" disabled={disabled || busy} onclick={() => void operation(async () => {
         const retained = copy!; await retained.close(); copy = null; report = null;
         message = `Kept ${retained.workspace.name}. Open it from the workspace directory and check it with its new passphrase. The original remains available.`;
-      })}>Finish verification and keep copy</button>
+      })}>Keep copy and finish</button>
     </div>
     <p>The new workspace stays closed to other tabs during verification. Leaving keeps any completed writes; an interrupted copy may be incomplete. Export and rehearse a separate backup before deliberately deleting an older workspace.</p>
   {/if}

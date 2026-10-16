@@ -72,7 +72,7 @@
   <div class="section-intro"><h2 id="start-title">Run the CLI locally</h2><p>Node.js 24 or later.</p></div>
   <ol class="start-steps">
     <li>
-      <span>1</span><div><h3>Run help without installing</h3><CopyableCommand command={PUBLIC_CLI_GUIDANCE.runOnce[0]} label="run-once help command" /></div>
+      <span>1</span><div><h3>Run help without a global install</h3><CopyableCommand command={PUBLIC_CLI_GUIDANCE.runOnce[0]} label="run-once help command" /></div>
     </li>
     <li>
       <span>2</span><div><h3>Install and check the CLI</h3><CopyableCommand command={PUBLIC_CLI_GUIDANCE.install[0]} label="installation command" /><CopyableCommand command={PUBLIC_CLI_GUIDANCE.install[1]} label="runtime check command" compact /></div>

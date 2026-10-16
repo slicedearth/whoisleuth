@@ -405,7 +405,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
   {:else}
     <LocalCollectionState state={reviewInboxSourceState}
       loadingTitle="Opening review inbox" loadingDetail="Reading saved evidence and review decisions for this inbox."
-      title="Review inbox evidence unavailable" detail="Cases, watchlists, saved Bulk sessions, Brand Profiles, custom rules, website snapshots, and the analyst lifecycle overlay must all be readable before the combined inbox can distinguish zero review items from missing saved state. Fulfilled collections remain available in their own views." />
+      title="Review inbox evidence unavailable" detail="Some required saved collections could not be read. Open available work in its own view, or reload to retry." />
   {/if}
   {#if cases.length || bulkSessions.length || casesSourceState==='unavailable' || bulkSessionsSourceState==='unavailable'}
     <div class="retained-preparation" aria-busy={debtPreparation?.state==='loading'}>

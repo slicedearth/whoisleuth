@@ -230,7 +230,7 @@
 <section class="dashboard-state card" aria-live="polite" aria-busy="true">
   <p class="eyebrow">Saved workspace</p>
   <h2>Preparing your Dashboard</h2>
-  <p>Waiting for every required local collection before deciding whether this is a first-use or returning workspace.</p>
+  <p>Reading saved work…</p>
 </section>
 {:else if workspaceState === 'first_use'}
 <section class="dashboard-section getting-started" aria-labelledby="getting-started-title">
@@ -252,7 +252,7 @@
 {#if attentionSummary}
   <DashboardAttentionSummary summary={attentionSummary} />
 {:else if attentionUnavailable}
-  <section class="dashboard-state card" role="status"><h2>Attention summary unavailable</h2><p>The combined review summary is unavailable. Available work remains accessible below; no missing source was treated as empty.</p></section>
+  <section class="dashboard-state card" role="status"><h2>Attention summary unavailable</h2><p>The review summary is unavailable. Open the available saved work below.</p></section>
 {/if}
 </div>
 <section class="recent-cases" aria-labelledby="recent-cases-title">

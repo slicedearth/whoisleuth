@@ -8,6 +8,7 @@
   import { readSelectedConsoleCase, selectConsoleCase, subscribeSelectedConsoleCase } from '#lib/console-workflow-state.ts';
   import { activeProfile } from '#lib/brand-profiles.ts';
   import { loadCases, type CaseRecord } from '#lib/cases.ts';
+  import { formattedCaseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
 import { isExpectedBrowserLocalDataFailure } from '#lib/browser-local-data-content.ts';
   import type { BrandProfile } from '#lib/analysis/brand-profile-model.ts';
   import { buildInvestigationHandoffReadiness } from '#lib/analysis/investigation-handoff-readiness.ts';
@@ -610,7 +611,7 @@ import { isExpectedBrowserLocalDataFailure } from '#lib/browser-local-data-conte
         {#if contextCaseChoices.length}
           <select aria-label="Case for this guide" aria-busy={caseContextPending} bind:this={caseSelector} value={contextCase?.id || ''} onchange={(event) => selectConsoleCase(event.currentTarget.value)}>
             <option value="" disabled>Choose Case</option>
-            {#each contextCaseChoices as choice (choice.id)}<option value={choice.id}>{choice.domain}</option>{/each}
+            {#each contextCaseChoices as choice (choice.id)}<option value={choice.id}>{choice.domain} · {formattedCaseNumber(choice.id)}</option>{/each}
           </select>
         {/if}
         <span role="status">{caseContextPending ? 'Loading…' : contextCaseLabel}</span>

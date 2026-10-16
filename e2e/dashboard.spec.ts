@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import type { ArchiveInspectionReport } from '../cli/archive-inspect.mts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import { formattedCaseNumber } from '../packages/cases/case-workflow-metadata.mts';
 import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
 import { canonicalArtifactJson, sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity';
 import { createCase as createCaseInBrowser } from './case-test-fixtures';
@@ -442,7 +443,7 @@ for (const unavailableSource of ['detection_rules', 'website_snapshots'] as cons
     await expect(page.getByRole('heading', { name: 'Attention summary unavailable' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Attention needed', exact: true })).toHaveCount(0);
     await expect(page.getByText(/No current Review Item requires attention/u)).toHaveCount(0);
-    await expect(page.getByText(/no missing source was treated as empty/iu)).toBeVisible();
+    await expect(page.getByText('The review summary is unavailable. Open the available saved work below.')).toBeVisible();
   });
 }
 
@@ -488,7 +489,7 @@ test('the Console navigation exposes semantic groups without changing link order
 test('the privacy-safe browser handoff previews exact third-party disclosure before opening', async ({ page }) => {
   await page.goto('/dashboard');
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord('handoff-case', 'handoff.invalid', 'new')] },
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord('handoff-case', 'handoff.invalid', 'new'), caseRecord('handoff-case-two', 'handoff.invalid', 'new')] },
   });
   await openDashboardSecondaryWorkspaces(page);
   await page.getByLabel('Domain or URL').fill('https://user:secret@Sub.Example.Invalid:8443/private?token=secret#fragment');
@@ -515,6 +516,19 @@ test('the privacy-safe browser handoff previews exact third-party disclosure bef
   await page.getByRole('button', { name: 'Open reviewed destination' }).click();
   await expect(page.getByRole('alert')).toContainText('The new tab was blocked');
   await expect(preview).toBeVisible();
+
+  const caseSelector = page.getByLabel('Optional case trail');
+  const firstLabel = `handoff.invalid · ${formattedCaseNumber('handoff-case')}`;
+  const secondLabel = `handoff.invalid · ${formattedCaseNumber('handoff-case-two')}`;
+  await expect(caseSelector.getByRole('option', { name: firstLabel, exact: true })).toHaveCount(1);
+  await expect(caseSelector.getByRole('option', { name: secondLabel, exact: true })).toHaveCount(1);
+  await caseSelector.selectOption({ label: secondLabel });
+  await page.getByRole('button', { name: 'Record handoff locally' }).click();
+  await expect(page.locator('.browser-handoff [role="status"]')).toContainText('Recorded the reviewed handoff');
+  const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2, minimumRevision: 2 });
+  const records = stored.records.map(record => record.value);
+  expect(records.find(record => record.id === 'handoff-case')?.manualTrail).toEqual([]);
+  expect(records.find(record => record.id === 'handoff-case-two')?.manualTrail).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'handoff' })]));
 
   await page.setViewportSize({ width: 320, height: 700 });
   await expectSelectedOptionFits(page.getByLabel('Destination'));

@@ -10,6 +10,7 @@
   } from '#lib/analysis/parent-domain-campaign-review.ts';
   import type { CampaignRecord } from '#lib/campaigns.ts';
   import type { CaseRecord } from '#lib/cases.ts';
+  import { formattedCaseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
 
   let { campaign, review, records, onselect, onmessage }: {
     campaign: CampaignRecord;
@@ -135,7 +136,7 @@
       <p role="status" aria-live="polite">{selected.size} of {selectableHostnames.length} exact hostnames selected; {filteredHostnameCount} currently shown.</p>
       <button class="btn small" type="button" onclick={clearSelection} disabled={!selected.size} aria-label={`Clear selected hostnames for ${campaign.name}`}>Clear selection</button>
     </div>
-    <p class="selection-limit">Filtering and selection are held only in this component’s memory. They do not change routing, Case state, campaign membership, scores, monitoring, evidence, actions, assertions, exports, or browser storage.</p>
+    <p class="selection-limit">Filter and select hostnames for this review only. Selections are not saved or exported and do not change Cases, campaign membership or monitoring.</p>
 
     {#if filteredParents.length}<div class="table-wrap">
       <table>
@@ -164,7 +165,7 @@
                   <div class="case-pivots">
                     {#each hostname.affectedCaseIds as caseId}
                       {@const record = caseById.get(caseId)}
-                      {#if record}<button class="case-pivot" type="button" onclick={() => openCase(caseId)} aria-label={`Open Case ${record.domain} for retained hostname ${hostname.hostname}`}>{record.domain}</button>{/if}
+                      {#if record}<button class="case-pivot" type="button" onclick={() => openCase(caseId)} aria-label={`Open ${formattedCaseNumber(record.id)} for ${record.domain}, retained hostname ${hostname.hostname}`}>{record.domain} · {formattedCaseNumber(record.id)}</button>{/if}
                     {/each}
                   </div>
                 </td>

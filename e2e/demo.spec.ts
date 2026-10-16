@@ -747,6 +747,7 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
   const apiRequests: string[] = [];
   page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) apiRequests.push(request.url()); });
   await page.goto('/demo');
+  await expect(page.locator('.demo-hero')).toContainText('fixed fictional evidence');
   const tools = page.getByRole('navigation', { name: 'Synthetic tool substeps', exact: true });
   await expect(tools).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Reset demo', exact: true })).toHaveCount(0);
@@ -760,6 +761,10 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
   }
   await page.getByRole('button', { name: 'Inspect suspicious domain' }).click();
   await expect(page.getByRole('heading', { name: 'exampleshop-login.example', exact: true })).toBeFocused();
+  const demoScope = page.locator('.demo-scope');
+  await demoScope.getByText('About this demo', { exact: true }).click();
+  await expect(demoScope.locator('p')).toContainText('No sign-in, live collection or saved Console access.');
+  await demoScope.getByText('About this demo', { exact: true }).click();
   await expect(tools.getByRole('button')).toHaveCount(6);
   for (const name of ['Brands', 'Discover', 'Bulk']) {
     await expect(tools.getByRole('button', { name: `${name} Available`, exact: true })).toBeEnabled();
@@ -770,7 +775,7 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
   await expect(page.getByRole('heading', { name: 'exampleshop-login.example', exact: true })).toBeVisible();
   await expect(tools.getByRole('button', { name: 'Brands Available', exact: true })).toBeEnabled();
   await expect(tools).not.toContainText('Completed');
-  await expect(page.getByRole('button', { name: 'Open synthetic Case' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open Case' })).toBeVisible();
   await page.getByRole('button', { name: 'Expand details: Relationships and history evidence' }).click();
   const evidence = page.getByRole('region', { name: 'Where this result came from', exact: true });
   await expect(evidence).toBeVisible();
@@ -815,9 +820,9 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
   await expect(tools.getByRole('button', { name: 'Lookup Available', exact: true })).toBeEnabled();
   await expect(tools.getByRole('button', { name: 'Cases Current', exact: true })).toHaveAttribute('aria-current', 'step');
   await expect(tools).not.toContainText('Completed');
-  await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
+  await page.getByRole('button', { name: 'Load later observation' }).click();
   await expect(page.getByRole('heading', { name: 'Repeated evidence and material changes stay distinct' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Export synthetic case report' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Export demo Case report' })).toBeVisible();
   expect(apiRequests.filter(url => new URL(url).pathname !== '/api/session')).toEqual([]);
 });
 
@@ -826,13 +831,13 @@ async function progressToLookup(page: Page) {
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
   await expect(page.getByRole('heading', { name: 'Define the official identity' })).toBeFocused();
   await expect(workspace).toHaveAttribute('aria-busy', 'false');
-  await page.getByRole('button', { name: 'Use synthetic profile' }).click();
+  await page.getByRole('button', { name: 'Use profile' }).click();
   await expect(page.getByRole('heading', { name: 'Generate bounded candidate coverage' })).toBeFocused();
   await expect(workspace).toHaveAttribute('aria-busy', 'false');
   await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
   await expect(page.locator('.discover-candidates article')).toHaveCount(3);
   await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
-  await expect(page.getByRole('heading', { name: 'Prioritise candidates without collapsing evidence' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Choose a candidate to investigate' })).toBeFocused();
   await expect(workspace).toHaveAttribute('aria-busy', 'false');
   await page.getByRole('button', { name: 'Inspect exampleshop-login.example' }).click();
   await expect(page.getByRole('heading', { name: 'exampleshop-login.example' })).toBeFocused();
@@ -862,8 +867,9 @@ test('completes the guided synthetic workflow without investigation requests or 
 
   await page.goto('/demo');
   await expect(page.locator('.demo-footer').getByRole('link', { name: 'Sign in to investigate' })).toHaveAttribute('href', '/login');
-  await expect(page.getByRole('heading', { name: 'Explore a synthetic domain investigation.' })).toBeVisible();
-  await expect(page.getByText('Synthetic demo · State resets with this tab')).toBeVisible();
+  await expect(page.locator('.demo-hero').getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.locator('.demo-hero')).toContainText('fixed fictional evidence');
+  await expect(page.locator('.demo-hero')).toContainText('Progress lasts for this tab.');
   await expect(page.getByRole('navigation', { name: 'Synthetic tool substeps', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
   await expect(page.getByRole('heading', { name: 'Define the official identity' })).toBeFocused();
@@ -872,7 +878,7 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(page.getByRole('button', { name: /Cases.*Upcoming/ })).toBeDisabled();
   await expect(page.getByRole('heading', { name: 'Example Shop' })).toBeVisible();
   await expect(page.getByText(/exampleshop\.example · Complete/)).toBeVisible();
-  await page.getByRole('button', { name: 'Use synthetic profile' }).click();
+  await page.getByRole('button', { name: 'Use profile' }).click();
   await expect(page.getByRole('heading', { name: 'Generate bounded candidate coverage' })).toBeFocused();
 
   await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
@@ -882,7 +888,7 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(page.getByText('Generated candidate · generated locally')).toHaveCount(2);
   await expect(page.getByRole('button', { name: /Bulk.*Upcoming/ })).toBeDisabled();
   await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
-  await expect(page.getByRole('heading', { name: 'Prioritise candidates without collapsing evidence' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Choose a candidate to investigate' })).toBeFocused();
   await expect(page.locator('.candidate')).toHaveCount(3);
   await page.getByRole('button', { name: 'High priority · 1' }).click();
   await expect(page.locator('.candidate')).toHaveCount(1);
@@ -896,7 +902,7 @@ test('completes the guided synthetic workflow without investigation requests or 
   const familyControls = page.locator('.lookup-family button[aria-expanded]');
   await expect(familyControls).toHaveCount(5);
   expect(await familyControls.evaluateAll((buttons) => buttons.every((button) => button.getAttribute('aria-expanded') === 'false'))).toBe(true);
-  const monitorHandoff = page.getByRole('button', { name: 'Open synthetic Case' });
+  const monitorHandoff = page.getByRole('button', { name: 'Open Case' });
   await expect(monitorHandoff).toBeVisible();
   await expect(monitorHandoff).toBeInViewport();
   await expect(page.locator('#demo-evidence-registry')).toHaveCount(0);
@@ -1003,9 +1009,9 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(page.getByRole('heading', { name: 'Watchlist activity' })).toHaveCount(0);
 
   await page.getByRole('combobox', { name: /^Status/u }).selectOption('reviewing');
-  await expect(page.getByRole('status')).toHaveText('Synthetic case updated.');
+  await expect(page.getByRole('status')).toHaveText('Case updated.');
   await page.getByLabel('Analyst note').fill('Fixture reviewed for demonstration.');
-  await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
+  await page.getByRole('button', { name: 'Load later observation' }).click();
   const changeReview = page.locator('.change-review');
   await expect(changeReview.getByRole('heading', { name: 'Repeated evidence and material changes stay distinct' })).toBeVisible();
   await expect(changeReview).toContainText('2 retained observations');
@@ -1049,7 +1055,7 @@ test('completes the guided synthetic workflow without investigation requests or 
   await verifyIsolation();
 
   const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export synthetic case report' }).click();
+  await page.getByRole('button', { name: 'Export demo Case report' }).click();
   const download = await downloadPromise;
   const body = await (await download.createReadStream()).toArray();
   const payload = JSON.parse(Buffer.concat(body).toString('utf-8'));
@@ -1084,7 +1090,7 @@ test('settles long-to-short stage transitions at one stable workspace anchor', a
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/demo');
   await progressToLookup(page);
-  await page.getByRole('button', { name: 'Open synthetic Case' }).click();
+  await page.getByRole('button', { name: 'Open Case' }).click();
   await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeFocused();
   await expect(page.locator('#demo-workspace')).toHaveAttribute('aria-busy', 'false');
   await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeInViewport({ ratio: 1 });
@@ -1092,7 +1098,7 @@ test('settles long-to-short stage transitions at one stable workspace anchor', a
   const settledTop = await workspaceTop(page);
   expect(await workspaceTop(page)).toBe(settledTop);
 
-  await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
+  await page.getByRole('button', { name: 'Load later observation' }).click();
   await page.getByRole('button', { name: 'Review Lookup evidence' }).click();
   await expect(page.getByRole('heading', { name: 'exampleshop-login.example' })).toBeFocused();
   await expect(page.locator('#demo-workspace')).toHaveAttribute('aria-busy', 'false');
@@ -1123,7 +1129,7 @@ test('retains the stage surface until scrolling completes or reaches its bounded
 
   await page.evaluate(() => window.scrollTo(0, 0));
   expect(await workspaceNeedsScroll(page)).toBe(true);
-  await page.getByRole('button', { name: 'Use synthetic profile' }).evaluate((button: HTMLButtonElement) => button.click());
+  await page.getByRole('button', { name: 'Use profile' }).evaluate((button: HTMLButtonElement) => button.click());
   await expect(workspace).toHaveAttribute('aria-busy', 'true');
   await expect(page.getByRole('heading', { name: 'Generate bounded candidate coverage' })).toBeFocused();
   expect(await workspace.evaluate((element) => Number.parseFloat(getComputedStyle(element).minHeight))).toBeGreaterThan(0);
@@ -1158,8 +1164,8 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await expect(page.locator('.hero-full-title')).toHaveCount(1);
   await expect(page.locator('.hero-full-title')).toBeHidden();
   await expect(page.locator('.hero-compact-title')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Use synthetic profile' })).toBeInViewport();
-  await page.getByRole('button', { name: 'Use synthetic profile' }).click();
+  await expect(page.getByRole('button', { name: 'Use profile' })).toBeInViewport();
+  await page.getByRole('button', { name: 'Use profile' }).click();
   await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
   await expect(page.locator('.discover-candidates article')).toHaveCount(3);
   await expectNoHorizontalOverflow(page);
@@ -1181,7 +1187,7 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   });
   await expect.poll(activeStageCenterOffset).toBeLessThanOrEqual(3);
   await expect(page.locator('.lookup-family button[aria-expanded="true"]')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Open synthetic Case' })).toBeInViewport();
+  await expect(page.getByRole('button', { name: 'Open Case' })).toBeInViewport();
   await expectNoHorizontalOverflow(page);
 
   await rail.evaluate((element) => element.scrollTo({ left: 0, behavior: 'auto' }));
@@ -1202,8 +1208,8 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await page.setViewportSize({ width: 393, height: 852 });
   await expectNoHorizontalOverflow(page);
 
-  await page.getByRole('button', { name: 'Open synthetic Case' }).click();
-  await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
+  await page.getByRole('button', { name: 'Open Case' }).click();
+  await page.getByRole('button', { name: 'Load later observation' }).click();
   await expect(page.getByRole('heading', { name: 'Repeated evidence and material changes stay distinct' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Watchlist activity' })).toHaveCount(0);
   const mobileChangeArrows = page.locator('.change-list dd b');
@@ -1258,13 +1264,13 @@ test('keeps progressing in memory when tab storage is unavailable', async ({ pag
   });
   await page.goto('/demo');
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
-  await page.getByRole('button', { name: 'Use synthetic profile' }).click();
+  await page.getByRole('button', { name: 'Use profile' }).click();
   await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
   await expect(page.getByRole('heading', { name: 'Three candidates, two evidence origins' })).toBeVisible();
-  await expect(page.getByRole('status')).toHaveText('Loaded three synthetic candidates.');
+  await expect(page.getByRole('status')).toHaveText('Three candidates loaded.');
   await expect(page.getByRole('button', { name: /Bulk.*Upcoming/ })).toBeDisabled();
   await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
-  await expect(page.getByRole('heading', { name: 'Prioritise candidates without collapsing evidence' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Choose a candidate to investigate' })).toBeFocused();
   await expect(page.getByRole('status')).toContainText('Progress updated in memory');
 });
 

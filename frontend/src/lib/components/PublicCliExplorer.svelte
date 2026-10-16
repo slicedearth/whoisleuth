@@ -341,7 +341,7 @@
           <section><h3>Example</h3><CopyableCommand command={detail.example} label={`${command.id} example`} compact /></section>
           <details class="compact-disclosure usage"><summary>Full command syntax</summary><CopyableCommand command={detail.usage} label={`${command.id} usage`} compact /></details>
         </div>
-        <p class="network-summary"><strong>{detail.networkEffect === 'offline' ? 'Runs locally.' : detail.networkEffect === 'conditional_network' ? 'Network use depends on the selected options.' : 'Makes network requests.'}</strong> {detail.collection.scope}{#if detail.explicitAuthorisationRequired} Explicit authorisation is required.{/if}</p>
+        <p class="network-summary"><strong>{detail.networkEffect === 'offline' ? 'Runs locally.' : detail.networkEffect === 'conditional_network' ? 'Network use depends on the selected options.' : 'Makes network requests.'}</strong> {detail.collection.scope}{#if detail.explicitAuthorisationRequired}{' '}Explicit authorisation is required.{/if}</p>
         <details class="compact-disclosure" bind:open={builderOpen}><summary>Build this command</summary>
           {#if builderOpen}<DeferredSurface load={() => import('./CliCommandBuilder.svelte')} props={{command:command.id}} loadingLabel="Opening command builder…" unavailableLabel="The command builder is unavailable. The command syntax remains above." />{/if}
         </details>

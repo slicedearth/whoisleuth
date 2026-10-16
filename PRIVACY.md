@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 13 October 2026.
+Last updated: 16 October 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -492,8 +492,11 @@ Capture and analysis limits are disclosed as incomplete evidence, not absence.
 Deep domain collection can query A, AAAA, CAA and MX once through one selected
 public address per nameserver, retaining at most sixteen normalised values
 for each record type. Direct-authority results stay separately attributed.
+Authoritative registration publications take priority; positive authoritative
+DNS delegation can support registered status when those publications are
+inconclusive. Missing DNS never establishes availability.
 
-Supporting sources remain separately attributed. DNS, website, certificate,
+Supporting sources remain separately attributed. Non-authoritative DNS, website, certificate,
 provider and analyst evidence cannot independently decide domain registration,
 ownership, control, safety, activity, intent or maliciousness.
 

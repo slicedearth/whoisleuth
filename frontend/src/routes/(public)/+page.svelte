@@ -9,7 +9,7 @@
   import { PUBLIC_RESOURCES } from '#lib/public-resources.ts';
 
   const evidenceSources = [
-    { title: 'Registration first', description: 'WHOIS and RDAP stay separate, and only authoritative registry evidence decides registration status.' },
+    { title: 'Registration first', description: 'WHOIS and RDAP stay separate. Authoritative registry evidence takes priority; positive authoritative DNS delegation can support registered status when registry results are inconclusive.' },
     { title: 'Supporting context', description: 'DNS, certificates, mail and website checks help explain a domain without overriding registration evidence.' },
     { title: 'Offline intake', description: 'Review supplied text, messages and supported files locally without opening their links.', guide: { label: 'Read the intake guide', href: '/resources#tool-lookup-input' } },
     { title: 'Evidence handoff', description: 'Keep sources and decisions in a Case, review the selected disclosure and export a packet to share yourself.', guide: { label: 'Read the handoff guide', href: '/resources/reporting-and-takedown-guidance' } },

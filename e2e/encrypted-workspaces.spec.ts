@@ -295,7 +295,7 @@ for (const encryptedSource of [false, true]) {
     expect(files).toHaveLength(1); expect(files[0]!.codec).toBe('aes-gcm-hmac-v1'); expect(files[0]!.bytes).not.toEqual([...FILE_BYTES]);
     const after = await storedBytes(page, sourceDatabase);
     expect(after.records).toEqual(before.records); expect(after.manifests).toEqual(before.manifests); expect(await storedFiles(page, sourceDatabase)).toEqual(sourceFiles);
-    await copy.getByRole('button', { name: 'Finish verification and keep copy', exact: true }).click();
+    await copy.getByRole('button', { name: 'Keep copy and finish', exact: true }).click();
     await expect(copy.getByRole('status')).toContainText('The original remains available');
     const manager = await openManager(page);
     await manager.getByRole('button', { name: `Open workspace ${replacement!.name}`, exact: true }).click();
@@ -404,7 +404,7 @@ test('workspace lifecycle preserves an incomplete destination after its metadata
   await copy.getByRole('button', { name: 'Copy missing originals', exact: true }).click();
   await expect(copy.getByRole('alert')).toContainText('Destination records do not match');
   const after = await storedBytes(page, DEFAULT_DATABASE); expect(after.records).toEqual(before.records); expect(after.manifests).toEqual(before.manifests);
-  await copy.getByRole('button', { name: 'Finish verification and keep copy', exact: true }).click();
+  await copy.getByRole('button', { name: 'Keep copy and finish', exact: true }).click();
   expect((await directoryRows(page)).some(item => item.id === created!.id)).toBe(true);
 });
 

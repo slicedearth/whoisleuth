@@ -12,6 +12,7 @@ import {
 } from './helpers';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import { formattedCaseNumber } from '../packages/cases/case-workflow-metadata.mts';
 
 const RETAINED_AT = '2026-08-20T10:00:00.000Z';
 
@@ -248,7 +249,7 @@ test('reviews, filters, selects and exports exact parent scope without collectio
   page.off('request', recordDataRequest);
 
   const pivot = scope.getByRole('button', {
-    name: 'Open Case example.test for retained hostname account.example.test',
+    name: `Open ${formattedCaseNumber('parent-scope-case')} for example.test, retained hostname account.example.test`,
   });
   await pivot.focus();
   await page.keyboard.press('Shift+Tab');

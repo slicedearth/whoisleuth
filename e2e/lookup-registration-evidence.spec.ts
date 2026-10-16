@@ -1344,7 +1344,7 @@ for (const unsupported of ['provider', 'envelope'] as const) {
     await page.locator('#query').fill('example.test');
     await page.getByRole('button', { name: 'Run lookup' }).click();
     const advanced = page.locator('#advanced-evidence');
-    await expect(advanced).toContainText('0 usable external providers');
+    await expect(advanced).toContainText('0 external provider results');
     await expect(advanced).toContainText('1 provider record withheld');
     await page.getByRole('button', { name: 'Expand details: Advanced evidence' }).click();
     const notice = page.getByRole('region', { name: 'Withheld external-intelligence records' });

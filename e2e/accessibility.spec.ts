@@ -241,7 +241,7 @@ test('scans representative public initial, error, populated, and expanded states
   await useTheme(page, 'light');
   await page.goto('/demo');
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
-  await page.getByRole('button', { name: 'Use synthetic profile' }).click();
+  await page.getByRole('button', { name: 'Use profile' }).click();
   await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
   await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
   await page.getByRole('button', { name: 'Inspect exampleshop-login.example' }).click();
@@ -252,7 +252,7 @@ test('scans representative public initial, error, populated, and expanded states
   await expect(mobileComparison).toHaveAttribute('open', '');
   await expectNoAccessibilityViolations(page, testInfo, 'public-populated-expanded-light-mobile');
   await expectSequentialHeadingOrder(page, 'public populated demo');
-  await page.getByRole('button', { name: 'Open synthetic Case' }).click();
+  await page.getByRole('button', { name: 'Open Case' }).click();
   await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeVisible();
   await expectSequentialHeadingOrder(page, 'public monitor demo');
 });

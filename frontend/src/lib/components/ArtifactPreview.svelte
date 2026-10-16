@@ -87,7 +87,7 @@
       await tick();
       if (current === generation && focusOnReady) body?.focus();
     } catch {
-      if (current === generation) error = 'This file could not be shown safely in the inline viewer. The original file is unchanged.';
+      if (current === generation) error = 'This file could not be displayed in the inline viewer. The original file is unchanged.';
     } finally {
       if (current === generation) { busy = false; await tick(); if (current === generation && focusOnReady) body?.focus(); }
     }

@@ -9,6 +9,7 @@
     type BrowserLookupHandoff,
   } from '#lib/analysis/browser-lookup-handoff.ts';
   import { caseStatusIsClosed } from '../../../../packages/cases/case-record-decisions.mts';
+  import { formattedCaseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { editCase, loadCases, type CaseRecord } from '../cases.ts';
   import { casePruningNotice } from '#lib/analysis/case-mutation-feedback.ts';
 
@@ -169,7 +170,7 @@
           <label for="handoff-case">Optional case trail</label>
           <select id="handoff-case" bind:value={caseId}>
             <option value="">Do not record</option>
-            {#each cases as record}<option value={record.id}>{record.domain}</option>{/each}
+            {#each cases as record}<option value={record.id}>{record.domain} · {formattedCaseNumber(record.id)}</option>{/each}
           </select>
           <button type="button" class="btn" disabled={!caseId} onclick={() => void recordHandoff()}>Record handoff locally</button>
         </div>

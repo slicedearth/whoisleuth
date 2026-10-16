@@ -122,7 +122,7 @@
     <article class="card">
       <span>Generic + restricted</span>
       <strong>{standards.counts.genericAndRestrictedRdapCovered} / {standards.counts.generic + standards.counts.genericRestricted}</strong>
-      <p>Current delegations present in the IANA RDAP bootstrap</p>
+      <p>Delegations present in the retained IANA RDAP bootstrap snapshot</p>
     </article>
     <article class="card">
       <span>Sponsored</span>

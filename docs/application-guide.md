@@ -259,7 +259,9 @@ page discards them. Confirmed progress stays in the current tab.
 #### Practise with fictional evidence
 
 Choose **Explore an example investigation** on the public homepage to enter the
-demo. Its adjacent note identifies fictional evidence and no live collection.
+demo. The opening explains its fictional evidence, no live collection or saved
+Console access, and tab-only progress. After starting, the small **Demo** label
+remains; **About this demo** reopens that explanation.
 Choose a suspicious-domain, brand-lookalike or reported-change task first; the
 tool navigation appears after that task starts. **Reset demo** returns to the
 task choices. **Practise with real Case forms** is below the main workspace and
@@ -286,20 +288,17 @@ the requested-evidence exercise prepares a drafting amendment. Changing scenario
 requires confirming that its Case and drafts should be discarded. Feedback
 checks retained relationships and states, not the quality of free-text reasoning.
 
-Optional **Larger practice reading** and **Show practice companion** choices are
-page-local presentation aids. They do not change the fictional records, grade
-decisions or appear in evidence exports. **Present selected fictional evidence**
-lets you choose and order original supplied observations, then read them one at a
-time with their sources, times and limitations. Earlier/later buttons change the
-walkthrough order, not the observations or their chronology. It is an unmasked
-fictional walkthrough, not an export or broadcast. Closing it, collapsing
-practice, restarting or changing scenario clears the selection without writing
-saved work. Source-reuse and campaign-authority
+Use **Larger practice reading** or **Show practice companion** for a different
+reading layout. **Present selected fictional evidence** lets you order supplied
+observations and read them with their sources, times and limitations. The order
+does not change their chronology. This unmasked walkthrough is not an export or
+broadcast; closing it, collapsing practice, restarting or changing scenario clears
+its selection. Source-reuse and campaign-authority
 exercises explain why repeated reports or an organisation directory entry do
 not establish independent observation or authority for a separate offer.
 The retained investigation timeline also offers a **Field journal reading
 layout**, using the same entries, filters, pagination and separately labelled
-clocks. It does not reconstruct missing observations or change the theme.
+clocks. Missing observations are not reconstructed.
 
 For related hosts, conflicting sources and provider-reported resolution, open
 **Find the weak inference** in **Record a conclusion**. Inspect the original

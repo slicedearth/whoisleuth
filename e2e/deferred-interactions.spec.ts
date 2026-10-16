@@ -582,7 +582,7 @@ test('measures a later fictional demo stage without opening production storage',
       ],
     },
     ready: heading,
-    readyControl: page.getByRole('button', { name: 'Use synthetic profile' }),
+    readyControl: page.getByRole('button', { name: 'Use profile' }),
   });
   await expect(heading).toBeFocused();
   expect(await page.evaluate(async () => (await indexedDB.databases())

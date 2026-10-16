@@ -86,7 +86,7 @@
     <div>
       <p class="eyebrow">Analyst-selected pivots</p>
       <h2 id="retained-observation-title" tabindex="-1">Retained relationship observations</h2>
-      <p>Only relationships deliberately retained from Bulk appear here. The complete scan and raw lookup responses remain transient.</p>
+      <p>Only relationships deliberately retained from Bulk appear here. Each record contains selected relationship evidence, not the complete scan or raw Lookup responses.</p>
     </div>
     <span>{records.length} retained</span>
   </header>

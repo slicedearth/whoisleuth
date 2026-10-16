@@ -3,6 +3,7 @@ import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, failBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, selectBulkResultView, useTheme } from './helpers';
 import { BASE_URL } from './constants.ts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import { formattedCaseNumber } from '../packages/cases/case-workflow-metadata.mts';
 import { INVESTIGATION_GUIDE_KEY as GUIDE_KEY } from '../frontend/src/lib/investigation-guide-storage';
 
 type RecipeLabel =
@@ -293,7 +294,9 @@ async function retainCases(page: import('@playwright/test').Page, label: string,
     await chooseCase.focus();
     await chooseCase.press('Enter');
     await expect(caseSelector).toBeFocused();
-    await caseSelector.selectOption({ label: firstDomain });
+    const choice = caseSelector.getByRole('option').filter({ hasText: `${firstDomain} ·` });
+    await expect(choice).toHaveCount(1);
+    await caseSelector.selectOption((await choice.getAttribute('value'))!);
     await expect(caseSelector).toBeFocused();
   } else {
     await expect(completedGuide.getByRole('button', { name: 'Choose Case for handoff' })).toHaveCount(0);
@@ -968,21 +971,26 @@ test('shows retained Case context without treating a record update as evidence o
   await expect(page.locator('.guide')).toContainText('0 of 3 steps reviewed');
 });
 
-test('the guide does not arbitrarily choose between retained hostname and parent Cases', async ({ page }) => {
+test('the guide distinguishes same-domain Cases without choosing between hostname and parent records', async ({ page }) => {
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: ['example.test', 'login.example.test'].map((domain, index) => ({
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: ['example.test', 'login.example.test', 'login.example.test'].map((domain, index) => ({
       id: `guide-case-${index}`, domain, status: 'new', disposition: 'unreviewed', tags: [], notes: [], source: 'manual', evidenceHistory: [], createdAt: '2026-07-20T00:00:00.000Z', updatedAt: '2026-07-20T00:00:00.000Z',
     })) },
   }, { destination: '/dashboard' });
   await startRecipe(page, 'New-domain triage', 'login.example.test');
-  await expect(page.locator('.context-tray')).toContainText('Choose a Case (2 match this target)');
+  await expect(page.locator('.context-tray')).toContainText('Choose a Case (3 match this target)');
   await expect(page.locator('.guide').getByRole('link', { name: 'Review case decision workspace' })).toHaveCount(0);
   const caseSelector = page.getByRole('combobox', { name: 'Case for this guide' });
   await expect(caseSelector).toHaveValue('');
-  await expect(caseSelector.getByRole('option')).toHaveCount(3);
+  await expect(caseSelector.getByRole('option')).toHaveCount(4);
+  const firstLabel = `login.example.test · ${formattedCaseNumber('guide-case-1')}`;
+  const secondLabel = `login.example.test · ${formattedCaseNumber('guide-case-2')}`;
+  expect(firstLabel).not.toBe(secondLabel);
+  await expect(caseSelector.getByRole('option', { name: firstLabel, exact: true })).toHaveCount(1);
+  await expect(caseSelector.getByRole('option', { name: secondLabel, exact: true })).toHaveCount(1);
   await caseSelector.focus();
-  await caseSelector.selectOption({ label: 'login.example.test' });
-  await expect(caseSelector).toHaveValue('guide-case-1');
+  await caseSelector.selectOption({ label: secondLabel });
+  await expect(caseSelector).toHaveValue('guide-case-2');
   await expect(caseSelector).toBeFocused();
   await expect(page.locator('.context-tray')).toContainText('new · unreviewed');
   await page.setViewportSize({ width: 320, height: 760 });

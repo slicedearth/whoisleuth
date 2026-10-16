@@ -65,7 +65,7 @@
       <div class="completion" role="status">
         <p class="eyebrow">Scenario complete</p>
         <h4>{scenario.label}</h4>
-        <p>You preserved source authority, uncertainty, and analyst responsibility through all {scenario.steps.length} decisions.</p>
+        <p>Completed {scenario.steps.length} decisions. Review the feedback or try another scenario.</p>
         <button class="btn" type="button" onclick={reset}>Replay scenario</button>
         <a class="btn" href="/demo#case-practice">Practise with real Case forms</a>
       </div>
