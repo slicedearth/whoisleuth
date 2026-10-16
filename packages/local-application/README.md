@@ -94,7 +94,7 @@ portable backup instead.
 3. Make a **separate rehearsal copy** from the untouched recovery copy. Start
    the new installation against that rehearsal folder, with
    `--workspace ./upgrade-rehearsal --offline` and **without** `--init`.
-   `npx --no-install whoisleuth-local --version` reports the package version; the Console footer
+   `npx --no-install whoisleuth-local --version` reports the package version; the console footer
    reports the application version. Compare both with the candidate report,
    then check saved records, recovery drafts and original-file integrity.
    Browser-only preferences do not move with SQLite.

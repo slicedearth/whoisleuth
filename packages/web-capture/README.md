@@ -7,7 +7,7 @@ with the domain-only Cases importer. It is separate
 from the distributable WHOISleuth CLI and is never enabled by the hosted
 application.
 The [installation-mode comparison](https://www.whoisleuth.com/cli#choose-mode)
-explains how this companion differs from the Console and main CLI.
+explains how this companion differs from the console and main CLI.
 
 ## Install a local candidate
 

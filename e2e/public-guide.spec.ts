@@ -109,7 +109,7 @@ test('public task guides and reference sections are available before client hydr
       await expect(card.getByRole('link', { name: 'Read the guide' })).toHaveAttribute('href', `/resources#${goal.id}`);
       await expect(card.getByRole('link', { name: goal.example.label })).toHaveAttribute('href', goal.example.href);
     }
-    const caseGuide = starts.getByRole('article', { name: 'Continue a saved Case', exact: true }).getByRole('link', { name: 'Read the guide' });
+    const caseGuide = starts.getByRole('article', { name: 'Continue a saved case', exact: true }).getByRole('link', { name: 'Read the guide' });
     await caseGuide.focus(); await caseGuide.press('Enter');
     await expect(page).toHaveURL(/\/resources#track-important-findings$/u);
     await expect(page.locator('#track-important-findings')).toBeInViewport();
@@ -129,7 +129,7 @@ test('public task guides and reference sections are available before client hydr
     await sections.getByRole('link', { name: 'Choose how to run' }).click();
     await expect(page).toHaveURL(/\/cli#choose-mode$/u);
     const modes = page.getByRole('region', { name: 'Choose how to run WHOISleuth', exact: true });
-    for (const name of ['Hosted Console', 'Local application', 'Command-line tool', 'Capture companion']) {
+    for (const name of ['Hosted console', 'Local application', 'Command-line tool', 'Capture companion']) {
       const mode = modes.getByRole('article', { name, exact: true });
       await expect(mode).toBeVisible();
       await expect(mode.getByRole('link')).toHaveCount(1);
@@ -368,7 +368,7 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(lookupStep).toHaveAttribute('href', '#tool-lookup');
   await lookupStep.click();
   await expect(page.locator('#tool-lookup')).toBeInViewport();
-  const trackingPath = taskPaths.getByRole('list', { name: 'Continue a saved Case steps' });
+  const trackingPath = taskPaths.getByRole('list', { name: 'Continue a saved case steps' });
   const trackingSteps = trackingPath.getByRole('link');
   await expect(trackingSteps).toHaveCount(3);
   await expect(trackingSteps.nth(0)).toHaveAttribute('href', '#tool-cases-input');
@@ -391,7 +391,7 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await cases.locator('summary').focus();
   await page.keyboard.press('Enter');
   await expect(cases).toHaveAttribute('open', '');
-  await expect(cases.locator('dl')).toContainText('Each Case holds evidence');
+  await expect(cases.locator('dl')).toContainText('Each case holds evidence');
   await expect(referenceCards).toHaveCount(referenceGuides.length);
   await expect(page.locator('#tool-monitor')).toHaveAttribute('open', '');
   const monitorGuide = toolGuides.find(guide => guide.id === 'monitor');
@@ -539,7 +539,7 @@ test('public starting points keep guide and fictional practice navigation separa
   await expect(page.locator('#tool-lookup')).toHaveAttribute('open', '');
   await expect(page.locator('#tool-lookup-input')).toBeInViewport();
   await page.goBack();
-  await messageGuide.getByRole('link', { name: 'Fictional Case practice', exact: true }).click();
+  await messageGuide.getByRole('link', { name: 'Fictional case practice', exact: true }).click();
   await expect(page).toHaveURL(/\/demo#case-practice$/u);
   const practiceScenario = page.getByRole('combobox', { name: 'Practice scenario', exact: true });
   await expect(practiceScenario).toBeVisible();

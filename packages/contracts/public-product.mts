@@ -64,9 +64,9 @@ const COVERAGE_DISTINCTIONS = Object.freeze([
 const CLI_PUBLIC_GUIDANCE = Object.freeze({
   operationModes: Object.freeze([
     Object.freeze({
-      id: 'hosted-console', title: 'Hosted Console', availability: 'Website', packageManifest: null,
-      task: 'Investigate in the browser and keep Cases, Brands and Watchlists together.',
-      prerequisites: 'A supported browser and access to the Console. Nothing to install locally.',
+      id: 'hosted-console', title: 'Hosted console', availability: 'Website', packageManifest: null,
+      task: 'Investigate in the browser and keep cases, brands and watchlists together.',
+      prerequisites: 'A supported browser and access to the console. Nothing to install locally.',
       requests: 'Collection goes through the website service and runs from its host. Optional sources depend on that deployment; each action discloses what it sends.',
       storage: 'Saved work stays in the current browser profile. Unencrypted workspaces are plaintext; encrypted named workspaces are optional. Separately configured scheduled monitoring has its own limited hosted storage.',
       offline: 'Selected-file analysis and retained-evidence review run locally after the page loads. The hosted website is not an offline installation.',
@@ -74,7 +74,7 @@ const CLI_PUBLIC_GUIDANCE = Object.freeze({
     }),
     Object.freeze({
       id: 'local-console', title: 'Local application', availability: 'Local archive only', packageManifest: 'packages/local-application/package.json',
-      task: 'Use the Console with a filesystem workspace on your own computer.',
+      task: 'Use the console with a filesystem workspace on your own computer.',
       prerequisites: 'A verified, locally assembled archive. Open its private launch link; no hosted login is used.',
       requests: 'Explicit collection runs from your computer. Start with --offline to disable collection; starting the application does not investigate a target.',
       storage: 'Records, drafts and originals live in the selected SQLite folder in plaintext. Encrypted portable backups are separate. Appearance preferences remain browser-local.',
@@ -94,7 +94,7 @@ const CLI_PUBLIC_GUIDANCE = Object.freeze({
       id: 'rendered-capture', title: 'Capture companion', availability: 'Separate local archive only', packageManifest: 'packages/web-capture/package.json',
       task: 'Render one explicitly authorised page or compare two existing captures offline.',
       prerequisites: 'Its own verified local archive. Rendering also needs the separately installed matching browser and supported sandbox; help and comparison do not.',
-      requests: 'An authorised capture executes page JavaScript and contacts admitted resource operators from your computer. The browser and pinned collector enforce the companion’s request boundaries. It is not part of the main CLI or hosted Console.',
+      requests: 'An authorised capture executes page JavaScript and contacts admitted resource operators from your computer. The browser and pinned collector enforce the companion’s request boundaries. It is not part of the main CLI or hosted console.',
       storage: 'Screenshots and minimised manifests are local output files, unencrypted. Screenshots can contain sensitive visible content; review them before sharing.',
       offline: 'Comparison of supplied captures makes no request. Capturing a page and explicitly downloading the browser require network access.',
       href: '#capture-companion', linkLabel: 'Capture companion setup',
@@ -140,7 +140,7 @@ const CLI_PUBLIC_GUIDANCE = Object.freeze({
     Object.freeze({ label: 'Review supplied evidence offline', command: 'whoisleuth review-evidence evidence.json --json' }),
     Object.freeze({ label: 'Compare retained observations', command: 'whoisleuth diff earlier.json later.json --json' }),
     Object.freeze({ label: 'Discover fixed workflow recipes', command: 'whoisleuth workflow-plan --list --json' }),
-    Object.freeze({ label: 'Create an offline Case file', command: 'whoisleuth case open --domain example.test --output cases.json' }),
+    Object.freeze({ label: 'Create an offline case file', command: 'whoisleuth case open --domain example.test --output cases.json' }),
     Object.freeze({ label: 'Explain one recipe', command: 'whoisleuth workflow-plan --explain evidence-handoff' }),
     Object.freeze({ label: 'Prepare a reviewed public handoff', command: 'whoisleuth case-pack cases.json --audience public --reviewed --json' }),
   ]),
@@ -181,11 +181,11 @@ const CLI_PUBLIC_GUIDANCE = Object.freeze({
         'whoisleuth export lookup.json --output evidence.json',
         'whoisleuth verify-artifact evidence.json --json',
       ]),
-      result: 'Keep lookup.json as the private CLI original. Replay evidence.json from Console Lookup, inspect its source states and then choose whether to retain it in a Case.',
+      result: 'Keep lookup.json as the private CLI original. Replay evidence.json from Lookup in the console, inspect its source states and then choose whether to retain it in a case.',
     }),
     Object.freeze({
       id: 'case-handoff',
-      label: 'Prepare a reviewed Case handoff',
+      label: 'Prepare a reviewed case handoff',
       commands: Object.freeze([
         'whoisleuth case-pack cases.json --audience public --reviewed --json --output case-pack.json',
         'whoisleuth sharing-review case-pack.json --marking clear --recipient-scope public --purpose "Reviewed evidence handoff" --human-reviewed --personal-data-reviewed --redactions-confirmed --json',

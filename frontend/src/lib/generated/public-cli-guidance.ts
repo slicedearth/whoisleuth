@@ -3,10 +3,10 @@ export const PUBLIC_CLI_GUIDANCE = {
   "operationModes": [
     {
       "id": "hosted-console",
-      "title": "Hosted Console",
+      "title": "Hosted console",
       "availability": "Website",
-      "task": "Investigate in the browser and keep Cases, Brands and Watchlists together.",
-      "prerequisites": "A supported browser and access to the Console. Nothing to install locally.",
+      "task": "Investigate in the browser and keep cases, brands and watchlists together.",
+      "prerequisites": "A supported browser and access to the console. Nothing to install locally.",
       "requests": "Collection goes through the website service and runs from its host. Optional sources depend on that deployment; each action discloses what it sends.",
       "storage": "Saved work stays in the current browser profile. Unencrypted workspaces are plaintext; encrypted named workspaces are optional. Separately configured scheduled monitoring has its own limited hosted storage.",
       "offline": "Selected-file analysis and retained-evidence review run locally after the page loads. The hosted website is not an offline installation.",
@@ -18,7 +18,7 @@ export const PUBLIC_CLI_GUIDANCE = {
       "id": "local-console",
       "title": "Local application",
       "availability": "Local archive only",
-      "task": "Use the Console with a filesystem workspace on your own computer.",
+      "task": "Use the console with a filesystem workspace on your own computer.",
       "prerequisites": "A verified, locally assembled archive. Open its private launch link; no hosted login is used.",
       "requests": "Explicit collection runs from your computer. Start with --offline to disable collection; starting the application does not investigate a target.",
       "storage": "Records, drafts and originals live in the selected SQLite folder in plaintext. Encrypted portable backups are separate. Appearance preferences remain browser-local.",
@@ -46,7 +46,7 @@ export const PUBLIC_CLI_GUIDANCE = {
       "availability": "Separate local archive only",
       "task": "Render one explicitly authorised page or compare two existing captures offline.",
       "prerequisites": "Its own verified local archive. Rendering also needs the separately installed matching browser and supported sandbox; help and comparison do not.",
-      "requests": "An authorised capture executes page JavaScript and contacts admitted resource operators from your computer. The browser and pinned collector enforce the companion’s request boundaries. It is not part of the main CLI or hosted Console.",
+      "requests": "An authorised capture executes page JavaScript and contacts admitted resource operators from your computer. The browser and pinned collector enforce the companion’s request boundaries. It is not part of the main CLI or hosted console.",
       "storage": "Screenshots and minimised manifests are local output files, unencrypted. Screenshots can contain sensitive visible content; review them before sharing.",
       "offline": "Comparison of supplied captures makes no request. Capturing a page and explicitly downloading the browser require network access.",
       "href": "#capture-companion",
@@ -107,7 +107,7 @@ export const PUBLIC_CLI_GUIDANCE = {
       "command": "whoisleuth workflow-plan --list --json"
     },
     {
-      "label": "Create an offline Case file",
+      "label": "Create an offline case file",
       "command": "whoisleuth case open --domain example.test --output cases.json"
     },
     {
@@ -177,11 +177,11 @@ export const PUBLIC_CLI_GUIDANCE = {
         "whoisleuth export lookup.json --output evidence.json",
         "whoisleuth verify-artifact evidence.json --json"
       ],
-      "result": "Keep lookup.json as the private CLI original. Replay evidence.json from Console Lookup, inspect its source states and then choose whether to retain it in a Case."
+      "result": "Keep lookup.json as the private CLI original. Replay evidence.json from Lookup in the console, inspect its source states and then choose whether to retain it in a case."
     },
     {
       "id": "case-handoff",
-      "label": "Prepare a reviewed Case handoff",
+      "label": "Prepare a reviewed case handoff",
       "commands": [
         "whoisleuth case-pack cases.json --audience public --reviewed --json --output case-pack.json",
         "whoisleuth sharing-review case-pack.json --marking clear --recipient-scope public --purpose \"Reviewed evidence handoff\" --human-reviewed --personal-data-reviewed --redactions-confirmed --json"

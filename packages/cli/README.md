@@ -76,7 +76,7 @@ file atomically and refuses an existing path unless `--force` is selected.
 `--strict-exit` and `--fail-on` expose selected evidence states to automation.
 
 `case open --domain example.test --output cases.json` creates an ordinary local
-Case file. `case show`, `note`, `pin`, `assess` and `recheck` review or update it
+case file. `case show`, `note`, `pin`, `assess` and `recheck` review or update it
 offline. Mutations require explicit output and preserve earlier retained evidence;
 see `docs/cli.md#local-case-files` for JSON inputs and conflict handling. Working
 files contain private analyst content, not attached file bytes.

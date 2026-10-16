@@ -15,7 +15,7 @@ keeps registration, DNS, certificate, website, network and analyst evidence
 separately attributed, including unavailable and partial sources.
 
 Use it to investigate a domain, IP address or ASN; discover possible brand
-lookalikes; compare domain sets; retain reviewed Cases; prepare response
+lookalikes; compare domain sets; retain reviewed cases; prepare response
 material; and compare later observations. Scores are explainable prioritisation
 aids rather than automated verdicts.
 
@@ -32,7 +32,7 @@ aids rather than automated verdicts.
 </p>
 
 The demo uses fixed fictional evidence on reserved domains. It makes no live
-investigation request, requires no sign-in and writes no Console workspace data.
+investigation request, requires no sign-in and writes no console workspace data.
 
 ## How work is organised
 
@@ -49,7 +49,7 @@ WHOISleuth uses three analyst jobs: **Investigate**, **Respond** and **Assure**.
 | **Monitor** | Review changes, watchlists, follow-ups and local rules. |
 
 [Candidate review](docs/brand-candidate-review.md) connects explicit Discover
-and feed selections to local Brand review and per-domain Watchlist priorities.
+and feed selections to local brand review and per-domain watchlist priorities.
 Save time-bounded keyword campaigns, preview matching rules, and explicitly
 review retained editions from an optional feed service.
 
@@ -71,11 +71,11 @@ topology and historical comparison.
 Response actions can concern several exact domain, page or platform objects in
 one manually reviewed record. Event scopes, provider claims, independent
 comparisons and deliberate object closures remain separate; one resolved object
-does not close another. Historical missing bindings remain unknown. Console and
-the [offline Case file commands](docs/cli.md#local-case-files) submit no reports.
+does not close another. Historical missing bindings remain unknown. The console and
+the [offline case file commands](docs/cli.md#local-case-files) submit no reports.
 
 The optional [local application](packages/local-application/README.md) runs the
-same Console on loopback with an explicitly selected filesystem workspace.
+same console on loopback with an explicitly selected filesystem workspace.
 Saved records, drafts and original files stay in that folder, not IndexedDB.
 Its plaintext workspace and encrypted portable backups are separate.
 
@@ -132,8 +132,8 @@ backend has no general investigation database. See [architecture](docs/architect
 [current product boundaries](docs/product-boundary.md) and the
 [threat model](docs/threat-model.md).
 
-Supported public formats and current Case and workspace writers are listed
-in the generated [Case portability reference](docs/case-contracts.md). Other
+Supported public formats and current case and workspace writers are listed
+in the generated [case portability reference](docs/case-contracts.md). Other
 current writers and direct migrations are described in the
 [portable compatibility reference](docs/portable-domain-contracts.md).
 
