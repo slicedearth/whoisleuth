@@ -131,7 +131,7 @@
           <dt>Where work is saved</dt><dd>{mode.storage}</dd>
           <dt>Working offline</dt><dd>{mode.offline}</dd>
         </dl>
-        <a href={mode.href}>{mode.linkLabel}</a>
+        <a class="reference-link" href={mode.href}>{mode.linkLabel} <span aria-hidden="true">→</span></a>
       </article>
     {/each}
   </div>
@@ -217,7 +217,6 @@
   .operation-modes dl{margin:18px 0}
   .operation-modes dt{margin-top:14px;font-weight:700;font-size:var(--text-sm)}
   .operation-modes dd{margin-top:4px;color:var(--muted);font-size:var(--text-sm)}
-  .operation-modes a{display:inline-flex;align-items:center;min-height:44px}
   #choose-mode>p{max-width:85ch;line-height:1.6;color:var(--muted);font-size:var(--text-sm)}
   .boundary-list p{margin:0;padding:14px 0;border-bottom:1px solid var(--border);color:var(--muted);font-size:var(--text-sm);line-height:1.55}
   .exit-codes{margin-top:34px}

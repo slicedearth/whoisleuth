@@ -205,7 +205,6 @@
   .policy h2{margin:2rem 0 .65rem;font:700 1.05rem var(--mono);color:var(--interface-accent);scroll-margin-top:24px}
   .policy p,.policy li{color:var(--muted);line-height:1.7}
   .policy strong{color:var(--text)}
-  .policy a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
   .policy code{padding:2px 5px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text)}
   .policy li+li{margin-top:.35rem}
   @media(max-width:820px){

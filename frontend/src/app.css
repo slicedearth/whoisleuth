@@ -340,6 +340,26 @@ body::before {
 }
 
 a { color: inherit; text-decoration: none; }
+:where(p) a:where([href]):not(:where(.btn, .primary, [role='button'])), a.text-link {
+  color: var(--interface-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: .18em;
+  text-decoration-skip-ink: auto;
+}
+.reference-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  max-width: 100%;
+  color: var(--interface-accent);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+.reference-link > [aria-hidden='true'] { flex: 0 0 auto; }
+.reference-link:hover { text-decoration: underline; text-underline-offset: .18em; }
 a[href], summary { cursor: pointer; }
 a[href]:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 button, input, select, textarea { color: var(--text); font: inherit; }
