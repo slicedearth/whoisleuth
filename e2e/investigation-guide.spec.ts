@@ -412,7 +412,9 @@ test('a response playbook reaches focused local packet preflight without a reque
   const preflight = page.locator('details[id^="case-response-preflight-"]');
   await expect(preflight).toHaveAttribute('open', '');
   await expect(preflight.getByText('Prepare a reviewed abuse evidence packet', { exact: true })).toBeFocused();
-  await expect(preflight).toContainText('This prepares local drafts only; nothing is sent.');
+  await expect(preflight).toContainText('Nothing is sent here.');
+  await preflight.getByRole('button', { name: 'View full readiness matrix', exact: true }).click();
+  await expect(preflight.locator('[id^="packet-readiness-matrix-"]')).toBeFocused();
   await expect(preflight).toContainText('Lookup Decision Facts are transient and are not copied into saved Cases');
   const allowedStartupReads = new Set(['/api/session', '/api/capabilities']);
   for (const request of observedRequests) {
