@@ -91,12 +91,24 @@ describe('canonical Case portability lifecycle', () => {
     assert.equal(workspace.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS, contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS);
     assert.equal(encryptedWorkspace.ENCRYPTED_WORKSPACE_ARCHIVE_VERSION, contracts.ENCRYPTED_WORKSPACE_ARCHIVE_VERSION);
 
-    assert.deepEqual([...contracts.CASE_BROWSER_SUPPORTED_VERSIONS], [12, 13, 14, 15, 16, 17, 18, 19, 20]);
-    assert.deepEqual([...contracts.CASE_IMPORT_VERSIONS], [12, 13, 14, 15, 16, 17, 18, 19, 20]);
-    assert.deepEqual([...contracts.CASE_REPORT_OUTPUT_VERSIONS], [9, 10, 11, 12, 13, 14, 15]);
-    assert.deepEqual([...contracts.SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS], [6, 7, 8, 9, 10, 11, 12, 13]);
-    assert.deepEqual([...contracts.SUPPORTED_CLI_CASE_PACK_VERSIONS], [2]);
-    assert.deepEqual([...contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS], [5, 6, 7, 8, 9, 10]);
+    // Fixed historical checkpoints protect support without mirroring future additions.
+    // Current versions and descriptor consistency are checked independently below.
+    for (const version of [12, 13, 14, 15, 16, 17, 18, 19, 20] as const) {
+      assert.ok(contracts.CASE_BROWSER_SUPPORTED_VERSIONS.includes(version));
+      assert.ok(contracts.CASE_IMPORT_VERSIONS.includes(version));
+    }
+    for (const version of [9, 10, 11, 12, 13, 14, 15] as const) {
+      assert.ok(contracts.CASE_REPORT_OUTPUT_VERSIONS.includes(version));
+    }
+    for (const version of [6, 7, 8, 9, 10, 11, 12, 13] as const) {
+      assert.ok(contracts.SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS.includes(version));
+    }
+    for (const version of [2] as const) {
+      assert.ok(contracts.SUPPORTED_CLI_CASE_PACK_VERSIONS.includes(version));
+    }
+    for (const version of [5, 6, 7, 8, 9, 10] as const) {
+      assert.ok(contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.includes(version));
+    }
 
     const family = contracts.CASE_PORTABILITY_LIFECYCLE_FAMILY;
     assert.ok(family.compatibility.length > 0);

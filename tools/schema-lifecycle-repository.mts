@@ -676,11 +676,25 @@ export function validateCasePortabilitySourceSnapshot(value: unknown): void {
   }
 
   const staticReExports = new Map<string, readonly string[]>();
+  const canonicalConstants = new Set<string>([
+    ...CASE_PORTABILITY_IDENTITY_CONSTANTS,
+    ...CASE_PORTABILITY_BOUND_CONSTANTS,
+  ]);
   for (const item of sources) {
     const sourceFile = ts.createSourceFile(item.file, item.source, ts.ScriptTarget.Latest, true, scriptKind(item.file));
     const diagnostics = (sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics ?? [];
     if (diagnostics.length) throw new TypeError(`Case portability source ${item.file} must contain valid source syntax.`);
     validateSourceAstBounds(sourceFile, item.file);
+    if (item.file !== CASE_CONTRACT_OWNER) {
+      const pending: ts.Node[] = [sourceFile];
+      while (pending.length) {
+        const node = pending.pop()!;
+        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && canonicalConstants.has(node.name.text)) {
+          throw new TypeError(`Case portability constant is declared outside its canonical owner: ${item.file}#${node.name.text}.`);
+        }
+        ts.forEachChild(node, (child) => { pending.push(child); });
+      }
+    }
     const importedTargets = new Map<string, string>();
     for (const statement of sourceFile.statements) {
       if (!ts.isImportDeclaration(statement)
@@ -729,19 +743,6 @@ export function validateCasePortabilitySourceSnapshot(value: unknown): void {
   for (const adapter of adapterPaths) {
     if (!reachesCaseOwner(adapter, new Set<string>())) {
       throw new TypeError(`Case domain runtime adapter is stale: ${adapter}.`);
-    }
-  }
-
-  for (const { file, source } of sources) {
-    if (file === CASE_CONTRACT_OWNER) continue;
-    for (const name of [
-      ...CASE_PORTABILITY_IDENTITY_CONSTANTS,
-      ...CASE_PORTABILITY_BOUND_CONSTANTS,
-    ]) {
-      const declaration = new RegExp(`\\b(?:const|let|var)\\s+${name}\\b`, 'u');
-      if (declaration.test(source)) {
-        throw new TypeError(`Case portability constant is declared outside its canonical owner: ${file}#${name}.`);
-      }
     }
   }
 }
