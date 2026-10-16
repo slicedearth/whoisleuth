@@ -39,17 +39,17 @@ function prose(input: unknown, maximum: number, label: string): string {
 }
 function selection(cases: readonly CaseRecord[], args: CaseArguments, required: boolean): CaseRecord[] {
   const domain = args.domain === null ? null : normalizeDomain(args.domain);
-  if (args.domain !== null && !domain) throw new CliUsageError('Select a valid Case domain.');
+  if (args.domain !== null && !domain) throw new CliUsageError('Select a valid case domain.');
   const selected = cases.filter(record => (!args.caseId || record.id === args.caseId) && (!domain || record.domain === domain));
-  if ((args.caseId || domain || required) && selected.length === 0) throw new CliUsageError('The selected Case is not present in this file.');
-  if (required && selected.length !== 1) throw new CliUsageError('Select exactly one Case with --case-id; no arbitrary Case was chosen.');
+  if ((args.caseId || domain || required) && selected.length === 0) throw new CliUsageError('The selected case is not present in this file.');
+  if (required && selected.length !== 1) throw new CliUsageError('Select exactly one case with --case-id; no arbitrary case was chosen.');
   return selected;
 }
 
 function pin(input: unknown, now: string): JsonObject {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new CliUsageError('An evidence pin must be a JSON object.');
   const raw = input as JsonObject;
-  if (Object.hasOwn(raw, 'id') || Object.hasOwn(raw, 'createdAt')) throw new CliUsageError('New pin identity and creation time are allocated by the Case operation.');
+  if (Object.hasOwn(raw, 'id') || Object.hasOwn(raw, 'createdAt')) throw new CliUsageError('New pin identity and creation time are allocated by the case operation.');
   const normal = appendCaseEvidencePin([], raw, now)[0]!;
   // Validate the supplied subset against the domain result, without duplicating
   // its field inventory or accepting silent truncation/default substitution.
@@ -94,7 +94,7 @@ export function applyCliCaseOperation(cases: CaseRecord[], args: CaseArguments, 
     const result = args.newIncident
       ? createCaseIncident(cases, { domain: args.domain, title }, now)
       : openOrCreateCase(cases, { domain: args.domain, ...(title ? { title } : {}) }, now, args.caseId ? { caseId: args.caseId } : {});
-    if (!result.created && title && title !== result.record.title) throw new CliUsageError('The selected Case already exists with another title. Use --new-incident for a separate investigation.');
+    if (!result.created && title && title !== result.record.title) throw new CliUsageError('The selected case already exists with another title. Use --new-incident for a separate investigation.');
     return result.cases;
   }
   const current = selection(cases, args, true)[0]!;
@@ -114,7 +114,7 @@ export function applyCliCaseOperation(cases: CaseRecord[], args: CaseArguments, 
     fields(input, ['type', 'recipient', 'contactSource', 'routeObservedAt', 'routeReviewAfter', 'contactLimitations', 'dueAt', 'followUpAt', 'responseObjects', 'originActionId', 'amendment', 'correction'], 'Response action');
     result = updateCase(cases, current.id, { action: input }, now);
     const action = result.record.actions.find(candidate => !current.actions.some(prior => prior.id === candidate.id))!;
-    if (!action) throw new CliUsageError('No new action was retained within the Case bounds; nothing was written.');
+    if (!action) throw new CliUsageError('No new action was retained within the case bounds; nothing was written.');
     for (const [key, value] of Object.entries(input)) if (canonicalArtifactJsonV2(key === 'responseObjects' ? readCaseResponseObjects(value) : value) !== canonicalArtifactJsonV2(action[key as keyof typeof action])) {
       throw new CliUsageError(`Action field ${safeTerminalValue(key)} is not canonical; nothing was written.`);
     }
@@ -135,16 +135,16 @@ export function applyCliCaseOperation(cases: CaseRecord[], args: CaseArguments, 
     fields(input, ['statement', 'rationale', 'recheck', 'evidencePinIds'], 'Recheck question');
     result = updateCase(cases, current.id, { assertion: { ...input, kind: 'next_step' } }, now);
     const question = result.record.assertions.find(candidate => !current.assertions.some(prior => prior.id === candidate.id))!;
-    if (!question) throw new CliUsageError('No new question was retained within the Case bounds; nothing was written.');
+    if (!question) throw new CliUsageError('No new question was retained within the case bounds; nothing was written.');
     for (const [key, value] of Object.entries(input)) if (canonicalArtifactJsonV2(value) !== canonicalArtifactJsonV2(question[key as keyof typeof question])) {
       throw new CliUsageError(`Question field ${safeTerminalValue(key)} is not canonical; nothing was written.`);
     }
   } else if (args.operation === 'close-object') {
-    if (!input?.responseObject) throw new CliUsageError('Object closure requires one explicit responseObject; it cannot close the whole Case.');
+    if (!input?.responseObject) throw new CliUsageError('Object closure requires one explicit responseObject; it cannot close the whole case.');
     fields(input, ['responseObject', 'reason', 'summary', 'observedEffectReviewId', 'actionId', 'limitations'], 'Object closure');
     result = updateCase(cases, current.id, { closure: input }, now);
     const closure = result.record.closures.records.find(candidate => !current.closures.records.some(prior => prior.id === candidate.id))!;
-    if (!closure) throw new CliUsageError('No new closure was retained within the Case bounds; nothing was written.');
+    if (!closure) throw new CliUsageError('No new closure was retained within the case bounds; nothing was written.');
     for (const [key, value] of Object.entries(input)) if (canonicalArtifactJsonV2(value) !== canonicalArtifactJsonV2(closure[key as keyof typeof closure])) {
       throw new CliUsageError(`Closure field ${safeTerminalValue(key)} is not canonical; nothing was written.`);
     }
@@ -172,7 +172,7 @@ export function applyCliCaseOperation(cases: CaseRecord[], args: CaseArguments, 
     fields(input, ['state', 'observedAt', 'completeness', 'comparisonSummary', 'source', 'followUpAt', 'limitations', 'collectionDepth', 'recheck', 'observationHostname', 'responseObject', 'objectOutcome'], 'Recheck');
     const recheck = readCaseRecheckAnswerContext(input.recheck);
     if (input.state === 'not_reproduced' && !recheck) {
-      throw new CliUsageError('Not reproduced requires a saved recheck question and confirmed comparable conditions. Import the planned Case or record unavailable for a limited observation.');
+      throw new CliUsageError('Not reproduced requires a saved recheck question and confirmed comparable conditions. Import the planned case or record unavailable for a limited observation.');
     }
     const summary = prose(input.comparisonSummary, MAX_RESPONSE_VALUE_LENGTH, 'Comparison summary');
     result = recordCaseRecheckOutcome(cases, current.id, {
@@ -192,13 +192,13 @@ export function applyCliCaseOperation(cases: CaseRecord[], args: CaseArguments, 
     for (const [key, value] of Object.entries(input)) {
       if (canonicalArtifactJsonV2(value) !== canonicalArtifactJsonV2(projected[key])) throw new CliUsageError(`Recheck field ${safeTerminalValue(key)} would be repaired or truncated; nothing was written.`);
     }
-  } else throw new CliUsageError('Select a supported Case mutation.');
+  } else throw new CliUsageError('Select a supported case mutation.');
   retainExistingEntries(current, result.record);
   return result.cases;
 }
 
 function formatCases(cases: readonly CaseRecord[], digest: string): string {
-  const lines = ['Local Case review', `File digest  ${digest}`, `Cases        ${cases.length}`, ''];
+  const lines = ['Local case review', `File digest  ${digest}`, `Cases        ${cases.length}`, ''];
   for (const record of cases) {
     lines.push(`Case ${safeTerminalValue(record.id)} · ${safeTerminalValue(record.title || record.domain)}`,
       `Domain       ${safeTerminalValue(record.domain)}`, `Status       ${statusLabel(record.status)}`,
@@ -227,16 +227,16 @@ function formatCases(cases: readonly CaseRecord[], digest: string): string {
       `  Object: ${review.responseObject ? `${review.responseObject.kind}: ${safeTerminalValue(review.responseObject.identifier)}` : 'unknown binding'}${review.objectOutcome ? ` · observed ${review.objectOutcome}` : ''}`);
     lines.push(`Other retained records: ${record.evidenceHistory.length} snapshots, ${record.actions.length} actions, ${record.assertions.length} assertions, ${record.attachments?.length ?? 0} file references.`, '');
   }
-  lines.push('Use --json for the full Case export. Attached file bytes remain separate. This command makes no request.', '');
+  lines.push('Use --json for the full case export. Attached file bytes remain separate. This command makes no request.', '');
   return lines.join('\n');
 }
 
 export async function runCaseCommand(args: CaseArguments, dependencies: CaseCommandDependencies, context: CliCommandContext): Promise<number> {
-  context.setFailureLabel('Local Case operation');
+  context.setFailureLabel('Local case operation');
   try {
     const raw = args.source ? dependencies.caseFileInput ?? await context.readInput(args.source, MAX_EDITABLE_CASE_INPUT_BYTES, 'Case file') : null;
     const digest = raw === null ? null : `sha256:${createHash('sha256').update(raw).digest('hex')}`;
-    if (args.expectedFileDigest && args.expectedFileDigest !== digest) throw new CliUsageError('The Case file differs from the reviewed file digest. Nothing was written.');
+    if (args.expectedFileDigest && args.expectedFileDigest !== digest) throw new CliUsageError('The case file differs from the reviewed file digest. Nothing was written.');
     const cases = raw === null ? [] : readEditableCaseExport(raw);
     const now = normalizeExplicitIsoTimestamp(context.now());
     if (!now) throw new CliUsageError('A valid current timestamp is required.');
@@ -250,7 +250,7 @@ export async function runCaseCommand(args: CaseArguments, dependencies: CaseComm
     }) : null;
     const note = args.noteSource ? await context.readInput(args.noteSource, MAX_NOTE_LENGTH * 4 + 4, 'Case note') : args.text;
     const next = applyCliCaseOperation(cases, args, input, note, now);
-    if (Buffer.byteLength(serializeCaseStore(next)) > MAX_CASE_STORE_BYTES) throw new CliUsageError('The updated Case store exceeds its byte budget. No evidence was pruned and nothing was written.');
+    if (Buffer.byteLength(serializeCaseStore(next)) > MAX_CASE_STORE_BYTES) throw new CliUsageError('The updated case store exceeds its byte budget. No evidence was pruned and nothing was written.');
     const output = `${JSON.stringify(buildCaseExport(next, now))}\n`;
     // Apply the same strict admission to our output before atomic publication.
     readEditableCaseExport(output);
@@ -260,6 +260,6 @@ export async function runCaseCommand(args: CaseArguments, dependencies: CaseComm
   } catch (cause) {
     dependencies.signal?.throwIfAborted();
     if (cause instanceof CliUsageError) throw cause;
-    throw new CliUsageError(cause instanceof Error ? cause.message : 'The Case operation could not be completed.');
+    throw new CliUsageError(cause instanceof Error ? cause.message : 'The case operation could not be completed.');
   }
 }

@@ -3110,8 +3110,8 @@
       "id": "command.cli.case",
       "command": "case",
       "capabilityFamilyId": "analyst_cases",
-      "title": "Review and update ordinary local Case files",
-      "requestPurpose": "Reads exact Case schemas 15 or 16 or 17 or 18 or 19 or 20. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 20.",
+      "title": "Review and update ordinary local case files",
+      "requestPurpose": "Reads exact case schemas 15 or 16 or 17 or 18 or 19 or 20. Input is bounded to 16 MiB including formatting; the complete canonical case store must fit 4 MiB without pruning. Writes current schema 20.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -3171,7 +3171,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:<digest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
+        "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple cases. Existing files require --force; --expect-file-digest sha256:<digest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -3182,7 +3182,7 @@
       "command": "case-pack",
       "capabilityFamilyId": "portable_evidence",
       "title": "Build a reviewed case package",
-      "requestPurpose": "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 or 19 or 20 and writes a separate audience-specific Case-pack v2.",
+      "requestPurpose": "Reads one bounded case export from schemas 15 or 16 or 17 or 18 or 19 or 20 and writes a separate audience-specific Case-pack v2.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -3243,7 +3243,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "The command creates a separate offline package without changing the source or durable Cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, Case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.",
+        "The command creates a separate offline package without changing the source or durable cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -4933,7 +4933,7 @@
       "command": "intake",
       "capabilityFamilyId": "offline_review",
       "title": "Review selected files and identity events offline",
-      "requestPurpose": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic Case write.",
+      "requestPurpose": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic case write.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"

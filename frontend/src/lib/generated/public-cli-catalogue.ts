@@ -1092,7 +1092,7 @@ const SHARED_COMMAND_OPTIONS = [
     "option": "--case-id",
     "scope": "command",
     "usage": "--case-id \u003cvalue>",
-    "description": "Select the retained Case identifier.",
+    "description": "Select the retained case identifier.",
     "values": [],
     "repeatable": false,
     "ranges": [],
@@ -1102,7 +1102,7 @@ const SHARED_COMMAND_OPTIONS = [
     "option": "--domain",
     "scope": "command",
     "usage": "--domain \u003cvalue>",
-    "description": "Supply the Case domain.",
+    "description": "Supply the case domain.",
     "values": [],
     "repeatable": false,
     "ranges": [],
@@ -1112,7 +1112,7 @@ const SHARED_COMMAND_OPTIONS = [
     "option": "--title",
     "scope": "command",
     "usage": "--title \u003cvalue>",
-    "description": "Supply the Case title.",
+    "description": "Supply the case title.",
     "values": [],
     "repeatable": false,
     "ranges": [],
@@ -1122,7 +1122,7 @@ const SHARED_COMMAND_OPTIONS = [
     "option": "--new-incident",
     "scope": "command",
     "usage": "--new-incident",
-    "description": "Create a separate incident instead of updating a matching Case.",
+    "description": "Create a separate incident instead of updating a matching case.",
     "values": [],
     "repeatable": false,
     "ranges": [],
@@ -3475,7 +3475,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "verify-artifact",
       "summary": "Validate saved evidence offline",
-      "description": "Validate a supported archive, ordinary Case export, claim passport, packet, manifest, saved Lookup or Lookup-evidence export without printing evidence contents. Use --package for an evidence ZIP or encrypted package, with --passphrase-file to unlock it; use --folder ./evidence for an unencrypted evidence folder. Add --bagit with --package or --folder to verify BagIt 1.0.",
+      "description": "Validate a supported archive, ordinary case export, claim passport, packet, manifest, saved Lookup or Lookup-evidence export without printing evidence contents. Use --package for an evidence ZIP or encrypted package, with --passphrase-file to unlock it; use --folder ./evidence for an unencrypted evidence folder. Add --bagit with --package or --folder to verify BagIt 1.0.",
       "group": "assure",
       "common": true,
       "usage": "whoisleuth verify-artifact [\u003csource>] [--passphrase-file \u003cfile>] [--manifest \u003cfile>] [--manifest-entry \u003cmanifest-entry>] [--package] [--bagit] [--folder \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
@@ -4271,7 +4271,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "Offline only: no destination, embedded command, phone number or QR payload is opened, contacted or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Literal IPs and labelled hashes are bounded text observations, not lookup targets or verdicts; headers, URL contents, QR, HAR and identity-event fields are not scanned for them. Plain-text phone discovery writes only counts, source digest, ranges and status to stderr; --quiet suppresses it. Optional --intake-context reads one separate file up to 8 KiB, not stdin. Version 1 carries distribution declarations; version 2 can also bind explicit phone selections and a supplied destination pair to the exact input digest. Selected phone strings and source declarations enter output; unselected candidates and exact private URLs do not. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic Case write."
+        "scope": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic case write."
       },
       "inputs": [
         {
@@ -4323,7 +4323,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002eidentity-events.input"
       ],
       "inputLimits": [
-        "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic Case write.",
+        "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic case write.",
         "kind: 1-1 enum value",
         "source: 0-1 file value"
       ],
@@ -4539,16 +4539,16 @@ export const PUBLIC_CLI_CATALOGUE = {
     },
     {
       "id": "case",
-      "summary": "Review and update ordinary local Case files",
-      "description": "Show or open a local Case, append a note or evidence pin, link evidence, record an assessment or offline recheck, retain an incident-link, create an action, append an action-event, save a recheck-question, or close-object. JSON mutations use --input; notes use --text or --note-file. Link input contains fromPinId, toPinId, kind and basis. Action-event input contains id and transition. Explicit responseObjects bind an action; a typed objectOutcome requires an explicit affected subset on its event. Object closure never closes other objects or the Case. Mutations require --output and write the complete current Case export.",
+      "summary": "Review and update ordinary local case files",
+      "description": "Show or open a local case, append a note or evidence pin, link evidence, record an assessment or offline recheck, retain an incident-link, create an action, append an action-event, save a recheck-question, or close-object. JSON mutations use --input; notes use --text or --note-file. Link input contains fromPinId, toPinId, kind and basis. Action-event input contains id and transition. Explicit responseObjects bind an action; a typed objectOutcome requires an explicit affected subset on its event. Object closure never closes other objects or the case. Mutations require --output and write the complete current case export.",
       "group": "respond",
       "common": true,
       "usage": "whoisleuth case \u003cshow|open|note|pin|link|withdraw-link|assess|recheck|incident-link|action|action-event|recheck-question|close-object> [\u003csource>] [--text \u003cvalue>|--note-file \u003cfile>] [--case-id \u003cvalue>] [--domain \u003cvalue>] [--title \u003cvalue>] [--new-incident] [--input \u003cfile>] [--expect-file-digest \u003cvalue>] [--json] [--no-color]",
       "example": "whoisleuth case open --domain example.test --output cases.json\n  whoisleuth case show cases.json\n  whoisleuth case note cases.json --text \"Review the retained observation\" --output cases.json --force",
-      "boundary": "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:\u003cdigest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
+      "boundary": "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple cases. Existing files require --force; --expect-file-digest sha256:\u003cdigest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads exact Case schemas 15 or 16 or 17 or 18 or 19 or 20. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 20."
+        "scope": "Reads exact case schemas 15 or 16 or 17 or 18 or 19 or 20. Input is bounded to 16 MiB including formatting; the complete canonical case store must fit 4 MiB without pruning. Writes current schema 20."
       },
       "inputs": [
         {
@@ -4606,7 +4606,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-export"
       ],
       "inputLimits": [
-        "Reads exact Case schemas 15 or 16 or 17 or 18 or 19 or 20. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 20.",
+        "Reads exact case schemas 15 or 16 or 17 or 18 or 19 or 20. Input is bounded to 16 MiB including formatting; the complete canonical case store must fit 4 MiB without pruning. Writes current schema 20.",
         "operation: 1-1 enum value",
         "source: 0-1 file value"
       ],
@@ -4742,15 +4742,15 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "case-pack",
       "summary": "Build a reviewed case package",
-      "description": "Package browser-created Case records from schemas 15 or 16 or 17 or 18 or 19 or 20 as a reviewed, audience-specific Case-pack v2 with current schema 20.",
+      "description": "Package browser-created case records from schemas 15 or 16 or 17 or 18 or 19 or 20 as a reviewed, audience-specific Case-pack v2 with current schema 20.",
       "group": "respond",
       "common": true,
       "usage": "whoisleuth case-pack [\u003csource>] --audience \u003cinternal|trusted|public> --reviewed [--json] [--quiet] [--no-color]",
       "example": "whoisleuth case-pack cases.json --audience trusted --reviewed --json",
-      "boundary": "The command creates a separate offline package without changing the source or durable Cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, Case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.",
+      "boundary": "The command creates a separate offline package without changing the source or durable cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 or 19 or 20 and writes a separate audience-specific Case-pack v2."
+        "scope": "Reads one bounded case export from schemas 15 or 16 or 17 or 18 or 19 or 20 and writes a separate audience-specific Case-pack v2."
       },
       "inputs": [
         {
@@ -4781,7 +4781,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-report"
       ],
       "inputLimits": [
-        "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 or 19 or 20 and writes a separate audience-specific Case-pack v2.",
+        "Reads one bounded case export from schemas 15 or 16 or 17 or 18 or 19 or 20 and writes a separate audience-specific Case-pack v2.",
         "source: 0-1 file value"
       ],
       "outputLimits": [

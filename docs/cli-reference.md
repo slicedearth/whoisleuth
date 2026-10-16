@@ -71,11 +71,11 @@ candidate, form destination and deliberately observed navigation separately
 attributed. A similar page without a logo or brand name can still merit manual
 evidence review; correspondence does not establish authorship, rights authority
 or maliciousness. Missing optional capture or comparison evidence does not
-prevent ordinary Case pins and conclusions. Installed command help remains the
+prevent ordinary case pins and conclusions. Installed command help remains the
 authority for offline file inputs and explicit collection plans.
 
 The [reporting guide](https://www.whoisleuth.com/resources/reporting-and-takedown-guidance)
-uses the same reviewed official-route catalogue as the Console for social
+uses the same reviewed official-route catalogue as the console for social
 content, storefronts, app listings, hosted files/forms and advertising. Verify
 the exact object, current route, reporter authority and disclosure before any
 manual submission. Fraud, order complaints and rights notices are different
@@ -181,9 +181,9 @@ does not include it. `--plan` remains offline and produces no completed receipt.
 Case schema 20 also retains this context when an analyst saves a completed Lookup
 assessment or selected checkpoint facts. A selected checkpoint saves only its
 selected pins and one payload-free receipt, not every Lookup result. Ordinary
-backups and internal Case packs preserve it. Trusted/public Case packs, Case
+backups and internal case packs preserve it. Trusted/public case packs, case
 reports and response packets omit receipts; shared assessment identities are
-recomputed without them. Historical Case formats remain readable without
+recomputed without them. Historical case formats remain readable without
 inventing missing collection choices.
 
 `verify-artifact` checks a recognised structure and its applicable integrity
@@ -193,10 +193,10 @@ validity and signer trust separate. None of these checks establishes that
 evidence is accurate, current, safe to share or attributable to a person.
 
 The text output of `verify-artifact` suggests compatible offline follow-up
-commands for recognised saved Lookups, Case exports, workspace archives,
+commands for recognised saved Lookups, case exports, workspace archives,
 Lookup-evidence reports, Case-packs and managed indicator revisions. These are
 examples with placeholder filenames, not executed actions or a sharing approval.
-Replace the filenames deliberately; a Case or indicator inspection can display
+Replace the filenames deliberately; a case or indicator inspection can display
 private contents. Encrypted workspace guidance uses a separate passphrase file,
 never a passphrase in command history. JSON output and `--quiet` are unchanged.
 
@@ -249,9 +249,9 @@ own retention policy. No automatic key discovery, key storage or trust refresh o
   control, activity, intent or maliciousness.
 - Bulk applies one declared collection contract per target. Fast accepts up to
   500 targets and Deep up to 50; each target remains a separate request.
-- Respond commands package browser-created Cases and prepare local packets,
+- Respond commands package browser-created cases and prepare local packets,
   reports and sharing reviews. The offline [`case` workflow](cli.md#local-case-files)
-  also creates and updates ordinary local Case files through explicit, conflict-checked
+  also creates and updates ordinary local case files through explicit, conflict-checked
   output. Neither workflow submits, publishes, notifies or grants recipient authorisation.
 - Assurance, comparison and calibration commands describe supplied or retained
   evidence. They do not tune the running model, change infrastructure or turn an
