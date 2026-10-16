@@ -1139,7 +1139,7 @@
       {#if brandWorkbench==='control'}
         <DeferredSurface load={brandWorkbenches.control.load} props={{active}} loadingLabel="Loading domain controls." unavailableLabel="Domain controls could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='portfolio'&&active}
-        <DeferredSurface load={brandWorkbenches.portfolio.load} props={{active}} loadingLabel="Loading the owned-domain comparison." unavailableLabel="The owned-domain comparison could not be loaded." placeholder="workspace" />
+        <DeferredSurface load={brandWorkbenches.portfolio.load} props={{active}} loadingLabel="Loading the official-domain settings comparison." unavailableLabel="The official-domain settings comparison could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='posture'&&active}
         <DeferredSurface load={brandWorkbenches.posture.load} props={{active,disabledReason:postureReason,auditing,results:auditResults,audit,retainObservation}} loadingLabel="Loading the current-settings review." unavailableLabel="The current-settings review could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='certificates'&&active}

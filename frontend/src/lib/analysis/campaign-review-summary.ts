@@ -68,9 +68,9 @@ export function buildCampaignReviewSummary(
     },
     {
       id: 'mail_surface',
-      label: 'Mail exchanger observed',
+      label: 'MX publication retained',
       caseCount: count(({ evidence }) => evidence?.hasMx === true),
-      detail: 'Mail-routing evidence was retained. Receiving mail is operational context, not evidence of abuse.',
+      detail: 'Retained evidence indicates MX publication, not confirmed mail delivery or abuse.',
     },
   ];
   return {
