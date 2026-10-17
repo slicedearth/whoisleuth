@@ -1,50 +1,12 @@
 import { MAX_ALLOWLIST_DRAFT_CHARACTERS, MAX_PROFILE_VALUES, normalizeProfileDomains } from './brand-profile-model.ts';
-import { hammingDistanceHex, isInformativeFaviconHash, parseDomainInput } from './utils.ts';
+import { parseDomainInput } from './utils.ts';
 import { MAX_GENERATED_CONTEXT } from '../candidate-handoff-core.ts';
-
-export type BrandProfileSignalProfile = Readonly<{
-  officialDomains: readonly string[];
-  approvedPartnerDomains: readonly string[];
-  allowlistedDomains: readonly string[];
-  officialFaviconHash: string;
-  officialFaviconPHash: string;
-}>;
-
-function normalizedDomain(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/u, '');
-}
-
-export type BrandDomainMatch = Readonly<{
-  kind: 'official' | 'partner' | 'allowlisted';
-  matchedDomain: string;
-  reason: string;
-}>;
+import { profileDomainMatch, type BrandDomainMatch, type BrandProfileSignalProfile } from '../../../../packages/analysis/brand-profile-signals.mts';
+export { profileDomainMatch, profileDomainKind, profileSignals } from '../../../../packages/analysis/brand-profile-signals.mts';
+export type { BrandDomainMatch, BrandProfileSignalProfile } from '../../../../packages/analysis/brand-profile-signals.mts';
 type DomainLists = Pick<BrandProfileSignalProfile, 'officialDomains' | 'approvedPartnerDomains' | 'allowlistedDomains'>;
 export type BrandCandidateExclusion = BrandDomainMatch | Readonly<{ kind: 'scoped_exception'; matchedDomain: string; reason: string }>;
 export type BrandMatchSourceState = 'loading' | 'ready' | 'unavailable';
-
-/** Explains the same exact comparison and role precedence used by collection consumers. */
-export function profileDomainMatch(domain: string, profile: DomainLists | null = null): BrandDomainMatch | null {
-  if (!profile || !domain) return null;
-  const target = normalizedDomain(domain);
-  const lists = [
-    ['official', profile.officialDomains, 'Exact official-domain declaration'],
-    ['partner', profile.approvedPartnerDomains, 'Exact approved-partner declaration'],
-    ['allowlisted', profile.allowlistedDomains, 'Exact domain allowlist entry'],
-  ] as const;
-  for (const [kind, values, reason] of lists) {
-    const matched = values.find(value => normalizedDomain(value) === target);
-    if (matched !== undefined) return { kind, matchedDomain: normalizedDomain(matched), reason };
-  }
-  return null;
-}
-
-export function profileDomainKind(
-  domain: string,
-  profile: BrandProfileSignalProfile | null = null,
-): 'official' | 'partner' | 'allowlisted' | null {
-  return profileDomainMatch(domain, profile)?.kind ?? null;
-}
 
 /** Partition a bounded candidate set without changing its records or retaining another collection. */
 export function partitionBrandCandidates<T extends Readonly<{ domain: string }>>(
@@ -102,33 +64,6 @@ export function previewBrandDomainExclusions(
   return { state: 'ready', rows, newlyExcluded: rows.filter(row => row.change === 'newly_excluded').length,
     returned: rows.filter(row => row.change === 'returned').length,
     detail: `${rows.length} selected domains evaluated against saved and draft domain lists.` };
-}
-
-export function profileSignals(
-  domain: string,
-  evidence: Record<string, unknown>,
-  profile: BrandProfileSignalProfile | null = null,
-): Readonly<{
-  trusted: 'official' | 'partner' | 'allowlisted' | null;
-  faviconMatch: boolean;
-  faviconNearMatch: boolean;
-  reusesOfficialAssets: boolean;
-}> {
-  const trusted = profileDomainKind(domain, profile);
-  if (!profile || trusted) return { trusted, faviconMatch: false, faviconNearMatch: false, reusesOfficialAssets: false };
-  const exact = Boolean(evidence.faviconHash && profile.officialFaviconHash && evidence.faviconHash === profile.officialFaviconHash);
-  const distance = isInformativeFaviconHash(evidence.faviconPHash) && isInformativeFaviconHash(profile.officialFaviconPHash)
-    ? hammingDistanceHex(evidence.faviconPHash, profile.officialFaviconPHash)
-    : null;
-  const official = new Set(profile.officialDomains.map(normalizedDomain));
-  const reused = Array.isArray(evidence.externalAssetHosts)
-    && evidence.externalAssetHosts.some((host: unknown) => official.has(normalizedDomain(String(host))));
-  return {
-    trusted: null,
-    faviconMatch: exact,
-    faviconNearMatch: !exact && distance !== null && distance <= 8,
-    reusesOfficialAssets: reused,
-  };
 }
 
 export function parseProfileList(raw: string, lower = false): string[] {

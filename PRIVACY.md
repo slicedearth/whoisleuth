@@ -603,6 +603,12 @@ deliberately selects a local file. Existing files are refused unless replacement
 is explicit. CLI files are not uploaded to WHOISleuth and remain under the
 operator's retention and deletion control.
 
+Explicit `--brand-profile` on Lookup, Bulk or Discover scan reads one bounded
+local Brand Profile export for Risk failure-policy comparisons. Only its
+normalised domain declarations and favicon references are used in memory; the
+profile is not sent to collectors or copied into result documents/checkpoints.
+It makes no additional requests and does not enable Deep collection.
+
 `doctor --summary-json` produces an optional troubleshooting summary on stdout.
 It retains numeric CLI/Node versions, fixed check codes and public format
 identifiers. It omits targets, URLs, file/folder/user names, credentials, headers,

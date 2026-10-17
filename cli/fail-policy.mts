@@ -1,6 +1,10 @@
 import type { UnknownRecord } from './saved-lookup.mts';
 import { lookupStrictExitFindings } from './strict-exit.mts';
 import { CliUsageError } from './errors.mts';
+import { RISK_REVIEW_THRESHOLD } from '../packages/analysis/risk-scoring.mts';
+import type { BrandProfileSignalProfile } from '../packages/analysis/brand-profile-signals.mts';
+import { explainCliLookupRisk } from './risk-policy.mts';
+import type { CliProgressEvents } from './progress-events.mts';
 
 export const CLI_FAIL_POLICIES = ['source-failure', 'inconclusive', 'danger', 'material-drift'] as const;
 export type CliFailPolicy = typeof CLI_FAIL_POLICIES[number];
@@ -40,14 +44,11 @@ function availabilityStates(document: UnknownRecord): string[] {
   return [direct, review, ...resultStates].filter(Boolean);
 }
 
-function riskScore(value: UnknownRecord): number | null {
-  const raw = record(value.risk).score ?? value.riskScore;
-  if (raw === null || raw === undefined || raw === '') return null;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-export function evaluateCliFailPolicies(document: unknown, policies: readonly CliFailPolicy[]): FailPolicyFinding[] {
+export function evaluateCliFailPolicies(
+  document: unknown,
+  policies: readonly CliFailPolicy[],
+  profile: BrandProfileSignalProfile | null = null,
+): FailPolicyFinding[] {
   const root = record(document);
   const findings: FailPolicyFinding[] = [];
   for (const policy of policies) {
@@ -65,18 +66,17 @@ export function evaluateCliFailPolicies(document: unknown, policies: readonly Cl
       if (count) findings.push({ policy, reason: `${count} authority or availability state(s) remained inconclusive` });
     } else if (policy === 'danger') {
       const documents = [root, ...(Array.isArray(root.results) ? root.results.map(record) : [])];
-      const risks = documents.map(riskScore).filter((score): score is number => score !== null);
-      const severities = documents
-        .flatMap((item) => [item.severity, record(item.review).severity])
-        .map((severity) => String(severity || '').toLowerCase())
-        .filter((severity) => severity === 'danger' || severity === 'critical');
-      const highestRisk = risks.length ? Math.max(...risks) : null;
-      if ((highestRisk !== null && highestRisk >= 70) || severities.length) {
+      const risks = documents.flatMap(item => {
+        const risk = explainCliLookupRisk(item, profile, item.mode ?? root.mode);
+        return risk ? [risk] : [];
+      });
+      const highestRisk = risks.reduce<(typeof risks)[number] | null>((highest, risk) => (
+        !highest || risk.score > highest.score ? risk : highest
+      ), null);
+      if (highestRisk && highestRisk.score >= RISK_REVIEW_THRESHOLD) {
         findings.push({
           policy,
-          reason: highestRisk !== null && highestRisk >= 70
-            ? `risk score ${highestRisk} met the 70 review threshold`
-            : `explicit ${severities[0]} severity was present`,
+          reason: `risk score ${highestRisk.score} met the ${RISK_REVIEW_THRESHOLD} review threshold; model v${highestRisk.modelVersion}; evidence ${highestRisk.evidenceQuality.state} (heuristic, not a verdict)`,
         });
       }
     } else {
@@ -90,4 +90,16 @@ export function evaluateCliFailPolicies(document: unknown, policies: readonly Cl
 
 export function formatFailPolicyNotice(findings: readonly FailPolicyFinding[]): string {
   return `Failure policy matched: ${findings.map((item) => `${item.policy} (${item.reason})`).join('; ')}.\n`;
+}
+
+export function reportCliFailPolicies(
+  findings: readonly FailPolicyFinding[],
+  writeStderr: (value: string) => void,
+  progress: CliProgressEvents,
+): void {
+  if (!findings.length) return;
+  if (!progress.enabled) writeStderr(formatFailPolicyNotice(findings));
+  else for (const finding of findings) {
+    progress.emit({ event: 'warning', state: 'failure_policy_matched', source: finding.policy, reason: finding.reason });
+  }
 }

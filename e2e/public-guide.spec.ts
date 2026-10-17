@@ -249,7 +249,7 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(previewTabs.getByRole('tab', { name: 'Evidence' })).toBeFocused();
   await expect(previewTabs.getByRole('tab', { name: 'Evidence' })).toHaveAttribute('aria-selected', 'true');
   await expect(topology).toBeVisible();
-  await expect(page.getByText('Fixed fictional data from the public demo. No live target is contacted.')).toBeVisible();
+  await expect(page.locator('.hero-preview .preview-note')).toBeVisible();
   await expect(page.locator('.hero-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await expect(page.locator('.learn article')).toHaveCount(4);
@@ -491,10 +491,8 @@ test('public starting points keep guide and fictional practice navigation separa
   for (const pathname of ['/', '/resources']) {
     await page.goto(pathname);
     if (pathname === '/') {
-      const example = page.getByRole('link', { name: 'Explore an example investigation', exact: true });
+      const example = page.getByRole('link', { name: 'Explore the demo', exact: true });
       await expect(example).toHaveAttribute('href', '/demo');
-      await expect(example).toHaveAccessibleDescription('Fictional evidence. No live collection.');
-      await expect(page.getByText('Fictional evidence. No live collection.', { exact: true })).toBeVisible();
       await example.focus();
       await example.press('Enter');
       await expect(page).toHaveURL('/demo');

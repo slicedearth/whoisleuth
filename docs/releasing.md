@@ -20,6 +20,15 @@ unsupported future versions, and document migration or comparison behaviour.
 
 ## Prepare a release
 
+Include these CLI corrections in the next release notes: Discovery failure
+policies now include results hidden by output filters and restored checkpoints;
+`danger` evaluates canonical Risk evidence with an explicitly supplied local
+Brand Profile rather than asserted score/severity fields. Matching runs return
+4 without changing stdout schemas, collection limits or request scope. Scripts
+using `danger` should select `--deep --brand-profile brand.json`; no match is not
+a safety verdict. The homepage now labels the illustrative preview once rather
+than repeating fictional-data wording beside the product actions.
+
 Work on a focused branch and prepare the approved explicit version:
 
 ```bash

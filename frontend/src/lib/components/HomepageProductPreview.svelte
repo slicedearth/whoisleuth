@@ -138,7 +138,7 @@
 
 <section class="product-preview" aria-label="Synthetic WHOISleuth console preview">
   <article class="preview-panel discover-panel">
-    <header><span>Candidates</span><small>Synthetic examples</small></header>
+    <header><span>Candidates</span></header>
     <div class="candidate-list">
       {#each previewCandidates as candidate}
         <button
@@ -247,7 +247,7 @@
   </article>
 </section>
 
-<p class="preview-note">Fixed fictional data from the public demo. No live target is contacted.</p>
+<p class="preview-note">Example investigation · fictional data</p>
 
 <style>
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}

@@ -763,6 +763,33 @@ and machine output contains no ANSI or transient progress text.
 - `--output` writes a private local file atomically and refuses an existing path
   unless `--force` is also selected.
 
+Lookup, Bulk and Discover scan evaluate `--fail-on` against every collected or
+restored result, before output filters. A fulfilled lookup can still match
+`source-failure` through its diagnostics. Quiet and event output do not change
+the policy exit: matches return **4**, with diagnostics on stderr. Ordinary
+collection/checkpoint failures and Lookup's separate `--strict-exit` still apply.
+
+For `danger`, export your Brand Profiles from Brands and explicitly select Deep
+collection. The same Risk model and Brand comparisons used by the console
+evaluate the collected evidence without extra requests:
+
+```bash
+whoisleuth lookup candidate.example --deep --brand-profile brand.json --fail-on danger --json
+whoisleuth bulk domains.txt --deep --brand-profile brand.json --fail-on danger --errors-only --json
+```
+
+The selected file uses the existing versioned Brand Profile export format,
+must provide one unambiguous valid profile with an official domain, and is bounded
+by the existing Brand Profile import byte limit. If the export contains multiple
+profiles, add `--brand-id <exact-profile-id>` from the selected profile's `id`
+field; no first-profile default is chosen. Its private fields are not copied into
+results or checkpoints or sent to sources. Restore it explicitly when resuming.
+Danger matches report the scoring-model version and evidence quality. The
+threshold prioritises review, not confirmed maliciousness. Fast collection,
+missing Brand context or ineligible registration evidence cannot establish a
+match; exit **0** does not establish low risk, complete coverage or safety.
+`inconclusive` and `source-failure` remain independently selected policies.
+
 Local configuration profiles can set presentation, Fast collection, bounded
 concurrency and observer labels. They cannot add targets, enable Deep
 collection, choose output paths or approve network work. Explicit command

@@ -31,10 +31,7 @@
     <h1>Understand a domain.<br><span>Before you act.</span></h1>
     <p class="lede">Investigate a domain or inspect material you already have. Compare source evidence, keep a case and prepare a reviewed handoff.</p>
     <div class="hero-actions">
-      <div class="example-action">
-        <a class="primary" href="/demo" aria-describedby="example-scope">Explore an example investigation</a>
-        <p id="example-scope">Fictional evidence. No live collection.</p>
-      </div>
+      <a class="primary" href="/demo">Explore the demo</a>
       <PublicConsoleCta />
     </div>
   </div>
@@ -44,7 +41,7 @@
 </section>
 
 <section class="jobs" id="features" aria-labelledby="jobs-title">
-  <div class="section-intro"><p class="eyebrow">Investigate · Respond · Assure</p><h2 id="jobs-title">Start with the work in front of you</h2><p>Choose a domain, a suspicious message, a brand candidate or a saved case. The guides and fictional examples are open to everyone; your own investigations use the console.</p></div>
+  <div class="section-intro"><p class="eyebrow">Investigate · Respond · Assure</p><h2 id="jobs-title">Start with the work in front of you</h2><p>Choose a domain, a suspicious message, a brand candidate or a saved case. The guides and worked examples are open to everyone; your own investigations use the console.</p></div>
   <PublicGoalPaths goals={publicGuideGoals} />
 </section>
 
@@ -74,8 +71,6 @@
   .hero-actions a{display:inline-flex;min-height:44px;align-items:center;justify-content:center;padding:10px 16px;border-radius:var(--radius-sm);font:750 var(--text-xs) var(--font-sans)}
   .hero-actions > :global(a){min-height:44px}
   .hero-actions .primary{color:var(--primary-text);background:linear-gradient(135deg,var(--primary-start),var(--primary-end))}
-  .example-action{min-width:0;max-width:100%}
-  .example-action p{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .hero-preview{min-width:0}
   .hero-preview :global(.preview-panel){box-shadow:0 18px 48px rgb(var(--shadow-rgb) / .16)}
   .jobs,.evidence,.learn{padding:72px 0;border-top:1px solid var(--border)}
