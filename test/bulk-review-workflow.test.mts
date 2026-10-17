@@ -12,6 +12,7 @@ import { buildBulkRetryPlan, preservePriorBulkResult } from '../frontend/src/lib
 import type { BulkSessionResult } from '../frontend/src/lib/analysis/bulk-session-model.ts';
 import { MAX_BULK_SESSION_ROWS } from '../packages/contracts/workspace-portability.mts';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
+import { capturedWebCollectionQuality } from '../packages/evidence/collection-quality.mts';
 
 const OBSERVED_AT = '2026-07-20T00:00:00.000Z';
 const GENERATED_AT = '2026-07-28T00:00:00.000Z';
@@ -206,6 +207,60 @@ function cockpitRow(domain: string, reviewState: string): BulkReviewCockpitRow {
 }
 
 describe('Bulk evidence review workflow', () => {
+  test('qualifies retained web values by collection quality without hiding independent evidence', () => {
+    const complete = capturedWebCollectionQuality('complete', 'complete');
+    const left = result('left.example', { webCollectionQuality: complete, hasPasswordField: true,
+      faviconHash: 'a'.repeat(64), sourceCoverage: [{ source: 'rdap', state: 'complete' }, { source: 'http', state: 'complete' }] });
+    const right = result('right.example', { ...left, domain: 'right.example', hasPasswordField: false });
+    const observed = buildBulkDomainComparison(left, right, OBSERVED_AT, { now: Date.parse(GENERATED_AT) });
+    assert.ok(observed);
+    assert.equal(observed.rows.find(row => row.id === 'password-field')?.state, 'different');
+    assert.equal(observed.counts.different, 1);
+    for (const quality of [capturedWebCollectionQuality('unavailable', 'complete'),
+      capturedWebCollectionQuality('partial', 'complete'), capturedWebCollectionQuality('unknown', 'complete'),
+      capturedWebCollectionQuality('not_collected', 'complete'), undefined]) {
+      const comparison = buildBulkDomainComparison(left, { ...right, webCollectionQuality: quality }, OBSERVED_AT,
+        { now: Date.parse(GENERATED_AT), leftEvidenceHref: '#bulk-result-0', rightEvidenceHref: '#bulk-result-1' });
+      assert.ok(comparison);
+      const password = comparison.rows.find(row => row.id === 'password-field');
+      assert.equal(password?.state, 'unavailable');
+      assert.equal(password.left, 'Observed');
+      assert.equal(password.right, 'Not observed');
+      assert.equal(password.leftSourceState, 'complete');
+      assert.equal(password.rightSourceState, 'complete');
+      assert.equal(password.rightEvidenceHref, '#bulk-result-1');
+      assert.ok(password.limitations.length > 0);
+      assert.equal(comparison.rows.find(row => row.id === 'page-title')?.state, 'unavailable');
+      assert.equal(comparison.rows.find(row => row.id === 'registration')?.state, 'equal');
+      assert.equal(comparison.rows.find(row => row.id === 'source-health')?.state, 'equal');
+      assert.equal(comparison.rows.find(row => row.id === 'favicon')?.state, quality ? 'equal' : 'unavailable');
+      assert.equal(comparison.counts.different, 0);
+      assert.ok(comparison.counts.unavailable > observed.counts.unavailable);
+      assert.equal(buildBulkDomainComparison({ ...left, webCollectionQuality: quality }, right, OBSERVED_AT,
+        { now: Date.parse(GENERATED_AT) })?.rows.find(row => row.id === 'password-field')?.state, 'unavailable');
+    }
+  });
+
+  test('distinguishes complete observed absence from two unknown false defaults and qualifies favicon independently', () => {
+    const complete = capturedWebCollectionQuality('complete', 'complete');
+    const left = result('left.example', { hasPasswordField: false, webCollectionQuality: complete });
+    const right = result('right.example', { hasPasswordField: false, webCollectionQuality: complete });
+    const compare = (first: unknown, second: unknown) => {
+      const comparison = buildBulkDomainComparison(first, second, OBSERVED_AT, { now: Date.parse(GENERATED_AT) });
+      assert.ok(comparison);
+      return comparison;
+    };
+    assert.equal(compare(left, right).rows.find(row => row.id === 'password-field')?.state, 'equal');
+    const unknown = compare({ ...left, webCollectionQuality: undefined }, { ...right, webCollectionQuality: undefined });
+    assert.equal(unknown.rows.find(row => row.id === 'password-field')?.state, 'unavailable');
+    assert.equal(unknown.counts.different, 0);
+    const pageOnly = compare({ ...left, hasPasswordField: true, faviconHash: 'a'.repeat(64) },
+      { ...right, faviconHash: 'b'.repeat(64), webCollectionQuality: capturedWebCollectionQuality('complete', 'unavailable') });
+    assert.equal(pageOnly.rows.find(row => row.id === 'password-field')?.state, 'different');
+    assert.equal(pageOnly.rows.find(row => row.id === 'favicon')?.state, 'unavailable');
+    assert.equal(pageOnly.counts.different, 1);
+  });
+
   test('compares two compact results without collapsing missing evidence into a difference', async () => {
     const comparison = buildBulkDomainComparison(
       result('left.example', { hasDmarc: null, pageTitle: null }),
@@ -225,7 +280,7 @@ describe('Bulk evidence review workflow', () => {
     assert.equal(comparison.version, 3);
     assert.equal(comparison.rows.find((row) => row.id === 'registrar')?.state, 'different');
     assert.equal(comparison.rows.find((row) => row.id === 'dmarc')?.state, 'not_recorded');
-    assert.equal(comparison.rows.find((row) => row.id === 'page-title')?.state, 'not_recorded');
+    assert.equal(comparison.rows.find((row) => row.id === 'page-title')?.state, 'unavailable');
     assert.equal(comparison.rows.find((row) => row.id === 'technology')?.state, 'not_recorded');
     assert.equal(comparison.rows.find((row) => row.id === 'registrar')?.leftEvidenceHref, '#bulk-result-0');
     assert.equal(comparison.freshness.state, 'stale');

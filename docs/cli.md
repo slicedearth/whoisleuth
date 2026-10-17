@@ -649,7 +649,10 @@ second input. Supply every input for an uncompleted step to use files instead,
 or override a connection with `--use-artifact <step-id>:<input-number>=<earlier-step-id>`.
 Input numbers start at 1 and refer to the fixed recipe's placeholders.
 `diff` compares saved observations of the same or different domains; `timeline`
-orders observations of one domain. Candidate and domain-control intent inputs
+orders observations of one domain. Web-derived fields require complete collection
+for the relevant page or favicon; failed, partial and historical unknown collection
+keep their values visible without establishing equality or change. Source-health
+changes remain comparable separately. Candidate and domain-control intent inputs
 remain analyst selections. No external file is inferred or extracted automatically.
 `reconcile` lists each observation time and declared observer/vantage, keeping
 disagreement and unavailable evidence separate. Distinct labels do not verify

@@ -5,6 +5,7 @@ import {
   type BulkSessionSourceState,
 } from '../workspace/bulk-session-model.mts';
 import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from '../evidence/artifact-integrity.mts';
+import { webCollectionAllowsComparison } from '../evidence/collection-quality.mts';
 import { BULK_REVIEW_STALE_AFTER_DAYS } from './bulk-review-policy.mts';
 import {
   BULK_DOMAIN_COMPARISON_EXPORT_VERSION,
@@ -179,6 +180,7 @@ function row(
     rightEvidenceHref: string;
     rightSourceState: BulkDomainComparisonSourceState;
     source: string;
+    webComparable?: boolean;
   }>,
   limitations: readonly string[] = [],
   options: Readonly<{ conflicting?: boolean; retained?: boolean }> = {},
@@ -189,7 +191,7 @@ function row(
     label,
     left: options.retained === false ? 'Not recorded in compact Bulk evidence' : display(left),
     right: options.retained === false ? 'Not recorded in compact Bulk evidence' : display(right),
-    state: state(left, right, context.leftSourceState, context.rightSourceState, options),
+    state: context.webComparable === false ? 'unavailable' : state(left, right, context.leftSourceState, context.rightSourceState, options),
     method: text(method, 320),
     source: text(context.source, 80),
     leftSourceState: context.leftSourceState,
@@ -197,7 +199,10 @@ function row(
     observedAt: context.observedAt,
     leftEvidenceHref: context.leftEvidenceHref,
     rightEvidenceHref: context.rightEvidenceHref,
-    limitations: limitations.map((item) => text(item, 320)).filter(Boolean).slice(0, 6),
+    limitations: [
+      ...(context.webComparable === false ? ['Incomplete or unknown web collection; retained values are not comparable.'] : []),
+      ...limitations,
+    ].map((item) => text(item, 320)).filter(Boolean).slice(0, 6),
   };
 }
 
@@ -278,6 +283,11 @@ export function buildBulkDomainComparison(
   const registry = context(left, right, 'Registry and registrar evidence', ['rdap', 'availability'], observedAt, options);
   const dns = context(left, right, 'DNS evidence', ['dns'], observedAt, options);
   const http = context(left, right, 'HTTP and static page evidence', ['http'], observedAt, options);
+  const webContext = (field: string, base = http) => ({
+    ...base,
+    webComparable: webCollectionAllowsComparison(field, left.webCollectionQuality, left.scanDepth)
+      && webCollectionAllowsComparison(field, right.webCollectionQuality, right.scanDepth),
+  });
   const tls = context(left, right, 'TLS evidence', ['tls'], observedAt, options);
   const compactTechnology = comparisonEvidenceContext(left, right, 'technology', {
     ...http,
@@ -324,13 +334,13 @@ export function buildBulkDomainComparison(
     row('null-mx', 'mail', 'Null MX observed', left.hasNullMx, right.hasNullMx, 'Compact Deep DNS observation', dns),
     row('spf', 'mail', 'SPF observed', left.hasSpf, right.hasSpf, 'Compact Deep DNS observation', dns),
     row('dmarc', 'mail', 'DMARC observed', left.hasDmarc, right.hasDmarc, 'Compact Deep DNS observation', dns),
-    row('website', 'web', 'Website activity', left.activityStatus, right.activityStatus, 'Bounded homepage observation', http),
-    row('page-title', 'identity', 'Page title', left.pageTitle, right.pageTitle, 'Normalised bounded title equality', http),
-    row('favicon', 'identity', 'Favicon fingerprint', left.faviconHash, right.faviconHash, 'Exact SHA-256 comparison', http),
+    row('website', 'web', 'Website activity', left.activityStatus, right.activityStatus, 'Bounded homepage observation', webContext('activityStatus')),
+    row('page-title', 'identity', 'Page title', left.pageTitle, right.pageTitle, 'Normalised bounded title equality', webContext('pageTitle')),
+    row('favicon', 'identity', 'Favicon fingerprint', left.faviconHash, right.faviconHash, 'Exact SHA-256 comparison', webContext('faviconHash')),
     row('tracking', 'identity', 'Tracking identifiers', left.relationship.trackingIdentifiers, right.relationship.trackingIdentifiers, 'Normalised exact set comparison', http, ['Shared identifiers are an investigative lead, not proof of ownership.']),
-    row('password-field', 'identity', 'Password field', left.hasPasswordField, right.hasPasswordField, 'Bounded static form observation', http),
-    row('phishing-language', 'identity', 'Phishing-language indicator', left.phishingLanguageMatch, right.phishingLanguageMatch, 'Bounded explainable page-language signal', http, ['A wording match is a review lead, not proof of malicious intent.']),
-    row('official-assets', 'identity', 'Official asset reuse', profileContextsComparable ? left.reusesOfficialAssets : null, profileContextsComparable ? right.reusesOfficialAssets : null, 'Configured Brand Profile comparison', profileContext, profileLimitations),
+    row('password-field', 'identity', 'Password field', left.hasPasswordField, right.hasPasswordField, 'Bounded static form observation', webContext('hasPasswordField')),
+    row('phishing-language', 'identity', 'Phishing-language indicator', left.phishingLanguageMatch, right.phishingLanguageMatch, 'Bounded explainable page-language signal', webContext('phishingLanguageMatch'), ['A wording match is a review lead, not proof of malicious intent.']),
+    row('official-assets', 'identity', 'Official asset reuse', profileContextsComparable ? left.reusesOfficialAssets : null, profileContextsComparable ? right.reusesOfficialAssets : null, 'Configured Brand Profile comparison', webContext('reusesOfficialAssets', profileContext), profileLimitations),
     row('technology', 'technology', 'Technology identifiers', left.comparisonEvidence?.technology.ids ?? [], right.comparisonEvidence?.technology.ids ?? [], 'Normalised exact set comparison of at most 12 curated identifiers', compactTechnology, ['An unmatched identifier is not evidence that a technology is absent. Shared technologies do not establish common ownership or control.']),
     row('source-health', 'source', 'Recorded source coverage', sourceSummary(left), sourceSummary(right), 'Source-by-source compact state comparison', source, ['A source-state difference can reflect collection conditions rather than a domain change.']),
   ];

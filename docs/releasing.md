@@ -42,6 +42,11 @@ newer children cannot overwrite apex or sibling service observations. One-shot
 monitoring rejects unsupported child targets before collection and categorises
 wrong-host replies as failed Lookups, preserving checkpoint identities and counts.
 
+Bulk comparison and saved-Lookup `diff`/`timeline` now qualify web-derived fields
+using retained collection quality. Failed, partial or unknown collection cannot
+establish equality, removal or change; source-health changes remain visible.
+Existing reports and historical integrity verification keep their formats.
+
 Work on a focused branch and prepare the approved explicit version:
 
 ```bash

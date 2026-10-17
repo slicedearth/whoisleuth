@@ -98,6 +98,7 @@ function lookupComparisonInput(document: SavedLookupDocument): UnknownRecord {
     trusted: null,
     error: '',
     scanDepth: document.mode,
+    webCollectionQuality: availability.webCollectionQuality,
     createdDate: lifecycleValue(preferredRegistry, 'createdDate'),
     expiryDate: lifecycleValue(preferredRegistry, 'expiryDate'),
     nameservers: relationship.nameservers.length ? relationship.nameservers : stringList(preferredRegistry.nameservers, 20),
